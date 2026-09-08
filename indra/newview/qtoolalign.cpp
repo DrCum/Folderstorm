@@ -133,7 +133,12 @@ bool QToolAlign::findSelectedManipulator(S32 x, S32 y)
     F32 half_width = (F32)world_view_rect.getWidth() / 2.f;
     F32 half_height = (F32)world_view_rect.getHeight() / 2.f;
     LLVector2 manip2d;
-    LLVector2 mousePos((F32)x - half_width, (F32)y - half_height);
+    // <FS> Projected manipulators are relative to the world viewport
+    // center, which may be offset from the full window center.
+    LLVector2 mousePos(
+        (F32)x - (F32)world_view_rect.getCenterX(),
+        (F32)y - (F32)world_view_rect.getCenterY());
+    // </FS>
     LLVector2 delta;
 
     LLVector3 bbox_scale = mBBox.getMaxLocal() - mBBox.getMinLocal();

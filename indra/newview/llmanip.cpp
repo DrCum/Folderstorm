@@ -270,8 +270,11 @@ bool LLManip::getMousePointOnPlaneGlobal(LLVector3d& point, S32 x, S32 y, LLVect
     if (mObjectSelection->getSelectType() == SELECT_TYPE_HUD)
     {
         bool result = false;
-        F32 mouse_x = ((F32)x / gViewerWindow->getWorldViewWidthScaled() - 0.5f) * LLViewerCamera::getInstance()->getAspect() / gAgentCamera.mHUDCurZoom;
-        F32 mouse_y = ((F32)y / gViewerWindow->getWorldViewHeightScaled() - 0.5f) / gAgentCamera.mHUDCurZoom;
+        // <FS> Map HUD manipulation through the custom world viewport.
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        F32 mouse_x = ((F32)x - (F32)world_view_rect.getCenterX()) / (F32)world_view_rect.getHeight() / gAgentCamera.mHUDCurZoom;
+        F32 mouse_y = ((F32)y - (F32)world_view_rect.getCenterY()) / (F32)world_view_rect.getHeight() / gAgentCamera.mHUDCurZoom;
+        // </FS>
 
         LLVector3 origin_agent = gAgent.getPosAgentFromGlobal(origin);
         LLVector3 mouse_pos = LLVector3(0.f, -mouse_x, mouse_y);

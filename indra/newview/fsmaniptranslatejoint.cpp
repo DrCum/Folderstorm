@@ -366,16 +366,18 @@ bool FSManipTranslateJoint::handleHover(S32 x, S32 y, MASK mask)
     bool rotated = false;
 
     // ...moving joints can move camera about focus point
-    if (x < ROTATE_H_MARGIN)
+    // <FS> Compare against absolute world viewport edges.
+    if (x < world_rect.mLeft + ROTATE_H_MARGIN)
     {
         gAgentCamera.cameraOrbitAround(rotate_angle);
         rotated = true;
     }
-    else if (x > world_rect.getWidth() - ROTATE_H_MARGIN)
+    else if (x > world_rect.mRight - ROTATE_H_MARGIN)
     {
         gAgentCamera.cameraOrbitAround(-rotate_angle);
         rotated = true;
     }
+    // </FS>
 
     // Suppress processing if mouse hasn't actually moved.
     // This may cause problems if the camera moves outside of the
@@ -655,7 +657,12 @@ void FSManipTranslateJoint::highlightManipulators(S32 x, S32 y)
     LLRect world_view_rect = gViewerWindow->getWorldViewRectScaled();
     F32 half_width = (F32)world_view_rect.getWidth() / 2.f;
     F32 half_height = (F32)world_view_rect.getHeight() / 2.f;
-    LLVector2 mousePos((F32)x - half_width, (F32)y - half_height);
+    // <FS> Projected manipulators are relative to the world viewport
+    // center, which may be offset from the full window center.
+    LLVector2 mousePos(
+        (F32)x - (F32)world_view_rect.getCenterX(),
+        (F32)y - (F32)world_view_rect.getCenterY());
+    // </FS>
     LLVector2 mouse_delta;
 
     // Keep order consistent with insertion via stable_sort

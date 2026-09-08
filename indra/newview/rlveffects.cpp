@@ -95,7 +95,15 @@ bool RlvOverlayEffect::hitTest(const LLCoordGL& ptMouse) const
     if (!m_pImage)
         return false;
 
-    return (m_fBlockTouch) && (m_pImage->getMask(LLVector2((float)ptMouse.mX / gViewerWindow->getWorldViewWidthScaled(), (float)ptMouse.mY / gViewerWindow->getWorldViewHeightScaled())));
+    // <FS> RLV overlays cover the world viewport, not the full viewer window.
+    const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+    if (!m_fBlockTouch || !world_view_rect.pointInRect(ptMouse.mX, ptMouse.mY))
+        return false;
+
+    return m_pImage->getMask(LLVector2(
+        (float)(ptMouse.mX - world_view_rect.mLeft) / (float)world_view_rect.getWidth(),
+        (float)(ptMouse.mY - world_view_rect.mBottom) / (float)world_view_rect.getHeight()));
+    // </FS>
 }
 
 void RlvOverlayEffect::setImage(const LLUUID& idTexture)
@@ -116,8 +124,9 @@ void RlvOverlayEffect::run(const LLVisualEffectParams*)
     {
         gUIProgram.bind();
 
-        int nWidth = gViewerWindow->getWorldViewWidthScaled();
-        int nHeight = gViewerWindow->getWorldViewHeightScaled();
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        int nWidth = world_view_rect.getWidth();
+        int nHeight = world_view_rect.getHeight();
 
         m_pImage->addTextureStats((F32)(nWidth * nHeight));
         m_pImage->setKnownDrawSize(nWidth, nHeight);
@@ -128,6 +137,9 @@ void RlvOverlayEffect::run(const LLVisualEffectParams*)
 
         const LLVector2& displayScale = gViewerWindow->getDisplayScale();
         gGL.scalef(displayScale.mV[VX], displayScale.mV[VY], 1.f);
+        // <FS> Position the overlay over an offset custom world viewport.
+        gGL.translatef((F32)world_view_rect.mLeft, (F32)world_view_rect.mBottom, 0.f);
+        // </FS>
 
         gGL.getTexUnit(0)->bind(m_pImage);
         const LLColor3 col = m_Color.get();

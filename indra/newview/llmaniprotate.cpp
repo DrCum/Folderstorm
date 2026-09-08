@@ -1243,8 +1243,12 @@ bool LLManipRotate::updateVisiblity()
         // x axis range is (-aspect * 0.5f, +aspect * 0.5)
         // y axis range is (-0.5, 0.5)
         // so use getWorldViewHeightRaw as scale factor when converting to pixel coordinates
-        mCenterScreen.set((S32)((0.5f - center.mV[VY]) / gAgentCamera.mHUDCurZoom * gViewerWindow->getWorldViewHeightScaled()),
-                            (S32)((center.mV[VZ] + 0.5f) / gAgentCamera.mHUDCurZoom * gViewerWindow->getWorldViewHeightScaled()));
+        // <FS> HUD screen coordinates must include the custom viewport origin.
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        mCenterScreen.set(
+            world_view_rect.mLeft + (S32)((0.5f - center.mV[VY]) / gAgentCamera.mHUDCurZoom * world_view_rect.getHeight()),
+            world_view_rect.mBottom + (S32)((center.mV[VZ] + 0.5f) / gAgentCamera.mHUDCurZoom * world_view_rect.getHeight()));
+        // </FS>
         visible = true;
     }
     else
