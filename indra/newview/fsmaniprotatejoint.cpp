@@ -874,8 +874,8 @@ std::string FSManipRotateJoint::getManipPartString(EManipPart part)
 void FSManipRotateJoint::renderNameXYZ(const LLQuaternion& rot)
 {
     constexpr S32 PAD = 10;
-    S32 window_center_x = gViewerWindow->getWorldViewRectScaled().getWidth() / 2;
-    S32 window_center_y = gViewerWindow->getWorldViewRectScaled().getHeight() / 2;
+    S32 window_center_x = gViewerWindow->getWorldViewRectScaled().getCenterX();
+    S32 window_center_y = gViewerWindow->getWorldViewRectScaled().getCenterY();
     S32 vertical_offset = window_center_y - VERTICAL_OFFSET;
 
     LLVector3 euler_angles;

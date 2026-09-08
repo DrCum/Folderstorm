@@ -23494,6 +23494,74 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <!-- <FS> Custom world viewport for multi-monitor layouts -->
+    <key>FSWorldViewEnabled</key>
+    <map>
+      <key>Comment</key>
+      <string>Restrict the interactive 3D world to a configurable portion of the viewer window.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSWorldViewInMouselook</key>
+    <map>
+      <key>Comment</key>
+      <string>Keep the custom world viewport active while in Mouselook.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>FSWorldViewInsetLeft</key>
+    <map>
+      <key>Comment</key>
+      <string>Percentage of the normal world view reserved along the left edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSWorldViewInsetRight</key>
+    <map>
+      <key>Comment</key>
+      <string>Percentage of the normal world view reserved along the right edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSWorldViewInsetTop</key>
+    <map>
+      <key>Comment</key>
+      <string>Percentage of the normal world view reserved along the top edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSWorldViewInsetBottom</key>
+    <map>
+      <key>Comment</key>
+      <string>Percentage of the normal world view reserved along the bottom edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <!-- </FS> -->
     <key>FSIMTabNameFormat</key>
     <map>
       <key>Comment</key>

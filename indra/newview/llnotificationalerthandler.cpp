@@ -68,7 +68,10 @@ LLAlertHandler::~LLAlertHandler()
 //--------------------------------------------------------------------------
 void LLAlertHandler::initChannel()
 {
-    S32 channel_right_bound = gViewerWindow->getWorldViewRectScaled().getWidth() / 2;
+    // <FS> Center alerts in a custom world viewport.
+    // S32 channel_right_bound = gViewerWindow->getWorldViewRectScaled().getWidth() / 2;
+    S32 channel_right_bound = gViewerWindow->getWorldViewRectScaled().getCenterX();
+    // </FS>
     mChannel.get()->init(channel_right_bound, channel_right_bound);
 }
 

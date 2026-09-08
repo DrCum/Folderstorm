@@ -666,11 +666,16 @@ bool LLToolPie::walkToClickedLocation()
     {
         // We do not handle hover in mouselook as we do in other modes, so
         // use croshair's position to do a pick
-        mPick = gViewerWindow->pickImmediate(gViewerWindow->getWorldViewRectScaled().getWidth() / 2,
-            gViewerWindow->getWorldViewRectScaled().getHeight() / 2,
+        // <FS> The custom world viewport may not start at the window origin.
+        // mPick = gViewerWindow->pickImmediate(gViewerWindow->getWorldViewRectScaled().getWidth() / 2,
+        //     gViewerWindow->getWorldViewRectScaled().getHeight() / 2,
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        mPick = gViewerWindow->pickImmediate(world_view_rect.getCenterX(),
+            world_view_rect.getCenterY(),
             false /* ignore transparent */,
             false /* ignore rigged */,
             false /* ignore particles */);
+        // </FS>
     }
 
     if (mPick.mPickType == LLPickInfo::PICK_OBJECT)
@@ -753,10 +758,15 @@ bool LLToolPie::teleportToClickedLocation()
         // We do not handle hover in mouselook as we do in other modes, so
         // use croshair's position to do a pick
         bool pick_rigged = false;
-        mHoverPick = gViewerWindow->pickImmediate(gViewerWindow->getWorldViewRectScaled().getWidth() / 2,
-                                                  gViewerWindow->getWorldViewRectScaled().getHeight() / 2,
+        // <FS> The custom world viewport may not start at the window origin.
+        // mHoverPick = gViewerWindow->pickImmediate(gViewerWindow->getWorldViewRectScaled().getWidth() / 2,
+        //                                           gViewerWindow->getWorldViewRectScaled().getHeight() / 2,
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        mHoverPick = gViewerWindow->pickImmediate(world_view_rect.getCenterX(),
+                                                  world_view_rect.getCenterY(),
                                                   false,
                                                   pick_rigged);
+        // </FS>
     }
     LLViewerObject* objp = mHoverPick.getObject();
     LLViewerObject* parentp = objp ? objp->getRootEdit() : NULL;

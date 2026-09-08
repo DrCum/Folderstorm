@@ -1781,8 +1781,13 @@ void LLManipRotate::mouseToRay( S32 x, S32 y, LLVector3* ray_pt, LLVector3* ray_
 {
     if (LLSelectMgr::getInstance()->getSelection()->getSelectType() == SELECT_TYPE_HUD)
     {
-        F32 mouse_x = (((F32)x / gViewerWindow->getWorldViewRectScaled().getWidth()) - 0.5f) / gAgentCamera.mHUDCurZoom;
-        F32 mouse_y = ((((F32)y) / gViewerWindow->getWorldViewRectScaled().getHeight()) - 0.5f) / gAgentCamera.mHUDCurZoom;
+        // <FS> Map HUD manipulation through the custom world viewport.
+        // F32 mouse_x = (((F32)x / gViewerWindow->getWorldViewRectScaled().getWidth()) - 0.5f) / gAgentCamera.mHUDCurZoom;
+        // F32 mouse_y = ((((F32)y) / gViewerWindow->getWorldViewRectScaled().getHeight()) - 0.5f) / gAgentCamera.mHUDCurZoom;
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        F32 mouse_x = (((F32)x - (F32)world_view_rect.mLeft) / (F32)world_view_rect.getWidth() - 0.5f) / gAgentCamera.mHUDCurZoom;
+        F32 mouse_y = (((F32)y - (F32)world_view_rect.mBottom) / (F32)world_view_rect.getHeight() - 0.5f) / gAgentCamera.mHUDCurZoom;
+        // </FS>
 
         *ray_pt = LLVector3(-1.f, -mouse_x, mouse_y);
         *ray_dir = LLVector3(1.f, 0.f, 0.f);

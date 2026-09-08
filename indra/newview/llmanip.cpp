@@ -309,8 +309,13 @@ bool LLManip::nearestPointOnLineFromMouse( S32 x, S32 y, const LLVector3& b1, co
 
     if (mObjectSelection->getSelectType() == SELECT_TYPE_HUD)
     {
-        F32 mouse_x = (((F32)x / gViewerWindow->getWindowWidthScaled()) - 0.5f) * LLViewerCamera::getInstance()->getAspect() / gAgentCamera.mHUDCurZoom;
-        F32 mouse_y = (((F32)y / gViewerWindow->getWindowHeightScaled()) - 0.5f) / gAgentCamera.mHUDCurZoom;
+        // <FS> Map HUD manipulation through the custom world viewport.
+        // F32 mouse_x = (((F32)x / gViewerWindow->getWindowWidthScaled()) - 0.5f) * LLViewerCamera::getInstance()->getAspect() / gAgentCamera.mHUDCurZoom;
+        // F32 mouse_y = (((F32)y / gViewerWindow->getWindowHeightScaled()) - 0.5f) / gAgentCamera.mHUDCurZoom;
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
+        F32 mouse_x = ((F32)x - (F32)world_view_rect.getCenterX()) / (F32)world_view_rect.getHeight() / gAgentCamera.mHUDCurZoom;
+        F32 mouse_y = ((F32)y - (F32)world_view_rect.getCenterY()) / (F32)world_view_rect.getHeight() / gAgentCamera.mHUDCurZoom;
+        // </FS>
         a1 = LLVector3(llmin(b1.mV[VX] - 0.1f, b2.mV[VX] - 0.1f, 0.f), -mouse_x, mouse_y);
         a2 = a1 + LLVector3(1.f, 0.f, 0.f);
     }
@@ -509,8 +514,12 @@ void LLManip::renderXYZ(const LLVector3 &vec)
 {
     const S32 PAD = 10;
     std::string feedback_string;
-    S32 window_center_x = gViewerWindow->getWorldViewRectScaled().getWidth() / 2;
-    S32 window_center_y = gViewerWindow->getWorldViewRectScaled().getHeight() / 2;
+    // <FS> The custom world viewport may not start at the window origin.
+    // S32 window_center_x = gViewerWindow->getWorldViewRectScaled().getWidth() / 2;
+    // S32 window_center_y = gViewerWindow->getWorldViewRectScaled().getHeight() / 2;
+    S32 window_center_x = gViewerWindow->getWorldViewRectScaled().getCenterX();
+    S32 window_center_y = gViewerWindow->getWorldViewRectScaled().getCenterY();
+    // </FS>
     S32 vertical_offset = window_center_y - VERTICAL_OFFSET;
 
 

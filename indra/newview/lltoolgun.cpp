@@ -170,9 +170,11 @@ void LLToolGun::draw()
         //crosshair->draw(
         //  ( gViewerWindow->getWorldViewRectScaled().getWidth() - crosshair->getWidth() ) / 2,
         //  ( gViewerWindow->getWorldViewRectScaled().getHeight() - crosshair->getHeight() ) / 2);
+        // The custom world viewport may not start at the window origin.
+        const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
         mCrosshairp->draw(
-            ( gViewerWindow->getWorldViewRectScaled().getWidth() - mCrosshairp->getWidth() ) / 2,
-            ( gViewerWindow->getWorldViewRectScaled().getHeight() - mCrosshairp->getHeight() ) / 2);
+            world_view_rect.getCenterX() - mCrosshairp->getWidth() / 2,
+            world_view_rect.getCenterY() - mCrosshairp->getHeight() / 2);
         // </FS:Ansariel> Performance tweak
     }
 }

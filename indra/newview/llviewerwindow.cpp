@@ -3040,8 +3040,8 @@ void LLViewerWindow::draw()
         static LLCachedControl<bool> fsMouselookCombatFeatures(gSavedSettings, "FSMouselookCombatFeatures", true);
         if (inMouselook && fsMouselookCombatFeatures)
         {
-            S32 windowWidth = gViewerWindow->getWorldViewRectScaled().getWidth();
-            S32 windowHeight = gViewerWindow->getWorldViewRectScaled().getHeight();
+            // <FS> Center mouselook overlays in a custom world viewport.
+            const LLRect& world_view_rect = gViewerWindow->getWorldViewRectScaled();
 
             static const std::string unknown_agent = LLTrans::getString("Mouselook_Unknown_Avatar");
             static LLUIColor map_avatar_color = LLUIColorTable::instance().getColor("MapAvatarColor", LLColor4::white);
@@ -3114,7 +3114,7 @@ void LLViewerWindow::draw()
 
                             LLFontGL::getFontSansSerifBold()->renderUTF8(
                                 llformat("%s, %.2fm", targetName.c_str(), (targetPosition - myPosition).magVec()),
-                                0, (windowWidth / 2.f) + userPresetX, (windowHeight / 2.f) + userPresetY, targetColor,
+                                0, (F32)world_view_rect.getCenterX() + userPresetX, (F32)world_view_rect.getCenterY() + userPresetY, targetColor,
                                 (LLFontGL::HAlign)((S32)userPresetHAlign), LLFontGL::TOP, LLFontGL::BOLD, LLFontGL::DROP_SHADOW_SOFT
                             );
 
@@ -3128,6 +3128,7 @@ void LLViewerWindow::draw()
                     }
                 }
             }
+            // </FS>
         }
         // </exodus>
 
@@ -3772,8 +3773,12 @@ void LLViewerWindow::moveCursorToCenter()
 
     if (mouse_warp)
     {
-        S32 x = getWorldViewWidthScaled() / 2;
-        S32 y = getWorldViewHeightScaled() / 2;
+        // <FS> The world viewport can be offset from the window origin.
+        // S32 x = getWorldViewWidthScaled() / 2;
+        // S32 y = getWorldViewHeightScaled() / 2;
+        S32 x = getWorldViewRectScaled().getCenterX();
+        S32 y = getWorldViewRectScaled().getCenterY();
+        // </FS>
 
         LLUI::getInstance()->setMousePositionScreen(x, y);
 
@@ -4507,6 +4512,59 @@ void LLViewerWindow::updateWorldViewRect(bool use_full_window)
         new_world_rect.mBottom = ll_round((F32)new_world_rect.mBottom * mDisplayScale.mV[VY]);
         new_world_rect.mTop = ll_round((F32)new_world_rect.mTop * mDisplayScale.mV[VY]);
     }
+
+    // <FS> Allow the interactive 3D world to occupy only part of the viewer
+    // window. Floaters continue to use the full root view, making the inset
+    // area available for inventory, conversations, and other utility windows.
+    static LLCachedControl<bool> custom_world_view(gSavedSettings, "FSWorldViewEnabled", false);
+    static LLCachedControl<bool> custom_world_view_mouselook(gSavedSettings, "FSWorldViewInMouselook", true);
+    const bool apply_custom_world_view =
+        custom_world_view &&
+        (!use_full_window || (gAgentCamera.cameraMouselook() && custom_world_view_mouselook));
+
+    if (apply_custom_world_view)
+    {
+        constexpr F32 PERCENT_TO_FRACTION = 0.01f;
+        constexpr F32 MAX_COMBINED_INSET = 0.95f;
+        static LLCachedControl<F32> inset_left(gSavedSettings, "FSWorldViewInsetLeft", 0.f);
+        static LLCachedControl<F32> inset_right(gSavedSettings, "FSWorldViewInsetRight", 0.f);
+        static LLCachedControl<F32> inset_top(gSavedSettings, "FSWorldViewInsetTop", 0.f);
+        static LLCachedControl<F32> inset_bottom(gSavedSettings, "FSWorldViewInsetBottom", 0.f);
+
+        F32 left = llclamp((F32)inset_left * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
+        F32 right = llclamp((F32)inset_right * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
+        F32 top = llclamp((F32)inset_top * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
+        F32 bottom = llclamp((F32)inset_bottom * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
+
+        const F32 horizontal_inset = left + right;
+        if (horizontal_inset > MAX_COMBINED_INSET)
+        {
+            const F32 scale = MAX_COMBINED_INSET / horizontal_inset;
+            left *= scale;
+            right *= scale;
+        }
+
+        const F32 vertical_inset = top + bottom;
+        if (vertical_inset > MAX_COMBINED_INSET)
+        {
+            const F32 scale = MAX_COMBINED_INSET / vertical_inset;
+            top *= scale;
+            bottom *= scale;
+        }
+
+        const S32 base_width = new_world_rect.getWidth();
+        const S32 base_height = new_world_rect.getHeight();
+        new_world_rect.mLeft += ll_round((F32)base_width * left);
+        new_world_rect.mRight -= ll_round((F32)base_width * right);
+        new_world_rect.mTop -= ll_round((F32)base_height * top);
+        new_world_rect.mBottom += ll_round((F32)base_height * bottom);
+    }
+
+    // Settings are user-editable through Debug Settings, so retain a final
+    // guard even though the percentage insets are constrained above.
+    new_world_rect.mTop = llmax(new_world_rect.mTop, new_world_rect.mBottom + 1);
+    new_world_rect.mRight = llmax(new_world_rect.mRight, new_world_rect.mLeft + 1);
+    // </FS>
 
     if (mWorldViewRectRaw != new_world_rect)
     {
