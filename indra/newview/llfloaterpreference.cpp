@@ -526,6 +526,9 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     sSkin = gSavedSettings.getString("SkinCurrent");
 
     mCommitCallbackRegistrar.add("Pref.ClickActionChange",      boost::bind(&LLFloaterPreference::onClickActionChange, this));
+    // <FS> Custom world viewport presets for multi-monitor layouts.
+    mCommitCallbackRegistrar.add("Pref.WorldViewPreset",        boost::bind(&LLFloaterPreference::onWorldViewPreset, this, _2));
+    // </FS>
 
     gSavedSettings.getControl("NameTagShowUsernames")->getCommitSignal()->connect(boost::bind(&handleNameTagOptionChanged,  _2));
     gSavedSettings.getControl("NameTagShowFriends")->getCommitSignal()->connect(boost::bind(&handleNameTagOptionChanged,  _2));
@@ -3075,6 +3078,40 @@ void LLFloaterPreference::onClickActionChange()
 {
     updateClickActionControls();
 }
+
+// <FS> Custom world viewport presets for multi-monitor layouts.
+void LLFloaterPreference::onWorldViewPreset(const LLSD& preset)
+{
+    const std::string preset_name = preset.asString();
+    F32 left = 0.f;
+    F32 right = 0.f;
+
+    if (preset_name == "left_half")
+    {
+        right = 50.f;
+    }
+    else if (preset_name == "right_half")
+    {
+        left = 50.f;
+    }
+    else if (preset_name == "center_third")
+    {
+        left = 100.f / 3.f;
+        right = 100.f / 3.f;
+    }
+    else if (preset_name != "full")
+    {
+        LL_WARNS("Preferences") << "Unknown world viewport preset: " << preset_name << LL_ENDL;
+        return;
+    }
+
+    gSavedSettings.setF32("FSWorldViewInsetLeft", left);
+    gSavedSettings.setF32("FSWorldViewInsetRight", right);
+    gSavedSettings.setF32("FSWorldViewInsetTop", 0.f);
+    gSavedSettings.setF32("FSWorldViewInsetBottom", 0.f);
+    gSavedSettings.setBOOL("FSWorldViewEnabled", preset_name != "full");
+}
+// </FS>
 
 void LLFloaterPreference::onAtmosShaderChange()
 {

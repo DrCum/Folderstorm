@@ -159,6 +159,10 @@ protected:
     // updates click/double-click action keybindngs depending on view values
     void updateClickActionControls();
 
+    // <FS> Custom world viewport presets for multi-monitor layouts.
+    void onWorldViewPreset(const LLSD& preset);
+    // </FS>
+
     void onAtmosShaderChange();
 
     // <FS:PP> updates UI Sounds controls depending on values from settings.xml
