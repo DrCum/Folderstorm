@@ -673,9 +673,21 @@ void LLToolBarView::draw()
         mToolbars[LLToolBarEnums::TOOLBAR_LEFT] &&
         mToolbars[LLToolBarEnums::TOOLBAR_RIGHT])
     {
+        const bool dragging = isToolDragged();
+        auto metric_width = [dragging](LLToolBar* toolbar) {
+            if (!toolbar)
+            {
+                return 0;
+            }
+            if (!toolbar->hasButtons() && !dragging)
+            {
+                return 0;
+            }
+            return toolbar->getRect().getWidth();
+        };
         FSChromeLayoutController::instance().notifyToolbarMetrics(
-            mToolbars[LLToolBarEnums::TOOLBAR_LEFT]->getRect().getWidth(),
-            mToolbars[LLToolBarEnums::TOOLBAR_RIGHT]->getRect().getWidth());
+            metric_width(mToolbars[LLToolBarEnums::TOOLBAR_LEFT]),
+            metric_width(mToolbars[LLToolBarEnums::TOOLBAR_RIGHT]));
     }
 
     // Draw drop zones if drop of a tool is active

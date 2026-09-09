@@ -175,6 +175,143 @@ int main()
                "span percents are ordered");
     }
 
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        SideRequest edge{SidePlacement::WindowEdge, toolbar, 0};
+        const SideLayout layout = computeSideLayout(window, world, edge, edge);
+        expectEq(layout.left_outer_spacer, 0, "window-edge left spacer");
+        expectEq(layout.right_outer_spacer, 0, "window-edge right spacer");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        SideRequest inside{SidePlacement::InsideViewport, toolbar, 0};
+        const SideLayout layout = computeSideLayout(window, world, inside, inside);
+        expectEq(layout.left_outer_spacer, world.left, "inside left sits on viewport edge");
+        expectEq(layout.right_outer_spacer, window.right - world.right, "inside right sits on viewport edge");
+        expect(layout.left_outer_spacer + layout.left_toolbar_width +
+                   layout.right_toolbar_width + layout.right_outer_spacer <= window.width(),
+               "inside placement does not overflow holder");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        SideRequest outside{SidePlacement::OutsideViewport, toolbar, 0};
+        const SideLayout layout = computeSideLayout(window, world, outside, outside);
+        expectEq(layout.left_outer_spacer, world.left - toolbar, "outside left touches viewport");
+        expectEq(layout.right_outer_spacer, window.right - world.right - toolbar, "outside right touches viewport");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 0.2f, 0.1f);
+        SideRequest inside{SidePlacement::InsideViewport, toolbar, 12};
+        const SideLayout layout = computeSideLayout(window, world, inside, inside);
+        expectEq(layout.left_outer_spacer, world.left + 12, "inside left offset");
+        expectEq(layout.right_outer_spacer, window.right - world.right + 12, "inside right offset");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 0.2f, 0.1f);
+        SideRequest smart{SidePlacement::Smart, toolbar, 0};
+        const SideLayout layout = computeSideLayout(window, world, smart, smart);
+        expectEq(layout.left_outer_spacer, world.left - toolbar, "unequal insets: left smart outside");
+        expectEq(layout.right_outer_spacer, window.right - world.right - toolbar, "unequal insets: right smart outside");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        SpanRequest full{Region::FullWindow};
+        const Span span = computeHorizontalSpan(window, world, full, kMinInteractiveWidth);
+        expectEq(span.left, window.left, "full window span left");
+        expectEq(span.right, window.right, "full window span right");
+        expect(span.resolved_region == Region::FullWindow, "full window keeps region");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        SpanRequest right_util{Region::RightUtility};
+        const Span span = computeHorizontalSpan(window, world, right_util, kMinInteractiveWidth);
+        expectEq(span.left, world.right, "right utility starts at viewport");
+        expectEq(span.right, window.right, "right utility ends at window");
+        expect(!span.used_fallback, "wide right utility does not fall back");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 0.4f, 0.01f);
+        SpanRequest right_util{Region::RightUtility};
+        const Span span = computeHorizontalSpan(window, world, right_util, kMinInteractiveWidth);
+        expect(span.used_fallback, "narrow right utility falls back to viewport");
+        expectEq(span.left, world.left, "right utility fallback left");
+        expectEq(span.right, world.right, "right utility fallback right");
+        expect(span.valid() && span.width() > 0, "fallback span stays interactive");
+    }
+
+    {
+        SpanRequest custom{Region::CustomSpan, 10.f, 40.f, 8, 12};
+        const Span span = computeHorizontalSpan(window, window, custom, kMinInteractiveWidth);
+        expectEq(span.left, 308, "custom span applies left margin");
+        expectEq(span.right, 1188, "custom span applies right margin");
+        expect(!span.used_fallback, "custom span with margins stays valid");
+    }
+
+    {
+        SpanRequest custom{Region::CustomSpan, 10.f, 12.f, 40, 40};
+        const Span span = computeHorizontalSpan(window, window, custom, kMinInteractiveWidth);
+        expect(span.used_fallback, "margins that invert a custom span fall back");
+        expect(span.valid(), "inverted custom span fallback remains valid");
+    }
+
+    {
+        const std::vector<std::string> ids = builtinProfileIds();
+        expectEq(static_cast<int>(ids.size()), 4, "four built-in profiles");
+        expect(builtinProfileLabel("standard_window") == "Standard Window", "standard label");
+        expect(builtinProfileLabel("two_monitors_utility_left") == "Two Monitors — Utility Left",
+               "utility left label");
+        expect(builtinProfileLabel("two_monitors_utility_right") == "Two Monitors — Utility Right",
+               "utility right label");
+        expect(builtinProfileLabel("three_monitors_centered") == "Three Monitors — Centered Viewport",
+               "centered label");
+
+        const Snapshot standard = builtinSnapshot("standard_window");
+        expect(!standard.viewport_enabled, "standard window leaves viewport disabled");
+        expectEq(static_cast<int>(standard.left_placement), static_cast<int>(SidePlacement::Smart),
+                 "standard uses smart left");
+        expect(standard.nav_favorites.region == Region::Viewport, "standard nav uses viewport");
+        expect(standard.menu_status.region == Region::Viewport, "standard menu uses viewport");
+
+        const Snapshot left = builtinSnapshot("two_monitors_utility_left");
+        expect(left.viewport_enabled, "utility left enables viewport");
+        expect(left.inset_left == 50.f && left.inset_right == 0.f, "utility left inset");
+
+        const Snapshot right = builtinSnapshot("two_monitors_utility_right");
+        expect(right.viewport_enabled, "utility right enables viewport");
+        expect(right.inset_left == 0.f && right.inset_right == 50.f, "utility right inset");
+    }
+
+    {
+        expect(clampSidePlacement(-1) == SidePlacement::Smart, "invalid side placement defaults smart");
+        expect(clampRegion(99) == Region::Viewport, "invalid region defaults viewport");
+        expectEq(clampNonNegative(-4), 0, "negative clamp");
+        expect(clampPercent(150.f) == 100.f, "percent clamps high");
+        expect(clampPercent(-8.f) == 0.f, "percent clamps low");
+        const std::string text = describeFallback("bottom dock", Region::LeftUtility, Region::Viewport);
+        expect(text.find("bottom dock") != std::string::npos, "fallback diagnostic names the group");
+    }
+
+    {
+        const Rect world = worldFromInsets(window, 1.f / 3.f, 1.f / 3.f);
+        for (int placement = 0; placement < kPlacementCount; ++placement)
+        {
+            SideRequest request{clampSidePlacement(placement), toolbar, 0};
+            const SideLayout layout = computeSideLayout(window, world, request, request);
+            expect(layout.left_outer_spacer >= 0 && layout.right_outer_spacer >= 0,
+                   "placement never yields negative spacers");
+            expect(layout.left_outer_spacer + layout.left_toolbar_width +
+                       layout.right_toolbar_width + layout.right_outer_spacer <= window.width(),
+                   "placement fits the holder");
+        }
+    }
+
     if (g_failures)
     {
         std::cerr << g_failures << " test(s) failed" << std::endl;

@@ -28,6 +28,7 @@
 
 class LLLayoutPanel;
 class LLLayoutStack;
+class LLToolBar;
 class LLView;
 
 class FSChromeLayoutController : public LLSingleton<FSChromeLayoutController>
@@ -76,7 +77,9 @@ private:
     void applyNavigation();
     void applyMenuStatus();
     void applySpanToView(LLView* view, const FSChromeLayout::Span& span, U32 follows);
+    void applyMenuBarToSpan(LLView* menu, const FSChromeLayout::Span& span);
     void setSpacerWidth(LLLayoutPanel* panel, int width);
+    int toolbarLayoutWidth(LLToolBar* toolbar) const;
     LLLayoutPanel* findLayoutPanel(LLView* root, const char* name) const;
 
     bool mInitialized = false;

@@ -55,6 +55,12 @@ struct Rect
     int width() const { return right - left; }
     int height() const { return top - bottom; }
     bool valid() const { return right > left && top > bottom; }
+    bool operator==(const Rect& other) const
+    {
+        return left == other.left && bottom == other.bottom &&
+               right == other.right && top == other.top;
+    }
+    bool operator!=(const Rect& other) const { return !(*this == other); }
 };
 
 struct SideRequest
@@ -62,6 +68,14 @@ struct SideRequest
     SidePlacement placement = SidePlacement::Smart;
     int toolbar_width = 0;
     int offset = 0;
+
+    bool operator==(const SideRequest& other) const
+    {
+        return placement == other.placement &&
+               toolbar_width == other.toolbar_width &&
+               offset == other.offset;
+    }
+    bool operator!=(const SideRequest& other) const { return !(*this == other); }
 };
 
 struct SideLayout
@@ -74,6 +88,19 @@ struct SideLayout
     bool right_visible = true;
     bool left_used_fallback = false;
     bool right_used_fallback = false;
+
+    bool operator==(const SideLayout& other) const
+    {
+        return left_outer_spacer == other.left_outer_spacer &&
+               right_outer_spacer == other.right_outer_spacer &&
+               left_toolbar_width == other.left_toolbar_width &&
+               right_toolbar_width == other.right_toolbar_width &&
+               left_visible == other.left_visible &&
+               right_visible == other.right_visible &&
+               left_used_fallback == other.left_used_fallback &&
+               right_used_fallback == other.right_used_fallback;
+    }
+    bool operator!=(const SideLayout& other) const { return !(*this == other); }
 };
 
 struct SpanRequest
@@ -83,6 +110,16 @@ struct SpanRequest
     float custom_end_percent = 100.f;
     int margin_left = 0;
     int margin_right = 0;
+
+    bool operator==(const SpanRequest& other) const
+    {
+        return region == other.region &&
+               custom_start_percent == other.custom_start_percent &&
+               custom_end_percent == other.custom_end_percent &&
+               margin_left == other.margin_left &&
+               margin_right == other.margin_right;
+    }
+    bool operator!=(const SpanRequest& other) const { return !(*this == other); }
 };
 
 struct Span
@@ -94,6 +131,13 @@ struct Span
 
     int width() const { return right - left; }
     bool valid() const { return right > left; }
+    bool operator==(const Span& other) const
+    {
+        return left == other.left && right == other.right &&
+               used_fallback == other.used_fallback &&
+               resolved_region == other.resolved_region;
+    }
+    bool operator!=(const Span& other) const { return !(*this == other); }
 };
 
 struct Snapshot

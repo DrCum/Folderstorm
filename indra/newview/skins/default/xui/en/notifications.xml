@@ -7120,6 +7120,10 @@ Delete this saved interface layout profile?
      yestext="Delete"/>
   </notification>
 
+  <notification
+   icon="alertmodal.tga"
+   name="ConfirmClearCache"
+   type="alertmodal">
 Are you sure you want to clear your viewer cache?
     <tag>confirm</tag>
     <usetemplate

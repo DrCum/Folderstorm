@@ -17,10 +17,12 @@
 
 #include "fschromelayoutcontroller.h"
 
+#include "llagentcamera.h"
 #include "llcontrol.h"
 #include "lllayoutstack.h"
 #include "llnavigationbar.h"
 #include "llstatusbar.h"
+#include "lltoolbar.h"
 #include "lltoolbarview.h"
 #include "llui.h"
 #include "llview.h"
@@ -78,7 +80,8 @@ const char* const kSettingNames[] = {
     "FSWorldViewInsetLeft",
     "FSWorldViewInsetRight",
     "FSWorldViewInsetTop",
-    "FSWorldViewInsetBottom"
+    "FSWorldViewInsetBottom",
+    "UIScaleFactor"
 };
 
 FSChromeLayout::SpanRequest readSpan(const char* region_key, const char* start_key,
@@ -284,14 +287,10 @@ void FSChromeLayoutController::apply()
 
     if (gToolBarView)
     {
-        if (LLToolBar* left = gToolBarView->getToolbar(LLToolBarEnums::TOOLBAR_LEFT))
-        {
-            mLeftRequest.toolbar_width = left->getRect().getWidth();
-        }
-        if (LLToolBar* right = gToolBarView->getToolbar(LLToolBarEnums::TOOLBAR_RIGHT))
-        {
-            mRightRequest.toolbar_width = right->getRect().getWidth();
-        }
+        mLeftRequest.toolbar_width =
+            toolbarLayoutWidth(gToolBarView->getToolbar(LLToolBarEnums::TOOLBAR_LEFT));
+        mRightRequest.toolbar_width =
+            toolbarLayoutWidth(gToolBarView->getToolbar(LLToolBarEnums::TOOLBAR_RIGHT));
     }
 
     mLastLeftToolbarWidth = mLeftRequest.toolbar_width;
@@ -403,13 +402,13 @@ void FSChromeLayoutController::applyNavigation()
 
 void FSChromeLayoutController::applyMenuStatus()
 {
-    if (gMenuBarView && gMenuBarView->getParent())
-    {
-        applySpanToView(gMenuBarView, mLastMenuSpan, FOLLOWS_LEFT | FOLLOWS_TOP);
-    }
     if (gStatusBar && gStatusBar->getParent())
     {
         applySpanToView(gStatusBar, mLastMenuSpan, FOLLOWS_LEFT | FOLLOWS_TOP | FOLLOWS_BOTTOM);
+    }
+    if (gMenuBarView && gMenuBarView->getParent())
+    {
+        applyMenuBarToSpan(gMenuBarView, mLastMenuSpan);
     }
 }
 
@@ -436,8 +435,63 @@ void FSChromeLayoutController::applySpanToView(LLView* view, const FSChromeLayou
         return;
     }
 
+    if (view->getRect() == local && view->getFollows() == follows)
+    {
+        return;
+    }
+
     view->setFollows(follows);
     view->setShape(local);
+}
+
+void FSChromeLayoutController::applyMenuBarToSpan(LLView* menu, const FSChromeLayout::Span& span)
+{
+    if (!menu)
+    {
+        return;
+    }
+    LLView* parent = menu->getParent();
+    if (!parent)
+    {
+        return;
+    }
+
+    const LLRect parent_screen = parent->calcScreenRect();
+    const S32 parent_width = parent->getRect().getWidth();
+    const S32 span_left = llclamp(span.left - parent_screen.mLeft, 0, parent_width);
+    const S32 span_right = llclamp(span.right - parent_screen.mLeft, span_left + 1, parent_width);
+
+    S32 content_width = menu->getRect().getWidth();
+    if (gMenuBarView)
+    {
+        content_width = std::max(content_width, gMenuBarView->getRightmostMenuEdge());
+    }
+    content_width = llclamp(content_width, 1, std::max(1, span_right - span_left));
+
+    LLRect local = menu->getRect();
+    local.mLeft = span_left;
+    local.mRight = span_left + content_width;
+    if (menu->getRect() == local && menu->getFollows() == (FOLLOWS_LEFT | FOLLOWS_TOP))
+    {
+        return;
+    }
+
+    menu->setFollows(FOLLOWS_LEFT | FOLLOWS_TOP);
+    menu->setShape(local);
+}
+
+int FSChromeLayoutController::toolbarLayoutWidth(LLToolBar* toolbar) const
+{
+    if (!toolbar)
+    {
+        return 0;
+    }
+    LLView* parent = toolbar->getParent();
+    if (!toolbar->hasButtons() && parent && !parent->getVisible())
+    {
+        return 0;
+    }
+    return toolbar->getRect().getWidth();
 }
 
 void FSChromeLayoutController::setSpacerWidth(LLLayoutPanel* panel, int width)
@@ -502,6 +556,10 @@ void FSChromeLayoutController::applySnapshot(const FSChromeLayout::Snapshot& sna
               SETTING_NAV_MARGIN_LEFT, SETTING_NAV_MARGIN_RIGHT);
     writeSpan(clean.menu_status, SETTING_MENU_REGION, SETTING_MENU_START, SETTING_MENU_END,
               SETTING_MENU_MARGIN_LEFT, SETTING_MENU_MARGIN_RIGHT);
+    if (gViewerWindow)
+    {
+        gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
+    }
     mApplying = false;
     apply();
 }
