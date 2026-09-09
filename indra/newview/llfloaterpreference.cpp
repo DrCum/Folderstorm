@@ -130,6 +130,7 @@
 // Firestorm Includes
 #include "exogroupmutelist.h"
 #include "fsavatarrenderpersistence.h"
+#include "fschromelayoutcontroller.h"
 #include "fsdroptarget.h"
 #include "fsfloaterimcontainer.h"
 #include "fspanelpreferenceuisounds.h"  // <FS:PP> UI Sounds
@@ -528,6 +529,12 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.ClickActionChange",      boost::bind(&LLFloaterPreference::onClickActionChange, this));
     // <FS> Custom world viewport presets for multi-monitor layouts.
     mCommitCallbackRegistrar.add("Pref.WorldViewPreset",        boost::bind(&LLFloaterPreference::onWorldViewPreset, this, _2));
+    mCommitCallbackRegistrar.add("Pref.ChromeProfileApply",     boost::bind(&LLFloaterPreference::onChromeProfileApply, this));
+    mCommitCallbackRegistrar.add("Pref.ChromeProfileSave",      boost::bind(&LLFloaterPreference::onChromeProfileSave, this));
+    mCommitCallbackRegistrar.add("Pref.ChromeProfileRename",    boost::bind(&LLFloaterPreference::onChromeProfileRename, this));
+    mCommitCallbackRegistrar.add("Pref.ChromeProfileDelete",    boost::bind(&LLFloaterPreference::onChromeProfileDelete, this));
+    mCommitCallbackRegistrar.add("Pref.ChromeLayoutReset",      boost::bind(&LLFloaterPreference::onChromeLayoutReset, this));
+    mCommitCallbackRegistrar.add("Pref.ChromeRegionChanged",    boost::bind(&LLFloaterPreference::refreshChromeLayoutControls, this));
     // </FS>
 
     gSavedSettings.getControl("NameTagShowUsernames")->getCommitSignal()->connect(boost::bind(&handleNameTagOptionChanged,  _2));
@@ -2386,6 +2393,7 @@ void LLFloaterPreference::refresh()
         advanced->refresh();
     }
     updateClickActionViews();
+    refreshChromeLayoutControls();
 
     mTimeFormatCombobox->selectByValue(gSavedSettings.getBOOL("Use24HourClock") ? "1" : "0");
 
@@ -3110,6 +3118,208 @@ void LLFloaterPreference::onWorldViewPreset(const LLSD& preset)
     gSavedSettings.setF32("FSWorldViewInsetTop", 0.f);
     gSavedSettings.setF32("FSWorldViewInsetBottom", 0.f);
     gSavedSettings.setBOOL("FSWorldViewEnabled", preset_name != "full");
+}
+
+void LLFloaterPreference::refreshChromeLayoutControls()
+{
+    auto show_span = [this](const char* start_name, const char* end_name, const char* region_setting) {
+        const bool custom = gSavedSettings.getS32(region_setting) ==
+                            static_cast<S32>(FSChromeLayout::Region::CustomSpan);
+        if (LLView* start = findChildView(start_name, true))
+        {
+            start->setVisible(custom);
+        }
+        if (LLView* end = findChildView(end_name, true))
+        {
+            end->setVisible(custom);
+        }
+    };
+
+    show_span("chrome_bottom_span_start", "chrome_bottom_span_end", "FSChromeBottomDockRegion");
+    show_span("chrome_nav_span_start", "chrome_nav_span_end", "FSChromeNavFavoritesRegion");
+    show_span("chrome_menu_span_start", "chrome_menu_span_end", "FSChromeMenuStatusRegion");
+    populateChromeProfileCombo();
+}
+
+void LLFloaterPreference::populateChromeProfileCombo()
+{
+    LLComboBox* combo = findChild<LLComboBox>("chrome_profile_combo");
+    if (!combo || !FSChromeLayoutController::instanceExists())
+    {
+        return;
+    }
+
+    const std::string active = FSChromeLayoutController::instance().activeProfileId();
+    combo->clearRows();
+    for (const std::string& id : FSChromeLayoutController::instance().profileNames())
+    {
+        const std::string label = FSChromeLayout::isBuiltinProfileId(id)
+            ? FSChromeLayout::builtinProfileLabel(id)
+            : id;
+        combo->add(label, LLSD(id));
+    }
+    if (!active.empty())
+    {
+        combo->setValue(LLSD(active));
+    }
+    else if (combo->getItemCount() > 0)
+    {
+        combo->selectFirstItem();
+    }
+}
+
+std::string LLFloaterPreference::getChromeProfileName() const
+{
+    LLLineEditor* editor = findChild<LLLineEditor>("chrome_profile_name");
+    if (!editor)
+    {
+        return std::string();
+    }
+    std::string name = editor->getText();
+    LLStringUtil::trim(name);
+    return name;
+}
+
+std::string LLFloaterPreference::getSelectedChromeProfileId() const
+{
+    LLComboBox* combo = findChild<LLComboBox>("chrome_profile_combo");
+    if (!combo)
+    {
+        return std::string();
+    }
+    return combo->getValue().asString();
+}
+
+void LLFloaterPreference::onChromeProfileApply()
+{
+    const std::string id = getSelectedChromeProfileId();
+    if (id.empty() || !FSChromeLayoutController::instanceExists())
+    {
+        return;
+    }
+    if (!FSChromeLayoutController::instance().applyProfile(id))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Could not apply that interface layout profile.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onChromeProfileSave()
+{
+    if (!FSChromeLayoutController::instanceExists())
+    {
+        return;
+    }
+    const std::string name = getChromeProfileName();
+    if (!FSChromeLayoutController::isSafeProfileName(name) || FSChromeLayout::isBuiltinProfileId(name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Enter a unique profile name using letters, numbers, spaces, dashes, or underscores.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+
+    if (FSChromeLayoutController::instance().isUserProfile(name))
+    {
+        LLSD payload;
+        payload["name"] = name;
+        LLNotificationsUtil::add("ConfirmChromeLayoutOverwrite", LLSD(), payload,
+                                 boost::bind(&LLFloaterPreference::onChromeProfileOverwriteResponse, this, _1, _2));
+        return;
+    }
+
+    if (!FSChromeLayoutController::instance().saveUserProfile(name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Could not save that interface layout profile.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onChromeProfileOverwriteResponse(const LLSD& notification, const LLSD& response)
+{
+    if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
+    {
+        return;
+    }
+    const std::string name = notification["payload"]["name"].asString();
+    if (!FSChromeLayoutController::instanceExists() ||
+        !FSChromeLayoutController::instance().saveUserProfile(name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Could not overwrite that interface layout profile.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onChromeProfileRename()
+{
+    if (!FSChromeLayoutController::instanceExists())
+    {
+        return;
+    }
+    const std::string old_name = getSelectedChromeProfileId();
+    const std::string new_name = getChromeProfileName();
+    if (!FSChromeLayoutController::instance().renameUserProfile(old_name, new_name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Rename only works on saved custom profiles, and the new name must be unique.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onChromeProfileDelete()
+{
+    const std::string name = getSelectedChromeProfileId();
+    if (!FSChromeLayoutController::instanceExists() ||
+        !FSChromeLayoutController::instance().isUserProfile(name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Built-in profiles cannot be deleted. Select a saved custom profile first.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+
+    LLSD payload;
+    payload["name"] = name;
+    LLNotificationsUtil::add("ConfirmChromeLayoutDelete", LLSD(), payload,
+                             boost::bind(&LLFloaterPreference::onChromeProfileDeleteResponse, this, _1, _2));
+}
+
+void LLFloaterPreference::onChromeProfileDeleteResponse(const LLSD& notification, const LLSD& response)
+{
+    if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
+    {
+        return;
+    }
+    const std::string name = notification["payload"]["name"].asString();
+    if (!FSChromeLayoutController::instanceExists() ||
+        !FSChromeLayoutController::instance().deleteUserProfile(name))
+    {
+        LLSD args;
+        args["MESSAGE"] = "Could not delete that interface layout profile.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onChromeLayoutReset()
+{
+    if (FSChromeLayoutController::instanceExists())
+    {
+        FSChromeLayoutController::instance().resetCurrentLayout();
+        refreshChromeLayoutControls();
+    }
 }
 // </FS>
 
