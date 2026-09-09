@@ -31,6 +31,13 @@
                   height="500"
                   follows="all"
                   mouse_opaque="false">
+      <layout_panel name="left_toolbar_outer_spacer"
+                    auto_resize="false"
+                    user_resize="false"
+                    min_dim="0"
+                    height="500"
+                    width="0"
+                    mouse_opaque="false"/>
       <layout_panel name="left_toolbar_panel"
                     auto_resize="false"
                     height="500"
@@ -130,12 +137,40 @@
 	            name="caret" />
         </toolbar_vertical> <!-- FS:Ansariel: Special vertical toolbar -->
       </layout_panel>
+      <layout_panel name="right_toolbar_outer_spacer"
+                    auto_resize="false"
+                    user_resize="false"
+                    min_dim="0"
+                    height="500"
+                    width="0"
+                    mouse_opaque="false"/>
     </layout_stack>
   </layout_panel>
 
   <!-- Panel to take up the chat bar / tool bar layout stack -->
   <layout_panel name="bottom_toolbar_panel"
                 auto_resize="false"
+                height="60"
+                width="1024"
+                mouse_opaque="false">
+
+  <layout_stack name="bottom_dock_region_stack"
+                orientation="horizontal"
+                left="0"
+                top="0"
+                width="1024"
+                height="60"
+                follows="all"
+                mouse_opaque="false">
+  <layout_panel name="bottom_dock_left_spacer"
+                auto_resize="false"
+                user_resize="false"
+                min_dim="0"
+                height="60"
+                width="0"
+                mouse_opaque="false"/>
+  <layout_panel name="bottom_dock_content"
+                auto_resize="true"
                 height="60"
                 width="1024"
                 mouse_opaque="false">
@@ -288,6 +323,16 @@
 
   </layout_stack>
   <!-- Horizontal panel to take up the chat bar and the tool bar -->
+
+  </layout_panel>
+  <layout_panel name="bottom_dock_right_spacer"
+                auto_resize="false"
+                user_resize="false"
+                min_dim="0"
+                height="60"
+                width="0"
+                mouse_opaque="false"/>
+  </layout_stack>
 
   </layout_panel>
   <!-- Panel to take up the chat bar / tool bar layout stack -->

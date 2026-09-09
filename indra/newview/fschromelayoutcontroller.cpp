@@ -19,7 +19,12 @@
 
 #include "llcontrol.h"
 #include "lllayoutstack.h"
+#include "llnavigationbar.h"
+#include "llstatusbar.h"
 #include "lltoolbarview.h"
+#include "llui.h"
+#include "llview.h"
+#include "llviewermenu.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
 
@@ -325,22 +330,114 @@ void FSChromeLayoutController::apply()
 
 void FSChromeLayoutController::applySideToolbars()
 {
-    // Applied in a later milestone once spacer panels exist in the default skin.
+    if (!gToolBarView)
+    {
+        return;
+    }
+
+    LLView* stack = gToolBarView->findChildView("vertical_toolbar_stack");
+    LLLayoutPanel* left_spacer = findLayoutPanel(gToolBarView, "left_toolbar_outer_spacer");
+    LLLayoutPanel* right_spacer = findLayoutPanel(gToolBarView, "right_toolbar_outer_spacer");
+    if (!stack || !left_spacer || !right_spacer)
+    {
+        return;
+    }
+
+    const FSChromeLayout::Rect holder = toLayoutRect(stack->calcScreenRect());
+    const FSChromeLayout::SideLayout layout =
+        FSChromeLayout::computeSideLayout(holder, mWorld, mLeftRequest, mRightRequest);
+    mLastSideLayout = layout;
+
+    if (layout.left_used_fallback)
+    {
+        LL_DEBUGS("FSChromeLayout") << "Left toolbar outside placement did not fit the gutter; clamped"
+                                    << LL_ENDL;
+    }
+    if (layout.right_used_fallback)
+    {
+        LL_DEBUGS("FSChromeLayout") << "Right toolbar outside placement did not fit the gutter; clamped"
+                                    << LL_ENDL;
+    }
+
+    setSpacerWidth(left_spacer, layout.left_outer_spacer);
+    setSpacerWidth(right_spacer, layout.right_outer_spacer);
 }
 
 void FSChromeLayoutController::applyBottomDock()
 {
-    // Applied in a later milestone once the bottom dock region stack exists.
+    if (!gToolBarView)
+    {
+        return;
+    }
+
+    LLView* stack = gToolBarView->findChildView("bottom_dock_region_stack");
+    LLLayoutPanel* left_spacer = findLayoutPanel(gToolBarView, "bottom_dock_left_spacer");
+    LLLayoutPanel* right_spacer = findLayoutPanel(gToolBarView, "bottom_dock_right_spacer");
+    if (!stack || !left_spacer || !right_spacer)
+    {
+        return;
+    }
+
+    const LLRect holder = stack->calcScreenRect();
+    const int left = llclamp(mLastBottomSpan.left, holder.mLeft, holder.mRight);
+    const int right = llclamp(mLastBottomSpan.right, left, holder.mRight);
+    setSpacerWidth(left_spacer, std::max(0, left - holder.mLeft));
+    setSpacerWidth(right_spacer, std::max(0, holder.mRight - right));
 }
 
 void FSChromeLayoutController::applyNavigation()
 {
-    // Applied in a later milestone.
+    if (!LLNavigationBar::instanceExists())
+    {
+        return;
+    }
+
+    LLView* nav = LLNavigationBar::instance().getView();
+    if (!nav || !nav->getParent())
+    {
+        return;
+    }
+
+    applySpanToView(nav, mLastNavSpan, FOLLOWS_LEFT | FOLLOWS_TOP);
 }
 
 void FSChromeLayoutController::applyMenuStatus()
 {
-    // Applied in a later milestone.
+    if (gMenuBarView && gMenuBarView->getParent())
+    {
+        applySpanToView(gMenuBarView, mLastMenuSpan, FOLLOWS_LEFT | FOLLOWS_TOP);
+    }
+    if (gStatusBar && gStatusBar->getParent())
+    {
+        applySpanToView(gStatusBar, mLastMenuSpan, FOLLOWS_LEFT | FOLLOWS_TOP | FOLLOWS_BOTTOM);
+    }
+}
+
+void FSChromeLayoutController::applySpanToView(LLView* view, const FSChromeLayout::Span& span, U32 follows)
+{
+    if (!view)
+    {
+        return;
+    }
+    LLView* parent = view->getParent();
+    if (!parent)
+    {
+        return;
+    }
+
+    const LLRect parent_screen = parent->calcScreenRect();
+    LLRect local = view->getRect();
+    local.mLeft = span.left - parent_screen.mLeft;
+    local.mRight = span.right - parent_screen.mLeft;
+    local.mLeft = llclamp(local.mLeft, 0, parent->getRect().getWidth());
+    local.mRight = llclamp(local.mRight, local.mLeft + 1, parent->getRect().getWidth());
+    if (local.getWidth() <= 0)
+    {
+        return;
+    }
+
+    view->setFollows(follows);
+    view->setShape(local);
 }
 
 void FSChromeLayoutController::setSpacerWidth(LLLayoutPanel* panel, int width)

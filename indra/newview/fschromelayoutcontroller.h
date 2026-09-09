@@ -20,6 +20,7 @@
 #include "llrect.h"
 #include "llsingleton.h"
 #include "llsd.h"
+#include "stdtypes.h"
 
 #include <boost/signals2.hpp>
 #include <string>
@@ -74,6 +75,7 @@ private:
     void applyBottomDock();
     void applyNavigation();
     void applyMenuStatus();
+    void applySpanToView(LLView* view, const FSChromeLayout::Span& span, U32 follows);
     void setSpacerWidth(LLLayoutPanel* panel, int width);
     LLLayoutPanel* findLayoutPanel(LLView* root, const char* name) const;
 
