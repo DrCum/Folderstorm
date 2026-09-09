@@ -109,6 +109,8 @@ set(viewer_SOURCE_FILES
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
+    fschromelayout.cpp
+    fschromelayoutcontroller.cpp
     fsconsoleutils.cpp
     fscontactsfriendsmenu.cpp
     fsdata.cpp
@@ -970,6 +972,8 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fschromelayout.h
+    fschromelayoutcontroller.h
     fsconsoleutils.h
     fscontactsfriendsmenu.h
     fsdata.h
