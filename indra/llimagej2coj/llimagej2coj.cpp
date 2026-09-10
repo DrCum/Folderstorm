@@ -48,7 +48,10 @@ std::string LLImageJ2COJ::getEngineInfo() const
 //    return std::string("OpenJPEG runtime: ") + opj_version();
 //#endif
 #ifdef LL_OPENJPEG_AVX2
-    return llformat("OpenJPEG: %i.%i.%i AVX2, Runtime: %s", OPJ_VERSION_MAJOR, OPJ_VERSION_MINOR, OPJ_VERSION_BUILD, opj_version());
+    // LLTextureCache::EntriesInfo::mEncoderVersion is 32 bytes (31 + NUL).
+    // The stock string "OpenJPEG: 2.5.3, Runtime: 2.5.3" is already 31 chars;
+    // appending " AVX2" to that format crashes at startup in setEntriesHeader().
+    return llformat("OpenJPEG: %i.%i.%i AVX2", OPJ_VERSION_MAJOR, OPJ_VERSION_MINOR, OPJ_VERSION_BUILD);
 #else
     return llformat("OpenJPEG: %i.%i.%i, Runtime: %s", OPJ_VERSION_MAJOR, OPJ_VERSION_MINOR, OPJ_VERSION_BUILD, opj_version());
 #endif

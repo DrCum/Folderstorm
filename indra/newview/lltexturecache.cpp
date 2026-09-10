@@ -1094,11 +1094,14 @@ void LLTextureCache::setEntriesHeader()
 {
     if (sHeaderEncoderStringSize < sHeaderCacheEncoderVersion.size() + 1)
     {
-        // For simplicity we use predefined size of header, so if version string
-        // doesn't fit, either getEngineInfo() returned malformed string or
-        // sHeaderEncoderStringSize need to be increased.
-        // Also take into accout that c_str() returns additional null character
-        LL_ERRS() << "Version string doesn't fit in header" << LL_ENDL;
+        // For simplicity we use a fixed-size header. A too-long getEngineInfo()
+        // used to LL_ERRS() here and abort the viewer on startup (AVX2 OpenJPEG
+        // hit this). Truncate so the cache can still be created; About/logs
+        // still use the full engine string.
+        LL_WARNS() << "J2C version string too long for texture cache header (max "
+                   << (sHeaderEncoderStringSize - 1) << " chars), truncating: "
+                   << sHeaderCacheEncoderVersion << LL_ENDL;
+        sHeaderCacheEncoderVersion.resize(sHeaderEncoderStringSize - 1);
     }
 
     mHeaderEntriesInfo.mVersion = sHeaderCacheVersion;
