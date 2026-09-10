@@ -184,10 +184,18 @@ if (LINUX)
       -fno-math-errno
       -fno-strict-aliasing
       -fsigned-char
-      -msse2
       -mfpmath=sse
       -pthread
       )
+
+  # Named ISA, not -march=native: AVX2 implies SSE2. --avx2 used to be a no-op on Linux.
+  if (USE_AVX2_OPTIMIZATION)
+    add_compile_options(-mavx2)
+  elseif (USE_AVX_OPTIMIZATION)
+    add_compile_options(-mavx)
+  else ()
+    add_compile_options(-msse2)
+  endif ()
 
   # force this platform to accept TOS via external browser <FS:ND> No, do not.
   # add_definitions(-DEXTERNAL_TOS)

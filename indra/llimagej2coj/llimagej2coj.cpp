@@ -26,6 +26,8 @@
 
 #include "linden_common.h"
 #include "llimagej2coj.h"
+#include "llimagej2cpack.h"
+#include "llimage.h"
 
 // this is defined so that we get static linking.
 #include "openjpeg.h"
@@ -45,7 +47,11 @@ std::string LLImageJ2COJ::getEngineInfo() const
 //#else
 //    return std::string("OpenJPEG runtime: ") + opj_version();
 //#endif
+#ifdef LL_OPENJPEG_AVX2
+    return llformat("OpenJPEG: %i.%i.%i AVX2, Runtime: %s", OPJ_VERSION_MAJOR, OPJ_VERSION_MINOR, OPJ_VERSION_BUILD, opj_version());
+#else
     return llformat("OpenJPEG: %i.%i.%i, Runtime: %s", OPJ_VERSION_MAJOR, OPJ_VERSION_MINOR, OPJ_VERSION_BUILD, opj_version());
+#endif
 // </FS:Ansariel>
 }
 
@@ -531,6 +537,10 @@ public:
         LLImageDataLock lockOut(&compressedImageOut);
 
         setImage(rawImageIn);
+        if (!image)
+        {
+            return false;
+        }
 
         encoder = opj_create_compress(OPJ_CODEC_J2K);
 
@@ -642,6 +652,10 @@ public:
         S32 numcomps = raw.getComponents();
         S32 width    = raw.getWidth();
         S32 height   = raw.getHeight();
+        if (numcomps <= 0 || numcomps > MAX_IMAGE_COMPONENTS || width <= 0 || height <= 0)
+        {
+            return;
+        }
 
         std::vector<opj_image_cmptparm_t> cmptparm(numcomps);
 
@@ -656,118 +670,22 @@ public:
         }
 
         image = opj_image_create(numcomps, cmptparm.data(), OPJ_CLRSPC_SRGB);
+        if (!image)
+        {
+            return;
+        }
 
         image->x1 = width;
         image->y1 = height;
 
         const U8 *src_datap = raw.getData();
-
-        S32 i = 0;
-        for (S32 y = height - 1; y >= 0; y--)
+        OPJ_INT32* planes[MAX_IMAGE_COMPONENTS] = {};
+        for (S32 c = 0; c < numcomps; ++c)
         {
-            for (S32 x = 0; x < width; x++)
-            {
-                const U8 *pixel = src_datap + (y * width + x) * numcomps;
-                for (S32 c = 0; c < numcomps; c++)
-                {
-                    image->comps[c].data[i] = *pixel;
-                    pixel++;
-                }
-                i++;
-            }
+            planes[c] = image->comps[c].data;
         }
-
-        // This likely works, but there seems to be an issue openjpeg side
-        // check over after gixing that.
-
-        // De-interleave to component plane data
-        /*
-        switch (numcomps)
-        {
-        case 0:
-        default:
-            break;
-
-        case 1:
-        {
-            U32 rBitDepth = image->comps[0].bpp;
-            U32 bytesPerPixel = rBitDepth >> 3;
-            memcpy(image->comps[0].data, src, width * height * bytesPerPixel);
-        }
-        break;
-
-        case 2:
-        {
-            U32 rBitDepth = image->comps[0].bpp;
-            U32 gBitDepth = image->comps[1].bpp;
-            U32 totalBitDepth = rBitDepth + gBitDepth;
-            U32 bytesPerPixel = totalBitDepth >> 3;
-            U32 stride = width * bytesPerPixel;
-            U32 offset = 0;
-            for (S32 y = height - 1; y >= 0; y--)
-            {
-                const U8* component = src + (y * stride);
-                for (S32 x = 0; x < width; x++)
-                {
-                    image->comps[0].data[offset] = *component++;
-                    image->comps[1].data[offset] = *component++;
-                    offset++;
-                }
-            }
-        }
-        break;
-
-        case 3:
-        {
-            U32 rBitDepth = image->comps[0].bpp;
-            U32 gBitDepth = image->comps[1].bpp;
-            U32 bBitDepth = image->comps[2].bpp;
-            U32 totalBitDepth = rBitDepth + gBitDepth + bBitDepth;
-            U32 bytesPerPixel = totalBitDepth >> 3;
-            U32 stride = width * bytesPerPixel;
-            U32 offset = 0;
-            for (S32 y = height - 1; y >= 0; y--)
-            {
-                const U8* component = src + (y * stride);
-                for (S32 x = 0; x < width; x++)
-                {
-                    image->comps[0].data[offset] = *component++;
-                    image->comps[1].data[offset] = *component++;
-                    image->comps[2].data[offset] = *component++;
-                    offset++;
-                }
-            }
-        }
-        break;
-
-
-        case 4:
-        {
-            U32 rBitDepth = image->comps[0].bpp;
-            U32 gBitDepth = image->comps[1].bpp;
-            U32 bBitDepth = image->comps[2].bpp;
-            U32 aBitDepth = image->comps[3].bpp;
-
-            U32 totalBitDepth = rBitDepth + gBitDepth + bBitDepth + aBitDepth;
-            U32 bytesPerPixel = totalBitDepth >> 3;
-
-            U32 stride = width * bytesPerPixel;
-            U32 offset = 0;
-            for (S32 y = height - 1; y >= 0; y--)
-            {
-                const U8* component = src + (y * stride);
-                for (S32 x = 0; x < width; x++)
-                {
-                    image->comps[0].data[offset] = *component++;
-                    image->comps[1].data[offset] = *component++;
-                    image->comps[2].data[offset] = *component++;
-                    image->comps[3].data[offset] = *component++;
-                    offset++;
-                }
-            }
-        }
-        break;
-        }*/
+        llimagej2cpack::unpack_interleaved_u8_to_planar_int32(
+            planes, src_datap, numcomps, (unsigned)width, (unsigned)height);
     }
 
     opj_image_t* getImage() { return image; }
@@ -905,32 +823,27 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     }
     // <FS:Ansariel>
 
-    // first_channel is what channel to start copying from
-    // dest is what channel to copy to.  first_channel comes from the
-    // argument, dest always starts writing at channel zero.
-    for (S32 comp = first_channel, dest = 0; comp < first_channel + channels; comp++, dest++)
+    const OPJ_INT32* planes[MAX_IMAGE_COMPONENTS] = {};
+    for (S32 comp = first_channel; comp < first_channel + channels; ++comp)
     {
-        llassert(image->comps[comp].data);
-        if (image->comps[comp].data)
-        {
-            S32 offset = dest;
-            for (S32 y = (height - 1); y >= 0; y--)
-            {
-                for (U32 x = 0; x < width; x++)
-                {
-                    rawp[offset] = image->comps[comp].data[y*comp_width + x];
-                    offset += channels;
-                }
-            }
-        }
-        else // Some rare OpenJPEG versions have this bug.
+        if (comp < 0 || comp >= (S32)image->numcomps || !image->comps[comp].data)
         {
             LL_DEBUGS("Texture") << "ERROR -> decodeImpl: failed! (OpenJPEG bug)" << LL_ENDL;
-            // [SL:KB] - Patch: Viewer-OpenJPEG2 | Checked: Catznip-5.3
             base.decodeFailed();
-            // [SL:KB]
+            return true;
         }
+        planes[comp] = image->comps[comp].data;
     }
+
+    llimagej2cpack::pack_planar_int32_to_interleaved_u8(
+        rawp,
+        channels,
+        planes,
+        first_channel,
+        channels,
+        width,
+        height,
+        comp_width);
 
     base.setDiscardLevel(f);
 
