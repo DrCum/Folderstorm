@@ -300,6 +300,7 @@ using namespace LL;
 #include "aoengine.h"
 #include "fsradar.h"
 #include "fsassetblacklist.h"
+#include "fseventapibridge.h"
 #include "bugsplatattributes.h"
 
 #if LL_LINUX && LL_GTK
@@ -1445,6 +1446,10 @@ bool LLAppViewer::init()
 
     // Create IO Pump to use for HTTP Requests.
     gServicePump = new LLPumpIO(gAPRPoolp);
+    if (gSavedSettings.getBOOL("EnableLocalEventAPIBridge"))
+    {
+        FSEventAPIBridge::instance().start(*gServicePump);
+    }
 
     // Note: this is where gLocalSpeakerMgr and gActiveSpeakerMgr used to be instantiated.
 
@@ -1949,6 +1954,10 @@ bool LLAppViewer::doFrame()
         }
 
         pingMainloopTimeout("Main:TerminatePump");
+        if (FSEventAPIBridge::instanceExists())
+        {
+            FSEventAPIBridge::instance().stop();
+        }
         delete gServicePump;
         gServicePump = NULL;
 

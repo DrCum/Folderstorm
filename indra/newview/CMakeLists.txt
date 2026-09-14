@@ -498,6 +498,7 @@ set(viewer_SOURCE_FILES
     llinspectremoteobject.cpp
     llinspecttexture.cpp
     llinspecttoast.cpp
+    fseventapibridge.cpp
     llinventorybridge.cpp
     llinventoryfilter.cpp
     llinventoryfunctions.cpp
@@ -1365,7 +1366,9 @@ set(viewer_HEADER_FILES
     llinspectremoteobject.h
     llinspecttexture.h
     llinspecttoast.h
+    fseventapibridge.h
     llinventorybridge.h
+    llinventorycopypolicy.h
     llinventoryfilter.h
     llinventoryfunctions.h
     llinventorygallery.h
@@ -3111,6 +3114,11 @@ if (LL_TESTS)
           )
 
   LL_ADD_INTEGRATION_TEST(cppfeatures
+    ""
+    "${test_libs}"
+    )
+
+  LL_ADD_INTEGRATION_TEST(llinventorycopypolicy
     ""
     "${test_libs}"
     )

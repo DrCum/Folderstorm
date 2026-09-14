@@ -972,14 +972,24 @@ private:
 LLHTTPNode& LLIOHTTPServer::create(
     apr_pool_t* pool, LLPumpIO& pump, U16 port)
 {
-    LLSocket::ptr_t socket = LLSocket::create(
-        pool,
-        LLSocket::STREAM_TCP,
-        port);
+    U16 bound_port = 0;
+    return create(pool, pump, port, APR_ANYADDR, bound_port);
+}
+
+// static
+LLHTTPNode& LLIOHTTPServer::create(
+    apr_pool_t* pool,
+    LLPumpIO& pump,
+    U16 port,
+    const char* hostname,
+    U16& bound_port)
+{
+    LLSocket::ptr_t socket = LLSocket::createListening(pool, port, hostname);
     if(!socket)
     {
         LL_ERRS() << "Unable to initialize socket" << LL_ENDL;
     }
+    bound_port = socket->getPort();
 
     LLHTTPResponseFactory* factory = new LLHTTPResponseFactory;
     std::shared_ptr<LLChainIOFactory> factory_ptr(factory);

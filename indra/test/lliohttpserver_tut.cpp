@@ -343,6 +343,22 @@ namespace tut
             "X-Documentation-URL: http://localhost");
     }
 
+    template<> template<>
+    void HTTPServiceTestObject::test<9>()
+    {
+        apr_pool_t* pool = nullptr;
+        apr_pool_create(&pool, nullptr);
+        {
+            LLPumpIO pump(pool);
+            U16 bound_port = 0;
+            LLHTTPNode& root = LLIOHTTPServer::create(
+                pool, pump, 0, "127.0.0.1", bound_port);
+            ensure("server root exists", &root != nullptr);
+            ensure("ephemeral port was selected", bound_port != 0);
+        }
+        apr_pool_destroy(pool);
+    }
+
 
     /* TO DO:
         test generation of not found and method not allowed errors

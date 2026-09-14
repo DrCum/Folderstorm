@@ -201,6 +201,59 @@ LLSocket::ptr_t LLSocket::create(apr_pool_t* pool, EType type, U16 port, const c
 }
 
 // static
+LLSocket::ptr_t LLSocket::createListening(apr_pool_t* pool, U16 port, const char* hostname)
+{
+    apr_pool_t* new_pool = NULL;
+    if (ll_apr_warn_status(apr_pool_create(&new_pool, pool)))
+    {
+        if (new_pool)
+        {
+            apr_pool_destroy(new_pool);
+        }
+        return ptr_t();
+    }
+
+    apr_socket_t* socket = NULL;
+    if (ll_apr_warn_status(apr_socket_create(
+            &socket, APR_INET, SOCK_STREAM, APR_PROTO_TCP, new_pool)))
+    {
+        apr_pool_destroy(new_pool);
+        return ptr_t();
+    }
+
+    ptr_t result(new LLSocket(socket, new_pool));
+    apr_sockaddr_t* address = NULL;
+    apr_status_t status = apr_sockaddr_info_get(
+        &address, hostname, APR_INET, port, 0, new_pool);
+    if (ll_apr_warn_status(status))
+    {
+        result.reset();
+        return result;
+    }
+
+    ll_apr_warn_status(apr_socket_opt_set(socket, APR_SO_REUSEADDR, 1));
+    if (ll_apr_warn_status(apr_socket_bind(socket, address)) ||
+        ll_apr_warn_status(apr_socket_listen(socket, LL_DEFAULT_LISTEN_BACKLOG)))
+    {
+        result.reset();
+        return result;
+    }
+
+    apr_sockaddr_t* local_address = NULL;
+    if (ll_apr_warn_status(apr_socket_addr_get(&local_address, APR_LOCAL, socket)) ||
+        !local_address || local_address->port == 0)
+    {
+        result.reset();
+        return result;
+    }
+
+    result->mPort = static_cast<U16>(local_address->port);
+    result->setNonBlocking();
+    LL_DEBUGS("Socket") << "Listening on " << hostname << ":" << result->mPort << LL_ENDL;
+    return result;
+}
+
+// static
 LLSocket::ptr_t LLSocket::create(apr_socket_t* socket, apr_pool_t* pool)
 {
     LLSocket::ptr_t rv;

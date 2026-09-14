@@ -39,6 +39,11 @@ public:
     typedef void (*timing_callback_t)(const char* hashed_name, F32 time, void* data);
 
     static LLHTTPNode& create(apr_pool_t* pool, LLPumpIO& pump, U16 port);
+    static LLHTTPNode& create(apr_pool_t* pool,
+                              LLPumpIO& pump,
+                              U16 port,
+                              const char* hostname,
+                              U16& bound_port);
     /**< Creates an HTTP wire server on the pump for the given TCP port.
      *
      *   Returns the root node of the new server.  Add LLHTTPNode instances
