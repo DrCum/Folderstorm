@@ -15,6 +15,7 @@ void inventory_copy_policy_object::test<1>()
 {
     using namespace LLInventoryCopyPolicy;
     ensure("default policy", parse("") == Policy::INCLUDE_NO_COPY);
+    ensure("named default policy", parse("default") == Policy::INCLUDE_NO_COPY);
     ensure("strict policy", parse("strict") == Policy::STRICT);
     ensure("copyable policy", parse("copyable_only") == Policy::COPYABLE_ONLY);
     ensure("invalid policy", parse("unknown") == Policy::INVALID);

@@ -281,20 +281,23 @@ bool FSEventAPIBridge::start(LLPumpIO& pump)
     auto state = std::make_shared<State>(std::move(token));
     U16 port = 0;
     LLHTTPNode& root = LLIOHTTPServer::create(
-        gAPRPoolp, pump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port);
+        gAPRPoolp, pump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port, 75.f);
     root.addNode(BRIDGE_PATH, new Node(state));
 
     const std::string filename =
-        "firestorm-mcp-" + std::to_string(LLApp::getPid()) + ".json";
+        "fs-mcp-" + std::to_string(LLApp::getPid()) + ".json";
     mDiscoveryPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, filename);
     const std::string temporary = mDiscoveryPath + ".tmp";
 
     LLSD discovery = llsd::map(
+        "api_version", 1,
         "apiVersion", API_VERSION,
         "pid", LLApp::getPid(),
         "port", port,
         "token", state->token(),
-        "endpoint", BRIDGE_PATH);
+        "host", "127.0.0.1",
+        "scheme", "http",
+        "path", BRIDGE_PATH);
     const std::string payload = to_json(discovery);
 
     LLFILE* file = LLFile::fopen(temporary, "wb");

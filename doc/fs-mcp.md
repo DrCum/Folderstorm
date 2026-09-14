@@ -12,7 +12,7 @@ Launch the viewer with:
 ```
 
 After startup, Firestorm listens on an operating-system-selected
-`127.0.0.1` port and writes a `firestorm-mcp-<pid>.json` discovery file to
+`127.0.0.1` port and writes an `fs-mcp-<pid>.json` discovery file to
 the Firestorm user-settings directory. The file contains a random bearer
 token and is removed when the viewer exits. A new token is generated for
 every viewer launch.

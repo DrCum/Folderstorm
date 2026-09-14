@@ -91,24 +91,27 @@ LLInventoryListener::LLInventoryListener()
 
     add("status", "Return login and inventory synchronization status",
         &LLInventoryListener::status, llsd::map("reply", LLSD()));
-    add("get", "Fetch and return inventory objects named by item_ids",
-        &LLInventoryListener::get, llsd::map("item_ids", LLSD(), "reply", LLSD()));
+    add("get", "Fetch and return one inventory object by id",
+        &LLInventoryListener::get, llsd::map("id", LLSD(), "reply", LLSD()));
     add("list", "Fetch and return the direct children of folder_id",
         &LLInventoryListener::list, llsd::map("folder_id", LLSD(), "reply", LLSD()));
-    add("search", "Fetch recursively and search below folder_id",
-        &LLInventoryListener::search, llsd::map("folder_id", LLSD(), "reply", LLSD()));
+    add("search", "Fetch recursively and search inventory",
+        &LLInventoryListener::search, llsd::map("reply", LLSD()));
+    add("systemFolder", "Return a system-folder UUID by type name",
+        &LLInventoryListener::systemFolder,
+        llsd::map("ft_name", LLSD(), "reply", LLSD()));
     add("createFolder", "Create a normal folder below parent_id",
         &LLInventoryListener::createFolder,
         llsd::map("parent_id", LLSD(), "name", LLSD(), "reply", LLSD()));
     add("move", "Move an inventory item or folder to dest_folder_id",
         &LLInventoryListener::move,
-        llsd::map("id", LLSD(), "dest_folder_id", LLSD(), "reply", LLSD()));
+        llsd::map("id", LLSD(), "parent_id", LLSD(), "reply", LLSD()));
     add("rename", "Rename an inventory item or folder",
         &LLInventoryListener::rename,
         llsd::map("id", LLSD(), "name", LLSD(), "reply", LLSD()));
     add("copy", "Copy an item or folder; may return a no-copy move plan",
         &LLInventoryListener::copy,
-        llsd::map("id", LLSD(), "dest_folder_id", LLSD(), "reply", LLSD()));
+        llsd::map("id", LLSD(), "parent_id", LLSD(), "reply", LLSD()));
     add("confirmCopy", "Confirm or decline no-copy moves from a completed copy",
         &LLInventoryListener::confirmCopy,
         llsd::map("plan_id", LLSD(), "confirm", LLSD(), "reply", LLSD()));
@@ -466,16 +469,25 @@ void LLInventoryListener::get(LLSD const& data)
         return response.error("Inventory is not usable; log in and wait for initialization");
     }
 
-    uuid_vec_t ids = LLSDParam<uuid_vec_t>(data["item_ids"]);
-    uuid_vec_t item_ids;
-    for (const LLUUID& id : ids)
+    const LLUUID id = data["id"].asUUID();
+    if (LLViewerInventoryCategory* category = gInventory.getCategory(id))
     {
-        if (gInventory.getItem(id))
-        {
-            item_ids.push_back(id);
-        }
+        Response response(LLSD(), data);
+        add_cat_info(response, category);
+        return;
     }
-    fetch_items_then(item_ids, [this, data]() { getItemsInfo(data); });
+    if (!gInventory.getItem(id))
+    {
+        Response response(LLSD(), data);
+        return response.error("Inventory object was not found");
+    }
+
+    LLSD fetch_data(data);
+    fetch_data["item_ids"] = LLSD::emptyArray();
+    fetch_data["item_ids"].append(id);
+    fetch_items_then(
+        uuid_vec_t{id},
+        [this, fetch_data]() { getItemsInfo(fetch_data); });
 }
 
 void LLInventoryListener::list(LLSD const& data)
@@ -507,7 +519,11 @@ void LLInventoryListener::search(LLSD const& data)
         Response response(LLSD(), data);
         return response.error("Inventory is not usable; log in and wait for initialization");
     }
-    const LLUUID folder_id = data["folder_id"].asUUID();
+    LLUUID folder_id = data["folder_id"].asUUID();
+    if (folder_id.isNull())
+    {
+        folder_id = gInventory.getRootFolderID();
+    }
     if (!gInventory.getCategory(folder_id))
     {
         Response response(LLSD(), data);
@@ -537,7 +553,11 @@ void LLInventoryListener::search(LLSD const& data)
 void LLInventoryListener::searchAfterFetch(LLSD data)
 {
     Response response(LLSD(), data);
-    const LLUUID folder_id = data["folder_id"].asUUID();
+    LLUUID folder_id = data["folder_id"].asUUID();
+    if (folder_id.isNull())
+    {
+        folder_id = gInventory.getRootFolderID();
+    }
     LLInventoryModel::cat_array_t categories;
     LLInventoryModel::item_array_t items;
     LLFilteredCollector collector(data);
@@ -549,12 +569,70 @@ void LLInventoryListener::searchAfterFetch(LLSD data)
             ? LLInventoryModel::INCLUDE_TRASH
             : LLInventoryModel::EXCLUDE_TRASH,
         collector);
-    add_objects_info(response, categories, items);
+    const S32 total_matches =
+        static_cast<S32>(categories.size() + items.size());
+    S32 remaining = data["limit"].asInteger();
+    if (remaining <= 0)
+    {
+        remaining = total_matches;
+    }
+    for (LLViewerInventoryCategory* category : categories)
+    {
+        if (remaining-- <= 0) break;
+        add_cat_info(response, category);
+    }
+    for (LLViewerInventoryItem* item : items)
+    {
+        if (remaining-- <= 0) break;
+        add_item_info(response, item);
+    }
+    response["total_matches"] = total_matches;
+    response["truncated"] =
+        data["limit"].asInteger() > 0 &&
+        total_matches > data["limit"].asInteger();
     response["complete"] = inventory_tree_complete(folder_id);
     if (data["_fetch_timeout"].asBoolean())
     {
         response.warn("Inventory fetch timed out; results may be incomplete");
     }
+}
+
+void LLInventoryListener::systemFolder(LLSD const& data)
+{
+    std::string name = data["ft_name"].asString();
+    LLStringUtil::trim(name);
+    LLStringUtil::toLower(name);
+    LLStringUtil::replaceString(name, "_", " ");
+    LLStringUtil::replaceString(name, "-", " ");
+
+    static const std::map<std::string, std::string> aliases = {
+        {"textures", "texture"},
+        {"sounds", "sound"},
+        {"calling cards", "callcard"},
+        {"landmarks", "landmark"},
+        {"objects", "object"},
+        {"notecards", "notecard"},
+        {"scripts", "lsltext"},
+        {"body parts", "bodypart"},
+        {"snapshots", "snapshot"},
+        {"lost and found", "lstndfnd"},
+        {"animations", "animatn"},
+        {"gestures", "gesture"},
+        {"favorites", "favorite"},
+        {"current outfit", "current"},
+        {"my outfits", "my_otfts"},
+        {"marketplace listings", "merchant"},
+        {"materials", "material"},
+    };
+    auto alias = aliases.find(name);
+    if (alias != aliases.end())
+    {
+        name = alias->second;
+    }
+
+    LLSD normalized(data);
+    normalized["ft_name"] = name;
+    getBasicFolderID(normalized);
 }
 
 bool LLInventoryListener::validateDestination(const LLUUID& id, std::string& error) const
@@ -612,7 +690,11 @@ void LLInventoryListener::move(LLSD const& data)
 {
     std::string error;
     const LLUUID id = data["id"].asUUID();
-    const LLUUID destination_id = data["dest_folder_id"].asUUID();
+    LLUUID destination_id = data["parent_id"].asUUID();
+    if (destination_id.isNull())
+    {
+        destination_id = data["dest_folder_id"].asUUID();
+    }
     LLInventoryObject* object = gInventory.getObject(id);
     if (!object || !object_is_agent_inventory(id) ||
         !validateDestination(destination_id, error))
@@ -909,7 +991,11 @@ void LLInventoryListener::copy(LLSD const& data)
 {
     pruneCopyPlans();
     const LLUUID source_id = data["id"].asUUID();
-    const LLUUID destination_id = data["dest_folder_id"].asUUID();
+    LLUUID destination_id = data["parent_id"].asUUID();
+    if (destination_id.isNull())
+    {
+        destination_id = data["dest_folder_id"].asUUID();
+    }
     LLInventoryObject* source = gInventory.getObject(source_id);
     std::string error;
     if (!source || !validateDestination(destination_id, error))

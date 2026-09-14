@@ -49,6 +49,7 @@ private:
     void get(LLSD const& data);
     void list(LLSD const& data);
     void search(LLSD const& data);
+    void systemFolder(LLSD const& data);
     void createFolder(LLSD const& data);
     void move(LLSD const& data);
     void rename(LLSD const& data);

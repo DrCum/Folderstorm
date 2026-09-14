@@ -27,7 +27,8 @@ enum class Action
 
 inline Policy parse(const std::string& value)
 {
-    if (value.empty() || value == "include_no_copy") return Policy::INCLUDE_NO_COPY;
+    if (value.empty() || value == "default" || value == "include_no_copy")
+        return Policy::INCLUDE_NO_COPY;
     if (value == "strict") return Policy::STRICT;
     if (value == "copyable_only") return Policy::COPYABLE_ONLY;
     return Policy::INVALID;
