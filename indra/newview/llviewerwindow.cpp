@@ -159,6 +159,7 @@
 #include "lltoast.h"
 #include "lltool.h"
 #include "lltoolbarview.h"
+#include "fschromelayoutcontroller.h"
 #include "lltoolcomp.h"
 #include "lltooldraganddrop.h"
 #include "lltoolface.h"
@@ -2524,6 +2525,9 @@ void LLViewerWindow::initWorldUI()
         gToolBarView->setVisible(true);
     }
 
+    // Independent chrome placement around the custom world viewport.
+    FSChromeLayoutController::instance().init();
+
     // Don't preload cef instances on low end hardware
     const F32Gigabytes MIN_PHYSICAL_MEMORY(8);
     F32Gigabytes physical_mem = LLMemory::getMaxMemKB();
@@ -2575,6 +2579,11 @@ void LLViewerWindow::initWorldUI()
 // Destroy the UI
 void LLViewerWindow::shutdownViews()
 {
+    if (FSChromeLayoutController::instanceExists())
+    {
+        FSChromeLayoutController::instance().shutdown();
+    }
+
     // clean up warning logger
     RecordToChatConsole::getInstance()->stopRecorder();
     LL_INFOS() << "Warning logger is cleaned." << LL_ENDL ;

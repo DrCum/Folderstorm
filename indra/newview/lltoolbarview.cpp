@@ -47,6 +47,7 @@
 #include "llinventorymodel.h" // HACK to disable starter avatars button for NUX
 
 #include "fscommon.h"
+#include "fschromelayoutcontroller.h"
 #include "quickprefs.h"
 
 LLToolBarView* gToolBarView = NULL;
@@ -659,7 +660,34 @@ void LLToolBarView::draw()
                                             //&& (mToolbars[i]->hasButtons()
                                             && (((i == LLToolBarEnums::TOOLBAR_BOTTOM && !mHideBottomOnEmpty) ? true : mToolbars[i]->hasButtons())
                                             // </FS:Ansariel>
-                                            || isToolDragged()));
+                                            || isToolDragged())
+                                            && !(i == LLToolBarEnums::TOOLBAR_LEFT &&
+                                                 FSChromeLayoutController::instanceExists() &&
+                                                 FSChromeLayoutController::instance().isLeftToolbarHidden())
+                                            && !(i == LLToolBarEnums::TOOLBAR_RIGHT &&
+                                                 FSChromeLayoutController::instanceExists() &&
+                                                 FSChromeLayoutController::instance().isRightToolbarHidden()));
+    }
+
+    if (FSChromeLayoutController::instanceExists() &&
+        mToolbars[LLToolBarEnums::TOOLBAR_LEFT] &&
+        mToolbars[LLToolBarEnums::TOOLBAR_RIGHT])
+    {
+        const bool dragging = isToolDragged();
+        auto metric_width = [dragging](LLToolBar* toolbar) {
+            if (!toolbar)
+            {
+                return 0;
+            }
+            if (!toolbar->hasButtons() && !dragging)
+            {
+                return 0;
+            }
+            return toolbar->getRect().getWidth();
+        };
+        FSChromeLayoutController::instance().notifyToolbarMetrics(
+            metric_width(mToolbars[LLToolBarEnums::TOOLBAR_LEFT]),
+            metric_width(mToolbars[LLToolBarEnums::TOOLBAR_RIGHT]));
     }
 
     // Draw drop zones if drop of a tool is active

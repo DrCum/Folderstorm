@@ -7098,6 +7098,30 @@ Are you sure you want to delete your travel, web, and search history?
   
   <notification
    icon="alertmodal.tga"
+   name="ConfirmChromeLayoutOverwrite"
+   type="alertmodal">
+A layout profile named that already exists. Overwrite it?
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Overwrite"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="ConfirmChromeLayoutDelete"
+   type="alertmodal">
+Delete this saved interface layout profile?
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Delete"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="ConfirmClearCache"
    type="alertmodal">
 Are you sure you want to clear your viewer cache?

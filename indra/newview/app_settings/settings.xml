@@ -23562,6 +23562,239 @@ Change of this parameter will affect the layout of buttons in notification toast
       <real>0.0</real>
     </map>
     <!-- </FS> -->
+    <!-- <FS> Viewport-relative chrome layout -->
+    <key>FSChromeLeftToolbarPlacement</key>
+    <map>
+      <key>Comment</key>
+      <string>Left toolbar placement: 0=window edge, 1=inside viewport, 2=outside viewport, 3=smart, 4=hidden.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>3</integer>
+    </map>
+    <key>FSChromeRightToolbarPlacement</key>
+    <map>
+      <key>Comment</key>
+      <string>Right toolbar placement: 0=window edge, 1=inside viewport, 2=outside viewport, 3=smart, 4=hidden.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>3</integer>
+    </map>
+    <key>FSChromeLeftToolbarOffset</key>
+    <map>
+      <key>Comment</key>
+      <string>Extra scaled-pixel offset for the left toolbar away from its chosen edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeRightToolbarOffset</key>
+    <map>
+      <key>Comment</key>
+      <string>Extra scaled-pixel offset for the right toolbar away from its chosen edge.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeBottomDockRegion</key>
+    <map>
+      <key>Comment</key>
+      <string>Bottom toolbar and nearby chat region: 0=full window, 1=viewport, 2=left utility, 3=right utility, 4=custom span.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>FSChromeBottomDockSpanStart</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom bottom dock start as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSChromeBottomDockSpanEnd</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom bottom dock end as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>100.0</real>
+    </map>
+    <key>FSChromeBottomDockMarginLeft</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional left margin in scaled pixels for the bottom dock.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeBottomDockMarginRight</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional right margin in scaled pixels for the bottom dock.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeNavFavoritesRegion</key>
+    <map>
+      <key>Comment</key>
+      <string>Address/search/favorites region: 0=full window, 1=viewport, 2=left utility, 3=right utility, 4=custom span.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>FSChromeNavFavoritesSpanStart</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom navigation bar start as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSChromeNavFavoritesSpanEnd</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom navigation bar end as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>100.0</real>
+    </map>
+    <key>FSChromeNavFavoritesMarginLeft</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional left margin in scaled pixels for the navigation bar.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeNavFavoritesMarginRight</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional right margin in scaled pixels for the navigation bar.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeMenuStatusRegion</key>
+    <map>
+      <key>Comment</key>
+      <string>Menu and status region: 0=full window, 1=viewport, 2=left utility, 3=right utility, 4=custom span.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>FSChromeMenuStatusSpanStart</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom menu/status start as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>FSChromeMenuStatusSpanEnd</key>
+    <map>
+      <key>Comment</key>
+      <string>Custom menu/status end as a percentage of window width.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>100.0</real>
+    </map>
+    <key>FSChromeMenuStatusMarginLeft</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional left margin in scaled pixels for the menu/status strip.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeMenuStatusMarginRight</key>
+    <map>
+      <key>Comment</key>
+      <string>Additional right margin in scaled pixels for the menu/status strip.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSChromeLayoutProfiles</key>
+    <map>
+      <key>Comment</key>
+      <string>User-defined interface layout profiles stored as an LLSD map.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>LLSD</string>
+      <key>Value</key>
+      <map/>
+    </map>
+    <key>FSChromeActiveProfile</key>
+    <map>
+      <key>Comment</key>
+      <string>Currently selected interface layout profile id.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
+    <!-- </FS> -->
     <key>FSIMTabNameFormat</key>
     <map>
       <key>Comment</key>

@@ -161,6 +161,17 @@ protected:
 
     // <FS> Custom world viewport presets for multi-monitor layouts.
     void onWorldViewPreset(const LLSD& preset);
+    void refreshChromeLayoutControls();
+    void populateChromeProfileCombo();
+    std::string getChromeProfileName() const;
+    std::string getSelectedChromeProfileId() const;
+    void onChromeProfileApply();
+    void onChromeProfileSave();
+    void onChromeProfileRename();
+    void onChromeProfileDelete();
+    void onChromeLayoutReset();
+    void onChromeProfileOverwriteResponse(const LLSD& notification, const LLSD& response);
+    void onChromeProfileDeleteResponse(const LLSD& notification, const LLSD& response);
     // </FS>
 
     void onAtmosShaderChange();
