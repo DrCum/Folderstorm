@@ -7,6 +7,7 @@
 
 #include "fseventapibridge.h"
 
+#include "llapr.h"
 #include "llapp.h"
 #include "lldir.h"
 #include "lleventapi.h"
@@ -24,6 +25,8 @@
 #include <openssl/rand.h>
 
 #include <cstdio>
+#include <cstring>
+#include <cerrno>
 #include <iomanip>
 #include <map>
 #include <sstream>
@@ -295,14 +298,11 @@ bool FSEventAPIBridge::start(LLPumpIO& pump)
     const std::string payload = to_json(discovery);
 
     LLFILE* file = LLFile::fopen(temporary, "wb");
-    if (!file ||
-        std::fwrite(payload.data(), 1, payload.size(), file) != payload.size() ||
-        LLFile::close(file) != 0)
+    const bool write_ok =
+        file && std::fwrite(payload.data(), 1, payload.size(), file) == payload.size();
+    const bool close_ok = !file || LLFile::close(file) == 0;
+    if (!write_ok || !close_ok)
     {
-        if (file)
-        {
-            LLFile::close(file);
-        }
         LLFile::remove(temporary, ENOENT);
         state->disable();
         mDiscoveryPath.clear();

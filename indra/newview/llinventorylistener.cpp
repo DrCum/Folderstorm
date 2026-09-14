@@ -579,7 +579,6 @@ bool LLInventoryListener::validateDestination(const LLUUID& id, std::string& err
 
 void LLInventoryListener::createFolder(LLSD const& data)
 {
-    Response validation(LLSD(), LLSD());
     std::string error;
     const LLUUID parent_id = data["parent_id"].asUUID();
     std::string name = data["name"].asString();
@@ -864,7 +863,7 @@ private:
                     }
                     self->taskDone();
                 });
-        link_inventory_object(destination_id, item, callback);
+        link_inventory_object(destination_id, item->getLinkedUUID(), callback);
     }
 
     void taskDone()
@@ -980,7 +979,7 @@ void LLInventoryListener::copy(LLSD const& data)
             });
         if (item->getIsLinkType())
         {
-            link_inventory_object(destination_id, item, callback);
+            link_inventory_object(destination_id, item->getLinkedUUID(), callback);
         }
         else
         {
