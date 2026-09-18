@@ -59,6 +59,7 @@
 #include "llmultifloater.h"
 #include "llsdutil.h"
 #include "lluiusage.h"
+#include "lltoolbaravoidance.h"
 
 
 // use this to control "jumping" behavior when Ctrl-Tabbing
@@ -1270,7 +1271,7 @@ void LLFloater::handleReshape(const LLRect& new_rect, bool by_user)
     const LLRect old_rect = getRect();
     LLView::handleReshape(new_rect, by_user);
 
-    if (by_user && !getHost())
+    if (by_user && !getHost() && !isBeingDragged())
     {
         LLFloaterView * floaterVp = dynamic_cast<LLFloaterView*>(getParent());
         if (floaterVp)
@@ -1726,9 +1727,7 @@ void LLFloater::fitWithDependentsOnScreen(const LLRect& left, const LLRect& bott
         }
     }
 
-    S32 delta_left = left.notEmpty() ? left.mRight - total_rect.mRight : 0;
     S32 delta_bottom = bottom.notEmpty() ? bottom.mTop - total_rect.mTop : 0;
-    S32 delta_right = right.notEmpty() ? right.mLeft - total_rect.mLeft : 0;
     // <FS:Ansariel> Prevent floaters being dragged under main chat bar
     S32 delta_bottom_chatbar = chatbar.notEmpty() ? chatbar.mTop - total_rect.mTop : 0;
     S32 delta_utility_bar = utilitybar.notEmpty() ? utilitybar.mTop - total_rect.mTop : 0;
@@ -1742,42 +1741,61 @@ void LLFloater::fitWithDependentsOnScreen(const LLRect& left, const LLRect& bott
     {
         clearSnapTarget();
     }
-    // <FS:Ansariel> Fix floater relocation for vertical toolbars; Only header guarantees that floater can be dragged!
-    //else if (delta_left > 0 && total_rect.mTop < left.mTop && total_rect.mBottom > left.mBottom)
-    else if (delta_left > 0 && total_rect.mTop < left.mTop && (total_rect.mTop - header_height) > left.mBottom)
-    // </FS:Ansariel>
+    else
     {
-        translate(delta_left, 0);
-    }
-    // <FS:Ansariel> Prevent floaters being dragged under main chat bar
-    //else if (delta_bottom > 0 && total_rect.mLeft > bottom.mLeft && total_rect.mRight < bottom.mRight)
-    else if (delta_bottom > 0 && ((total_rect.mLeft > bottom.mLeft && total_rect.mRight < bottom.mRight) // floater completely within toolbar rect
-        || (total_rect.mLeft > bottom.mLeft && total_rect.mLeft < bottom.mRight && bottom.mRight > constraint.mRight) // floater partially within toolbar rect, toolbar bound to right side
-        || (delta_bottom_chatbar > 0 && total_rect.mLeft < chatbar.mRight && total_rect.mRight > bottom.mLeft && bottom.mLeft <= chatbar.mRight)) // floater within chatbar and toolbar rect
-        )
-    // </FS:Ansariel>
-    {
-        translate(0, delta_bottom);
-    }
-    // <FS:Ansariel> Fix floater relocation for vertical toolbars; Only header guarantees that floater can be dragged!
-    //else if (delta_right < 0 && total_rect.mTop < right.mTop    && total_rect.mBottom > right.mBottom)
-    else if (delta_right < 0 && total_rect.mTop < right.mTop && (total_rect.mTop - header_height) > right.mBottom)
-    // </FS:Ansariel>
-    {
-        translate(delta_right, 0);
-    }
-    // <FS:Ansariel> Prevent floaters being dragged under main chat bar
-    else if (delta_bottom_chatbar > 0 && ((total_rect.mLeft > chatbar.mLeft && total_rect.mRight < chatbar.mRight) // floater completely within chatbar rect
-        || (total_rect.mRight > chatbar.mLeft && total_rect.mRight < chatbar.mRight && chatbar.mLeft < constraint.mLeft) // floater partially within chatbar rect, chatbar bound to left side
-        || (delta_bottom > 0 && total_rect.mRight > bottom.mLeft && total_rect.mLeft < chatbar.mRight && bottom.mLeft <= chatbar.mRight)) // floater within chatbar and toolbar rect
-        )
-    {
-        translate(0, delta_bottom_chatbar);
-    }
-    else if (delta_utility_bar > 0 && (total_rect.mLeft > utilitybar.mLeft && total_rect.mRight < utilitybar.mRight))
-    {
-        // Utility bar on legacy skins
-        translate(0, delta_utility_bar);
+        // <FS> Side toolbars can sit at a custom world-view edge, with a utility
+        // gutter on the far side. Pushing "inward" in that layout yanks floaters
+        // back onto the viewport while they are still being dragged.
+        S32 toolbar_dx = 0;
+        // <FS:Ansariel> Fix floater relocation for vertical toolbars; Only header guarantees that floater can be dragged!
+        //else if (delta_left > 0 && total_rect.mTop < left.mTop && total_rect.mBottom > left.mBottom)
+        if (left.notEmpty() && total_rect.mTop < left.mTop && (total_rect.mTop - header_height) > left.mBottom)
+        // </FS:Ansariel>
+        {
+            toolbar_dx += computeVerticalToolbarClearanceX(
+                total_rect.mLeft, total_rect.mRight,
+                left.mLeft, left.mRight,
+                constraint.mLeft, constraint.mRight,
+                true);
+        }
+        // <FS:Ansariel> Fix floater relocation for vertical toolbars; Only header guarantees that floater can be dragged!
+        //else if (delta_right < 0 && total_rect.mTop < right.mTop    && total_rect.mBottom > right.mBottom)
+        if (right.notEmpty() && total_rect.mTop < right.mTop && (total_rect.mTop - header_height) > right.mBottom)
+        // </FS:Ansariel>
+        {
+            toolbar_dx += computeVerticalToolbarClearanceX(
+                total_rect.mLeft, total_rect.mRight,
+                right.mLeft, right.mRight,
+                constraint.mLeft, constraint.mRight,
+                false);
+        }
+        if (toolbar_dx != 0)
+        {
+            translate(toolbar_dx, 0);
+        }
+        // <FS:Ansariel> Prevent floaters being dragged under main chat bar
+        //else if (delta_bottom > 0 && total_rect.mLeft > bottom.mLeft && total_rect.mRight < bottom.mRight)
+        else if (delta_bottom > 0 && ((total_rect.mLeft > bottom.mLeft && total_rect.mRight < bottom.mRight) // floater completely within toolbar rect
+            || (total_rect.mLeft > bottom.mLeft && total_rect.mLeft < bottom.mRight && bottom.mRight > constraint.mRight) // floater partially within toolbar rect, toolbar bound to right side
+            || (delta_bottom_chatbar > 0 && total_rect.mLeft < chatbar.mRight && total_rect.mRight > bottom.mLeft && bottom.mLeft <= chatbar.mRight)) // floater within chatbar and toolbar rect
+            )
+        // </FS:Ansariel>
+        {
+            translate(0, delta_bottom);
+        }
+        // <FS:Ansariel> Prevent floaters being dragged under main chat bar
+        else if (delta_bottom_chatbar > 0 && ((total_rect.mLeft > chatbar.mLeft && total_rect.mRight < chatbar.mRight) // floater completely within chatbar rect
+            || (total_rect.mRight > chatbar.mLeft && total_rect.mRight < chatbar.mRight && chatbar.mLeft < constraint.mLeft) // floater partially within chatbar rect, chatbar bound to left side
+            || (delta_bottom > 0 && total_rect.mRight > bottom.mLeft && total_rect.mLeft < chatbar.mRight && bottom.mLeft <= chatbar.mRight)) // floater within chatbar and toolbar rect
+            )
+        {
+            translate(0, delta_bottom_chatbar);
+        }
+        else if (delta_utility_bar > 0 && (total_rect.mLeft > utilitybar.mLeft && total_rect.mRight < utilitybar.mRight))
+        {
+            // Utility bar on legacy skins
+            translate(0, delta_utility_bar);
+        }
     }
     // </FS:Ansariel>
     mTranslateWithDependents = false;
@@ -2349,6 +2367,26 @@ bool LLFloater::getCanDrag() const
     return mDragHandle->getEnabled();
 }
 
+bool LLFloater::isBeingDragged() const
+{
+    if (mDragHandle && mDragHandle->hasMouseCapture())
+    {
+        return true;
+    }
+    for (S32 i = 0; i < 4; ++i)
+    {
+        if (mResizeBar[i] && mResizeBar[i]->hasMouseCapture())
+        {
+            return true;
+        }
+        if (mResizeHandle[i] && mResizeHandle[i]->hasMouseCapture())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 
 void LLFloater::updateTitleButtons()
 {
@@ -2663,6 +2701,11 @@ void LLFloaterView::reshape(S32 width, S32 height, bool called_from_parent)
         if (floaterp->isDependent())
         {
             // dependents are moved with their "dependee"
+            continue;
+        }
+
+        if (floaterp->isBeingDragged())
+        {
             continue;
         }
 
@@ -3231,7 +3274,7 @@ void LLFloaterView::refresh()
     for ( child_list_const_iter_t child_it = getChildList()->begin(); child_it != getChildList()->end(); ++child_it)
     {
         LLFloater* floaterp = dynamic_cast<LLFloater*>(*child_it);
-        if (floaterp && floaterp->getVisible() )
+        if (floaterp && floaterp->getVisible() && !floaterp->isBeingDragged())
         {
             // minimized floaters are kept fully onscreen
             adjustToFitScreen(floaterp, !floaterp->isMinimized());

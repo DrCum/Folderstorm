@@ -217,6 +217,7 @@ set(llui_HEADER_FILES
     lltimectrl.h
     lltoggleablemenu.h
     lltoolbar.h
+    lltoolbaravoidance.h
     lltooltip.h
     lltrans.h
     lltransutil.h

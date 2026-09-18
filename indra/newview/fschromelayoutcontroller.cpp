@@ -22,6 +22,7 @@
 #include "lllayoutstack.h"
 #include "llnavigationbar.h"
 #include "llstatusbar.h"
+#include "llfloater.h"
 #include "lltoolbar.h"
 #include "lltoolbarview.h"
 #include "llui.h"
@@ -323,6 +324,7 @@ void FSChromeLayoutController::apply()
     applyBottomDock();
     applyNavigation();
     applyMenuStatus();
+    applyFloaterSnapView();
 
     mApplying = false;
 }
@@ -478,6 +480,33 @@ void FSChromeLayoutController::applyMenuBarToSpan(LLView* menu, const FSChromeLa
 
     menu->setFollows(FOLLOWS_LEFT | FOLLOWS_TOP);
     menu->setShape(local);
+}
+
+void FSChromeLayoutController::applyFloaterSnapView()
+{
+    if (!gFloaterView || !gToolBarView)
+    {
+        return;
+    }
+
+    // Toasts and chiclets still parent to floater_snap_region (the squeezed
+    // non-toolbar panel). Floater edge-snap and relative positioning must
+    // include utility gutters so windows can live on the other monitor.
+    LLView* snap = gToolBarView->findChildView("floater_snap_region");
+    const bool expand_for_gutters =
+        gSavedSettings.getBOOL("FSWorldViewEnabled") &&
+        (mLastSideLayout.left_outer_spacer > 0 || mLastSideLayout.right_outer_spacer > 0);
+    if (expand_for_gutters)
+    {
+        if (LLView* stack = gToolBarView->findChildView("vertical_toolbar_stack"))
+        {
+            snap = stack;
+        }
+    }
+    if (snap)
+    {
+        gFloaterView->setFloaterSnapView(snap->getHandle());
+    }
 }
 
 int FSChromeLayoutController::toolbarLayoutWidth(LLToolBar* toolbar) const

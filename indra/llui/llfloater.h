@@ -298,6 +298,7 @@ public:
     virtual void    setCanResize(bool can_resize);
     void            setCanDrag(bool can_drag);
     bool            getCanDrag() const;
+    bool            isBeingDragged() const;
     void            setCanSnooze(bool can_snooze);      // <FS:Ansariel> FIRE-11724: Snooze group chat
     void            setHost(LLMultiFloater* host);
     bool            isResizable() const { return mResizable; }

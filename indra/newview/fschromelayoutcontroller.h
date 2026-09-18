@@ -76,6 +76,7 @@ private:
     void applyBottomDock();
     void applyNavigation();
     void applyMenuStatus();
+    void applyFloaterSnapView();
     void applySpanToView(LLView* view, const FSChromeLayout::Span& span, U32 follows);
     void applyMenuBarToSpan(LLView* menu, const FSChromeLayout::Span& span);
     void setSpacerWidth(LLLayoutPanel* panel, int width);
