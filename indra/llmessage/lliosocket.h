@@ -106,6 +106,16 @@ public:
         const char *hostname = APR_ANYADDR);
 
     /**
+     * Create and bind a listening socket, including when port is ephemeral.
+     * Unlike create(), a zero port is bound and the selected port is exposed
+     * through getPort().
+     */
+    static ptr_t createListening(
+        apr_pool_t* pool,
+        U16 port = PORT_EPHEMERAL,
+        const char* hostname = APR_ANYADDR);
+
+    /**
      * @brief Create a LLSocket when you already have an apr socket.
      *
      * This method assumes an ephemeral port. This is typically used

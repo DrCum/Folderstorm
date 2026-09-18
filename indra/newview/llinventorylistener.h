@@ -30,6 +30,8 @@
 #include "lleventapi.h"
 #include "llinventoryfunctions.h"
 
+#include <map>
+
 class LLInventoryListener : public LLEventAPI
 {
 public:
@@ -42,6 +44,42 @@ private:
     void getBasicFolderID(LLSD const &data);
     void getDirectDescendants(LLSD const &data);
     void collectDescendantsIf(LLSD const &data);
+
+    void status(LLSD const& data);
+    void get(LLSD const& data);
+    void list(LLSD const& data);
+    void search(LLSD const& data);
+    void systemFolder(LLSD const& data);
+    void createFolder(LLSD const& data);
+    void move(LLSD const& data);
+    void rename(LLSD const& data);
+    void copy(LLSD const& data);
+    void confirmCopy(LLSD const& data);
+
+    void listAfterFetch(LLSD data);
+    void searchAfterFetch(LLSD data);
+    bool validateDestination(const LLUUID& id, std::string& error) const;
+
+public:
+    struct NoCopyMove
+    {
+        LLUUID item_id;
+        LLUUID old_parent_id;
+        LLUUID new_parent_id;
+    };
+
+    struct CopyPlan
+    {
+        LLUUID id;
+        LLUUID source_id;
+        LLUUID destination_root_id;
+        F64 expires_at;
+        std::vector<NoCopyMove> moves;
+    };
+
+private:
+    void pruneCopyPlans();
+    std::map<LLUUID, CopyPlan> mCopyPlans;
 };
 
 #endif // LL_LLINVENTORYLISTENER_H
