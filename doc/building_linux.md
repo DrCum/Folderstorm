@@ -164,6 +164,14 @@ cd ~/src/phoenix-firestorm
 autobuild configure -A 64 -c ReleaseFS_open
 ```
 
+This fork's daily **AVX2 open** target (no Kakadu / FMOD, with OpenSim) is:
+
+```
+autobuild configure -A 64 -c ReleaseFS_AVX2
+```
+
+`ReleaseFS_AVX2` passes `--avx2`, which compiles the viewer with `-mavx2` and builds OpenJPEG 2.5.3 with AVX2 DWT/MCT kernels. Those binaries will not run on CPUs without AVX2.
+
 This will set up to compile with all defaults and without non-default libraries. It will fetch any additional necessary libraries.
 
 Available premade firestorm-specific build targets:
@@ -171,7 +179,7 @@ Available premade firestorm-specific build targets:
 ```
 ReleaseFS             (with KDU, with FMOD,   no OpenSim)
 ReleaseFS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
-ReleaseFS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
+ReleaseFS_AVX2        (no KDU, no FMOD, OpenSim, AVX2 viewer + AVX2 OpenJPEG)
 ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
 RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
@@ -185,7 +193,7 @@ There are a number of switches you can use to modify the configuration process. 
 
 - **-A \<architecture\>** sets the target architecture, that is if you want to build a 32bit or 64bit viewer (32bit is default if omitted). You probably want to set this to `-A 64`.
 - **--avx** will enable AVX optimizations for AVX-enabled CPUs. Mutually exclusive with --avx2.
-- **--avx2** will enable AVX2 optimizations for AVX2-enabled CPUs. Mutually exclusive with --avx.
+- **--avx2** will enable AVX2 optimizations for AVX2-enabled CPUs. Mutually exclusive with --avx. On Linux this passes `-mavx2` to the viewer **and** builds OpenJPEG 2.5.3 with AVX2 DWT/MCT kernels (`indra/cmake/OpenJPEG.cmake`, recipe in `scripts/3p-openjpeg-avx2`). Rebuild the 3p with `./scripts/3p-openjpeg-avx2/build.sh` if you want a local tarball; AVX2 configure uses that `stage/` tree when present. Those binaries will not run on CPUs without AVX2.
 - **--clean** will cause autobuild to remove any previously compiled objects and fetched packages. It can be useful if you need to force a reload of all packages
 - **--fmodstudio** will tell autobuiild to use the FmodStudio package when compiling.
 - **--kdu** will tell autobuiild to use the KDU (Kakadu) package when compiling.

@@ -23,6 +23,7 @@
 # Executables
 *.dll binary
 *.exe binary
+*.zip binary
 
 # Files with Windows line endings
 VivoxAUP.txt text eol=crlf

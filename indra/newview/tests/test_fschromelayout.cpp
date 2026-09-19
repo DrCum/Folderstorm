@@ -4,6 +4,7 @@
  */
 
 #include "../fschromelayout.h"
+#include "../../llui/lltoolbaravoidance.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -283,6 +284,17 @@ int main()
         expect(left.viewport_enabled, "utility left enables viewport");
         expect(left.inset_left == 50.f && left.inset_right == 0.f, "utility left inset");
 
+        const Rect dual = windowRect(3840, 1080);
+        const Rect world_right = worldFromInsets(dual, 0.5f, 0.f);
+        SideRequest smart{SidePlacement::Smart, toolbar, 0};
+        const SideLayout dual_layout = computeSideLayout(dual, world_right, smart, smart);
+        const int left_bar_left = dual.left + dual_layout.left_outer_spacer;
+        const int left_bar_right = left_bar_left + dual_layout.left_toolbar_width;
+        expect(left_bar_left > dual.left, "utility-left toolbar sits off the window edge");
+        expectEq(computeVerticalToolbarClearanceX(80, 480, left_bar_left, left_bar_right,
+                                                  dual.left, dual.right, true),
+                 0, "inventory in the left utility monitor is not yanked back");
+
         const Snapshot right = builtinSnapshot("two_monitors_utility_right");
         expect(right.viewport_enabled, "utility right enables viewport");
         expect(right.inset_left == 0.f && right.inset_right == 50.f, "utility right inset");
@@ -296,6 +308,37 @@ int main()
         expect(clampPercent(-8.f) == 0.f, "percent clamps low");
         const std::string text = describeFallback("bottom dock", Region::LeftUtility, Region::Viewport);
         expect(text.find("bottom dock") != std::string::npos, "fallback diagnostic names the group");
+    }
+
+    {
+        // Window-edge left toolbar: floater hanging fully off the left is pulled inward.
+        expectEq(computeVerticalToolbarClearanceX(-200, -5, 0, 30, 0, 3000, true),
+                 35, "window-edge left toolbar keeps header inside");
+        // Mid-window left toolbar (viewport edge): floater in the left gutter stays put.
+        expectEq(computeVerticalToolbarClearanceX(100, 500, 1890, 1920, 0, 3840, true),
+                 0, "left gutter floater is not yanked to the viewport");
+        // Overlap nearer the gutter: push fully into the gutter.
+        expectEq(computeVerticalToolbarClearanceX(1860, 1910, 1890, 1920, 0, 3840, true),
+                 -20, "overlap nearer the gutter exits into the gutter");
+        // Overlap nearer the viewport: push fully into the viewport.
+        expectEq(computeVerticalToolbarClearanceX(1900, 1960, 1890, 1920, 0, 3840, true),
+                 20, "overlap nearer the viewport exits into the viewport");
+        // Completely on the inner side: no move.
+        expectEq(computeVerticalToolbarClearanceX(1930, 2300, 1890, 1920, 0, 3840, true),
+                 0, "viewport-side floater is left alone");
+
+        // Window-edge right toolbar: floater hanging fully off the right is pulled inward.
+        expectEq(computeVerticalToolbarClearanceX(3010, 3300, 2970, 3000, 0, 3000, false),
+                 -40, "window-edge right toolbar keeps header inside");
+        // Mid-window right toolbar: floater in the right gutter stays put.
+        expectEq(computeVerticalToolbarClearanceX(2000, 2400, 1920, 1950, 0, 3840, false),
+                 0, "right gutter floater is not yanked to the viewport");
+        // Overlap nearer the right gutter.
+        expectEq(computeVerticalToolbarClearanceX(1930, 1980, 1920, 1950, 0, 3840, false),
+                 20, "overlap nearer the right gutter exits into the gutter");
+        // Overlap nearer the viewport.
+        expectEq(computeVerticalToolbarClearanceX(1880, 1940, 1920, 1950, 0, 3840, false),
+                 -20, "overlap nearer the viewport exits into the viewport");
     }
 
     {

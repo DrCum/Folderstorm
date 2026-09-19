@@ -515,7 +515,7 @@ LLIOPipe::EStatus LLHTTPResponseHeader::process_impl(
 class LLHTTPResponder : public LLIOPipe
 {
 public:
-    LLHTTPResponder(const LLHTTPNode& tree, const LLSD& ctx);
+    LLHTTPResponder(const LLHTTPNode& tree, const LLSD& ctx, F32 request_timeout);
     ~LLHTTPResponder();
 
 protected:
@@ -589,14 +589,17 @@ protected:
 
     // handle the urls
     const LLHTTPNode& mRootNode;
+    F32 mRequestTimeout;
 };
 
-LLHTTPResponder::LLHTTPResponder(const LLHTTPNode& tree, const LLSD& ctx) :
+LLHTTPResponder::LLHTTPResponder(
+    const LLHTTPNode& tree, const LLSD& ctx, F32 request_timeout) :
     mBuildContext(ctx),
     mState(STATE_NOTHING),
     mLastRead(NULL),
     mContentLength(0),
-    mRootNode(tree)
+    mRootNode(tree),
+    mRequestTimeout(request_timeout)
 {
 }
 
@@ -918,7 +921,7 @@ LLIOPipe::EStatus LLHTTPResponder::process_impl(
                 links,
                 buffer,
                 context,
-                DEFAULT_CHAIN_EXPIRY_SECS);
+                mRequestTimeout);
 
             status = STATUS_STOP;
         }
@@ -948,16 +951,23 @@ LLIOPipe::EStatus LLHTTPResponder::process_impl(
 void LLIOHTTPServer::createPipe(LLPumpIO::chain_t& chain,
         const LLHTTPNode& root, const LLSD& ctx)
 {
-    chain.push_back(LLIOPipe::ptr_t(new LLHTTPResponder(root, ctx)));
+    chain.push_back(LLIOPipe::ptr_t(
+        new LLHTTPResponder(root, ctx, DEFAULT_CHAIN_EXPIRY_SECS)));
 }
 
 
 class LLHTTPResponseFactory : public LLChainIOFactory
 {
 public:
+    explicit LLHTTPResponseFactory(F32 request_timeout)
+        : mRequestTimeout(request_timeout)
+    {
+    }
+
     bool build(LLPumpIO::chain_t& chain, LLSD ctx) const
     {
-        LLIOHTTPServer::createPipe(chain, mTree, ctx);
+        chain.push_back(LLIOPipe::ptr_t(
+            new LLHTTPResponder(mTree, ctx, mRequestTimeout)));
         return true;
     }
 
@@ -965,6 +975,7 @@ public:
 
 private:
     LLHTTPNode mTree;
+    F32 mRequestTimeout;
 };
 
 
@@ -972,16 +983,40 @@ private:
 LLHTTPNode& LLIOHTTPServer::create(
     apr_pool_t* pool, LLPumpIO& pump, U16 port)
 {
-    LLSocket::ptr_t socket = LLSocket::create(
-        pool,
-        LLSocket::STREAM_TCP,
-        port);
+    U16 bound_port = 0;
+    return create(pool, pump, port, APR_ANYADDR, bound_port);
+}
+
+// static
+LLHTTPNode& LLIOHTTPServer::create(
+    apr_pool_t* pool,
+    LLPumpIO& pump,
+    U16 port,
+    const char* hostname,
+    U16& bound_port)
+{
+    return create(
+        pool, pump, port, hostname, bound_port, DEFAULT_CHAIN_EXPIRY_SECS);
+}
+
+// static
+LLHTTPNode& LLIOHTTPServer::create(
+    apr_pool_t* pool,
+    LLPumpIO& pump,
+    U16 port,
+    const char* hostname,
+    U16& bound_port,
+    F32 request_timeout)
+{
+    LLSocket::ptr_t socket = LLSocket::createListening(pool, port, hostname);
     if(!socket)
     {
         LL_ERRS() << "Unable to initialize socket" << LL_ENDL;
     }
+    bound_port = socket->getPort();
 
-    LLHTTPResponseFactory* factory = new LLHTTPResponseFactory;
+    LLHTTPResponseFactory* factory =
+        new LLHTTPResponseFactory(request_timeout);
     std::shared_ptr<LLChainIOFactory> factory_ptr(factory);
 
     LLIOServerSocket* server = new LLIOServerSocket(pool, socket, factory_ptr);

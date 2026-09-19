@@ -226,6 +226,14 @@
       <string>LogPerformance</string>
     </map>
 
+    <key>mcp-api</key>
+    <map>
+      <key>desc</key>
+      <string>Enable the authenticated local Event API bridge for MCP tools.</string>
+      <key>map-to</key>
+      <string>EnableLocalEventAPIBridge</string>
+    </map>
+
     <key>multiple</key>		  
     <map>
       <key>desc</key>

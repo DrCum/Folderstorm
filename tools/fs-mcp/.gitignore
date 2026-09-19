@@ -1,0 +1,5 @@
+# Ignore built sidecar binaries
+/fs-mcp
+/fs-mcp.exe
+/cmd/fs-mcp/fs-mcp
+*.exe

@@ -1,0 +1,47 @@
+name: fs-mcp
+
+on:
+  pull_request:
+    paths:
+      - "tools/fs-mcp/**"
+      - ".github/workflows/fs-mcp.yml"
+  push:
+    paths:
+      - "tools/fs-mcp/**"
+      - ".github/workflows/fs-mcp.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: tools/fs-mcp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/fs-mcp/go.mod
+          cache-dependency-path: tools/fs-mcp/go.sum
+      - name: gofmt
+        if: runner.os != 'Windows'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build -o fs-mcp ./cmd/fs-mcp

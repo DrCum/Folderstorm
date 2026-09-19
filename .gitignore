@@ -130,3 +130,8 @@ firestorm.code-workspace
 .github/release.yaml
 
 checks.json
+
+scripts/3p-openjpeg-avx2/src/
+scripts/3p-openjpeg-avx2/build/
+scripts/3p-openjpeg-avx2/stage/
+scripts/3p-openjpeg-avx2/dist/
