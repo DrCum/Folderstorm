@@ -19,6 +19,7 @@
   <string name="no_matched_outfits_msg">
     Didn't find what you're looking for? Try [secondlife:///app/search/all/[SEARCH_TERM] Search].
   </string>
+  <string name="thumbnail_size_label">Thumbnail size</string>
   <text
     type="string"
     clip_partial="false"
@@ -26,20 +27,39 @@
     layout="topleft"
     left="13"
     name="no_outfits_txt"
-    top="0"
+    top="26"
     height="32"
     valign="center"
     parse_urls="true"
     wrap="true">
     Searching...
-  </text> 
+  </text>
+  <slider
+   can_edit_text="true"
+   control_name="OutfitGalleryItemWidth"
+   decimal_digits="0"
+   follows="left|top|right"
+   height="18"
+   increment="1"
+   initial_value="150"
+   label="Thumbnail size"
+   label_width="95"
+   layout="topleft"
+   left="8"
+   max_val="256"
+   min_val="80"
+   name="gallery_size_slider"
+   show_text="true"
+   tool_tip="Changes the size of the photos in the outfit gallery. The largest size matches the 256 pixel image already loaded for each outfit, so making thumbnails bigger does not download a sharper photo."
+   top="2"
+   width="296" />
   <scroll_container
    follows="all"
-   height="395"
+   height="369"
    right="310"
    layout="topleft"
    left="3"
-   top="0"
+   top="26"
    tab_stop="true"
    name="gallery_scroll_panel"
    opaque="false">

@@ -37,6 +37,7 @@
 
 #include <vector>
 
+class LLSliderCtrl;
 class LLOutfitGallery;
 class LLOutfitGalleryItem;
 class LLOutfitListGearMenuBase;
@@ -139,6 +140,10 @@ private:
     void updateRowsIfNeeded();
     void updateGalleryWidth();
     void handleInvFavColorChange();
+    void onThumbnailSizeChanged();
+    void applyThumbnailWidthFromSetting();
+    void setThumbnailDimensions(S32 width);
+    S32 calcItemsInRow(S32 items_in_row) const;
 
     LLOutfitGalleryItem* buildGalleryItem(std::string name, LLUUID outfit_id, bool is_favorite);
     LLOutfitGalleryItem* getSelectedItem() const;
@@ -194,6 +199,10 @@ private:
     std::set<LLUUID>                                  mPendingOutfitRefreshes;
 
     boost::signals2::connection mSavedSettingInvFavColor;
+    boost::signals2::connection mThumbnailSizeConnection;
+    LLSliderCtrl* mGallerySizeSlider;
+    bool mApplyingThumbnailSize;
+    bool mThumbnailWidthDirty;
 };
 class LLOutfitGalleryContextMenu : public LLOutfitContextMenu
 {
@@ -244,6 +253,7 @@ public:
     bool openOutfitsContent();
 
     void setGallery(LLOutfitGallery* gallery) { mGallery = gallery; }
+    void setDisplaySize(S32 width, S32 height);
     void setDefaultImage();
     bool setImageAssetId(LLUUID asset_id);
     LLUUID getImageAssetId();

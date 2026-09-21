@@ -48,6 +48,7 @@
 #include "lltabcontainer.h"
 #include "lltexturectrl.h"
 #include "lltrans.h"
+#include "llsliderctrl.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"
 #include "llviewertexturelist.h"
@@ -66,6 +67,30 @@ static LLPanelInjector<LLOutfitGallery> t_outfit_gallery("outfit_gallery");
 #define MAX_OUTFIT_PHOTO_LOAD_HEIGHT 256
 
 const S32 GALLERY_ITEMS_PER_ROW_MIN = 2;
+
+// Default cell geometry from panel_outfit_gallery_item.xml (150x175).
+// The photo stays square with the label block; only the photo scales.
+const S32 GALLERY_ITEM_HEIGHT_DEFAULT = 175;
+const S32 GALLERY_ROW_HEIGHT_DEFAULT = 180;
+const S32 GALLERY_IMAGE_WIDTH_DEFAULT = 147;
+const S32 GALLERY_IMAGE_HEIGHT_DEFAULT = 149;
+const S32 GALLERY_IMAGE_LEFT = 1;
+const S32 GALLERY_IMAGE_RIGHT_PAD = 2;
+const S32 GALLERY_TEXT_HEIGHT = 25;
+const S32 GALLERY_TEXT_BOTTOM = 1;
+// Gallery content width uses this extra on top of the item width so the
+// historic 163 factor is unchanged at the default 150px cell.
+const S32 GALLERY_WIDTH_FACTOR_EXTRA = 13;
+// Do not display larger than the resolution the gallery already fetches.
+// Raising this without raising MAX_OUTFIT_PHOTO_LOAD_* blurs the photo and
+// raising both increases texture memory for every visible outfit.
+const S32 GALLERY_ITEM_WIDTH_MIN = 80;
+const S32 GALLERY_ITEM_WIDTH_MAX = MAX_OUTFIT_PHOTO_LOAD_WIDTH;
+
+static S32 clampGalleryItemWidth(S32 width)
+{
+    return llclamp(width, GALLERY_ITEM_WIDTH_MIN, GALLERY_ITEM_WIDTH_MAX);
+}
 
 LLOutfitGallery::LLOutfitGallery(const LLOutfitGallery::Params& p)
     : LLOutfitListBase(),
@@ -88,14 +113,24 @@ LLOutfitGallery::LLOutfitGallery(const LLOutfitGallery::Params& p)
       mRowPanWidthFactor(p.row_panel_width_factor),
       mGalleryWidthFactor(p.gallery_width_factor),
       mTextureSelected(NULL),
-      mSortMenu(nullptr)
+      mSortMenu(nullptr),
+      mGallerySizeSlider(nullptr),
+      mApplyingThumbnailSize(false),
+      mThumbnailWidthDirty(false)
 {
+    setThumbnailDimensions(clampGalleryItemWidth(gSavedSettings.getS32("OutfitGalleryItemWidth")));
     updateGalleryWidth();
 
     LLControlVariable* ctrl = gSavedSettings.getControl("InventoryFavoritesColorText");
     if (ctrl)
     {
         mSavedSettingInvFavColor = ctrl->getSignal()->connect(boost::bind(&LLOutfitGallery::handleInvFavColorChange, this));
+    }
+
+    LLControlVariable* size_ctrl = gSavedSettings.getControl("OutfitGalleryItemWidth");
+    if (size_ctrl)
+    {
+        mThumbnailSizeConnection = size_ctrl->getSignal()->connect(boost::bind(&LLOutfitGallery::onThumbnailSizeChanged, this));
     }
 }
 
@@ -124,6 +159,11 @@ bool LLOutfitGallery::postBuild()
     mScrollPanel = getChild<LLScrollContainer>("gallery_scroll_panel");
     mMessageTextBox = getChild<LLTextBox>("no_outfits_txt");
     mOutfitGalleryMenu = new LLOutfitGalleryContextMenu(this);
+    mGallerySizeSlider = findChild<LLSliderCtrl>("gallery_size_slider");
+    if (mGallerySizeSlider)
+    {
+        mGallerySizeSlider->setLabel(getString("thumbnail_size_label"));
+    }
     return rv;
 }
 
@@ -149,6 +189,13 @@ void LLOutfitGallery::onOpen(const LLSD& info)
 void LLOutfitGallery::draw()
 {
     LLPanel::draw();
+    // Apply a pending thumbnail size once the slider is released so a drag
+    // does not rebuild the gallery on every increment.
+    if (mThumbnailWidthDirty && (!mGallerySizeSlider || !mGallerySizeSlider->isMouseHeldDown()))
+    {
+        mThumbnailWidthDirty = false;
+        applyThumbnailWidthFromSetting();
+    }
     if (mGalleryCreated)
     {
         updateRowsIfNeeded();
@@ -491,8 +538,112 @@ void LLOutfitGallery::reArrangeRows(S32 row_diff)
 
 void LLOutfitGallery::updateGalleryWidth()
 {
+    // Factors stay in lockstep with the cell width. At the default 150px
+    // cell this is 166 and 163, matching the original constants. A stale
+    // factor makes updateRowsIfNeeded add and remove a column forever.
+    mRowPanWidthFactor = mItemWidth + mItemHorizontalGap;
+    mGalleryWidthFactor = mItemWidth + GALLERY_WIDTH_FACTOR_EXTRA;
     mRowPanelWidth = mRowPanWidthFactor * mItemsInRow - mItemHorizontalGap;
     mGalleryWidth = mGalleryWidthFactor * mItemsInRow - mItemHorizontalGap;
+}
+
+void LLOutfitGallery::onThumbnailSizeChanged()
+{
+    mThumbnailWidthDirty = true;
+}
+
+void LLOutfitGallery::setThumbnailDimensions(S32 width)
+{
+    mItemWidth = width;
+    const S32 image_width = llmax(1, width - GALLERY_IMAGE_LEFT - GALLERY_IMAGE_RIGHT_PAD);
+    const S32 image_height = llmax(1, (image_width * GALLERY_IMAGE_HEIGHT_DEFAULT) / GALLERY_IMAGE_WIDTH_DEFAULT);
+    mItemHeight = image_height + GALLERY_TEXT_HEIGHT + GALLERY_TEXT_BOTTOM;
+    mRowPanelHeight = mItemHeight + (GALLERY_ROW_HEIGHT_DEFAULT - GALLERY_ITEM_HEIGHT_DEFAULT);
+}
+
+S32 LLOutfitGallery::calcItemsInRow(S32 items_in_row) const
+{
+    if (items_in_row < GALLERY_ITEMS_PER_ROW_MIN)
+    {
+        items_in_row = GALLERY_ITEMS_PER_ROW_MIN;
+    }
+
+    const S32 view_width = getRect().getWidth();
+    if (view_width <= 0)
+    {
+        return items_in_row;
+    }
+
+    const S32 visible = static_cast<S32>(mItems.size());
+    // Same inequalities as updateRowsIfNeeded, converged in one pass so a
+    // size change does not rebuild the gallery once per added or removed column.
+    for (S32 step = 0; step < 32; ++step)
+    {
+        const S32 row_width = (mItemWidth + mItemHorizontalGap) * items_in_row - mItemHorizontalGap;
+        const S32 row_count = (visible == 0) ? 0 : ((visible + items_in_row - 1) / items_in_row);
+
+        if (((view_width - row_width) > mItemWidth) && row_count > 1)
+        {
+            ++items_in_row;
+        }
+        else if ((row_width > (view_width + mItemHorizontalGap)) && items_in_row > GALLERY_ITEMS_PER_ROW_MIN)
+        {
+            --items_in_row;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return items_in_row;
+}
+
+void LLOutfitGallery::applyThumbnailWidthFromSetting()
+{
+    if (mApplyingThumbnailSize)
+    {
+        return;
+    }
+
+    const S32 requested = gSavedSettings.getS32("OutfitGalleryItemWidth");
+    const S32 width = clampGalleryItemWidth(requested);
+    if (width != requested)
+    {
+        mApplyingThumbnailSize = true;
+        gSavedSettings.setS32("OutfitGalleryItemWidth", width);
+        mApplyingThumbnailSize = false;
+        mThumbnailWidthDirty = false;
+    }
+
+    if (width == mItemWidth)
+    {
+        return;
+    }
+
+    setThumbnailDimensions(width);
+    updateGalleryWidth();
+
+    for (outfit_map_t::iterator iter = mOutfitMap.begin(); iter != mOutfitMap.end(); ++iter)
+    {
+        if (iter->second)
+        {
+            iter->second->setDisplaySize(mItemWidth, mItemHeight);
+        }
+    }
+
+    if (mGalleryCreated)
+    {
+        const S32 target_columns = calcItemsInRow(mItemsInRow);
+        reArrangeRows(target_columns - mItemsInRow);
+        if (mSelectedOutfitUUID.notNull())
+        {
+            LLOutfitGalleryItem* selected = getSelectedItem();
+            if (selected && !selected->isHidden())
+            {
+                scrollToShowItem(mSelectedOutfitUUID);
+            }
+        }
+    }
 }
 
 void LLOutfitGallery::handleInvFavColorChange()
@@ -664,7 +815,7 @@ LLOutfitGalleryItem* LLOutfitGallery::buildGalleryItem(std::string name, LLUUID 
 {
     LLOutfitGalleryItem::Params giparams;
     LLOutfitGalleryItem* gitem = LLUICtrlFactory::create<LLOutfitGalleryItem>(giparams);
-    gitem->reshape(mItemWidth, mItemHeight);
+    gitem->setDisplaySize(mItemWidth, mItemHeight);
     gitem->setVisible(true);
     gitem->setFollowsLeft();
     gitem->setFollowsTop();
@@ -762,6 +913,7 @@ void LLOutfitGallery::moveRowPanel(LLPanel* stack, int left, int bottom)
 
 LLOutfitGallery::~LLOutfitGallery()
 {
+    mThumbnailSizeConnection.disconnect();
     delete mOutfitGalleryMenu;
 
     while (!mUnusedRowPanels.empty())
@@ -1020,6 +1172,32 @@ LLOutfitGalleryItem::LLOutfitGalleryItem(const Params& p)
 LLOutfitGalleryItem::~LLOutfitGalleryItem()
 {
 
+}
+
+void LLOutfitGalleryItem::setDisplaySize(S32 width, S32 height)
+{
+    reshape(width, height);
+
+    if (!mPreviewIcon || !mTextBgPanel || !mOutfitNameText || !mOutfitWornText)
+    {
+        return;
+    }
+
+    const S32 image_width = llmax(1, width - GALLERY_IMAGE_LEFT - GALLERY_IMAGE_RIGHT_PAD);
+    const S32 image_height = llmax(1, height - GALLERY_TEXT_HEIGHT - GALLERY_TEXT_BOTTOM);
+    const S32 image_bottom = height - image_height;
+    mPreviewIcon->setRect(LLRect(GALLERY_IMAGE_LEFT,
+                                  image_bottom + image_height,
+                                  GALLERY_IMAGE_LEFT + image_width,
+                                  image_bottom));
+
+    const S32 text_width = llmax(1, width - 2);
+    mTextBgPanel->setRect(LLRect(0, GALLERY_TEXT_BOTTOM + GALLERY_TEXT_HEIGHT, text_width, GALLERY_TEXT_BOTTOM));
+
+    const LLRect name_rect = mOutfitNameText->getRect();
+    mOutfitNameText->reshape(llmax(1, text_width - name_rect.mLeft), name_rect.getHeight());
+    const LLRect worn_rect = mOutfitWornText->getRect();
+    mOutfitWornText->reshape(llmax(1, text_width - worn_rect.mLeft), worn_rect.getHeight());
 }
 
 bool LLOutfitGalleryItem::postBuild()

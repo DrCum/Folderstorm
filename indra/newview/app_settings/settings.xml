@@ -19016,6 +19016,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>OutfitGalleryItemWidth</key>
+    <map>
+      <key>Comment</key>
+      <string>Width, in pixels, of an outfit gallery thumbnail. The photo height scales with it and the name stays a fixed height. Clamped to 80-256; 256 is the resolution the gallery fetches.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>150</integer>
+    </map>
     <key>OutfitGallerySortOrder</key>
     <map>
       <key>Comment</key>
