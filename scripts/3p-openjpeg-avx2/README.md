@@ -9,7 +9,7 @@ Linux/Windows **AVX2 viewer builds** (`USE_AVX2_OPTIMIZATION`) consume this libr
 
 Non-AVX2 configurations (`ReleaseFS_open` without `--avx2`) keep the stock Linden tarball in `autobuild.xml`. **darwin64** always stays on that stock package. Replacing the committed linux64/windows64 URLs with an AVX2 tarball would make SSE2 open builds crash on CPUs without AVX2 during JPEG2000 decode.
 
-This fork's daily AVX2 target is `ReleaseFS_AVX2` on Linux (`--avx2 --opensim`, no Kakadu). On Windows use `ReleaseFS_open` plus `--avx2`. Those binaries need an AVX2 CPU.
+This fork's daily AVX2 target is `ReleaseFS_open_AVX2` (no Kakadu / FMOD, `--avx2`). That is the same as `ReleaseFS_open -- --avx2`. Firestorm's `ReleaseFS_AVX2` name is left as Kakadu/FMOD so it does not collide with upstream recipes. Those binaries need an AVX2 CPU.
 
 ## Linux
 
@@ -34,6 +34,6 @@ Leave `platform=darwin64` on the Linden URL. Do not commit a `file://` path.
 
 ## Windows
 
-Run the same `build.sh` from Git Bash after `cmake` and MSVC (`cl`) are on `PATH`. It passes `/arch:AVX2` and writes `openjpeg-2.5.3-avx2-windows64.tar.zst`. Viewer `--avx2` configure also compiles OpenJPEG via FetchContent when `stage/` is missing.
+Run the same `build.sh` from Git Bash after `cmake` and MSVC (`cl`) are on `PATH`. It passes `/arch:AVX2` and writes `openjpeg-2.5.3-avx2-windows64.tar.zst`. Viewer `--avx2` configure also compiles OpenJPEG via FetchContent when `stage/` is missing. On Windows that FetchContent build is **static** (`openjp2.lib`); packaging must not use OpenJPEG's `bin/`, and `Copy3rdPartyLibs` must not stage the Linden 3p `openjp2.dll`.
 
 macOS is not supported here (universal x86_64+arm64 `lipo` is out of scope).

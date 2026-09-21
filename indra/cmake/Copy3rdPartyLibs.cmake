@@ -62,9 +62,11 @@ if(WINDOWS)
         )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
+    # AVX2 OpenJPEG is a static FetchContent/stage lib; the Linden 3p
+    # openjp2.dll is not present and must not be staged.
+    if (NOT USE_KDU AND NOT USE_AVX2_OPTIMIZATION)
         set(release_files ${release_files} openjp2.dll)
-    endif (NOT USE_KDU)
+    endif ()
     # </FS:Ansariel>
 
     # Filenames are different for 32/64 bit BugSplat file and we don't
