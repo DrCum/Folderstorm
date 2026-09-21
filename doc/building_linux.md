@@ -167,10 +167,10 @@ autobuild configure -A 64 -c ReleaseFS_open
 This fork's daily **AVX2 open** target (no Kakadu / FMOD, with OpenSim) is:
 
 ```
-autobuild configure -A 64 -c ReleaseFS_AVX2
+autobuild configure -A 64 -c ReleaseFS_open_AVX2
 ```
 
-`ReleaseFS_AVX2` passes `--avx2`, which compiles the viewer with `-mavx2` and builds OpenJPEG 2.5.3 with AVX2 DWT/MCT kernels. Those binaries will not run on CPUs without AVX2.
+`ReleaseFS_open_AVX2` passes `--avx2`, which compiles the viewer with `-mavx2` and builds OpenJPEG 2.5.3 with AVX2 DWT/MCT kernels. Those binaries will not run on CPUs without AVX2. Do not use Firestorm's `ReleaseFS_AVX2` name for this: on Windows that config is still Kakadu/FMOD.
 
 This will set up to compile with all defaults and without non-default libraries. It will fetch any additional necessary libraries.
 
@@ -179,8 +179,9 @@ Available premade firestorm-specific build targets:
 ```
 ReleaseFS             (with KDU, with FMOD,   no OpenSim)
 ReleaseFS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
-ReleaseFS_AVX2        (no KDU, no FMOD, OpenSim, AVX2 viewer + AVX2 OpenJPEG)
+ReleaseFS_AVX2        (Firestorm name: with KDU, with FMOD, AVX2 — not this fork's open path)
 ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
+ReleaseFS_open_AVX2   (  no KDU,   no FMOD, OpenSim, AVX2 viewer + AVX2 OpenJPEG)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
 RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
 RelWithDebInfoFS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
@@ -213,6 +214,7 @@ autobuild configure -A 64 -c ReleaseFS_open -- -DLL_TESTS:BOOL=FALSE
 autobuild configure -A 64 -c ReleaseFS_open -- --clean
 autobuild configure -A 64 -c ReleaseFS_open -- --fmodstudio
 autobuild configure -A 64 -c ReleaseFS_open -- --chan="MyBuild"
+autobuild configure -A 64 -c ReleaseFS_open_AVX2
 ```
 
 In the last example, the channel and resulting viewer name would be "Firestorm-MyBuild". 

@@ -252,8 +252,9 @@ Available premade firestorm-specific build targets:
 ```
 ReleaseFS             (with KDU, with FMOD,   no OpenSim)
 ReleaseFS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
-ReleaseFS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
+ReleaseFS_AVX2        (Firestorm name: with KDU, with FMOD, AVX2 — not this fork's open path)
 ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
+ReleaseFS_open_AVX2   (  no KDU,   no FMOD, AVX2 viewer + AVX2 OpenJPEG)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
 RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
 RelWithDebInfoFS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
@@ -270,7 +271,7 @@ There are a number of switches you can use to modify the configuration process. 
 
 - **-A \<architecture\>** sets the target architecture, that is if you want to build a 32bit or 64bit viewer (32bit is default if omitted). You probably want to set this to `-A 64`.
 - **--avx** will enable AVX optimizations for AVX-enabled CPUs. Mutually exclusive with --avx2.
-- **--avx2** will enable AVX2 optimizations for AVX2-enabled CPUs. Mutually exclusive with --avx. This compiles the viewer with `/arch:AVX2` **and** builds OpenJPEG 2.5.3 with `/arch:AVX2` (`indra/cmake/OpenJPEG.cmake`). Windows FetchContent OpenJPEG is static (`openjp2.lib`); packaging must not use OpenJPEG's `bin/`, and the Linden 3p `openjp2.dll` is not copied. This fork has no Kakadu, so the open AVX2 path is `autobuild configure -A 64 -c ReleaseFS_open -- --avx2` (the named `ReleaseFS_AVX2` Windows target is still the upstream Kakadu configuration). Rebuild the 3p with `scripts/3p-openjpeg-avx2/build.sh` from Git Bash if you want a local tarball. AVX2 binaries will not run on CPUs without AVX2.
+- **--avx2** will enable AVX2 optimizations for AVX2-enabled CPUs. Mutually exclusive with --avx. This compiles the viewer with `/arch:AVX2` **and** builds OpenJPEG 2.5.3 with `/arch:AVX2` (`indra/cmake/OpenJPEG.cmake`). Windows FetchContent OpenJPEG is static (`openjp2.lib`); packaging must not use OpenJPEG's `bin/`, and the Linden 3p `openjp2.dll` is not copied. This fork's named open AVX2 target is `ReleaseFS_open_AVX2` (same as `ReleaseFS_open -- --avx2`). Leave Firestorm's `ReleaseFS_AVX2` alone: that name is still Kakadu/FMOD and does not pass `--avx2`. Rebuild the 3p with `scripts/3p-openjpeg-avx2/build.sh` from Git Bash if you want a local tarball. AVX2 binaries will not run on CPUs without AVX2.
 - **--clean** will cause autobuild to remove any previously compiled objects and fetched packages. It can be useful if you need to force a reload of all packages.
 - **--fmodstudio** controls if the FMOD Studio package is incorporated into the viewer. You must have performed the FMOD Studio installation steps in [FMOD Studio using Autobuild](#fmod-studio-using-autobuild) for this to work. You will not have any sound if you do not include FMOD.
 - **--kdu** will tell autobuiild to use the KDU (Kakadu) package when compiling.
@@ -288,6 +289,9 @@ There are a number of switches you can use to modify the configuration process. 
 
 - To build a 64bit viewer without FMOD Studio and without installer package, run this command:
 `autobuild configure -A 64 -c ReleaseFS_open -- --chan MyViewer -DLL_TESTS:BOOL=FALSE`
+
+- To build this fork's open AVX2 viewer (no Kakadu / FMOD, `/arch:AVX2` + AVX2 OpenJPEG), run:
+`autobuild configure -A 64 -c ReleaseFS_open_AVX2`
 
 ## Building the viewer
 

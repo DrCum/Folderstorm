@@ -11,7 +11,7 @@
 #   scripts/3p-openjpeg-avx2/stage/     install tree
 #   scripts/3p-openjpeg-avx2/dist/*.tar.zst  autobuild-style tarball
 #
-# Do not use -march=native: this is a named AVX2 package, same as ReleaseFS_AVX2.
+# Do not use -march=native: this is a named AVX2 package, same as ReleaseFS_open_AVX2.
 
 set -euo pipefail
 
