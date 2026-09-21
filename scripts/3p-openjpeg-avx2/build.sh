@@ -63,6 +63,8 @@ else
   )
 fi
 
+# BUILD_SHARED_LIBS=OFF must produce static openjp2.lib (not a DLL) so
+# autobuild layout lib/release/ stays correct on Windows/MSVC.
 cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
   -DBUILD_SHARED_LIBS=OFF \

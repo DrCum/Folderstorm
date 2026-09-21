@@ -34,6 +34,6 @@ Leave `platform=darwin64` on the Linden URL. Do not commit a `file://` path.
 
 ## Windows
 
-Run the same `build.sh` from Git Bash after `cmake` and MSVC (`cl`) are on `PATH`. It passes `/arch:AVX2` and writes `openjpeg-2.5.3-avx2-windows64.tar.zst`. Viewer `--avx2` configure also compiles OpenJPEG via FetchContent when `stage/` is missing.
+Run the same `build.sh` from Git Bash after `cmake` and MSVC (`cl`) are on `PATH`. It passes `/arch:AVX2` and writes `openjpeg-2.5.3-avx2-windows64.tar.zst`. Viewer `--avx2` configure also compiles OpenJPEG via FetchContent when `stage/` is missing. On Windows that FetchContent build is **static** (`openjp2.lib`); packaging must not use OpenJPEG's `bin/`.
 
 macOS is not supported here (universal x86_64+arm64 `lipo` is out of scope).
