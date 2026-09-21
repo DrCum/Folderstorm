@@ -55,21 +55,24 @@ if (WINDOWS)
         LINK_FLAGS "/NODEFAULTLIB:LIBCMT"
         )
 
-    # Copy over OpenJPEG.dll
-    # *NOTE: On Windows with VS2005, only the first comment prints
-    set(OPENJPEG_RELEASE
-        "${ARCH_PREBUILT_DIRS_RELEASE}/openjp2.dll")
-    add_custom_command( TARGET llui_libtest POST_BUILD
+    # Copy over OpenJPEG.dll from the Linden 3p. AVX2 builds link static
+    # FetchContent/stage openjp2.lib and have no 3p DLL.
+    if (NOT USE_AVX2_OPTIMIZATION)
+        # *NOTE: On Windows with VS2005, only the first comment prints
+        set(OPENJPEG_RELEASE
+            "${ARCH_PREBUILT_DIRS_RELEASE}/openjp2.dll")
+        add_custom_command( TARGET llui_libtest POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${OPENJPEG_RELEASE} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying OpenJPEG DLLs to binary directory"
+            )
+        set(OPENJPEG_DEBUG
+            "${ARCH_PREBUILT_DIRS_DEBUG}/openjp2.dll")
+        add_custom_command( TARGET llui_libtest POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${OPENJPEG_RELEASE} ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Copying OpenJPEG DLLs to binary directory"
-        )
-    set(OPENJPEG_DEBUG
-        "${ARCH_PREBUILT_DIRS_DEBUG}/openjp2.dll")
-    add_custom_command( TARGET llui_libtest POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-            ${OPENJPEG_DEBUG} ${CMAKE_CURRENT_BINARY_DIR}
-        )
+                ${OPENJPEG_DEBUG} ${CMAKE_CURRENT_BINARY_DIR}
+            )
+    endif ()
   
 endif (WINDOWS)
 
