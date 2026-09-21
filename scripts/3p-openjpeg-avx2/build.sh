@@ -11,7 +11,7 @@
 #   scripts/3p-openjpeg-avx2/stage/     install tree
 #   scripts/3p-openjpeg-avx2/dist/*.tar.zst  autobuild-style tarball
 #
-# Do not use -march=native: this is a named AVX2 package, same as ReleaseFS_AVX2.
+# Do not use -march=native: this is a named AVX2 package, same as ReleaseFS_open_AVX2.
 
 set -euo pipefail
 
@@ -63,6 +63,8 @@ else
   )
 fi
 
+# BUILD_SHARED_LIBS=OFF must produce static openjp2.lib (not a DLL) so
+# autobuild layout lib/release/ stays correct on Windows/MSVC.
 cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
   -DBUILD_SHARED_LIBS=OFF \

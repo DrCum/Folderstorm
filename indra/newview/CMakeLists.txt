@@ -2359,11 +2359,12 @@ if (WINDOWS)
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
+    # AVX2 OpenJPEG is static; there is no staged openjp2.dll.
+    if (NOT USE_KDU AND NOT USE_AVX2_OPTIMIZATION)
         list(APPEND COPY_INPUT_DEPENDENCIES
             ${SHARED_LIB_STAGING_DIR}/openjp2.dll
             )
-    endif (NOT USE_KDU)
+    endif ()
     # </FS:Ansariel>
 
     if (ADDRESS_SIZE EQUAL 64)
