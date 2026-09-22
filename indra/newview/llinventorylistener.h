@@ -30,14 +30,22 @@
 #include "lleventapi.h"
 #include "llinventoryfunctions.h"
 
+#include <deque>
 #include <map>
+#include <memory>
+
+struct InventoryChangeFeed;
 
 class LLInventoryListener : public LLEventAPI
 {
 public:
     LLInventoryListener();
+    ~LLInventoryListener() override;
+
+    void noteInventoryChanged(U32 mask);
 
 private:
+    void ensureObserving();
     void getItemsInfo(LLSD const &data);
     void getFolderTypeNames(LLSD const &data);
     void getAssetTypeNames(LLSD const &data);
@@ -55,10 +63,33 @@ private:
     void rename(LLSD const& data);
     void copy(LLSD const& data);
     void confirmCopy(LLSD const& data);
+    void types(LLSD const& data);
+    void getMany(LLSD const& data);
+    void resolvePath(LLSD const& data);
+    void protectedFolders(LLSD const& data);
+    void setDescription(LLSD const& data);
+    void setThumbnail(LLSD const& data);
+    void setFavorite(LLSD const& data);
+    void link(LLSD const& data);
+    void replaceLinks(LLSD const& data);
+    void createItem(LLSD const& data);
+    void batchMove(LLSD const& data);
+    void batchRename(LLSD const& data);
+    void batchCopy(LLSD const& data);
+    void trash(LLSD const& data);
+    void restore(LLSD const& data);
+    void emptyTrash(LLSD const& data);
+    void purge(LLSD const& data);
+    void readNotecard(LLSD const& data);
+    void readScript(LLSD const& data);
+    void landmark(LLSD const& data);
+    void changes(LLSD const& data);
 
     void listAfterFetch(LLSD data);
     void searchAfterFetch(LLSD data);
     bool validateDestination(const LLUUID& id, std::string& error) const;
+    bool requireConfirm(LLSD const& data, LLEventAPI::Response& response) const;
+    bool canMutate(const LLUUID& id, bool rename, std::string& error) const;
 
 public:
     struct NoCopyMove
@@ -77,9 +108,19 @@ public:
         std::vector<NoCopyMove> moves;
     };
 
+    struct ChangeRecord
+    {
+        S32 generation = 0;
+        LLUUID id;
+        U32 mask = 0;
+    };
+
 private:
     void pruneCopyPlans();
     std::map<LLUUID, CopyPlan> mCopyPlans;
+    std::shared_ptr<InventoryChangeFeed> mFeed;
+    S32 mGeneration = 0;
+    std::deque<ChangeRecord> mChanges;
 };
 
 #endif // LL_LLINVENTORYLISTENER_H

@@ -57,3 +57,8 @@ func (c *Client) Copy(ctx context.Context, params map[string]any) (json.RawMessa
 func (c *Client) ConfirmCopy(ctx context.Context, params map[string]any) (json.RawMessage, error) {
 	return c.Call(ctx, "confirmCopy", params)
 }
+
+// CallNamed posts an operation to a named Event API.
+func (c *Client) CallNamed(ctx context.Context, apiName, op string, params map[string]any) (json.RawMessage, error) {
+	return c.CallAPI(ctx, apiName, op, params)
+}
