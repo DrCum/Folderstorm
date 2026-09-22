@@ -988,6 +988,7 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
   var css = document.createElement('style');
   css.id = 'folderstorm-login-theme';
   css.textContent = [
+    'body{background-image:url(https://sodie.net/FSV3splashimg.webp) !important;}',
     'a{color:#8B7CFF !important;}',
     'a:hover{color:#6CB6FF !important;}',
     'b{color:#C4B5FD !important;}',
