@@ -142,24 +142,12 @@ namespace
             std::string update_url = platforms[platform]["url"].asString();
 #if LL_VELOPACK
             std::string velopack_url = platforms[platform]["velopack_url"].asString();
-            U32 updater_service = gSavedSettings.getU32("UpdaterServiceSetting");
-            std::string required_version = update_required ? result["version"].asString() : "";
-            // Skip network check if no required version AND user only wants mandatory updates
-            if (!velopack_url.empty() && (update_required || updater_service != 0))
+            // Folderstorm keeps Velopack compiled in for a future feed, but does not
+            // query or download from one yet.
+            if (!velopack_url.empty())
             {
-                LL_INFOS("VVM") << "Velopack feed URL: " << velopack_url
-                                << " required_version: " << required_version << LL_ENDL;
-                velopack_set_update_url(velopack_url);
-
-                LLCoros::instance().launch("VelopackUpdateCheck",
-                    [required_version, relnotes]()
-                    {
-                        velopack_check_for_updates(required_version, relnotes);
-                    });
-            }
-            else if (!velopack_url.empty())
-            {
-                LL_INFOS("VVM") << "Optional update skipped (UpdaterServiceSetting=0)" << LL_ENDL;
+                LL_INFOS("VVM") << "Velopack update check skipped (required="
+                                << update_required << ")" << LL_ENDL;
             }
             else
 #endif

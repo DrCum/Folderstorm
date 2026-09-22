@@ -87,7 +87,7 @@ showUsage()
     echo "  --avx2                   : Build with Advanced Vector Extensions 2"
     echo "  --tracy                  : Build with Tracy Profiler support"
     echo "  --lto                    : Build with Link Time Optimization"
-    echo "  --crashreporting         : Build with crash reporting enabled (Windows only)"
+    echo "  --crashreporting         : Ignored. Folderstorm does not upload crashes to BugSplat"
     echo "  --testbuild <days>       : Create time-limited test build (build date + <days>)"
     echo "  --platform <platform>    : Build for specified platform (darwin | windows | linux)"
     echo "  --jobs <num>             : Build with <num> jobs in parallel (Linux and Darwin only)"
@@ -532,26 +532,13 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         PACKAGE="-DPACKAGE:BOOL=OFF"
         VELOPACK="-DUSE_VELOPACK:BOOL=OFF"
     fi
+    # Folderstorm does not send crashes to the Phoenix Firestorm BugSplat
+    # database. --crashreporting is accepted and ignored so RELEASE_CRASH_REPORTING
+    # and USE_BUGSPLAT stay off (no LL_SEND_CRASH_REPORTS, no Breakpad upload).
     if [ $WANTS_CRASHREPORTING -eq $TRUE ] ; then
-        if [ $TARGET_PLATFORM == "windows" ] ; then
-            BUILD_DIR=`cygpath -w $(pwd)`
-        else
-            BUILD_DIR=`pwd`
-        fi
-        # This name is consumed by indra/newview/CMakeLists.txt
-        if [ $TARGET_PLATFORM == "linux" ] ; then
-            VIEWER_SYMBOL_FILE="${BUILD_DIR}/newview/firestorm-symbols-${TARGET_PLATFORM}-${AUTOBUILD_ADDRSIZE}.tar.bz2"
-        else
-            VIEWER_SYMBOL_FILE="${BUILD_DIR}/newview/$BTYPE/firestorm-symbols-${TARGET_PLATFORM}-${AUTOBUILD_ADDRSIZE}.tar.bz2"
-        fi
-        CRASH_REPORTING="-DRELEASE_CRASH_REPORTING=ON"
-        if [ ! -z $CHANNEL_SIMPLE ]
-        then
-            CRASH_REPORTING="$CRASH_REPORTING -DUSE_BUGSPLAT=On -DBUGSPLAT_DB=firestorm_"`echo $CHANNEL_SIMPLE | tr [:upper:] [:lower:] | sed -e 's/x64//' | sed 's/[^A-Za-z0-9]//g'`
-        fi
-    else
-        CRASH_REPORTING="-DRELEASE_CRASH_REPORTING:BOOL=OFF"
+        echo "Folderstorm: ignoring --crashreporting (no BugSplat upload)" | tee -a "$LOG"
     fi
+    CRASH_REPORTING="-DRELEASE_CRASH_REPORTING:BOOL=OFF"
 
     CHANNEL="-DVIEWER_CHANNEL:STRING=$CHANNEL"
 

@@ -979,8 +979,9 @@ void FSPanelLogin::loadLoginPage()
 
 namespace
 {
-// Recolor the upstream Phoenix login splash (orange/red) to Folderstorm purple-blue.
-// The Firestorm Blog column is left as upstream content; only chrome colors and the page title change.
+// Recolor the upstream Phoenix login splash (orange/red) to Folderstorm purple-blue,
+// put an "I'm Sodie" title in the left column (no feed), move Firestorm Blog to the
+// right in place of Blogger Network, and close the version / WebRTC popups.
 const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
 (function () {
   if (window.__folderstormLoginTheme) return;
@@ -1009,6 +1010,84 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
   if (meta && meta.content) {
     meta.content = meta.content.replace(/Firestorm/g, 'Folderstorm');
   }
+
+  var blockedModals = {newVersionModal: 1, newPreviewVersionModal: 1, emergencyModal: 1};
+
+  function dismissSplashModals() {
+    var hid = false;
+    for (var id in blockedModals) {
+      if (!blockedModals.hasOwnProperty(id)) continue;
+      var el = document.getElementById(id);
+      if (!el) continue;
+      if (el.classList.contains('show') || el.style.display === 'block' || el.getAttribute('aria-modal') === 'true') {
+        el.classList.remove('show');
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+        el.removeAttribute('aria-modal');
+        hid = true;
+      }
+    }
+    if (!hid) return;
+    if (!document.querySelector('.modal.show')) {
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      var backs = document.querySelectorAll('.modal-backdrop');
+      for (var i = 0; i < backs.length; i++) {
+        if (backs[i].parentNode) backs[i].parentNode.removeChild(backs[i]);
+      }
+    }
+  }
+
+  function patchJqueryModal() {
+    if (!window.jQuery || !jQuery.fn || !jQuery.fn.modal || jQuery.fn.modal.__folderstormPatched) return;
+    var orig = jQuery.fn.modal;
+    function wrapped(arg) {
+      var id = this.attr ? this.attr('id') : '';
+      if (blockedModals[id]) {
+        dismissSplashModals();
+        return this;
+      }
+      return orig.apply(this, arguments);
+    }
+    wrapped.__folderstormPatched = true;
+    wrapped.Constructor = orig.Constructor;
+    wrapped.noConflict = orig.noConflict;
+    jQuery.fn.modal = wrapped;
+  }
+
+  function layoutColumns() {
+    if (window.__folderstormColumns) return;
+    var row = document.getElementById('blog-row');
+    var blog = document.getElementById('feed_firestorm_blog');
+    var linden = document.getElementById('feed_linden_news');
+    if (!row || !blog || !linden) return;
+    var net = document.getElementById('feed_blogger_network');
+    if (net && net.parentNode) net.parentNode.removeChild(net);
+    var sodie = document.getElementById('feed_im_sodie');
+    if (!sodie) {
+      sodie = document.createElement('div');
+      sodie.id = 'feed_im_sodie';
+      sodie.innerHTML = '<h4><a href="https://folderstorm.sodie.net/" title="folderstorm.sodie.net" target="_blank">I\'m Sodie</a></h4>';
+    }
+    row.insertBefore(sodie, row.firstChild);
+    row.appendChild(blog);
+    window.__folderstormColumns = true;
+  }
+
+  layoutColumns();
+  patchJqueryModal();
+  dismissSplashModals();
+  var obs = new MutationObserver(function () {
+    layoutColumns();
+    patchJqueryModal();
+    dismissSplashModals();
+  });
+  obs.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'aria-modal']
+  });
 })();
 )JS";
 

@@ -10052,7 +10052,7 @@ Select residents to share with.
     icon="alert.tga"
     type="alert">
       [LABEL] failed to upload: [MESSAGE]
-[DETAILS] See Firestorm.log for details
+[DETAILS] See Folderstorm.log for details
   </notification>
 
   <notification
@@ -10061,7 +10061,7 @@ Select residents to share with.
     type="alert">
       [LABEL] failed to upload: [MESSAGE]
 
-See Firestorm.log for details
+See Folderstorm.log for details
   </notification>
    
   <notification
@@ -14440,8 +14440,8 @@ This setting is intended for cases where VRAM detection is reporting incorrect v
    name="CurrencyURIOverrideReceived"
    type="alertmodal">
 This region has elected to specify a third-party currency portal. 
-Please note that currency purchases made through Firestorm Viewer are transactions between you (the user) and the provider(s) or seller(s) of the currency. 
-Neither Firestorm Viewer, the Phoenix Firestorm Viewer Project Inc., nor its team shall be liable for any cost or damage arising either directly or indirectly from any such transaction. 
+Please note that currency purchases made through Folderstorm are transactions between you (the user) and the provider(s) or seller(s) of the currency. 
+Neither Folderstorm, the Phoenix Firestorm Viewer Project Inc., nor its team shall be liable for any cost or damage arising either directly or indirectly from any such transaction. 
 If you do not agree to these terms of use, then no financial transactions should be conducted using this viewer.
    <usetemplate
     ignoretext="When the region sets a new currency helper."
