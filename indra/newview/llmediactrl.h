@@ -30,6 +30,7 @@
 #include "llviewermedia.h"
 
 #include "lluictrl.h"
+#include <vector>
 #include "llframetimer.h"
 #include "llnotificationptr.h"
 
@@ -153,6 +154,10 @@ public:
 
         void setAllowFileDownload(bool allow) { mAllowFileDownload = allow; }
 
+        // Extra listeners (for example the login panel) notified alongside this control.
+        void addMediaObserver(LLViewerMediaObserver* observer);
+        void removeMediaObserver(LLViewerMediaObserver* observer);
+
         // over-rides
         virtual bool handleKeyHere( KEY key, MASK mask);
         virtual bool handleKeyUpHere(KEY key, MASK mask);
@@ -215,6 +220,7 @@ public:
                     mCurrentNavUrl,
                     mErrorPageURL,
                     mTarget;
+        std::vector<LLViewerMediaObserver*> mExtraMediaObservers;
         viewer_media_t mMediaSource;
         S32 mTextureWidth,
             mTextureHeight;

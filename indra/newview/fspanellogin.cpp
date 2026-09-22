@@ -30,6 +30,7 @@
 
 #include "fspanellogin.h"
 #include "lllayoutstack.h"
+#include "llpluginclassmedia.h"
 
 #include "indra_constants.h"        // for key and mask constants
 #include "llfloaterreg.h"
@@ -211,6 +212,11 @@ FSPanelLogin::FSPanelLogin(const LLRect &rect,
     else
     {
         buildFromFile( "panel_fs_login.xml");
+    }
+
+    if (LLMediaCtrl* web_browser = findChild<LLMediaCtrl>("login_html"))
+    {
+        web_browser->addMediaObserver(this);
     }
 
     reshape(rect.getWidth(), rect.getHeight());
@@ -402,6 +408,11 @@ void FSPanelLogin::addFavoritesToStartLocation()
 
 FSPanelLogin::~FSPanelLogin()
 {
+    if (LLMediaCtrl* web_browser = findChild<LLMediaCtrl>("login_html"))
+    {
+        web_browser->removeMediaObserver(this);
+    }
+
     if (mGridListChangedCallbackConnection.connected())
     {
         mGridListChangedCallbackConnection.disconnect();
@@ -966,8 +977,60 @@ void FSPanelLogin::loadLoginPage()
     }
 }
 
-void FSPanelLogin::handleMediaEvent(LLPluginClassMedia* /*self*/, EMediaEvent event)
+namespace
 {
+// Recolor the upstream Phoenix login splash (orange/red) to Folderstorm purple-blue.
+// The Firestorm Blog column is left as upstream content; only chrome colors and the page title change.
+const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
+(function () {
+  if (window.__folderstormLoginTheme) return;
+  window.__folderstormLoginTheme = true;
+  var css = document.createElement('style');
+  css.id = 'folderstorm-login-theme';
+  css.textContent = [
+    'a{color:#8B7CFF !important;}',
+    'a:hover{color:#6CB6FF !important;}',
+    'b{color:#C4B5FD !important;}',
+    '#top-row > div{background:linear-gradient(0deg, rgba(76,59,207,1) 0%, rgba(76,59,207,0) 100%) !important;}',
+    '#top-row a{color:#ffffff !important;}',
+    '#top-row a:hover,#blog-row h4 a:hover{color:#B9D4FF !important;}',
+    '#blog-row i,#blog-row #feed_blogger_network > a::first-letter{color:#8EB4FF !important;}',
+    '.text-danger{color:#A78BFA !important;}',
+    '.btn-danger{background-color:#4C3BCF !important;border-color:#3A2CB0 !important;}',
+    '.btn-warning{background-color:#3D7EFF !important;border-color:#2C68E0 !important;color:#ffffff !important;}',
+    'body.notransparency #top-row > div{background:linear-gradient(0deg, rgba(76,59,207,1) 0%, rgba(0,0,0,1) 100%) !important;}'
+  ].join('\n');
+  (document.head || document.documentElement).appendChild(css);
+  if (document.title) {
+    document.title = document.title.replace(/Firestorm/g, 'Folderstorm');
+  }
+  var meta = document.querySelector('meta[name="description"]');
+  if (meta && meta.content) {
+    meta.content = meta.content.replace(/Firestorm/g, 'Folderstorm');
+  }
+})();
+)JS";
+
+bool isUpstreamFirestormSplash(const std::string& uri)
+{
+    std::string lower(uri);
+    LLStringUtil::toLower(lower);
+    return lower.find("phoenixviewer.com") != std::string::npos
+        && lower.find("loginv3") != std::string::npos;
+}
+}
+
+void FSPanelLogin::handleMediaEvent(LLPluginClassMedia* self, EMediaEvent event)
+{
+    if (event != MEDIA_EVENT_NAVIGATE_COMPLETE || !self)
+    {
+        return;
+    }
+    if (!isUpstreamFirestormSplash(self->getNavigateURI()))
+    {
+        return;
+    }
+    self->executeJavaScript(FOLDERSTORM_LOGIN_THEME_JS);
 }
 
 //---------------------------------------------------------------------------
