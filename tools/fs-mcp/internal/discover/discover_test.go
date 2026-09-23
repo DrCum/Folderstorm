@@ -141,17 +141,35 @@ func TestDefaultSearchDirs(t *testing.T) {
 	joined := filepath.Join(dirs...)
 	switch runtime.GOOS {
 	case "windows":
+		if !containsPath(dirs, filepath.Join(`C:\Users\me\AppData\Roaming`, "Folderstorm_x64", "user_settings")) {
+			t.Fatalf("missing Folderstorm windows dir in %s", joined)
+		}
 		if !containsPath(dirs, filepath.Join(`C:\Users\me\AppData\Roaming`, "Firestorm_x64", "user_settings")) {
-			t.Fatalf("missing windows dir in %s", joined)
+			t.Fatalf("missing Firestorm windows dir in %s", joined)
 		}
 	case "darwin":
+		if !containsPath(dirs, filepath.Join("/tmp/home", "Library", "Application Support", "Folderstorm", "user_settings")) {
+			t.Fatalf("missing Folderstorm mac dir in %s", joined)
+		}
 		if !containsPath(dirs, filepath.Join("/tmp/home", "Library", "Application Support", "Firestorm", "user_settings")) {
-			t.Fatalf("missing mac dir in %s", joined)
+			t.Fatalf("missing Firestorm mac dir in %s", joined)
 		}
 	default:
-		if !containsPath(dirs, filepath.Join("/tmp/home", ".firestorm_x64", "user_settings")) {
-			t.Fatalf("missing linux dir in %s", joined)
+		if !containsPath(dirs, filepath.Join("/tmp/home", ".folderstorm_x64", "user_settings")) {
+			t.Fatalf("missing Folderstorm linux dir in %s", joined)
 		}
+		if !containsPath(dirs, filepath.Join("/tmp/home", ".firestorm_x64", "user_settings")) {
+			t.Fatalf("missing Firestorm linux dir in %s", joined)
+		}
+	}
+}
+
+func TestDefaultSearchDirsHonorsFolderstormEnv(t *testing.T) {
+	t.Setenv("FOLDERSTORM_X64_USER_DIR", filepath.Join("/tmp", "moved-folderstorm"))
+	dirs := DefaultSearchDirs(Options{Home: "/tmp/home", AppData: `C:\Users\me\AppData\Roaming`})
+	want := filepath.Join("/tmp", "moved-folderstorm", "user_settings")
+	if !containsPath(dirs, want) {
+		t.Fatalf("missing env dir %s in %s", want, filepath.Join(dirs...))
 	}
 }
 

@@ -37,9 +37,9 @@ After startup the viewer listens on `127.0.0.1` and writes a discovery file name
 | --- | --- |
 | Linux | `~/.folderstorm_x64/user_settings` |
 | Windows | `%APPDATA%\Folderstorm_x64\user_settings` |
-| macOS | `~/Library/Application Support/Firestorm/user_settings` |
+| macOS | `~/Library/Application Support/Folderstorm/user_settings` |
 
-On Linux you can point the viewer at another directory with `FOLDERSTORM_X64_USER_DIR`. The macOS settings folder is still named Firestorm in this build.
+On Linux you can point the viewer at another directory with `FOLDERSTORM_X64_USER_DIR`.
 
 ### 2. Build the sidecar
 
@@ -52,11 +52,13 @@ go build -o fs-mcp ./cmd/fs-mcp
 
 Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in the client config below. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
 
-### 3. Point discovery at Folderstorm
+### 3. How the sidecar finds the viewer
 
-The sidecar still searches the older Firestorm settings folders unless you tell it otherwise. Set `FIRESTORM_MCP_DISCOVERY` to the directory in the table above. On macOS the default Firestorm path already matches, so the variable is optional there.
+The sidecar searches the Folderstorm directory in the table above. It also checks the older Firestorm folders, so a Firestorm install on the same machine is still found. A normal install does not need `FIRESTORM_MCP_DISCOVERY`.
 
-Optional: `FIRESTORM_MCP_TIMEOUT` is how long one viewer call may take. The default is `90s`.
+Set `FIRESTORM_MCP_DISCOVERY` when this viewer's settings live somewhere else. It may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search. On Linux, `FOLDERSTORM_X64_USER_DIR` is recognized too.
+
+`FIRESTORM_MCP_TIMEOUT` is how long one viewer call may take. The default is `90s`.
 
 ## Connect a client
 
@@ -72,22 +74,13 @@ Project file `.cursor/mcp.json`, or the global file `~/.cursor/mcp.json`. You ca
 {
   "mcpServers": {
     "folderstorm": {
-      "command": "/absolute/path/to/fs-mcp",
-      "env": {
-        "FIRESTORM_MCP_DISCOVERY": "/home/you/.folderstorm_x64/user_settings"
-      }
+      "command": "/absolute/path/to/fs-mcp"
     }
   }
 }
 ```
 
-Windows example for `env`:
-
-```json
-"FIRESTORM_MCP_DISCOVERY": "C:\\Users\\you\\AppData\\Roaming\\Folderstorm_x64\\user_settings"
-```
-
-Restart the MCP server from the Cursor MCP panel after you edit the file. Cursor does not use a `type` field for a local command.
+Restart the MCP server from the Cursor MCP panel after you edit the file. Cursor does not use a `type` field for a local command. If settings were moved, add an `env` object with `FIRESTORM_MCP_DISCOVERY` set to that `user_settings` directory.
 
 ### Claude Code
 
@@ -103,7 +96,6 @@ Add it from a shell. Flags go before the server name. The double dash separates 
 
 ```bash
 claude mcp add --scope user \
-  --env FIRESTORM_MCP_DISCOVERY="$HOME/.folderstorm_x64/user_settings" \
   folderstorm -- /absolute/path/to/fs-mcp
 ```
 
@@ -115,10 +107,7 @@ Or write `.mcp.json` yourself:
     "folderstorm": {
       "type": "stdio",
       "command": "/absolute/path/to/fs-mcp",
-      "args": [],
-      "env": {
-        "FIRESTORM_MCP_DISCOVERY": "/home/you/.folderstorm_x64/user_settings"
-      }
+      "args": []
     }
   }
 }
@@ -135,7 +124,6 @@ User file `~/.codex/config.toml`:
 ```toml
 [mcp_servers.folderstorm]
 command = "/absolute/path/to/fs-mcp"
-env = { FIRESTORM_MCP_DISCOVERY = "/home/you/.folderstorm_x64/user_settings" }
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 ```
@@ -143,7 +131,7 @@ tool_timeout_sec = 120
 Or:
 
 ```bash
-codex mcp add folderstorm --env FIRESTORM_MCP_DISCOVERY="$HOME/.folderstorm_x64/user_settings" -- /absolute/path/to/fs-mcp
+codex mcp add folderstorm -- /absolute/path/to/fs-mcp
 ```
 
 `codex mcp list` shows what was saved.
@@ -155,8 +143,8 @@ A project file `.codex/config.toml` is loaded only when that project is trusted.
 ### What is the same everywhere
 
 - One command, no arguments, stdio transport.
-- The same `FIRESTORM_MCP_DISCOVERY` value.
 - The same tool names and arguments.
+- `FIRESTORM_MCP_DISCOVERY` only when settings were moved, and the same path on every client.
 - If the client can show an MCP confirmation form, answer it there. If it cannot, the tool returns a `plan_id` and tells you which follow-up tool to call. That fallback is the normal path on clients that do not advertise elicitation.
 
 ## Asking for something
@@ -183,7 +171,7 @@ If two viewers are open, say which one, or ask for the process list and pick a p
 ## When it does not connect
 
 - The viewer was started without `--mcp-api`. Quit and relaunch with the flag. There is no preference that keeps it on.
-- `FIRESTORM_MCP_DISCOVERY` points at a Firestorm folder, or was left unset on Linux or Windows, so the sidecar never sees `fs-mcp-<pid>.json`.
+- `FIRESTORM_MCP_DISCOVERY` is set and points somewhere other than this viewer's `user_settings` directory. That variable replaces the default search. Unset it, or point it at the Folderstorm directory from the table above.
 - Inventory is still downloading. `viewer_status` shows fetch progress. Wait until `usable` is true.
 - The binary path in the client config is relative, or it is the Go source directory instead of the built `fs-mcp` file.
 - Codex is using a project `.codex/config.toml` in an untrusted folder, or the table is named `mcpServers`.

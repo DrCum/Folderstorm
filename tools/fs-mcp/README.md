@@ -85,13 +85,11 @@ Accepted aliases: `http_port`, `bearer_token` / `auth_token`, `apiVersion`. `hos
 | --- | --- | --- |
 | Linux 64-bit | `~/.folderstorm_x64/user_settings` | `FOLDERSTORM_X64_USER_DIR` |
 | Windows 64-bit | `%APPDATA%\Folderstorm_x64\user_settings` | — |
-| macOS | `~/Library/Application Support/Firestorm/user_settings` | — |
+| macOS | `~/Library/Application Support/Folderstorm/user_settings` | — |
 
-The macOS folder name is still `Firestorm` in this build. Linux and Windows follow the Folderstorm application name.
+The sidecar searches those directories on its own. It also checks the older Firestorm folders, so a Firestorm install on the same machine is still found. Set `FIRESTORM_MCP_DISCOVERY` only when this viewer's settings directory was moved. On Linux, `FOLDERSTORM_X64_USER_DIR` is picked up as well.
 
-The sidecar's built-in search list still looks in the older Firestorm directories (`~/.firestorm_x64/user_settings`, `%APPDATA%\Firestorm_x64\user_settings`, and the FirestormOS variants). On Linux and Windows, set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm `user_settings` directory. On macOS the default Firestorm path matches this build.
-
-`FIRESTORM_MCP_DISCOVERY` may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows).
+`FIRESTORM_MCP_DISCOVERY` may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search.
 
 `FIRESTORM_MCP_TIMEOUT` is a Go duration for each HTTP call. The default is `90s`.
 
