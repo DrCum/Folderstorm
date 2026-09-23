@@ -1,24 +1,27 @@
-# Folderstorm features
+# Folderstorm
 
-Short bullets for the website. The first group is what this build adds on top of the previous Folderstorm main branch. The second group is already in that main branch and ships with this build.
+Folderstorm is a viewer for Second Life. It keeps the Firestorm experience and adds a few things that change how you play.
 
-## New in this build
+## Use a second monitor
 
-- Folderstorm is its own viewer name, with its own icons, login mark, and crash reports, split off from Firestorm.
-- The login screen uses the winged folder mark, purple and blue splash art from folderstorm.sodie.net, and a purple Log In button.
-- The login page shows the I'm Sodie feed and retitles the page as Folderstorm.
-- A local assistant bridge lets Cursor, Codex, and Claude Code work with the viewer you already have open. It stays on this computer and is off unless you start the viewer with `--mcp-api`.
-- The assistant can look through inventory, search it, and open folders, items, notecards, scripts, and landmarks.
-- The assistant can make folders and new items, rename, move, copy, link, favorite, and set descriptions and thumbnails.
-- Copying respects no-copy items. Unique items stay put until you confirm a move. Emptying Trash and permanent delete always ask first.
-- The assistant can list My Outfits and what you are wearing, then wear an outfit, add pieces, or detach them after you confirm.
-- The assistant can pose the camera for a portrait, full-body, front, back, left, or right shot, or place it at an exact spot in the region.
-- The assistant can take a JPEG of the current view with the interface and HUD hidden, then hand that picture back to the chat.
+Stretch the window across two screens and keep the world on one of them. The new viewport settings hold the camera, your HUD, and the mouse in that view, so the rest of the window is free for panels.
 
-## Already in Folderstorm
+- Open several Inventory windows on the second monitor and sort outfits, landmarks, and objects while you can still see where you are standing.
+- Leave the map on the second monitor while you drive or explore.
+- Move the toolbars and top bars around the world view, and save that arrangement if you want it again later.
 
-- A custom world viewport keeps the camera, HUD, and mouse in the visible world while Inventory and other windows use the rest of a wide screen.
-- Toolbars, chat, and the top bars can sit around that viewport, with saved layout profiles you can apply, rename, and delete.
-- Those layout controls are in the preferences for the included skins.
-- Outfit Gallery thumbnails resize from a slider, from small tiles up to the full photo the gallery loads.
-- Linux and Windows open builds decode JPEG2000 textures with AVX2, including a static Windows build that does not rely on a separate OpenJPEG DLL.
+You will find these controls in Preferences, under Move & View.
+
+## Let an assistant help with your wardrobe
+
+Folderstorm can connect to an assistant on your own computer, such as Cursor, Codex, or Claude. The connection is called MCP. It stays on your machine, and it is off until you choose to turn it on.
+
+It was built for the same reason as the second monitor: inventory is easier when the world stays in view. The assistant can search and tidy your inventory, dress your avatar, aim the camera, and take a picture, so you can see a look instead of guessing from a folder name. Putting something on, taking it off, and deleting it wait until you say yes.
+
+## Outfit Gallery
+
+- A slider changes the size of the thumbnails in the Outfit Gallery, from small tiles up to the full photo.
+
+## Texture loading
+
+- The open Linux and Windows builds load textures with an AVX2 version of OpenJPEG. That improves on the OpenJPEG those builds used before. Linden Lab’s closed-source Kakadu loader is still faster.

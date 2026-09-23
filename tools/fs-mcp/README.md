@@ -81,15 +81,33 @@ Accepted aliases: `http_port`, `bearer_token` / `auth_token`, `apiVersion`. `hos
 
 ### Where the viewer writes it
 
-| OS | User-settings directory | Override |
+The settings folder follows the Folderstorm name on every platform, including macOS.
+
+| OS | User-settings directory | Viewer override |
 | --- | --- | --- |
 | Linux 64-bit | `~/.folderstorm_x64/user_settings` | `FOLDERSTORM_X64_USER_DIR` |
 | Windows 64-bit | `%APPDATA%\Folderstorm_x64\user_settings` | — |
 | macOS | `~/Library/Application Support/Folderstorm/user_settings` | — |
 
-The sidecar searches those directories on its own. It also checks the older Firestorm folders, so a Firestorm install on the same machine is still found. Set `FIRESTORM_MCP_DISCOVERY` only when this viewer's settings directory was moved. On Linux, `FOLDERSTORM_X64_USER_DIR` is picked up as well.
+On macOS the cache directory is `Folderstorm_x64`. Settings, logs, and the discovery file stay in `Folderstorm`.
 
-`FIRESTORM_MCP_DISCOVERY` may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search.
+### Where the sidecar looks
+
+A normal install needs no discovery variable. The sidecar searches in this order:
+
+1. A user-dir override, if one is set: `FOLDERSTORM_X64_USER_DIR`, `FOLDERSTORMOS_X64_USER_DIR`, `FOLDERSTORM_USER_DIR`, `FOLDERSTORMOS_USER_DIR`, then the matching `FIRESTORM_*_USER_DIR` variables.
+2. The Folderstorm settings folders for this operating system.
+3. The older Firestorm settings folders, so a Firestorm install on the same machine is still found.
+
+| OS | Folderstorm folders, then Firestorm folders |
+| --- | --- |
+| Linux | `~/.folderstorm_x64`, `~/.folderstormos_x64`, `~/.folderstorm`, `~/.folderstormos`, then `~/.firestorm_x64` and the other Firestorm names |
+| Windows | `%APPDATA%\Folderstorm_x64`, `FolderstormOS_x64`, `Folderstorm`, `FolderstormOS`, then `Firestorm_x64` and the other Firestorm names |
+| macOS | `~/Library/Application Support/Folderstorm`, plus `FolderstormOS`, `Folderstorm_x64`, and `FolderstormOS_x64`, then the same names with Firestorm |
+
+Each entry is the `user_settings` directory inside that folder. The sidecar reads `fs-mcp-*.json` files there.
+
+Set `FIRESTORM_MCP_DISCOVERY` only when this viewer's settings directory was moved. It may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search.
 
 `FIRESTORM_MCP_TIMEOUT` is a Go duration for each HTTP call. The default is `90s`.
 
