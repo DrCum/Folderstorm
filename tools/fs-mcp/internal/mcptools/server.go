@@ -31,6 +31,7 @@ type API interface {
 	Rename(ctx context.Context, params map[string]any) (json.RawMessage, error)
 	Copy(ctx context.Context, params map[string]any) (json.RawMessage, error)
 	ConfirmCopy(ctx context.Context, params map[string]any) (json.RawMessage, error)
+	CallNamed(ctx context.Context, apiName, op string, params map[string]any) (json.RawMessage, error)
 }
 
 // Finder locates live viewer discovery files.
@@ -46,6 +47,7 @@ type Server struct {
 
 	mu          sync.Mutex
 	selectedPID int
+	plans       map[string]storedPlan
 }
 
 // New returns a sidecar tool server with production discovery defaults.
@@ -64,7 +66,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 		state = New()
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: Name, Version: Version}, &mcp.ServerOptions{
-		Instructions: "Local Firestorm inventory sidecar. Talks only to a loopback Event API bridge. Address inventory by UUID. Copy of no-copy items requires explicit confirmation (plan_id / inventory_confirm_copy). Delete, wear, rez, and task inventory are not available.",
+		Instructions: "Local Firestorm sidecar for inventory, appearance, and camera. Talks only to a loopback Event API bridge. Address inventory by UUID. Copy of no-copy items, wearing, detaching, replacing links, emptying trash, and purging require explicit confirmation. Task inventory and Marketplace folders are not available.",
 	})
 
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false), Title: ""}
@@ -131,6 +133,14 @@ func NewMCPServer(state *Server) *mcp.Server {
 		Description: "Approve or decline a pending no-copy copy plan. Approval moves unique no-copy items out of the source into the destination.",
 		Annotations: withTitle(destructive, "Confirm no-copy copy"),
 	}, state.inventoryConfirmCopy)
+	registerInventoryExtra(s, state, readOnly, mutating, destructive)
+	registerAppearance(s, state, readOnly, destructive)
+	registerCamera(s, state, readOnly, mutating)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "confirm_action",
+		Description: "Approve or decline a pending wear, detach, link replacement, empty-trash, or purge plan.",
+		Annotations: withTitle(destructive, "Confirm action"),
+	}, state.confirmAction)
 	return s
 }
 
@@ -157,18 +167,31 @@ type getArgs struct {
 
 type listArgs struct {
 	FolderID  string `json:"folder_id" jsonschema:"folder UUID to list"`
+	Limit     int    `json:"limit,omitempty" jsonschema:"maximum number of children to return"`
+	Offset    int    `json:"offset,omitempty" jsonschema:"number of children to skip"`
 	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type searchArgs struct {
-	Query       string `json:"query,omitempty" jsonschema:"name substring to match"`
-	Name        string `json:"name,omitempty" jsonschema:"alias of query"`
-	Desc        string `json:"desc,omitempty" jsonschema:"description substring"`
-	Type        string `json:"type,omitempty" jsonschema:"asset type name"`
-	FolderID    string `json:"folder_id,omitempty" jsonschema:"folder UUID to search under"`
-	FilterLinks string `json:"filter_links,omitempty" jsonschema:"INCLUDE_LINKS, EXCLUDE_LINKS, or ONLY_LINKS"`
-	Limit       int    `json:"limit,omitempty" jsonschema:"maximum number of results"`
-	ViewerPID   int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Query         string `json:"query,omitempty" jsonschema:"name substring to match"`
+	Name          string `json:"name,omitempty" jsonschema:"alias of query"`
+	Desc          string `json:"desc,omitempty" jsonschema:"description substring"`
+	Type          string `json:"type,omitempty" jsonschema:"asset type name"`
+	FolderID      string `json:"folder_id,omitempty" jsonschema:"folder UUID to search under"`
+	FilterLinks   string `json:"filter_links,omitempty" jsonschema:"INCLUDE_LINKS, EXCLUDE_LINKS, or ONLY_LINKS"`
+	IncludeTrash  *bool  `json:"include_trash,omitempty" jsonschema:"when true, search Trash as well"`
+	CreatorID     string `json:"creator_id,omitempty" jsonschema:"creator UUID"`
+	CreatorName   string `json:"creator_name,omitempty" jsonschema:"creator name substring when the viewer name cache already has it"`
+	InvType       string `json:"inv_type,omitempty" jsonschema:"inventory type name"`
+	LinkedID      string `json:"linked_id,omitempty" jsonschema:"return links that point at this UUID"`
+	Worn          *bool  `json:"worn,omitempty" jsonschema:"filter by worn state"`
+	Copyable      *bool  `json:"copyable,omitempty" jsonschema:"filter by copy permission"`
+	Modifiable    *bool  `json:"modifiable,omitempty" jsonschema:"filter by modify permission"`
+	Favorite      *bool  `json:"favorite,omitempty" jsonschema:"filter by favorite flag"`
+	CreatedAfter  int    `json:"created_after,omitempty" jsonschema:"unix timestamp lower bound"`
+	CreatedBefore int    `json:"created_before,omitempty" jsonschema:"unix timestamp upper bound"`
+	Limit         int    `json:"limit,omitempty" jsonschema:"maximum number of results"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type systemFolderArgs struct {
@@ -295,7 +318,14 @@ func (s *Server) inventoryList(ctx context.Context, _ *mcp.CallToolRequest, args
 	if errRes != nil {
 		return errRes, nil, nil
 	}
-	return apiResult(api.List(ctx, map[string]any{"folder_id": args.FolderID}))
+	params := map[string]any{"folder_id": args.FolderID}
+	if args.Limit > 0 {
+		params["limit"] = args.Limit
+	}
+	if args.Offset > 0 {
+		params["offset"] = args.Offset
+	}
+	return apiResult(api.List(ctx, params))
 }
 
 func (s *Server) inventorySearch(ctx context.Context, _ *mcp.CallToolRequest, args searchArgs) (*mcp.CallToolResult, any, error) {
@@ -320,6 +350,39 @@ func (s *Server) inventorySearch(ctx context.Context, _ *mcp.CallToolRequest, ar
 	}
 	if args.FilterLinks != "" {
 		params["filter_links"] = args.FilterLinks
+	}
+	if args.IncludeTrash != nil {
+		params["include_trash"] = *args.IncludeTrash
+	}
+	if args.CreatorID != "" {
+		params["creator_id"] = args.CreatorID
+	}
+	if args.CreatorName != "" {
+		params["creator_name"] = args.CreatorName
+	}
+	if args.InvType != "" {
+		params["inv_type"] = args.InvType
+	}
+	if args.LinkedID != "" {
+		params["linked_id"] = args.LinkedID
+	}
+	if args.Worn != nil {
+		params["worn"] = *args.Worn
+	}
+	if args.Copyable != nil {
+		params["copyable"] = *args.Copyable
+	}
+	if args.Modifiable != nil {
+		params["modifiable"] = *args.Modifiable
+	}
+	if args.Favorite != nil {
+		params["favorite"] = *args.Favorite
+	}
+	if args.CreatedAfter > 0 {
+		params["created_after"] = args.CreatedAfter
+	}
+	if args.CreatedBefore > 0 {
+		params["created_before"] = args.CreatedBefore
 	}
 	if args.Limit > 0 {
 		params["limit"] = args.Limit

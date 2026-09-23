@@ -235,6 +235,7 @@ set(viewer_SOURCE_FILES
     llanimstatelabels.cpp
     llappcorehttp.cpp
     llappearancelistener.cpp
+    llcameralistener.cpp
     llappearancemgr.cpp
     llappviewer.cpp
     llappviewerlistener.cpp

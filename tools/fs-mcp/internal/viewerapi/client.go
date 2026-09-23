@@ -21,6 +21,10 @@ import (
 const (
 	// DefaultAPI is the LLEventAPI instance name for inventory.
 	DefaultAPI = "LLInventory"
+	// AppearanceAPI is the LLEventAPI instance name for outfits and worn items.
+	AppearanceAPI = "LLAppearance"
+	// CameraAPI is the LLEventAPI instance name for camera pose and snapshots.
+	CameraAPI = "LLCamera"
 	// EnvTimeout overrides the HTTP timeout (Go duration, default 90s).
 	EnvTimeout = "FIRESTORM_MCP_TIMEOUT"
 	maxBody    = 8 << 20
@@ -69,8 +73,13 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s (%s)", e.Message, e.Code)
 }
 
-// Call POSTs an Event API request {api, op, ...params} and returns the JSON body.
+// Call POSTs an LLInventory Event API request and returns the JSON body.
 func (c *Client) Call(ctx context.Context, op string, params map[string]any) (json.RawMessage, error) {
+	return c.CallAPI(ctx, "", op, params)
+}
+
+// CallAPI POSTs {api, op, ...params} to the named Event API.
+func (c *Client) CallAPI(ctx context.Context, apiName, op string, params map[string]any) (json.RawMessage, error) {
 	if c == nil {
 		return nil, &Error{Code: "internal", Message: "nil viewer client"}
 	}
@@ -81,7 +90,10 @@ func (c *Client) Call(ctx context.Context, op string, params map[string]any) (js
 	for k, v := range params {
 		body[k] = v
 	}
-	api := c.API
+	api := apiName
+	if api == "" {
+		api = c.API
+	}
 	if api == "" {
 		api = DefaultAPI
 	}

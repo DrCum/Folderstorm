@@ -51,8 +51,38 @@ tools before inventory operations.
 ## Inventory behavior
 
 Inventory objects are identified by UUID because names and paths are not
-unique. The initial tool set supports status, get, list, search, system-folder
-lookup, folder creation, move, rename, and copy.
+unique. The tool set supports status, get, list, search, system-folder lookup,
+folder creation, move, rename, and copy. It also covers richer item
+fields, batch get, path resolution, protected folders, descriptions,
+thumbnails, favorites, links, item creation, batch move/rename/copy,
+trash and restore, notecard/script/landmark reads, and an inventory
+change generation.
+
+`viewer_status` includes the current change `generation`.
+`inventory_changes` returns later changes with a `since` cursor. This is
+not a push stream: the bridge stays request/response.
+
+### Appearance and camera
+
+`appearance_outfits` and `appearance_outfit_items` list My Outfits.
+`appearance_worn` lists the Current Outfit, including wearable type and
+attachment point. Wearing and detaching require confirmation. Baking
+continues after the wear call returns, so poll `appearance_worn` before
+taking a picture.
+
+`camera_set_pose` uses `portrait`, `full_body`, `front`, `back`, `left`,
+or `right`. `camera_set` takes region `[x, y, z]` position and focus.
+`camera_reset` restores the default camera. `camera_snapshot` returns a
+JPEG with the UI and HUD hidden by default. The viewer writes that file
+itself and the sidecar deletes it after reading.
+
+### Confirmation
+
+No-copy copy still resumes with `inventory_confirm_copy`. Wear, detach,
+link replacement, emptying trash, and purging resume with
+`confirm_action` when the client cannot show an elicitation prompt.
+Pass `skip_elicitation` to receive a `plan_id` immediately. Emptying
+trash and purging are permanent. Moving one object to Trash is not.
 
 Reads fetch incomplete inventory before returning where practical. Mutations
 reject protected or locked folders, unsupported special destinations,
@@ -88,6 +118,8 @@ include per-item errors when only part of an operation succeeds.
 - Requests carrying a browser `Origin` header are rejected.
 - Request bodies are size-limited and responses disable caching.
 - The bridge must be explicitly enabled for each viewer launch.
+- The bridge allowlist is `LLInventory`, `LLAppearance`, and `LLCamera`.
+  Other Event APIs are rejected.
 - The MCP sidecar never receives Second Life credentials or simulator
   capability URLs.
 
