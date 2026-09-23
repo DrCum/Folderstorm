@@ -114,13 +114,13 @@ bool LLAppearanceListener::rlvAllows(const LLUUID& item_id, bool detach, std::st
     {
         if (detach)
         {
-            if (!RlvWearableLocks::instance().canRemove(target))
+            if (!gRlvWearableLocks.canRemove(target))
             {
                 error = "Wearable is locked";
                 return false;
             }
         }
-        else if (RlvWearableLocks::instance().canWear(target) == RLV_WEAR_LOCKED)
+        else if (gRlvWearableLocks.canWear(target) == RLV_WEAR_LOCKED)
         {
             error = "Wearable is locked";
             return false;
@@ -130,13 +130,13 @@ bool LLAppearanceListener::rlvAllows(const LLUUID& item_id, bool detach, std::st
     {
         if (detach)
         {
-            if (!RlvAttachmentLocks::instance().canDetach(target))
+            if (!gRlvAttachmentLocks.canDetach(target))
             {
                 error = "Attachment is locked";
                 return false;
             }
         }
-        else if (RlvAttachmentLocks::instance().canAttach(target) == RLV_WEAR_LOCKED)
+        else if (gRlvAttachmentLocks.canAttach(target) == RLV_WEAR_LOCKED)
         {
             error = "Attachment is locked";
             return false;

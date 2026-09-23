@@ -283,7 +283,7 @@ void add_item_info(LLEventAPI::Response& response, LLViewerInventoryItem* item)
                                        "path", make_path(item),
                                        "creator_id", item->getCreatorUUID(),
                                        "favorite", get_is_favorite(item),
-                                       "transferable", permissions.allowTransferBy(gAgent.getID()),
+                                       "transferable", permissions.allowTransferTo(gAgent.getID()),
                                        "wearable_type", item->isWearableType()
                                            ? LLWearableType::getInstance()->getTypeName(item->getWearableType())
                                            : std::string(),
@@ -1852,7 +1852,7 @@ void LLInventoryListener::resolvePath(LLSD const& data)
             response["matches"].append(object_summary(object));
         }
     }
-    response["count"] = response["matches"].size();
+    response["count"] = static_cast<LLSD::Integer>(response["matches"].size());
     response["ambiguous"] = response["matches"].size() > 1;
     response["ok"] = response["matches"].size() > 0;
 }

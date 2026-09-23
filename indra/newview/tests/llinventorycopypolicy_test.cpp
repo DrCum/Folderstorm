@@ -16,7 +16,7 @@ void inventory_copy_policy_object::test<1>()
     using namespace LLInventoryCopyPolicy;
     ensure("default policy", parse("") == Policy::INCLUDE_NO_COPY);
     ensure("named default policy", parse("default") == Policy::INCLUDE_NO_COPY);
-    ensure("strict policy", parse("strict") == Policy::STRICT);
+    ensure("strict policy", parse("strict") == Policy::STRICT_POLICY);
     ensure("copyable policy", parse("copyable_only") == Policy::COPYABLE_ONLY);
     ensure("invalid policy", parse("unknown") == Policy::INVALID);
 }
@@ -26,7 +26,7 @@ void inventory_copy_policy_object::test<2>()
 {
     using namespace LLInventoryCopyPolicy;
     ensure("ordinary copy", decide(Policy::INCLUDE_NO_COPY, false) == Action::COPY);
-    ensure("strict rejects", decide(Policy::STRICT, true) == Action::REJECT);
+    ensure("strict rejects", decide(Policy::STRICT_POLICY, true) == Action::REJECT);
     ensure("copyable only proceeds",
            decide(Policy::COPYABLE_ONLY, true) == Action::COPY);
     ensure("default confirms",

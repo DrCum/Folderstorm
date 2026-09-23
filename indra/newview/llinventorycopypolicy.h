@@ -13,7 +13,7 @@ namespace LLInventoryCopyPolicy
 enum class Policy
 {
     INCLUDE_NO_COPY,
-    STRICT,
+    STRICT_POLICY,
     COPYABLE_ONLY,
     INVALID
 };
@@ -29,7 +29,7 @@ inline Policy parse(const std::string& value)
 {
     if (value.empty() || value == "default" || value == "include_no_copy")
         return Policy::INCLUDE_NO_COPY;
-    if (value == "strict") return Policy::STRICT;
+    if (value == "strict") return Policy::STRICT_POLICY;
     if (value == "copyable_only") return Policy::COPYABLE_ONLY;
     return Policy::INVALID;
 }
@@ -38,7 +38,7 @@ inline Action decide(Policy policy, bool has_no_copy)
 {
     if (policy == Policy::INVALID) return Action::REJECT;
     if (!has_no_copy) return Action::COPY;
-    if (policy == Policy::STRICT) return Action::REJECT;
+    if (policy == Policy::STRICT_POLICY) return Action::REJECT;
     if (policy == Policy::COPYABLE_ONLY) return Action::COPY;
     return Action::COPY_AND_CONFIRM_MOVES;
 }
