@@ -980,8 +980,8 @@ void FSPanelLogin::loadLoginPage()
 namespace
 {
 // Recolor the upstream Phoenix login splash (orange/red) to Folderstorm purple-blue,
-// put an "I'm Sodie" title in the left column (no feed), move Firestorm Blog to the
-// right in place of Blogger Network, and close the version / WebRTC popups.
+// show the I'm Sodie feed on the left, move Firestorm Blog to the right in place of
+// Blogger Network, and close the version / WebRTC popups.
 const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
 (function () {
   if (window.__folderstormLoginTheme) return;
@@ -989,7 +989,7 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
   var css = document.createElement('style');
   css.id = 'folderstorm-login-theme';
   css.textContent = [
-    'body{background-image:url(https://sodie.net/FSV3splashimg.webp) !important;}',
+    'body{background-image:url(https://folderstorm.sodie.net/viewer_splash.webp) !important;}',
     'a{color:#8B7CFF !important;}',
     'a:hover{color:#6CB6FF !important;}',
     'b{color:#C4B5FD !important;}',
@@ -1072,6 +1072,49 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
     row.insertBefore(sodie, row.firstChild);
     row.appendChild(blog);
     window.__folderstormColumns = true;
+    loadSodieFeed(sodie);
+  }
+
+  function loadSodieFeed(sodie) {
+    if (window.__folderstormFeedStarted || !sodie) return;
+    window.__folderstormFeedStarted = true;
+    fetch('https://folderstorm.sodie.net/feed.xml').then(function (response) {
+      if (!response.ok) throw new Error('feed');
+      return response.text();
+    }).then(function (text) {
+      var doc = new DOMParser().parseFromString(text, 'text/xml');
+      if (doc.querySelector('parsererror')) return;
+      var items = doc.getElementsByTagName('item');
+      var fmt = new Intl.DateTimeFormat('en', {timeZone: 'America/Los_Angeles', day: 'numeric', month: 'short'});
+      var count = Math.min(3, items.length);
+      for (var i = 0; i < count; i++) {
+        var item = items[i];
+        var titleEl = item.getElementsByTagName('title')[0];
+        var linkEl = item.getElementsByTagName('link')[0];
+        var dateEl = item.getElementsByTagName('pubDate')[0];
+        var title = titleEl ? titleEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        var link = linkEl ? linkEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        var pub = dateEl ? dateEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        if (!title) continue;
+        if (title.length > 100) title = title.slice(0, 95) + ' (...)';
+        var when = '';
+        if (pub) {
+          var parsed = new Date(pub);
+          if (!isNaN(parsed.getTime())) when = fmt.format(parsed);
+        }
+        var anchor = document.createElement('a');
+        anchor.target = '_blank';
+        anchor.href = link || 'https://folderstorm.sodie.net/';
+        anchor.title = pub || title;
+        if (when) {
+          var stamp = document.createElement('i');
+          stamp.textContent = '[' + when + '] ';
+          anchor.appendChild(stamp);
+        }
+        anchor.appendChild(document.createTextNode(title));
+        sodie.appendChild(anchor);
+      }
+    }).catch(function () {});
   }
 
   layoutColumns();
