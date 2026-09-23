@@ -541,8 +541,8 @@ func (s *Server) resolve(pidHint int) (discover.Instance, API, *mcp.CallToolResu
 		return discover.Instance{}, nil, res
 	}
 	if len(insts) == 0 {
-		res, _, _ := errorResult("viewer_not_found", "no live Firestorm MCP discovery files found; start the viewer with the Event API bridge enabled", map[string]any{
-			"hint": "Set FIRESTORM_MCP_DISCOVERY to a file or directory of fs-mcp-<pid>.json files",
+		res, _, _ := errorResult("viewer_not_found", "no live Folderstorm MCP discovery files found; start the viewer with --mcp-api", map[string]any{
+			"hint": "The sidecar searches the Folderstorm user_settings directory. If settings were moved, set FIRESTORM_MCP_DISCOVERY to that directory or to an fs-mcp-<pid>.json file",
 		})
 		return discover.Instance{}, nil, res
 	}

@@ -64,7 +64,9 @@ LLDir_Mac::LLDir_Mac()
 {
     mDirDelimiter = "/";
 
-    const std::string     secondLifeString = "Firestorm";
+    // Settings, logs, and temp files use the product name. The cache
+    // directory below appends _x64, or OS_x64 for an OpenSim build.
+    const std::string     secondLifeString = "Folderstorm";
 
     std::string executablepathstr = getSystemExecutableFolder();
 
