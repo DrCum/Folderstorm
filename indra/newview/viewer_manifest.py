@@ -856,6 +856,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("libvlccore.dll")
                 self.path("plugins/")
 
+        # Optional post-install settings copy. NSIS and a Velopack install can
+        # launch this; it also runs on its own.
+        self.path("linux_tools/migrate_settings.py", "migrate_settings.py")
+
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"
 
@@ -1580,6 +1584,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                     self.path("*.tif")
 
                 self.path("licenses-mac.txt", dst="licenses.txt")
+                # macOS disk images have no post-install step. The script is
+                # here so it can be run after the app is copied to Applications.
+                self.path("linux_tools/migrate_settings.py", "migrate_settings.py")
                 self.path("featuretable_mac.txt")
                 self.path("cube.dae")
 
@@ -2146,6 +2153,7 @@ class LinuxManifest(ViewerManifest):
                 self.path("refresh_desktop_app_entry.sh")
                 self.path("launch_url.sh")
             self.path("install.sh")
+            self.path("migrate_settings.py")
 
         with self.prefix(dst="bin"):
             self.path( os.path.join(os.pardir,'build_data.json'), "build_data.json" )

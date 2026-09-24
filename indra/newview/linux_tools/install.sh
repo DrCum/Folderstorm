@@ -27,6 +27,8 @@ usage() {
     echo "  --install-dir <directory> Specify a custom installation directory"
     echo "  --retain <count>          Number of backup versions to keep (default: ${DEFAULT_RETAIN_BACKUPS})"
     echo "  --yes, -y                 Non-interactive mode (accept defaults)"
+    echo "  --migrate-settings        Copy Firestorm settings after install (opt-in; ignored when run as root)"
+    echo "  --migrate-overwrite       With --migrate-settings, replace files in an existing Folderstorm settings folder"
     echo "  --help, -h                Display this help message"
     exit 1
 }
@@ -140,6 +142,7 @@ homedir_install() {
 
     install_to_prefix "${install_prefix}"
     "${install_prefix}/etc/refresh_desktop_app_entry.sh"
+    offer_settings_migration "${install_prefix}/migrate_settings.py"
 }
 
 # Function for system-wide installation (root)
@@ -169,6 +172,100 @@ root_install() {
     mkdir -p /usr/local/share/applications || die "Failed to create /usr/local/share/applications"
 
     "${install_prefix}/etc/refresh_desktop_app_entry.sh"
+    offer_settings_migration "${install_prefix}/migrate_settings.py"
+}
+
+# Ask to copy Firestorm user settings. Opt-in. A root install does not
+# write into /root; it prints the command for each user to run.
+offer_settings_migration() {
+    local script="$1"
+    local status
+    local answer
+
+    if [[ ! -f "$script" ]]; then
+        return
+    fi
+
+    if [[ "$EUID" -eq 0 ]]; then
+        echo "Settings stay with each user. To copy Firestorm settings, run:"
+        echo "  python3 \"${script}\""
+        return
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        if [[ -d "${HOME}/.firestorm_x64/user_settings" || -d "${HOME}/.firestorm/user_settings" || -n "${FIRESTORM_X64_USER_DIR:-}${FIRESTORM_USER_DIR:-}" ]]; then
+            echo "python3 was not found, so Firestorm settings were not copied."
+            echo "When Python 3 is available: python3 \"${script}\""
+        fi
+        return
+    fi
+
+    python3 "$script" --check
+    status=$?
+    if [[ "$status" -eq 2 ]]; then
+        if [[ "$MIGRATE_SETTINGS" == "true" ]]; then
+            echo "No Firestorm settings were found. Nothing was copied."
+        fi
+        return
+    fi
+    if [[ "$status" -ne 0 && "$status" -ne 3 ]]; then
+        echo "Could not check Firestorm settings (status ${status}). Nothing was copied."
+        return
+    fi
+
+    if [[ "$status" -eq 3 ]]; then
+        if [[ "$NON_INTERACTIVE" == "true" ]]; then
+            if [[ "$MIGRATE_SETTINGS" == "true" && "$MIGRATE_OVERWRITE" == "true" ]]; then
+                python3 "$script" --yes --overwrite
+                status=$?
+            else
+                echo "Folderstorm already has settings. Not replacing them."
+                echo "Re-run ${script} with --yes --overwrite to replace files."
+                return
+            fi
+        else
+            echo
+            echo "Folderstorm already has a settings folder. Saved passwords and caches are not copied."
+            echo -n "Copy Firestorm settings over that folder? [y/N] "
+            read -r answer
+            if [[ ! "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                echo "Leaving Folderstorm settings unchanged."
+                return
+            fi
+            echo -n "Replace files that came from Firestorm? Folderstorm-only files are kept. [y/N] "
+            read -r answer
+            if [[ ! "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                echo "Leaving Folderstorm settings unchanged."
+                return
+            fi
+            python3 "$script" --yes --overwrite
+            status=$?
+        fi
+    else
+        if [[ "$NON_INTERACTIVE" == "true" ]]; then
+            if [[ "$MIGRATE_SETTINGS" != "true" ]]; then
+                echo "Firestorm settings were left in place. Pass --migrate-settings to copy them."
+                return
+            fi
+            python3 "$script" --yes
+            status=$?
+        else
+            echo
+            echo "Folderstorm uses its own settings folder. Saved passwords and caches are not copied."
+            echo -n "Copy Firestorm settings into Folderstorm? [y/N] "
+            read -r answer
+            if [[ ! "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                echo "Leaving settings unchanged. You can run python3 \"${script}\" later."
+                return
+            fi
+            python3 "$script" --yes
+            status=$?
+        fi
+    fi
+
+    if [[ "$status" -ne 0 ]]; then
+        echo "Settings were not copied (status ${status})."
+    fi
 }
 
 # Function to parse command-line arguments
@@ -203,6 +300,14 @@ parse_arguments() {
                 NON_INTERACTIVE="true"
                 shift
                 ;;
+            --migrate-settings)
+                MIGRATE_SETTINGS="true"
+                shift
+                ;;
+            --migrate-overwrite)
+                MIGRATE_OVERWRITE="true"
+                shift
+                ;;
             --help|-h)
                 usage
                 ;;
@@ -219,6 +324,8 @@ main() {
 
     RETAIN_BACKUPS="${DEFAULT_RETAIN_BACKUPS}"
     NON_INTERACTIVE="false"
+    MIGRATE_SETTINGS="false"
+    MIGRATE_OVERWRITE="false"
 
     # Parse command-line arguments
     parse_arguments "$@"
@@ -228,6 +335,7 @@ main() {
     echo "  Custom Install Directory: ${CUSTOM_INSTALL_DIR:-None}"
     echo "  Retained Backups: ${RETAIN_BACKUPS}"
     echo "  Non-interactive: ${NON_INTERACTIVE}"
+    echo "  Migrate settings: ${MIGRATE_SETTINGS}"
     echo
 
     # Determine if the script is run as root

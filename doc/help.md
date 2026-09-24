@@ -19,6 +19,34 @@ Open **Preferences → Move & View**.
 
 Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo width from 80 to 256 pixels. The name row stays a fixed height. 256 is the photo size the gallery fetches.
 
+## Settings from Firestorm
+
+Folderstorm keeps its own settings folder. It does not read Firestorm's, and a normal install does not copy it unless you say so.
+
+| OS | Firestorm | Folderstorm |
+| --- | --- | --- |
+| Linux | `~/.firestorm_x64/user_settings` | `~/.folderstorm_x64/user_settings` |
+| Windows | `%APPDATA%\Firestorm_x64\user_settings` | `%APPDATA%\Folderstorm_x64\user_settings` |
+| macOS | `~/Library/Application Support/Firestorm/user_settings` | `~/Library/Application Support/Folderstorm/user_settings` |
+
+On Linux, `FOLDERSTORM_X64_USER_DIR` replaces the Folderstorm folder, and `FIRESTORM_X64_USER_DIR` is where a Firestorm install keeps its own. macOS settings stay in `Folderstorm` with no `_x64`. That suffix is only the cache.
+
+The tool is `migrate_settings.py`. Saved passwords and caches are not copied. If Folderstorm already has settings, nothing is replaced unless you pass `--overwrite` or confirm the second prompt.
+
+The Windows NSIS installer asks after the files are in place, for the Windows account that is running it. If Folderstorm already has settings, it asks again before replacing any files. A Velopack install asks only when that settings folder does not exist yet, and it will not replace one. `install.sh` on Linux asks at the end of the install; pass `--migrate-settings` when the install itself is non-interactive. The macOS disk image does not ask: that script runs while the image is built, not on your Mac. After you copy Folderstorm to Applications, run:
+
+```bash
+python3 "/Applications/Folderstorm.app/Contents/Resources/migrate_settings.py"
+```
+
+From a checkout, from the Linux package next to `install.sh`, or from the Windows install folder:
+
+```bash
+python3 migrate_settings.py
+```
+
+`--yes` skips the first question. `--dry-run` prints the plan and writes nothing. `--check` is what the installers use: it exits 0 when a copy can proceed, 2 when there is nothing to copy, and 3 when Folderstorm already has settings.
+
 ## The local assistant bridge
 
 The bridge lets an MCP client on this computer read and change inventory, change your outfit, move the camera, and take a picture. It does not teleport, chat, or reach the Marketplace. It does not run unless you ask for it, and the choice is not remembered.

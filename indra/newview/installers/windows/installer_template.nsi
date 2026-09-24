@@ -160,6 +160,7 @@ Var SKIP_DIALOGS        # Set from command line in  .onInit. autoinstall GUI and
 Var DO_UNINSTALL_V2     # If non-null, path to a previous Viewer 2 installation that will be uninstalled.
 Var NO_STARTMENU        # <FS:Ansariel> Optional start menu entry
 Var FRIENDLY_APP_NAME   # <FS:Ansariel> FIRE-30446: Set FriendlyAppName for protocols
+Var MIGRATE_REQUESTED   # /MIGRATE copies Firestorm settings without the first prompt
 
 # Function definitions should go before file includes, because calls to
 # DLLs like LangDLL trigger an implicit file include, so if that call is at
@@ -432,6 +433,10 @@ Call CheckWindowsVersion					# Don't install On unsupported systems
       StrCpy $SKIP_DIALOGS "true"
         SetAutoClose true
     # </FS:Ansariel>
+
+    ${GetOptions} $COMMANDLINE "/MIGRATE" $0
+    IfErrors +2 0
+        StrCpy $MIGRATE_REQUESTED "yes"
 
 	# <FS:PP> Disable autorun
 	# ${GetOptions} $COMMANDLINE "/SKIP_AUTORUN" $0
@@ -1139,6 +1144,130 @@ NoDelete:
 FunctionEnd
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Optional Firestorm -> Folderstorm settings copy.
+;; migrate_settings.py is installed next to the viewer. It refuses to
+;; replace an existing Folderstorm settings tree unless --overwrite is passed.
+;; Silent installs do not copy unless /MIGRATE is set, and even then they
+;; will not replace settings that are already there.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Function RunMigratePython
+    ; $R3 is "ran" when an interpreter actually ran the script (exit 0-4).
+    ; A larger exit, or a launcher that will not start, tries the next one.
+    StrCpy $R3 "missing"
+    StrCmp $R1 "" 0 migrate_with_extra
+
+    ClearErrors
+    ExecWait 'py -3 "$INSTDIR\migrate_settings.py" --yes' $R2
+    IfErrors migrate_try_python
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_try_python
+migrate_try_python:
+    ClearErrors
+    ExecWait 'python "$INSTDIR\migrate_settings.py" --yes' $R2
+    IfErrors migrate_try_python3
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_try_python3
+migrate_try_python3:
+    ClearErrors
+    ExecWait 'python3 "$INSTDIR\migrate_settings.py" --yes' $R2
+    IfErrors migrate_ran
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_ran
+    Goto migrate_ran
+
+migrate_with_extra:
+    ClearErrors
+    ExecWait 'py -3 "$INSTDIR\migrate_settings.py" --yes $R1' $R2
+    IfErrors migrate_try_python_extra
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_try_python_extra
+migrate_try_python_extra:
+    ClearErrors
+    ExecWait 'python "$INSTDIR\migrate_settings.py" --yes $R1' $R2
+    IfErrors migrate_try_python3_extra
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_try_python3_extra
+migrate_try_python3_extra:
+    ClearErrors
+    ExecWait 'python3 "$INSTDIR\migrate_settings.py" --yes $R1' $R2
+    IfErrors migrate_ran
+    IntCmp $R2 4 migrate_mark_ran migrate_mark_ran migrate_ran
+    Goto migrate_ran
+
+migrate_mark_ran:
+    StrCpy $R3 "ran"
+migrate_ran:
+FunctionEnd
+
+Function OfferSettingsMigration
+    Push $R1
+    Push $R2
+    Push $R3
+
+    IfFileExists "$INSTDIR\migrate_settings.py" 0 migrate_cleanup
+    IfFileExists "$APPDATA\Firestorm_x64\user_settings\*.*" have_src
+    IfFileExists "$APPDATA\Firestorm\user_settings\*.*" have_src
+    IfFileExists "$APPDATA\FirestormOS_x64\user_settings\*.*" have_src
+    IfFileExists "$APPDATA\FirestormOS\user_settings\*.*" have_src migrate_cleanup
+
+have_src:
+    StrCpy $R1 "--check"
+    Call RunMigratePython
+    StrCmp $R3 "missing" python_missing
+    IntCmp $R2 2 migrate_cleanup
+    IntCmp $R2 0 dest_empty
+    IntCmp $R2 3 dest_full
+    DetailPrint "Settings migration did not run (status $R2)."
+    Goto migrate_cleanup
+
+dest_empty:
+    StrCmp $MIGRATE_REQUESTED "yes" run_copy
+    IfSilent migrate_cleanup
+    StrCmp $SKIP_DIALOGS "true" migrate_cleanup
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsQuestion) /SD IDNO IDYES run_copy IDNO migrate_cleanup
+    Goto migrate_cleanup
+
+run_copy:
+    StrCpy $R1 ""
+    Call RunMigratePython
+    StrCmp $R3 "missing" python_missing
+    IntCmp $R2 0 copied_ok
+    DetailPrint "Settings migration did not finish (status $R2)."
+    Goto migrate_cleanup
+
+dest_full:
+    IfSilent note_full
+    StrCmp $SKIP_DIALOGS "true" note_full
+    StrCmp $MIGRATE_REQUESTED "yes" ask_overwrite
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsQuestion) /SD IDNO IDNO migrate_cleanup
+
+ask_overwrite:
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 $(MigrateSettingsOverwrite) /SD IDNO IDYES run_overwrite IDNO migrate_cleanup
+    Goto migrate_cleanup
+
+note_full:
+    DetailPrint "Folderstorm already has settings. Not replacing them."
+    Goto migrate_cleanup
+
+run_overwrite:
+    StrCpy $R1 "--overwrite"
+    Call RunMigratePython
+    StrCmp $R3 "missing" python_missing
+    IntCmp $R2 0 copied_ok
+    DetailPrint "Settings migration did not finish (status $R2)."
+    Goto migrate_cleanup
+
+copied_ok:
+    DetailPrint "Copied Firestorm settings into Folderstorm."
+    Goto migrate_cleanup
+
+python_missing:
+    IfSilent migrate_cleanup
+    StrCmp $SKIP_DIALOGS "true" migrate_cleanup
+    MessageBox MB_OK|MB_ICONINFORMATION $(MigrateSettingsNoPython)
+
+migrate_cleanup:
+    Pop $R3
+    Pop $R2
+    Pop $R1
+FunctionEnd
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; After install completes, launch app
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Function .onInstSuccess
@@ -1172,6 +1301,7 @@ Function .onInstSuccess
         # </FS:Ansariel>
 
         Call CheckWindowsServPack		# Warn if not on the latest SP before asking to launch.
+        Call OfferSettingsMigration		# Optional Firestorm settings copy. Opt-in.
         # <FS:PP> Disable autorun
         #StrCmp $SKIP_AUTORUN "true" +2;
         StrCmp $SKIP_DIALOGS "true" label_launch

@@ -907,6 +907,140 @@ static void on_first_run(void* p_user_data, const char* app_version)
     }
 }
 
+static bool folder_exists(const std::wstring& path)
+{
+    const DWORD attrs = GetFileAttributesW(path.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+// Ask once, before Folderstorm has a settings folder, to copy Firestorm settings.
+// Later updates skip this because the viewer has created that folder by then.
+// The copy itself is migrate_settings.py, which also runs standalone.
+static void offer_settings_migration(const std::wstring& install_dir)
+{
+    const std::wstring script = install_dir + L"\\migrate_settings.py";
+    if (GetFileAttributesW(script.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        return;
+    }
+
+    wchar_t appdata[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata)))
+    {
+        return;
+    }
+    const std::wstring root(appdata);
+    if (folder_exists(root + L"\\Folderstorm_x64\\user_settings"))
+    {
+        return;
+    }
+
+    const wchar_t* const sources[] = {
+        L"Firestorm_x64",
+        L"Firestorm",
+        L"FirestormOS_x64",
+        L"FirestormOS",
+    };
+    bool found = false;
+    for (size_t i = 0; i < sizeof(sources) / sizeof(sources[0]); ++i)
+    {
+        if (folder_exists(root + L"\\" + sources[i] + L"\\user_settings"))
+        {
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+    {
+        return;
+    }
+
+    auto launch = [&](const std::wstring& extra, DWORD* exit_code) -> bool
+    {
+        const std::wstring commands[] = {
+            L"py -3 \"" + script + L"\" --yes " + extra,
+            L"python \"" + script + L"\" --yes " + extra,
+            L"python3 \"" + script + L"\" --yes " + extra,
+        };
+        for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i)
+        {
+            std::wstring mutable_cmd = commands[i];
+            STARTUPINFOW si = {};
+            si.cb = sizeof(si);
+            PROCESS_INFORMATION pi = {};
+            if (!CreateProcessW(NULL, &mutable_cmd[0], NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+            {
+                continue;
+            }
+            const DWORD wait = WaitForSingleObject(pi.hProcess, 120000);
+            DWORD code = 1;
+            if (wait != WAIT_OBJECT_0)
+            {
+                TerminateProcess(pi.hProcess, 1);
+            }
+            else
+            {
+                GetExitCodeProcess(pi.hProcess, &code);
+            }
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            if (wait != WAIT_OBJECT_0)
+            {
+                continue;
+            }
+            // 0-4 are this script's exits. A larger code is a launcher that
+            // did not run it, such as the Microsoft Store python alias.
+            if (code > 4)
+            {
+                continue;
+            }
+            if (exit_code)
+            {
+                *exit_code = code;
+            }
+            return true;
+        }
+        return false;
+    };
+
+    DWORD check_code = 1;
+    if (!launch(L"--check", &check_code))
+    {
+        MessageBoxW(NULL,
+            L"Python 3 was not found, so Firestorm settings were not copied.\n\n"
+            L"Install Python 3, then run migrate_settings.py --yes from the Folderstorm install folder.",
+            L"Folderstorm",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    // 0: destination is empty and there is something to copy.
+    // Anything else (nothing to copy, or Folderstorm already has settings) stays quiet.
+    if (check_code != 0)
+    {
+        return;
+    }
+
+    const int answer = MessageBoxW(NULL,
+        L"Copy your Firestorm settings to Folderstorm?\n\n"
+        L"Saved passwords and caches are not copied. This step is optional.",
+        L"Folderstorm",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    if (answer != IDYES)
+    {
+        return;
+    }
+
+    DWORD copy_code = 1;
+    if (!launch(L"", &copy_code) || copy_code != 0)
+    {
+        MessageBoxW(NULL,
+            L"Firestorm settings were not copied.\n\n"
+            L"Run migrate_settings.py --yes from the Folderstorm install folder.",
+            L"Folderstorm",
+            MB_OK | MB_ICONINFORMATION);
+    }
+}
+
 static void on_after_install(void* user_data, const char* app_version)
 {
     std::wstring install_dir = get_install_dir();
@@ -924,6 +1058,7 @@ static void on_after_install(void* user_data, const char* app_version)
     register_protocol_handler(PROTOCOL_GRID_INFO_OPENSIM, L"URL:Hypergrid", exe_path);
     // </FS:TJ>
     create_shortcuts(install_dir, app_name);
+    offer_settings_migration(install_dir);
 }
 
 static void on_before_uninstall(void* user_data, const char* app_version)

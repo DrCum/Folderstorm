@@ -37,6 +37,9 @@ LangString CheckStartupParamsMB ${LANG_GERMAN} "Konnte Programm '$INSTNAME' nich
 
 ; installation success dialog
 LangString InstSuccesssQuestion ${LANG_GERMAN} "Firestorm starten?"
+LangString MigrateSettingsQuestion ${LANG_GERMAN} "Copy your Firestorm settings to Folderstorm?$\n$\nSaved passwords and caches are not copied. This step is optional."
+LangString MigrateSettingsOverwrite ${LANG_GERMAN} "Folderstorm already has settings. Replace the files copied from Firestorm?$\n$\nFiles that exist only in Folderstorm are kept. Saved passwords are still not copied."
+LangString MigrateSettingsNoPython ${LANG_GERMAN} "Python 3 was not found, so settings were not copied.$\n$\nInstall Python 3, then run migrate_settings.py --yes from the Folderstorm install folder."
 
 ; remove old NSIS version
 LangString RemoveOldNSISVersion ${LANG_GERMAN} "Überprüfe alte Version ..."
