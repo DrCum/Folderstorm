@@ -214,7 +214,7 @@ tool_tip="The account name you chose when you registered, like bobsmith420 or St
       <text
           follows="left|bottom"
           font="SansSerifSmall"
-          text_color="EmphasisColor"
+          text_color="FolderstormAccent"
           left="10"
           height="16"
           name="create_new_account_text"
@@ -225,7 +225,7 @@ tool_tip="The account name you chose when you registered, like bobsmith420 or St
       <text
           follows="left|bottom"
           font="SansSerifSmall"
-          text_color="EmphasisColor"
+          text_color="FolderstormAccent"
           height="16"
           name="forgot_password_text"
           top="26"
@@ -293,7 +293,7 @@ tool_tip="The account name you chose when you registered, like bobsmith420 or St
           name="mode_combo"
           width="110">
            <combo_box.item
-            label="Firestorm"
+            label="Folderstorm"
             name="Firestorm"
             value="settings_firestorm.xml" />
            <combo_box.item

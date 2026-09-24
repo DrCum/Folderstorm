@@ -315,7 +315,7 @@
       <combo_box.drop_down_button
         font="SansSerifLarge"/>
       <combo_box.item
-        label="Firestorm"
+        label="Folderstorm"
         name="Firestorm"
         value="settings_firestorm.xml" />
       <combo_box.item
@@ -364,7 +364,7 @@
     <text
       follows="left|top|right"
       font="SansSerifMedium"
-      text_color="EmphasisColor"
+      text_color="FolderstormAccent"
       left_delta="0"
       height="16"
       name="create_new_account_text"
@@ -375,7 +375,7 @@
     <text
       follows="left|top|right"
       font="SansSerifMedium"
-      text_color="EmphasisColor"
+      text_color="FolderstormAccent"
       left_delta="0"
       height="16"
       name="forgot_password_text"

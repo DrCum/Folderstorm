@@ -40,6 +40,10 @@ private:
     void detachItems(LLSD const &data);
     void getOutfitsList(LLSD const &data);
     void getOutfitItems(LLSD const &data);
+    void worn(LLSD const &data);
+
+    bool requireConfirm(LLSD const& data, LLEventAPI::Response& response) const;
+    bool rlvAllows(const LLUUID& item_id, bool detach, std::string& error) const;
 };
 
 #endif // LL_LLAPPEARANCELISTENER_H

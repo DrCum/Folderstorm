@@ -50,6 +50,29 @@ func TestCallPostsBearerJSON(t *testing.T) {
 	}
 }
 
+func TestCallNamedPostsAPI(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(discover.Instance{Token: "tok", URL: srv.URL + "/"})
+	if _, err := c.CallNamed(context.Background(), AppearanceAPI, "worn", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, `"api":"LLAppearance"`) || !strings.Contains(gotBody, `"op":"worn"`) {
+		t.Fatalf("body = %s", gotBody)
+	}
+	if _, err := c.CallNamed(context.Background(), CameraAPI, "snapshot", map[string]any{"max_edge": 128}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, `"api":"LLCamera"`) || !strings.Contains(gotBody, `"op":"snapshot"`) {
+		t.Fatalf("body = %s", gotBody)
+	}
+}
+
 func TestCallMapsUnauthorized(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

@@ -78,6 +78,11 @@ std::string to_json(const LLSD& value)
 {
     return boost::json::serialize(LlsdToJson(value));
 }
+
+bool bridge_api_allowed(const std::string& api)
+{
+    return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera";
+}
 }
 
 class FSEventAPIBridge::State
@@ -133,6 +138,16 @@ public:
             response->extendedResult(
                 HTTP_BAD_REQUEST,
                 to_json(llsd::map("error", "Both api and op are required")),
+                json_headers());
+            return;
+        }
+        if (!bridge_api_allowed(api))
+        {
+            response->extendedResult(
+                HTTP_FORBIDDEN,
+                to_json(llsd::map(
+                    "error", "Event API is not exposed by the local MCP bridge",
+                    "api", api)),
                 json_headers());
             return;
         }

@@ -30,6 +30,7 @@
 
 #include "fspanellogin.h"
 #include "lllayoutstack.h"
+#include "llpluginclassmedia.h"
 
 #include "indra_constants.h"        // for key and mask constants
 #include "llfloaterreg.h"
@@ -211,6 +212,11 @@ FSPanelLogin::FSPanelLogin(const LLRect &rect,
     else
     {
         buildFromFile( "panel_fs_login.xml");
+    }
+
+    if (LLMediaCtrl* web_browser = findChild<LLMediaCtrl>("login_html"))
+    {
+        web_browser->addMediaObserver(this);
     }
 
     reshape(rect.getWidth(), rect.getHeight());
@@ -402,6 +408,11 @@ void FSPanelLogin::addFavoritesToStartLocation()
 
 FSPanelLogin::~FSPanelLogin()
 {
+    if (LLMediaCtrl* web_browser = findChild<LLMediaCtrl>("login_html"))
+    {
+        web_browser->removeMediaObserver(this);
+    }
+
     if (mGridListChangedCallbackConnection.connected())
     {
         mGridListChangedCallbackConnection.disconnect();
@@ -966,8 +977,183 @@ void FSPanelLogin::loadLoginPage()
     }
 }
 
-void FSPanelLogin::handleMediaEvent(LLPluginClassMedia* /*self*/, EMediaEvent event)
+namespace
 {
+// Recolor the upstream Phoenix login splash (orange/red) to Folderstorm purple-blue,
+// show the I'm Sodie feed on the left, move Firestorm Blog to the right in place of
+// Blogger Network, and close the version / WebRTC popups.
+const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
+(function () {
+  if (window.__folderstormLoginTheme) return;
+  window.__folderstormLoginTheme = true;
+  var css = document.createElement('style');
+  css.id = 'folderstorm-login-theme';
+  css.textContent = [
+    'body{background-image:url(https://folderstorm.sodie.net/viewer_splash.webp) !important;}',
+    'a{color:#8B7CFF !important;}',
+    'a:hover{color:#6CB6FF !important;}',
+    'b{color:#C4B5FD !important;}',
+    '#top-row > div{background:linear-gradient(0deg, rgba(76,59,207,1) 0%, rgba(76,59,207,0) 100%) !important;}',
+    '#top-row a{color:#ffffff !important;}',
+    '#top-row a:hover,#blog-row h4 a:hover{color:#B9D4FF !important;}',
+    '#blog-row i,#blog-row #feed_blogger_network > a::first-letter{color:#8EB4FF !important;}',
+    '.text-danger{color:#A78BFA !important;}',
+    '.btn-danger{background-color:#4C3BCF !important;border-color:#3A2CB0 !important;}',
+    '.btn-warning{background-color:#3D7EFF !important;border-color:#2C68E0 !important;color:#ffffff !important;}',
+    'body.notransparency #top-row > div{background:linear-gradient(0deg, rgba(76,59,207,1) 0%, rgba(0,0,0,1) 100%) !important;}'
+  ].join('\n');
+  (document.head || document.documentElement).appendChild(css);
+  if (document.title) {
+    document.title = document.title.replace(/Firestorm/g, 'Folderstorm');
+  }
+  var meta = document.querySelector('meta[name="description"]');
+  if (meta && meta.content) {
+    meta.content = meta.content.replace(/Firestorm/g, 'Folderstorm');
+  }
+
+  var blockedModals = {newVersionModal: 1, newPreviewVersionModal: 1, emergencyModal: 1};
+
+  function dismissSplashModals() {
+    var hid = false;
+    for (var id in blockedModals) {
+      if (!blockedModals.hasOwnProperty(id)) continue;
+      var el = document.getElementById(id);
+      if (!el) continue;
+      if (el.classList.contains('show') || el.style.display === 'block' || el.getAttribute('aria-modal') === 'true') {
+        el.classList.remove('show');
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+        el.removeAttribute('aria-modal');
+        hid = true;
+      }
+    }
+    if (!hid) return;
+    if (!document.querySelector('.modal.show')) {
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      var backs = document.querySelectorAll('.modal-backdrop');
+      for (var i = 0; i < backs.length; i++) {
+        if (backs[i].parentNode) backs[i].parentNode.removeChild(backs[i]);
+      }
+    }
+  }
+
+  function patchJqueryModal() {
+    if (!window.jQuery || !jQuery.fn || !jQuery.fn.modal || jQuery.fn.modal.__folderstormPatched) return;
+    var orig = jQuery.fn.modal;
+    function wrapped(arg) {
+      var id = this.attr ? this.attr('id') : '';
+      if (blockedModals[id]) {
+        dismissSplashModals();
+        return this;
+      }
+      return orig.apply(this, arguments);
+    }
+    wrapped.__folderstormPatched = true;
+    wrapped.Constructor = orig.Constructor;
+    wrapped.noConflict = orig.noConflict;
+    jQuery.fn.modal = wrapped;
+  }
+
+  function layoutColumns() {
+    if (window.__folderstormColumns) return;
+    var row = document.getElementById('blog-row');
+    var blog = document.getElementById('feed_firestorm_blog');
+    var linden = document.getElementById('feed_linden_news');
+    if (!row || !blog || !linden) return;
+    var net = document.getElementById('feed_blogger_network');
+    if (net && net.parentNode) net.parentNode.removeChild(net);
+    var sodie = document.getElementById('feed_im_sodie');
+    if (!sodie) {
+      sodie = document.createElement('div');
+      sodie.id = 'feed_im_sodie';
+      sodie.innerHTML = '<h4><a href="https://folderstorm.sodie.net/" title="folderstorm.sodie.net" target="_blank">I\'m Sodie</a></h4>';
+    }
+    row.insertBefore(sodie, row.firstChild);
+    row.appendChild(blog);
+    window.__folderstormColumns = true;
+    loadSodieFeed(sodie);
+  }
+
+  function loadSodieFeed(sodie) {
+    if (window.__folderstormFeedStarted || !sodie) return;
+    window.__folderstormFeedStarted = true;
+    fetch('https://folderstorm.sodie.net/feed.xml').then(function (response) {
+      if (!response.ok) throw new Error('feed');
+      return response.text();
+    }).then(function (text) {
+      var doc = new DOMParser().parseFromString(text, 'text/xml');
+      if (doc.querySelector('parsererror')) return;
+      var items = doc.getElementsByTagName('item');
+      var fmt = new Intl.DateTimeFormat('en', {timeZone: 'America/Los_Angeles', day: 'numeric', month: 'short'});
+      var count = Math.min(3, items.length);
+      for (var i = 0; i < count; i++) {
+        var item = items[i];
+        var titleEl = item.getElementsByTagName('title')[0];
+        var linkEl = item.getElementsByTagName('link')[0];
+        var dateEl = item.getElementsByTagName('pubDate')[0];
+        var title = titleEl ? titleEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        var link = linkEl ? linkEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        var pub = dateEl ? dateEl.textContent.replace(/^\s+|\s+$/g, '') : '';
+        if (!title) continue;
+        if (title.length > 100) title = title.slice(0, 95) + ' (...)';
+        var when = '';
+        if (pub) {
+          var parsed = new Date(pub);
+          if (!isNaN(parsed.getTime())) when = fmt.format(parsed);
+        }
+        var anchor = document.createElement('a');
+        anchor.target = '_blank';
+        anchor.href = link || 'https://folderstorm.sodie.net/';
+        anchor.title = pub || title;
+        if (when) {
+          var stamp = document.createElement('i');
+          stamp.textContent = '[' + when + '] ';
+          anchor.appendChild(stamp);
+        }
+        anchor.appendChild(document.createTextNode(title));
+        sodie.appendChild(anchor);
+      }
+    }).catch(function () {});
+  }
+
+  layoutColumns();
+  patchJqueryModal();
+  dismissSplashModals();
+  var obs = new MutationObserver(function () {
+    layoutColumns();
+    patchJqueryModal();
+    dismissSplashModals();
+  });
+  obs.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'aria-modal']
+  });
+})();
+)JS";
+
+bool isUpstreamFirestormSplash(const std::string& uri)
+{
+    std::string lower(uri);
+    LLStringUtil::toLower(lower);
+    return lower.find("phoenixviewer.com") != std::string::npos
+        && lower.find("loginv3") != std::string::npos;
+}
+}
+
+void FSPanelLogin::handleMediaEvent(LLPluginClassMedia* self, EMediaEvent event)
+{
+    if (event != MEDIA_EVENT_NAVIGATE_COMPLETE || !self)
+    {
+        return;
+    }
+    if (!isUpstreamFirestormSplash(self->getNavigateURI()))
+    {
+        return;
+    }
+    self->executeJavaScript(FOLDERSTORM_LOGIN_THEME_JS);
 }
 
 //---------------------------------------------------------------------------

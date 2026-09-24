@@ -249,7 +249,8 @@ func searchRoots(opts Options) []string {
 	return DefaultSearchDirs(opts)
 }
 
-// DefaultSearchDirs returns Firestorm user_settings directories for this OS.
+// DefaultSearchDirs returns Folderstorm user_settings directories for this OS,
+// then the older Firestorm directories so a side-by-side install is still found.
 func DefaultSearchDirs(opts Options) []string {
 	home := opts.Home
 	if home == "" {
@@ -261,6 +262,10 @@ func DefaultSearchDirs(opts Options) []string {
 	}
 	var dirs []string
 	for _, envName := range []string{
+		"FOLDERSTORM_X64_USER_DIR",
+		"FOLDERSTORMOS_X64_USER_DIR",
+		"FOLDERSTORM_USER_DIR",
+		"FOLDERSTORMOS_USER_DIR",
 		"FIRESTORM_X64_USER_DIR",
 		"FIRESTORMOS_X64_USER_DIR",
 		"FIRESTORM_USER_DIR",
@@ -273,17 +278,26 @@ func DefaultSearchDirs(opts Options) []string {
 	switch runtime.GOOS {
 	case "windows":
 		if appData != "" {
-			for _, name := range []string{"Firestorm_x64", "FirestormOS_x64", "Firestorm", "FirestormOS"} {
+			for _, name := range []string{
+				"Folderstorm_x64", "FolderstormOS_x64", "Folderstorm", "FolderstormOS",
+				"Firestorm_x64", "FirestormOS_x64", "Firestorm", "FirestormOS",
+			} {
 				dirs = append(dirs, filepath.Join(appData, name, "user_settings"))
 			}
 		}
 	case "darwin":
 		support := filepath.Join(home, "Library", "Application Support")
-		for _, name := range []string{"Firestorm", "FirestormOS", "Firestorm_x64", "FirestormOS_x64"} {
+		for _, name := range []string{
+			"Folderstorm", "FolderstormOS", "Folderstorm_x64", "FolderstormOS_x64",
+			"Firestorm", "FirestormOS", "Firestorm_x64", "FirestormOS_x64",
+		} {
 			dirs = append(dirs, filepath.Join(support, name, "user_settings"))
 		}
 	default:
-		for _, name := range []string{".firestorm_x64", ".firestormos_x64", ".firestorm", ".firestormos"} {
+		for _, name := range []string{
+			".folderstorm_x64", ".folderstormos_x64", ".folderstorm", ".folderstormos",
+			".firestorm_x64", ".firestormos_x64", ".firestorm", ".firestormos",
+		} {
 			dirs = append(dirs, filepath.Join(home, name, "user_settings"))
 		}
 	}

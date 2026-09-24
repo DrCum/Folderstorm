@@ -362,7 +362,7 @@
          name="world_view_explanation"
          type="string"
          wrap="true">
-            Reserve part of a stretched Firestorm window for Inventory and other floaters. The camera, HUD, and mouse controls remain centered in the visible world area.
+            Reserve part of a stretched Folderstorm window for Inventory and other floaters. The camera, HUD, and mouse controls remain centered in the visible world area.
         </text>
         <check_box
          control_name="FSWorldViewEnabled"
@@ -527,7 +527,7 @@
          top_pad="16"
          type="string"
          wrap="true">
-            If opposing margins leave less than 5% of the window, Firestorm scales them down proportionally. Changes preview immediately.
+            If opposing margins leave less than 5% of the window, Folderstorm scales them down proportionally. Changes preview immediately.
         </text>
     </panel>
     <!-- </FS> -->

@@ -215,7 +215,7 @@
       <text
           follows="left|bottom"
           font="SansSerifSmall"
-          text_color="EmphasisColor"
+          text_color="FolderstormAccent"
           left="10"
           height="16"
           name="create_new_account_text"
@@ -226,7 +226,7 @@
       <text
           follows="left|bottom"
           font="SansSerifSmall"
-          text_color="EmphasisColor"
+          text_color="FolderstormAccent"
           height="16"
           name="forgot_password_text"
           top="26"
@@ -294,7 +294,7 @@
           name="mode_combo"
           width="110">
            <combo_box.item
-            label="Firestorm"
+            label="Folderstorm"
             name="Firestorm"
             value="settings_firestorm.xml" />
            <combo_box.item

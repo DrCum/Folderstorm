@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "lltooltip.h"
 
+#include <algorithm>
+
 #include "llmediactrl.h"
 
 // viewer includes
@@ -165,6 +167,10 @@ LLMediaCtrl::~LLMediaCtrl()
 
     if (mMediaSource)
     {
+        for (LLViewerMediaObserver* observer : mExtraMediaObservers)
+        {
+            mMediaSource->remObserver(observer);
+        }
         mMediaSource->remObserver( this );
         mMediaSource = NULL;
     }
@@ -792,6 +798,10 @@ bool LLMediaCtrl::ensureMediaSourceExists()
             mMediaSource->setTarget(mTarget);
             mMediaSource->setVisible( isInVisibleChain() );
             mMediaSource->addObserver( this );
+            for (LLViewerMediaObserver* observer : mExtraMediaObservers)
+            {
+                mMediaSource->addObserver(observer);
+            }
             mMediaSource->setBackgroundColor( getBackgroundColor() );
             mMediaSource->setTrustedBrowser(mTrusted);
 
@@ -1304,6 +1314,37 @@ void LLMediaCtrl::hideNotification()
     if (mWindowShade)
     {
         mWindowShade->hide();
+    }
+}
+
+void LLMediaCtrl::addMediaObserver(LLViewerMediaObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    if (std::find(mExtraMediaObservers.begin(), mExtraMediaObservers.end(), observer) == mExtraMediaObservers.end())
+    {
+        mExtraMediaObservers.push_back(observer);
+    }
+    if (mMediaSource)
+    {
+        mMediaSource->addObserver(observer);
+    }
+}
+
+void LLMediaCtrl::removeMediaObserver(LLViewerMediaObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    mExtraMediaObservers.erase(
+        std::remove(mExtraMediaObservers.begin(), mExtraMediaObservers.end(), observer),
+        mExtraMediaObservers.end());
+    if (mMediaSource)
+    {
+        mMediaSource->remObserver(observer);
     }
 }
 

@@ -3,6 +3,8 @@ package mcptools
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,13 +15,15 @@ import (
 )
 
 type fakeAPI struct {
-	mu       sync.Mutex
-	ops      []string
-	status   json.RawMessage
-	get      json.RawMessage
-	copy     json.RawMessage
-	confirm  json.RawMessage
-	lastCopy map[string]any
+	mu        sync.Mutex
+	ops       []string
+	status    json.RawMessage
+	get       json.RawMessage
+	copy      json.RawMessage
+	confirm   json.RawMessage
+	snapshot  json.RawMessage
+	lastCopy  map[string]any
+	lastNamed map[string]any
 }
 
 func (f *fakeAPI) record(op string) {
@@ -82,6 +86,18 @@ func (f *fakeAPI) ConfirmCopy(context.Context, map[string]any) (json.RawMessage,
 		return f.confirm, nil
 	}
 	return json.RawMessage(`{"status":"ok"}`), nil
+}
+
+func (f *fakeAPI) CallNamed(_ context.Context, apiName, op string, params map[string]any) (json.RawMessage, error) {
+	f.record(apiName + "." + op)
+	f.mu.Lock()
+	f.lastNamed = params
+	snap := f.snapshot
+	f.mu.Unlock()
+	if apiName == "LLCamera" && op == "snapshot" && snap != nil {
+		return snap, nil
+	}
+	return json.RawMessage(`{"ok":true}`), nil
 }
 
 func (f *fakeAPI) opsCopy() []string {
@@ -293,6 +309,16 @@ func TestToolAnnotations(t *testing.T) {
 		"inventory_get", "inventory_list", "inventory_search", "inventory_system_folder",
 		"inventory_create_folder", "inventory_move", "inventory_rename",
 		"inventory_copy", "inventory_confirm_copy",
+		"inventory_types", "inventory_get_many", "inventory_resolve_path", "inventory_protected_folders",
+		"inventory_changes", "inventory_read_notecard", "inventory_read_script", "inventory_landmark",
+		"inventory_set_description", "inventory_set_thumbnail", "inventory_set_favorite",
+		"inventory_link", "inventory_create_item", "inventory_batch_move", "inventory_batch_rename",
+		"inventory_batch_copy", "inventory_trash", "inventory_restore", "inventory_replace_links",
+		"inventory_empty_trash", "inventory_purge",
+		"appearance_outfits", "appearance_outfit_items", "appearance_worn",
+		"appearance_wear_outfit", "appearance_wear_items", "appearance_detach",
+		"camera_get", "camera_set_pose", "camera_set", "camera_reset", "camera_snapshot",
+		"confirm_action",
 	} {
 		if byName[name] == nil {
 			t.Fatalf("missing tool %s", name)
@@ -304,6 +330,155 @@ func TestToolAnnotations(t *testing.T) {
 	if byName["inventory_confirm_copy"].Annotations.DestructiveHint == nil || !*byName["inventory_confirm_copy"].Annotations.DestructiveHint {
 		t.Fatal("confirm_copy should be destructive")
 	}
+}
+
+func TestNamedAPIRouting(t *testing.T) {
+	api := &fakeAPI{}
+	state := &Server{
+		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+		NewClient: func(discover.Instance) API { return api },
+	}
+	cs := connect(t, state, nil)
+	for _, name := range []string{"appearance_worn", "appearance_outfits", "camera_get", "camera_reset", "inventory_types"} {
+		res := call(t, cs, name, map[string]any{})
+		if res.IsError {
+			t.Fatalf("%s: %s", name, textOf(res))
+		}
+	}
+	ops := api.opsCopy()
+	for _, want := range []string{
+		"LLAppearance.worn",
+		"LLAppearance.getOutfitsList",
+		"LLCamera.get",
+		"LLCamera.reset",
+		"LLInventory.types",
+	} {
+		if !contains(ops, want) {
+			t.Fatalf("ops = %v, missing %s", ops, want)
+		}
+	}
+}
+
+func TestWearSkipElicitationDecline(t *testing.T) {
+	api := &fakeAPI{}
+	state := &Server{
+		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+		NewClient: func(discover.Instance) API { return api },
+	}
+	cs := connect(t, state, nil)
+	res := call(t, cs, "appearance_wear_outfit", map[string]any{
+		"folder_id":        "outfit-1",
+		"skip_elicitation": true,
+	})
+	if res.IsError {
+		t.Fatalf("wear: %s", textOf(res))
+	}
+	planID := planIDOf(t, res)
+	if contains(api.opsCopy(), "LLAppearance.wearOutfit") {
+		t.Fatal("wearOutfit ran before confirmation")
+	}
+	declined := call(t, cs, "confirm_action", map[string]any{"plan_id": planID, "confirm": false})
+	if declined.IsError || !strings.Contains(textOf(declined), "declined") {
+		t.Fatalf("decline: %s", textOf(declined))
+	}
+	if contains(api.opsCopy(), "LLAppearance.wearOutfit") {
+		t.Fatal("wearOutfit ran after decline")
+	}
+}
+
+func TestPurgeElicitationDecline(t *testing.T) {
+	api := &fakeAPI{}
+	state := &Server{
+		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+		NewClient: func(discover.Instance) API { return api },
+	}
+	cs := connect(t, state, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	res := call(t, cs, "inventory_purge", map[string]any{"id": "doomed"})
+	if res.IsError {
+		t.Fatalf("purge: %s", textOf(res))
+	}
+	if !strings.Contains(textOf(res), "declined") || !strings.Contains(textOf(res), "plan_id") {
+		t.Fatalf("got %s", textOf(res))
+	}
+	if contains(api.opsCopy(), "LLInventory.purge") {
+		t.Fatal("purge ran after elicitation decline")
+	}
+}
+
+func TestCameraSnapshotReturnsImage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "shot.jpg")
+	image := []byte{0xff, 0xd8, 0xff, 0xd9}
+	if err := os.WriteFile(path, image, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(map[string]any{
+		"ok": true, "path": path, "width": 64, "height": 32,
+		"camera": map[string]any{"distance": 2.5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := &fakeAPI{snapshot: raw}
+	state := &Server{
+		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+		NewClient: func(discover.Instance) API { return api },
+	}
+	cs := connect(t, state, nil)
+	res := call(t, cs, "camera_snapshot", map[string]any{"max_edge": 256})
+	if res.IsError {
+		t.Fatalf("snapshot: %s", textOf(res))
+	}
+	var got *mcp.ImageContent
+	for _, content := range res.Content {
+		if imageContent, ok := content.(*mcp.ImageContent); ok {
+			got = imageContent
+		}
+	}
+	if got == nil || got.MIMEType != "image/jpeg" || string(got.Data) != string(image) {
+		t.Fatalf("image content = %#v", got)
+	}
+	if strings.Contains(textOf(res), path) {
+		t.Fatal("snapshot path leaked to the client")
+	}
+	if !strings.Contains(textOf(res), `"width":64`) {
+		t.Fatalf("sidecar json = %s", textOf(res))
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("temp snapshot still exists: %v", statErr)
+	}
+	api.mu.Lock()
+	maxEdge := api.lastNamed["max_edge"]
+	api.mu.Unlock()
+	switch value := maxEdge.(type) {
+	case int:
+		if value != 256 {
+			t.Fatalf("max_edge = %v", value)
+		}
+	case float64:
+		if value != 256 {
+			t.Fatalf("max_edge = %v", value)
+		}
+	default:
+		t.Fatalf("max_edge = %#v", maxEdge)
+	}
+}
+
+func planIDOf(t *testing.T, res *mcp.CallToolResult) string {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+		t.Fatalf("plan payload %s: %v", textOf(res), err)
+	}
+	planID, _ := payload["plan_id"].(string)
+	if planID == "" {
+		t.Fatalf("missing plan_id in %s", textOf(res))
+	}
+	return planID
 }
 
 func textOf(res *mcp.CallToolResult) string {

@@ -14659,7 +14659,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>FSUseLegacyUnsupportedHardwareChecks</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will perform utterly pointless checks that probably made sense in 2004.</string>
+      <string>If enabled, Folderstorm will perform utterly pointless checks that probably made sense in 2004.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -14670,7 +14670,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>FSUseStandaloneGroupFloater</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will use a standalone floater for each group profile.</string>
+      <string>If enabled, Folderstorm will use a standalone floater for each group profile.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -22030,7 +22030,7 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Type</key>
       <string>String</string>
       <key>Value</key>
-      <string>Firestorm</string>
+      <string>Folderstorm</string>
     </map>
   <key>FSSkinCurrentThemeReadableName</key>
     <map>
@@ -23453,7 +23453,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSUseStandalonePlaceDetailsFloater</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will use a standalone floater for each landmark details, teleport history details and parcel details view.</string>
+      <string>If enabled, Folderstorm will use a standalone floater for each landmark details, teleport history details and parcel details view.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -23464,7 +23464,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSUseStandaloneTeleportHistoryFloater</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will use a standalone floater for the teleport history view.</string>
+      <string>If enabled, Folderstorm will use a standalone floater for the teleport history view.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -23475,7 +23475,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSUseStandaloneBlocklistFloater</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will use a standalone floater for the blocklist.</string>
+      <string>If enabled, Folderstorm will use a standalone floater for the blocklist.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -23486,7 +23486,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSDisableIMChiclets</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, Firestorm will not show any group / IM chat chiclets (notifications envelope and sum of IMs will remain on the screen).</string>
+      <string>If enabled, Folderstorm will not show any group / IM chat chiclets (notifications envelope and sum of IMs will remain on the screen).</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -23508,7 +23508,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSDisableMouseWheelCameraZoom</key>
     <map>
       <key>Comment</key>
-      <string>If true, Firestorm will not use mouse wheel to zoom in/out the camera.</string>
+      <string>If true, Folderstorm will not use mouse wheel to zoom in/out the camera.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -23831,7 +23831,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSEnableVolumeControls</key>
     <map>
         <key>Comment</key>
-        <string>If true, Firestorm will show volume controls (sounds, media, stream) in upper right corner of the screen. Useful, if skin already has its own controls.</string>
+        <string>If true, Folderstorm will show volume controls (sounds, media, stream) in upper right corner of the screen. Useful, if skin already has its own controls.</string>
         <key>Persist</key>
         <integer>1</integer>
         <key>Type</key>
@@ -23842,7 +23842,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSResetCameraOnMovement</key>
     <map>
         <key>Comment</key>
-        <string>If true, Firestorm will reset camera on avatar movement.</string>
+        <string>If true, Folderstorm will reset camera on avatar movement.</string>
         <key>Persist</key>
         <integer>1</integer>
         <key>Type</key>
@@ -23853,7 +23853,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSShowInterfaceInMouselook</key>
     <map>
         <key>Comment</key>
-        <string>If true, Firestorm will show user interface in mouselook mode.</string>
+        <string>If true, Folderstorm will show user interface in mouselook mode.</string>
         <key>Persist</key>
         <integer>1</integer>
         <key>Type</key>
@@ -25069,7 +25069,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSFlashOnScriptDialog</key>
     <map>
       <key>Comment</key>
-      <string>Flash/Bounce the app icon when a script dialog is received and Firestorm is not in focus</string>
+      <string>Flash/Bounce the app icon when a script dialog is received and Folderstorm is not in focus</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -25080,7 +25080,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSFlashOnMessage</key>
     <map>
       <key>Comment</key>
-      <string>Flash/Bounce the app icon when a new message is received and Firestorm is not in focus</string>
+      <string>Flash/Bounce the app icon when a new message is received and Folderstorm is not in focus</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -25091,7 +25091,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSFlashOnObjectIM</key>
     <map>
       <key>Comment</key>
-      <string>Flash/Bounce the app icon when a new instant message from an object is received and Firestorm is not in focus.</string>
+      <string>Flash/Bounce the app icon when a new instant message from an object is received and Folderstorm is not in focus.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -26144,7 +26144,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSNoVersionPopup</key>
     <map>
       <key>Comment</key>
-      <string>Disables version popup on the Firestorm Login page</string>
+      <string>Disables version popup on the Folderstorm Login page</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27998,7 +27998,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>OmnifilterControls</key>
     <map>
         <key>Comment</key>
-        <string>If true, Firestorm will show the omnifilter controls (enable, drop down) in upper right corner of the screen. Useful, if multiple omnifilter rule sets are being used.</string>
+        <string>If true, Folderstorm will show the omnifilter controls (enable, drop down) in upper right corner of the screen. Useful, if multiple omnifilter rule sets are being used.</string>
         <key>Persist</key>
         <integer>1</integer>
         <key>Type</key>
@@ -28043,7 +28043,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSUseFSLegacySearch</key>
     <map>
       <key>Comment</key>
-      <string>Uses Firestorm&apos;s legacy search if enabled - the Linden Lab version instead if disabled</string>
+      <string>Uses Folderstorm&apos;s legacy search if enabled - the Linden Lab version instead if disabled</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
