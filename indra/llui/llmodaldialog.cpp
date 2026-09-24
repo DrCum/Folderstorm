@@ -39,6 +39,13 @@
 
 // static
 std::list<LLModalDialog*> LLModalDialog::sModalStack;
+LLModalDialog::screen_bounds_callback_t LLModalDialog::sScreenBoundsCallback = nullptr;
+
+// static
+void LLModalDialog::setScreenBoundsCallback(screen_bounds_callback_t callback)
+{
+    sScreenBoundsCallback = callback;
+}
 
 LLModalDialog::LLModalDialog( const LLSD& key, bool modal )
     : LLFloater(key),
@@ -305,6 +312,21 @@ void LLModalDialog::draw()
 
 void LLModalDialog::centerOnScreen()
 {
+    LLRect bounds;
+    if (sScreenBoundsCallback && sScreenBoundsCallback(bounds))
+    {
+        // Callback rects are scaled window coordinates. Dialogs are positioned
+        // in their parent's space (the floater view).
+        if (LLView* parent = getParent())
+        {
+            LLRect local_bounds;
+            parent->screenRectToLocal(bounds, &local_bounds);
+            bounds = local_bounds;
+        }
+        centerWithin(bounds);
+        return;
+    }
+
     LLVector2 window_size = LLUI::getInstance()->getWindowSize();
     centerWithin(LLRect(0, 0, ll_round(window_size.mV[VX]), ll_round(window_size.mV[VY])));
 }

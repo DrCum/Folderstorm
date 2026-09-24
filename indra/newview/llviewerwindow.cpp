@@ -1962,6 +1962,19 @@ std::string LLViewerWindow::translateString(const char* tag,
     return LLTrans::getString( std::string(tag), args_copy);
 }
 
+// Login-time modals center in the saved world-view slice. Once the world is
+// running this returns false and LLModalDialog::centerOnScreen() uses the full window.
+static bool loginModalScreenBounds(LLRect& bounds)
+{
+    if (!gViewerWindow || LLStartUp::getStartupState() >= STATE_STARTED)
+    {
+        return false;
+    }
+
+    bounds = gViewerWindow->getLoginPlacementRect();
+    return true;
+}
+
 //
 // Classes
 //
@@ -2177,6 +2190,10 @@ LLViewerWindow::LLViewerWindow(const Params& p)
     mDebugText = new LLDebugText(this);
 
     mWorldViewRectScaled = calcScaledRect(mWorldViewRectRaw, mDisplayScale);
+
+    // Login-time modals (including MFA) center in the saved world-view slice.
+    // In-world, the callback returns false and centerOnScreen() stays on the full window.
+    LLModalDialog::setScreenBoundsCallback(&loginModalScreenBounds);
 }
 
 std::string LLViewerWindow::getLastSnapshotDir()
@@ -2703,6 +2720,7 @@ void LLViewerWindow::shutdownGL()
 // shutdownViews() and shutdownGL() need to be called first
 LLViewerWindow::~LLViewerWindow()
 {
+    LLModalDialog::setScreenBoundsCallback(nullptr);
     LL_INFOS() << "Destroying Window" << LL_ENDL;
     destroyWindow();
 
@@ -2796,14 +2814,6 @@ void LLViewerWindow::reshape(S32 width, S32 height)
         // round up when converting coordinates to make sure there are no gaps at edge of window
         LLView::sForceReshape = display_scale_changed;
         mRootView->reshape(llceil((F32)width / mDisplayScale.mV[VX]), llceil((F32)height / mDisplayScale.mV[VY]));
-        if (display_scale_changed)
-        {
-            // Needs only a 'scale change' update, everything else gets handled by LLLayoutStack::updateClass()
-            // <FS:Ansariel> [FS Login Panel]
-            //LLPanelLogin::reshapePanel();
-            FSPanelLogin::reshapePanel();
-            // </FS:Ansariel> [FS Login Panel]
-        }
         LLView::sForceReshape = false;
 
         // clear font width caches
@@ -2843,6 +2853,10 @@ void LLViewerWindow::reshape(S32 width, S32 height)
         sample(LLStatViewer::WINDOW_HEIGHT, height);
 
         LLLayoutStack::updateClass();
+
+        // Login layout follows the saved world-view slice. Re-apply after the
+        // root view and layout stacks have taken the new window size.
+        FSPanelLogin::reshapePanel();
     }
 }
 
@@ -4501,6 +4515,72 @@ void LLViewerWindow::updateKeyboardFocus()
     }
 }
 
+namespace
+{
+    constexpr F32 WORLD_VIEW_PERCENT_TO_FRACTION = 0.01f;
+    constexpr F32 WORLD_VIEW_MAX_COMBINED_INSET = 0.95f;
+    // Combined inset below this is a gutter, not one monitor of a stretched window.
+    constexpr F32 WORLD_VIEW_MIN_SLICE_INSET = 0.20f;
+
+    struct WorldViewInsets
+    {
+        F32 left = 0.f;
+        F32 right = 0.f;
+        F32 top = 0.f;
+        F32 bottom = 0.f;
+
+        F32 horizontal() const { return left + right; }
+        F32 vertical() const { return top + bottom; }
+
+        bool isRealSlice() const
+        {
+            return horizontal() >= WORLD_VIEW_MIN_SLICE_INSET
+                || vertical() >= WORLD_VIEW_MIN_SLICE_INSET;
+        }
+    };
+
+    // Same per-edge and combined clamp as the interactive world view.
+    WorldViewInsets readWorldViewInsets()
+    {
+        static LLCachedControl<F32> inset_left(gSavedSettings, "FSWorldViewInsetLeft", 0.f);
+        static LLCachedControl<F32> inset_right(gSavedSettings, "FSWorldViewInsetRight", 0.f);
+        static LLCachedControl<F32> inset_top(gSavedSettings, "FSWorldViewInsetTop", 0.f);
+        static LLCachedControl<F32> inset_bottom(gSavedSettings, "FSWorldViewInsetBottom", 0.f);
+
+        WorldViewInsets insets;
+        insets.left = llclamp((F32)inset_left * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
+        insets.right = llclamp((F32)inset_right * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
+        insets.top = llclamp((F32)inset_top * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
+        insets.bottom = llclamp((F32)inset_bottom * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
+
+        if (insets.horizontal() > WORLD_VIEW_MAX_COMBINED_INSET)
+        {
+            const F32 scale = WORLD_VIEW_MAX_COMBINED_INSET / insets.horizontal();
+            insets.left *= scale;
+            insets.right *= scale;
+        }
+
+        if (insets.vertical() > WORLD_VIEW_MAX_COMBINED_INSET)
+        {
+            const F32 scale = WORLD_VIEW_MAX_COMBINED_INSET / insets.vertical();
+            insets.top *= scale;
+            insets.bottom *= scale;
+        }
+
+        return insets;
+    }
+
+    void applyWorldViewInsets(LLRect& rect, const WorldViewInsets& insets)
+    {
+        const S32 base_width = rect.getWidth();
+        const S32 base_height = rect.getHeight();
+        rect.mLeft += ll_round((F32)base_width * insets.left);
+        rect.mRight -= ll_round((F32)base_width * insets.right);
+        rect.mTop -= ll_round((F32)base_height * insets.top);
+        rect.mBottom += ll_round((F32)base_height * insets.bottom);
+    }
+}
+
 static LLTrace::BlockTimerStatHandle FTM_UPDATE_WORLD_VIEW("Update World View");
 void LLViewerWindow::updateWorldViewRect(bool use_full_window)
 {
@@ -4533,40 +4613,7 @@ void LLViewerWindow::updateWorldViewRect(bool use_full_window)
 
     if (apply_custom_world_view)
     {
-        constexpr F32 PERCENT_TO_FRACTION = 0.01f;
-        constexpr F32 MAX_COMBINED_INSET = 0.95f;
-        static LLCachedControl<F32> inset_left(gSavedSettings, "FSWorldViewInsetLeft", 0.f);
-        static LLCachedControl<F32> inset_right(gSavedSettings, "FSWorldViewInsetRight", 0.f);
-        static LLCachedControl<F32> inset_top(gSavedSettings, "FSWorldViewInsetTop", 0.f);
-        static LLCachedControl<F32> inset_bottom(gSavedSettings, "FSWorldViewInsetBottom", 0.f);
-
-        F32 left = llclamp((F32)inset_left * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
-        F32 right = llclamp((F32)inset_right * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
-        F32 top = llclamp((F32)inset_top * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
-        F32 bottom = llclamp((F32)inset_bottom * PERCENT_TO_FRACTION, 0.f, MAX_COMBINED_INSET);
-
-        const F32 horizontal_inset = left + right;
-        if (horizontal_inset > MAX_COMBINED_INSET)
-        {
-            const F32 scale = MAX_COMBINED_INSET / horizontal_inset;
-            left *= scale;
-            right *= scale;
-        }
-
-        const F32 vertical_inset = top + bottom;
-        if (vertical_inset > MAX_COMBINED_INSET)
-        {
-            const F32 scale = MAX_COMBINED_INSET / vertical_inset;
-            top *= scale;
-            bottom *= scale;
-        }
-
-        const S32 base_width = new_world_rect.getWidth();
-        const S32 base_height = new_world_rect.getHeight();
-        new_world_rect.mLeft += ll_round((F32)base_width * left);
-        new_world_rect.mRight -= ll_round((F32)base_width * right);
-        new_world_rect.mTop -= ll_round((F32)base_height * top);
-        new_world_rect.mBottom += ll_round((F32)base_height * bottom);
+        applyWorldViewInsets(new_world_rect, readWorldViewInsets());
     }
 
     // Settings are user-editable through Debug Settings, so retain a final
@@ -4588,6 +4635,28 @@ void LLViewerWindow::updateWorldViewRect(bool use_full_window)
         // sending a signal with a new WorldView rect
         mOnWorldViewRectUpdated(old_world_rect_scaled, mWorldViewRectScaled);
     }
+}
+
+LLRect LLViewerWindow::getLoginPlacementRect() const
+{
+    LLRect placement = mWindowRectScaled;
+
+    static LLCachedControl<bool> custom_world_view(gSavedSettings, "FSWorldViewEnabled", false);
+    if (!custom_world_view)
+    {
+        return placement;
+    }
+
+    const WorldViewInsets insets = readWorldViewInsets();
+    if (!insets.isRealSlice())
+    {
+        return placement;
+    }
+
+    applyWorldViewInsets(placement, insets);
+    placement.mTop = llmax(placement.mTop, placement.mBottom + 1);
+    placement.mRight = llmax(placement.mRight, placement.mLeft + 1);
+    return placement;
 }
 
 void LLViewerWindow::saveLastMouse(const LLCoordGL &point)

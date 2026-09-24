@@ -69,6 +69,13 @@ public:
     static S32      activeCount() { return static_cast<S32>(sModalStack.size()); }
     static void     shutdownModals();
 
+    // Optional override for centerOnScreen(). Return true and fill bounds
+    // (scaled UI coordinates, origin at the window's bottom left) to center
+    // there. Return false to keep the full window. In-world callers leave
+    // this unset or return false.
+    typedef bool (*screen_bounds_callback_t)(LLRect& bounds);
+    static void     setScreenBoundsCallback(screen_bounds_callback_t callback);
+
 protected:
     void            centerOnScreen();
 
@@ -78,6 +85,7 @@ private:
     const bool      mModal;
 
     static std::list<LLModalDialog*> sModalStack;  // Top of stack is currently being displayed
+    static screen_bounds_callback_t sScreenBoundsCallback;
 };
 
 #endif  // LL_LLMODALDIALOG_H

@@ -34,6 +34,7 @@
 #include "lltoastpanel.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
+#include "llstartup.h"
 #include "llfloaterreg.h"
 #include "lltrans.h"
 #include "llagent.h"
@@ -758,6 +759,32 @@ void LLScreenChannel::showToastsCentre()
     if (!toast)
     {
         LL_WARNS() << "Attempt to display a deleted toast." << LL_ENDL;
+        return;
+    }
+
+    // Alert modals, including the MFA prompt, are centred toasts. Before the
+    // world is running, put them on the same slice as the login screen.
+    // In-world, the channel rect below is unchanged.
+    if (gViewerWindow && LLStartUp::getStartupState() < STATE_STARTED)
+    {
+        const LLRect placement = gViewerWindow->getLoginPlacementRect();
+        for (std::vector<ToastElem>::reverse_iterator it = mToastList.rbegin(); it != mToastList.rend(); ++it)
+        {
+            toast = it->getToast();
+            if (!toast)
+            {
+                LL_WARNS() << "Attempt to display a deleted toast." << LL_ENDL;
+                return;
+            }
+
+            LLRect bounds = placement;
+            if (LLView* parent = toast->getParent())
+            {
+                parent->screenRectToLocal(placement, &bounds);
+            }
+            toast->centerWithin(bounds);
+            toast->setVisible(true);
+        }
         return;
     }
 
