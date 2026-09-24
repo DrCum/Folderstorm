@@ -26,17 +26,17 @@ func registerAppearance(s *mcp.Server, state *Server, readOnly, destructive *mcp
 	}, state.appearanceWorn)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "appearance_wear_outfit",
-		Description: "Wear an outfit by folder_id or folder_name. append adds it to the current outfit. Requires confirmation.",
+		Description: "Wear an outfit by folder_id or folder_name. append adds it to the current outfit. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.",
 		Annotations: withTitle(destructive, "Wear outfit"),
 	}, state.appearanceWearOutfit)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "appearance_wear_items",
-		Description: "Wear inventory items by UUID. replace removes conflicting worn items. Requires confirmation.",
+		Description: "Wear inventory items by UUID. replace removes conflicting worn items. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.",
 		Annotations: withTitle(destructive, "Wear items"),
 	}, state.appearanceWearItems)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "appearance_detach",
-		Description: "Detach or remove worn items by UUID. Requires confirmation.",
+		Description: "Detach or remove worn items by UUID. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.",
 		Annotations: withTitle(destructive, "Detach items"),
 	}, state.appearanceDetach)
 }
@@ -66,7 +66,7 @@ type wearItemsArgs struct {
 }
 
 func (s *Server) appearanceOutfits(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -77,7 +77,7 @@ func (s *Server) appearanceOutfitItems(ctx context.Context, _ *mcp.CallToolReque
 	if args.OutfitID == "" {
 		return errorResult("invalid_args", "outfit_id is required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -85,7 +85,7 @@ func (s *Server) appearanceOutfitItems(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *Server) appearanceWorn(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -107,7 +107,7 @@ func (s *Server) appearanceWearOutfit(ctx context.Context, req *mcp.CallToolRequ
 	if args.Append {
 		message = "Wearing this outfit adds it to what you are already wearing."
 	}
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.AppearanceAPI, "wearOutfit", params, message, args.SkipElicitation)
+	return s.callOrConfirm(ctx, req, args.ViewerPID, viewerapi.ClassWear, viewerapi.AppearanceAPI, "wearOutfit", params, message, args.SkipElicitation)
 }
 
 func (s *Server) appearanceWearItems(ctx context.Context, req *mcp.CallToolRequest, args wearItemsArgs) (*mcp.CallToolResult, any, error) {
@@ -115,7 +115,7 @@ func (s *Server) appearanceWearItems(ctx context.Context, req *mcp.CallToolReque
 		return errorResult("invalid_args", "items_id is required", nil)
 	}
 	params := map[string]any{"items_id": args.ItemsID, "replace": args.Replace}
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.AppearanceAPI, "wearItems", params,
+	return s.callOrConfirm(ctx, req, args.ViewerPID, viewerapi.ClassWear, viewerapi.AppearanceAPI, "wearItems", params,
 		"Wearing these items changes what other people see.", args.SkipElicitation)
 }
 
@@ -123,6 +123,6 @@ func (s *Server) appearanceDetach(ctx context.Context, req *mcp.CallToolRequest,
 	if args.ItemsID == nil || args.ItemsID == "" {
 		return errorResult("invalid_args", "items_id is required", nil)
 	}
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.AppearanceAPI, "detachItems", map[string]any{"items_id": args.ItemsID},
+	return s.callOrConfirm(ctx, req, args.ViewerPID, viewerapi.ClassWear, viewerapi.AppearanceAPI, "detachItems", map[string]any{"items_id": args.ItemsID},
 		"Detaching these items changes what other people see.", args.SkipElicitation)
 }

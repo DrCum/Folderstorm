@@ -16,6 +16,7 @@ type storedPlan struct {
 	Op        string
 	Params    map[string]any
 	ViewerPID int
+	Class     string
 	Message   string
 	Expires   time.Time
 }
@@ -47,6 +48,9 @@ func (s *Server) confirmAction(ctx context.Context, _ *mcp.CallToolRequest, args
 	if !ok || time.Now().After(plan.Expires) {
 		return errorResult("not_found", "confirmation plan was not found or has expired", map[string]any{"plan_id": args.PlanID})
 	}
+	if isPermanentOp(plan.Op) {
+		return permanentDeleteResult()
+	}
 	if !approve {
 		return jsonResult(map[string]any{
 			"confirmation": "declined",
@@ -56,6 +60,9 @@ func (s *Server) confirmAction(ctx context.Context, _ *mcp.CallToolRequest, args
 	}
 	if args.ViewerPID != 0 {
 		plan.ViewerPID = args.ViewerPID
+	}
+	if res, payload, err, blocked := s.blockedByCurrentPolicy(ctx, plan, args.PlanID); blocked {
+		return res, payload, err
 	}
 	return s.runConfirmed(ctx, plan)
 }
@@ -82,6 +89,7 @@ func (s *Server) gateConfirm(ctx context.Context, req *mcp.CallToolRequest, view
 		Op:        op,
 		Params:    params,
 		ViewerPID: viewerPID,
+		Class:     classForOp(apiName, op),
 		Message:   message,
 		Expires:   time.Now().Add(10 * time.Minute),
 	}
@@ -140,7 +148,37 @@ func (s *Server) finishConfirmElicitation(ctx context.Context, req *mcp.CallTool
 			"resume":       "Call confirm_action with this plan_id if you later approve it.",
 		})
 	}
+	if res, payload, err, blocked := s.blockedByCurrentPolicy(ctx, plan, state.PlanID); blocked {
+		return res, payload, err
+	}
 	return s.runConfirmed(ctx, plan)
+}
+
+func (s *Server) blockedByCurrentPolicy(ctx context.Context, plan storedPlan, planID string) (*mcp.CallToolResult, any, error, bool) {
+	class := plan.Class
+	if class == "" {
+		class = classForOp(plan.API, plan.Op)
+	}
+	if class == "" {
+		return nil, nil, nil, false
+	}
+	inst, api, errRes := s.resolve(plan.ViewerPID)
+	if errRes != nil {
+		return errRes, nil, nil, true
+	}
+	policy, err := s.loadPolicy(ctx, inst.PID, api)
+	if err != nil {
+		res, payload, callErr := apiError(err)
+		return res, payload, callErr, true
+	}
+	if policy.Present && policy.Level(class) == "deny" {
+		res, payload, callErr := errorResult("not_permitted", "This action is not allowed by the viewer permission settings", map[string]any{
+			"class":   class,
+			"plan_id": planID,
+		})
+		return res, payload, callErr, true
+	}
+	return nil, nil, nil, false
 }
 
 func (s *Server) prunePlansLocked() {

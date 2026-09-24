@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"fs-mcp/internal/discover"
 
@@ -330,6 +331,9 @@ func TestToolAnnotations(t *testing.T) {
 	if byName["inventory_confirm_copy"].Annotations.DestructiveHint == nil || !*byName["inventory_confirm_copy"].Annotations.DestructiveHint {
 		t.Fatal("confirm_copy should be destructive")
 	}
+	if byName["camera_snapshot"].Annotations.ReadOnlyHint {
+		t.Fatal("camera_snapshot is not read-only")
+	}
 }
 
 func TestNamedAPIRouting(t *testing.T) {
@@ -386,26 +390,60 @@ func TestWearSkipElicitationDecline(t *testing.T) {
 	}
 }
 
-func TestPurgeElicitationDecline(t *testing.T) {
-	api := &fakeAPI{}
+func TestPermanentDeleteNeverCallsViewer(t *testing.T) {
+	statuses := []json.RawMessage{
+		nil,
+		json.RawMessage(`{"logged_in":true}`),
+		json.RawMessage(`{"logged_in":true,"permissions":{"read":"allow","trash":"allow","move":"allow"},"policy_generation":1}`),
+		json.RawMessage(`{"logged_in":true,"permissions":{"purge":"allow","emptyTrash":"ask"},"policy_generation":4}`),
+	}
+	for i, status := range statuses {
+		api := &fakeAPI{status: status}
+		state := &Server{
+			Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+			NewClient: func(discover.Instance) API { return api },
+		}
+		cs := connect(t, state, &mcp.ClientOptions{
+			ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				t.Fatal("permanent delete elicited")
+				return nil, nil
+			},
+		})
+		for _, name := range []string{"inventory_purge", "inventory_empty_trash"} {
+			args := map[string]any{}
+			if name == "inventory_purge" {
+				args["id"] = "doomed"
+			}
+			res := call(t, cs, name, args)
+			if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+				t.Fatalf("status %d %s: %s", i, name, textOf(res))
+			}
+		}
+		if ops := api.opsCopy(); len(ops) != 0 {
+			t.Fatalf("status %d called the viewer: %v", i, ops)
+		}
+	}
+
+	api := &fakeAPI{status: json.RawMessage(`{"logged_in":true,"permissions":{"wear":"allow"},"policy_generation":1}`)}
 	state := &Server{
 		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
 		NewClient: func(discover.Instance) API { return api },
-	}
-	cs := connect(t, state, &mcp.ClientOptions{
-		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
+		plans: map[string]storedPlan{
+			"old-purge": {
+				API:     "LLInventory",
+				Op:      "purge",
+				Params:  map[string]any{"id": "doomed"},
+				Expires: time.Now().Add(time.Minute),
+			},
 		},
-	})
-	res := call(t, cs, "inventory_purge", map[string]any{"id": "doomed"})
-	if res.IsError {
-		t.Fatalf("purge: %s", textOf(res))
 	}
-	if !strings.Contains(textOf(res), "declined") || !strings.Contains(textOf(res), "plan_id") {
-		t.Fatalf("got %s", textOf(res))
+	cs := connect(t, state, nil)
+	res := call(t, cs, "confirm_action", map[string]any{"plan_id": "old-purge", "confirm": true})
+	if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+		t.Fatalf("resumed purge: %s", textOf(res))
 	}
-	if contains(api.opsCopy(), "LLInventory.purge") {
-		t.Fatal("purge ran after elicitation decline")
+	if len(api.opsCopy()) != 0 {
+		t.Fatalf("resumed purge called the viewer: %v", api.opsCopy())
 	}
 }
 
@@ -466,6 +504,224 @@ func TestCameraSnapshotReturnsImage(t *testing.T) {
 	default:
 		t.Fatalf("max_edge = %#v", maxEdge)
 	}
+}
+
+func TestDenyDoesNotCallTheAction(t *testing.T) {
+	api := &fakeAPI{status: policyStatus(1, map[string]string{"wear": "deny"})}
+	state := singleViewer(api)
+	cs := connect(t, state, nil)
+	res := call(t, cs, "appearance_wear_outfit", map[string]any{"folder_id": "outfit-1", "skip_elicitation": true})
+	if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+		t.Fatalf("deny: %s", textOf(res))
+	}
+	if contains(api.opsCopy(), "LLAppearance.wearOutfit") {
+		t.Fatalf("wear ran: %v", api.opsCopy())
+	}
+}
+
+func TestAskCallsViewerOnceWithoutPlan(t *testing.T) {
+	api := &fakeAPI{status: policyStatus(1, map[string]string{"wear": "ask"})}
+	state := singleViewer(api)
+	cs := connect(t, state, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			t.Fatal("ask elicited in the sidecar")
+			return nil, nil
+		},
+	})
+	res := call(t, cs, "appearance_wear_outfit", map[string]any{
+		"folder_id":        "outfit-1",
+		"skip_elicitation": true,
+	})
+	if res.IsError {
+		t.Fatalf("ask: %s", textOf(res))
+	}
+	if strings.Contains(textOf(res), "plan_id") {
+		t.Fatalf("ask returned a plan: %s", textOf(res))
+	}
+	if count(api.opsCopy(), "LLAppearance.wearOutfit") != 1 {
+		t.Fatalf("ops = %v", api.opsCopy())
+	}
+}
+
+func TestAllowDoesNotElicit(t *testing.T) {
+	api := &fakeAPI{status: policyStatus(1, map[string]string{"wear": "allow"})}
+	state := singleViewer(api)
+	cs := connect(t, state, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			t.Fatal("allow elicited")
+			return nil, nil
+		},
+	})
+	res := call(t, cs, "appearance_wear_outfit", map[string]any{"folder_id": "outfit-1"})
+	if res.IsError {
+		t.Fatalf("allow: %s", textOf(res))
+	}
+	if !contains(api.opsCopy(), "LLAppearance.wearOutfit") {
+		t.Fatalf("ops = %v", api.opsCopy())
+	}
+}
+
+func TestPolicyGenerationBumpRefreshes(t *testing.T) {
+	api := &fakeAPI{status: policyStatus(1, map[string]string{"move": "allow"})}
+	state := singleViewer(api)
+	cs := connect(t, state, nil)
+	first := call(t, cs, "inventory_move", map[string]any{"id": "item", "parent_id": "dest"})
+	if first.IsError {
+		t.Fatalf("allow move: %s", textOf(first))
+	}
+	api.mu.Lock()
+	api.status = policyStatus(2, map[string]string{"move": "deny"})
+	api.mu.Unlock()
+	second := call(t, cs, "inventory_move", map[string]any{"id": "item", "parent_id": "dest"})
+	if !second.IsError || !strings.Contains(textOf(second), "not_permitted") {
+		t.Fatalf("refreshed deny: %s", textOf(second))
+	}
+	if count(api.opsCopy(), "move") != 1 {
+		t.Fatalf("ops = %v", api.opsCopy())
+	}
+}
+
+func TestResumedPlanDenyDoesNotCallViewer(t *testing.T) {
+	api := &fakeAPI{}
+	state := singleViewer(api)
+	cs := connect(t, state, nil)
+	res := call(t, cs, "appearance_wear_outfit", map[string]any{
+		"folder_id":        "outfit-1",
+		"skip_elicitation": true,
+	})
+	if res.IsError {
+		t.Fatalf("plan: %s", textOf(res))
+	}
+	planID := planIDOf(t, res)
+	api.mu.Lock()
+	api.status = policyStatus(3, map[string]string{"wear": "deny"})
+	api.mu.Unlock()
+	resumed := call(t, cs, "confirm_action", map[string]any{"plan_id": planID, "confirm": true})
+	if !resumed.IsError || !strings.Contains(textOf(resumed), "not_permitted") {
+		t.Fatalf("resume: %s", textOf(resumed))
+	}
+	if contains(api.opsCopy(), "LLAppearance.wearOutfit") {
+		t.Fatalf("wear ran after deny: %v", api.opsCopy())
+	}
+}
+
+func TestTrashPermissionClasses(t *testing.T) {
+	for _, level := range []string{"allow", "ask"} {
+		api := &fakeAPI{status: policyStatus(1, map[string]string{"trash": level})}
+		cs := connect(t, singleViewer(api), &mcp.ClientOptions{
+			ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				t.Fatal("trash elicited in the sidecar")
+				return nil, nil
+			},
+		})
+		res := call(t, cs, "inventory_trash", map[string]any{"id": "item"})
+		if res.IsError {
+			t.Fatalf("trash %s: %s", level, textOf(res))
+		}
+		if strings.Contains(textOf(res), "plan_id") {
+			t.Fatalf("trash %s plan: %s", level, textOf(res))
+		}
+		if count(api.opsCopy(), "LLInventory.trash") != 1 {
+			t.Fatalf("trash %s ops = %v", level, api.opsCopy())
+		}
+	}
+	denied := &fakeAPI{status: policyStatus(1, map[string]string{"trash": "deny"})}
+	res := call(t, connect(t, singleViewer(denied), nil), "inventory_trash", map[string]any{"id": "item"})
+	if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+		t.Fatalf("trash deny: %s", textOf(res))
+	}
+	if contains(denied.opsCopy(), "LLInventory.trash") {
+		t.Fatal("trash ran when Never")
+	}
+}
+
+func TestRestoreFollowsMoveNotTrash(t *testing.T) {
+	trashDenied := &fakeAPI{status: policyStatus(1, map[string]string{"trash": "deny", "move": "allow"})}
+	ok := call(t, connect(t, singleViewer(trashDenied), nil), "inventory_restore", map[string]any{"id": "item"})
+	if ok.IsError {
+		t.Fatalf("restore while trash is Never: %s", textOf(ok))
+	}
+	if !contains(trashDenied.opsCopy(), "LLInventory.restore") {
+		t.Fatalf("ops = %v", trashDenied.opsCopy())
+	}
+	moveDenied := &fakeAPI{status: policyStatus(1, map[string]string{"trash": "allow", "move": "deny"})}
+	blocked := call(t, connect(t, singleViewer(moveDenied), nil), "inventory_restore", map[string]any{"id": "item"})
+	if !blocked.IsError || !strings.Contains(textOf(blocked), "not_permitted") {
+		t.Fatalf("restore while move is Never: %s", textOf(blocked))
+	}
+	if contains(moveDenied.opsCopy(), "LLInventory.restore") {
+		t.Fatal("restore ran when Move and copy is Never")
+	}
+}
+
+func TestCopyPathsForCurrentAndOlderViewers(t *testing.T) {
+	needs := json.RawMessage(`{"status":"confirmation_required","plan_id":"plan-new","proposed_moves":[{"source_id":"u1"}]}`)
+	denied := &fakeAPI{
+		status:  policyStatus(1, map[string]string{"move": "allow", "nocopy": "deny"}),
+		copy:    needs,
+		confirm: json.RawMessage(`{"status":"ok"}`),
+	}
+	res := call(t, connect(t, singleViewer(denied), nil), "inventory_copy", map[string]any{"id": "src", "parent_id": "dst", "skip_elicitation": true})
+	if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+		t.Fatalf("nocopy deny: %s", textOf(res))
+	}
+	if !contains(denied.opsCopy(), "copy") || contains(denied.opsCopy(), "confirmCopy") {
+		t.Fatalf("ops = %v", denied.opsCopy())
+	}
+
+	for _, level := range []string{"ask", "allow"} {
+		api := &fakeAPI{
+			status:  policyStatus(1, map[string]string{"move": "allow", "nocopy": level}),
+			copy:    needs,
+			confirm: json.RawMessage(`{"status":"ok","moved":["u1"]}`),
+		}
+		cs := connect(t, singleViewer(api), &mcp.ClientOptions{
+			ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				t.Fatal("current viewer elicited")
+				return nil, nil
+			},
+		})
+		got := call(t, cs, "inventory_copy", map[string]any{"id": "src", "parent_id": "dst", "skip_elicitation": true})
+		if got.IsError {
+			t.Fatalf("nocopy %s: %s", level, textOf(got))
+		}
+		if strings.Contains(textOf(got), "plan_id") || strings.Contains(textOf(got), "plan-new") {
+			t.Fatalf("nocopy %s returned a plan: %s", level, textOf(got))
+		}
+		if count(api.opsCopy(), "copy") != 1 || count(api.opsCopy(), "confirmCopy") != 1 {
+			t.Fatalf("nocopy %s ops = %v", level, api.opsCopy())
+		}
+	}
+}
+
+func singleViewer(api API) *Server {
+	return &Server{
+		Find:      func() ([]discover.Instance, error) { return []discover.Instance{testInstance(1)}, nil },
+		NewClient: func(discover.Instance) API { return api },
+	}
+}
+
+func policyStatus(generation int, levels map[string]string) json.RawMessage {
+	payload := map[string]any{
+		"logged_in":         true,
+		"permissions":       levels,
+		"policy_generation": generation,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
+	}
+	return raw
+}
+
+func count(list []string, want string) int {
+	n := 0
+	for _, v := range list {
+		if v == want {
+			n++
+		}
+	}
+	return n
 }
 
 func planIDOf(t *testing.T, res *mcp.CallToolResult) string {

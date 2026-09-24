@@ -21,17 +21,17 @@ Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo 
 
 ## The local assistant bridge
 
-The bridge lets an MCP client on this computer read and change inventory, change your outfit, move the camera, and take a picture. It does not teleport, chat, or reach the Marketplace. It does not run unless you ask for it, and the choice is not remembered.
+The bridge lets an MCP client on this computer read and change inventory, change your outfit, move the camera, and take a picture. It does not teleport, chat, or reach the Marketplace. It stays off until you turn it on.
 
-### 1. Start the viewer with the bridge
+### 1. Turn the bridge on
 
-```text
---mcp-api
-```
+Open **Preferences → Privacy → General** and enable **Local assistant**. That choice is saved. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
 
-On Windows, add that to the shortcut target after the executable. On macOS and Linux, pass it on the command line.
+`--mcp-api` still forces the bridge on for that one session. It does not save the preference. Quit and the next launch follows the saved checkbox.
 
-After startup the viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. Log in and wait until inventory has loaded before asking the assistant to use it. Quit the viewer and the file is deleted. The next launch needs `--mcp-api` again.
+Turning the switch off deletes the discovery file and rejects requests. After the first enable in a session, the port stays bound until you quit. Enabling it again keeps that port and writes a new token. Quit deletes the file.
+
+The discovery file is a bearer secret. Another program running as this user can read it while the switch is on. Leave it on disk for the sidecar, and do not paste it into chat, tickets, or a remote machine.
 
 | OS | Discovery file directory |
 | --- | --- |
@@ -145,7 +145,7 @@ A project file `.codex/config.toml` is loaded only when that project is trusted.
 - One command, no arguments, stdio transport.
 - The same tool names and arguments.
 - `FIRESTORM_MCP_DISCOVERY` only when settings were moved, and the same path on every client.
-- If the client can show an MCP confirmation form, answer it there. If it cannot, the tool returns a `plan_id` and tells you which follow-up tool to call. That fallback is the normal path on clients that do not advertise elicitation.
+- Ask is a dialog in the viewer. The tool call stays in flight until you answer, or for 60 seconds, and then it is denied. A client that auto-approves `confirm_action` does not skip that dialog.
 
 ## Asking for something
 
@@ -158,9 +158,11 @@ Then, in ordinary language:
 - "Make a folder called Studio shots in Textures and move these two textures into it." Use UUIDs when two items share a name. Ask the assistant to resolve the path and show you the matches before it moves anything.
 - "Wear the outfit named Portrait, then wait until the outfit is no longer dirty, frame a portrait, and take a picture with the HUD hidden."
 
-Wear, detach, replacing links, emptying Trash, and permanent delete stop for confirmation. A no-copy copy copies the copyable pieces first, then stops and lists the unique items that would have to move. Approving that step removes them from the original folder. Declining leaves the copyable copy where it is and leaves the originals alone.
+Wear, detach, replacing links, and moving no-copy items during a copy ask in the viewer unless that permission is Allow. A no-copy copy copies the copyable pieces first. Allow on that row moves the unique items out of the source with no dialog. Ask waits for the viewer dialog. Never leaves those unique items in the source.
 
-Moving one object to Trash is reversible with restore. Empty Trash and purge are not.
+Trash is its own permission, default Allow, and the preference says Trash can be restored. Restore follows Move and copy, so Ask or Never on Trash does not block it. Permanent delete is not possible. The bridge hard-denies purge and empty Trash. There is no Ask and no preference row that can enable them. A hand-edited setting cannot turn them on. Those tools fail immediately, with no dialog.
+
+If an older viewer has no permission list, wear, detach, link replacement, and no-copy copies still use the sidecar confirmation. `confirm_action` and `inventory_confirm_copy` are that older path. Purge and empty Trash fail on those viewers too.
 
 Baking continues after a wear call returns. Take the snapshot after `appearance_worn` reports the outfit is clean, or the picture can show the previous outfit.
 
@@ -170,7 +172,7 @@ If two viewers are open, say which one, or ask for the process list and pick a p
 
 ## When it does not connect
 
-- The viewer was started without `--mcp-api`. Quit and relaunch with the flag. There is no preference that keeps it on.
+- The local assistant switch is off. Turn it on under **Preferences → Privacy → General**. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
 - `FIRESTORM_MCP_DISCOVERY` is set and points somewhere other than this viewer's `user_settings` directory. That variable replaces the default search. Unset it, or point it at the Folderstorm directory from the table above.
 - Inventory is still downloading. `viewer_status` shows fetch progress. Wait until `usable` is true.
 - The binary path in the client config is relative, or it is the Go source directory instead of the built `fs-mcp` file.

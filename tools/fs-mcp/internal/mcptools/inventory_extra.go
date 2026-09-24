@@ -24,12 +24,12 @@ func registerInventoryExtra(s *mcp.Server, state *Server, readOnly, mutating, de
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_create_item", Description: "Create a notecard, script, gesture, material, settings item, clothing, body part, or a landmark of the current location.", Annotations: withTitle(mutating, "Create inventory item")}, state.inventoryCreateItem)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_batch_move", Description: "Move up to 50 objects into one folder. Returns a per-item result.", Annotations: withTitle(destructive, "Batch move")}, state.inventoryBatchMove)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_batch_rename", Description: "Rename up to 50 objects. Returns a per-item result.", Annotations: withTitle(mutating, "Batch rename")}, state.inventoryBatchRename)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_batch_copy", Description: "Copy up to 50 items. No-copy items return a plan_id for inventory_confirm_copy. Folders use inventory_copy.", Annotations: withTitle(destructive, "Batch copy")}, state.inventoryBatchCopy)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_trash", Description: "Move an object into Trash. This can be restored.", Annotations: withTitle(destructive, "Move to trash")}, state.inventoryTrash)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_restore", Description: "Move an object out of Trash into its type folder.", Annotations: withTitle(mutating, "Restore from trash")}, state.inventoryRestore)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_replace_links", Description: "Point every link that targets source_id at target_id, and move the old links to Trash. Requires confirmation.", Annotations: withTitle(destructive, "Replace links")}, state.inventoryReplaceLinks)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_empty_trash", Description: "Permanently empty Trash. Requires confirmation.", Annotations: withTitle(destructive, "Empty trash")}, state.inventoryEmptyTrash)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_purge", Description: "Permanently delete one object. Requires confirmation.", Annotations: withTitle(destructive, "Purge inventory object")}, state.inventoryPurge)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_batch_copy", Description: "Copy up to 50 items. Copyable items follow Move and copy. Unique no-copy items follow Move no-copy items during a copy. On an older viewer, no-copy items return a plan_id for inventory_confirm_copy. Folders use inventory_copy.", Annotations: withTitle(destructive, "Batch copy")}, state.inventoryBatchCopy)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_trash", Description: "Move an object into Trash. Trash is its own permission, default Allow, and the item can be restored.", Annotations: withTitle(destructive, "Move to trash")}, state.inventoryTrash)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_restore", Description: "Move an object out of Trash into its type folder. Follows Move and copy, not Trash.", Annotations: withTitle(mutating, "Restore from trash")}, state.inventoryRestore)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_replace_links", Description: "Point every link that targets source_id at target_id, and move the old links to Trash. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.", Annotations: withTitle(destructive, "Replace links")}, state.inventoryReplaceLinks)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_empty_trash", Description: "Permanently empty Trash. This is not available. The viewer bridge denies emptyTrash, and no setting can enable it.", Annotations: withTitle(destructive, "Empty trash")}, state.inventoryEmptyTrash)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_purge", Description: "Permanently delete one object. This is not available. The viewer bridge denies purge, and no setting can enable it.", Annotations: withTitle(destructive, "Purge inventory object")}, state.inventoryPurge)
 }
 
 type idsArgs struct {
@@ -262,31 +262,43 @@ func (s *Server) inventoryReplaceLinks(ctx context.Context, req *mcp.CallToolReq
 	if args.SourceID == "" || args.TargetID == "" {
 		return errorResult("invalid_args", "source_id and target_id are required", nil)
 	}
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.DefaultAPI, "replaceLinks",
+	return s.callOrConfirm(ctx, req, args.ViewerPID, viewerapi.ClassLinks, viewerapi.DefaultAPI, "replaceLinks",
 		map[string]any{"source_id": args.SourceID, "target_id": args.TargetID},
 		"Replacing links creates new links to the target and moves the old links into Trash.",
 		args.SkipElicitation)
 }
 
-func (s *Server) inventoryEmptyTrash(ctx context.Context, req *mcp.CallToolRequest, args wearOutfitArgs) (*mcp.CallToolResult, any, error) {
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.DefaultAPI, "emptyTrash", map[string]any{},
-		"Emptying Trash permanently deletes everything in it.", args.SkipElicitation)
+func (s *Server) inventoryEmptyTrash(context.Context, *mcp.CallToolRequest, wearOutfitArgs) (*mcp.CallToolResult, any, error) {
+	return permanentDeleteResult()
 }
 
-func (s *Server) inventoryPurge(ctx context.Context, req *mcp.CallToolRequest, args purgeArgs) (*mcp.CallToolResult, any, error) {
+func (s *Server) inventoryPurge(_ context.Context, _ *mcp.CallToolRequest, args purgeArgs) (*mcp.CallToolResult, any, error) {
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
-	return s.gateConfirm(ctx, req, args.ViewerPID, viewerapi.DefaultAPI, "purge",
-		map[string]any{"id": args.ID},
-		"Purging permanently deletes this inventory object.",
-		args.SkipElicitation)
+	return permanentDeleteResult()
 }
 
 func (s *Server) named(ctx context.Context, viewerPID int, apiName, op string, params map[string]any) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(viewerPID)
+	if isPermanentOp(op) {
+		return permanentDeleteResult()
+	}
+	class := classForOp(apiName, op)
+	if class == "" {
+		return errorResult("not_permitted", "Event API operation is not classified for the local MCP bridge", map[string]any{
+			"op": op,
+		})
+	}
+	api, policy, errRes := s.openClass(ctx, viewerPID, class)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
-	return apiResult(api.CallNamed(ctx, apiName, op, params))
+	raw, err := api.CallNamed(ctx, apiName, op, params)
+	if err != nil {
+		return apiError(err)
+	}
+	if op == "copy" || op == "batchCopy" {
+		return s.finishCopy(ctx, nil, api, policy, viewerPID, raw, true)
+	}
+	return apiResult(raw, nil)
 }

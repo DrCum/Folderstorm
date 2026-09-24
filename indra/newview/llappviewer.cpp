@@ -1446,9 +1446,26 @@ bool LLAppViewer::init()
 
     // Create IO Pump to use for HTTP Requests.
     gServicePump = new LLPumpIO(gAPRPoolp);
+    FSEventAPIBridge::instance().setPump(*gServicePump);
     if (gSavedSettings.getBOOL("EnableLocalEventAPIBridge"))
     {
         FSEventAPIBridge::instance().start(*gServicePump);
+    }
+    // Connected only after the pump exists. The command line applies earlier
+    // and must not start the listener through this signal.
+    if (LLControlVariable* bridge_control = gSavedSettings.getControl("EnableLocalEventAPIBridge"))
+    {
+        bridge_control->getSignal()->connect([](LLControlVariable*, const LLSD& value, const LLSD&)
+        {
+            FSEventAPIBridge::instance().applyEnabled(value.asBoolean());
+        });
+    }
+    if (LLControlVariable* permission_control = gSavedSettings.getControl("LocalEventAPIPermissionClasses"))
+    {
+        permission_control->getSignal()->connect([](LLControlVariable*, const LLSD&, const LLSD&)
+        {
+            FSEventAPIBridge::notePermissionClassesChanged();
+        });
     }
 
     // Note: this is where gLocalSpeakerMgr and gActiveSpeakerMgr used to be instantiated.
