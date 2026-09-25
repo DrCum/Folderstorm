@@ -2,7 +2,7 @@
 
 `fs-mcp` is a local stdio [MCP](https://modelcontextprotocol.io) server. It turns tool calls from Cursor, Codex, Claude Code, or any other MCP client into the Folderstorm viewer's loopback Event API.
 
-The viewer does not link or build this program. It is a separate Go module in `tools/fs-mcp`. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
+The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
 Client setup for Cursor, Codex, and Claude Code is in [doc/help.md](../../doc/help.md).
 
@@ -35,7 +35,7 @@ Restrained Love locks are honored. A locked wearable, attachment, or folder retu
 
 ## Build
 
-Requires Go 1.25 or newer.
+A packaged installer already includes this binary next to the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer.
 
 ```bash
 cd tools/fs-mcp

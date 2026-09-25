@@ -69,9 +69,13 @@ The discovery file is a bearer secret. Another program running as this user can 
 
 On Linux you can point the viewer at another directory with `FOLDERSTORM_X64_USER_DIR`.
 
-### 2. Build the sidecar
+### 2. Point a client at the sidecar
 
-Install Go 1.25 or newer, then:
+A packaged installer already includes `fs-mcp` in the same folder as `migrate-settings`. On Windows that file is `fs-mcp.exe`, next to the viewer. A Velopack install of the Release channel puts it at `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`. The legacy NSIS installer puts it at `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`. On Linux it is `fs-mcp` next to `install.sh`. On macOS it is `Folderstorm.app/Contents/Resources/fs-mcp`.
+
+Use that absolute path in the client config below. The viewer does not start the sidecar, and the installer does not write an MCP config into Cursor or any other app. The local assistant stays off until you enable it.
+
+To build the binary yourself instead, install Go 1.25 or newer, then:
 
 ```bash
 cd tools/fs-mcp

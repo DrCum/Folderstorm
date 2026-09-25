@@ -25,7 +25,7 @@ XCode is a free download from Apple but you will need an Apple ID to login and a
 
 ### Go
 
-The settings migrator is built with the viewer. Install Go 1.22 or newer and make sure `go` is on `PATH` before configuring the build.
+The settings migrator and the MCP sidecar (`fs-mcp`) are built with the viewer and copied into `Folderstorm.app/Contents/Resources`. Install Go 1.25 or newer and make sure `go` is on `PATH` before configuring the build. The viewer does not start `fs-mcp`. See [building-from-source.md](building-from-source.md).
 
 ### CMake
 - Download [CMake](http://www.cmake.org/download) version 4.1.1 or higher

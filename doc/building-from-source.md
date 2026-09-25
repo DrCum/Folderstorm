@@ -1,6 +1,10 @@
 # Building Folderstorm from source
 
-These are three separate builds. Do them in this order: the viewer, then the MCP sidecar, then the settings migrator. Building one does not build the others. The viewer CMake rules also compile `tools/migrate-settings` into the viewer package so the installer can ship that program. That step is Go, not Python, and it does not build `tools/fs-mcp`.
+The viewer build compiles `tools/migrate-settings` and `tools/fs-mcp` and the installer copies both into the install folder, next to the viewer. `fs-mcp` is `fs-mcp.exe` on Windows. The viewer does not start it. The local assistant stays off until it is enabled in Preferences. The installer does not write an MCP config into Cursor or another app. Point the client at the installed binary. See [help.md](help.md).
+
+On Windows, a Velopack install of the Release channel puts the sidecar at `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`, in the same directory as the viewer executable. The legacy NSIS installer puts it at `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`. On Linux the file is `fs-mcp`, next to `install.sh`. On macOS it is `Folderstorm.app/Contents/Resources/fs-mcp`.
+
+You can still test the two Go modules on their own. Those commands do not replace the copies in the viewer package.
 
 The viewer uses the bootstrap from this repo. `scripts/bootstrap-autobuild.cmd` and `scripts/bootstrap-autobuild.sh` create `.venv`, install `requirements.txt`, put that venv's `autobuild` on `PATH`, and set `AUTOBUILD_VARIABLES_FILE` to `fs-build-variables/variables`. `scripts/configure_firestorm.sh` uses that same path when the variable is unset. On Windows, the cmd script sets `AUTOBUILD_VSVER=170` only when both Visual Studio 2022 and Visual Studio 2026 are installed.
 
@@ -9,7 +13,7 @@ The viewer uses the bootstrap from this repo. `scripts/bootstrap-autobuild.cmd` 
 Copy this to an agent. It should run the commands below and not invent environment variables, paths, or extra configure flags.
 
 ```
-Build three separate Folderstorm artifacts, in this order. Do not treat one build as producing the other two. Do not invent environment variables.
+Build the Folderstorm viewer package. That package includes migrate-settings and fs-mcp next to the viewer. Then test the two Go modules on their own if you are checking them. Do not invent environment variables. Do not treat a standalone go build as a substitute for the packaged copy.
 
 Checkout: the Folderstorm repo root (the directory that contains autobuild.xml, scripts/bootstrap-autobuild.cmd, scripts/bootstrap-autobuild.sh, and fs-build-variables/variables).
 
@@ -37,7 +41,9 @@ On Linux, autobuild.xml's ReleaseFS_open_AVX2 configure and build options alread
 
 ReleaseFS_open_AVX2 is the open AVX2 target (no Kakadu, no FMOD). Do not configure ReleaseFS_AVX2. AVX2 binaries do not run on a CPU without AVX2.
 
-2. MCP sidecar. Separate Go module. The viewer does not build it. From tools/fs-mcp, with Go 1.25 or newer:
+Viewer configure runs CGO_ENABLED=0 go build for tools/migrate-settings and tools/fs-mcp. The package copies both next to the viewer (fs-mcp.exe on Windows). The viewer does not start fs-mcp. A client still has to be pointed at that file.
+
+2. MCP sidecar tests. Separate Go module, already compiled into the viewer package. From tools/fs-mcp, with Go 1.25 or newer:
 
   go test ./...
   go vet ./...
@@ -46,7 +52,7 @@ ReleaseFS_open_AVX2 is the open AVX2 target (no Kakadu, no FMOD). Do not configu
 On Windows the output name in tools/fs-mcp/README.md is fs-mcp.exe:
   go build -o fs-mcp.exe ./cmd/fs-mcp
 
-3. Settings migrator. Separate Go module. Not Python. From tools/migrate-settings (this is the command in .github/workflows/migrate-settings.yml):
+3. Settings migrator tests. Separate Go module, already compiled into the viewer package. Not Python. From tools/migrate-settings (this is the command in .github/workflows/migrate-settings.yml):
 
   go test ./...
   go vet ./...
@@ -57,7 +63,7 @@ Do not point AUTOBUILD_VARIABLES_FILE at a sibling checkout. Do not pip install 
 
 ## Quick guide
 
-Three separate builds, in this order.
+Build the viewer package first. It includes both Go programs. The standalone commands below only test those modules.
 
 ### 1. Viewer (`ReleaseFS_open_AVX2`, with the installer)
 
@@ -81,7 +87,7 @@ autobuild build -A 64 -c ReleaseFS_open_AVX2
 
 ### 2. MCP sidecar (`tools/fs-mcp`)
 
-Go 1.25 or newer. Not part of the viewer build.
+Go 1.25 or newer. The viewer package already includes this binary next to the viewer. These commands test the module on their own.
 
 ```
 cd tools/fs-mcp
@@ -94,7 +100,7 @@ Windows output name: `go build -o fs-mcp.exe ./cmd/fs-mcp`.
 
 ### 3. Settings migrator (`tools/migrate-settings`)
 
-Go, not Python. Not the MCP build.
+Go, not Python. The viewer package already includes this binary. These commands test the module on their own.
 
 ```
 cd tools/migrate-settings
@@ -105,7 +111,7 @@ go build -o migrate-settings .
 
 ## Handhold guide
 
-You are producing three programs. They stay separate. Finish the viewer before the sidecar, and the sidecar before the migrator. A failure in one does not mean you should rerun the others with different flags.
+The viewer package includes the two Go programs beside the viewer. Finish the viewer first. Standalone `go test` for the sidecar and the migrator checks those modules and does not replace the packaged copies. A failure in one does not mean you should rerun the others with different flags.
 
 One-time tools, already written up in the OS docs:
 
@@ -116,7 +122,7 @@ One-time tools, already written up in the OS docs:
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev libpulse-dev build-essential python3-pip git libssl-dev libxinerama-dev libxrandr-dev libfontconfig-dev libfreetype6-dev gcc-11 cmake
 ```
 
-Go has to be on `PATH` before the viewer configure. `indra/newview/CMakeLists.txt` stops with `Go 1.22 or newer is required to build migrate-settings` when `go` is missing. `tools/fs-mcp/go.mod` says `go 1.25.0`, and `tools/fs-mcp/README.md` says Go 1.25 or newer. Install Go 1.25 or newer once and use it for all three.
+Go has to be on `PATH` before the viewer configure. `indra/newview/CMakeLists.txt` stops with `Go 1.25 or newer is required to build migrate-settings and fs-mcp` when `go` is missing. `tools/fs-mcp/go.mod` says `go 1.25.0`, and `tools/fs-mcp/README.md` says Go 1.25 or newer. Install Go 1.25 or newer once and use it for the viewer and for the standalone Go commands.
 
 ### Known machine setup
 
@@ -162,14 +168,14 @@ The first configure downloads third-party libraries. `doc/building_windows.md` n
 
 What success looks like: the build command exits 0. `configure_firestorm.sh` prints `finished` when its own build step succeeds.
 
-- Linux: a ready-to-run tree at `build-linux-x86_64/newview/packaged`, which is the directory `doc/building_linux.md` tells you to copy. `install.sh` is placed at the root of that package (`viewer_manifest.py` copies `linux_tools/install.sh`). For a Release build the archive name is `Phoenix-<app>_AVX2-<version>.tar.xz` (`fs_installer_basename` in `indra/newview/fs_viewer_manifest.py`, then `package_file = installer_name + '.tar.xz'`). The Linux doc copies `build-linux-x86_64/newview/Phoenix*.tar.*`.
-- Windows: NSIS writes `Phoenix-<app>_AVX2-<version>_Setup.exe` (`fs_installer_basename` plus `_Setup.exe`) into the newview destination under `build-vc170-64` when `AUTOBUILD_VSVER` is 170. The Visual Studio generator is multi-config, so that destination includes the `Release` folder.
+- Linux: a ready-to-run tree at `build-linux-x86_64/newview/packaged`, which is the directory `doc/building_linux.md` tells you to copy. `install.sh` is placed at the root of that package (`viewer_manifest.py` copies `linux_tools/install.sh`). `fs-mcp` is copied next to `install.sh`, beside `migrate-settings`. For a Release build the archive name is `Phoenix-<app>_AVX2-<version>.tar.xz` (`fs_installer_basename` in `indra/newview/fs_viewer_manifest.py`, then `package_file = installer_name + '.tar.xz'`). The Linux doc copies `build-linux-x86_64/newview/Phoenix*.tar.*`.
+- Windows: NSIS writes `Phoenix-<app>_AVX2-<version>_Setup.exe` (`fs_installer_basename` plus `_Setup.exe`) into the newview destination under `build-vc170-64` when `AUTOBUILD_VSVER` is 170. The Visual Studio generator is multi-config, so that destination includes the `Release` folder. `fs-mcp.exe` is in that install folder next to the viewer.
 
-Viewer configure also runs `CGO_ENABLED=0 go build` in `tools/migrate-settings` and expects `go` on `PATH`. That copy is for the installer. It is not the MCP sidecar, and it is not a Python program.
+Viewer configure also runs `CGO_ENABLED=0 go build` in `tools/migrate-settings` and `tools/fs-mcp` and expects `go` on `PATH`. Both copies are for the installer. The viewer does not start `fs-mcp`.
 
 ### 2. MCP sidecar
 
-`tools/fs-mcp/README.md` says the viewer does not link or build this program. Leave the Autobuild variables alone; this build does not read them.
+The packaged installer already includes this binary next to the viewer. A client still has to be pointed at that file. Leave the Autobuild variables alone; this standalone build does not read them.
 
 ```
 cd tools/fs-mcp
@@ -180,11 +186,11 @@ go build -o fs-mcp ./cmd/fs-mcp
 
 On Windows use `go build -o fs-mcp.exe ./cmd/fs-mcp`.
 
-What success looks like: `go test` and `go vet` exit 0, and `tools/fs-mcp/fs-mcp` exists (`fs-mcp.exe` on Windows). The sidecar talks MCP on stdin and stdout. It is not the viewer executable.
+What success looks like: `go test` and `go vet` exit 0, and `tools/fs-mcp/fs-mcp` exists (`fs-mcp.exe` on Windows). The sidecar talks MCP on stdin and stdout. The viewer does not launch it.
 
 ### 3. Settings migrator
 
-`tools/migrate-settings` is a Go program. There is no Python build for it. The workflow `.github/workflows/migrate-settings.yml` builds it on its own:
+`tools/migrate-settings` is a Go program. There is no Python build for it. The workflow `.github/workflows/migrate-settings.yml` builds it on its own, and the viewer package build does too:
 
 ```
 cd tools/migrate-settings

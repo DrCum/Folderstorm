@@ -2316,11 +2316,12 @@ else (OPENSIM)
   set(ND_VIEWER_FLAVOR "hvk")
 endif (OPENSIM)
 
-# Firestorm -> Folderstorm settings copy. Built with the viewer so the
-# installers can run it without Python.
+# Go programs shipped next to the viewer. migrate-settings is what the
+# installers run. fs-mcp is the local MCP sidecar: the package includes the
+# binary, and the viewer does not start it.
 find_program(GO_EXECUTABLE go)
 if(NOT GO_EXECUTABLE)
-  message(FATAL_ERROR "Go 1.22 or newer is required to build migrate-settings. Install Go and re-run CMake.")
+  message(FATAL_ERROR "Go 1.25 or newer is required to build migrate-settings and fs-mcp. Install Go and re-run CMake.")
 endif()
 set(MIGRATE_SETTINGS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/migrate-settings${CMAKE_EXECUTABLE_SUFFIX}")
 add_custom_command(
@@ -2338,6 +2339,36 @@ add_custom_command(
   VERBATIM
 )
 add_custom_target(migrate-settings ALL DEPENDS "${MIGRATE_SETTINGS_OUTPUT}")
+
+set(FS_MCP_DIR "${CMAKE_SOURCE_DIR}/../tools/fs-mcp")
+set(FS_MCP_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/fs-mcp${CMAKE_EXECUTABLE_SUFFIX}")
+add_custom_command(
+  OUTPUT "${FS_MCP_OUTPUT}"
+  COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
+          "${GO_EXECUTABLE}" build -o "${FS_MCP_OUTPUT}" ./cmd/fs-mcp
+  WORKING_DIRECTORY "${FS_MCP_DIR}"
+  DEPENDS
+    "${FS_MCP_DIR}/go.mod"
+    "${FS_MCP_DIR}/go.sum"
+    "${FS_MCP_DIR}/cmd/fs-mcp/main.go"
+    "${FS_MCP_DIR}/internal/discover/discover.go"
+    "${FS_MCP_DIR}/internal/discover/pid_other.go"
+    "${FS_MCP_DIR}/internal/discover/pid_unix.go"
+    "${FS_MCP_DIR}/internal/discover/pid_windows.go"
+    "${FS_MCP_DIR}/internal/mcptools/appearance.go"
+    "${FS_MCP_DIR}/internal/mcptools/camera.go"
+    "${FS_MCP_DIR}/internal/mcptools/confirm.go"
+    "${FS_MCP_DIR}/internal/mcptools/errors.go"
+    "${FS_MCP_DIR}/internal/mcptools/inventory_extra.go"
+    "${FS_MCP_DIR}/internal/mcptools/policy.go"
+    "${FS_MCP_DIR}/internal/mcptools/server.go"
+    "${FS_MCP_DIR}/internal/viewerapi/client.go"
+    "${FS_MCP_DIR}/internal/viewerapi/ops.go"
+    "${FS_MCP_DIR}/internal/viewerapi/policy.go"
+  COMMENT "Building fs-mcp"
+  VERBATIM
+)
+add_custom_target(fs-mcp ALL DEPENDS "${FS_MCP_OUTPUT}")
 
 if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
@@ -2381,6 +2412,7 @@ if (WINDOWS)
       media_plugin_libvlc
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       "${MIGRATE_SETTINGS_OUTPUT}"
+      "${FS_MCP_OUTPUT}"
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
@@ -2755,6 +2787,7 @@ if (LINUX)
     llcommon
     linux-crash-logger
     "${MIGRATE_SETTINGS_OUTPUT}"
+    "${FS_MCP_OUTPUT}"
     )
 
   add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_gstreamer10 media_plugin_cef linux-crash-logger)
@@ -3212,9 +3245,9 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
-  add_dependencies(copy_w_viewer_manifest migrate-settings)
+  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp)
 endif()
 if(TARGET copy_l_viewer_manifest)
-  add_dependencies(copy_l_viewer_manifest migrate-settings)
+  add_dependencies(copy_l_viewer_manifest migrate-settings fs-mcp)
 endif()
-add_dependencies(${VIEWER_BINARY_NAME} migrate-settings)
+add_dependencies(${VIEWER_BINARY_NAME} migrate-settings fs-mcp)
