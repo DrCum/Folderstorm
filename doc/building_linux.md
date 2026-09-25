@@ -43,7 +43,7 @@ A few packages must be installed on the build system. Some may already be instal
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev libpulse-dev build-essential python3-pip git libssl-dev libxinerama-dev libxrandr-dev libfontconfig-dev libfreetype6-dev gcc-11 cmake
 ```
 
-The settings migrator (`migrate-settings`) is a small Go program built with the viewer and shipped in the Linux package. Install Go 1.22 or newer and make sure `go` is on `PATH` before configuring the build.
+The settings migrator (`migrate-settings`) and the MCP sidecar (`fs-mcp`) are small Go programs built with the viewer and shipped in the Linux package, next to `install.sh`. Install Go 1.25 or newer and make sure `go` is on `PATH` before configuring the build. The viewer does not start `fs-mcp`. See [building-from-source.md](building-from-source.md).
 
 ### Optional: Set up a Python virtual environment
 

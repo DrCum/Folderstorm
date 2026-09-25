@@ -121,7 +121,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: tools/migrate-settings/go.mod
+          go-version-file: tools/fs-mcp/go.mod
+          cache-dependency-path: tools/fs-mcp/go.sum
       - name: Checkout build variables
         uses: actions/checkout@v7
         with:

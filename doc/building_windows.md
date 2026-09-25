@@ -33,7 +33,7 @@ All installations are done with default settings (unless told explicitly) - if y
 
 ### Go
 
-The settings migrator is built with the viewer. Install [Go 1.22 or newer](https://go.dev/dl/) and make sure `go` is on `PATH` before configuring the build.
+The settings migrator and the MCP sidecar (`fs-mcp.exe`) are built with the viewer and copied into the install folder next to the viewer. Install [Go 1.25 or newer](https://go.dev/dl/) and make sure `go` is on `PATH` before configuring the build. The viewer does not start `fs-mcp`. See [building-from-source.md](building-from-source.md).
 
 ### Git
 
