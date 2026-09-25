@@ -269,6 +269,11 @@ public:
 
     // Window in scaled pixels (via UI scale), use for most UI computations
     LLRect          getWindowRectScaled() const     { return mWindowRectScaled; }
+
+    // Scaled UI rect used to place the login screen and login-time modals.
+    // When the saved world viewport is enabled and its combined inset is a
+    // real slice of the window, this is that slice. Otherwise the full window.
+    LLRect          getLoginPlacementRect() const;
     S32             getWindowHeightScaled() const;
     S32             getWindowWidthScaled() const;
 

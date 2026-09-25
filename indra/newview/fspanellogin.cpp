@@ -499,14 +499,77 @@ void FSPanelLogin::showLoginWidgets()
 }
 
 // static
+void FSPanelLogin::applyLoginViewport()
+{
+    if (!gViewerWindow || LLStartUp::getStartupState() >= STATE_STARTED)
+    {
+        return;
+    }
+
+    LLView* holder = gViewerWindow->getLoginPanelHolder();
+    LLView* parent = holder ? holder->getParent() : nullptr;
+    if (!holder || !parent)
+    {
+        return;
+    }
+
+    // Placement is in scaled window coordinates. The holder lives in the
+    // world panel, under the menu bar, so convert and stay inside that parent.
+    // The rest of the window keeps its normal background.
+    const LLRect placement = gViewerWindow->getLoginPlacementRect();
+    LLRect local_rect;
+    parent->screenRectToLocal(placement, &local_rect);
+    local_rect.intersectWith(parent->getLocalRect());
+    if (local_rect.isEmpty())
+    {
+        local_rect = parent->getLocalRect();
+    }
+
+    const LLRect& parent_rect = parent->getLocalRect();
+    const bool covers_parent =
+        local_rect.mLeft == parent_rect.mLeft &&
+        local_rect.mRight == parent_rect.mRight &&
+        local_rect.mBottom == parent_rect.mBottom &&
+        local_rect.mTop == parent_rect.mTop;
+    if (covers_parent)
+    {
+        holder->setFollowsAll();
+    }
+    else
+    {
+        holder->setFollowsNone();
+    }
+    holder->setShape(local_rect);
+
+    if (sInstance)
+    {
+        sInstance->setShape(holder->getLocalRect());
+    }
+}
+
+// static
 void FSPanelLogin::show(const LLRect &rect,
                         void (*callback)(S32 option, void* user_data),
                         void* callback_data)
 {
+    // Size the holder before the panel is built so the HTML page and the
+    // login bar are created inside the slice, not the full window.
+    applyLoginViewport();
+
     if (!FSPanelLogin::sInstance)
     {
-        new FSPanelLogin(rect, callback, callback_data);
+        LLRect panel_rect = rect;
+        if (gViewerWindow)
+        {
+            if (LLView* holder = gViewerWindow->getLoginPanelHolder())
+            {
+                panel_rect = holder->getLocalRect();
+            }
+        }
+        new FSPanelLogin(panel_rect, callback, callback_data);
     }
+
+    applyLoginViewport();
 
     if( !gFocusMgr.getKeyboardFocus() )
     {
@@ -523,8 +586,7 @@ void FSPanelLogin::reshapePanel()
 {
     if (sInstance)
     {
-        LLRect rect = sInstance->getRect();
-        sInstance->reshape(rect.getWidth(), rect.getHeight());
+        applyLoginViewport();
     }
 }
 
