@@ -29,23 +29,23 @@ Folderstorm keeps its own settings folder. It does not read Firestorm's, and a n
 | Windows | `%APPDATA%\Firestorm_x64\user_settings` | `%APPDATA%\Folderstorm_x64\user_settings` |
 | macOS | `~/Library/Application Support/Firestorm/user_settings` | `~/Library/Application Support/Folderstorm/user_settings` |
 
+Toolbar layout is not in `user_settings`. The viewer loads `toolbars.xml` from the per-account folder next to it, for example `~/.firestorm_x64/first_last/toolbars.xml` into `~/.folderstorm_x64/first_last/toolbars.xml`. The same account name is used on Windows under `%APPDATA%\Firestorm_x64\` and `%APPDATA%\Folderstorm_x64\`, and on macOS under Application Support. A grid other than Second Life keeps its suffix, such as `first_last.osgrid`.
+
 On Linux, `FOLDERSTORM_X64_USER_DIR` replaces the Folderstorm folder, and `FIRESTORM_X64_USER_DIR` is where a Firestorm install keeps its own. macOS settings stay in `Folderstorm` with no `_x64`. That suffix is only the cache.
 
-The tool is `migrate_settings.py`. Saved passwords and caches are not copied. If Folderstorm already has settings, nothing is replaced unless you pass `--overwrite` or confirm the second prompt.
+The program is `migrate-settings` (`migrate-settings.exe` on Windows). Double-click it, or run it from a terminal. Saved passwords, cookies, assistant tokens, caches, and logs are not copied. If Folderstorm already has a settings folder, the copy is still offered. Files that are already there are kept unless you pass `--overwrite` or confirm the second prompt. Choosing not to replace them still copies settings Folderstorm does not have yet.
 
-The Windows NSIS installer asks after the files are in place, for the Windows account that is running it. If Folderstorm already has settings, it asks again before replacing any files. A Velopack install asks only when that settings folder does not exist yet, and it will not replace one. `install.sh` on Linux asks at the end of the install; pass `--migrate-settings` when the install itself is non-interactive. The macOS disk image does not ask: that script runs while the image is built, not on your Mac. After you copy Folderstorm to Applications, run:
+Account folders are a separate question. The whole folder is copied, including `toolbars.xml`, only if you accept. An existing Folderstorm account folder is left unchanged unless you pass `--overwrite-accounts` or confirm that folder.
 
-```bash
-python3 "/Applications/Folderstorm.app/Contents/Resources/migrate_settings.py"
-```
-
-From a checkout, from the Linux package next to `install.sh`, or from the Windows install folder:
+The Windows NSIS installer and a Velopack install ask after the files are in place, for the Windows account that is running the installer. They ask even when the Folderstorm settings folder already exists. If some of those files are already present, they ask again before replacing them. They then ask separately about account folders. `install.sh` on Linux asks at the end of the install. Pass `--migrate-settings` and, for account folders, `--migrate-accounts` when the install itself is non-interactive. The macOS disk image does not ask: that script runs while the image is built, not on your Mac. After you copy Folderstorm to Applications, run:
 
 ```bash
-python3 migrate_settings.py
+"/Applications/Folderstorm.app/Contents/Resources/migrate-settings"
 ```
 
-`--yes` skips the first question. `--dry-run` prints the plan and writes nothing. `--check` is what the installers use: it exits 0 when a copy can proceed, 2 when there is nothing to copy, and 3 when Folderstorm already has settings.
+From the Linux package next to `install.sh`, or from the Windows install folder, run `migrate-settings` or `migrate-settings.exe`.
+
+`--yes` copies settings without the first question. `--accounts` copies account folders. `--dry-run` prints the plan and writes nothing. `--check` is what the installers use for settings: it exits 0 when a copy does not need to replace a file, 2 when there is nothing to copy, and 3 when Folderstorm already has some of those files. `--check-accounts` is the same check for account folders.
 
 ## The local assistant bridge
 

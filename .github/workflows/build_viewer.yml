@@ -204,6 +204,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/migrate-settings/go.mod
+
       - name: Checkout build vars (after the main code)
         uses: actions/checkout@v7
         with:

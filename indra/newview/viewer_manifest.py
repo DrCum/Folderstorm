@@ -69,6 +69,37 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         # and copy_l_viewer_manifest targets)
         return 'package' in self.args['actions']
 
+    def stage_migrate_settings(self):
+        """Return the migrate-settings binary built with the viewer.
+
+        The CMake target writes it into the build directory. If that file is
+        not there yet, build it with Go so a packaged installer still contains
+        the program the installers run.
+        """
+        exe = "migrate-settings.exe" if sys.platform.startswith("win") else "migrate-settings"
+        config = self.args.get("configuration") or ""
+        rel_dirs = []
+        if config and config not in (".",):
+            rel_dirs.append(config)
+        rel_dirs.append("")
+        candidates = [os.path.join(self.get_build_prefix(), rel, exe) for rel in rel_dirs]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+        module = os.path.normpath(os.path.join(viewer_dir, os.pardir, os.pardir, "tools", "migrate-settings"))
+        out = candidates[0]
+        go = shutil.which("go")
+        if not go:
+            raise ManifestError(
+                "migrate-settings was not built and Go was not found. "
+                "Install Go 1.22 or newer and rebuild.")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        env = os.environ.copy()
+        env["CGO_ENABLED"] = "0"
+        self.run_command([go, "build", "-o", out, "."], cwd=module, env=env)
+        os.chmod(out, 0o755)
+        return out
+
     def construct(self):
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
@@ -858,7 +889,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
         # Optional post-install settings copy. NSIS and a Velopack install can
         # launch this; it also runs on its own.
-        self.path("linux_tools/migrate_settings.py", "migrate_settings.py")
+        self.path(self.stage_migrate_settings(), "migrate-settings.exe")
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"
@@ -1584,9 +1615,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                     self.path("*.tif")
 
                 self.path("licenses-mac.txt", dst="licenses.txt")
-                # macOS disk images have no post-install step. The script is
+                # macOS disk images have no post-install step. The program is
                 # here so it can be run after the app is copied to Applications.
-                self.path("linux_tools/migrate_settings.py", "migrate_settings.py")
+                self.path(self.stage_migrate_settings(), "migrate-settings")
                 self.path("featuretable_mac.txt")
                 self.path("cube.dae")
 
@@ -2153,7 +2184,7 @@ class LinuxManifest(ViewerManifest):
                 self.path("refresh_desktop_app_entry.sh")
                 self.path("launch_url.sh")
             self.path("install.sh")
-            self.path("migrate_settings.py")
+            self.path(self.stage_migrate_settings(), "migrate-settings")
 
         with self.prefix(dst="bin"):
             self.path( os.path.join(os.pardir,'build_data.json'), "build_data.json" )

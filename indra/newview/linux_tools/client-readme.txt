@@ -79,11 +79,15 @@ perform a separate installation step anyway, you may run './install.sh'
 Run './firestorm' from the installation directory to start Firestorm.
 
 User settings are stored in ~/.folderstorm_x64/user_settings. Set
-FOLDERSTORM_X64_USER_DIR to use another directory. To copy an existing
-Firestorm settings folder, run ./migrate_settings.py, or answer yes when
-./install.sh asks. Saved passwords and caches are not copied. An existing
-Folderstorm settings folder is left alone unless you confirm the prompt
-or pass --overwrite.
+FOLDERSTORM_X64_USER_DIR to use another directory. Toolbar layout is in
+the per-account folder next to that, for example
+~/.firestorm_x64/first_last/toolbars.xml. To copy Firestorm settings, run
+./migrate-settings, or answer yes when ./install.sh asks. It asks again,
+separately, before copying account folders. Saved passwords, cookies,
+caches, and logs are not copied. An existing Folderstorm settings folder
+is still offered. Files and account folders that are already there are
+left in place unless you confirm the prompt or pass --overwrite or
+--overwrite-accounts.
 
 For in-world MOVIE and MUSIC PLAYBACK, you will need (32-bit) GStreamer 0.10
 installed on your system.  This is optional - it is not required for general
