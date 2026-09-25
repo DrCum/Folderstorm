@@ -2319,10 +2319,8 @@ endif (OPENSIM)
 # Go programs shipped next to the viewer. migrate-settings is what the
 # installers run. fs-mcp is the local MCP sidecar: the package includes the
 # binary, and the viewer does not start it.
-find_program(GO_EXECUTABLE go)
-if(NOT GO_EXECUTABLE)
-  message(FATAL_ERROR "Go 1.25 or newer is required to build migrate-settings and fs-mcp. Install Go and re-run CMake.")
-endif()
+# GO_EXECUTABLE is the absolute path from indra/cmake/GoToolchain.cmake,
+# chosen at the start of configure. These build steps call that path.
 set(MIGRATE_SETTINGS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/migrate-settings${CMAKE_EXECUTABLE_SUFFIX}")
 add_custom_command(
   OUTPUT "${MIGRATE_SETTINGS_OUTPUT}"

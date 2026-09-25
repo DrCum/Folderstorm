@@ -18,6 +18,11 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.31.0")
     cmake_policy(SET CMP0179 NEW)
 endif()
 
+# migrate-settings and fs-mcp ship in the installer. Run before project()
+# so a missing or old Go fails before compiler probes and the rest of configure.
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(GoToolchain)
+
 set(ROOT_PROJECT_NAME "Firestorm" CACHE STRING
     "The root project/makefile/solution name. Defaults to Firestorm.")
 project(${ROOT_PROJECT_NAME})
