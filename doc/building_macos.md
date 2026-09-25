@@ -95,21 +95,7 @@ git clone https://github.com/FirestormViewer/phoenix-firestorm.git
 
 This can take a while. It's a rather large download.
 
-You will also need to download the build variables used for building the viewer. Like the viewer source, these are downloaded from the Firestorm git repository. Assuming you are still in your ~/firestorm directory (or wherever else you chose), issue the following commands:
-
-```
-git clone https://github.com/FirestormViewer/fs-build-variables.git
-```
-
-You will then need to add this line to your ~/.zshrc file (assuming you are on Catalina or later):
-```
-echo 'AUTOBUILD_VARIABLES_FILE=~/firestorm/fs-build-variables/variables' | sudo tee ~/.zshrc
-```
-
-Again, if you do not wish to restart your terminal:
-```
-export AUTOBUILD_VARIABLES_FILE=~/firestorm/fs-build-variables/variables
-```
+Compiler switches ship in the viewer repo at `fs-build-variables/variables`. `configure_firestorm.sh` uses that path when `AUTOBUILD_VARIABLES_FILE` is unset. Export that path yourself only if you want a different file.
 
 ## Firestorm build targets
 Available premade firestorm-specific build targets:

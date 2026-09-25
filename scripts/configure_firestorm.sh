@@ -351,6 +351,32 @@ if [ $TARGET_PLATFORM == "linux" -o $TARGET_PLATFORM == "darwin" ] ; then
 fi
 echo -e "       Logging to $LOG"
 
+# Fresh checkouts ship compiler switches in-repo. Autobuild reads
+# AUTOBUILD_VARIABLES_FILE before it launches this script; set the default
+# first so a later `autobuild source_environment` on Windows sees it.
+if [ -z "$AUTOBUILD_VARIABLES_FILE" ]
+then
+    _cfg_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    _vars_bash="$(cd "${_cfg_script_dir}/../fs-build-variables" && pwd)/variables"
+    if [ ! -f "$_vars_bash" ]
+    then
+        echo "AUTOBUILD_VARIABLES_FILE not set."
+        echo "In order to run autobuild it needs to be set to point to a correct variables file."
+        echo "Expected in-repo default: ${_vars_bash}"
+        exit 1
+    fi
+    case "$OSTYPE" in
+        cygwin*|msys*)
+            AUTOBUILD_VARIABLES_FILE="$(cygpath -w "$_vars_bash")"
+            ;;
+        *)
+            AUTOBUILD_VARIABLES_FILE="$_vars_bash"
+            ;;
+    esac
+    export AUTOBUILD_VARIABLES_FILE
+    echo "AUTOBUILD_VARIABLES_FILE not set; using ${AUTOBUILD_VARIABLES_FILE}"
+fi
+
 if [ $TARGET_PLATFORM == "windows" ]
 then
     if [ -z "${AUTOBUILD_VSVER}" ]
@@ -374,11 +400,21 @@ then
     load_vsvars
 fi
 
-if [ -z "$AUTOBUILD_VARIABLES_FILE" ]
+# Autobuild exports LL_BUILD when AUTOBUILD_VARIABLES_FILE was set before it
+# started. If this script just applied the in-repo default, source the
+# companion convenience script so cmake still receives LL_BUILD.
+if [ -z "${LL_BUILD:-}" ]
 then
-    echo "AUTOBUILD_VARIABLES_FILE not set."
-    echo "In order to run autobuild it needs to be set to point to a correct variables file."
-    exit 1
+    _vars_for_source="$AUTOBUILD_VARIABLES_FILE"
+    case "$OSTYPE" in
+        cygwin*|msys*)
+            _vars_for_source="$(cygpath -u "$AUTOBUILD_VARIABLES_FILE")"
+            ;;
+    esac
+    _vars_dir="$(cd "$(dirname "$_vars_for_source")" && pwd)"
+    # shellcheck disable=SC1091
+    source "${_vars_dir}/convenience" "$BTYPE"
+    export LL_BUILD
 fi
 
 if [ $TARGET_PLATFORM == "windows" ] ; then
