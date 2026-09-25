@@ -111,31 +111,21 @@ pip --version
 
 If they all report sensible values and not "Command not found" errors, then you are in good shape.
 
-### Optional: Set up a Python virtual environment
+### Bootstrap Autobuild for this session
 
-If you do not want to install the required Python packages into the default Python directory, you can optionally create a virtual environment.
+From the viewer checkout, in the Windows Command Prompt (`cmd.exe`):
 
-- Create the Python Virtual Environment (only once). Open Windows Command Prompt and navigate to the directory where you want to install the virtual environment. To create the virtual environment, enter:
-  `python -m venv <env_name>` (`<env_name>` is a placeholder for the name you want to use for the virtual environment)
-- Activate the virtual environment by typing:
-  `<env_name>\Scripts\activate.bat`
-- Activate the virtual environment each time you want to build.
-- Type all the subsequent commands in this virtual environment.
-- In case of issue or Python update, you can delete this directory for the virtual environemt and create a new one again.
+```
+call scripts\bootstrap-autobuild.cmd
+```
 
-### Set up Autobuild
+Run that again in each new Command Prompt before `autobuild configure`. It sets three things for the session:
 
-- Install Autobuild
-   You can install autobuild and its dependencies using the `requirements.txt` file that is part of the repo, this will build using the same versions that our official builds use.
-  - Open Windows Command Prompt
-  - If you created a Python virtual environment earlier, activate it
-  - Enter: <code>pip install -r requirements.txt</code>
-  - Autobuild will be installed. **Earlier versions of Autobuild could be made to work by just putting the source files into your path correctly; this is no longer true - Autobuild _must_ be installed as described here.**
-  - Open Windows Command Prompt and enter:
-    `pip install git+https://github.com/secondlife/autobuild.git#egg=autobuild`
-- Set environment variable AUTOBUILD_VSVER to 170 (170 = Visual Studio 2022).
-- Check Autobuild version to be "autobuild 3.8" or higher:
-  `autobuild --version`
+- **autobuild on PATH.** Creates `.venv` and runs `pip install -r requirements.txt`. The launcher prefers Python 3.10–3.13 when one is installed (local builds used 3.10). The venv's `Scripts` directory is put on `PATH`, which is where `autobuild.exe` lands.
+- **AUTOBUILD_VARIABLES_FILE.** Set to this repo's `fs-build-variables\variables`. `configure_firestorm.sh` uses that same path when the variable is unset. A value you already exported is left alone.
+- **AUTOBUILD_VSVER.** Set to `170` (Visual Studio 2022) only when both VS 2022 and VS 2026 are installed, so Autobuild does not pick 2026. If `AUTOBUILD_VSVER` is already set, it is left alone. If `ProgramFiles(x86)` is missing, it is set to `C:\Program Files (x86)` so `vswhere.exe` can be found.
+
+Check Autobuild version to be "autobuild 3.8" or higher: `autobuild --version`
 
 ### NSIS
 
@@ -144,15 +134,6 @@ If you do not want to install the required Python packages into the default Pyth
   
 > [!IMPORTANT]
 > If you want to package the viewer built on a revision prior to the [Bugsplat merge](https://github.com/FirestormViewer/phoenix-firestorm/commit/a399c6778579ac7c8965737088c275dde1371c9e), you must install the Unicode version of NSIS [from here](http://www.scratchpaper.com) - the installer from the NSIS website **WILL NOT** work!
-
-## Setup viewer build variables
-
-In order to make it easier to build collections of related packages (such as the viewer and all the library packages that it imports) with the same compilation options, Autobuild expects a file of variable definitions. This can be set using the environmenat variable AUTOBUILD_VARIABLES_FILE.
-
-- Clone the build variables repository: 
-  `git clone https://github.com/FirestormViewer/fs-build-variables.git <path-to-your-variables-file>`
-- Set the environment variable AUTOBUILD_VARIABLES_FILE to
-  `<path-to-your-variables-file>\variables`
 
 ## Configure Visual Studio 2022 (optional)
 

@@ -16,6 +16,7 @@ Pre-built versions of the viewer releases for Windows, Mac and Linux can be down
 
 Build instructions for each operating system can be found using the links below and in the official [wiki](https://wiki.firestormviewer.org).
 
+- [From source (viewer, MCP sidecar, settings migrator)](doc/building-from-source.md)
 - [Windows](doc/building_windows.md)
 - [Mac](doc/building_macos.md)
 - [Linux](doc/building_linux.md)
