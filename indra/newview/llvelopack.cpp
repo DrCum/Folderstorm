@@ -907,6 +907,153 @@ static void on_first_run(void* p_user_data, const char* app_version)
     }
 }
 
+static bool launch_migrator(const std::wstring& exe, const std::wstring& args, DWORD* exit_code)
+{
+    std::wstring cmd = L"\"" + exe + L"\"";
+    if (!args.empty())
+    {
+        cmd += L" ";
+        cmd += args;
+    }
+    STARTUPINFOW si = {};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi = {};
+    if (!CreateProcessW(NULL, &cmd[0], NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        return false;
+    }
+    const DWORD wait = WaitForSingleObject(pi.hProcess, 120000);
+    DWORD code = 1;
+    if (wait != WAIT_OBJECT_0)
+    {
+        TerminateProcess(pi.hProcess, 1);
+    }
+    else
+    {
+        GetExitCodeProcess(pi.hProcess, &code);
+    }
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    if (wait != WAIT_OBJECT_0)
+    {
+        return false;
+    }
+    if (exit_code)
+    {
+        *exit_code = code;
+    }
+    return true;
+}
+
+// Ask whenever Firestorm settings exist, including when Folderstorm already
+// has a settings folder. A first launch can create that folder before this
+// hook runs. Existing files are replaced only after a second confirmation.
+// Account folders, including toolbars.xml, are a separate question.
+static void offer_user_settings_copy(const std::wstring& exe)
+{
+    DWORD code = 1;
+    if (!launch_migrator(exe, L"--check", &code))
+    {
+        return;
+    }
+    if (code != 0 && code != 3)
+    {
+        return;
+    }
+
+    const int copy = MessageBoxW(NULL,
+        L"Copy your Firestorm settings to Folderstorm?\n\n"
+        L"Saved passwords and caches are not copied. This step is optional.",
+        L"Folderstorm",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    if (copy != IDYES)
+    {
+        return;
+    }
+
+    bool overwrite = false;
+    if (code == 3)
+    {
+        const int replace = MessageBoxW(NULL,
+            L"Folderstorm already has some of these settings. Replace those files with the Firestorm copies?\n\n"
+            L"Choosing No still copies settings Folderstorm does not have yet. "
+            L"Files that exist only in Folderstorm are kept. Saved passwords are not copied.",
+            L"Folderstorm",
+            MB_YESNO | MB_ICONEXCLAMATION | MB_DEFBUTTON2);
+        overwrite = replace == IDYES;
+    }
+
+    const wchar_t* args = overwrite ? L"--yes --overwrite" : L"--yes";
+    DWORD copy_code = 1;
+    if (!launch_migrator(exe, args, &copy_code) || copy_code != 0)
+    {
+        MessageBoxW(NULL,
+            L"Firestorm settings were not copied.\n\n"
+            L"Run migrate-settings from the Folderstorm install folder.",
+            L"Folderstorm",
+            MB_OK | MB_ICONINFORMATION);
+    }
+}
+
+static void offer_account_folder_copy(const std::wstring& exe)
+{
+    DWORD code = 1;
+    if (!launch_migrator(exe, L"--check-accounts", &code))
+    {
+        return;
+    }
+    if (code != 0 && code != 3)
+    {
+        return;
+    }
+
+    const int copy = MessageBoxW(NULL,
+        L"Copy your Firestorm account folders to Folderstorm?\n\n"
+        L"This includes toolbar layout and the rest of each account. "
+        L"It is separate from the main settings copy. "
+        L"Saved passwords, cookies, and caches are not copied.",
+        L"Folderstorm",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    if (copy != IDYES)
+    {
+        return;
+    }
+
+    bool overwrite = false;
+    if (code == 3)
+    {
+        const int replace = MessageBoxW(NULL,
+            L"Folderstorm already has one or more of these account folders. Replace those folders?\n\n"
+            L"Choosing No leaves an existing account folder unchanged and still copies account folders Folderstorm does not have. "
+            L"Saved passwords, cookies, and caches are not copied.",
+            L"Folderstorm",
+            MB_YESNO | MB_ICONEXCLAMATION | MB_DEFBUTTON2);
+        overwrite = replace == IDYES;
+    }
+
+    const wchar_t* args = overwrite ? L"--accounts --overwrite-accounts" : L"--accounts";
+    DWORD copy_code = 1;
+    if (!launch_migrator(exe, args, &copy_code) || copy_code != 0)
+    {
+        MessageBoxW(NULL,
+            L"Firestorm account folders were not copied.\n\n"
+            L"Run migrate-settings from the Folderstorm install folder.",
+            L"Folderstorm",
+            MB_OK | MB_ICONINFORMATION);
+    }
+}
+
+static void offer_settings_migration(const std::wstring& install_dir)
+{
+    const std::wstring exe = install_dir + L"\\migrate-settings.exe";
+    if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        return;
+    }
+    offer_user_settings_copy(exe);
+    offer_account_folder_copy(exe);
+}
+
 static void on_after_install(void* user_data, const char* app_version)
 {
     std::wstring install_dir = get_install_dir();
@@ -924,6 +1071,7 @@ static void on_after_install(void* user_data, const char* app_version)
     register_protocol_handler(PROTOCOL_GRID_INFO_OPENSIM, L"URL:Hypergrid", exe_path);
     // </FS:TJ>
     create_shortcuts(install_dir, app_name);
+    offer_settings_migration(install_dir);
 }
 
 static void on_before_uninstall(void* user_data, const char* app_version)

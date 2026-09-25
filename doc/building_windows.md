@@ -31,6 +31,10 @@ All installations are done with default settings (unless told explicitly) - if y
 ### Command Prompt vs Powershell
 - Make sure that you use the Windows Command Prompt / Terminal (cmd.exe) and not Powershell or it won't detect the Visual Studio build tools properly.
 
+### Go
+
+The settings migrator is built with the viewer. Install [Go 1.22 or newer](https://go.dev/dl/) and make sure `go` is on `PATH` before configuring the build.
+
 ### Git
 
 -  If you prefer having a GUI for Git, download and install [TortoiseGit 2.17.0 or newer](https://tortoisegit.org) (64bit)

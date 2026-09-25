@@ -37,6 +37,11 @@ LangString CheckStartupParamsMB ${LANG_GERMAN} "Konnte Programm '$INSTNAME' nich
 
 ; installation success dialog
 LangString InstSuccesssQuestion ${LANG_GERMAN} "Firestorm starten?"
+LangString MigrateSettingsQuestion ${LANG_GERMAN} "Copy your Firestorm settings to Folderstorm?$\n$\nSaved passwords and caches are not copied. This step is optional."
+LangString MigrateSettingsOverwrite ${LANG_GERMAN} "Folderstorm already has some of these settings. Replace those files with the Firestorm copies?$\n$\nChoosing No still copies settings Folderstorm does not have yet. Files that exist only in Folderstorm are kept. Saved passwords are not copied."
+LangString MigrateSettingsAccounts ${LANG_GERMAN} "Copy your Firestorm account folders to Folderstorm?$\n$\nThis includes toolbar layout and the rest of each account. It is separate from the main settings copy. Saved passwords, cookies, and caches are not copied."
+LangString MigrateSettingsAccountsOverwrite ${LANG_GERMAN} "Folderstorm already has one or more of these account folders. Replace those folders?$\n$\nChoosing No leaves an existing account folder unchanged and still copies account folders Folderstorm does not have. Saved passwords, cookies, and caches are not copied."
+LangString MigrateSettingsMissing ${LANG_GERMAN} "The settings copy program was not found, so nothing was copied.$\n$\nRun migrate-settings from the Folderstorm install folder."
 
 ; remove old NSIS version
 LangString RemoveOldNSISVersion ${LANG_GERMAN} "Überprüfe alte Version ..."

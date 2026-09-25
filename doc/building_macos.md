@@ -23,6 +23,10 @@ XCode is a free download from Apple but you will need an Apple ID to login and a
   - It should report version 17 something (Apple clang version 17.0.0 (clang-1700.0.13.5) for example).
   - If it reports an inferior version, something is messed up and you installed another version of XCode. It might still work, but the supported version is currently 16.4.
 
+### Go
+
+The settings migrator is built with the viewer. Install Go 1.22 or newer and make sure `go` is on `PATH` before configuring the build.
+
 ### CMake
 - Download [CMake](http://www.cmake.org/download) version 4.1.1 or higher
 - Open the downloaded file and copy CMake to the Applications folder.

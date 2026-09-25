@@ -160,6 +160,7 @@ Var SKIP_DIALOGS        # Set from command line in  .onInit. autoinstall GUI and
 Var DO_UNINSTALL_V2     # If non-null, path to a previous Viewer 2 installation that will be uninstalled.
 Var NO_STARTMENU        # <FS:Ansariel> Optional start menu entry
 Var FRIENDLY_APP_NAME   # <FS:Ansariel> FIRE-30446: Set FriendlyAppName for protocols
+Var MIGRATE_REQUESTED   # /MIGRATE copies Firestorm settings without the first prompt
 
 # Function definitions should go before file includes, because calls to
 # DLLs like LangDLL trigger an implicit file include, so if that call is at
@@ -432,6 +433,10 @@ Call CheckWindowsVersion					# Don't install On unsupported systems
       StrCpy $SKIP_DIALOGS "true"
         SetAutoClose true
     # </FS:Ansariel>
+
+    ${GetOptions} $COMMANDLINE "/MIGRATE" $0
+    IfErrors +2 0
+        StrCpy $MIGRATE_REQUESTED "yes"
 
 	# <FS:PP> Disable autorun
 	# ${GetOptions} $COMMANDLINE "/SKIP_AUTORUN" $0
@@ -1139,6 +1144,134 @@ NoDelete:
 FunctionEnd
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Optional Firestorm -> Folderstorm settings copy.
+;; migrate-settings.exe is installed next to the viewer. The settings folder
+;; existing is not a reason to skip the question. Existing files are replaced
+;; only after a second confirmation. Account folders are a separate question.
+;; Silent installs copy settings only when /MIGRATE is set, and even then
+;; they do not replace files that are already there. Account folders are
+;; not copied during a silent install.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Function RunMigrateSettings
+    StrCpy $R3 "missing"
+    IfFileExists "$INSTDIR\migrate-settings.exe" 0 migrate_ran
+    ClearErrors
+    ExecWait '"$INSTDIR\migrate-settings.exe" $R1' $R2
+    IfErrors migrate_ran
+    StrCpy $R3 "ran"
+migrate_ran:
+FunctionEnd
+
+Function OfferSettingsMigration
+    Push $R1
+    Push $R2
+    Push $R3
+
+    IfFileExists "$INSTDIR\migrate-settings.exe" 0 migrate_missing_file
+
+    StrCpy $R1 "--check"
+    Call RunMigrateSettings
+    StrCmp $R3 "missing" migrate_missing_file
+    IntCmp $R2 2 check_accounts
+    IntCmp $R2 0 settings_ready
+    IntCmp $R2 3 settings_conflict
+    DetailPrint "Settings migration did not run (status $R2)."
+    Goto check_accounts
+
+settings_ready:
+    StrCmp $MIGRATE_REQUESTED "yes" run_settings
+    IfSilent check_accounts
+    StrCmp $SKIP_DIALOGS "true" check_accounts
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsQuestion) /SD IDNO IDYES run_settings IDNO check_accounts
+    Goto check_accounts
+
+settings_conflict:
+    IfSilent settings_conflict_silent
+    StrCmp $SKIP_DIALOGS "true" settings_conflict_silent
+    StrCmp $MIGRATE_REQUESTED "yes" ask_settings_overwrite
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsQuestion) /SD IDNO IDNO check_accounts
+
+ask_settings_overwrite:
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 $(MigrateSettingsOverwrite) /SD IDNO IDYES run_settings_overwrite IDNO run_settings
+    Goto check_accounts
+
+settings_conflict_silent:
+    StrCmp $MIGRATE_REQUESTED "yes" run_settings
+    DetailPrint "Folderstorm already has settings files. Not replacing them."
+    Goto check_accounts
+
+run_settings:
+    StrCpy $R1 "--yes"
+    Call RunMigrateSettings
+    IntCmp $R2 0 settings_copied settings_copied
+    DetailPrint "Settings migration did not finish (status $R2)."
+    Goto check_accounts
+
+run_settings_overwrite:
+    StrCpy $R1 "--yes --overwrite"
+    Call RunMigrateSettings
+    IntCmp $R2 0 settings_copied settings_copied
+    DetailPrint "Settings migration did not finish (status $R2)."
+    Goto check_accounts
+
+settings_copied:
+    DetailPrint "Copied Firestorm settings into Folderstorm."
+
+check_accounts:
+    StrCpy $R1 "--check-accounts"
+    Call RunMigrateSettings
+    StrCmp $R3 "missing" migrate_missing_file
+    IntCmp $R2 2 migrate_cleanup
+    IntCmp $R2 0 accounts_ready
+    IntCmp $R2 3 accounts_conflict
+    DetailPrint "Account folder migration did not run (status $R2)."
+    Goto migrate_cleanup
+
+accounts_ready:
+    IfSilent migrate_cleanup
+    StrCmp $SKIP_DIALOGS "true" migrate_cleanup
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsAccounts) /SD IDNO IDYES run_accounts IDNO migrate_cleanup
+    Goto migrate_cleanup
+
+accounts_conflict:
+    IfSilent migrate_cleanup
+    StrCmp $SKIP_DIALOGS "true" migrate_cleanup
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 $(MigrateSettingsAccounts) /SD IDNO IDNO migrate_cleanup
+
+ask_accounts_overwrite:
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 $(MigrateSettingsAccountsOverwrite) /SD IDNO IDYES run_accounts_overwrite IDNO run_accounts
+    Goto migrate_cleanup
+
+run_accounts:
+    StrCpy $R1 "--accounts"
+    Call RunMigrateSettings
+    IntCmp $R2 0 accounts_copied accounts_copied
+    DetailPrint "Account folders were not copied (status $R2)."
+    Goto migrate_cleanup
+
+run_accounts_overwrite:
+    StrCpy $R1 "--accounts --overwrite-accounts"
+    Call RunMigrateSettings
+    IntCmp $R2 0 accounts_copied accounts_copied
+    DetailPrint "Account folders were not copied (status $R2)."
+    Goto migrate_cleanup
+
+accounts_copied:
+    DetailPrint "Copied Firestorm account folders into Folderstorm."
+    Goto migrate_cleanup
+
+migrate_missing_file:
+    IfSilent migrate_cleanup
+    StrCmp $SKIP_DIALOGS "true" migrate_cleanup
+    MessageBox MB_OK|MB_ICONINFORMATION $(MigrateSettingsMissing)
+
+migrate_cleanup:
+    Pop $R3
+    Pop $R2
+    Pop $R1
+FunctionEnd
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; After install completes, launch app
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Function .onInstSuccess
@@ -1172,6 +1305,7 @@ Function .onInstSuccess
         # </FS:Ansariel>
 
         Call CheckWindowsServPack		# Warn if not on the latest SP before asking to launch.
+        Call OfferSettingsMigration		# Optional Firestorm settings copy. Opt-in.
         # <FS:PP> Disable autorun
         #StrCmp $SKIP_AUTORUN "true" +2;
         StrCmp $SKIP_DIALOGS "true" label_launch

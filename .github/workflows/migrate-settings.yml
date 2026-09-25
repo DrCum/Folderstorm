@@ -1,0 +1,46 @@
+name: migrate-settings
+
+on:
+  pull_request:
+    paths:
+      - "tools/migrate-settings/**"
+      - ".github/workflows/migrate-settings.yml"
+  push:
+    paths:
+      - "tools/migrate-settings/**"
+      - ".github/workflows/migrate-settings.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: tools/migrate-settings
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/migrate-settings/go.mod
+      - name: gofmt
+        if: runner.os != 'Windows'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build -o migrate-settings .

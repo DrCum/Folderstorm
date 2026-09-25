@@ -2316,6 +2316,29 @@ else (OPENSIM)
   set(ND_VIEWER_FLAVOR "hvk")
 endif (OPENSIM)
 
+# Firestorm -> Folderstorm settings copy. Built with the viewer so the
+# installers can run it without Python.
+find_program(GO_EXECUTABLE go)
+if(NOT GO_EXECUTABLE)
+  message(FATAL_ERROR "Go 1.22 or newer is required to build migrate-settings. Install Go and re-run CMake.")
+endif()
+set(MIGRATE_SETTINGS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/migrate-settings${CMAKE_EXECUTABLE_SUFFIX}")
+add_custom_command(
+  OUTPUT "${MIGRATE_SETTINGS_OUTPUT}"
+  COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
+          "${GO_EXECUTABLE}" build -o "${MIGRATE_SETTINGS_OUTPUT}" .
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../tools/migrate-settings"
+  DEPENDS
+    "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/go.mod"
+    "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/main.go"
+    "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/migrate.go"
+    "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/dialog_other.go"
+    "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/dialog_windows.go"
+  COMMENT "Building migrate-settings"
+  VERBATIM
+)
+add_custom_target(migrate-settings ALL DEPENDS "${MIGRATE_SETTINGS_OUTPUT}")
+
 if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
@@ -2357,6 +2380,7 @@ if (WINDOWS)
       media_plugin_cef
       media_plugin_libvlc
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
+      "${MIGRATE_SETTINGS_OUTPUT}"
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
@@ -2730,6 +2754,7 @@ if (LINUX)
     media_plugin_gstreamer10
     llcommon
     linux-crash-logger
+    "${MIGRATE_SETTINGS_OUTPUT}"
     )
 
   add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_gstreamer10 media_plugin_cef linux-crash-logger)
@@ -3185,3 +3210,11 @@ if (LL_TESTS)
 endif (LL_TESTS)
 
 check_message_template(${VIEWER_BINARY_NAME})
+
+if(TARGET copy_w_viewer_manifest)
+  add_dependencies(copy_w_viewer_manifest migrate-settings)
+endif()
+if(TARGET copy_l_viewer_manifest)
+  add_dependencies(copy_l_viewer_manifest migrate-settings)
+endif()
+add_dependencies(${VIEWER_BINARY_NAME} migrate-settings)
