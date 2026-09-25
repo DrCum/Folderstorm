@@ -387,7 +387,7 @@ bool bridge_api_allowed(const std::string& api)
     return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera";
 }
 
-void fail_response(const LLHTTPNode::ResponsePtr& response, S32 code, const std::string& error, const LLSD& extra = LLSD())
+void fail_response(LLHTTPNode::ResponsePtr response, S32 code, const std::string& error, const LLSD& extra = LLSD())
 {
     LLSD body = extra.isMap() ? extra : LLSD::emptyMap();
     body["error"] = error;
