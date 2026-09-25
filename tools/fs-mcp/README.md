@@ -2,7 +2,7 @@
 
 `fs-mcp` is a local stdio [MCP](https://modelcontextprotocol.io) server. It turns tool calls from Cursor, Codex, Claude Code, or any other MCP client into the Folderstorm viewer's loopback Event API.
 
-The viewer does not link or build this program. It is a separate Go module in `tools/fs-mcp`. The bridge is off until you launch the viewer with `--mcp-api`. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
+The viewer does not link or build this program. It is a separate Go module in `tools/fs-mcp`. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
 Client setup for Cursor, Codex, and Claude Code is in [doc/help.md](../../doc/help.md).
 
@@ -56,8 +56,8 @@ Logs go to stderr so they do not corrupt the stdio stream. The bearer token is n
 
 ## How a call gets to the viewer
 
-1. You start Folderstorm with `--mcp-api`. That setting is not saved. The next launch is offline again unless you pass the flag.
-2. The viewer binds `127.0.0.1` on an ephemeral port, generates a bearer token, and writes `fs-mcp-<pid>.json` into the user-settings directory. The file is removed on exit. A new token is generated every launch. On Unix the file is mode `0600`.
+1. You enable the local assistant in Preferences, or you pass `--mcp-api` for this session only. The preference is saved. The flag is not.
+2. The first enable in a process binds `127.0.0.1` on an ephemeral port. That port stays bound until you quit, even if you turn the switch off. Off deletes the discovery file and rejects requests. The next on writes a new bearer token to `fs-mcp-<pid>.json` and keeps the same port. The file can exist at the login screen. It is removed on exit. On Unix the file is mode `0600`. The file is a bearer secret: another program running as this user can read it while the switch is on. Do not copy or publish it.
 3. The sidecar finds that file, checks that the process is still alive, and posts JSON to `http://127.0.0.1:<port>/firestorm/event-api` with `Authorization: Bearer <token>`.
 4. The viewer rejects a non-loopback peer, a browser `Origin` header, a body over 1 MiB, and any API outside the allowlist. Responses send `Cache-Control: no-store`.
 
@@ -145,29 +145,29 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `inventory_set_thumbnail` | Texture UUID, or clear it. |
 | `inventory_set_favorite` | Set or clear the favorite flag. |
 | `inventory_link` | Link an item or folder into `parent_id`. |
-| `inventory_replace_links` | Point every link that targets `source_id` at `target_id`, and move the old links to Trash. Requires confirmation. |
-| `inventory_move` | Move `id` to `parent_id`. This is a move, including no-copy items. |
-| `inventory_batch_move` | Up to 50 ids into one `parent_id`. Per-item results. |
+| `inventory_replace_links` | Point every link that targets `source_id` at `target_id`, and move the old links to Trash. Ask is a viewer dialog unless that permission is Allow. |
+| `inventory_move` | Move `id` to `parent_id`. This is a move, including no-copy items. Follows Move and copy. |
+| `inventory_batch_move` | Up to 50 ids into one `parent_id`. Per-item results. Follows Move and copy. |
 | `inventory_batch_rename` | Up to 50 `{id, name}` entries. Per-item results. |
-| `inventory_copy` | Copy `id` into `parent_id`. Optional `policy`. |
-| `inventory_batch_copy` | Up to 50 items. Folders still use `inventory_copy`. Each no-copy item can return its own `plan_id`. |
-| `inventory_confirm_copy` | Approve or decline a no-copy copy plan. |
-| `inventory_trash` | Move one object to Trash. Restorable. |
-| `inventory_restore` | Move an object out of Trash into its type folder. |
-| `inventory_empty_trash` | Permanently empty Trash. Requires confirmation. |
-| `inventory_purge` | Permanently delete one object. Requires confirmation. |
+| `inventory_copy` | Copy `id` into `parent_id`. Optional `policy`. Copyable items follow Move and copy. |
+| `inventory_batch_copy` | Up to 50 items. Folders still use `inventory_copy`. Copyable items follow Move and copy. |
+| `inventory_confirm_copy` | Older-viewer follow-up for a no-copy copy plan. A current viewer asks in its own dialog. |
+| `inventory_trash` | Move one object to Trash. Its own permission, default Allow. The item can be restored. |
+| `inventory_restore` | Move an object out of Trash into its type folder. Follows Move and copy, not Trash. |
+| `inventory_empty_trash` | Not available. The bridge hard-denies this. No setting can enable it. |
+| `inventory_purge` | Not available. The bridge hard-denies this. No setting can enable it. |
 | `appearance_outfits` | Outfit folders under My Outfits: id and name. |
 | `appearance_outfit_items` | Items in an outfit folder: name, wearable type, worn flag. |
 | `appearance_worn` | Current Outfit folder, including wearable type and attachment point, plus `outfit_dirty`. |
-| `appearance_wear_outfit` | Wear by `folder_id` or `folder_name`. `append` adds to the current outfit. Requires confirmation. |
-| `appearance_wear_items` | Wear one UUID or an array. `replace` removes conflicting worn items. Requires confirmation. |
-| `appearance_detach` | Detach or take off by UUID. Requires confirmation. |
+| `appearance_wear_outfit` | Wear by `folder_id` or `folder_name`. `append` adds to the current outfit. Ask is a viewer dialog unless Wear and detach is Allow. |
+| `appearance_wear_items` | Wear one UUID or an array. `replace` removes conflicting worn items. Ask is a viewer dialog unless Wear and detach is Allow. |
+| `appearance_detach` | Detach or take off by UUID. Ask is a viewer dialog unless Wear and detach is Allow. |
 | `camera_get` | Region position, focus, agent-relative offset, global position, and distance. |
 | `camera_set_pose` | `portrait`, `full_body`, `front`, `back`, `left`, or `right`, relative to the avatar's facing. |
 | `camera_set` | Region `position` and `focus`, each `[x, y, z]`. |
 | `camera_reset` | Default third-person camera. |
-| `camera_snapshot` | JPEG bytes plus width, height, and camera pose. |
-| `confirm_action` | Approve or decline a wear, detach, link-replacement, empty-trash, or purge `plan_id`. |
+| `camera_snapshot` | JPEG bytes plus width, height, and camera pose. Hides UI and HUD and writes a temp JPEG. Follows the Camera permission. Not a read. |
+| `confirm_action` | Resume a wear, detach, or link-replacement plan stored for an older viewer. A current viewer asks in its own dialog. Purge and empty-trash plans are denied and are not sent. |
 
 ### Object fields
 
@@ -200,11 +200,11 @@ Other asset types are rejected. Calling cards cannot be renamed. Library folders
 | `strict` | Make no changes if any descendant is no-copy. |
 | `copyable_only` | Copy what is permitted and leave no-copy items behind, with no confirmation step. |
 
-Confirming a default plan moves the unique items out of the source into the destination. Declining leaves the copyable-only destination in place. Plans last ten minutes and are checked again immediately before any no-copy move. Folder copy is not one server transaction, so a partial failure reports per-item errors.
+On a current viewer, Ask is a dialog in the viewer. The sidecar does not elicit and does not return a `plan_id` for that question. Allow on Move no-copy items during a copy moves the unique items out of the source with no dialog. Never leaves them in the source and does not call the confirm step. The tool stays in flight until the dialog is answered or the viewer denies it at 60 seconds. A client that auto-approves `confirm_action` does not skip the dialog.
 
-If the MCP client advertises elicitation, the sidecar shows a form. If it does not, or you pass `skip_elicitation: true`, the tool returns `plan_id`. Resume a copy with `inventory_confirm_copy`. Resume wear, detach, link replacement, empty trash, and purge with `confirm_action`.
+Trash is its own class, default Allow, and the preference row says Trash can be restored. Restore follows Move and copy. Permanent delete is not possible: the bridge hard-denies `purge` and `emptyTrash`, with no Ask and no row that can enable them. A hand-edited setting cannot turn them on. Those tools fail immediately and do not call the viewer.
 
-`confirm` defaults to true. `confirm: false` drops the plan. Emptying Trash and purge cannot be undone. Moving one object to Trash can.
+An older viewer has no `permissions` object. Wear, detach, link replacement, and no-copy copies then keep the sidecar form. If the client does not advertise elicitation, or you pass `skip_elicitation: true`, the tool returns `plan_id`. Resume a copy with `inventory_confirm_copy`. Resume wear, detach, and link replacement with `confirm_action`. That fallback is not used for purge or empty Trash. Plans last ten minutes. Folder copy is not one server transaction, so a partial failure reports per-item errors.
 
 Wearing returns before the avatar finishes baking. Poll `appearance_worn` and look at `outfit_dirty` before you take a picture.
 
@@ -223,7 +223,7 @@ Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
 
 `camera_set` uses region coordinates, not global coordinates. The avatar must be in a region. Presets also require a loaded avatar.
 
-`camera_snapshot` hides UI and HUD unless you pass `show_ui` or `show_hud`. `max_edge` defaults to 1024 and is clamped from 64 to 2048. The viewer writes a temp JPEG under its temp `fs-mcp-snapshots` directory. The sidecar checks that the path is absolute and at most 8 MiB, returns the bytes as `image/jpeg`, and deletes the file. Callers cannot choose the path.
+`camera_snapshot` is not a read. It follows the Camera permission. It hides UI and HUD unless you pass `show_ui` or `show_hud`, and it writes a temp JPEG. `max_edge` defaults to 1024 and is clamped from 64 to 2048. The viewer writes that file under its temp `fs-mcp-snapshots` directory. The sidecar checks that the path is absolute and at most 8 MiB, returns the bytes as `image/jpeg`, and deletes the file. Callers cannot choose the path.
 
 ## Event API body
 

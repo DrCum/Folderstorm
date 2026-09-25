@@ -15569,4 +15569,18 @@ Folder names cannot contain / or \.
   </notification>
   <!-- </FS:Amy> Favorite Wearables folders -->
 
+  <notification
+   icon="alertmodal.tga"
+   name="LocalAssistantConfirm"
+   type="alertmodal"
+   label="Local assistant">
+[TITLE]
+
+[MESSAGE]
+    <usetemplate
+     name="okcancelbuttons"
+     notext="No"
+     yestext="Yes"/>
+  </notification>
+
 </notifications>

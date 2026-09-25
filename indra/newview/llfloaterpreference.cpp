@@ -123,6 +123,8 @@
 #include "llviewercontrol.h"
 #include "llpresetsmanager.h"
 #include "llinventoryfunctions.h"
+#include "fseventapibridge.h"
+#include "llsdutil.h"
 
 #include "llsearchableui.h"
 #include "llperfstats.h"
@@ -4112,6 +4114,15 @@ public:
                 }
             }
         }
+        // The bridge switch and the permission map are not bound to controls.
+        // A bound checkbox would persist a --mcp-api session override on Cancel.
+        snapshotLocalAssistant();
+    }
+
+    /*virtual*/ void cancel(const std::vector<std::string> settings_to_skip = {})
+    {
+        LLPanelPreference::cancel(settings_to_skip);
+        restoreLocalAssistant();
     }
 
     // <FS:Ansariel> Send inventory item on autoresponse
@@ -4136,6 +4147,15 @@ public:
         mInvDropTarget->setDADCallback(boost::bind(&LLPanelPreferencePrivacy::onDADAutoresponseItem, this, _1));
         getChild<LLButton>("clear_autoresponse_item")->setCommitCallback(boost::bind(&LLPanelPreferencePrivacy::onClearAutoresponseItem, this));
 
+        getChild<LLCheckBoxCtrl>("local_assistant_enable")->setCommitCallback(
+            [this](LLUICtrl*, const LLSD&) { onLocalAssistantToggled(); });
+        for (const LocalAssistantRow& row : kLocalAssistantRows)
+        {
+            getChild<LLComboBox>(row.widget)->setCommitCallback(
+                [this, key = row.key](LLUICtrl*, const LLSD&) { onLocalAssistantPermission(key); });
+        }
+        refreshLocalAssistantControls();
+
         return LLPanelPreference::postBuild();
     }
     // </FS:Ansariel>
@@ -4143,6 +4163,7 @@ public:
     // <FS:Ansariel> Send inventory item on autoresponse
     /* virtual */ void onOpen(const LLSD& key)
     {
+        refreshLocalAssistantControls();
         LLButton* clear_item_btn = getChild<LLButton>("clear_autoresponse_item");
         clear_item_btn->setEnabled(false);
         if (LLStartUp::getStartupState() == STATE_STARTED)
@@ -4175,7 +4196,163 @@ public:
     // </FS:Ansariel>
 
 private:
+    struct LocalAssistantRow
+    {
+        const char* key;
+        const char* widget;
+        const char* fallback;
+        bool ask;
+    };
+
+    static const LocalAssistantRow kLocalAssistantRows[9];
+
     std::list<std::string> mAccountIndependentSettings;
+    bool mLocalAssistantSnapshotted = false;
+    bool mBridgeRuntime = false;
+    bool mBridgeSaved = false;
+    bool mBridgeUnsaved = false;
+    LLSD mPermsRuntime;
+    LLSD mPermsSaved;
+    bool mPermsUnsaved = false;
+
+    static bool levelAllowed(const LocalAssistantRow& row, const std::string& level)
+    {
+        if (level == "allow" || level == "deny")
+        {
+            return true;
+        }
+        return row.ask && level == "ask";
+    }
+
+    void refreshLocalAssistantControls()
+    {
+        const bool enabled = gSavedSettings.getBOOL("EnableLocalEventAPIBridge");
+        getChild<LLCheckBoxCtrl>("local_assistant_enable")->setValue(enabled);
+        LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
+        if (!configured.isMap())
+        {
+            configured = LLSD::emptyMap();
+        }
+        for (const LocalAssistantRow& row : kLocalAssistantRows)
+        {
+            std::string level = row.fallback;
+            if (configured.has(row.key) && levelAllowed(row, configured[row.key].asString()))
+            {
+                level = configured[row.key].asString();
+            }
+            getChild<LLComboBox>(row.widget)->setValue(level);
+        }
+        refreshLocalAssistantStatus();
+    }
+
+    void refreshLocalAssistantStatus()
+    {
+        std::string text = "Off";
+        if (FSEventAPIBridge::instanceExists() && FSEventAPIBridge::instance().isRunning())
+        {
+            text = llformat("Listening on 127.0.0.1:%d", FSEventAPIBridge::instance().getPort());
+        }
+        else if (gSavedSettings.getBOOL("EnableLocalEventAPIBridge"))
+        {
+            text = "Not listening";
+        }
+        getChild<LLTextBox>("local_assistant_status")->setText(text);
+    }
+
+    void onLocalAssistantToggled()
+    {
+        const bool enabled = getChild<LLCheckBoxCtrl>("local_assistant_enable")->getValue().asBoolean();
+        gSavedSettings.setBOOL("EnableLocalEventAPIBridge", enabled);
+        refreshLocalAssistantStatus();
+    }
+
+    void onLocalAssistantPermission(const char* key)
+    {
+        const LocalAssistantRow* row = nullptr;
+        for (const LocalAssistantRow& candidate : kLocalAssistantRows)
+        {
+            if (std::string(candidate.key) == key)
+            {
+                row = &candidate;
+                break;
+            }
+        }
+        if (!row)
+        {
+            return;
+        }
+        const std::string level = getChild<LLComboBox>(row->widget)->getValue().asString();
+        if (!levelAllowed(*row, level))
+        {
+            return;
+        }
+        LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
+        if (!configured.isMap())
+        {
+            configured = LLSD::emptyMap();
+        }
+        configured[key] = level;
+        gSavedSettings.setLLSD("LocalEventAPIPermissionClasses", configured);
+    }
+
+    void snapshotLocalAssistant()
+    {
+        LLControlVariable* bridge = gSavedSettings.getControl("EnableLocalEventAPIBridge");
+        LLControlVariable* perms = gSavedSettings.getControl("LocalEventAPIPermissionClasses");
+        if (!bridge || !perms)
+        {
+            mLocalAssistantSnapshotted = false;
+            return;
+        }
+        mBridgeRuntime = bridge->getValue().asBoolean();
+        mBridgeSaved = bridge->getSaveValue().asBoolean();
+        mBridgeUnsaved = bridge->hasUnsavedValue();
+        mPermsRuntime = perms->getValue();
+        mPermsSaved = perms->getSaveValue();
+        mPermsUnsaved = perms->hasUnsavedValue();
+        mLocalAssistantSnapshotted = true;
+    }
+
+    void restoreSavedControl(const char* name, const LLSD& saved, const LLSD& runtime, bool hadUnsaved)
+    {
+        LLControlVariable* control = gSavedSettings.getControl(name);
+        if (!control)
+        {
+            return;
+        }
+        if (llsd_equals(control->getValue(), runtime) &&
+            llsd_equals(control->getSaveValue(), saved) &&
+            control->hasUnsavedValue() == hadUnsaved)
+        {
+            return;
+        }
+        if (hadUnsaved)
+        {
+            if (!llsd_equals(control->getSaveValue(), saved) || !control->hasUnsavedValue())
+            {
+                control->setValue(saved, true);
+            }
+            if (!llsd_equals(control->getValue(), runtime) || !control->hasUnsavedValue())
+            {
+                control->setValue(runtime, false);
+            }
+        }
+        else
+        {
+            control->setValue(runtime, true);
+        }
+    }
+
+    void restoreLocalAssistant()
+    {
+        if (!mLocalAssistantSnapshotted)
+        {
+            return;
+        }
+        restoreSavedControl("EnableLocalEventAPIBridge", mBridgeSaved, mBridgeRuntime, mBridgeUnsaved);
+        restoreSavedControl("LocalEventAPIPermissionClasses", mPermsSaved, mPermsRuntime, mPermsUnsaved);
+        refreshLocalAssistantControls();
+    }
 
     // <FS:Ansariel> Send inventory item on autoresponse
     FSCopyTransInventoryDropTarget* mInvDropTarget;
@@ -4212,6 +4389,18 @@ private:
         childSetEnabled("clear_autoresponse_item", false);
     }
     // </FS:Ansariel>
+};
+
+const LLPanelPreferencePrivacy::LocalAssistantRow LLPanelPreferencePrivacy::kLocalAssistantRows[] = {
+    {"read", "local_assistant_perm_read", "allow", false},
+    {"camera", "local_assistant_perm_camera", "allow", true},
+    {"create", "local_assistant_perm_create", "allow", true},
+    {"edit", "local_assistant_perm_edit", "allow", true},
+    {"move", "local_assistant_perm_move", "allow", true},
+    {"trash", "local_assistant_perm_trash", "allow", true},
+    {"nocopy", "local_assistant_perm_nocopy", "ask", true},
+    {"wear", "local_assistant_perm_wear", "ask", true},
+    {"links", "local_assistant_perm_links", "ask", true},
 };
 
 static LLPanelInjector<LLPanelPreferenceGraphics> t_pref_graph("panel_preference_graphics");

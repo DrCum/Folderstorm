@@ -37,8 +37,8 @@ func registerCamera(s *mcp.Server, state *Server, readOnly, mutating *mcp.ToolAn
 	}, state.cameraReset)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "camera_snapshot",
-		Description: "Capture a JPEG of the current view with UI and HUD hidden by default, and return the image.",
-		Annotations: withTitle(readOnly, "Snapshot"),
+		Description: "Capture a JPEG of the current view. Hides UI and HUD by default and writes a temp JPEG. This follows the Camera permission and is not a read.",
+		Annotations: withTitle(mutating, "Snapshot"),
 	}, state.cameraSnapshot)
 }
 
@@ -61,7 +61,7 @@ type snapshotArgs struct {
 }
 
 func (s *Server) cameraGet(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -72,7 +72,7 @@ func (s *Server) cameraSetPose(ctx context.Context, _ *mcp.CallToolRequest, args
 	if strings.TrimSpace(args.Preset) == "" {
 		return errorResult("invalid_args", "preset is required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -83,7 +83,7 @@ func (s *Server) cameraSet(ctx context.Context, _ *mcp.CallToolRequest, args cam
 	if len(args.Position) != 3 || len(args.Focus) != 3 {
 		return errorResult("invalid_args", "position and focus must each be [x, y, z]", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -94,7 +94,7 @@ func (s *Server) cameraSet(ctx context.Context, _ *mcp.CallToolRequest, args cam
 }
 
 func (s *Server) cameraReset(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -102,7 +102,7 @@ func (s *Server) cameraReset(ctx context.Context, _ *mcp.CallToolRequest, args v
 }
 
 func (s *Server) cameraSnapshot(ctx context.Context, _ *mcp.CallToolRequest, args snapshotArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
 	}

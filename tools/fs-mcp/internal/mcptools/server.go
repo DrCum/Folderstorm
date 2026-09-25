@@ -48,6 +48,7 @@ type Server struct {
 	mu          sync.Mutex
 	selectedPID int
 	plans       map[string]storedPlan
+	policies    map[int]viewerapi.StatusPolicy
 }
 
 // New returns a sidecar tool server with production discovery defaults.
@@ -66,7 +67,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 		state = New()
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: Name, Version: Version}, &mcp.ServerOptions{
-		Instructions: "Local Firestorm sidecar for inventory, appearance, and camera. Talks only to a loopback Event API bridge. Address inventory by UUID. Copy of no-copy items, wearing, detaching, replacing links, emptying trash, and purging require explicit confirmation. Task inventory and Marketplace folders are not available.",
+		Instructions: "Local Firestorm sidecar for inventory, appearance, and camera. Talks only to a loopback Event API bridge. Address inventory by UUID. Wear, detach, replace-links, and moving no-copy items during a copy ask in the viewer unless that permission is Allow. Trash is its own permission and defaults to Allow. Permanent delete (purge and empty trash) is not available. Task inventory and Marketplace folders are not available.",
 	})
 
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false), Title: ""}
@@ -125,12 +126,12 @@ func NewMCPServer(state *Server) *mcp.Server {
 	}, state.inventoryRename)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "inventory_copy",
-		Description: "Copy an item or folder. Default policy copies copyable content then asks to confirm moving unique no-copy leaves (plan_id fallback). Policies: default, strict, copyable_only.",
+		Description: "Copy an item or folder. Copyable items follow Move and copy. Unique no-copy items follow Move no-copy items during a copy. On a current viewer, Ask is a viewer dialog. Policies: default, strict, copyable_only.",
 		Annotations: withTitle(destructive, "Copy inventory"),
 	}, state.inventoryCopy)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "inventory_confirm_copy",
-		Description: "Approve or decline a pending no-copy copy plan. Approval moves unique no-copy items out of the source into the destination.",
+		Description: "Approve or decline a pending no-copy copy plan on an older viewer. On a current viewer, Ask is a dialog in the viewer and this tool is not how that question is asked. Approval moves unique no-copy items out of the source into the destination.",
 		Annotations: withTitle(destructive, "Confirm no-copy copy"),
 	}, state.inventoryConfirmCopy)
 	registerInventoryExtra(s, state, readOnly, mutating, destructive)
@@ -138,7 +139,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 	registerCamera(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "confirm_action",
-		Description: "Approve or decline a pending wear, detach, link replacement, empty-trash, or purge plan.",
+		Description: "Resume a wear, detach, or link-replacement plan stored for an older viewer. A current viewer asks in its own dialog instead. Purge and empty-trash plans are denied and are not sent.",
 		Annotations: withTitle(destructive, "Confirm action"),
 	}, state.confirmAction)
 	return s
@@ -245,9 +246,18 @@ func (s *Server) viewerStatus(ctx context.Context, _ *mcp.CallToolRequest, args 
 	if err != nil {
 		payload["bridge_error"] = err.Error()
 		payload["connected"] = false
+		if ve, ok := err.(*viewerapi.Error); ok {
+			if policy, parsed := viewerapi.ParseStatusPolicy(ve.Body); parsed && policy.Present {
+				s.rememberPolicy(inst.PID, policy)
+				payload["status"] = json.RawMessage(ve.Body)
+			}
+		}
 	} else {
 		payload["connected"] = true
 		payload["status"] = json.RawMessage(status)
+		if policy, parsed := viewerapi.ParseStatusPolicy(status); parsed {
+			s.rememberPolicy(inst.PID, policy)
+		}
 	}
 	return jsonResult(payload)
 }
@@ -303,7 +313,7 @@ func (s *Server) inventoryGet(ctx context.Context, _ *mcp.CallToolRequest, args 
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -314,7 +324,7 @@ func (s *Server) inventoryList(ctx context.Context, _ *mcp.CallToolRequest, args
 	if args.FolderID == "" {
 		return errorResult("invalid_args", "folder_id is required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -329,7 +339,7 @@ func (s *Server) inventoryList(ctx context.Context, _ *mcp.CallToolRequest, args
 }
 
 func (s *Server) inventorySearch(ctx context.Context, _ *mcp.CallToolRequest, args searchArgs) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -395,7 +405,7 @@ func (s *Server) inventorySystemFolder(ctx context.Context, _ *mcp.CallToolReque
 	if ft == "" {
 		return errorResult("invalid_args", "type or ft_name is required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -406,7 +416,7 @@ func (s *Server) inventoryCreateFolder(ctx context.Context, _ *mcp.CallToolReque
 	if args.ParentID == "" || args.Name == "" {
 		return errorResult("invalid_args", "parent_id and name are required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCreate)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -421,7 +431,7 @@ func (s *Server) inventoryMove(ctx context.Context, _ *mcp.CallToolRequest, args
 	if args.ID == "" || args.ParentID == "" {
 		return errorResult("invalid_args", "id and parent_id are required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassMove)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -432,7 +442,7 @@ func (s *Server) inventoryRename(ctx context.Context, _ *mcp.CallToolRequest, ar
 	if args.ID == "" || args.Name == "" {
 		return errorResult("invalid_args", "id and name are required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassEdit)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -446,7 +456,7 @@ func (s *Server) inventoryCopy(ctx context.Context, req *mcp.CallToolRequest, ar
 	if args.ID == "" || args.ParentID == "" {
 		return errorResult("invalid_args", "id and parent_id are required", nil)
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, policy, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassMove)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
@@ -458,28 +468,7 @@ func (s *Server) inventoryCopy(ctx context.Context, req *mcp.CallToolRequest, ar
 	if err != nil {
 		return apiError(err)
 	}
-	parsed := parseCopyResult(raw)
-	if !parsed.NeedsConfirmation || parsed.PlanID == "" {
-		return jsonResult(parsed.Payload)
-	}
-	if args.SkipElicitation || !supportsElicitation(req) {
-		return confirmationRequiredResult(parsed)
-	}
-	state, _ := json.Marshal(copyState{
-		PlanID:    parsed.PlanID,
-		ViewerPID: args.ViewerPID,
-		Payload:   parsed.Payload,
-	})
-	return &mcp.CallToolResult{
-		InputRequests: mcp.InputRequestMap{
-			"no_copy_confirm": &mcp.ElicitParams{
-				Mode:            "form",
-				Message:         noCopyMessage(parsed),
-				RequestedSchema: noCopySchema(),
-			},
-		},
-		RequestState: string(state),
-	}, nil, nil
+	return s.finishCopy(ctx, req, api, policy, args.ViewerPID, raw, args.SkipElicitation)
 }
 
 func (s *Server) finishCopyElicitation(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, any, error) {
@@ -517,13 +506,24 @@ func (s *Server) inventoryConfirmCopy(ctx context.Context, _ *mcp.CallToolReques
 	if args.Confirm != nil {
 		confirm = *args.Confirm
 	}
-	_, api, errRes := s.resolve(args.ViewerPID)
+	api, policy, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassNoCopy)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
+	if !policy.Present {
+		return apiResult(api.ConfirmCopy(ctx, map[string]any{
+			"plan_id": args.PlanID,
+			"confirm": confirm,
+		}))
+	}
+	if !confirm {
+		return jsonResult(map[string]any{
+			"confirmation": "declined",
+			"plan_id":      args.PlanID,
+		})
+	}
 	return apiResult(api.ConfirmCopy(ctx, map[string]any{
 		"plan_id": args.PlanID,
-		"confirm": confirm,
 	}))
 }
 
@@ -541,7 +541,7 @@ func (s *Server) resolve(pidHint int) (discover.Instance, API, *mcp.CallToolResu
 		return discover.Instance{}, nil, res
 	}
 	if len(insts) == 0 {
-		res, _, _ := errorResult("viewer_not_found", "no live Folderstorm MCP discovery files found; start the viewer with --mcp-api", map[string]any{
+		res, _, _ := errorResult("viewer_not_found", "no live Folderstorm MCP discovery files found; turn the bridge on under Preferences, Privacy, General, Local assistant. --mcp-api still forces it on for one session and does not save that choice", map[string]any{
 			"hint": "The sidecar searches the Folderstorm user_settings directory. If settings were moved, set FIRESTORM_MCP_DISCOVERY to that directory or to an fs-mcp-<pid>.json file",
 		})
 		return discover.Instance{}, nil, res
