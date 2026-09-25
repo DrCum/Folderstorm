@@ -2,9 +2,20 @@
 
 `fs-mcp` is a local stdio [MCP](https://modelcontextprotocol.io) server. It turns tool calls from Cursor, Codex, Claude Code, or any other MCP client into the Folderstorm viewer's loopback Event API.
 
-The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
+The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
-Client setup for Cursor, Codex, and Claude Code is in [doc/help.md](../../doc/help.md).
+Windows Release paths. Adjust the exe path if the channel or install type differs:
+
+| Install | Sidecar |
+| --- | --- |
+| Velopack, Release | `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe` |
+| NSIS, Release | `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` |
+
+Set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm user_settings directory, `%APPDATA%\Folderstorm_x64\user_settings`. Use that Folderstorm directory. Firestorm's settings live in `%APPDATA%\Firestorm_x64\user_settings`, and that path will not see this viewer.
+
+On Linux and macOS the program is the `fs-mcp` binary beside the viewer (next to `install.sh`, or `Folderstorm.app/Contents/Resources/fs-mcp`). Set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory.
+
+Cursor, Claude Code, and Codex each have their own file. Connection steps are under [Connect a client](#connect-a-client). The same guide is in [doc/help.md](../../doc/help.md).
 
 ## What it can do
 
@@ -35,7 +46,12 @@ Restrained Love locks are honored. A locked wearable, attachment, or folder retu
 
 ## Build
 
-A packaged installer already includes this binary next to the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer.
+A packaged install already has the binary next to the viewer. Use that path in the client config:
+
+- Velopack Release: `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`
+- NSIS Release: `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`
+
+Adjust the path if the channel or install type differs. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.
 
 ```bash
 cd tools/fs-mcp
@@ -93,7 +109,11 @@ On macOS the cache directory is `Folderstorm_x64`. Settings, logs, and the disco
 
 ### Where the sidecar looks
 
-A normal install needs no discovery variable. The sidecar searches in this order:
+Point each client at the installed exe and set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm user_settings directory. On Windows that is `%APPDATA%\Folderstorm_x64\user_settings`. On Linux it is `~/.folderstorm_x64/user_settings`. On macOS it is `~/Library/Application Support/Folderstorm/user_settings`. Use the Folderstorm directory. Firestorm's user_settings folder is a different path.
+
+When `FIRESTORM_MCP_DISCOVERY` is set, it replaces the default search. It may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows).
+
+If the variable is unset, the sidecar searches in this order:
 
 1. A user-dir override, if one is set: `FOLDERSTORM_X64_USER_DIR`, `FOLDERSTORMOS_X64_USER_DIR`, `FOLDERSTORM_USER_DIR`, `FOLDERSTORMOS_USER_DIR`, then the matching `FIRESTORM_*_USER_DIR` variables.
 2. The Folderstorm settings folders for this operating system.
@@ -105,11 +125,68 @@ A normal install needs no discovery variable. The sidecar searches in this order
 | Windows | `%APPDATA%\Folderstorm_x64`, `FolderstormOS_x64`, `Folderstorm`, `FolderstormOS`, then `Firestorm_x64` and the other Firestorm names |
 | macOS | `~/Library/Application Support/Folderstorm`, plus `FolderstormOS`, `Folderstorm_x64`, and `FolderstormOS_x64`, then the same names with Firestorm |
 
-Each entry is the `user_settings` directory inside that folder. The sidecar reads `fs-mcp-*.json` files there.
-
-Set `FIRESTORM_MCP_DISCOVERY` only when this viewer's settings directory was moved. It may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search.
+Each entry is the `user_settings` directory inside that folder. The sidecar reads `fs-mcp-*.json` files there. The client configs below set `FIRESTORM_MCP_DISCOVERY` so that search stays on Folderstorm.
 
 `FIRESTORM_MCP_TIMEOUT` is a Go duration for each HTTP call. The default is `90s`.
+
+## Connect a client
+
+The viewer does not start `fs-mcp`. Enable **Local assistant**, or the sidecar finds no viewer. Cursor, Claude Code, and Codex each have their own file. One file does not configure the other two. The snippets use the Velopack Release exe. For an NSIS Release install, use `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`. Adjust the path if the channel or install type differs. The same instructions are in [doc/help.md](../../doc/help.md).
+
+On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory.
+
+### Cursor
+
+**Settings → MCP**, or `%USERPROFILE%\.cursor\mcp.json`. The entry is `mcpServers.folderstorm`, with `command` and `env`. A project file `.cursor/mcp.json` is a different file.
+
+```json
+{
+  "mcpServers": {
+    "folderstorm": {
+      "command": "%LocalAppData%\\Folderstorm-Release\\current\\fs-mcp.exe",
+      "env": {
+        "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
+      }
+    }
+  }
+}
+```
+
+### Claude Code
+
+`claude mcp add --transport stdio --scope user` writes `%USERPROFILE%\.claude.json`:
+
+```bat
+claude mcp add --transport stdio --scope user folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
+```
+
+For a single project, use `.mcp.json` in that project's root. If the CLI has no environment flag, add the env block in the file it wrote:
+
+```json
+"env": {
+  "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
+}
+```
+
+### Codex
+
+Codex is ChatGPT's coding client. `codex mcp add` writes `%USERPROFILE%\.codex\config.toml`:
+
+```bat
+codex mcp add folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
+```
+
+```toml
+[mcp_servers.folderstorm]
+command = '%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe'
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+
+[mcp_servers.folderstorm.env]
+FIRESTORM_MCP_DISCOVERY = '%APPDATA%\Folderstorm_x64\user_settings'
+```
+
+If the command leaves out the env table, add it in that file. The ChatGPT desktop app is separate. Add the sidecar by hand in its connector settings. That app does not read `%USERPROFILE%\.codex\config.toml`.
 
 ### More than one viewer
 

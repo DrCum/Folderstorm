@@ -71,9 +71,20 @@ On Linux you can point the viewer at another directory with `FOLDERSTORM_X64_USE
 
 ### 2. Point a client at the sidecar
 
-A packaged installer already includes `fs-mcp` in the same folder as `migrate-settings`. On Windows that file is `fs-mcp.exe`, next to the viewer. A Velopack install of the Release channel puts it at `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`. The legacy NSIS installer puts it at `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`. On Linux it is `fs-mcp` next to `install.sh`. On macOS it is `Folderstorm.app/Contents/Resources/fs-mcp`.
+The installer ships `fs-mcp` in the same folder as the viewer and `migrate-settings`. On Windows that file is `fs-mcp.exe`. The viewer does not start it. The installer does not write a config for Cursor, Claude Code, or Codex. You point each client at that exe.
 
-Use that absolute path in the client config below. The viewer does not start the sidecar, and the installer does not write an MCP config into Cursor or any other app. The local assistant stays off until you enable it.
+The paths below are the Release channel. Adjust the path if the channel or install type differs. The discovery directory stays Folderstorm's `user_settings` folder.
+
+| Install | Sidecar |
+| --- | --- |
+| Velopack, Release | `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe` |
+| NSIS, Release | `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` |
+
+Set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm user_settings directory, `%APPDATA%\Folderstorm_x64\user_settings`. Use that Folderstorm directory. Firestorm's settings live in `%APPDATA%\Firestorm_x64\user_settings`, and that path will not see this viewer. When the variable is set, it replaces the default search, which also looks in Firestorm folders. It may be one file, one directory of `fs-mcp-*.json` files, or a `;`-separated path list.
+
+On Linux and macOS the program is the `fs-mcp` binary beside the viewer: next to `install.sh` on Linux, and `Folderstorm.app/Contents/Resources/fs-mcp` on macOS. Set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory from the table above.
+
+Turn **Local assistant** on before you connect. With the bridge off, the sidecar finds no viewer.
 
 To build the binary yourself instead, install Go 1.25 or newer, then:
 
@@ -82,101 +93,108 @@ cd tools/fs-mcp
 go build -o fs-mcp ./cmd/fs-mcp
 ```
 
-Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in the client config below. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
-
-### 3. How the sidecar finds the viewer
-
-The sidecar searches the Folderstorm directory in the table above. It also checks the older Firestorm folders, so a Firestorm install on the same machine is still found. A normal install does not need `FIRESTORM_MCP_DISCOVERY`.
-
-Set `FIRESTORM_MCP_DISCOVERY` when this viewer's settings live somewhere else. It may be one file, one directory of `fs-mcp-*.json` files, or a path list (`:` on Unix, `;` on Windows). When it is set, it replaces the default search. On Linux, `FOLDERSTORM_X64_USER_DIR` is recognized too.
+Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in place of the installed path below. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
 
 `FIRESTORM_MCP_TIMEOUT` is how long one viewer call may take. The default is `90s`.
 
 ## Connect a client
 
-All three clients run the same binary. They differ in file format, file location, and how environment variables are written.
+Cursor, Claude Code, and Codex each keep their own file. `mcp.json`, `.claude.json`, and `config.toml` are three configs. Adding the server in one of them leaves the other two unchanged. All three run the same exe.
 
-Use a server name such as `folderstorm`. Tool names inside the sidecar stay `inventory_search`, `camera_snapshot`, and so on. Claude Code shows them to you as `mcp__folderstorm__inventory_search`.
+The server name is `folderstorm`. Tool names inside the sidecar stay `inventory_search`, `camera_snapshot`, and so on. Claude Code shows them to you as `mcp__folderstorm__inventory_search`.
+
+The snippets use the Velopack Release exe. For an NSIS Release install, use `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` as `command`. Adjust the path if the channel or install type differs. Leave `FIRESTORM_MCP_DISCOVERY` on `%APPDATA%\Folderstorm_x64\user_settings`.
 
 ### Cursor
 
-Project file `.cursor/mcp.json`, or the global file `~/.cursor/mcp.json`. You can also add it from **Cursor Settings → MCP**.
+Open **Settings → MCP**, or edit `%USERPROFILE%\.cursor\mcp.json`. The entry is `mcpServers.folderstorm`, with `command` and `env`.
 
 ```json
 {
   "mcpServers": {
     "folderstorm": {
-      "command": "/absolute/path/to/fs-mcp"
+      "command": "%LocalAppData%\\Folderstorm-Release\\current\\fs-mcp.exe",
+      "env": {
+        "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
+      }
     }
   }
 }
 ```
 
-Restart the MCP server from the Cursor MCP panel after you edit the file. Cursor does not use a `type` field for a local command. If settings were moved, add an `env` object with `FIRESTORM_MCP_DISCOVERY` set to that `user_settings` directory.
+A single project can use `.cursor/mcp.json` in that project. That file is separate from `%USERPROFILE%\.cursor\mcp.json`. Restart the MCP server from the Cursor MCP panel after you edit the file. Cursor does not use a `type` field for a local command.
 
 ### Claude Code
 
-Three scopes, same JSON shape:
+User scope writes `%USERPROFILE%\.claude.json`. Flags go before the server name. The double dash separates the sidecar command:
 
-| Scope | Stored in | Who sees it |
-| --- | --- | --- |
-| local (default) | `~/.claude.json`, under this project | Only you, this project |
-| project | `.mcp.json` in the project root | Anyone who clones the repo, after they approve it |
-| user | `~/.claude.json`, top-level `mcpServers` | Only you, every project |
-
-Add it from a shell. Flags go before the server name. The double dash separates the sidecar command:
-
-```bash
-claude mcp add --scope user \
-  folderstorm -- /absolute/path/to/fs-mcp
+```bat
+claude mcp add --transport stdio --scope user folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
 ```
 
-Or write `.mcp.json` yourself:
+For a single project, use `.mcp.json` in that project's root. That file is approved the first time the folder is opened. The user-scope file remains `%USERPROFILE%\.claude.json`. Claude Code does not read `%USERPROFILE%\.claude\mcp.json`.
+
+If that `claude` command has no environment flag, add the env block on the `folderstorm` server in the file it wrote:
+
+```json
+"env": {
+  "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
+}
+```
+
+A project `.mcp.json` looks like this:
 
 ```json
 {
   "mcpServers": {
     "folderstorm": {
       "type": "stdio",
-      "command": "/absolute/path/to/fs-mcp",
-      "args": []
+      "command": "%LocalAppData%\\Folderstorm-Release\\current\\fs-mcp.exe",
+      "args": [],
+      "env": {
+        "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
+      }
     }
   }
 }
 ```
 
-Check with `claude mcp list`. A project `.mcp.json` asks for approval the first time that folder is opened. Claude Code does not read `~/.claude/mcp.json`.
+Check with `claude mcp list`.
 
 ### Codex
 
-Codex uses TOML, and the table name is `mcp_servers`, not `mcpServers`.
+Codex is ChatGPT's coding client. `codex mcp add` writes `%USERPROFILE%\.codex\config.toml`. The table name is `mcp_servers`.
 
-User file `~/.codex/config.toml`:
+```bat
+codex mcp add folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
+```
+
+The file should contain the command and the Folderstorm discovery directory:
 
 ```toml
 [mcp_servers.folderstorm]
-command = "/absolute/path/to/fs-mcp"
+command = '%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe'
 startup_timeout_sec = 20
 tool_timeout_sec = 120
+
+[mcp_servers.folderstorm.env]
+FIRESTORM_MCP_DISCOVERY = '%APPDATA%\Folderstorm_x64\user_settings'
 ```
 
-Or:
+If `codex mcp add` writes the command and leaves out the env table, add that table in `%USERPROFILE%\.codex\config.toml`. `codex mcp list` shows what was saved.
 
-```bash
-codex mcp add folderstorm -- /absolute/path/to/fs-mcp
-```
+The ChatGPT desktop app is separate. Add the sidecar by hand in that app's connector settings. The desktop app does not read `%USERPROFILE%\.codex\config.toml`.
 
-`codex mcp list` shows what was saved.
-
-A project file `.codex/config.toml` is loaded only when that project is trusted. If the server appears in the file and Codex ignores it, trust the project or put the same table in `~/.codex/config.toml`.
+A project file `.codex/config.toml` is loaded only when that project is trusted. If the server appears in the file and Codex ignores it, trust the project or put the same table in `%USERPROFILE%\.codex\config.toml`.
 
 `tool_timeout_sec` should stay above the sidecar timeout (default 90 seconds). Inventory reads wait for the viewer to fetch objects, and a short client timeout cancels them first. The sidecar itself starts immediately, so the startup timeout only needs to cover process launch.
 
 ### What is the same everywhere
 
-- One command, no arguments, stdio transport.
+- One command, no arguments, stdio transport. The command is the installed exe next to the viewer.
 - The same tool names and arguments.
-- `FIRESTORM_MCP_DISCOVERY` only when settings were moved, and the same path on every client.
+- `FIRESTORM_MCP_DISCOVERY` set to this viewer's Folderstorm `user_settings` directory. Each client still has its own file.
+- **Local assistant** is on. With the bridge off, the sidecar finds no viewer.
 - Ask is a dialog in the viewer. The tool call stays in flight until you answer, or for 60 seconds, and then it is denied. A client that auto-approves `confirm_action` does not skip that dialog.
 
 ## Asking for something
@@ -204,12 +222,12 @@ If two viewers are open, say which one, or ask for the process list and pick a p
 
 ## When it does not connect
 
-- The local assistant switch is off. Turn it on under **Preferences → Privacy → General**. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
-- `FIRESTORM_MCP_DISCOVERY` is set and points somewhere other than this viewer's `user_settings` directory. That variable replaces the default search. Unset it, or point it at the Folderstorm directory from the table above.
+- The local assistant switch is off. Turn it on under **Preferences → Privacy → General**. With the bridge off, the sidecar finds no viewer. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
+- `FIRESTORM_MCP_DISCOVERY` points at Firestorm's user_settings directory, or at any folder other than this viewer's Folderstorm `user_settings`. That variable replaces the default search. On Windows set it to `%APPDATA%\Folderstorm_x64\user_settings`. On Linux and macOS use the Folderstorm directory in the table above.
 - Inventory is still downloading. `viewer_status` shows fetch progress. Wait until `usable` is true.
-- The binary path in the client config is relative, or it is the Go source directory instead of the built `fs-mcp` file.
-- Codex is using a project `.codex/config.toml` in an untrusted folder, or the table is named `mcpServers`.
-- Claude Code was given `--env` after the server name, so the variable was never applied. Flags go before `folderstorm`.
+- The command is a relative path, the Go source directory, or a hand-built binary when this install already has `fs-mcp.exe` next to the viewer. Use the Velopack or NSIS path above, and adjust it if the channel or install type differs.
+- Codex is using a project `.codex/config.toml` in an untrusted folder, the table is named `mcpServers`, or the ChatGPT desktop app was expected to read `%USERPROFILE%\.codex\config.toml`.
+- Claude Code's file has no `env` block. If `claude mcp add` has no environment flag, add `FIRESTORM_MCP_DISCOVERY` in the file it wrote (`%USERPROFILE%\.claude.json`, or `.mcp.json` for one project). Flags that do exist go before `folderstorm`.
 - A tool dies around 10–30 seconds while inventory is still loading. Raise the client tool timeout above 90 seconds, or set `FIRESTORM_MCP_TIMEOUT` to match a timeout you accept.
 
 The discovery file contains the bearer token. Leave it on disk for the sidecar, and do not paste it into chat, tickets, or a remote machine.
