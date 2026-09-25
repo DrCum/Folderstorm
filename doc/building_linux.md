@@ -59,17 +59,17 @@ If you do not want to install the required Python packages into the default Pyth
 
 ### Install Autobuild
 
-Autobuild is a Linden Lab resource that does all the hard work.
-If you created a Python virtual environment, activate it first.
-You can install it using the same versions as our automated builds as follows:
+From the viewer checkout:
+
 ```
-sudo pip3 install --upgrade pip
-pip install -r requirements.txt
+source scripts/bootstrap-autobuild.sh
 ```
-Check Autobuild version to be "autobuild 3.9.3" or higher: `autobuild --version`
+
+That creates `.venv`, runs `pip install -r requirements.txt`, puts that venv's `autobuild` on `PATH`, and exports `AUTOBUILD_VARIABLES_FILE` to `fs-build-variables/variables` in this repo. `configure_firestorm.sh` uses that path when the variable is unset. Source the script again in each new shell. Check Autobuild version to be "autobuild 3.9.3" or higher: `autobuild --version`
+
 ## Download the source code
 
-There are two required repositories, the viewer itself and the build variables. An optional third repository is used to configure and package FMOD Studio.
+The viewer repository includes the build variables. An optional second repository is used to configure and package FMOD Studio.
 
 ### Clone the viewer
 
@@ -86,14 +86,9 @@ git clone https://github.com/FirestormViewer/phoenix-firestorm.git NewDestinatio
  
 The rest of this document will assume the default directory, `phoenix-firestorm`
 
-### Clone the Autobuild build variables
+### Build variables
 
-Autobuild uses a separate file to control compiler options, switches, and the like for different configurations. 
-
-```
-cd ~/src
-git clone https://github.com/FirestormViewer/fs-build-variables.git
-```
+Autobuild reads compiler switches from `AUTOBUILD_VARIABLES_FILE`. This repo ships that file at `fs-build-variables/variables`. `source scripts/bootstrap-autobuild.sh` exports it. Set the variable yourself only if you want a different file.
 
 ### Create FMOD Studio package (optional)
 
@@ -117,7 +112,7 @@ Click the button representing the version you're after, then click the Download 
 Copy that file to the `~/src/3p-fmodstudio` directory.
 
 ```
-export AUTOBUILD_VARIABLES_FILE=$HOME/src/fs-build-variables/variables
+export AUTOBUILD_VARIABLES_FILE=$HOME/src/phoenix-firestorm/fs-build-variables/variables
 autobuild build -A 64 --all
 autobuild package -A 64 --results-file result.txt
 ```
@@ -153,13 +148,7 @@ autobuild installables edit fmodstudio platform=linux64 hash=c3f696412ef74f1559c
 
 ### Configuring the viewer
 
-Start by initializing the variables
-
-```
-export AUTOBUILD_VARIABLES_FILE=$HOME/src/fs-build-variables/variables
-```
-
-You can add that to `~/.bashrc` or `~/.profile` so they execute automatically, or execute them before you run autobuild.
+`source scripts/bootstrap-autobuild.sh` sets `AUTOBUILD_VARIABLES_FILE` to `fs-build-variables/variables`. You can export a different path if you need one.
 
 ```
 cd ~/src/phoenix-firestorm
