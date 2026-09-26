@@ -319,6 +319,7 @@ func TestToolAnnotations(t *testing.T) {
 		"appearance_outfits", "appearance_outfit_items", "appearance_worn",
 		"appearance_wear_outfit", "appearance_wear_items", "appearance_detach",
 		"camera_get", "camera_set_pose", "camera_set", "camera_reset", "camera_snapshot",
+		"inventory_snapshot_upload",
 		"confirm_action",
 	} {
 		if byName[name] == nil {
@@ -333,6 +334,9 @@ func TestToolAnnotations(t *testing.T) {
 	}
 	if byName["camera_snapshot"].Annotations.ReadOnlyHint {
 		t.Fatal("camera_snapshot is not read-only")
+	}
+	if byName["inventory_snapshot_upload"].Annotations.ReadOnlyHint {
+		t.Fatal("inventory_snapshot_upload is not read-only")
 	}
 }
 

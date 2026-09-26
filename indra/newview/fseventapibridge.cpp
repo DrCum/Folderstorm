@@ -26,6 +26,9 @@
 #include "lltimer.h"
 #include "lluuid.h"
 #include "llviewercontrol.h"
+#include "fssnapshotupload.h"
+#include "llagentbenefits.h"
+#include "llstring.h"
 
 #include <boost/json.hpp>
 #include <openssl/crypto.h>
@@ -318,6 +321,10 @@ std::string action_phrase(const std::string& op, ActionClass kind)
     {
         return "Take a picture";
     }
+    if (op == "snapshotUpload")
+    {
+        return "Set the folder image";
+    }
     if (op == "set" || op == "setPose" || op == "reset")
     {
         return "Move the camera";
@@ -465,6 +472,12 @@ public:
             return;
         }
 
+        if (api == "LLInventory" && op == "snapshotUpload")
+        {
+            dispatchSnapshotUpload(input, response);
+            return;
+        }
+
         const ActionClass kind = classify(api, op);
         if (kind == ActionClass::Unknown || kind == ActionClass::Permanent)
         {
@@ -539,6 +552,63 @@ private:
         LLNotificationPtr notification;
     };
 
+    void dispatchSnapshotUpload(const LLSD& input, ResponsePtr response)
+    {
+        std::string raw_destination = input.has("destination") ? input["destination"].asString() : std::string();
+        LLStringUtil::trim(raw_destination);
+        LLStringUtil::toLower(raw_destination);
+        std::string destination;
+        if (!fs_snapshot::normalize_destination(raw_destination, destination))
+        {
+            fail_response(response, HTTP_BAD_REQUEST, "destination must be thumbnail or texture");
+            return;
+        }
+        const bool has_width = input.has("width");
+        const bool has_height = input.has("height");
+        if (has_width != has_height)
+        {
+            fail_response(response, HTTP_BAD_REQUEST, "width and height must both be set");
+            return;
+        }
+
+        const ActionClass kind = destination == "texture" ? ActionClass::Create : ActionClass::Edit;
+        const std::string level = effective_level(kind);
+        S32 texture_cost = 0;
+        if (destination == "texture")
+        {
+            const S32 width = has_width ? fs_snapshot::clamp_edge(input["width"].asInteger()) : fs_snapshot::kDefaultEdge;
+            const S32 height = has_height ? fs_snapshot::clamp_edge(input["height"].asInteger()) : fs_snapshot::kDefaultEdge;
+            texture_cost = LLAgentBenefitsMgr::current().getTextureUploadCost(width, height);
+        }
+        const S32 cost = fs_snapshot::quoted_cost(destination, texture_cost);
+        const fs_snapshot::UploadAction action = fs_snapshot::decide(level, cost);
+        if (action == fs_snapshot::UploadAction::Deny)
+        {
+            fail_response(
+                response,
+                HTTP_FORBIDDEN,
+                ERR_NOT_ALLOWED,
+                llsd::map("op", "snapshotUpload", "class", find_def(kind)->id));
+            return;
+        }
+        if (action == fs_snapshot::UploadAction::Ask)
+        {
+            std::string message;
+            if (destination == "texture")
+            {
+                message = "Upload a texture for L$" + std::to_string(cost);
+                const std::string target = target_label(input);
+                if (!target.empty())
+                {
+                    message += " and set it on " + target;
+                }
+            }
+            enqueueAsk(input, response, "LLInventory", "snapshotUpload", kind, message);
+            return;
+        }
+        postEvent(input, response, "LLInventory", "snapshotUpload", false);
+    }
+
     void postEvent(LLSD request, ResponsePtr response, const std::string& api, const std::string& op, bool needsConfirm)
     {
         if (needsConfirm)
@@ -568,7 +638,7 @@ private:
         LLEventPumps::instance().obtain(api).post(request);
     }
 
-    void enqueueAsk(const LLSD& input, ResponsePtr response, const std::string& api, const std::string& op, ActionClass kind)
+    void enqueueAsk(const LLSD& input, ResponsePtr response, const std::string& api, const std::string& op, ActionClass kind, const std::string& message = {})
     {
         Ask ask;
         ask.key = LLUUID::generateNewID();
@@ -578,7 +648,7 @@ private:
         ask.op = op;
         ask.needsConfirm = op_needs_confirm(op);
         ask.title = find_def(kind) ? find_def(kind)->title : "Local assistant";
-        ask.message = action_message(op, kind, input);
+        ask.message = message.empty() ? action_message(op, kind, input) : message;
         ask.enqueuedAt = now_seconds();
         ask.chainDeadline = ask.enqueuedAt + CHAIN_GUARD_SECONDS;
         mAskOrder.push_back(ask.key);

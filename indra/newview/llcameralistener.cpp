@@ -11,6 +11,7 @@
 #include "llagentcamera.h"
 #include "lldir.h"
 #include "llfile.h"
+#include "fssnapshotupload.h"
 #include "llsnapshotmodel.h"
 #include "lluuid.h"
 #include "llviewerwindow.h"
@@ -22,9 +23,6 @@
 namespace
 {
 LLCameraListener sCameraListener;
-
-const S32 kDefaultMaxEdge = 1024;
-const S32 kHardMaxEdge = 2048;
 
 LLSD vec3(const LLVector3& value)
 {
@@ -111,6 +109,20 @@ void apply_pose(const LLVector3d& camera_global, const LLVector3d& focus_global)
     gAgentCamera.changeCameraToThirdPerson(false);
     gAgentCamera.setCameraPosAndFocusGlobal(camera_global, focus_global, gAgent.getID());
 }
+
+bool write_snapshot_jpeg(LLImageRaw* raw, const std::string& path)
+{
+    if (!raw)
+    {
+        return false;
+    }
+    LLPointer<LLImageFormatted> formatted = LLImageFormatted::createFromType(IMG_CODEC_JPEG);
+    if (formatted.isNull() || !formatted->encode(raw, 0.0f))
+    {
+        return false;
+    }
+    return formatted->save(path);
+}
 }
 
 LLCameraListener::LLCameraListener()
@@ -125,8 +137,107 @@ LLCameraListener::LLCameraListener()
         &LLCameraListener::set, llsd::map("position", LLSD(), "focus", LLSD(), "reply", LLSD()));
     add("reset", "Return the camera to the default third-person pose",
         &LLCameraListener::reset, llsd::map("reply", LLSD()));
-    add("snapshot", "Write a JPEG snapshot to a temporary file and return its path",
+    add("snapshot", "Write a JPEG snapshot to a temporary file and return its path. Optional width and height capture that frame. viewport_only uses the world view.",
         &LLCameraListener::snapshot, llsd::map("reply", LLSD()));
+}
+
+bool fs_parse_snapshot_frame(const LLSD& data, const FSSnapshotDefaults& defaults, FSSnapshotFrame& frame, std::string& error)
+{
+    if (!gViewerWindow)
+    {
+        error = "Viewer window is not available";
+        return false;
+    }
+    frame.show_ui = data.has("show_ui") ? data["show_ui"].asBoolean() : false;
+    frame.show_hud = data.has("show_hud") ? data["show_hud"].asBoolean() : false;
+    frame.viewport_only = data.has("viewport_only") ? data["viewport_only"].asBoolean() : defaults.viewport_only;
+
+    const bool has_width = data.has("width");
+    const bool has_height = data.has("height");
+    if (has_width != has_height)
+    {
+        error = "width and height must both be set";
+        return false;
+    }
+    if (has_width)
+    {
+        frame.explicit_size = true;
+        frame.width = fs_snapshot::clamp_edge(data["width"].asInteger());
+        frame.height = fs_snapshot::clamp_edge(data["height"].asInteger());
+        return true;
+    }
+    if (defaults.square)
+    {
+        frame.explicit_size = true;
+        const int edge = fs_snapshot::clamp_edge(defaults.square_edge);
+        frame.width = edge;
+        frame.height = edge;
+        return true;
+    }
+
+    int max_edge = data.has("max_edge") ? data["max_edge"].asInteger() : fs_snapshot::kDefaultEdge;
+    max_edge = fs_snapshot::clamp_edge(max_edge);
+    int width = 0;
+    int height = 0;
+    if (frame.viewport_only)
+    {
+        const LLRect rect = gViewerWindow->getWorldViewRectRaw();
+        width = rect.getWidth();
+        height = rect.getHeight();
+    }
+    else
+    {
+        width = gViewerWindow->getWindowWidthRaw();
+        height = gViewerWindow->getWindowHeightRaw();
+    }
+    if (width < 1 || height < 1)
+    {
+        error = "Viewer window has no drawable size";
+        return false;
+    }
+    const int long_edge = std::max(width, height);
+    if (long_edge > max_edge)
+    {
+        const F32 scale = (F32)max_edge / (F32)long_edge;
+        width = std::max(1, (int)std::lround(width * scale));
+        height = std::max(1, (int)std::lround(height * scale));
+    }
+    frame.explicit_size = false;
+    frame.width = width;
+    frame.height = height;
+    return true;
+}
+
+bool fs_capture_snapshot_image(const FSSnapshotFrame& frame, LLPointer<LLImageRaw>& image, std::string& error)
+{
+    if (!gViewerWindow)
+    {
+        error = "Viewer window is not available";
+        return false;
+    }
+    image = new LLImageRaw;
+    const bool keep_window_aspect = !frame.explicit_size;
+    const bool ok = gViewerWindow->rawSnapshot(
+        image,
+        frame.width,
+        frame.height,
+        keep_window_aspect,
+        false,
+        frame.show_ui,
+        frame.show_hud,
+        true,
+        false,
+        false,
+        LLSnapshotModel::SNAPSHOT_TYPE_COLOR,
+        MAX_SNAPSHOT_IMAGE_SIZE,
+        frame.viewport_only);
+    if (!ok)
+    {
+        error = "Snapshot failed";
+        image = NULL;
+        return false;
+    }
+    return true;
 }
 
 void LLCameraListener::get(LLSD const& data)
@@ -202,53 +313,47 @@ void LLCameraListener::reset(LLSD const& data)
 void LLCameraListener::snapshot(LLSD const& data)
 {
     Response response(LLSD(), data);
-    if (!gViewerWindow)
+    FSSnapshotFrame frame;
+    std::string error;
+    if (!fs_parse_snapshot_frame(data, FSSnapshotDefaults(), frame, error))
     {
-        return response.error("Viewer window is not available");
+        return response.error(error);
     }
 
-    S32 max_edge = data.has("max_edge") ? data["max_edge"].asInteger() : kDefaultMaxEdge;
-    max_edge = std::clamp(max_edge, 64, kHardMaxEdge);
-    S32 width = gViewerWindow->getWindowWidthRaw();
-    S32 height = gViewerWindow->getWindowHeightRaw();
-    if (width < 1 || height < 1)
-    {
-        return response.error("Viewer window has no drawable size");
-    }
-    const S32 long_edge = std::max(width, height);
-    if (long_edge > max_edge)
-    {
-        const F32 scale = (F32)max_edge / (F32)long_edge;
-        width = std::max(1, (S32)std::lround(width * scale));
-        height = std::max(1, (S32)std::lround(height * scale));
-    }
-
-    const bool show_ui = data.has("show_ui") ? data["show_ui"].asBoolean() : false;
-    const bool show_hud = data.has("show_hud") ? data["show_hud"].asBoolean() : false;
     const std::string directory = gDirUtilp->getExpandedFilename(LL_PATH_TEMP, "fs-mcp-snapshots");
     LLFile::mkdir(directory);
     const std::string path = directory + gDirUtilp->getDirDelimiter() +
         LLUUID::generateNewID().asString() + ".jpg";
-    const bool ok = gViewerWindow->saveSnapshot(
-        path,
-        width,
-        height,
-        show_ui,
-        show_hud,
-        true,
-        false,
-        LLSnapshotModel::SNAPSHOT_TYPE_COLOR,
-        LLSnapshotModel::SNAPSHOT_FORMAT_JPEG);
+    bool ok = false;
+    if (!frame.explicit_size && !frame.viewport_only)
+    {
+        // Omitted size and viewport keep the previous whole-window JPEG.
+        ok = gViewerWindow->saveSnapshot(
+            path,
+            frame.width,
+            frame.height,
+            frame.show_ui,
+            frame.show_hud,
+            true,
+            false,
+            LLSnapshotModel::SNAPSHOT_TYPE_COLOR,
+            LLSnapshotModel::SNAPSHOT_FORMAT_JPEG);
+    }
+    else
+    {
+        LLPointer<LLImageRaw> raw;
+        ok = fs_capture_snapshot_image(frame, raw, error) && write_snapshot_jpeg(raw, path);
+    }
     if (!ok || !LLFile::isfile(path))
     {
         LLFile::remove(path);
-        return response.error("Snapshot failed");
+        return response.error(error.empty() ? "Snapshot failed" : error);
     }
 
     response["ok"] = true;
     response["path"] = path;
-    response["width"] = width;
-    response["height"] = height;
+    response["width"] = frame.width;
+    response["height"] = frame.height;
     response["mime"] = "image/jpeg";
     response["camera"] = camera_state();
 }

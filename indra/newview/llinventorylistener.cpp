@@ -51,6 +51,23 @@
 #include "llworldmap.h"
 #include "llviewerassetstorage.h"
 #include "llviewercontrol.h"
+#include "llcameralistener.h"
+#include "fssnapshotupload.h"
+#include "llfloatersimplesnapshot.h"
+#include "llfloaterperms.h"
+#include "llviewermenufile.h"
+#include "llviewerassetupload.h"
+#include "llviewertexturelist.h"
+#include "llimagej2c.h"
+#include "llagentbenefits.h"
+#include "llbuycurrencyhtml.h"
+#include "llstatusbar.h"
+#include "llviewerregion.h"
+#include "llpermissions.h"
+#include "llresourcedata.h"
+#include "llstring.h"
+#include "message.h"
+#include "lltransactiontypes.h"
 #include "rlvactions.h"
 #include "rlvlocks.h"
 #include "stringize.h"
@@ -143,6 +160,9 @@ LLInventoryListener::LLInventoryListener()
     add("setThumbnail", "Set an item or folder thumbnail asset id",
         &LLInventoryListener::setThumbnail,
         llsd::map("id", LLSD(), "thumbnail_id", LLSD(), "reply", LLSD()));
+    add("snapshotUpload", "Capture a snapshot and set it as a folder or item image",
+        &LLInventoryListener::snapshotUpload,
+        llsd::map("id", LLSD(), "reply", LLSD()));
     add("setFavorite", "Set or clear the favorite flag",
         &LLInventoryListener::setFavorite,
         llsd::map("id", LLSD(), "favorite", LLSD(), "reply", LLSD()));
@@ -1957,6 +1977,279 @@ void LLInventoryListener::setThumbnail(LLSD const& data)
     {
         update_inventory_category(id, updates, callback);
     }
+}
+
+namespace
+{
+struct SnapshotTextureHold
+{
+    LLSD request;
+    LLUUID inventory_id;
+    S32 cost = 0;
+    bool sent = false;
+};
+
+void reply_snapshot_texture(const std::shared_ptr<SnapshotTextureHold>& hold, const LLSD& body)
+{
+    if (!hold || hold->sent)
+    {
+        return;
+    }
+    hold->sent = true;
+    sendReply(body, hold->request);
+}
+
+void assign_uploaded_thumbnail(const std::shared_ptr<SnapshotTextureHold>& hold, const LLUUID& asset_id)
+{
+    if (!hold)
+    {
+        return;
+    }
+    if (asset_id.isNull())
+    {
+        reply_snapshot_texture(hold, llsd::map("error", "Texture upload failed"));
+        return;
+    }
+    LLSD updates;
+    updates["thumbnail"] = LLSD().with("asset_id", asset_id.asString());
+    LLPointer<LLInventoryCallback> callback =
+        new LLBoostFuncInventoryCallback([hold, asset_id](const LLUUID&)
+        {
+            if (!gInventory.getObject(hold->inventory_id))
+            {
+                reply_snapshot_texture(hold, llsd::map("error", "Thumbnail update failed"));
+                return;
+            }
+            reply_snapshot_texture(hold, llsd::map(
+                "ok", true,
+                "cost", LLSD::Integer(hold->cost),
+                "destination", "texture",
+                "asset_id", asset_id,
+                "thumbnail_id", asset_id,
+                "id", hold->inventory_id));
+        });
+    if (gInventory.getItem(hold->inventory_id))
+    {
+        update_inventory_item(hold->inventory_id, updates, callback);
+    }
+    else
+    {
+        update_inventory_category(hold->inventory_id, updates, callback);
+    }
+}
+
+void snapshot_texture_legacy_callback(const LLUUID& asset_id, void* user_data, S32 result, LLExtStat)
+{
+    LLResourceData* data = static_cast<LLResourceData*>(user_data);
+    std::shared_ptr<SnapshotTextureHold> hold;
+    if (data && data->mUserData)
+    {
+        auto* boxed = static_cast<std::shared_ptr<SnapshotTextureHold>*>(data->mUserData);
+        hold = *boxed;
+        delete boxed;
+        data->mUserData = nullptr;
+    }
+    if (!hold || !data || result < 0)
+    {
+        reply_snapshot_texture(hold, llsd::map("error", "Texture upload failed"));
+        delete data;
+        return;
+    }
+
+    const S32 expected_upload_cost = data->mExpectedUploadCost;
+    bool balance_ok = true;
+    LLViewerRegion* region = gAgent.getRegion();
+    if (!can_afford_transaction(expected_upload_cost))
+    {
+        LLBuyCurrencyHTML::openCurrencyFloater("", expected_upload_cost);
+        balance_ok = false;
+    }
+    else if (region)
+    {
+        gStatusBar->debitBalance(expected_upload_cost);
+        LLMessageSystem* msg = gMessageSystem;
+        msg->newMessageFast(_PREHASH_MoneyTransferRequest);
+        msg->nextBlockFast(_PREHASH_AgentData);
+        msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
+        msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
+        msg->nextBlockFast(_PREHASH_MoneyData);
+        msg->addUUIDFast(_PREHASH_SourceID, gAgent.getID());
+        msg->addUUIDFast(_PREHASH_DestID, LLUUID::null);
+        msg->addU8("Flags", 0);
+        msg->addS32Fast(_PREHASH_Amount, expected_upload_cost);
+        msg->addU8Fast(_PREHASH_AggregatePermNextOwner, (U8)LLAggregatePermissions::AP_EMPTY);
+        msg->addU8Fast(_PREHASH_AggregatePermInventory, (U8)LLAggregatePermissions::AP_EMPTY);
+        msg->addS32Fast(_PREHASH_TransactionType, TRANS_UPLOAD_CHARGE);
+        msg->addStringFast(_PREHASH_Description, NULL);
+        msg->sendReliable(region->getHost());
+    }
+    if (!balance_ok)
+    {
+        reply_snapshot_texture(hold, llsd::map("error", "Not enough L$ to upload the texture"));
+        delete data;
+        return;
+    }
+
+    LLFolderType::EType dest_loc = data->mPreferredLocation == LLFolderType::FT_NONE
+        ? LLFolderType::assetTypeToFolderType(data->mAssetInfo.mType)
+        : data->mPreferredLocation;
+    const LLUUID folder_id = gInventory.findCategoryUUIDForType(dest_loc);
+    if (folder_id.isNull())
+    {
+        reply_snapshot_texture(hold, llsd::map("error", "Texture upload failed"));
+        delete data;
+        return;
+    }
+    U32 next_owner_perms = data->mNextOwnerPerm;
+    if (PERM_NONE == next_owner_perms)
+    {
+        next_owner_perms = PERM_MOVE | PERM_TRANSFER;
+    }
+    create_inventory_item(
+        gAgent.getID(),
+        gAgent.getSessionID(),
+        folder_id,
+        data->mAssetInfo.mTransactionID,
+        data->mAssetInfo.getName(),
+        data->mAssetInfo.getDescription(),
+        data->mAssetInfo.mType,
+        data->mInventoryType,
+        NO_INV_SUBTYPE,
+        next_owner_perms,
+        LLPointer<LLInventoryCallback>(NULL));
+    assign_uploaded_thumbnail(hold, asset_id);
+    delete data;
+}
+}
+
+void LLInventoryListener::snapshotUpload(LLSD const& data)
+{
+    const LLUUID id = data["id"].asUUID();
+    LLInventoryObject* object = gInventory.getObject(id);
+    if (!object || !object_is_agent_inventory(id))
+    {
+        sendReply(llsd::map("error", object ? "Only agent inventory can be edited" : "Inventory object was not found"), data);
+        return;
+    }
+
+    std::string raw_destination = data.has("destination") ? data["destination"].asString() : std::string();
+    LLStringUtil::trim(raw_destination);
+    LLStringUtil::toLower(raw_destination);
+    std::string destination;
+    if (!fs_snapshot::normalize_destination(raw_destination, destination))
+    {
+        sendReply(llsd::map("error", "destination must be thumbnail or texture"), data);
+        return;
+    }
+
+    FSSnapshotDefaults defaults;
+    defaults.viewport_only = true;
+    defaults.square = true;
+    defaults.square_edge = fs_snapshot::kDefaultEdge;
+    FSSnapshotFrame frame;
+    std::string error;
+    if (!fs_parse_snapshot_frame(data, defaults, frame, error))
+    {
+        sendReply(llsd::map("error", error), data);
+        return;
+    }
+
+    LLPointer<LLImageRaw> raw;
+    if (!fs_capture_snapshot_image(frame, raw, error))
+    {
+        sendReply(llsd::map("error", error.empty() ? "Snapshot failed" : error), data);
+        return;
+    }
+
+    if (destination == "thumbnail")
+    {
+        LLFloaterSimpleSnapshot::uploadThumbnail(
+            raw,
+            id,
+            LLUUID::null,
+            [data, id](const LLUUID& asset_id)
+            {
+                if (asset_id.isNull())
+                {
+                    sendReply(llsd::map("error", "Thumbnail upload failed"), data);
+                    return;
+                }
+                sendReply(llsd::map(
+                    "ok", true,
+                    "cost", LLSD::Integer(0),
+                    "destination", "thumbnail",
+                    "thumbnail_id", asset_id,
+                    "id", id), data);
+            });
+        return;
+    }
+
+    if (gDisconnected)
+    {
+        sendReply(llsd::map("error", "Texture upload failed"), data);
+        return;
+    }
+
+    std::string name = data.has("name") ? data["name"].asString() : std::string();
+    LLStringUtil::trim(name);
+    if (name.empty())
+    {
+        name = object->getName();
+    }
+    const S32 cost = LLAgentBenefitsMgr::current().getTextureUploadCost(frame.width, frame.height);
+    LLPointer<LLImageJ2C> j2c = LLViewerTextureList::convertToUploadFile(raw);
+    if (j2c.isNull() || !j2c->getData() || j2c->getDataSize() <= 0)
+    {
+        sendReply(llsd::map("error", "Snapshot encoding failed"), data);
+        return;
+    }
+    std::string buffer;
+    buffer.assign(reinterpret_cast<const char*>(j2c->getData()), static_cast<std::size_t>(j2c->getDataSize()));
+
+    auto hold = std::make_shared<SnapshotTextureHold>();
+    hold->request = data;
+    hold->inventory_id = id;
+    hold->cost = cost;
+    LLNewBufferedResourceUploadInfo::uploadFinish_f finish = [hold](LLUUID asset_id, LLSD)
+    {
+        assign_uploaded_thumbnail(hold, asset_id);
+    };
+    LLNewBufferedResourceUploadInfo::uploadFailure_f failure = [hold](LLUUID, LLSD, std::string reason)
+    {
+        reply_snapshot_texture(hold, llsd::map("error", reason.empty() ? "Texture upload failed" : reason));
+        return true;
+    };
+    LLResourceUploadInfo::ptr_t uploadInfo = std::make_shared<LLNewBufferedResourceUploadInfo>(
+        buffer,
+        LLUUID::generateNewID(),
+        name,
+        name,
+        0,
+        LLFolderType::FT_TEXTURE,
+        LLInventoryType::IT_TEXTURE,
+        LLAssetType::AT_TEXTURE,
+        LLFloaterPerms::getNextOwnerPerms("Uploads"),
+        LLFloaterPerms::getGroupPerms("Uploads"),
+        LLFloaterPerms::getEveryonePerms("Uploads"),
+        cost,
+        LLUUID::null,
+        false,
+        finish,
+        failure);
+
+    const std::string upload_cap = gAgent.getRegionCapability("NewFileAgentInventory");
+    if (!upload_cap.empty())
+    {
+        upload_new_resource(uploadInfo);
+        return;
+    }
+    if (!gAssetStorage)
+    {
+        reply_snapshot_texture(hold, llsd::map("error", "Texture upload failed"));
+        return;
+    }
+    auto* boxed = new std::shared_ptr<SnapshotTextureHold>(hold);
+    upload_new_resource(uploadInfo, snapshot_texture_legacy_callback, boxed);
 }
 
 void LLInventoryListener::setFavorite(LLSD const& data)

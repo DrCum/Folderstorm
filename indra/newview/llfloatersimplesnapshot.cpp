@@ -486,6 +486,10 @@ void LLFloaterSimpleSnapshot::uploadThumbnail(const std::string &file_path,
         notif_args["REASON"] = LLImage::getLastThreadError().c_str();
         LLNotificationsUtil::add("CannotUploadTexture", notif_args);
         LL_WARNS("Thumbnail") << "Failed to upload thumbnail for " << inventory_id << " " << task_id << ", reason: " << notif_args["REASON"].asString() << LL_ENDL;
+        if (callback)
+        {
+            callback(LLUUID::null);
+        }
         return;
     }
     uploadImageUploadFile(temp_file, inventory_id, task_id, callback);
@@ -504,6 +508,10 @@ void LLFloaterSimpleSnapshot::uploadThumbnail(LLPointer<LLImageRaw> raw_image,
         notif_args["REASON"] = LLImage::getLastThreadError().c_str();
         LLNotificationsUtil::add("CannotUploadTexture", notif_args);
         LL_WARNS("Thumbnail") << "Failed to upload thumbnail for " << inventory_id << " " << task_id << ", reason: " << notif_args["REASON"].asString() << LL_ENDL;
+        if (callback)
+        {
+            callback(LLUUID::null);
+        }
         return;
     }
     uploadImageUploadFile(temp_file, inventory_id, task_id, callback);
@@ -538,6 +546,11 @@ void LLFloaterSimpleSnapshot::uploadImageUploadFile(const std::string &temp_file
         args["CAPABILITY"] = THUMBNAIL_UPLOAD_CAP;
         LLNotificationsUtil::add("RegionCapabilityRequestError", args);
         LL_WARNS("Thumbnail") << "Failed to upload profile image for item " << inventory_id << " " << task_id << ", no cap found" << LL_ENDL;
+        LLFile::remove(temp_file);
+        if (callback)
+        {
+            callback(LLUUID::null);
+        }
         return;
     }
 

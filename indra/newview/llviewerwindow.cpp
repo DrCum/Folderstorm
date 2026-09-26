@@ -6289,7 +6289,7 @@ bool LLViewerWindow::thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 p
 // Since the required size might be bigger than the available screen, this method rerenders the scene in parts (called subimages) and copy
 // the results over to the final raw image.
 bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_height,
-    bool keep_window_aspect, bool is_texture, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, bool show_balance, LLSnapshotModel::ESnapshotLayerType type, S32 max_size)
+    bool keep_window_aspect, bool is_texture, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, bool show_balance, LLSnapshotModel::ESnapshotLayerType type, S32 max_size, bool viewport_only)
 {
     if (!raw)
     {
@@ -6327,13 +6327,17 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         LLPipeline::sShowHUDAttachments = false;
     }
 
-    // if not showing ui, use full window to render world view
-    updateWorldViewRect(!show_ui);
+    // Hiding the UI normally passes use_full_window, which skips the world-view
+    // inset unless the user is in mouselook. A viewport capture keeps that inset
+    // even while the UI is hidden. With the custom world view off, the rect is
+    // the full window.
+    const bool use_full_window = !viewport_only && !show_ui;
+    updateWorldViewRect(use_full_window);
 
     // Copy screen to a buffer
     // crop sides or top and bottom, if taking a snapshot of different aspect ratio
     // from window
-    LLRect window_rect = show_ui ? getWindowRectRaw() : getWorldViewRectRaw();
+    LLRect window_rect = (show_ui && !viewport_only) ? getWindowRectRaw() : getWorldViewRectRaw();
 
     S32 snapshot_width  = window_rect.getWidth();
     S32 snapshot_height = window_rect.getHeight();

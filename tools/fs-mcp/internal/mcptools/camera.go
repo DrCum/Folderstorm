@@ -37,7 +37,7 @@ func registerCamera(s *mcp.Server, state *Server, readOnly, mutating *mcp.ToolAn
 	}, state.cameraReset)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "camera_snapshot",
-		Description: "Capture a JPEG of the current view. Hides UI and HUD by default and writes a temp JPEG. This follows the Camera permission and is not a read.",
+		Description: "Capture a JPEG of the current view. Hides UI and HUD by default and writes a temp JPEG. Optional width and height capture that exact frame. viewport_only uses the world view and defaults to false. This follows the Camera permission and is not a read.",
 		Annotations: withTitle(mutating, "Snapshot"),
 	}, state.cameraSnapshot)
 }
@@ -54,10 +54,37 @@ type cameraSetArgs struct {
 }
 
 type snapshotArgs struct {
-	MaxEdge   int   `json:"max_edge,omitempty" jsonschema:"cap the long edge in pixels, default 1024"`
-	ShowUI    *bool `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
-	ShowHUD   *bool `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
-	ViewerPID int   `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	MaxEdge      int   `json:"max_edge,omitempty" jsonschema:"cap the long edge in pixels, default 1024"`
+	Width        *int  `json:"width,omitempty" jsonschema:"exact width in pixels when height is also set, 64 to 2048"`
+	Height       *int  `json:"height,omitempty" jsonschema:"exact height in pixels when width is also set, 64 to 2048"`
+	ViewportOnly *bool `json:"viewport_only,omitempty" jsonschema:"capture the world viewport instead of the full window, default false"`
+	ShowUI       *bool `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
+	ShowHUD      *bool `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
+	ViewerPID    int   `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+}
+
+func buildCameraSnapshotParams(args snapshotArgs) (map[string]any, string) {
+	if (args.Width == nil) != (args.Height == nil) {
+		return nil, "width and height must both be set"
+	}
+	params := map[string]any{}
+	if args.MaxEdge > 0 {
+		params["max_edge"] = args.MaxEdge
+	}
+	if args.Width != nil && args.Height != nil {
+		params["width"] = *args.Width
+		params["height"] = *args.Height
+	}
+	if args.ViewportOnly != nil {
+		params["viewport_only"] = *args.ViewportOnly
+	}
+	if args.ShowUI != nil {
+		params["show_ui"] = *args.ShowUI
+	}
+	if args.ShowHUD != nil {
+		params["show_hud"] = *args.ShowHUD
+	}
+	return params, ""
 }
 
 func (s *Server) cameraGet(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
@@ -102,19 +129,13 @@ func (s *Server) cameraReset(ctx context.Context, _ *mcp.CallToolRequest, args v
 }
 
 func (s *Server) cameraSnapshot(ctx context.Context, _ *mcp.CallToolRequest, args snapshotArgs) (*mcp.CallToolResult, any, error) {
+	params, message := buildCameraSnapshotParams(args)
+	if message != "" {
+		return errorResult("invalid_args", message, nil)
+	}
 	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
-	}
-	params := map[string]any{}
-	if args.MaxEdge > 0 {
-		params["max_edge"] = args.MaxEdge
-	}
-	if args.ShowUI != nil {
-		params["show_ui"] = *args.ShowUI
-	}
-	if args.ShowHUD != nil {
-		params["show_hud"] = *args.ShowHUD
 	}
 	raw, err := api.CallNamed(ctx, viewerapi.CameraAPI, "snapshot", params)
 	if err != nil {
