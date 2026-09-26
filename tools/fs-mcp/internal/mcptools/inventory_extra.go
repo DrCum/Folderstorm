@@ -2,6 +2,7 @@ package mcptools
 
 import (
 	"context"
+	"strings"
 
 	"fs-mcp/internal/viewerapi"
 
@@ -19,6 +20,7 @@ func registerInventoryExtra(s *mcp.Server, state *Server, readOnly, mutating, de
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_landmark", Description: "Read a landmark's region and global position.", Annotations: withTitle(readOnly, "Read landmark")}, state.inventoryLandmark)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_description", Description: "Set the description of an item or folder.", Annotations: withTitle(mutating, "Set description")}, state.inventorySetDescription)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_thumbnail", Description: "Set or clear a thumbnail using a texture UUID.", Annotations: withTitle(mutating, "Set thumbnail")}, state.inventorySetThumbnail)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_snapshot_upload", Description: "Capture the world view and set that image on a folder, outfit, or item. destination thumbnail is the default, costs L$0, and follows Edit. destination texture creates an inventory texture, follows Create, and Allow spends L$ only when the quoted cost is 0.", Annotations: withTitle(mutating, "Upload snapshot image")}, state.inventorySnapshotUpload)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_favorite", Description: "Set or clear the favorite flag.", Annotations: withTitle(mutating, "Set favorite")}, state.inventorySetFavorite)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_link", Description: "Create a link to an item or folder in a destination folder.", Annotations: withTitle(mutating, "Create link")}, state.inventoryLink)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_create_item", Description: "Create a notecard, script, gesture, material, settings item, clothing, body part, or a landmark of the current location.", Annotations: withTitle(mutating, "Create inventory item")}, state.inventoryCreateItem)
@@ -58,6 +60,65 @@ type thumbArgs struct {
 	ID          string `json:"id" jsonschema:"item or folder UUID"`
 	ThumbnailID string `json:"thumbnail_id,omitempty" jsonschema:"texture UUID, empty to clear"`
 	ViewerPID   int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+}
+
+type snapshotUploadArgs struct {
+	ID           string `json:"id" jsonschema:"outfit folder, other folder, or item UUID"`
+	Width        *int   `json:"width,omitempty" jsonschema:"width in pixels, default 1024, with height"`
+	Height       *int   `json:"height,omitempty" jsonschema:"height in pixels, default 1024, with width"`
+	ViewportOnly *bool  `json:"viewport_only,omitempty" jsonschema:"capture the world viewport, default true"`
+	Destination  string `json:"destination,omitempty" jsonschema:"thumbnail (default, free) or texture"`
+	Name         string `json:"name,omitempty" jsonschema:"texture name; defaults to the folder or item name"`
+	ShowUI       *bool  `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
+	ShowHUD      *bool  `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
+	ViewerPID    int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+}
+
+func buildSnapshotUploadParams(args snapshotUploadArgs) (string, map[string]any, string) {
+	if strings.TrimSpace(args.ID) == "" {
+		return "", nil, "id is required"
+	}
+	if (args.Width == nil) != (args.Height == nil) {
+		return "", nil, "width and height must both be set"
+	}
+	destination := strings.ToLower(strings.TrimSpace(args.Destination))
+	if destination == "" {
+		destination = "thumbnail"
+	}
+	if destination != "thumbnail" && destination != "texture" {
+		return "", nil, "destination must be thumbnail or texture"
+	}
+	width := 1024
+	height := 1024
+	if args.Width != nil && args.Height != nil {
+		width = *args.Width
+		height = *args.Height
+	}
+	viewport := true
+	if args.ViewportOnly != nil {
+		viewport = *args.ViewportOnly
+	}
+	class := viewerapi.ClassEdit
+	if destination == "texture" {
+		class = viewerapi.ClassCreate
+	}
+	params := map[string]any{
+		"id":            strings.TrimSpace(args.ID),
+		"width":         width,
+		"height":        height,
+		"viewport_only": viewport,
+		"destination":   destination,
+	}
+	if name := strings.TrimSpace(args.Name); name != "" {
+		params["name"] = name
+	}
+	if args.ShowUI != nil {
+		params["show_ui"] = *args.ShowUI
+	}
+	if args.ShowHUD != nil {
+		params["show_hud"] = *args.ShowHUD
+	}
+	return class, params, ""
 }
 
 type favoriteArgs struct {
@@ -179,6 +240,18 @@ func (s *Server) inventorySetThumbnail(ctx context.Context, _ *mcp.CallToolReque
 		return errorResult("invalid_args", "id is required", nil)
 	}
 	return s.named(ctx, args.ViewerPID, viewerapi.DefaultAPI, "setThumbnail", map[string]any{"id": args.ID, "thumbnail_id": args.ThumbnailID})
+}
+
+func (s *Server) inventorySnapshotUpload(ctx context.Context, _ *mcp.CallToolRequest, args snapshotUploadArgs) (*mcp.CallToolResult, any, error) {
+	class, params, message := buildSnapshotUploadParams(args)
+	if message != "" {
+		return errorResult("invalid_args", message, nil)
+	}
+	api, _, errRes := s.openClass(ctx, args.ViewerPID, class)
+	if errRes != nil {
+		return errRes, nil, nil
+	}
+	return apiResult(api.CallNamed(ctx, viewerapi.DefaultAPI, "snapshotUpload", params))
 }
 
 func (s *Server) inventorySetFavorite(ctx context.Context, _ *mcp.CallToolRequest, args favoriteArgs) (*mcp.CallToolResult, any, error) {

@@ -69,6 +69,7 @@ private:
     void protectedFolders(LLSD const& data);
     void setDescription(LLSD const& data);
     void setThumbnail(LLSD const& data);
+    void snapshotUpload(LLSD const& data);
     void setFavorite(LLSD const& data);
     void link(LLSD const& data);
     void replaceLinks(LLSD const& data);

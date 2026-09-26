@@ -226,6 +226,10 @@ Baking continues after a wear call returns. Take the snapshot after `appearance_
 
 Camera presets are `portrait`, `full_body`, `front`, `back`, `left`, and `right`. An exact shot uses region coordinates: where the camera stands, and the point it looks at.
 
+`camera_snapshot` can take `width` and `height`. When both are set, the picture is that size, center-cropped to the ratio. A square is the same number on both sides. Each side is clamped from 64 to 2048. Omit them and the picture stays the whole window, scaled so the long edge is at most `max_edge` (default 1024). `viewport_only` uses the world view instead of the full window. It defaults to false, so existing calls stay the same. UI and HUD stay hidden unless you ask for them. The tool still returns a temp JPEG and does not upload.
+
+`inventory_snapshot_upload` takes the outfit, folder, or item id and sets that image. `width` and `height` default to 1024. `viewport_only` defaults to true. `destination` is `thumbnail` unless you pass `texture`. A thumbnail is free, follows Rename and edit details, and is scaled down to 256. Allow on that row uploads it with no dialog. A texture creates a real inventory texture and then sets the folder image. It follows Create folders and items. The viewer quotes the L$ price first. Never refuses the upload. Ask shows the L$ amount. Allow uploads with no dialog only when that price is L$0. Allow with a price above L$0 asks and shows the amount. OpenSim can quote L$0. `inventory_set_thumbnail` still only points at an existing texture and does not spend L$. Allow does not spend L$.
+
 If two viewers are open, say which one, or ask for the process list and pick a pid.
 
 ## When it does not connect

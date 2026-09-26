@@ -222,7 +222,8 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `inventory_create_item` | See item types below. |
 | `inventory_rename` | `id`, `name`. |
 | `inventory_set_description` | Item or folder description. |
-| `inventory_set_thumbnail` | Texture UUID, or clear it. |
+| `inventory_set_thumbnail` | Texture UUID, or clear it. Stays free. Follows Rename and edit details. |
+| `inventory_snapshot_upload` | Capture and set a folder, outfit, or item image. `destination` is `thumbnail` by default, or `texture`. |
 | `inventory_set_favorite` | Set or clear the favorite flag. |
 | `inventory_link` | Link an item or folder into `parent_id`. |
 | `inventory_replace_links` | Point every link that targets `source_id` at `target_id`, and move the old links to Trash. Ask is a viewer dialog unless that permission is Allow. |
@@ -246,7 +247,7 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `camera_set_pose` | `portrait`, `full_body`, `front`, `back`, `left`, or `right`, relative to the avatar's facing. |
 | `camera_set` | Region `position` and `focus`, each `[x, y, z]`. |
 | `camera_reset` | Default third-person camera. |
-| `camera_snapshot` | JPEG bytes plus width, height, and camera pose. Hides UI and HUD and writes a temp JPEG. Follows the Camera permission. Not a read. |
+| `camera_snapshot` | JPEG bytes plus width, height, and camera pose. Hides UI and HUD and writes a temp JPEG. Optional `width`, `height`, and `viewport_only`. Follows the Camera permission. Does not upload. Not a read. |
 | `confirm_action` | Resume a wear, detach, or link-replacement plan stored for an older viewer. A current viewer asks in its own dialog. Purge and empty-trash plans are denied and are not sent. |
 
 ### Object fields
@@ -303,7 +304,17 @@ Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
 
 `camera_set` uses region coordinates, not global coordinates. The avatar must be in a region. Presets also require a loaded avatar.
 
-`camera_snapshot` is not a read. It follows the Camera permission. It hides UI and HUD unless you pass `show_ui` or `show_hud`, and it writes a temp JPEG. `max_edge` defaults to 1024 and is clamped from 64 to 2048. The viewer writes that file under its temp `fs-mcp-snapshots` directory. The sidecar checks that the path is absolute and at most 8 MiB, returns the bytes as `image/jpeg`, and deletes the file. Callers cannot choose the path.
+`camera_snapshot` is not a read. It follows the Camera permission. It hides UI and HUD unless you pass `show_ui` or `show_hud`, and it writes a temp JPEG. `max_edge` defaults to 1024 and is clamped from 64 to 2048. The viewer writes that file under its temp `fs-mcp-snapshots` directory. The sidecar checks that the path is absolute and at most 8 MiB, returns the bytes as `image/jpeg`, and deletes the file. Callers cannot choose the path. It does not upload.
+
+`width` and `height` are optional. When both are set, the capture is that exact frame: the viewer center-crops to the ratio, then scales. A square is the same number on both sides. Each side is clamped from 64 to 2048. Omit them and the picture stays the whole window, scaled so the long edge is at most `max_edge`. `viewport_only` uses the world view instead of the full window. It defaults to false, so existing calls stay the same. With the custom world view off, that rect is the full window.
+
+`inventory_snapshot_upload` takes `id` (an outfit folder, another folder, or an item) and sets that image. `width` and `height` default to 1024 and 1024. `viewport_only` defaults to true. `destination` is `thumbnail` unless you pass `texture`. Optional `name` is the inventory texture name; otherwise the folder or item name is used.
+
+A thumbnail uses the same free upload as the Item Snapshot floater. It follows Rename and edit details, the same class as `inventory_set_thumbnail`. The picture is scaled down to 256. The quoted cost is L$0, so Allow uploads with no dialog. The reply is `cost` 0, `destination` `thumbnail`, and `thumbnail_id`. It does not create a reusable inventory texture.
+
+A texture creates a real inventory texture, then sets the folder image. It follows Create folders and items. The viewer quotes the L$ price before spending anything. A 1024 square uses the normal texture price. A larger request uses the 2K price. OpenSim can quote L$0. Never refuses the upload. Ask shows the L$ amount. Allow uploads with no dialog only when that price is L$0. Allow with a price above L$0 asks and shows the amount. The reply is `cost`, `destination` `texture`, `asset_id`, and `thumbnail_id`.
+
+`inventory_set_thumbnail` is unchanged. It still only points a folder or item at an existing texture UUID, stays on Rename and edit details, and does not spend L$. Allow does not spend L$ on a thumbnail upload or on a texture upload whose quoted cost is L$0.
 
 ## Event API body
 
@@ -315,7 +326,7 @@ Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
 }
 ```
 
-Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
+Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `snapshotUpload`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
 
 Appearance ops: `getOutfitsList`, `getOutfitItems`, `worn`, `wearOutfit`, `wearItems`, `detachItems`.
 
