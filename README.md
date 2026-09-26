@@ -1,37 +1,27 @@
-<img align="left" width="100" height="100" src="doc/firestorm_256.png" alt="Logo of Firestorm viewer"/>
+<p align="center">
+  <img src="indra/newview/icons/release/firestorm_256.png" alt="Folderstorm" width="128">
+</p>
 
-**[Firestorm](https://www.firestormviewer.org) is a free client for 3D virtual worlds such as Second Life and various OpenSim worlds where users can create, connect and chat with others from around the world.**
+# Folderstorm
 
-This repository contains the official source code for the Firestorm viewer.
+Folderstorm is a Second Life viewer based on [Firestorm](https://github.com/FirestormViewer/phoenix-firestorm). It is not an official Firestorm build.
 
-## Open Source
+## What is different
 
-Firestorm is a third party viewer derived from the official [Second Life](https://github.com/secondlife/viewer) client. The client codebase has been open source since 2007 and is available under the LGPL license.
+- **Local assistant.** `fs-mcp` is a local MCP sidecar. The viewer runs an in-viewer bridge, and a permission grid controls what the assistant may do. Permanent delete stays off.
+- **Settings from Firestorm.** An opt-in migrator can copy Firestorm settings into Folderstorm.
+- **Login on the world view.** When a saved world viewport is a real slice of a stretched window, the login screen and the two-factor prompt sit in that slice.
+- **Outfit snapshots.** The assistant can capture a square of the world viewport and set it on an outfit. The default is a free thumbnail. Uploading a texture asks when it costs L$.
+- **Build and install.** Configure finds Go 1.25 or newer before the rest of the build. The installer ships `fs-mcp` and the settings migrator next to the viewer. On Windows it also adds a space-free link at `C:\ProgramData\Folderstorm\fs-mcp.exe`.
 
-## Download
+## Get a build
 
-Pre-built versions of the viewer releases for Windows, Mac and Linux can be downloaded from the [official website](https://www.firestormviewer.org/choose-your-platform/).
+A release build is not published yet. To build from source, see [building from source](doc/building-from-source.md).
 
-## Build Instructions
+## MCP setup
 
-Build instructions for each operating system can be found using the links below and in the official [wiki](https://wiki.firestormviewer.org).
+How to turn the bridge on and connect a client is in [doc/help.md](doc/help.md) and [tools/fs-mcp/README.md](tools/fs-mcp/README.md). On Windows, the command is `C:\ProgramData\Folderstorm\fs-mcp.exe`.
 
-- [From source (viewer, MCP sidecar, settings migrator)](doc/building-from-source.md)
-- [Windows](doc/building_windows.md)
-- [Mac](doc/building_macos.md)
-- [Linux](doc/building_linux.md)
+## License
 
-> [!NOTE]
-> We do not provide support for compiling the viewer or issues resulting from using a self-compiled viewer. However, there is a self-compilers group within Second Life that can be joined to ask questions related to compiling the viewer: [Firestorm Self Compilers](https://tinyurl.com/firestorm-self-compilers)
-
-## Contribute
-
-Help make Firestorm better! You can get involved with improvements by filing bugs and suggesting enhancements via [JIRA](https://jira.firestormviewer.org) or [creating pull requests](CONTRIBUTING.md).
-
-## Community respect
-
-This section is guided by the [TPV Policy](https://secondlife.com/corporate/third-party-viewers) and the [Second Life Code of Conduct](https://github.com/secondlife/viewer?tab=coc-ov-file).
-
-Firestorm code is made available during ongoing development, with the **master** branch representing the current nightly build. Developers and self-compilers are encouraged to work on their own forks and contribute back via pull requests, as detailed in the [contributing guide](CONTRIBUTING.md).
-
-If you intend to use our code for your own viewer beyond personal use, please only use code from official release branches (for example, `Firestorm_7.1.13`), rather than from pre-release/preview or nightly builds.
+Folderstorm remains under the same license as Firestorm: the [GNU Lesser General Public License, version 2.1](LICENSE).
