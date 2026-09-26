@@ -4,14 +4,22 @@
 
 The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
-Windows Release paths. Adjust the exe path if the channel or install type differs:
+On Windows, point Cursor, Claude Code, and Codex at:
 
-| Install | Sidecar |
+`C:\ProgramData\Folderstorm\fs-mcp.exe`
+
+That path has no spaces. Cursor starts the MCP command through `cmd.exe`, and a path under `C:\Program Files` is split at the space (`'C:\Program' is not recognized`). Use the ProgramData path as the command, with no `cmd` wrapper and no extra quotes. The Windows installers create it as a symbolic link, not a `.lnk` shortcut, to the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays there. An upgrade replaces the link so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty. Removing the link leaves the real exe in place.
+
+A Velopack install is per-user and usually not elevated. It tries to create the same link. When `C:\ProgramData` is not writable, the install still succeeds and `fs-mcp.exe` stays in the Velopack `current` folder next to the viewer.
+
+The link targets the Release-channel copy below. A different channel uses that channel's directory.
+
+| Install | `fs-mcp.exe` beside the viewer |
 | --- | --- |
 | Velopack, Release | `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe` |
 | NSIS, Release | `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` |
 
-Set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm user_settings directory, `%APPDATA%\Folderstorm_x64\user_settings`. Use that Folderstorm directory. Firestorm's settings live in `%APPDATA%\Firestorm_x64\user_settings`, and that path will not see this viewer.
+Set `FIRESTORM_MCP_DISCOVERY` to the Folderstorm user_settings directory, `%APPDATA%\Folderstorm_x64\user_settings`. For an account named Jane that directory is `C:\Users\Jane\AppData\Roaming\Folderstorm_x64\user_settings`. Use that Folderstorm directory. Firestorm's settings live in `%APPDATA%\Firestorm_x64\user_settings`, and that path will not see this viewer.
 
 On Linux and macOS the program is the `fs-mcp` binary beside the viewer (next to `install.sh`, or `Folderstorm.app/Contents/Resources/fs-mcp`). Set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory.
 
@@ -46,12 +54,7 @@ Restrained Love locks are honored. A locked wearable, attachment, or folder retu
 
 ## Build
 
-A packaged install already has the binary next to the viewer. Use that path in the client config:
-
-- Velopack Release: `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`
-- NSIS Release: `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`
-
-Adjust the path if the channel or install type differs. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.
+A packaged Windows install already has the binary next to the viewer, and the installers link `C:\ProgramData\Folderstorm\fs-mcp.exe` at it. Use that ProgramData path in the client config. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.
 
 ```bash
 cd tools/fs-mcp
@@ -131,7 +134,7 @@ Each entry is the `user_settings` directory inside that folder. The sidecar read
 
 ## Connect a client
 
-The viewer does not start `fs-mcp`. Enable **Local assistant**, or the sidecar finds no viewer. Cursor, Claude Code, and Codex each have their own file. One file does not configure the other two. The snippets use the Velopack Release exe. For an NSIS Release install, use `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe`. Adjust the path if the channel or install type differs. The same instructions are in [doc/help.md](../../doc/help.md).
+The viewer does not start `fs-mcp`. Enable **Local assistant**, or the sidecar finds no viewer. Cursor, Claude Code, and Codex each have their own file. One file does not configure the other two. On Windows the command is `C:\ProgramData\Folderstorm\fs-mcp.exe` for NSIS, Velopack, and a private channel. The same instructions are in [doc/help.md](../../doc/help.md).
 
 On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory.
 
@@ -143,7 +146,7 @@ On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM
 {
   "mcpServers": {
     "folderstorm": {
-      "command": "%LocalAppData%\\Folderstorm-Release\\current\\fs-mcp.exe",
+      "command": "C:\\ProgramData\\Folderstorm\\fs-mcp.exe",
       "env": {
         "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
       }
@@ -157,7 +160,7 @@ On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM
 `claude mcp add --transport stdio --scope user` writes `%USERPROFILE%\.claude.json`:
 
 ```bat
-claude mcp add --transport stdio --scope user folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
+claude mcp add --transport stdio --scope user folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
 ```
 
 For a single project, use `.mcp.json` in that project's root. If the CLI has no environment flag, add the env block in the file it wrote:
@@ -173,12 +176,12 @@ For a single project, use `.mcp.json` in that project's root. If the CLI has no 
 Codex is ChatGPT's coding client. `codex mcp add` writes `%USERPROFILE%\.codex\config.toml`:
 
 ```bat
-codex mcp add folderstorm -- %LocalAppData%\Folderstorm-Release\current\fs-mcp.exe
+codex mcp add folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
 ```
 
 ```toml
 [mcp_servers.folderstorm]
-command = '%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe'
+command = 'C:\ProgramData\Folderstorm\fs-mcp.exe'
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 
