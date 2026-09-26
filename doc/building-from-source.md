@@ -18,8 +18,8 @@ Build the Folderstorm viewer package. That package includes migrate-settings and
 Checkout: the Folderstorm repo root (the directory that contains autobuild.xml, scripts/bootstrap-autobuild.cmd, scripts/bootstrap-autobuild.sh, and fs-build-variables/variables).
 
 Toolchains already required, from doc/building_windows.md and doc/building_linux.md:
-- Windows: Command Prompt (cmd.exe), not PowerShell. Visual Studio 2022 with the Desktop development with C++ workload. CMake on PATH. Cygwin with the patch package, with Cygwin's bin after CMake and before %SystemRoot%\system32. Git. NSIS (the Windows installer is makensis). Python so the bootstrap can create a venv (the py launcher's 3.10–3.13 if one is installed). Go 1.25 or newer on PATH (viewer CMake refuses to configure without go; tools/fs-mcp/go.mod says go 1.25.0).
-- Linux: the apt packages in doc/building_linux.md, then Go 1.25 or newer on PATH.
+- Windows: Command Prompt (cmd.exe), not PowerShell. Visual Studio 2022 with the Desktop development with C++ workload. CMake on PATH. Cygwin with the patch package, with Cygwin's bin after CMake and before %SystemRoot%\system32. Git. NSIS (the Windows installer is makensis). Python so the bootstrap can create a venv (the py launcher's 3.10–3.13 if one is installed). Go 1.25 or newer. Viewer CMake searches PATH, then %LOCALAPPDATA%\Programs\go\bin and C:\Program Files\Go\bin, and refuses to configure if go is missing or older than 1.25 (tools/fs-mcp/go.mod says go 1.25.0).
+- Linux: the apt packages in doc/building_linux.md, then Go 1.25 or newer (PATH, /usr/local/go/bin, or /usr/lib/go/bin).
 
 1. Viewer, configuration ReleaseFS_open_AVX2, including the installer.
 
@@ -122,7 +122,7 @@ One-time tools, already written up in the OS docs:
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev libpulse-dev build-essential python3-pip git libssl-dev libxinerama-dev libxrandr-dev libfontconfig-dev libfreetype6-dev gcc-11 cmake
 ```
 
-Go has to be on `PATH` before the viewer configure. `indra/newview/CMakeLists.txt` stops with `Go 1.25 or newer is required to build migrate-settings and fs-mcp` when `go` is missing. `tools/fs-mcp/go.mod` says `go 1.25.0`, and `tools/fs-mcp/README.md` says Go 1.25 or newer. Install Go 1.25 or newer once and use it for the viewer and for the standalone Go commands.
+Install Go 1.25 or newer before the viewer configure. CMake searches PATH first, then the usual install locations: on Windows, `%LOCALAPPDATA%\Programs\go\bin` and `C:\Program Files\Go\bin`; on Linux, `/usr/local/go/bin` and `/usr/lib/go/bin`; on macOS, `/usr/local/go/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`. `scripts/bootstrap-autobuild.cmd` and `scripts/bootstrap-autobuild.sh` search those same places and prepend that `bin` directory to PATH for the session. Configure stops at the start if `go` is missing or older than 1.25. `tools/fs-mcp/go.mod` says `go 1.25.0`, and `tools/fs-mcp/README.md` says Go 1.25 or newer. Install Go 1.25 or newer once and use it for the viewer and for the standalone Go commands.
 
 ### Known machine setup
 
@@ -171,7 +171,7 @@ What success looks like: the build command exits 0. `configure_firestorm.sh` pri
 - Linux: a ready-to-run tree at `build-linux-x86_64/newview/packaged`, which is the directory `doc/building_linux.md` tells you to copy. `install.sh` is placed at the root of that package (`viewer_manifest.py` copies `linux_tools/install.sh`). `fs-mcp` is copied next to `install.sh`, beside `migrate-settings`. For a Release build the archive name is `Phoenix-<app>_AVX2-<version>.tar.xz` (`fs_installer_basename` in `indra/newview/fs_viewer_manifest.py`, then `package_file = installer_name + '.tar.xz'`). The Linux doc copies `build-linux-x86_64/newview/Phoenix*.tar.*`.
 - Windows: NSIS writes `Phoenix-<app>_AVX2-<version>_Setup.exe` (`fs_installer_basename` plus `_Setup.exe`) into the newview destination under `build-vc170-64` when `AUTOBUILD_VSVER` is 170. The Visual Studio generator is multi-config, so that destination includes the `Release` folder. `fs-mcp.exe` is in that install folder next to the viewer.
 
-Viewer configure also runs `CGO_ENABLED=0 go build` in `tools/migrate-settings` and `tools/fs-mcp` and expects `go` on `PATH`. Both copies are for the installer. The viewer does not start `fs-mcp`.
+Viewer configure also runs `CGO_ENABLED=0 go build` in `tools/migrate-settings` and `tools/fs-mcp` with the full path of the Go it found, so those build steps do not depend on PATH. Both copies are for the installer. The viewer does not start `fs-mcp`.
 
 ### 2. MCP sidecar
 
