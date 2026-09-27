@@ -6,11 +6,11 @@
 
 Folderstorm is a Second Life viewer based on [Firestorm](https://github.com/FirestormViewer/phoenix-firestorm). It is not an official Firestorm build.
 
-The reason for Folderstorm is inventory management. Sorting outfits, landmarks, and objects is easier when the world stays in view. Two features do that work: a world viewport, and a local assistant on your own computer.
+Folderstorm was inspired by a need for better inventory management. Sorting outfits, landmarks, and objects is easier with a larger workspace. Two features do that work: multi-monitor support w/ adjustable 3d viewport, and a local assistant on your own computer.
 
 ## World viewport
 
-Stretch the window across more than one monitor and keep the 3D world on part of it. The camera, HUD, and mouse stay in that slice. The rest of the window is free for other panels: more inventory windows, a map while you drive, chat on its own screen, and similar.
+Stretch the window across more than one monitor and keep the 3D world on one of them. The camera and HUD stay in that slice. The rest of the window is free for other panels: more inventory windows, a map while you drive, chat on its own screen, and similar.
 
 The controls are in Preferences, under Move & View. Toolbars and top bars can sit around that view, and that arrangement can be saved.
 
@@ -20,7 +20,7 @@ Login and the two-factor prompt use that same slice when it is a saved viewport.
 
 `fs-mcp` is a local MCP sidecar. The viewer runs an in-viewer bridge, and a permission grid controls what the assistant may do. Permanent delete stays off. It can search and tidy inventory, change your outfit, and take a picture. It stays off until you turn it on.
 
-It can capture a square of the world viewport and set that image on an outfit. The default is a free thumbnail. Uploading a texture asks when it costs L$.
+It can capture a snapshot of the world viewport and set that image on an outfit or inventory thumbnail. The default is a free thumbnail. Uploading a texture asks when it costs L$.
 
 ## Also included
 
