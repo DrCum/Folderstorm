@@ -2481,7 +2481,7 @@ void LLWindowMacOSX::openFile(const std::string& file_name )
     if (url)
     {
         OSStatus os_result = LSOpenCFURLRef(url, NULL);
-		CFRelease(url);
+        CFRelease(url);
     }
 }
 

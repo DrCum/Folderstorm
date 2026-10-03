@@ -6080,7 +6080,7 @@ void LLViewerWindow::saveImageLocal(LLImageFormatted *image, const snapshot_save
         filepath = sSnapshotDir;
         filepath += gDirUtilp->getDirDelimiter();
         filepath += sSnapshotBaseName;
-// <FS:Beq> FIRE-35391 - Restore ability for snapshots saving with simple index number        
+// <FS:Beq> FIRE-35391 - Restore ability for snapshots saving with simple index number
 // filepath += now.toLocalDateString("_%Y-%m-%d_%H%M%S");
 // filepath += llformat("%.2d", i);
         if (gSavedSettings.getBOOL("FSSnapshotLocalNamesWithTimestamps"))

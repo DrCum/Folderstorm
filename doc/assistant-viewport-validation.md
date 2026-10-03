@@ -13,10 +13,11 @@ This change implements review items 1–4, 6, and 9 from the [feature plans](pla
   ctest --test-dir build-folderstorm-tests --build-config Release --output-on-failure
   ```
 
-  The added workflow runs this suite on Linux, Windows, and macOS. Local execution covers Linux only.
+  The added workflow passed this suite on Linux, Windows, and macOS. The existing MCP workflow also passed all three platforms. Local execution covers Linux only.
 - Linux viewer CMake configuration and the `llui` library build pass with GCC 14. The touched viewer C++ translation units pass syntax checks using the generated viewer compiler flags. An existing overloaded-virtual warning in `LLCameraListener::reset` is downgraded for these syntax checks. A complete viewer executable has not been linked or launched.
 - Changed/new XUI files parse as XML. Registration and control names were checked for the dedicated assistant page in default, Starlight CUI, and Vintage skins.
 - The actual C++ configuration serializer was exercised with spaces, Unicode, quotes, backslashes, and percent signs. Generated JSON and Codex TOML parse and preserve those paths.
+- All pre-commit hooks pass when run on the files touched by this change. Repository-wide CI still reports pre-existing license, trigraph, indentation, line-ending, and whitespace issues in unrelated files. The CLA bot lacks its required secret, and GitHub account billing prevented the full macOS viewer build from starting (the matrix then cancelled the Windows job). These failures do not supply native viewer build evidence.
 
 ## Runtime acceptance still needed
 
