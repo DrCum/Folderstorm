@@ -77,6 +77,20 @@ fixture skipped for lack of privileges does not verify cleanup.
 The coroutine check is enabled when Boost fiber/context is available; it
 does not add a dependency to the eight portable checks.
 
+After publication, GitHub's portable C++ and fs-mcp Go jobs passed on Linux,
+macOS and Windows. Native Windows ownership fixtures caught a sharing gap:
+metadata-only handles do not participate in Windows share accounting.
+Evidence opens now request actual file-read/directory-list access; inability
+to obtain it leaves legacy aliases unchanged. The existing race assertions
+remain intact, and native CI must verify this correction.
+
+The full viewer workflow could not start its macOS build because GitHub
+reported failed account payments or a spending limit; its Windows build was
+cancelled. CLA checking requires the missing remote-signatures token.
+Repository-wide precommit failed on existing license/whitespace/line-ending
+debt, including the four legacy files identified above. These failures do
+not constitute a native viewer build result.
+
 ## Remaining native acceptance
 
 No complete native viewer was linked/launched for this follow-up. The user's
