@@ -13,6 +13,8 @@ on:
       - "indra/newview/CMakeLists.txt"
       - "indra/newview/tests/test_windows_mcp_installer_contract.py"
       - "indra/newview/tests/test_fsassistantlaunchpath.cpp"
+      - ".github/actions/sign-pkg-windows/**"
+      - ".github/workflows/build.yaml"
       - ".github/workflows/windows-mcp-launcher.yml"
   push:
     branches: [main]
@@ -27,6 +29,8 @@ on:
       - "indra/newview/CMakeLists.txt"
       - "indra/newview/tests/test_windows_mcp_installer_contract.py"
       - "indra/newview/tests/test_fsassistantlaunchpath.cpp"
+      - ".github/actions/sign-pkg-windows/**"
+      - ".github/workflows/build.yaml"
       - ".github/workflows/windows-mcp-launcher.yml"
 
 permissions:

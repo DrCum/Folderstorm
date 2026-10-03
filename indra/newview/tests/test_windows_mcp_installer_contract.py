@@ -14,6 +14,11 @@
 
 """Installer integration invariants; native filesystem races are tested by Go on Windows."""
 from pathlib import Path
+import os
+import shutil
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,6 +73,47 @@ class WindowsMCPInstallerContract(unittest.TestCase):
         self.assertIn("add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance)", cmake)
         self.assertIn('self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")', manifest)
         self.assertIn('fs-mcp-launcher-maintenance.exe', signing)
+
+    def test_reusable_nsis_action_signs_helper_before_packaging(self):
+        workflow = (ROOT / ".github/workflows/build.yaml").read_text()
+        job = workflow[workflow.index("  sign-and-package-windows:"):]
+        job = job[:job.index("  sign-and-package-mac:")]
+        self.assertLess(job.index("uses: actions/checkout@"), job.index("uses: ./.github/actions/sign-pkg-windows"))
+        action = (ROOT / ".github/actions/sign-pkg-windows/action.yaml").read_text()
+        signing = action[action.index("    - name: Sign the executables"):]
+        signing = signing[:signing.index("    - name: Setup Velopack CLI")]
+        self.assertIn("inputs.installer_type != 'velopack'", signing)
+        self.assertIn(".app/fs-mcp-launcher-maintenance.exe", signing)
+        self.assertLess(action.index("    - name: Sign the executables"), action.index("    - name: Build the installer"))
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "POSIX bash fixture; Windows signing requires credentials")
+    def test_actual_nsis_signing_loop_includes_helper_and_stops_on_failure(self):
+        action = (ROOT / ".github/actions/sign-pkg-windows/action.yaml").read_text()
+        signing = action[action.index("    - name: Sign the executables"):]
+        signing = signing[:signing.index("    - name: Setup Velopack CLI")]
+        script = textwrap.dedent(signing[signing.index("      run: |\n") + len("      run: |\n"):])
+        # Substitute only workflow expressions; run the real vendored loop with
+        # a fake signer, never real credentials or AzureSignTool.
+        import re
+        script = re.sub(r"\$\{\{[^}]*\}\}", "fixture", script)
+        stub = '''python() {
+          printf '%s\\n' "${@: -1}" >> "$SIGNING_TEST_LOG"
+          if [[ "$FAIL_HELPER_SIGNING" == 1 && "${@: -1}" == *.app/fs-mcp-launcher-maintenance.exe ]]; then
+            return 17
+          fi
+        }
+        '''
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "signed.log"
+            env = dict(os.environ, SIGNING_TEST_LOG=str(log), FAIL_HELPER_SIGNING="0")
+            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", stub + script + "\necho packaged\n"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log.read_text().splitlines(), [".app/SecondLifeViewer.exe", ".app/llplugin/dullahan_host.exe", ".app/fs-mcp-launcher-maintenance.exe"])
+            self.assertIn("packaged", result.stdout)
+            env["FAIL_HELPER_SIGNING"] = "1"
+            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", stub + script + "\necho packaged\n"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 17)
+            self.assertNotIn("packaged", result.stdout)
 
 
 if __name__ == "__main__":
