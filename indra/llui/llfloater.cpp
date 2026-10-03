@@ -1008,7 +1008,7 @@ bool LLFloater::applyRectControl()
     mPosition = LLCoordGL(screen_rect.getCenterX(), screen_rect.getCenterY()).convert();
 
     LLFloater* last_in_group = LLFloaterReg::getLastFloaterInGroup(mInstanceName);
-    if (last_in_group && last_in_group != this)
+    if (last_in_group && last_in_group != this && !mWorkspacePositioning)
     {
         // <FS:Ansariel> Open other floaters in group in the stored size (this
         //               is basically taken from the else-branch below)
@@ -1555,6 +1555,71 @@ void LLFloater::setRect(const LLRect &rect)
     LLPanel::setRect(rect);
     layoutDragHandle();
     layoutResizeCtrls();
+}
+
+bool LLFloater::hasWorkspaceDependents() const
+{
+    for (const auto& handle : mDependents)
+        if (handle.get()) return true;
+    return false;
+}
+
+bool LLFloater::restoreWorkspaceState(const LLRect& rect, bool visible, bool minimized,
+    const WorkspacePositioning& positioning, bool primary_inventory, bool geometry_only)
+{
+    if (getHost() || getParent() != gFloaterView || isDependent()) return false;
+    // The ordinary shape, visibility and minimize paths propagate to Filters
+    // and other dependent floaters. They were not part of the workspace and
+    // may have been opened during preview. Preserve their handles/relationships
+    // while restoring only the parent; never close or reconstruct a child.
+    handle_set_t dependents;
+    dependents.swap(mDependents);
+    setMinimized(false);
+    const bool applied = applyWorkspaceRect(rect, primary_inventory);
+    restoreWorkspacePositioning(positioning);
+    if (!geometry_only)
+    {
+        // Keep utility-specific housekeeping (notably Nearby Chat's console
+        // session) while the dependent propagation set is held aside.
+        setVisible(visible);
+        if (visible) setMinimized(minimized);
+    }
+    mDependents.insert(dependents.begin(), dependents.end());
+    return applied;
+}
+
+LLFloater::WorkspacePositioning LLFloater::getWorkspacePositioning() const
+{
+    return {mWorkspacePositioning, mPositioning, mPosition.mX, mPosition.mY,
+        mRectControl, mPosXControl, mPosYControl};
+}
+
+void LLFloater::restoreWorkspacePositioning(const WorkspacePositioning& state)
+{
+    mWorkspacePositioning = state.workspace;
+    mPositioning = state.positioning;
+    mPosition.mX = state.x; mPosition.mY = state.y;
+    mRectControl = state.rect_control;
+    mPosXControl = state.pos_x_control; mPosYControl = state.pos_y_control;
+}
+
+bool LLFloater::applyWorkspaceRect(const LLRect& rect, bool primary_inventory)
+{
+    if (getHost() || getParent() != gFloaterView || rect.isEmpty() || isMinimized()) return false;
+    // Only the unkeyed primary Inventory role bypasses group cascading. Manual
+    // additional windows retain their original positioning behavior.
+    if (primary_inventory && mInstanceName == "inventory" && mKey.isUndefined())
+    {
+        mWorkspacePositioning = true;
+        initRectControl();
+    }
+    setShape(rect);
+    mExpandedRect = getRect();
+    mPositioning = LLFloaterEnums::POSITIONING_RELATIVE;
+    const LLRect screen = calcScreenRect();
+    mPosition = LLCoordGL(screen.getCenterX(), screen.getCenterY()).convert();
+    storeRectControl();
+    return true;
 }
 
 // virtual

@@ -314,6 +314,23 @@ public:
     S32             getMinWidth() const{ return mMinWidth; }
     S32             getMinHeight() const{ return mMinHeight; }
     S32             getHeaderHeight() const { return mHeaderHeight; }
+    // Account-local workspace geometry, independent of minimized icon placement.
+    const LLRect& getWorkspaceRect() const { return mMinimized ? mExpandedRect : getRect(); }
+    bool applyWorkspaceRect(const LLRect& rect, bool primary_inventory = false);
+    struct WorkspacePositioning
+    {
+        bool workspace;
+        LLFloaterEnums::EOpenPositioning positioning;
+        F32 x, y;
+        std::string rect_control, pos_x_control, pos_y_control;
+    };
+    bool hasWorkspaceDependents() const;
+    WorkspacePositioning getWorkspacePositioning() const;
+    // Rollback only: restore this utility without moving/closing dependents
+    // opened by the user after the preview began.
+    bool restoreWorkspaceState(const LLRect& rect, bool visible, bool minimized,
+        const WorkspacePositioning& positioning, bool primary_inventory = false, bool geometry_only = false);
+    void restoreWorkspacePositioning(const WorkspacePositioning& state);
 
     virtual bool    handleMouseDown(S32 x, S32 y, MASK mask);
     virtual bool    handleMouseUp(S32 x, S32 y, MASK mask);
@@ -490,6 +507,7 @@ public:
 protected:
     bool            mSaveRect;
     bool            mDefaultRectForGroup;
+    bool            mWorkspacePositioning = false;
     std::string     mRectControl;
     std::string     mPosXControl;
     std::string     mPosYControl;
@@ -690,6 +708,5 @@ private:
 extern LLFloaterView* gFloaterView;
 
 #endif  // LL_FLOATER_H
-
 
 

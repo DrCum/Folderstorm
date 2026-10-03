@@ -85,6 +85,8 @@ public:
     void openInbox();
 
     bool isInboxEnabled() const { return mInboxEnabled; }
+    bool captureWorkspaceInbox(bool& expanded, S32& height) const;
+    bool applyWorkspaceInbox(bool expanded, S32 height);
 
     static void cleanup();
 

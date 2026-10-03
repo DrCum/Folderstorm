@@ -1,3 +1,18 @@
+/**
+ * $LicenseInfo:firstyear=2026&license=viewerlgpl$
+ * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License only.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ * $/LicenseInfo$
+ */
 /** @file test_fsworkspaceserialization.cpp @brief Strict workspace LLSD contract tests.
  * Links against llcommon; intentionally exercises real LLSD types and copy semantics.
  */
@@ -23,7 +38,7 @@ Workspace fixture()
     workspace.chrome.inset_right = 32.f;
     workspace.windows[Role::InventoryPrimary] = capture({1700.f, 100.f, 2100.f, 800.f},
                                                       {0.f, 0.f, 2400.f, 1000.f}, true, false);
-    workspace.windows[Role::MiniMap] = Window{};
+    workspace.windows[Role::MiniMap] = FSWorkspaceLayout::Window{};
     workspace.windows[Role::ConversationsGeometry] = capture({100.f, 30.f, 400.f, 330.f},
                                                            {0.f, 0.f, 2400.f, 1000.f}, false, false);
     workspace.has_inbox = true;

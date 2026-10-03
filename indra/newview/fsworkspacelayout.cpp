@@ -4,6 +4,16 @@
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Phoenix Firestorm Viewer Source Code
  * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License only.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
  * $/LicenseInfo$
  */
 #include "fsworkspacelayout.h"
@@ -112,7 +122,9 @@ Placement fit(const Window& window, const Rect& frame, float min_width, float mi
     // Clamp before multiplying to avoid overflow even for hostile coordinates.
     const float cx = std::clamp(window.center_x, 0.f, 1.f);
     const float cy = std::clamp(window.center_y, 0.f, 1.f);
-    const float left = std::clamp(frame.left + cx * frame.width() - width * .5f,
+    // Preserve the right-hand title/close controls when minimum width is larger.
+    const float left = width > frame.width() ? frame.right - width :
+        std::clamp(frame.left + cx * frame.width() - width * .5f,
                                   frame.left, std::max(frame.left, frame.right - width));
     // If minimum height exceeds the frame, pin the top edge, not the bottom.
     const float bottom = height > frame.height() ? frame.top - height :

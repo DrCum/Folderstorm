@@ -1,3 +1,18 @@
+/**
+ * $LicenseInfo:firstyear=2026&license=viewerlgpl$
+ * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License only.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ * $/LicenseInfo$
+ */
 /** @file test_fsworkspacelayout.cpp @brief Standalone workspace geometry/name tests. */
 #include "../fsworkspacelayout.h"
 #include <cmath>
@@ -52,7 +67,7 @@ int main()
            "Positions outside new client become reachable");
     const auto tiny = fit(window, {20.f, 30.f, 100.f, 70.f}, 200.f, 150.f);
     expect(near(tiny.rect.width(), 200.f) && near(tiny.rect.height(), 150.f) &&
-           near(tiny.rect.left, 20.f) && near(tiny.rect.top, 70.f) && tiny.adjusted,
+           near(tiny.rect.right, 100.f) && near(tiny.rect.top, 70.f) && tiny.adjusted,
            "Tiny client retains actual minima and reachable title controls");
     const auto shrunk = fit(window, {0.f, 0.f, 200.f, 300.f}, 100.f, 100.f);
     expect(near(shrunk.rect.width(), 200.f) && near(shrunk.rect.height(), 300.f), "Large saved size clamps when minima permit");

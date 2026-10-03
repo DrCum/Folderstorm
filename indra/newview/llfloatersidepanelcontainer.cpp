@@ -160,6 +160,8 @@ LLFloater* LLFloaterSidePanelContainer::getTopmostInventoryFloater()
     LLFloaterReg::instance_list_t combined_list;
     combined_list.insert(combined_list.end(), inst_list.begin(), inst_list.end());
     combined_list.insert(combined_list.end(), inst_list_secondary.begin(), inst_list_secondary.end());
+    const auto& workspace_instances = LLFloaterReg::getFloaterList("fs_workspace_inventory");
+    combined_list.insert(combined_list.end(), workspace_instances.begin(), workspace_instances.end());
     for (LLFloaterReg::instance_list_t::const_iterator iter = combined_list.begin(); iter != combined_list.end(); ++iter)
     // </FS:Ansariel>
     {

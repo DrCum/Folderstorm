@@ -1601,5 +1601,7 @@
          tool_tip="Enables teleporting via double click to a destination on the World Map."/>
 
 	 </panel>
+    <panel class="panel_preference_workspaces" filename="panel_preferences_workspaces.xml"
+     top_pad="5" bottom="-1" left="1" right="-1" follows="all" label="Workspaces" name="tab-workspaces"/>
 </tab_container>
 </panel>

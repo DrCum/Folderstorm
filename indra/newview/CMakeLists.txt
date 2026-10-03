@@ -111,6 +111,11 @@ set(viewer_SOURCE_FILES
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
+    fsworkspacelayout.cpp
+    fsworkspaceserialization.cpp
+    fsworkspacecontroller.cpp
+    fsworkspaceinventoryfloater.cpp
+    fspanelpreferenceworkspaces.cpp
     fschromelayout.cpp
     fschromelayoutcontroller.cpp
     fsinventorybulk.cpp
@@ -990,6 +995,10 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fsworkspacelayout.h
+    fsworkspacecontroller.h
+    fsworkspaceinventoryfloater.h
+    fspanelpreferenceworkspaces.h
     fschromelayout.h
     fschromelayoutcontroller.h
     fsinventorybulk.h
