@@ -34,6 +34,8 @@ struct Snapshot
     std::string id, name, parent, path, parent_label, linked_id;
     int type = 0;
     std::uint64_t revision = 0;
+    // Changes from sources other than this object's bulk AIS reconciliation.
+    std::uint64_t external_revision = 0;
     bool folder = false, link = false, copyable = false, modifiable = false, ordinary = false;
     bool operator==(const Snapshot& other) const;
 };

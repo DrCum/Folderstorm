@@ -42,6 +42,18 @@
 
 #include "llviewernetwork.h"
 
+namespace
+{
+LLUUID bulk_updating_object;
+struct BulkModelScope
+{
+    LLUUID previous;
+    explicit BulkModelScope(const LLUUID& id) : previous(bulk_updating_object) { bulk_updating_object = id; }
+    ~BulkModelScope() { bulk_updating_object = previous; }
+};
+}
+bool AISAPI::isBulkUpdateFor(const LLUUID& id) { return id.notNull() && bulk_updating_object == id; }
+
 ///----------------------------------------------------------------------------
 /// Classes for AISv3 support.
 ///----------------------------------------------------------------------------
@@ -405,6 +417,7 @@ void AISAPI::BulkRequest(const LLUUID& id, bool category, const LLSD& updates,
             {
                 LLSD body = patch ? updates : LLSD();
                 if (!patch && category) body["depth"] = 0;
+                BulkModelScope scope(id);
                 onUpdateReceived(response, patch ? (category ? UPDATECATEGORY : UPDATEITEM) :
                     (category ? FETCHCATEGORYCHILDREN : FETCHITEM), body);
             }

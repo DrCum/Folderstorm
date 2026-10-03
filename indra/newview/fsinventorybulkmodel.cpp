@@ -37,7 +37,7 @@ bool Snapshot::operator==(const Snapshot& o) const
 {
     return id == o.id && name == o.name && parent == o.parent && type == o.type &&
         folder == o.folder && link == o.link && copyable == o.copyable && modifiable == o.modifiable &&
-        ordinary == o.ordinary && linked_id == o.linked_id && revision == o.revision;
+        ordinary == o.ordinary && linked_id == o.linked_id && revision == o.revision && external_revision == o.external_revision;
 }
 
 void Store::session(const std::string& value)
@@ -190,6 +190,7 @@ bool Store::undoAvailable(const History& entry, std::size_t index) const
     const auto& row = entry.rows[index];
     auto writer = mLastWriter.find(row.before.id);
     return row.undo_eligible && entry.results[index].status == "confirmed" &&
+        entry.results[index].after.external_revision == row.before.external_revision &&
         !mTargets.count(row.before.id) && writer != mLastWriter.end() && writer->second == entry.id;
 }
 bool Store::previewUndo(const std::string& operation_id, const std::vector<std::string>& ids,

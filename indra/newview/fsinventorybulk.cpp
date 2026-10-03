@@ -50,7 +50,7 @@ std::vector<std::weak_ptr<fs_assistant::ExecutionGate>> native_gates;
 std::string current_session;
 bool ticker = false;
 double now() { return static_cast<double>(totalTime()) / 1000000.0; }
-std::map<std::string, std::uint64_t> revisions;
+std::map<std::string, std::uint64_t> revisions, external_revisions;
 std::uint64_t revision_counter = 0;
 std::map<std::string, std::string> material_states;
 std::string materialState(const std::string& id)
@@ -77,7 +77,12 @@ class RevisionObserver final : public LLInventoryObserver
             if (found != revisions.end())
             {
                 const auto state = materialState(id.asString());
-                if (state != material_states[id.asString()]) { found->second = ++revision_counter; material_states[id.asString()] = state; }
+                if (state != material_states[id.asString()])
+                {
+                    found->second = ++revision_counter;
+                    if (!AISAPI::isBulkUpdateFor(id)) external_revisions[id.asString()] = ++revision_counter;
+                    material_states[id.asString()] = state;
+                }
             }
         }
     }
@@ -87,8 +92,9 @@ std::uint64_t revision(const std::string& id)
 {
     auto found = revisions.find(id);
     if (found != revisions.end()) return found->second;
-    if (revisions.size() >= Store::MAX_TARGETS) { material_states.erase(revisions.begin()->first); revisions.erase(revisions.begin()); }
+    if (revisions.size() >= Store::MAX_TARGETS) { material_states.erase(revisions.begin()->first); external_revisions.erase(revisions.begin()->first); revisions.erase(revisions.begin()); }
     material_states[id] = materialState(id);
+    external_revisions[id] = ++revision_counter;
     return revisions.emplace(id, ++revision_counter).first->second;
 }
 std::string sessionKey()
@@ -99,7 +105,7 @@ std::string sessionKey()
 void sync()
 {
     const auto next_session = sessionKey();
-    if (next_session != current_session) { revisions.clear(); material_states.clear(); }
+    if (next_session != current_session) { revisions.clear(); external_revisions.clear(); material_states.clear(); }
     current_session = next_session;
     store->session(current_session);
     if (!revision_observer) { revision_observer = new RevisionObserver(); gInventory.addObserver(revision_observer); }
@@ -119,7 +125,7 @@ Snapshot snapshot(const LLUUID& id)
     Snapshot s; s.id = id.asString();
     auto* object = gInventory.getObject(id);
     if (!object || !agentObject(id)) return s;
-    s.name = object->getName(); s.revision = revision(s.id); s.parent = object->getParentUUID().asString();
+    s.name = object->getName(); s.revision = revision(s.id); s.external_revision = external_revisions[s.id]; s.parent = object->getParentUUID().asString();
     s.path = label(make_path(object), 1024);
     if (auto* parent = gInventory.getCategory(object->getParentUUID())) s.parent_label = label(make_path(parent), 1024);
     if (auto* item = gInventory.getItem(id))

@@ -54,6 +54,9 @@ public:
                             std::function<bool()> session_valid,
                             std::function<bool()> may_submit, result_completion_t callback,
                             std::function<void()> submitted = {});
+    // True only while synchronously applying this object's bulk AIS response.
+    // Inventory observers use this provenance to distinguish other writers.
+    static bool isBulkUpdateFor(const LLUUID& id);
     static void getCapNames(LLSD& capNames);
 
     static void CreateInventory(const LLUUID& parentId, const LLSD& newInventory, completion_t callback = completion_t());

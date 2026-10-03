@@ -180,6 +180,25 @@ void limitedUndo()
     Outcome result; result.status="confirmed"; f.store->settle(*inverse_entry,0,result); f.store->finish(*inverse_entry);
     expect(!f.store->undoAvailable(*inverse_entry,0),"no recursive inverse/redo");
 }
+void interveningNativeWriteBeforeConfirmation()
+{
+    Fixture f; auto prepared=f.prepare("p"); prepared->rows[0].before.external_revision=10;
+    auto op=f.execute("p"); op->tick();
+    // The AIS update succeeded. While its confirming GET was pending, a
+    // native rename changed new -> temporary -> new. Final fields still match,
+    // but its observed writer epoch must not become a fresh inverse baseline.
+    Outcome result; result.status="confirmed";result.accepted=true;
+    result.after=prepared->rows[0].before;result.after.name="new";result.after.external_revision=12;
+    f.callbacks.at("item0")(result);op->tick();
+    expect(f.entry->results[0].status=="confirmed","remote confirmation remains truthful after intervening writes");
+    expect(!f.store->undoAvailable(*f.entry,0),"native ABA while confirming must supersede the older inverse");
+    std::string error;expect(!f.store->previewUndo("op",{},"undo",1,error),"pending native write cannot authorize inverse preparation");
+    Fixture own;auto own_plan=own.prepare("p");own_plan->rows[0].before.external_revision=20;
+    auto own_op=own.execute("p");own_op->tick();
+    result.after=own_plan->rows[0].before;result.after.name="new";result.after.revision=100;
+    own.callbacks.at("item0")(result);own_op->tick();
+    expect(own.store->undoAvailable(*own.entry,0),"own AIS cache application may change material revision without counting as another writer");
+}
 void retentionAndSessionBoundaries()
 {
     Fixture f;
@@ -198,7 +217,7 @@ void retentionAndSessionBoundaries()
 }
 int main()
 {
-    try { displayPrivacyBounds(); preparationAndConsumption(); consumedPlansDoNotExhaustPreviewCapacity(); callbackOrderingAndConcurrency();preflightIsNotSubmission();uncertainLateAndClear();clearCannotBypassCapacity();cancellationAndValidation();clearThenStop();limitedUndo();retentionAndSessionBoundaries(); }
+    try { displayPrivacyBounds(); preparationAndConsumption(); consumedPlansDoNotExhaustPreviewCapacity(); callbackOrderingAndConcurrency();preflightIsNotSubmission();uncertainLateAndClear();clearCannotBypassCapacity();cancellationAndValidation();clearThenStop();limitedUndo();interveningNativeWriteBeforeConfirmation();retentionAndSessionBoundaries(); }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 1; }
     std::cout<<"Inventory bulk model checks passed\n";
 }
