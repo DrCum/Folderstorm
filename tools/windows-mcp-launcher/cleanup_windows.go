@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	readData           = 0x01 // FILE_READ_DATA / FILE_LIST_DIRECTORY; participates in share accounting
 	readAttributes     = 0x80
 	synchronize        = 0x100000
 	deleteAccess       = 0x10000
@@ -83,7 +84,9 @@ func attributes(h syscall.Handle) (uint32, error) {
 
 // A handle-relative open avoids a new lookup through mutable ancestors. The
 // caller holds parent handles; neither the inspected entry nor those parents
-// permit a competing write, rename, deletion or reparse-point change.
+// permit a competing write, rename, deletion or reparse-point change. Request
+// actual read/list access: Windows does not apply read/write/delete sharing to
+// metadata-only FILE_READ_ATTRIBUTES/SYNCHRONIZE opens.
 func openRelative(parent syscall.Handle, name string, access uint32, nofollow bool) (syscall.Handle, error) {
 	u, err := syscall.UTF16FromString(name)
 	if err != nil || len(u)*2 > 65535 {
@@ -110,7 +113,7 @@ func openRelative(parent syscall.Handle, name string, access uint32, nofollow bo
 		options |= openReparsePoint
 	}
 	status, _, _ := ntCreateFile.Call(
-		uintptr(unsafe.Pointer(&handle)), uintptr(access|synchronize), uintptr(unsafe.Pointer(&oa)),
+		uintptr(unsafe.Pointer(&handle)), uintptr(access|readData|synchronize), uintptr(unsafe.Pointer(&oa)),
 		uintptr(unsafe.Pointer(&iosb)), 0, 0, syscall.FILE_SHARE_READ,
 		1 /* FILE_OPEN */, uintptr(options), 0, 0)
 	runtime.KeepAlive(u)
@@ -175,7 +178,7 @@ func openDirectoryWithRedirects(path string, held *handles, redirects *int) (sys
 	if err != nil {
 		return 0, refuse(unverified, "invalid_directory_root")
 	}
-	h, err := syscall.CreateFile(root, readAttributes|synchronize, syscall.FILE_SHARE_READ, nil,
+	h, err := syscall.CreateFile(root, readData|readAttributes|synchronize, syscall.FILE_SHARE_READ, nil,
 		syscall.OPEN_EXISTING, syscall.FILE_FLAG_BACKUP_SEMANTICS|syscall.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		return 0, nativeError(err)

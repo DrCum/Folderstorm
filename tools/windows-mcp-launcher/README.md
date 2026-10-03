@@ -19,6 +19,9 @@ the parent directory.
 Ownership requires both the accepted installation target path and matching
 directory/file IDs. Directory ancestors, including redirector destinations,
 are pinned with no-follow handles that deny competing write/delete access.
+Evidence handles request actual file-read/directory-list access because
+Windows excludes metadata-only opens from read/write/delete share accounting.
+If this stronger access is unavailable, cleanup leaves the alias unchanged.
 Candidate deletion uses the inspected symlink's retained handle. Exact path
 spelling is intentionally conservative: different case or an unrecognized
 historical layout can leave an owned alias for manual removal.
