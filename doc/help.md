@@ -10,7 +10,7 @@ The window title, preferences tab, icons, and crash reports use the name Folders
 
 ### Wide-screen layout
 
-Open **Preferences → Move & View**.
+Open **Preferences → Move & View → Layout**.
 
 - **Viewport.** Turn on **Use a custom world viewport** and set the left, right, top, and bottom margins. The camera, HUD, and mouse stay in the remaining world area so Inventory and other windows can sit in the margins of a stretched window. If two opposite margins would leave less than 5% of the window, they are scaled down. The change previews immediately. There is a separate switch for mouselook.
 - **Layout.** Place the toolbars, chat bar, and top bars around that viewport. Side bars sit outside the viewport when there is room, and just inside it when there is not. Save the arrangement as a named profile, then apply, rename, or delete profiles later. **Reset** restores the default chrome.
