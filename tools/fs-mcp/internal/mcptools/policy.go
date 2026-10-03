@@ -30,7 +30,7 @@ func classForOp(apiName, op string) string {
 		case "status", "get", "list", "search", "systemFolder", "types", "getMany",
 			"resolvePath", "protectedFolders", "readNotecard", "readScript", "landmark", "changes",
 			"getItemsInfo", "getFolderTypeNames", "getAssetTypeNames", "getBasicFolderID",
-			"getDirectDescendants", "collectDescendantsIf":
+			"getDirectDescendants", "collectDescendantsIf", "previewBatchRename", "previewBatchMove", "bulkHistory", "previewBulkUndo":
 			return viewerapi.ClassRead
 		case "createFolder", "createItem", "link":
 			return viewerapi.ClassCreate
@@ -93,7 +93,7 @@ func (s *Server) rememberIfGenerationChanged(pid int, policy viewerapi.StatusPol
 	s.mu.Lock()
 	prev, had := s.policies[pid]
 	s.mu.Unlock()
-	if had && prev.Present == policy.Present && prev.Generation == policy.Generation {
+	if had && prev.Present == policy.Present && prev.Generation == policy.Generation && prev.BulkInventoryReview == policy.BulkInventoryReview {
 		return
 	}
 	s.rememberPolicy(pid, policy)

@@ -247,6 +247,11 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `inventory_move` | Move `id` to `parent_id`. This is a move, including no-copy items. Follows Move and copy. |
 | `inventory_batch_move` | Up to 50 ids into one `parent_id`. Per-item results. Follows Move and copy. |
 | `inventory_batch_rename` | Up to 50 `{id, name}` entries. Per-item results. |
+| `inventory_preview_batch_rename` | Dry-run up to 50 `{id, name}` entries, returning a viewer-owned plan and exact skips. Requires bulk review version 1 and Read. |
+| `inventory_preview_batch_move` | Dry-run up to 50 `ids` into `parent_id`. Requires bulk review version 1 and Read. |
+| `inventory_execute_plan` | Execute `plan_id` once, or retrieve its existing operation on a repeated call. The viewer derives current Edit/Move permission from the plan. |
+| `inventory_history` | Session-only assistant inventory outcomes. Optional `operation_id`, or `offset`/`limit` (default 20, maximum 50). Requires Read. |
+| `inventory_preview_undo` | Review limited eligible undo for `operation_id`; optional exact `ids` subset. Execute the returned plan separately. Requires Read. |
 | `inventory_copy` | Copy `id` into `parent_id`. Optional `policy`. Copyable items follow Move and copy. |
 | `inventory_batch_copy` | Up to 50 items. Folders still use `inventory_copy`. Copyable items follow Move and copy. |
 | `inventory_confirm_copy` | Older-viewer follow-up for a no-copy copy plan. A current viewer asks in its own dialog. |
@@ -306,6 +311,38 @@ An older viewer has no `permissions` object. Wear, detach, link replacement, and
 
 Wearing returns before the avatar finishes baking. Poll `appearance_worn` and look at `outfit_dirty` before you take a picture.
 
+### Bulk review and recovery
+
+The five new review/history tools require authenticated status to advertise
+`capabilities.bulk_inventory_review: 1` and a current permission map. They remain
+listed by the sidecar when an older viewer is selected, but calls return
+`unsupported_feature`; they never fall back to immediate batch mutation.
+Existing batch tools remain available with their existing behavior.
+
+Prepare a rename or move preview, inspect its exact before/after rows and skips,
+then pass only its `plan_id` to `inventory_execute_plan` for the same viewer.
+Plans expire after ten minutes and are bound to that viewer's login session.
+Preview does not authorize execution. The viewer revalidates the frozen scope,
+rejects stale plans, derives Edit or Move from its own plan, and asks in the viewer
+when required. The sidecar never accepts caller-supplied permission classes,
+candidate lists, confirmation overrides, or trusted deadlines for execution.
+Repeated Execute returns the existing operation rather than replaying writes.
+
+Inspect `status` and per-row outcomes instead of treating legacy `ok` as server
+confirmation. `submitted` or `unconfirmed` means the viewer sent work whose
+completion is not established. Inspect its history and inventory before retrying.
+Partial results remain structured and do not trigger automatic rollback. With
+Read set to Never, plan execution can still use its current Edit/Move permission,
+but its response omits stored names and paths; preview and history are denied.
+
+`inventory_preview_undo` prepares a separate limited inverse over eligible,
+confirmed history rows. It does not reverse changes itself. Current state and
+permissions must still permit execution. Link replacement, copies, no-copy
+moves, folder moves, Trash, wear, asset edits, and payments have no undo here.
+Unknown server completion never qualifies for recovery. History is bounded and
+kept in memory for the current login session; it is cleared on logout or by
+Clear history. Clearing history does not cancel work already sent to the server.
+
 ### Camera presets
 
 Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
@@ -343,7 +380,7 @@ A texture creates a real inventory texture, then sets the folder image. It requi
 }
 ```
 
-Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `snapshotUpload`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
+Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `snapshotUpload`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `previewBatchRename`, `previewBatchMove`, `executeBulkPlan`, `bulkHistory`, `previewBulkUndo`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
 
 Appearance ops: `getOutfitsList`, `getOutfitItems`, `worn`, `wearOutfit`, `wearItems`, `detachItems`.
 
