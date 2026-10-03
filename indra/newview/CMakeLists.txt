@@ -2465,6 +2465,7 @@ if (WINDOWS)
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       "${MIGRATE_SETTINGS_OUTPUT}"
       "${FS_MCP_OUTPUT}"
+      "${FS_MCP_MAINTENANCE_OUTPUT}"
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
