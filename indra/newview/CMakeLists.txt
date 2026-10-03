@@ -1003,6 +1003,7 @@ set(viewer_HEADER_FILES
     fschromelayoutcontroller.h
     fsinventorybulk.h
     fsinventorybulkmodel.h
+    fsinventorybulkscope.h
     fslinkreplacement.h
     fspanelpreferencelocalassistant.h
     fsworldviewdiagram.h

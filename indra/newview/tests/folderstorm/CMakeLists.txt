@@ -30,3 +30,21 @@ folderstorm_check(inventory_bulk
   ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)
 folderstorm_check(workspace_layout
   ../test_fsworkspacelayout.cpp ../../fsworkspacelayout.cpp)
+
+# Coroutine provenance uses the viewer's Boost fibers. Ordinary portable CI
+# without Boost still runs the inventory model/executor suite above.
+cmake_policy(PUSH)
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
+endif()
+if(POLICY CMP0167)
+  # Keep the FindBoost fallback for the project's CMake 3.16 compatibility.
+  cmake_policy(SET CMP0167 OLD)
+endif()
+find_package(Boost QUIET COMPONENTS fiber context)
+cmake_policy(POP)
+if(Boost_FOUND AND TARGET Boost::fiber AND TARGET Boost::context)
+  find_package(Threads REQUIRED)
+  folderstorm_check(inventory_bulk_scope ../test_fsinventorybulkscope.cpp)
+  target_link_libraries(inventory_bulk_scope PRIVATE Boost::fiber Boost::context Threads::Threads)
+endif()

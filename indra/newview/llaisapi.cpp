@@ -27,6 +27,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llaisapi.h"
+#include "fsinventorybulkscope.h"
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -44,15 +45,14 @@
 
 namespace
 {
-LLUUID bulk_updating_object;
-struct BulkModelScope
-{
-    LLUUID previous;
-    explicit BulkModelScope(const LLUUID& id) : previous(bulk_updating_object) { bulk_updating_object = id; }
-    ~BulkModelScope() { bulk_updating_object = previous; }
-};
+FSInventoryBulk::FiberLocalTag<LLUUID> bulk_updates;
+using BulkModelScope = FSInventoryBulk::FiberLocalTag<LLUUID>::Scope;
 }
-bool AISAPI::isBulkUpdateFor(const LLUUID& id) { return id.notNull() && bulk_updating_object == id; }
+bool AISAPI::isBulkUpdateFor(const LLUUID& id)
+{
+    const LLUUID* current = bulk_updates.current();
+    return id.notNull() && current && *current == id;
+}
 
 ///----------------------------------------------------------------------------
 /// Classes for AISv3 support.
@@ -417,7 +417,7 @@ void AISAPI::BulkRequest(const LLUUID& id, bool category, const LLSD& updates,
             {
                 LLSD body = patch ? updates : LLSD();
                 if (!patch && category) body["depth"] = 0;
-                BulkModelScope scope(id);
+                BulkModelScope scope(bulk_updates, id);
                 onUpdateReceived(response, patch ? (category ? UPDATECATEGORY : UPDATEITEM) :
                     (category ? FETCHCATEGORYCHILDREN : FETCHITEM), body);
             }
