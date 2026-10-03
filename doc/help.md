@@ -19,6 +19,18 @@ Open **Preferences → Move & View**.
 
 Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo width from 80 to 256 pixels. The name row stays a fixed height. 256 is the photo size the gallery fetches.
 
+### Workspaces
+
+Open **Preferences → Move & View → Workspaces** after login. Arrange your windows and choose **Save current**, or preview **Inventory sorting** or **Driving** as a starting arrangement. Workspaces are stored separately for each account. They include viewport and bars, supported Inventory/map windows, compatible chat geometry, and the primary Inventory's Received Items panel size.
+
+**Preview** changes the arrangement immediately. Preferences **OK** keeps the arrangement and saved definitions; **Cancel** restores the previous arrangement. Conversations, Inventory contents and filters stay as they are. Manually opened extra Inventory windows remain independent; **Add workspace inventory window** creates one extra window managed by workspaces. Workspaces are restored manually, rather than automatically at login.
+
+### Review Inventory changes
+
+Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. Review the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
+
+The gear menu's **Assistant inventory history…** shows this session's tracked rename/move operations. **Stop** prevents additional work; submitted changes may still finish. **Clear history** removes the visible records without changing Inventory. Undo is offered only for confirmed changes that still match their recorded state; ordinary renames and copyable-item moves have narrower rules than general Inventory actions. Unconfirmed changes, folder moves, moves involving Trash, and non-copyable-item moves cannot be undone here. See [bulk review and recovery](local-assistant-bulk-inventory.md) for the exact limits.
+
 ## Settings from Firestorm
 
 Folderstorm keeps its own settings folder. It does not read Firestorm's, and a normal install does not copy it unless you say so.
@@ -53,7 +65,9 @@ The bridge lets an MCP client on this computer read and change inventory, change
 
 ### 1. Turn the bridge on
 
-Open **Preferences → Local assistant** and enable **Allow local assistant access**. That choice is saved. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
+Open **Preferences → Local assistant** and enable **Allow local assistant access**. Choose **Read only**, **Ask before changes**, or **Custom** permissions. Selecting Custom exposes individual controls; it does not restore an earlier set of values. Existing saved permissions are kept until you choose a preset or change a control.
+
+Changes preview immediately and are saved when you click **OK**. **Use these settings for this session only** keeps both access and permissions temporary; the saved settings resume after restart. **Cancel** restores the previous settings. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
 
 `--mcp-api` still forces the bridge on for that one session. It does not save the preference. Quit and the next launch follows the saved checkbox.
 

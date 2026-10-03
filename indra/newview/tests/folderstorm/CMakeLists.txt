@@ -28,3 +28,5 @@ folderstorm_check(link_replacement
 folderstorm_check(assistant_permissions ../test_fsassistantpermissions.cpp)
 folderstorm_check(inventory_bulk
   ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)
+folderstorm_check(workspace_layout
+  ../test_fsworkspacelayout.cpp ../../fsworkspacelayout.cpp)

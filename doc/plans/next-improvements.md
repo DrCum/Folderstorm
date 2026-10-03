@@ -1,5 +1,7 @@
 # Next improvement plans — items 5, 7, 8, and 10
 
+These plans preserve the scope agreed before implementation. The subsequently authorized follow-up implementation is recorded in [validation and remaining acceptance checks](../next-improvements-validation.md), on a separate branch based on PR #1.
+
 Planning baseline: [PR #1](https://github.com/DrCum/Folderstorm/pull/1), **open and unmerged**, head `65e6ebd115` on `feat/assistant-and-viewport-improvements`. Main remains at `9aa5cbb0d6` in the inspected checkout. These are follow-up implementation plans, not additions to PR #1's scope and not authorization to start implementation.
 
 The plans were written in the separate `/workspace/Folderstorm-plans-next` worktree on `docs/next-improvement-plans`. The original PR #1 checkout, code, remote branch, and PR content remain unchanged. Its original six-feature plans and validation record remain the baseline for these features.
