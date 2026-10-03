@@ -593,6 +593,19 @@ void FSChromeLayoutController::applySnapshot(const FSChromeLayout::Snapshot& sna
     apply();
 }
 
+void FSChromeLayoutController::applyViewportInsets(bool enabled, float left, float right, float top, float bottom)
+{
+    mApplying = true;
+    gSavedSettings.setBOOL("FSWorldViewEnabled", enabled);
+    gSavedSettings.setF32("FSWorldViewInsetLeft", left);
+    gSavedSettings.setF32("FSWorldViewInsetRight", right);
+    gSavedSettings.setF32("FSWorldViewInsetTop", top);
+    gSavedSettings.setF32("FSWorldViewInsetBottom", bottom);
+    if (gViewerWindow) gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
+    mApplying = false;
+    apply();
+}
+
 std::vector<std::string> FSChromeLayoutController::profileNames() const
 {
     std::vector<std::string> names = FSChromeLayout::builtinProfileIds();

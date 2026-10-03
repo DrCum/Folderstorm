@@ -49,6 +49,13 @@ public:
         S32 mWidth;
         S32 mHeight;
     };
+
+    struct MonitorRect
+    {
+        std::string id;   // Session-local identity; do not persist in settings.
+        std::string name;
+        LLRect rect;     // Full monitor bounds in raw drawable-client pixels.
+    };
     enum ESwapMethod
     {
         SWAP_METHOD_UNDEFINED,
@@ -73,6 +80,14 @@ public:
     virtual bool getPosition(LLCoordScreen *position) = 0;
     virtual bool getSize(LLCoordScreen *size) = 0;
     virtual bool getSize(LLCoordWindow *size) = 0;
+    // Bottom-left origin, rectangle edges (not inclusive point coordinates).
+    // Keep off-client bounds; callers intersect them with their editing area.
+    // False means unsupported or temporarily unavailable, with an empty result.
+    virtual bool getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
+    {
+        monitors.clear();
+        return false;
+    }
     virtual bool setPosition(LLCoordScreen position) = 0;
     bool setSize(LLCoordScreen size);
     bool setSize(LLCoordWindow size);

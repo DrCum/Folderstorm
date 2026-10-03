@@ -274,6 +274,64 @@ CGRect getBackingViewRect(NSWindowRef window, GLViewRef view)
     return [(NSOpenGLView*)view convertRectToBacking:[[(LLNSWindow*)window contentView] bounds]];
 }
 
+bool getMonitorRectsInBackingView(NSWindowRef window, GLViewRef view,
+                                 std::vector<NativeMonitorRect>& monitors)
+{
+    monitors.clear();
+    if (!window || !view)
+    {
+        return false;
+    }
+
+    @autoreleasepool {
+        NSWindow* native_window = (NSWindow*)window;
+        NSView* native_view = (NSView*)view;
+        if ([native_view window] != native_window)
+        {
+            return false;
+        }
+
+        NSArray<NSScreen*>* screens = [NSScreen screens];
+        const NSRect backing_bounds = [native_view convertRectToBacking:[native_view bounds]];
+        if ([screens count] == 0 || backing_bounds.size.width <= 0 || backing_bounds.size.height <= 0)
+        {
+            return false;
+        }
+
+        for (NSScreen* screen in screens)
+        {
+            // Every screen must be mapped through this window's backing space.
+            // Using each screen's backingScaleFactor would misplace boundaries
+            // when the viewer spans Retina and non-Retina displays.
+            const NSRect window_rect = [native_window convertRectFromScreen:[screen frame]];
+            const NSRect view_rect = [native_view convertRect:window_rect fromView:nil];
+            NSRect backing_rect = [native_view convertRectToBacking:view_rect];
+            backing_rect.origin.x -= NSMinX(backing_bounds);
+            backing_rect.origin.y = [native_view isFlipped]
+                ? NSMaxY(backing_bounds) - NSMaxY(backing_rect)
+                : NSMinY(backing_rect) - NSMinY(backing_bounds);
+
+            NativeMonitorRect monitor;
+            NSNumber* screen_number = [[screen deviceDescription] objectForKey:@"NSScreenNumber"];
+            if (screen_number)
+            {
+                monitor.id = std::to_string([screen_number unsignedIntValue]);
+            }
+            if (@available(macOS 10.15, *))
+            {
+                const char* name = [[screen localizedName] UTF8String];
+                if (name)
+                {
+                    monitor.name = name;
+                }
+            }
+            monitor.rect = backing_rect;
+            monitors.push_back(monitor);
+        }
+    }
+    return !monitors.empty();
+}
+
 void getWindowSize(NSWindowRef window, float* size)
 {
     NSRect frame = [(LLNSWindow*)window frame];

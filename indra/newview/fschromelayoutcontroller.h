@@ -50,6 +50,8 @@ public:
 
     FSChromeLayout::Snapshot captureSnapshot() const;
     void applySnapshot(const FSChromeLayout::Snapshot& snapshot);
+    // Preview a viewport edit without changing or sanitizing chrome settings.
+    void applyViewportInsets(bool enabled, float left, float right, float top, float bottom);
 
     std::vector<std::string> profileNames() const;
     bool applyProfile(const std::string& id);

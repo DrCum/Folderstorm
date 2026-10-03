@@ -160,6 +160,7 @@
 #include "lltool.h"
 #include "lltoolbarview.h"
 #include "fschromelayoutcontroller.h"
+#include "fsworldviewgeometry.h"
 #include "lltoolcomp.h"
 #include "lltooldraganddrop.h"
 #include "lltoolface.h"
@@ -4517,90 +4518,47 @@ void LLViewerWindow::updateKeyboardFocus()
 
 namespace
 {
-    constexpr F32 WORLD_VIEW_PERCENT_TO_FRACTION = 0.01f;
-    constexpr F32 WORLD_VIEW_MAX_COMBINED_INSET = 0.95f;
-    // Combined inset below this is a gutter, not one monitor of a stretched window.
-    constexpr F32 WORLD_VIEW_MIN_SLICE_INSET = 0.20f;
+    using WorldViewInsets = FSWorldViewGeometry::Insets;
 
-    struct WorldViewInsets
-    {
-        F32 left = 0.f;
-        F32 right = 0.f;
-        F32 top = 0.f;
-        F32 bottom = 0.f;
-
-        F32 horizontal() const { return left + right; }
-        F32 vertical() const { return top + bottom; }
-
-        bool isRealSlice() const
-        {
-            return horizontal() >= WORLD_VIEW_MIN_SLICE_INSET
-                || vertical() >= WORLD_VIEW_MIN_SLICE_INSET;
-        }
-    };
-
-    // Same per-edge and combined clamp as the interactive world view.
     WorldViewInsets readWorldViewInsets()
     {
         static LLCachedControl<F32> inset_left(gSavedSettings, "FSWorldViewInsetLeft", 0.f);
         static LLCachedControl<F32> inset_right(gSavedSettings, "FSWorldViewInsetRight", 0.f);
         static LLCachedControl<F32> inset_top(gSavedSettings, "FSWorldViewInsetTop", 0.f);
         static LLCachedControl<F32> inset_bottom(gSavedSettings, "FSWorldViewInsetBottom", 0.f);
-
-        WorldViewInsets insets;
-        insets.left = llclamp((F32)inset_left * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
-        insets.right = llclamp((F32)inset_right * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
-        insets.top = llclamp((F32)inset_top * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
-        insets.bottom = llclamp((F32)inset_bottom * WORLD_VIEW_PERCENT_TO_FRACTION, 0.f, WORLD_VIEW_MAX_COMBINED_INSET);
-
-        if (insets.horizontal() > WORLD_VIEW_MAX_COMBINED_INSET)
-        {
-            const F32 scale = WORLD_VIEW_MAX_COMBINED_INSET / insets.horizontal();
-            insets.left *= scale;
-            insets.right *= scale;
-        }
-
-        if (insets.vertical() > WORLD_VIEW_MAX_COMBINED_INSET)
-        {
-            const F32 scale = WORLD_VIEW_MAX_COMBINED_INSET / insets.vertical();
-            insets.top *= scale;
-            insets.bottom *= scale;
-        }
-
-        return insets;
+        return FSWorldViewGeometry::normalize({(F32)inset_left * .01f, (F32)inset_right * .01f,
+                                               (F32)inset_top * .01f, (F32)inset_bottom * .01f});
     }
 
     void applyWorldViewInsets(LLRect& rect, const WorldViewInsets& insets)
     {
-        const S32 base_width = rect.getWidth();
-        const S32 base_height = rect.getHeight();
-        rect.mLeft += ll_round((F32)base_width * insets.left);
-        rect.mRight -= ll_round((F32)base_width * insets.right);
-        rect.mTop -= ll_round((F32)base_height * insets.top);
-        rect.mBottom += ll_round((F32)base_height * insets.bottom);
+        const auto viewport = FSWorldViewGeometry::apply(
+            {rect.mLeft, rect.mBottom, rect.mRight, rect.mTop}, insets);
+        rect.set(viewport.left, viewport.top, viewport.right, viewport.bottom);
     }
+}
+
+LLRect LLViewerWindow::getWorldViewBaseRectRaw(bool use_full_window) const
+{
+    LLRect rect = mWindowRectRaw;
+    if (!use_full_window && mWorldViewPlaceholder.get())
+    {
+        rect = mWorldViewPlaceholder.get()->calcScreenRect();
+        rect.mTop = llmax(rect.mTop, rect.mBottom + 1);
+        rect.mRight = llmax(rect.mRight, rect.mLeft + 1);
+        rect.mLeft = ll_round((F32)rect.mLeft * mDisplayScale.mV[VX]);
+        rect.mRight = ll_round((F32)rect.mRight * mDisplayScale.mV[VX]);
+        rect.mBottom = ll_round((F32)rect.mBottom * mDisplayScale.mV[VY]);
+        rect.mTop = ll_round((F32)rect.mTop * mDisplayScale.mV[VY]);
+    }
+    return rect;
 }
 
 static LLTrace::BlockTimerStatHandle FTM_UPDATE_WORLD_VIEW("Update World View");
 void LLViewerWindow::updateWorldViewRect(bool use_full_window)
 {
     LL_RECORD_BLOCK_TIME(FTM_UPDATE_WORLD_VIEW);
-
-    // start off using whole window to render world
-    LLRect new_world_rect = mWindowRectRaw;
-
-    if (!use_full_window && mWorldViewPlaceholder.get())
-    {
-        new_world_rect = mWorldViewPlaceholder.get()->calcScreenRect();
-        // clamp to at least a 1x1 rect so we don't try to allocate zero width gl buffers
-        new_world_rect.mTop = llmax(new_world_rect.mTop, new_world_rect.mBottom + 1);
-        new_world_rect.mRight = llmax(new_world_rect.mRight, new_world_rect.mLeft + 1);
-
-        new_world_rect.mLeft = ll_round((F32)new_world_rect.mLeft * mDisplayScale.mV[VX]);
-        new_world_rect.mRight = ll_round((F32)new_world_rect.mRight * mDisplayScale.mV[VX]);
-        new_world_rect.mBottom = ll_round((F32)new_world_rect.mBottom * mDisplayScale.mV[VY]);
-        new_world_rect.mTop = ll_round((F32)new_world_rect.mTop * mDisplayScale.mV[VY]);
-    }
+    LLRect new_world_rect = getWorldViewBaseRectRaw(use_full_window);
 
     // <FS> Allow the interactive 3D world to occupy only part of the viewer
     // window. Floaters continue to use the full root view, making the inset
@@ -6122,7 +6080,7 @@ void LLViewerWindow::saveImageLocal(LLImageFormatted *image, const snapshot_save
         filepath = sSnapshotDir;
         filepath += gDirUtilp->getDirDelimiter();
         filepath += sSnapshotBaseName;
-// <FS:Beq> FIRE-35391 - Restore ability for snapshots saving with simple index number        
+// <FS:Beq> FIRE-35391 - Restore ability for snapshots saving with simple index number
 // filepath += now.toLocalDateString("_%Y-%m-%d_%H%M%S");
 // filepath += llformat("%.2d", i);
         if (gSavedSettings.getBOOL("FSSnapshotLocalNamesWithTimestamps"))

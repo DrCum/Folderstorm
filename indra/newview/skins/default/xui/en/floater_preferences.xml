@@ -170,6 +170,12 @@
          help_topic="preferences_privacy_tab"
          name="im" />
         <panel
+         class="panel_preference_local_assistant"
+         filename="panel_preferences_local_assistant.xml"
+         label="Local assistant"
+         layout="topleft"
+         name="local_assistant" />
+        <panel
          class="panel_preference"
          filename="panel_preferences_advanced.xml"
          label="Advanced"

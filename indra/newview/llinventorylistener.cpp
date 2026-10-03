@@ -53,6 +53,9 @@
 #include "llviewercontrol.h"
 #include "llcameralistener.h"
 #include "fssnapshotupload.h"
+#include "fsassistantoperation.h"
+#include "fslinkreplacement.h"
+#include "llsdutil.h"
 #include "llfloatersimplesnapshot.h"
 #include "llfloaterperms.h"
 #include "llviewermenufile.h"
@@ -1565,6 +1568,59 @@ void LLInventoryListener::confirmCopy(LLSD const& data)
         data);
 }
 
+bool LLInventoryListener::prepareAssistantCopyConfirmation(const LLSD& data,
+    LLSD& summary, LLSD& validation, std::string& error) const
+{
+    const LLUUID plan_id = data["plan_id"].asUUID();
+    auto found = mCopyPlans.find(plan_id);
+    if (found == mCopyPlans.end() || found->second.expires_at <= LLDate::now().secondsSinceEpoch())
+    {
+        error = "Copy plan is missing or expired";
+        return false;
+    }
+    const CopyPlan& plan = found->second;
+    LLSD subjects = LLSD::emptyArray();
+    for (const NoCopyMove& move : plan.moves)
+    {
+        LLViewerInventoryItem* item = gInventory.getItem(move.item_id);
+        LLInventoryObject* source = gInventory.getObject(move.old_parent_id);
+        LLInventoryObject* destination = gInventory.getObject(move.new_parent_id);
+        if (!item || !source || !destination ||
+            item->getParentUUID() != move.old_parent_id ||
+            item->getPermissions().allowCopyBy(gAgent.getID()) ||
+            !validateDestination(move.new_parent_id, error) ||
+            !get_is_item_removable(&gInventory, move.item_id, false) ||
+            (RlvActions::isRlvEnabled() &&
+             !RlvFolderLocks::instance().canMoveItem(move.item_id, move.new_parent_id)))
+        {
+            error = "Copy plan is stale or a proposed no-copy move is no longer allowed";
+            return false;
+        }
+        LLSD subject = object_summary(item);
+        subject["source"] = object_summary(source);
+        subject["destination"] = object_summary(destination);
+        subjects.append(subject);
+    }
+    summary = llsd::map("action_key", "confirmCopy", "subject_count", static_cast<S32>(plan.moves.size()),
+        "subjects", subjects, "consequences", "These unique items will leave their source folders.");
+    validation = llsd::map("plan_id", plan_id, "expires_at", plan.expires_at,
+        "session_id", gAgent.getSessionID(), "subjects", subjects);
+    return true;
+}
+
+bool LLInventoryListener::validateAssistantCopyConfirmation(const LLSD& data,
+    const LLSD& validation, std::string& error) const
+{
+    LLSD current_summary, current_validation;
+    if (!prepareAssistantCopyConfirmation(data, current_summary, current_validation, error)) return false;
+    if (!llsd_equals(validation, current_validation))
+    {
+        error = "The copy plan changed; request fresh approval";
+        return false;
+    }
+    return true;
+}
+
 void LLInventoryListener::pruneCopyPlans()
 {
     const F64 now = LLDate::now().secondsSinceEpoch();
@@ -2124,6 +2180,16 @@ void snapshot_texture_legacy_callback(const LLUUID& asset_id, void* user_data, S
 
 void LLInventoryListener::snapshotUpload(LLSD const& data)
 {
+    snapshotUploadWithContext(data, nullptr);
+}
+
+void LLInventoryListener::dispatchPreparedSnapshotUpload(const LLSD& data, const FSAssistantExecutionContext& context)
+{
+    snapshotUploadWithContext(data, &context);
+}
+
+void LLInventoryListener::snapshotUploadWithContext(LLSD const& data, const FSAssistantExecutionContext* context)
+{
     const LLUUID id = data["id"].asUUID();
     LLInventoryObject* object = gInventory.getObject(id);
     if (!object || !object_is_agent_inventory(id))
@@ -2151,6 +2217,20 @@ void LLInventoryListener::snapshotUpload(LLSD const& data)
     if (!fs_parse_snapshot_frame(data, defaults, frame, error))
     {
         sendReply(llsd::map("error", error), data);
+        return;
+    }
+
+    if (context && ((context->allowed && !context->allowed()) ||
+        (context->deadline > 0.0 && static_cast<F64>(totalTime()) / 1000000.0 >= context->deadline)))
+    {
+        sendReply(llsd::map("error", "Snapshot permission was revoked or the request expired"), data);
+        return;
+    }
+    const S32 quoted_cost = destination == "texture" ?
+        LLAgentBenefitsMgr::current().getTextureUploadCost(frame.width, frame.height) : 0;
+    if (context && context->approvedSnapshotCost >= 0 && quoted_cost > context->approvedSnapshotCost)
+    {
+        sendReply(llsd::map("error", "The upload price increased. Request a fresh confirmation."), data);
         return;
     }
 
@@ -2197,6 +2277,11 @@ void LLInventoryListener::snapshotUpload(LLSD const& data)
         name = object->getName();
     }
     const S32 cost = LLAgentBenefitsMgr::current().getTextureUploadCost(frame.width, frame.height);
+    if (context && context->approvedSnapshotCost >= 0 && cost > context->approvedSnapshotCost)
+    {
+        sendReply(llsd::map("error", "The upload price increased. Request a fresh confirmation."), data);
+        return;
+    }
     LLPointer<LLImageJ2C> j2c = LLViewerTextureList::convertToUploadFile(raw);
     if (j2c.isNull() || !j2c->getData() || j2c->getDataSize() <= 0)
     {
@@ -2291,56 +2376,278 @@ void LLInventoryListener::link(LLSD const& data)
     link_inventory_object(parent_id, linked_id, callback);
 }
 
-void LLInventoryListener::replaceLinks(LLSD const& data)
+namespace
 {
-    Response response(LLSD(), data);
+std::string replacement_destination_error(const LLUUID& id)
+{
+    LLViewerInventoryCategory* destination = gInventory.getCategory(id);
+    if (!destination || !object_is_agent_inventory(id))
+        return "Destination must be a folder in the agent inventory";
+    const LLFolderType::EType type = destination->getPreferredType();
+    if (type == LLFolderType::FT_CURRENT_OUTFIT ||
+        type == LLFolderType::FT_MARKETPLACE_LISTINGS ||
+        type == LLFolderType::FT_MARKETPLACE_STOCK ||
+        type == LLFolderType::FT_LOST_AND_FOUND)
+        return "That special destination is not supported by the automation API";
+    return std::string();
+}
+
+std::string replacement_candidate_error(const FSLinkReplacementSelection& selection,
+                                         const FSLinkReplacementCandidate& candidate)
+{
+    const LLUUID id(candidate.id), parent(candidate.parent_id), trash(selection.trash_id);
+    LLViewerInventoryItem* link = gInventory.getItem(id);
+    if (!link || !object_is_agent_inventory(id) || !link->getIsLinkType() ||
+        link->getParentUUID() != parent ||
+        link->getLinkedUUID() != LLUUID(candidate.source_id) ||
+        link->getActualType() != candidate.link_kind ||
+        link->getName() != candidate.name || link->getActualDescription() != candidate.description)
+        return "The original link disappeared or changed after preparation";
+    std::string error = replacement_destination_error(parent);
+    if (!error.empty()) return error;
+    error = replacement_destination_error(trash);
+    if (!error.empty()) return error;
+    if (!get_is_item_removable(&gInventory, id, false) ||
+        (RlvActions::isRlvEnabled() &&
+         (!RlvFolderLocks::instance().canMoveItem(id, trash) ||
+          RlvFolderLocks::instance().isLockedFolder(parent, RLV_LOCK_ADD))))
+        return "The original link or its destination is protected or locked";
+    LLInventoryObject* requested = gInventory.getObject(LLUUID(selection.target_id));
+    LLInventoryObject* target = gInventory.getObject(LLUUID(selection.resolved_target_id));
+    if (!requested || !target || target->getIsLinkType() ||
+        !object_is_agent_inventory(target->getUUID()) ||
+        !LLAssetType::lookupCanLink(target->getType()) ||
+        (requested->getIsLinkType() ? requested->getLinkedUUID() : requested->getUUID()) != target->getUUID() ||
+        (gInventory.getCategory(target->getUUID()) ? LLAssetType::AT_LINK_FOLDER : LLAssetType::AT_LINK) != selection.target_kind)
+        return "The replacement target disappeared or changed after preparation";
+    return std::string();
+}
+
+std::shared_ptr<FSLinkReplacement::Reservations> replacement_reservations()
+{
+    static auto reservations = std::make_shared<FSLinkReplacement::Reservations>();
+    return reservations;
+}
+
+// startFetch submits AIS/UDP fetches without retaining this request object.
+// The operation's bounded timer polls inventory and owns no global observer.
+class ReplacementItemFetch final : public LLInventoryFetchItemsObserver
+{
+public:
+    explicit ReplacementItemFetch(const LLUUID& id) : LLInventoryFetchItemsObserver(id) {}
+    void done() override {}
+};
+}
+
+bool LLInventoryListener::prepareLinkReplacement(const LLSD& data,
+    FSLinkReplacementSelection& selection, std::string& error) const
+{
+    selection = FSLinkReplacementSelection();
     const LLUUID source_id = data["source_id"].asUUID();
     const LLUUID target_id = data["target_id"].asUUID();
-    if (source_id.isNull() || target_id.isNull() || !gInventory.getObject(target_id))
+    if (gDisconnected || gAgent.getID().isNull() || !gInventory.isInventoryUsable())
     {
-        return response.error("source_id and target_id must refer to inventory objects");
+        error = "Log in and wait for inventory before replacing links";
+        return false;
     }
-    std::string error;
-    const LLUUID trash_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
-    if (!validateDestination(trash_id, error))
+    if (source_id.isNull() || target_id.isNull())
     {
-        return response.error(error);
+        error = "source_id and target_id must be inventory UUIDs";
+        return false;
     }
-
+    LLInventoryObject* requested = gInventory.getObject(target_id);
+    LLInventoryObject* target = requested && requested->getIsLinkType()
+        ? gInventory.getObject(requested->getLinkedUUID()) : requested;
+    if (!target || target->getIsLinkType() || !object_is_agent_inventory(target->getUUID()) ||
+        !LLAssetType::lookupCanLink(target->getType()))
+    {
+        error = "The target must resolve to a linkable object in agent inventory";
+        return false;
+    }
+    selection.source_id = source_id.asString();
+    selection.target_id = target_id.asString();
+    selection.resolved_target_id = target->getUUID().asString();
+    selection.target_kind = gInventory.getCategory(target->getUUID())
+        ? LLAssetType::AT_LINK_FOLDER : LLAssetType::AT_LINK;
+    selection.session_id = gAgent.getSessionID().asString();
+    selection.target_name = target->getName();
+    selection.target_path = make_path(target);
+    if (const LLInventoryObject* source = gInventory.getObject(source_id))
+    {
+        selection.source_name = source->getName();
+        selection.source_path = make_path(source);
+    }
+    selection.no_op = source_id == target->getUUID();
+    if (selection.no_op) return true;
+    const LLUUID root = gInventory.getRootFolderID();
+    if (!inventory_tree_complete(root))
+    {
+        LLInventoryModelBackgroundFetch::instance().start(root, true);
+        error = "Inventory is still loading; retry link replacement when the full inventory is ready";
+        return false;
+    }
+    const LLUUID trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+    if (!validateDestination(trash, error)) return false;
+    selection.trash_id = trash.asString();
     LLInventoryModel::cat_array_t categories;
     LLInventoryModel::item_array_t items;
-    gInventory.collectDescendents(
-        gInventory.getRootFolderID(), categories, items, LLInventoryModel::EXCLUDE_TRASH);
-    uuid_vec_t links;
+    gInventory.collectDescendents(root, categories, items, LLInventoryModel::EXCLUDE_TRASH);
     for (LLViewerInventoryItem* item : items)
     {
-        if (item->getIsLinkType() && item->getLinkedUUID() == source_id)
+        if (!item->getIsLinkType() || item->getLinkedUUID() != source_id) continue;
+        FSLinkReplacementCandidate candidate;
+        candidate.id = item->getUUID().asString();
+        candidate.parent_id = item->getParentUUID().asString();
+        candidate.source_id = item->getLinkedUUID().asString();
+        candidate.name = item->getName();
+        candidate.path = make_path(item);
+        candidate.description = item->getActualDescription();
+        candidate.link_kind = item->getActualType();
+        if (const LLInventoryObject* parent = gInventory.getObject(item->getParentUUID()))
         {
-            links.push_back(item->getUUID());
+            candidate.parent_name = parent->getName();
+            candidate.parent_path = make_path(parent);
+        }
+        candidate.skip_error = replacement_candidate_error(selection, candidate);
+        selection.links.push_back(std::move(candidate));
+    }
+    std::sort(selection.links.begin(), selection.links.end(),
+        [](const FSLinkReplacementCandidate& lhs, const FSLinkReplacementCandidate& rhs)
+        { return lhs.id < rhs.id; });
+    return true;
+}
+
+bool LLInventoryListener::validateLinkReplacementSelection(
+    const FSLinkReplacementSelection& selection, std::string& error) const
+{
+    FSLinkReplacementSelection current;
+    if (!prepareLinkReplacement(llsd::map("source_id", LLUUID(selection.source_id),
+                                          "target_id", LLUUID(selection.target_id)), current, error)) return false;
+    if (current.session_id != selection.session_id ||
+        current.resolved_target_id != selection.resolved_target_id ||
+        current.target_kind != selection.target_kind || current.no_op != selection.no_op ||
+        current.trash_id != selection.trash_id || current.links.size() != selection.links.size() ||
+        current.source_name != selection.source_name || current.target_name != selection.target_name ||
+        current.source_path != selection.source_path || current.target_path != selection.target_path)
+    {
+        error = "The replacement selection changed; request fresh approval";
+        return false;
+    }
+    for (std::size_t i = 0; i < current.links.size(); ++i)
+    {
+        const auto& before = selection.links[i];
+        const auto& now = current.links[i];
+        if (before.id != now.id || before.parent_id != now.parent_id ||
+            before.source_id != now.source_id || before.link_kind != now.link_kind ||
+            before.name != now.name || before.path != now.path ||
+            before.description != now.description || before.skip_error != now.skip_error)
+        {
+            error = "A selected link changed; request fresh approval";
+            return false;
         }
     }
-    response["count"] = static_cast<S32>(links.size());
-    if (!requireConfirm(data, response))
+    return true;
+}
+
+void LLInventoryListener::dispatchPreparedLinkReplacement(const LLSD& data,
+    std::shared_ptr<const FSLinkReplacementSelection> selection,
+    const FSAssistantExecutionContext& context)
+{
+    std::string error;
+    if (!selection || !validateLinkReplacementSelection(*selection, error))
     {
+        sendReply(llsd::map("error", error.empty() ? "Replacement selection is missing" : error,
+                            "error_code", "stale_approval"), data);
         return;
     }
-
-    LLSD results = LLSD::emptyArray();
-    for (const LLUUID& link_id : links)
+    if (!data["confirm"].asBoolean())
     {
-        LLViewerInventoryItem* link = gInventory.getItem(link_id);
-        if (!link)
-        {
-            results.append(llsd::map("id", link_id, "ok", false, "error", "Link disappeared"));
-            continue;
-        }
-        const LLUUID parent_id = link->getParentUUID();
-        link_inventory_object(parent_id, target_id, nullptr);
-        gInventory.changeItemParent(link, trash_id, false);
-        results.append(llsd::map("id", link_id, "ok", true, "parent_id", parent_id));
+        Response response(llsd::map("count", static_cast<S32>(selection->links.size())), data);
+        requireConfirm(data, response);
+        return;
     }
-    response["ok"] = true;
-    response["results"] = results;
+    const LLUUID operation_id = LLUUID::generateNewID();
+    auto reservations = replacement_reservations();
+    reservations->setSession(selection->session_id);
+    FSLinkReplacement::Backend backend;
+    backend.now = []() { return static_cast<F64>(totalTime()) / 1000000.0; };
+    backend.allowed = [session = selection->session_id, allowed = context.allowed]()
+    {
+        return !gDisconnected && !LLApp::isExiting() && gInventory.isInventoryUsable() &&
+            gAgent.getSessionID().asString() == session && (!allowed || allowed());
+    };
+    backend.validate = [selection](const FSLinkReplacementCandidate& candidate)
+    { return replacement_candidate_error(*selection, candidate); };
+    backend.create = [selection](const FSLinkReplacementCandidate& candidate,
+                                 std::function<void(const std::string&)> completed)
+    {
+        LLPointer<LLInventoryCallback> callback = new LLBoostFuncInventoryCallback(
+            [completed](const LLUUID& new_id) { completed(new_id.isNull() ? std::string() : new_id.asString()); });
+        link_inventory_object(LLUUID(candidate.parent_id), LLUUID(selection->resolved_target_id), callback);
+    };
+    backend.verify = [selection](const FSLinkReplacementCandidate& candidate, const std::string& id)
+    {
+        LLViewerInventoryItem* link = gInventory.getItem(LLUUID(id));
+        if (!link || !link->isFinished()) return FSLinkReplacement::Verification::Waiting;
+        return link->getIsLinkType() && link->getUUID() != LLUUID(candidate.id) &&
+            link->getParentUUID() == LLUUID(candidate.parent_id) &&
+            link->getLinkedUUID() == LLUUID(selection->resolved_target_id) &&
+            link->getActualType() == selection->target_kind
+                ? FSLinkReplacement::Verification::Valid : FSLinkReplacement::Verification::Invalid;
+    };
+    backend.fetch = [](const std::string& id)
+    {
+        ReplacementItemFetch request{LLUUID(id)};
+        request.startFetch();
+    };
+    backend.submitTrash = [selection](const FSLinkReplacementCandidate& candidate)
+    {
+        LLViewerInventoryItem* original = gInventory.getItem(LLUUID(candidate.id));
+        if (!original) return false;
+        gInventory.changeItemParent(original, LLUUID(selection->trash_id), false);
+        LLViewerInventoryItem* moved = gInventory.getItem(LLUUID(candidate.id));
+        return moved && moved->getParentUUID() == LLUUID(selection->trash_id);
+    };
+    const F64 now = backend.now();
+    const F64 deadline = context.deadline > 0.0 ? std::min(now + 30.0, context.deadline - 0.5) : now + 30.0;
+    auto operation = std::make_shared<FSLinkReplacement::Operation>(selection, reservations,
+        operation_id.asString(), std::move(backend), deadline,
+        [data, operation_id](const std::vector<FSLinkReplacement::Result>& outcomes)
+        {
+            LLSD results = LLSD::emptyArray();
+            S32 completed = 0, skipped = 0;
+            for (const auto& outcome : outcomes)
+            {
+                LLSD row = llsd::map("id", LLUUID(outcome.candidate.id),
+                    "parent_id", LLUUID(outcome.candidate.parent_id), "ok", outcome.ok,
+                    "status", outcome.status, "original_preserved", outcome.original_preserved,
+                    "retry_safe", outcome.retry_safe, "trash_state", outcome.ok ? "submitted" : "not_submitted");
+                if (!outcome.new_id.empty()) row["new_id"] = LLUUID(outcome.new_id);
+                if (!outcome.error.empty()) row["error"] = outcome.error;
+                results.append(row);
+                completed += outcome.ok ? 1 : 0;
+                skipped += outcome.status == "skipped" ? 1 : 0;
+            }
+            const S32 count = static_cast<S32>(outcomes.size());
+            sendReply(llsd::map("ok", completed == count, "count", count, "results", results,
+                "operation_id", operation_id, "completed_count", completed,
+                "failed_count", count - completed - skipped, "skipped_count", skipped,
+                "partial", completed > 0 && completed < count), data);
+        });
+    if (!operation->tick())
+        doPeriodically([operation]() { return operation->tick(); }, 0.1f);
+}
+
+void LLInventoryListener::replaceLinks(LLSD const& data)
+{
+    auto selection = std::make_shared<FSLinkReplacementSelection>();
+    std::string error;
+    if (!prepareLinkReplacement(data, *selection, error))
+    {
+        sendReply(llsd::map("error", error), data);
+        return;
+    }
+    dispatchPreparedLinkReplacement(data, selection, FSAssistantExecutionContext());
 }
 
 void LLInventoryListener::createItem(LLSD const& data)
