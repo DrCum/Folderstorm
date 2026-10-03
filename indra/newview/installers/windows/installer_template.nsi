@@ -562,159 +562,24 @@ Function CheckWindowsVersion
 FunctionEnd
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Space-free MCP launch link.
-;;
-;; Cursor on Windows starts the MCP command through cmd.exe. A path under
-;; Program Files is split at the space. %ProgramData%\Folderstorm\fs-mcp.exe
-;; is a symbolic link to the fs-mcp.exe just installed beside the viewer
-;; ($INSTDIR\fs-mcp.exe). The channel directory may be Folderstorm-Release,
-;; FolderstormOS-private-<host>, or similar. The real exe stays there.
-;;
-;; DeleteFileW / RemoveDirectoryW unlink a reparse point and do not delete
-;; its target. RMDir without /r removes Folderstorm only when it is empty.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!macro FsMcpRemoveLaunchLink UN
-Function ${UN}RemoveFsMcpLaunchLink
+;; Legacy shared MCP aliases are never created or retargeted by this installer.
+;; Only the packaged ownership utility may clean proven-owned file symlinks,
+;; before un.ProgramFiles removes the package/target needed for verification.
+Function un.RemoveOwnedLegacyFsMcpLinks
   Push $R0
   Push $R1
-  Push $R8
-  Push $R9
-
-  ReadEnvStr $R0 "ProgramData"
-  ${If} $R0 == ""
-    ReadRegStr $R0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" "Common AppData"
-  ${EndIf}
-  ${If} $R0 != ""
-    StrCpy $R1 "$R0\Folderstorm\fs-mcp.exe"
-    ; INVALID_FILE_ATTRIBUTES is 0xFFFFFFFF, which lands in the register as -1.
-    StrCpy $R8 -1
-    System::Call 'kernel32::GetFileAttributesW(w R1) i .R8'
-    ${If} $R8 <> -1
-      ; FILE_ATTRIBUTE_NORMAL. This changes the link, not the target.
-      System::Call 'kernel32::SetFileAttributesW(w R1, i 128)'
-      ; FILE_ATTRIBUTE_DIRECTORY = 16. A directory symlink is removed as a link.
-      IntOp $R9 $R8 & 16
-      ${If} $R9 <> 0
-        System::Call 'kernel32::RemoveDirectoryW(w R1)'
-      ${Else}
-        System::Call 'kernel32::DeleteFileW(w R1)'
-      ${EndIf}
+  IfFileExists "$INSTDIR\fs-mcp-launcher-maintenance.exe" 0 fs_mcp_cleanup_done
+    ; The helper emits one bounded report only after inspection completes.
+    ; nsExec kills a stalled helper after five seconds without output.
+    nsExec::ExecToStack /TIMEOUT=5000 '"$INSTDIR\fs-mcp-launcher-maintenance.exe" cleanup-owned-legacy --install-dir "$INSTDIR\."'
+    Pop $R0
+    Pop $R1
+    ${If} $R0 != "0"
+      DetailPrint "Owned legacy MCP cleanup unavailable or timed out; remaining shared paths left unchanged."
     ${EndIf}
-    ; An interrupted upgrade may have left the previous link under this name.
-    StrCpy $R1 "$R0\Folderstorm\fs-mcp.exe.replacing"
-    StrCpy $R8 -1
-    System::Call 'kernel32::GetFileAttributesW(w R1) i .R8'
-    ${If} $R8 <> -1
-      System::Call 'kernel32::SetFileAttributesW(w R1, i 128)'
-      IntOp $R9 $R8 & 16
-      ${If} $R9 <> 0
-        System::Call 'kernel32::RemoveDirectoryW(w R1)'
-      ${Else}
-        System::Call 'kernel32::DeleteFileW(w R1)'
-      ${EndIf}
-    ${EndIf}
-    ; Only when empty. This is not /r, so it cannot walk into the real exe.
-    RMDir "$R0\Folderstorm"
-    ClearErrors
-  ${EndIf}
-
-  Pop $R9
-  Pop $R8
+  fs_mcp_cleanup_done:
   Pop $R1
   Pop $R0
-FunctionEnd
-!macroend
-!insertmacro FsMcpRemoveLaunchLink "un."
-
-Function CreateFsMcpLaunchLink
-  IfFileExists "$INSTDIR\fs-mcp.exe" 0 fs_mcp_link_done
-  Push $R0
-  Push $R1
-  Push $R2
-  Push $R3
-  Push $R4
-  Push $R8
-  Push $R9
-
-  ReadEnvStr $R0 "ProgramData"
-  ${If} $R0 == ""
-    ReadRegStr $R0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" "Common AppData"
-  ${EndIf}
-  ${If} $R0 == ""
-    DetailPrint "ProgramData is unset. fs-mcp.exe remains in $INSTDIR."
-  ${Else}
-    ClearErrors
-    CreateDirectory "$R0\Folderstorm"
-    ${If} ${Errors}
-      DetailPrint "Could not create $R0\Folderstorm. fs-mcp.exe remains in $INSTDIR."
-      ClearErrors
-    ${Else}
-      StrCpy $R1 "$R0\Folderstorm\fs-mcp.exe"
-      StrCpy $R2 "$INSTDIR\fs-mcp.exe"
-      StrCpy $R4 "$R1.replacing"
-      ; Drop a leftover backup. DeleteFileW / RemoveDirectoryW do not follow.
-      StrCpy $R8 -1
-      System::Call 'kernel32::GetFileAttributesW(w R4) i .R8'
-      ${If} $R8 <> -1
-        System::Call 'kernel32::SetFileAttributesW(w R4, i 128)'
-        IntOp $R9 $R8 & 16
-        ${If} $R9 <> 0
-          System::Call 'kernel32::RemoveDirectoryW(w R4)'
-        ${Else}
-          System::Call 'kernel32::DeleteFileW(w R4)'
-        ${EndIf}
-      ${EndIf}
-      ; MoveFileW moves a reparse point and does not move its target.
-      StrCpy $R9 1
-      StrCpy $R8 -1
-      System::Call 'kernel32::GetFileAttributesW(w R1) i .R8'
-      ${If} $R8 <> -1
-        System::Call 'kernel32::SetFileAttributesW(w R1, i 128)'
-        StrCpy $R9 0
-        System::Call 'kernel32::MoveFileW(w R1, w R4) i .R9'
-      ${EndIf}
-      ${If} $R9 = 0
-        DetailPrint "Could not replace $R1. fs-mcp.exe remains in $INSTDIR."
-      ${Else}
-        StrCpy $R3 0
-        ClearErrors
-        System::Call 'kernel32::CreateSymbolicLinkW(w R1, w R2, i 0) i .R3'
-        ${If} $R3 = 0
-          StrCpy $R3 0
-          ClearErrors
-          ; SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE. Second attempt only.
-          System::Call 'kernel32::CreateSymbolicLinkW(w R1, w R2, i 2) i .R3'
-        ${EndIf}
-        ${If} $R3 = 0
-          System::Call 'kernel32::MoveFileW(w R4, w R1)'
-          DetailPrint "Could not link $R1. fs-mcp.exe remains in $INSTDIR."
-        ${Else}
-          StrCpy $R8 -1
-          System::Call 'kernel32::GetFileAttributesW(w R4) i .R8'
-          ${If} $R8 <> -1
-            System::Call 'kernel32::SetFileAttributesW(w R4, i 128)'
-            IntOp $R9 $R8 & 16
-            ${If} $R9 <> 0
-              System::Call 'kernel32::RemoveDirectoryW(w R4)'
-            ${Else}
-              System::Call 'kernel32::DeleteFileW(w R4)'
-            ${EndIf}
-          ${EndIf}
-          DetailPrint "Linked $R1 -> $R2"
-        ${EndIf}
-      ${EndIf}
-      ClearErrors
-    ${EndIf}
-  ${EndIf}
-
-  Pop $R9
-  Pop $R8
-  Pop $R4
-  Pop $R3
-  Pop $R2
-  Pop $R1
-  Pop $R0
-  fs_mcp_link_done:
 FunctionEnd
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -914,7 +779,6 @@ StrCmp $DO_UNINSTALL_V2 "" REMOVE_SLV2_DONE
 
 REMOVE_SLV2_DONE:
 
-Call CreateFsMcpLaunchLink
 
 SectionEnd
 
@@ -960,8 +824,8 @@ Delete "$DESKTOP\$INSTSHORTCUT.lnk"
 Delete "$INSTDIR\$INSTSHORTCUT.lnk"
 Delete "$INSTDIR\Uninstall $INSTSHORTCUT.lnk"
 
-# Unlink %ProgramData%\Folderstorm\fs-mcp.exe. This does not delete the exe.
-Call un.RemoveFsMcpLaunchLink
+# Clean only legacy file symlinks proven to target this installation.
+Call un.RemoveOwnedLegacyFsMcpLinks
 
 # Remove the main installation directory
 Call un.ProgramFiles

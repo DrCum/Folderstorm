@@ -19,6 +19,8 @@
 #include "fseventapibridge.h"
 #include "fsassistantconfiguration.h"
 #include "fsassistantpermissions.h"
+#include "fsassistantlaunchpath.h"
+#include "llversioninfo.h"
 #include "llapp.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -35,7 +37,10 @@
 #include "llviewercontrol.h"
 #include "llweb.h"
 #include <boost/json.hpp>
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <vector>
 
 static LLPanelInjector<FSPanelPreferenceLocalAssistant> t_pref_local_assistant("panel_preference_local_assistant");
 
@@ -372,7 +377,20 @@ void FSPanelPreferenceLocalAssistant::refreshLocalAssistantStatus()
 std::string FSPanelPreferenceLocalAssistant::sidecarPath() const
 {
 #if LL_WINDOWS
-    return gDirUtilp->getExecutableDir() + gDirUtilp->getDirDelimiter() + "fs-mcp.exe";
+    // GetModuleFileNameW preserves the logical current path; grow the buffer
+    // rather than relying on LLDir's historical MAX_PATH initialization.
+    std::vector<wchar_t> module(512);
+    for (; module.size() <= 32768; module.resize(module.size() * 2))
+    {
+        const DWORD length = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+        if (!length) break;
+        if (length < module.size())
+        {
+            const auto path = std::filesystem::path(std::wstring(module.data(), length)).parent_path() / L"fs-mcp.exe";
+            return ll_convert<std::string>(path.wstring());
+        }
+    }
+    return {}; // Refuse a truncated or unresolvable installation path.
 #elif LL_DARWIN
     // The package keeps the sidecar in Contents/Resources, viewer in Contents/MacOS.
     return gDirUtilp->getAppRODataDir() + gDirUtilp->getDirDelimiter() + "fs-mcp";
@@ -389,6 +407,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     const bool found = LLFile::isfile(path);
     LLStringUtil::format_map_t args;
     args["[PATH]"] = path;
+    getChild<LLTextBox>("sidecar_status")->setToolTip(path);
     getChild<LLTextBox>("sidecar_status")->setText(getString(found ? "sidecar_found" : "sidecar_missing", args));
     getChild<LLButton>("copy_configuration")->setEnabled(found);
     getChild<LLButton>("check_connection")->setEnabled(found && !mDiagnostic);
@@ -397,16 +416,35 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     bool cursor_adapter = false;
     const std::string client = getChild<LLComboBox>("client")->getValue().asString();
 #if LL_WINDOWS
-    // Use the shared link only if it resolves to this installation, not a different channel.
-    const auto program_data = LLStringUtil::getoptenv("ProgramData");
-    if (program_data)
+    // A saved configuration must remain bound to this installation, even if
+    // another channel changes the legacy ProgramData alias after it is copied.
+    std::string package_id = LL_VIEWER_CHANNEL;
+    if (package_id.rfind("Folderstorm", 0) == 0) package_id.erase(0, 10);
+#ifdef OPENSIM
+    package_id = "FolderstormOS" + package_id;
+#else
+    package_id = "Folderstorm" + package_id;
+#endif
+    package_id.erase(std::remove_if(package_id.begin(), package_id.end(),
+        [](unsigned char c) { return std::isspace(c); }), package_id.end());
+    const auto& version = LLVersionInfo::instance();
+    const std::string package_version = version.getShortVersion() + "-" + version.getBuildVersion();
+    const auto launch = FSAssistantLaunchPath::resolve(std::filesystem::path(ll_convert<std::wstring>(path)),
+                                                       package_id, package_version);
+    command = ll_convert<std::string>(launch.command.wstring());
+    if (found)
     {
-        const std::string shared = *program_data + "\\Folderstorm\\fs-mcp.exe";
-        std::error_code ec;
-        if (std::filesystem::equivalent(std::filesystem::path(ll_convert<std::wstring>(shared)), std::filesystem::path(ll_convert<std::wstring>(path)), ec) && !ec)
-        {
-            command = shared;
-        }
+        const char* status = launch.state == FSAssistantLaunchPath::State::StableCurrent ? "sidecar_stable_current" :
+            launch.state == FSAssistantLaunchPath::State::UpdateInProgress ? "sidecar_update_in_progress" :
+            launch.state == FSAssistantLaunchPath::State::RecopyAfterUpdate ? "sidecar_recopy_after_update" : "sidecar_found";
+        getChild<LLTextBox>("sidecar_status")->setText(getString(status, args));
+    }
+    getChild<LLButton>("copy_configuration")->setEnabled(found && launch.canCopy());
+    if (!launch.canCopy())
+    {
+        mConfiguration.clear();
+        getChild<LLTextEditor>("configuration")->setText("");
+        return;
     }
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;
 #endif
@@ -418,7 +456,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
 void FSPanelPreferenceLocalAssistant::copyConfiguration()
 {
     refreshConfiguration();
-    if (!LLFile::isfile(sidecarPath())) return;
+    if (!LLFile::isfile(sidecarPath()) || mConfiguration.empty()) return;
     const LLWString text = utf8str_to_wstring(mConfiguration);
     LLClipboard::instance().copyToClipboard(text, 0, static_cast<S32>(text.size()));
 }

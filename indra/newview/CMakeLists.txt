@@ -973,6 +973,7 @@ set(viewer_HEADER_FILES
     fsareasearchmenu.h
     fsassetblacklist.h
     fsassistantapproval.h
+    fsassistantlaunchpath.h
     fsassistantconfiguration.h
     fsassistantoperation.h
     fsassistantpermissions.h
@@ -2386,6 +2387,28 @@ add_custom_command(
 )
 add_custom_target(fs-mcp ALL DEPENDS "${FS_MCP_OUTPUT}")
 
+# Windows uninstallation alone uses this conservative legacy-link utility.
+if(WINDOWS)
+  set(FS_MCP_MAINTENANCE_DIR "${CMAKE_SOURCE_DIR}/../tools/windows-mcp-launcher")
+  set(FS_MCP_MAINTENANCE_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/fs-mcp-launcher-maintenance${CMAKE_EXECUTABLE_SUFFIX}")
+  add_custom_command(
+    OUTPUT "${FS_MCP_MAINTENANCE_OUTPUT}"
+    COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
+            "${GO_EXECUTABLE}" build -o "${FS_MCP_MAINTENANCE_OUTPUT}" .
+    WORKING_DIRECTORY "${FS_MCP_MAINTENANCE_DIR}"
+    DEPENDS
+      "${FS_MCP_MAINTENANCE_DIR}/go.mod"
+      "${FS_MCP_MAINTENANCE_DIR}/main.go"
+      "${FS_MCP_MAINTENANCE_DIR}/cleanup.go"
+      "${FS_MCP_MAINTENANCE_DIR}/cleanup_windows.go"
+      "${FS_MCP_MAINTENANCE_DIR}/reparse.go"
+    COMMENT "Building fs-mcp-launcher-maintenance"
+    VERBATIM
+  )
+  add_custom_target(fs-mcp-launcher-maintenance ALL DEPENDS "${FS_MCP_MAINTENANCE_OUTPUT}")
+  add_dependencies(${VIEWER_BINARY_NAME} fs-mcp-launcher-maintenance)
+endif()
+
 if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
@@ -3266,7 +3289,7 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
-  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp)
+  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance)
 endif()
 if(TARGET copy_l_viewer_manifest)
   add_dependencies(copy_l_viewer_manifest migrate-settings fs-mcp)

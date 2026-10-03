@@ -15,6 +15,9 @@
  <string name="inventory_ready">Inventory: Ready</string>
  <string name="activity_none">No external requests observed this session</string>
  <string name="activity_recent">Last authenticated external request: [SECONDS] seconds ago</string>
+ <string name="sidecar_stable_current">Sidecar found. This command follows this installation's updates.</string>
+ <string name="sidecar_recopy_after_update">Sidecar found. Update location is unverified; copy configuration again after updating.</string>
+ <string name="sidecar_update_in_progress">Update in progress. Restart the viewer, then copy configuration again. Diagnostics still check this running viewer.</string>
  <string name="sidecar_found">Installed sidecar: [PATH]</string>
  <string name="sidecar_missing">Sidecar missing: [PATH]. Reinstall or build the packaged sidecar.</string>
  <string name="check_not_run">Connection has not been checked.</string>

@@ -113,6 +113,11 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         return self.stage_go_tool(
             "fs-mcp", ("tools", "fs-mcp"), ("./cmd/fs-mcp",))
 
+    def stage_fs_mcp_launcher_maintenance(self):
+        """Windows uninstall utility; never creates shared launch aliases."""
+        return self.stage_go_tool(
+            "fs-mcp-launcher-maintenance", ("tools", "windows-mcp-launcher"), (".",))
+
     def construct(self):
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
@@ -906,6 +911,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Local MCP sidecar. Shipped next to the viewer. The viewer does not
         # start it, and the installer does not write a client MCP config.
         self.path(self.stage_fs_mcp(), "fs-mcp.exe")
+        # Run only during uninstall, before its installation's sidecar disappears.
+        self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"

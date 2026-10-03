@@ -55,11 +55,6 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
 
-// CreateSymbolicLinkW fails this flag when Developer Mode is off, including
-// for an elevated token, so it is only the second attempt.
-#ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
-#define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2
-#endif
 #endif // LL_WINDOWS
 
 // Common state
@@ -294,10 +289,15 @@ static std::wstring get_viewer_exe_name()
 
 static std::wstring get_install_dir()
 {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH);
-    PathRemoveFileSpecW(path);
-    return path;
+    std::vector<wchar_t> module(512);
+    for (; module.size() <= 32768; module.resize(module.size() * 2))
+    {
+        const DWORD length = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+        if (!length) return {};
+        if (length < module.size())
+            return std::filesystem::path(std::wstring(module.data(), length)).parent_path().wstring();
+    }
+    return {};
 }
 
 static std::wstring get_app_name()
@@ -1061,117 +1061,32 @@ static void offer_settings_migration(const std::wstring& install_dir)
     offer_account_folder_copy(exe);
 }
 
-// Cursor on Windows launches the MCP command through cmd.exe, which splits a
-// Program Files path at the space. %ProgramData%\Folderstorm\fs-mcp.exe has
-// no spaces. It is a symbolic link to the fs-mcp.exe just installed beside
-// the viewer. The real exe stays there.
-
-static void enable_symlink_privilege()
+// Uninstall runs before packaged files disappear. The utility only removes a
+// held, no-follow legacy link proven to target this package's sidecar. Failure
+// is conservative and must never fail installation cleanup or alter ACLs.
+static void cleanup_owned_legacy_mcp_links(const std::wstring& install_dir)
 {
-    HANDLE token = NULL;
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
+    if (install_dir.empty()) return;
+    const std::wstring helper = install_dir + L"\\fs-mcp-launcher-maintenance.exe";
+    if (GetFileAttributesW(helper.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+    std::wstring command = L"\"" + helper + L"\" cleanup-owned-legacy --install-dir \"" + install_dir + L"\\.\"";
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(helper.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                        nullptr, install_dir.c_str(), &startup, &process))
     {
+        OutputDebugStringW(L"[Velopack] Owned legacy MCP link cleanup unavailable; links left unchanged\n");
         return;
     }
-    TOKEN_PRIVILEGES privileges = {};
-    privileges.PrivilegeCount = 1;
-    privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    if (LookupPrivilegeValueW(NULL, SE_CREATE_SYMBOLIC_LINK_NAME, &privileges.Privileges[0].Luid))
+    CloseHandle(process.hThread);
+    if (WaitForSingleObject(process.hProcess, 5000) != WAIT_OBJECT_0)
     {
-        AdjustTokenPrivileges(token, FALSE, &privileges, 0, NULL, NULL);
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 1000);
+        OutputDebugStringW(L"[Velopack] Owned legacy MCP link cleanup timed out\n");
     }
-    CloseHandle(token);
-}
-
-// DeleteFileW and RemoveDirectoryW remove a reparse point and leave its target.
-static void remove_path_without_following(const std::wstring& path)
-{
-    const DWORD attrs = GetFileAttributesW(path.c_str());
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-    {
-        return;
-    }
-    SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL);
-    if ((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
-    {
-        RemoveDirectoryW(path.c_str());
-        return;
-    }
-    DeleteFileW(path.c_str());
-}
-
-static std::wstring fs_mcp_launch_link_dir()
-{
-    wchar_t program_data[MAX_PATH] = {};
-    if (FAILED(SHGetFolderPathW(NULL, CSIDL_COMMON_APPDATA, NULL, 0, program_data)))
-    {
-        return std::wstring();
-    }
-    return std::wstring(program_data) + L"\\Folderstorm";
-}
-
-static void remove_fs_mcp_launch_link()
-{
-    const std::wstring dir = fs_mcp_launch_link_dir();
-    if (dir.empty())
-    {
-        return;
-    }
-    remove_path_without_following(dir + L"\\fs-mcp.exe");
-    remove_path_without_following(dir + L"\\fs-mcp.exe.replacing");
-    // Fails when the directory still has anything else in it.
-    RemoveDirectoryW(dir.c_str());
-}
-
-// Best effort. A per-user Velopack install is usually not elevated, and
-// ProgramData is often not writable. That must not fail the install; the
-// exe remains beside the viewer in the Velopack current directory.
-static void create_fs_mcp_launch_link(const std::wstring& install_dir)
-{
-    const std::wstring target = install_dir + L"\\fs-mcp.exe";
-    if (GetFileAttributesW(target.c_str()) == INVALID_FILE_ATTRIBUTES)
-    {
-        return;
-    }
-    const std::wstring dir = fs_mcp_launch_link_dir();
-    if (dir.empty())
-    {
-        return;
-    }
-    if (!CreateDirectoryW(dir.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
-    {
-        OutputDebugStringW(L"[Velopack] fs-mcp launch link skipped; ProgramData\\Folderstorm is not writable\n");
-        return;
-    }
-    const std::wstring link = dir + L"\\fs-mcp.exe";
-    // Move an existing link or file aside, then retarget. MoveFileW moves a
-    // reparse point and does not move its target. If the new link cannot be
-    // created, the previous path is moved back.
-    const std::wstring backup = link + L".replacing";
-    remove_path_without_following(backup);
-    const bool had_existing = GetFileAttributesW(link.c_str()) != INVALID_FILE_ATTRIBUTES;
-    if (had_existing)
-    {
-        SetFileAttributesW(link.c_str(), FILE_ATTRIBUTE_NORMAL);
-        if (!MoveFileW(link.c_str(), backup.c_str()))
-        {
-            OutputDebugStringW(L"[Velopack] fs-mcp launch link was not replaced\n");
-            return;
-        }
-    }
-    enable_symlink_privilege();
-    const bool created = CreateSymbolicLinkW(link.c_str(), target.c_str(), 0) ||
-        CreateSymbolicLinkW(link.c_str(), target.c_str(), SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE);
-    if (created)
-    {
-        remove_path_without_following(backup);
-        return;
-    }
-    if (had_existing)
-    {
-        MoveFileW(backup.c_str(), link.c_str());
-    }
-    OutputDebugStringW(L"[Velopack] fs-mcp launch link was not created\n");
+    CloseHandle(process.hProcess);
 }
 
 static void on_after_install(void* user_data, const char* app_version)
@@ -1191,20 +1106,14 @@ static void on_after_install(void* user_data, const char* app_version)
     register_protocol_handler(PROTOCOL_GRID_INFO_OPENSIM, L"URL:Hypergrid", exe_path);
     // </FS:TJ>
     create_shortcuts(install_dir, app_name);
-    create_fs_mcp_launch_link(install_dir);
     offer_settings_migration(install_dir);
-}
-
-static void on_after_update(void* user_data, const char* app_version)
-{
-    create_fs_mcp_launch_link(get_install_dir());
 }
 
 static void on_before_uninstall(void* user_data, const char* app_version)
 {
     std::wstring app_name = get_app_name();
 
-    remove_fs_mcp_launch_link();
+    cleanup_owned_legacy_mcp_links(get_install_dir());
     unregister_protocol_handler(PROTOCOL_SECONDLIFE);
     unregister_protocol_handler(PROTOCOL_GRID_INFO);
     // <FS:TJ> Support for OpenSim protocols
@@ -1425,9 +1334,6 @@ bool velopack_initialize()
     vpkc_app_set_hook_first_run(on_first_run);
     vpkc_app_set_hook_after_install(on_after_install);
     vpkc_app_set_hook_before_uninstall(on_before_uninstall);
-#endif
-#if LL_WINDOWS
-    vpkc_app_set_hook_after_update(on_after_update);
 #endif
 
     vpkc_app_run(nullptr);

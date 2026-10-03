@@ -70,7 +70,8 @@ class FSViewerManifest:
             self.args['configuration'] + "\\SLVoice.exe",
             self.args['configuration'] + "\\llwebrtc.dll",
             self.args['configuration'] + "\\llplugin\\dullahan_host.exe",
-            self.args['configuration'] + "\\" + self.final_exe()
+            self.args['configuration'] + "\\" + self.final_exe(),
+            self.args['configuration'] + "\\fs-mcp-launcher-maintenance.exe"
         ]
 
         if not signtool_path or not codesigning_dlib_path:

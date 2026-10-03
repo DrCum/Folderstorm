@@ -1,0 +1,65 @@
+name: Windows MCP launcher ownership
+
+on:
+  pull_request:
+    paths:
+      - "tools/windows-mcp-launcher/**"
+      - "indra/newview/fsassistantlaunchpath.h"
+      - "indra/newview/fspanelpreferencelocalassistant.cpp"
+      - "indra/newview/llvelopack.cpp"
+      - "indra/newview/installers/windows/installer_template.nsi"
+      - "indra/newview/viewer_manifest.py"
+      - "indra/newview/fs_viewer_manifest.py"
+      - "indra/newview/CMakeLists.txt"
+      - "indra/newview/tests/test_windows_mcp_installer_contract.py"
+      - "indra/newview/tests/test_fsassistantlaunchpath.cpp"
+      - ".github/workflows/windows-mcp-launcher.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/windows-mcp-launcher/**"
+      - "indra/newview/fsassistantlaunchpath.h"
+      - "indra/newview/fspanelpreferencelocalassistant.cpp"
+      - "indra/newview/llvelopack.cpp"
+      - "indra/newview/installers/windows/installer_template.nsi"
+      - "indra/newview/viewer_manifest.py"
+      - "indra/newview/fs_viewer_manifest.py"
+      - "indra/newview/CMakeLists.txt"
+      - "indra/newview/tests/test_windows_mcp_installer_contract.py"
+      - "indra/newview/tests/test_fsassistantlaunchpath.cpp"
+      - ".github/workflows/windows-mcp-launcher.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: tools/windows-mcp-launcher/go.mod
+          cache: false
+      - name: Ownership and deterministic race fixtures
+        working-directory: tools/windows-mcp-launcher
+        run: go test -v ./...
+      - name: Installer integration invariants
+        run: python indra/newview/tests/test_windows_mcp_installer_contract.py
+      - name: Installation-bound command fixtures
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libboost-dev
+          g++ -std=c++17 -Wall -Wextra -Werror indra/newview/tests/test_fsassistantlaunchpath.cpp -o /tmp/assistant-launch-path-tests
+          /tmp/assistant-launch-path-tests
+      - name: Windows executable and fixture cross-compilation
+        shell: bash
+        working-directory: tools/windows-mcp-launcher
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o fs-mcp-launcher-maintenance.exe .
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c -o windows-mcp-launcher.test.exe .

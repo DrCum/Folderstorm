@@ -1,8 +1,8 @@
 # Building Folderstorm from source
 
-The viewer build compiles `tools/migrate-settings` and `tools/fs-mcp` and the installer copies both into the install folder, next to the viewer. `fs-mcp` is `fs-mcp.exe` on Windows. The viewer does not start it. The local assistant stays off until it is enabled in Preferences. The installer does not write an MCP config into Cursor or another app. On Windows, point the client at `C:\ProgramData\Folderstorm\fs-mcp.exe`. See [help.md](help.md).
+The viewer build compiles `tools/migrate-settings` and `tools/fs-mcp` and the installer copies both into the install folder, next to the viewer. `fs-mcp` is `fs-mcp.exe` on Windows. The viewer does not start it. The local assistant stays off until it is enabled in Preferences. The installer does not write an MCP config into Cursor or another app. Copy the installed command from Preferences → Local assistant → Setup. See [help.md](help.md).
 
-On Windows the real sidecar stays next to the viewer. A Velopack install of the Release channel leaves it at `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`. The NSIS installer leaves it in the channel directory, for example `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` or a private channel such as `FolderstormOS-private-<host>`. Both installers create a symbolic link at `C:\ProgramData\Folderstorm\fs-mcp.exe` that points at that file. That link is the MCP command. It has no spaces, so `cmd.exe` does not split it. On Linux the file is `fs-mcp`, next to `install.sh`. On macOS it is `Folderstorm.app/Contents/Resources/fs-mcp`.
+On Windows the real sidecar stays next to the viewer. A Velopack install of the Release channel leaves it at `%LocalAppData%\Folderstorm-Release\current\fs-mcp.exe`. The NSIS installer leaves it in the channel directory, for example `%ProgramFiles%\Folderstorm-Release\fs-mcp.exe` or a private channel such as `FolderstormOS-private-<host>`. New installers never create or retarget the legacy ProgramData alias. Their installed sidecar path is the client command; Cursor receives the quoted adapter from Setup when that path contains spaces. Uninstall uses `fs-mcp-launcher-maintenance.exe` to remove only independently proven-owned legacy file symlinks. On Linux the file is `fs-mcp`, next to `install.sh`. On macOS it is `Folderstorm.app/Contents/Resources/fs-mcp`.
 
 You can still test the two Go modules on their own. Those commands do not replace the copies in the viewer package.
 
@@ -41,7 +41,7 @@ On Linux, autobuild.xml's ReleaseFS_open_AVX2 configure and build options alread
 
 ReleaseFS_open_AVX2 is the open AVX2 target (no Kakadu, no FMOD). Do not configure ReleaseFS_AVX2. AVX2 binaries do not run on a CPU without AVX2.
 
-Viewer configure runs CGO_ENABLED=0 go build for tools/migrate-settings and tools/fs-mcp. The package copies both next to the viewer (fs-mcp.exe on Windows). The viewer does not start fs-mcp. On Windows the client command is C:\ProgramData\Folderstorm\fs-mcp.exe.
+Viewer configure runs CGO_ENABLED=0 go build for tools/migrate-settings and tools/fs-mcp. The package copies both next to the viewer (fs-mcp.exe on Windows). The viewer does not start fs-mcp. On Windows the package also includes the legacy-link cleanup utility; client commands remain bound to the installation.
 
 2. MCP sidecar tests. Separate Go module, already compiled into the viewer package. From tools/fs-mcp, with Go 1.25 or newer:
 
@@ -175,7 +175,7 @@ Viewer configure also runs `CGO_ENABLED=0 go build` in `tools/migrate-settings` 
 
 ### 2. MCP sidecar
 
-The packaged installer already includes this binary next to the viewer. On Windows the client command is `C:\ProgramData\Folderstorm\fs-mcp.exe`, the symbolic link the installer creates. Leave the Autobuild variables alone; this standalone build does not read them.
+The packaged installer already includes this binary next to the viewer. On Windows copy the installation-bound command from the viewer's Local assistant Setup page. Leave the Autobuild variables alone; this standalone build does not read them.
 
 ```
 cd tools/fs-mcp
