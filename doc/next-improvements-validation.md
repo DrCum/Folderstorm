@@ -24,6 +24,11 @@ on 2026-10-03. They establish the listed behavior, not native GUI acceptance.
 - Eight portable production-helper C++ tests passed: chrome layout, snapshot
   upload, assistant policy, world-view geometry, link replacement, assistant
   permissions, inventory bulk, and workspace geometry/names.
+  A ninth check linked the production provenance helper to the viewer's
+  Boost fiber/context libraries and passed overlapping coroutine, native
+  edit, nested yield and out-of-order scope completion cases. The bulk model
+  regression also rejects undo after observed native edits while confirmation
+  is pending, even if the final name/parent returns to the expected value.
 - All fs-mcp, settings migrator and launcher-helper Go tests and `go vet`
   passed. The sidecar built; the launcher helper and its Windows-native
   fixture binary cross-compiled for Windows amd64. Local builds used
@@ -39,9 +44,13 @@ on 2026-10-03. They establish the listed behavior, not native GUI acceptance.
   integration. Existing overloaded-virtual warnings were allowed; the
   pre-existing Windows path comment warning in `llvelopack.cpp` was also
   allowed. Windows-only code paths were not compiled by these Linux checks.
-- C++ installation-path fixtures and five Python installer-contract checks
+- C++ installation-path fixtures and seven Python installer-contract checks
   passed. Changed XML parsed, Python manifests compiled, new viewer source
   registration and literal UI control references were checked.
+  The installer checks execute the vendored NSIS signing loop with a mock
+  signer and verify that helper signing failure stops packaging. The local
+  composite retains pinned upstream provenance/license and signs the helper
+  before building the installer; actual Azure signing was not run locally.
 - Touched-file precommit hooks passed except known baseline debt: missing
   license/copyright in `fs_viewer_manifest.py`, existing whitespace in the
   two manifest files and `llpanelmaininventory.cpp`, and mixed line endings
@@ -65,6 +74,8 @@ The portable CI workflow includes the new bulk/workspace helpers. The Windows
 ownership workflow runs native file/reparse/race fixtures on Windows; its
 successful execution is distinct from local cross-compilation. A symlink
 fixture skipped for lack of privileges does not verify cleanup.
+The coroutine check is enabled when Boost fiber/context is available; it
+does not add a dependency to the eight portable checks.
 
 ## Remaining native acceptance
 
