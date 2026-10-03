@@ -974,6 +974,8 @@ set(viewer_HEADER_FILES
     fsassistantapproval.h
     fsassistantconfiguration.h
     fsassistantoperation.h
+    fsassistantpermissions.h
+    fsassistantsettings.h
     fsassistantpolicy.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
@@ -3188,6 +3190,11 @@ if (LL_TESTS)
           llprimitive
           lllogin
           )
+
+  LL_ADD_INTEGRATION_TEST(fsassistantsettings
+    ""
+    "${test_libs}"
+    )
 
   LL_ADD_INTEGRATION_TEST(cppfeatures
     ""

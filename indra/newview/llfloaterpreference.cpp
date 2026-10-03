@@ -34,6 +34,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpreference.h"
+#include "fspanelpreferencelocalassistant.h"
 
 #include "message.h"
 #include "llfloaterautoreplacesettings.h"
@@ -1587,6 +1588,9 @@ void LLFloaterPreference::onBtnOK(const LLSD& userdata)
 
     if (canClose())
     {
+        // Runtime previews become saved preferences only on explicit acceptance.
+        if (auto* assistant = findChild<FSPanelPreferenceLocalAssistant>("local_assistant"))
+            assistant->commitPendingSettings();
         saveSettings();
         apply();
 

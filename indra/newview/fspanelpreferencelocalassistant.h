@@ -22,6 +22,10 @@
 #include "llprocess.h"
 #include "lltimer.h"
 #include "llevents.h"
+#include "llcontrol.h"
+#include "llsdutil.h"
+#include "fsassistantsettings.h"
+#include <memory>
 
 class FSPanelPreferenceLocalAssistant : public LLPanelPreference
 {
@@ -32,18 +36,27 @@ public:
     void draw() override;
     void onVisibilityChange(bool visible) override;
     void saveSettings() override;
+    // Called only by the explicit Preferences OK action, before baseline capture.
+    void commitPendingSettings();
     void cancel(const std::vector<std::string> settings_to_skip = {}) override;
 
 private:
-    struct LocalAssistantRow { const char* key; const char* widget; const char* fallback; bool ask; };
-    static const LocalAssistantRow kLocalAssistantRows[9];
-    static bool levelAllowed(const LocalAssistantRow& row, const std::string& level);
+    struct EqualSettings
+    {
+        bool operator()(const LLSD& a, const LLSD& b) const { return llsd_equals(a, b); }
+    };
+    using AssistantEditor = fs_assistant::SettingsEditor<LLControlVariable, EqualSettings>;
     void refreshLocalAssistantControls();
     void refreshLocalAssistantStatus();
+    void refreshPreset();
     void onLocalAssistantToggled();
     void onLocalAssistantPermission(const char* key);
+    void onPreset();
+    void onSessionScope();
+    void onIndividualPermissions();
+    void previewSettings(const LLSD& access, const LLSD& permissions);
+    bool settingsChangedElsewhere();
     void snapshotLocalAssistant();
-    void restoreSavedControl(const char* name, const LLSD& saved, const LLSD& runtime, bool hadUnsaved);
     void restoreLocalAssistant();
     void refreshConfiguration();
     void copyConfiguration();
@@ -52,13 +65,12 @@ private:
     void stopConnection();
     std::string sidecarPath() const;
 
-    bool mLocalAssistantSnapshotted = false;
-    bool mBridgeRuntime = false;
-    bool mBridgeSaved = false;
-    bool mBridgeUnsaved = false;
-    LLSD mPermsRuntime;
-    LLSD mPermsSaved;
-    bool mPermsUnsaved = false;
+    std::unique_ptr<AssistantEditor> mEditor;
+    boost::signals2::scoped_connection mAccessConnection;
+    boost::signals2::scoped_connection mPermissionsConnection;
+    bool mWritingSettings = false;
+    bool mIndividualPermissions = false;
+    bool mSettingsConflict = false;
     LLProcessPtr mDiagnostic;
     LLTimer mDiagnosticTimer;
     LLTimer mStatusTimer;

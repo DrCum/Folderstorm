@@ -25,6 +25,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fseventapibridge.h"
+#include "fsassistantpermissions.h"
 #include "fsassistantapproval.h"
 #include "fsassistantoperation.h"
 #include "fsassistantpolicy.h"
@@ -88,41 +89,9 @@ constexpr const char* ERR_TIMED_OUT = "Action confirmation timed out";
 
 int gPolicyGeneration = 1;
 
-enum class ActionClass
-{
-    Unknown,
-    Read,
-    Camera,
-    Create,
-    Edit,
-    Move,
-    Trash,
-    NoCopy,
-    Wear,
-    Links,
-    Permanent
-};
-
-struct ClassDef
-{
-    ActionClass kind;
-    const char* id;
-    const char* title;
-    const char* fallback;
-    bool ask;
-};
-
-const ClassDef CLASS_DEFS[] = {
-    {ActionClass::Read, "read", "Read inventory and outfits", "allow", false},
-    {ActionClass::Camera, "camera", "Move camera and take pictures", "allow", true},
-    {ActionClass::Create, "create", "Create folders and items", "allow", true},
-    {ActionClass::Edit, "edit", "Rename and edit details", "allow", true},
-    {ActionClass::Move, "move", "Move and copy", "allow", true},
-    {ActionClass::Trash, "trash", "Trash (can be restored)", "allow", true},
-    {ActionClass::NoCopy, "nocopy", "Move no-copy items during a copy", "ask", true},
-    {ActionClass::Wear, "wear", "Wear and detach", "ask", true},
-    {ActionClass::Links, "links", "Replace links", "ask", true},
-};
+using ActionClass = fs_assistant::ActionClass;
+using ClassDef = fs_assistant::PermissionClass;
+const auto& CLASS_DEFS = fs_assistant::permissionClasses;
 
 const ClassDef* find_def(ActionClass kind)
 {
@@ -145,11 +114,7 @@ const ClassDef* find_def(const std::string& id)
 
 bool level_allowed(const ClassDef& def, const std::string& level)
 {
-    if (level == "allow" || level == "deny")
-    {
-        return true;
-    }
-    return def.ask && level == "ask";
+    return fs_assistant::permissionLevelAllowed(def, level);
 }
 
 std::string effective_level(ActionClass kind)
