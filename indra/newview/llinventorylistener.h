@@ -35,6 +35,8 @@
 #include <memory>
 
 struct InventoryChangeFeed;
+struct FSLinkReplacementSelection;
+struct FSAssistantExecutionContext;
 
 class LLInventoryListener : public LLEventAPI
 {
@@ -43,6 +45,21 @@ public:
     ~LLInventoryListener() override;
 
     void noteInventoryChanged(U32 mask);
+
+    // Viewer-owned preflight and dispatch. Prepared scope and execution context
+    // are passed in C++, never taken from public Event API/HTTP fields.
+    bool prepareLinkReplacement(const LLSD& request, FSLinkReplacementSelection& selection,
+                                std::string& error) const;
+    bool validateLinkReplacementSelection(const FSLinkReplacementSelection& selection,
+                                          std::string& error) const;
+    void dispatchPreparedLinkReplacement(const LLSD& request,
+        std::shared_ptr<const FSLinkReplacementSelection> selection,
+        const FSAssistantExecutionContext& context);
+    void dispatchPreparedSnapshotUpload(const LLSD& request, const FSAssistantExecutionContext& context);
+    bool prepareAssistantCopyConfirmation(const LLSD& request, LLSD& summary,
+                                          LLSD& validation, std::string& error) const;
+    bool validateAssistantCopyConfirmation(const LLSD& request, const LLSD& validation,
+                                           std::string& error) const;
 
 private:
     void ensureObserving();
@@ -70,6 +87,7 @@ private:
     void setDescription(LLSD const& data);
     void setThumbnail(LLSD const& data);
     void snapshotUpload(LLSD const& data);
+    void snapshotUploadWithContext(LLSD const& data, const FSAssistantExecutionContext* context);
     void setFavorite(LLSD const& data);
     void link(LLSD const& data);
     void replaceLinks(LLSD const& data);
@@ -125,4 +143,3 @@ private:
 };
 
 #endif // LL_LLINVENTORYLISTENER_H
-

@@ -62,6 +62,7 @@ public:
     /*virtual*/ bool getPosition(LLCoordScreen *position);
     /*virtual*/ bool getSize(LLCoordScreen *size);
     /*virtual*/ bool getSize(LLCoordWindow *size);
+    bool getMonitorRectsInClient(std::vector<MonitorRect>& monitors) override;
     /*virtual*/ bool setPosition(LLCoordScreen position);
     /*virtual*/ bool setSizeImpl(LLCoordScreen size);
     /*virtual*/ bool setSizeImpl(LLCoordWindow size);

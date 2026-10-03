@@ -1112,6 +1112,76 @@ bool LLWindowSDL::getSize(LLCoordWindow *size)
     return (false);
 }
 
+bool LLWindowSDL::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
+{
+    monitors.clear();
+    const char* driver = SDL_GetCurrentVideoDriver();
+    // Wayland deliberately does not expose global window positions. Other
+    // drivers without a desktop coordinate space must use the manual controls.
+    if (!mWindow || !driver || strcmp(driver, "x11") != 0)
+    {
+        return false;
+    }
+
+    int window_x = 0;
+    int window_y = 0;
+    int window_width = 0;
+    int window_height = 0;
+    int drawable_width = 0;
+    int drawable_height = 0;
+#if LL_X11
+    // Query the client origin, not the decorated window's outer frame or a
+    // cached SDL position which may lag a window-manager move.
+    XWindowAttributes attributes;
+    Window child = None;
+    if (!mSDL_Display || mSDL_XWindowID == None ||
+        !XGetWindowAttributes(mSDL_Display, mSDL_XWindowID, &attributes) ||
+        !XTranslateCoordinates(mSDL_Display, mSDL_XWindowID, attributes.root,
+                               0, 0, &window_x, &window_y, &child))
+    {
+        return false;
+    }
+#else
+    return false;
+#endif
+    SDL_GetWindowSize(mWindow, &window_width, &window_height);
+    SDL_GL_GetDrawableSize(mWindow, &drawable_width, &drawable_height);
+    const int display_count = SDL_GetNumVideoDisplays();
+    if (display_count <= 0 || window_width <= 0 || window_height <= 0 ||
+        drawable_width <= 0 || drawable_height <= 0)
+    {
+        return false;
+    }
+
+    const F64 scale_x = static_cast<F64>(drawable_width) / window_width;
+    const F64 scale_y = static_cast<F64>(drawable_height) / window_height;
+    for (int display = 0; display < display_count; ++display)
+    {
+        SDL_Rect bounds;
+        if (SDL_GetDisplayBounds(display, &bounds) != 0 || bounds.w <= 0 || bounds.h <= 0)
+        {
+            monitors.clear();
+            return false;
+        }
+
+        MonitorRect monitor;
+        monitor.id = std::to_string(display);
+        const char* name = SDL_GetDisplayName(display);
+        if (name)
+        {
+            monitor.name = name;
+        }
+        const F64 left = (static_cast<F64>(bounds.x) - window_x) * scale_x;
+        const F64 right = (static_cast<F64>(bounds.x) + bounds.w - window_x) * scale_x;
+        const F64 top = drawable_height - (static_cast<F64>(bounds.y) - window_y) * scale_y;
+        const F64 bottom = drawable_height - (static_cast<F64>(bounds.y) + bounds.h - window_y) * scale_y;
+        // SDL uses top-left screen coordinates; LLRect uses bottom-left edges.
+        monitor.rect.set(ll_round(left), ll_round(top), ll_round(right), ll_round(bottom));
+        monitors.push_back(monitor);
+    }
+    return true;
+}
+
 bool LLWindowSDL::setPosition(const LLCoordScreen position)
 {
     if(mWindow)

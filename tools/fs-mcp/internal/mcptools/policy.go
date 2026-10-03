@@ -116,6 +116,12 @@ func (s *Server) cachedPolicy(pid int, fallback viewerapi.StatusPolicy) viewerap
 // old elicitation path. Ask and Allow both return the client; the viewer dialog
 // is the question for Ask.
 func (s *Server) openClass(ctx context.Context, viewerPID int, class string) (API, viewerapi.StatusPolicy, *mcp.CallToolResult) {
+	return s.openClasses(ctx, viewerPID, []string{class})
+}
+
+// Resolve and load policy once for compound actions. Ask still belongs to the
+// viewer, which rechecks every required class immediately before dispatch.
+func (s *Server) openClasses(ctx context.Context, viewerPID int, classes []string) (API, viewerapi.StatusPolicy, *mcp.CallToolResult) {
 	inst, api, errRes := s.resolve(viewerPID)
 	if errRes != nil {
 		return nil, viewerapi.StatusPolicy{}, errRes
@@ -125,11 +131,15 @@ func (s *Server) openClass(ctx context.Context, viewerPID int, class string) (AP
 		res, _, _ := apiError(err)
 		return nil, viewerapi.StatusPolicy{}, res
 	}
-	if policy.Present && policy.Level(class) == "deny" {
-		res, _, _ := errorResult("not_permitted", "This action is not allowed by the viewer permission settings", map[string]any{
-			"class": class,
-		})
-		return nil, policy, res
+	if policy.Present {
+		for _, class := range classes {
+			if policy.Level(class) == "deny" {
+				res, _, _ := errorResult("not_permitted", "This action is not allowed by the viewer permission settings", map[string]any{
+					"class": class, "required_classes": classes,
+				})
+				return nil, policy, res
+			}
+		}
 	}
 	return api, policy, nil
 }

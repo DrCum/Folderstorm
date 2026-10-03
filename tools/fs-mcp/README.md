@@ -2,13 +2,13 @@
 
 `fs-mcp` is a local stdio [MCP](https://modelcontextprotocol.io) server. It turns tool calls from Cursor, Codex, Claude Code, or any other MCP client into the Folderstorm viewer's loopback Event API.
 
-The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Privacy → General → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
+The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
 On Windows, point Cursor, Claude Code, and Codex at:
 
 `C:\ProgramData\Folderstorm\fs-mcp.exe`
 
-That path has no spaces. Cursor starts the MCP command through `cmd.exe`, and a path under `C:\Program Files` is split at the space (`'C:\Program' is not recognized`). Use the ProgramData path as the command, with no `cmd` wrapper and no extra quotes. The Windows installers create it as a symbolic link, not a `.lnk` shortcut, to the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays there. An upgrade replaces the link so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty. Removing the link leaves the real exe in place.
+That path has no spaces. Cursor starts the MCP command through `cmd.exe`, and a path under `C:\Program Files` is split at the space (`'C:\Program' is not recognized`). Use the Setup page to copy a command verified for the running installation. The Windows installers create it as a symbolic link, not a `.lnk` shortcut, to the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays there. An upgrade replaces the link so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty. Removing the link leaves the real exe in place.
 
 A Velopack install is per-user and usually not elevated. It tries to create the same link. When `C:\ProgramData` is not writable, the install still succeeds and `fs-mcp.exe` stays in the Velopack `current` folder next to the viewer.
 
@@ -72,6 +72,23 @@ GOOS=windows GOARCH=amd64 go build -o fs-mcp.exe ./cmd/fs-mcp
 ```
 
 Logs go to stderr so they do not corrupt the stdio stream. The bearer token is never printed.
+
+
+### Copy configuration and check this viewer
+
+Open **Preferences → Local assistant → Setup**, choose Codex, Cursor, or Claude Code, then **Copy configuration**. Merge the entry into that client's file; keep your existing servers. Codex receives a TOML table; Cursor and Claude Code receive a JSON `mcpServers` entry. This uses the current installation and the viewer's actual settings directory, including directory overrides. It copies no discovery contents or bearer token and writes no client files.
+
+On Windows the copy uses the ProgramData link only when it resolves to this installation's sidecar. Otherwise Codex and Claude Code use the real absolute executable path. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. The installer link is not modified. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
+
+**Check connection** runs the installed sidecar asynchronously against this viewer. It checks authenticated bridge health even when inventory Read is Never. A successful check means the sidecar could reach this viewer at that moment; it does not mean your external assistant loaded its configuration. Inventory and recent authenticated external requests are shown separately. Diagnostic probes do not count as external assistant activity. Closing preferences or leaving the page cancels a running check; changes to bridge readiness or permissions clear an old result.
+
+For a terminal check, use the installed executable:
+
+```text
+fs-mcp --diagnose --viewer-pid 12345 --discovery "/absolute/path/to/user_settings"
+```
+
+Replace the PID and directory with this viewer's values (the discovery filename includes its PID). The command emits bounded JSON with fixed failure stages and readiness facts, never the bearer token or raw server errors. Exit status is 0 on success, 1 when the check fails, and 2 for invalid arguments/output failure. HTTP checks have a four-second timeout; the viewer terminates its subprocess after five seconds. A pre-login viewer can pass bridge health while inventory is unavailable. Running `fs-mcp` with no arguments still starts the MCP stdio server.
 
 ## How a call gets to the viewer
 
@@ -226,7 +243,7 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `inventory_snapshot_upload` | Capture and set a folder, outfit, or item image. `destination` is `thumbnail` by default, or `texture`. |
 | `inventory_set_favorite` | Set or clear the favorite flag. |
 | `inventory_link` | Link an item or folder into `parent_id`. |
-| `inventory_replace_links` | Point every link that targets `source_id` at `target_id`, and move the old links to Trash. Ask is a viewer dialog unless that permission is Allow. |
+| `inventory_replace_links` | Verify replacement links to `target_id` before submitting old links targeting `source_id` to Trash. Protected links can be skipped. Inspect each result; `trash_state: submitted` is not server confirmation, and `retry_safe: false` requires inventory inspection before retrying. Ask is a viewer dialog unless that permission is Allow. |
 | `inventory_move` | Move `id` to `parent_id`. This is a move, including no-copy items. Follows Move and copy. |
 | `inventory_batch_move` | Up to 50 ids into one `parent_id`. Per-item results. Follows Move and copy. |
 | `inventory_batch_rename` | Up to 50 `{id, name}` entries. Per-item results. |
@@ -310,9 +327,9 @@ Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
 
 `inventory_snapshot_upload` takes `id` (an outfit folder, another folder, or an item) and sets that image. `width` and `height` default to 1024 and 1024. `viewport_only` defaults to true. `destination` is `thumbnail` unless you pass `texture`. Optional `name` is the inventory texture name; otherwise the folder or item name is used.
 
-A thumbnail uses the same free upload as the Item Snapshot floater. It follows Rename and edit details, the same class as `inventory_set_thumbnail`. The picture is scaled down to 256. The quoted cost is L$0, so Allow uploads with no dialog. The reply is `cost` 0, `destination` `thumbnail`, and `thumbnail_id`. It does not create a reusable inventory texture.
+A thumbnail uses the same free upload as the Item Snapshot floater. It requires both Camera and Rename and edit details permissions: taking the picture and changing the inventory image are separate actions. The picture is scaled down to 256. The quoted cost is L$0, so both permissions set to Allow uploads with no dialog. The reply is `cost` 0, `destination` `thumbnail`, and `thumbnail_id`. It does not create a reusable inventory texture.
 
-A texture creates a real inventory texture, then sets the folder image. It follows Create folders and items. The viewer quotes the L$ price before spending anything. A 1024 square uses the normal texture price. A larger request uses the 2K price. OpenSim can quote L$0. Never refuses the upload. Ask shows the L$ amount. Allow uploads with no dialog only when that price is L$0. Allow with a price above L$0 asks and shows the amount. The reply is `cost`, `destination` `texture`, `asset_id`, and `thumbnail_id`.
+A texture creates a real inventory texture, then sets the folder image. It requires Camera, Create folders and items, and Rename and edit details. Any required permission set to Never refuses the upload; any set to Ask produces one viewer confirmation. The viewer quotes the L$ price before spending anything. A 1024 square uses the normal texture price. A larger request uses the 2K price. OpenSim can quote L$0. All required permissions set to Allow uploads with no dialog only when that price is L$0. A positive price always asks and shows the amount, and a price increase requires fresh confirmation. The reply is `cost`, `destination` `texture`, `asset_id`, and `thumbnail_id`.
 
 `inventory_set_thumbnail` is unchanged. It still only points a folder or item at an existing texture UUID, stays on Rename and edit details, and does not spend L$. Allow does not spend L$ on a thumbnail upload or on a texture upload whose quoted cost is L$0.
 

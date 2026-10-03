@@ -1,8 +1,11 @@
 package mcptools
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func numberIs(t *testing.T, params map[string]any, key string, want int) {
@@ -174,5 +177,57 @@ func TestSnapshotUploadRejectsBadArgs(t *testing.T) {
 	}
 	if contains(api.opsCopy(), "LLInventory.snapshotUpload") {
 		t.Fatalf("upload ran: %v", api.opsCopy())
+	}
+}
+
+func TestSnapshotUploadEveryRequiredPermission(t *testing.T) {
+	for _, destination := range []string{"thumbnail", "texture"} {
+		classes := []string{"camera", "edit"}
+		if destination == "texture" {
+			classes = []string{"camera", "create", "edit"}
+		}
+		for _, denied := range classes {
+			t.Run(destination+"/"+denied, func(t *testing.T) {
+				levels := map[string]string{"camera": "allow", "create": "allow", "edit": "allow"}
+				levels[denied] = "deny"
+				api := &fakeAPI{status: policyStatus(1, levels)}
+				res := call(t, connect(t, singleViewer(api), nil), "inventory_snapshot_upload", map[string]any{"id": "folder-1", "destination": destination})
+				if !res.IsError || !strings.Contains(textOf(res), "not_permitted") {
+					t.Fatalf("denied %s: %s", denied, textOf(res))
+				}
+				if contains(api.opsCopy(), "LLInventory.snapshotUpload") {
+					t.Fatal("denied compound action reached viewer")
+				}
+				if count(api.opsCopy(), "status") != 1 {
+					t.Fatalf("compound policy loaded more than once: %v", api.opsCopy())
+				}
+			})
+		}
+	}
+}
+
+func TestSnapshotUploadCompoundAskCallsViewerOnce(t *testing.T) {
+	for _, destination := range []string{"thumbnail", "texture"} {
+		t.Run(destination, func(t *testing.T) {
+			api := &fakeAPI{status: policyStatus(1, map[string]string{"camera": "ask", "create": "ask", "edit": "ask"})}
+			cs := connect(t, singleViewer(api), &mcp.ClientOptions{
+				ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					t.Fatal("compound action duplicated viewer approval in sidecar")
+					return nil, nil
+				},
+			})
+			res := call(t, cs, "inventory_snapshot_upload", map[string]any{"id": "folder-1", "destination": destination})
+			if res.IsError || count(api.opsCopy(), "LLInventory.snapshotUpload") != 1 || count(api.opsCopy(), "status") != 1 {
+				t.Fatalf("compound Ask should dispatch once: %s; %v", textOf(res), api.opsCopy())
+			}
+		})
+	}
+}
+
+func TestSnapshotUploadOlderViewerPolicyFallback(t *testing.T) {
+	api := &fakeAPI{} // No permissions object, as in older viewers.
+	res := call(t, connect(t, singleViewer(api), nil), "inventory_snapshot_upload", map[string]any{"id": "folder-1", "destination": "texture"})
+	if res.IsError || count(api.opsCopy(), "LLInventory.snapshotUpload") != 1 {
+		t.Fatalf("older viewer fallback changed: %s; %v", textOf(res), api.opsCopy())
 	}
 }
