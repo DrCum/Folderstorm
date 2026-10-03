@@ -6793,6 +6793,17 @@
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <key>FSAssistantReviewBulkOperations</key>
+    <map>
+      <key>Comment</key>
+      <string>Show one exact review and permission dialog for assistant batch rename/move affecting at least 10 unique inventory objects, even when the action permission is Allow.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>LocalEventAPIPermissionClasses</key>
     <map>
       <key>Comment</key>
