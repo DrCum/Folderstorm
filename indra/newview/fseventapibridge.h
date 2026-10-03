@@ -7,6 +7,7 @@
 #define FS_EVENT_API_BRIDGE_H
 
 #include "llsingleton.h"
+#include "llsd.h"
 
 #include <memory>
 #include <string>
@@ -31,8 +32,24 @@ public:
     int getPort() const;
     const std::string& getDiscoveryPath() const;
 
-    // Bumps the integer published on inventory status. A hand-edited
-    // permanent-delete value does not change what the bridge will run.
+    struct StatusSnapshot
+    {
+        bool enabled = false;
+        bool ready = false;
+        int port = 0;
+        int policyGeneration = 0;
+        int pendingApprovals = 0;
+        F64 lastExternalRequestAt = 0.0;
+        F64 lastDiagnosticAt = 0.0;
+        std::string lastExternalApi;
+        std::string lastExternalOp;
+        std::string error;
+    };
+    // Local, credential-free diagnostics. Times use totalTime()/1e6.
+    StatusSnapshot getStatusSnapshot() const;
+
+    // Publish a new generation and reject pending approvals whose required
+    // permission was revoked. Permanent-delete settings remain irrelevant.
     static void notePermissionClassesChanged();
     static int getPolicyGeneration();
 
@@ -47,6 +64,7 @@ private:
     std::shared_ptr<State> mState;
     std::string mDiscoveryPath;
     int mPort = 0;
+    std::string mLastError;
 };
 
 #endif

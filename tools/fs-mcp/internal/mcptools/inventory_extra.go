@@ -20,7 +20,7 @@ func registerInventoryExtra(s *mcp.Server, state *Server, readOnly, mutating, de
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_landmark", Description: "Read a landmark's region and global position.", Annotations: withTitle(readOnly, "Read landmark")}, state.inventoryLandmark)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_description", Description: "Set the description of an item or folder.", Annotations: withTitle(mutating, "Set description")}, state.inventorySetDescription)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_thumbnail", Description: "Set or clear a thumbnail using a texture UUID.", Annotations: withTitle(mutating, "Set thumbnail")}, state.inventorySetThumbnail)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_snapshot_upload", Description: "Capture the world view and set that image on a folder, outfit, or item. destination thumbnail is the default, costs L$0, and follows Edit. destination texture creates an inventory texture, follows Create, and Allow spends L$ only when the quoted cost is 0.", Annotations: withTitle(mutating, "Upload snapshot image")}, state.inventorySnapshotUpload)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_snapshot_upload", Description: "Capture the world view and set that image on a folder, outfit, or item. destination thumbnail is the default, costs L$0, and requires Camera and Edit. destination texture creates an inventory texture and assigns the image, requires Camera, Create and Edit, and always asks before spending L$.", Annotations: withTitle(mutating, "Upload snapshot image")}, state.inventorySnapshotUpload)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_set_favorite", Description: "Set or clear the favorite flag.", Annotations: withTitle(mutating, "Set favorite")}, state.inventorySetFavorite)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_link", Description: "Create a link to an item or folder in a destination folder.", Annotations: withTitle(mutating, "Create link")}, state.inventoryLink)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_create_item", Description: "Create a notecard, script, gesture, material, settings item, clothing, body part, or a landmark of the current location.", Annotations: withTitle(mutating, "Create inventory item")}, state.inventoryCreateItem)
@@ -29,7 +29,7 @@ func registerInventoryExtra(s *mcp.Server, state *Server, readOnly, mutating, de
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_batch_copy", Description: "Copy up to 50 items. Copyable items follow Move and copy. Unique no-copy items follow Move no-copy items during a copy. On an older viewer, no-copy items return a plan_id for inventory_confirm_copy. Folders use inventory_copy.", Annotations: withTitle(destructive, "Batch copy")}, state.inventoryBatchCopy)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_trash", Description: "Move an object into Trash. Trash is its own permission, default Allow, and the item can be restored.", Annotations: withTitle(destructive, "Move to trash")}, state.inventoryTrash)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_restore", Description: "Move an object out of Trash into its type folder. Follows Move and copy, not Trash.", Annotations: withTitle(mutating, "Restore from trash")}, state.inventoryRestore)
-	mcp.AddTool(s, &mcp.Tool{Name: "inventory_replace_links", Description: "Point every link that targets source_id at target_id, and move the old links to Trash. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.", Annotations: withTitle(destructive, "Replace links")}, state.inventoryReplaceLinks)
+	mcp.AddTool(s, &mcp.Tool{Name: "inventory_replace_links", Description: "Create verified replacement links to target_id before moving old links that target source_id to Trash. Inspect per-link results: trash_state submitted means the viewer submitted the move, not server-confirmed completion; uncertain outcomes with retry_safe false require inventory inspection before retrying. Protected links may be skipped. On a current viewer, Ask is a viewer dialog. On an older viewer, confirmation is required.", Annotations: withTitle(destructive, "Replace links")}, state.inventoryReplaceLinks)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_empty_trash", Description: "Permanently empty Trash. This is not available. The viewer bridge denies emptyTrash, and no setting can enable it.", Annotations: withTitle(destructive, "Empty trash")}, state.inventoryEmptyTrash)
 	mcp.AddTool(s, &mcp.Tool{Name: "inventory_purge", Description: "Permanently delete one object. This is not available. The viewer bridge denies purge, and no setting can enable it.", Annotations: withTitle(destructive, "Purge inventory object")}, state.inventoryPurge)
 }
@@ -74,19 +74,19 @@ type snapshotUploadArgs struct {
 	ViewerPID    int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
-func buildSnapshotUploadParams(args snapshotUploadArgs) (string, map[string]any, string) {
+func buildSnapshotUploadParams(args snapshotUploadArgs) ([]string, map[string]any, string) {
 	if strings.TrimSpace(args.ID) == "" {
-		return "", nil, "id is required"
+		return nil, nil, "id is required"
 	}
 	if (args.Width == nil) != (args.Height == nil) {
-		return "", nil, "width and height must both be set"
+		return nil, nil, "width and height must both be set"
 	}
 	destination := strings.ToLower(strings.TrimSpace(args.Destination))
 	if destination == "" {
 		destination = "thumbnail"
 	}
 	if destination != "thumbnail" && destination != "texture" {
-		return "", nil, "destination must be thumbnail or texture"
+		return nil, nil, "destination must be thumbnail or texture"
 	}
 	width := 1024
 	height := 1024
@@ -98,9 +98,9 @@ func buildSnapshotUploadParams(args snapshotUploadArgs) (string, map[string]any,
 	if args.ViewportOnly != nil {
 		viewport = *args.ViewportOnly
 	}
-	class := viewerapi.ClassEdit
+	classes := []string{viewerapi.ClassCamera, viewerapi.ClassEdit}
 	if destination == "texture" {
-		class = viewerapi.ClassCreate
+		classes = []string{viewerapi.ClassCamera, viewerapi.ClassCreate, viewerapi.ClassEdit}
 	}
 	params := map[string]any{
 		"id":            strings.TrimSpace(args.ID),
@@ -118,7 +118,7 @@ func buildSnapshotUploadParams(args snapshotUploadArgs) (string, map[string]any,
 	if args.ShowHUD != nil {
 		params["show_hud"] = *args.ShowHUD
 	}
-	return class, params, ""
+	return classes, params, ""
 }
 
 type favoriteArgs struct {
@@ -243,11 +243,11 @@ func (s *Server) inventorySetThumbnail(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *Server) inventorySnapshotUpload(ctx context.Context, _ *mcp.CallToolRequest, args snapshotUploadArgs) (*mcp.CallToolResult, any, error) {
-	class, params, message := buildSnapshotUploadParams(args)
+	classes, params, message := buildSnapshotUploadParams(args)
 	if message != "" {
 		return errorResult("invalid_args", message, nil)
 	}
-	api, _, errRes := s.openClass(ctx, args.ViewerPID, class)
+	api, _, errRes := s.openClasses(ctx, args.ViewerPID, classes)
 	if errRes != nil {
 		return errRes, nil, nil
 	}

@@ -123,7 +123,6 @@
 #include "llviewercontrol.h"
 #include "llpresetsmanager.h"
 #include "llinventoryfunctions.h"
-#include "fseventapibridge.h"
 #include "llsdutil.h"
 
 #include "llsearchableui.h"
@@ -133,6 +132,7 @@
 #include "exogroupmutelist.h"
 #include "fsavatarrenderpersistence.h"
 #include "fschromelayoutcontroller.h"
+#include "fsworldviewdiagram.h"
 #include "fsdroptarget.h"
 #include "fsfloaterimcontainer.h"
 #include "fspanelpreferenceuisounds.h"  // <FS:PP> UI Sounds
@@ -530,6 +530,8 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
 
     mCommitCallbackRegistrar.add("Pref.ClickActionChange",      boost::bind(&LLFloaterPreference::onClickActionChange, this));
     // <FS> Custom world viewport presets for multi-monitor layouts.
+    mCommitCallbackRegistrar.add("Pref.WorldViewUseMonitor", boost::bind(&LLFloaterPreference::onWorldViewUseMonitor, this));
+    mCommitCallbackRegistrar.add("Pref.WorldViewMonitorSelected", boost::bind(&LLFloaterPreference::onWorldViewMonitorSelected, this, _2));
     mCommitCallbackRegistrar.add("Pref.WorldViewPreset",        boost::bind(&LLFloaterPreference::onWorldViewPreset, this, _2));
     mCommitCallbackRegistrar.add("Pref.ChromeProfileApply",     boost::bind(&LLFloaterPreference::onChromeProfileApply, this));
     mCommitCallbackRegistrar.add("Pref.ChromeProfileSave",      boost::bind(&LLFloaterPreference::onChromeProfileSave, this));
@@ -983,6 +985,7 @@ LLFloaterPreference::~LLFloaterPreference()
 
 void LLFloaterPreference::saveSettings()
 {
+    saveViewportSettings();
     LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
     child_list_t::const_iterator iter = tabcontainer->getChildList()->begin();
     child_list_t::const_iterator end = tabcontainer->getChildList()->end();
@@ -1084,6 +1087,7 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
         if (panel)
             panel->cancel(settings_to_skip);
     }
+    cancelViewportSettings(settings_to_skip);
     // hide joystick pref floater
     LLFloaterReg::hideInstance("pref_joystick");
 
@@ -3089,6 +3093,54 @@ void LLFloaterPreference::onClickActionChange()
     updateClickActionControls();
 }
 
+// A scoped baseline also captures callback-only profile state, which bound
+// controls do not include in LLPanelPreference::saveSettings().
+void LLFloaterPreference::saveViewportSettings()
+{
+    ++mViewportSettingsRevision;
+    static const char* const names[] = {
+        "FSWorldViewEnabled", "FSWorldViewInMouselook", "FSWorldViewInsetLeft", "FSWorldViewInsetRight",
+        "FSWorldViewInsetTop", "FSWorldViewInsetBottom", "FSChromeLeftToolbarPlacement", "FSChromeRightToolbarPlacement",
+        "FSChromeLeftToolbarOffset", "FSChromeRightToolbarOffset", "FSChromeBottomDockRegion",
+        "FSChromeBottomDockSpanStart", "FSChromeBottomDockSpanEnd", "FSChromeBottomDockMarginLeft", "FSChromeBottomDockMarginRight",
+        "FSChromeNavFavoritesRegion", "FSChromeNavFavoritesSpanStart", "FSChromeNavFavoritesSpanEnd",
+        "FSChromeNavFavoritesMarginLeft", "FSChromeNavFavoritesMarginRight", "FSChromeMenuStatusRegion",
+        "FSChromeMenuStatusSpanStart", "FSChromeMenuStatusSpanEnd", "FSChromeMenuStatusMarginLeft", "FSChromeMenuStatusMarginRight",
+        "FSChromeLayoutProfiles", "FSChromeActiveProfile"
+    };
+    mViewportPreferenceBaseline = LLSD::emptyMap();
+    for (const char* name : names)
+    {
+        if (LLControlVariable* control = gSavedSettings.getControl(name))
+            mViewportPreferenceBaseline[name] = control->getValue();
+    }
+}
+
+void LLFloaterPreference::cancelViewportSettings(const std::vector<std::string>& settings_to_skip)
+{
+    ++mViewportSettingsRevision;
+    if (FSWorldViewDiagram* diagram = findChild<FSWorldViewDiagram>("world_view_diagram")) diagram->cancelDrag();
+    if (!mViewportPreferenceBaseline.isMap()) return;
+    for (auto it = mViewportPreferenceBaseline.beginMap(); it != mViewportPreferenceBaseline.endMap(); ++it)
+    {
+        if (std::find(settings_to_skip.begin(), settings_to_skip.end(), it->first) != settings_to_skip.end()) continue;
+        if (LLControlVariable* control = gSavedSettings.getControl(it->first)) control->set(it->second);
+    }
+    if (gViewerWindow) gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
+    if (FSChromeLayoutController::instanceExists()) FSChromeLayoutController::instance().apply();
+    refreshChromeLayoutControls();
+}
+
+void LLFloaterPreference::onWorldViewUseMonitor()
+{
+    if (FSWorldViewDiagram* diagram = findChild<FSWorldViewDiagram>("world_view_diagram")) diagram->fitSelectedMonitor();
+}
+
+void LLFloaterPreference::onWorldViewMonitorSelected(const LLSD& id)
+{
+    if (FSWorldViewDiagram* diagram = findChild<FSWorldViewDiagram>("world_view_diagram")) diagram->selectMonitor(id);
+}
+
 // <FS> Custom world viewport presets for multi-monitor layouts.
 void LLFloaterPreference::onWorldViewPreset(const LLSD& preset)
 {
@@ -3228,6 +3280,7 @@ void LLFloaterPreference::onChromeProfileSave()
     {
         LLSD payload;
         payload["name"] = name;
+        payload["prefs_revision"] = static_cast<S32>(mViewportSettingsRevision);
         LLNotificationsUtil::add("ConfirmChromeLayoutOverwrite", LLSD(), payload,
                                  boost::bind(&LLFloaterPreference::onChromeProfileOverwriteResponse, this, _1, _2));
         return;
@@ -3245,6 +3298,7 @@ void LLFloaterPreference::onChromeProfileSave()
 
 void LLFloaterPreference::onChromeProfileOverwriteResponse(const LLSD& notification, const LLSD& response)
 {
+    if (notification["payload"]["prefs_revision"].asInteger() != static_cast<S32>(mViewportSettingsRevision)) return;
     if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
     {
         return;
@@ -3293,12 +3347,14 @@ void LLFloaterPreference::onChromeProfileDelete()
 
     LLSD payload;
     payload["name"] = name;
+    payload["prefs_revision"] = static_cast<S32>(mViewportSettingsRevision);
     LLNotificationsUtil::add("ConfirmChromeLayoutDelete", LLSD(), payload,
                              boost::bind(&LLFloaterPreference::onChromeProfileDeleteResponse, this, _1, _2));
 }
 
 void LLFloaterPreference::onChromeProfileDeleteResponse(const LLSD& notification, const LLSD& response)
 {
+    if (notification["payload"]["prefs_revision"].asInteger() != static_cast<S32>(mViewportSettingsRevision)) return;
     if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
     {
         return;
@@ -4114,15 +4170,6 @@ public:
                 }
             }
         }
-        // The bridge switch and the permission map are not bound to controls.
-        // A bound checkbox would persist a --mcp-api session override on Cancel.
-        snapshotLocalAssistant();
-    }
-
-    /*virtual*/ void cancel(const std::vector<std::string> settings_to_skip = {})
-    {
-        LLPanelPreference::cancel(settings_to_skip);
-        restoreLocalAssistant();
     }
 
     // <FS:Ansariel> Send inventory item on autoresponse
@@ -4147,15 +4194,6 @@ public:
         mInvDropTarget->setDADCallback(boost::bind(&LLPanelPreferencePrivacy::onDADAutoresponseItem, this, _1));
         getChild<LLButton>("clear_autoresponse_item")->setCommitCallback(boost::bind(&LLPanelPreferencePrivacy::onClearAutoresponseItem, this));
 
-        getChild<LLCheckBoxCtrl>("local_assistant_enable")->setCommitCallback(
-            [this](LLUICtrl*, const LLSD&) { onLocalAssistantToggled(); });
-        for (const LocalAssistantRow& row : kLocalAssistantRows)
-        {
-            getChild<LLComboBox>(row.widget)->setCommitCallback(
-                [this, key = row.key](LLUICtrl*, const LLSD&) { onLocalAssistantPermission(key); });
-        }
-        refreshLocalAssistantControls();
-
         return LLPanelPreference::postBuild();
     }
     // </FS:Ansariel>
@@ -4163,7 +4201,6 @@ public:
     // <FS:Ansariel> Send inventory item on autoresponse
     /* virtual */ void onOpen(const LLSD& key)
     {
-        refreshLocalAssistantControls();
         LLButton* clear_item_btn = getChild<LLButton>("clear_autoresponse_item");
         clear_item_btn->setEnabled(false);
         if (LLStartUp::getStartupState() == STATE_STARTED)
@@ -4196,163 +4233,7 @@ public:
     // </FS:Ansariel>
 
 private:
-    struct LocalAssistantRow
-    {
-        const char* key;
-        const char* widget;
-        const char* fallback;
-        bool ask;
-    };
-
-    static const LocalAssistantRow kLocalAssistantRows[9];
-
     std::list<std::string> mAccountIndependentSettings;
-    bool mLocalAssistantSnapshotted = false;
-    bool mBridgeRuntime = false;
-    bool mBridgeSaved = false;
-    bool mBridgeUnsaved = false;
-    LLSD mPermsRuntime;
-    LLSD mPermsSaved;
-    bool mPermsUnsaved = false;
-
-    static bool levelAllowed(const LocalAssistantRow& row, const std::string& level)
-    {
-        if (level == "allow" || level == "deny")
-        {
-            return true;
-        }
-        return row.ask && level == "ask";
-    }
-
-    void refreshLocalAssistantControls()
-    {
-        const bool enabled = gSavedSettings.getBOOL("EnableLocalEventAPIBridge");
-        getChild<LLCheckBoxCtrl>("local_assistant_enable")->setValue(enabled);
-        LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
-        if (!configured.isMap())
-        {
-            configured = LLSD::emptyMap();
-        }
-        for (const LocalAssistantRow& row : kLocalAssistantRows)
-        {
-            std::string level = row.fallback;
-            if (configured.has(row.key) && levelAllowed(row, configured[row.key].asString()))
-            {
-                level = configured[row.key].asString();
-            }
-            getChild<LLComboBox>(row.widget)->setValue(level);
-        }
-        refreshLocalAssistantStatus();
-    }
-
-    void refreshLocalAssistantStatus()
-    {
-        std::string text = "Off";
-        if (FSEventAPIBridge::instanceExists() && FSEventAPIBridge::instance().isRunning())
-        {
-            text = llformat("Listening on 127.0.0.1:%d", FSEventAPIBridge::instance().getPort());
-        }
-        else if (gSavedSettings.getBOOL("EnableLocalEventAPIBridge"))
-        {
-            text = "Not listening";
-        }
-        getChild<LLTextBox>("local_assistant_status")->setText(text);
-    }
-
-    void onLocalAssistantToggled()
-    {
-        const bool enabled = getChild<LLCheckBoxCtrl>("local_assistant_enable")->getValue().asBoolean();
-        gSavedSettings.setBOOL("EnableLocalEventAPIBridge", enabled);
-        refreshLocalAssistantStatus();
-    }
-
-    void onLocalAssistantPermission(const char* key)
-    {
-        const LocalAssistantRow* row = nullptr;
-        for (const LocalAssistantRow& candidate : kLocalAssistantRows)
-        {
-            if (std::string(candidate.key) == key)
-            {
-                row = &candidate;
-                break;
-            }
-        }
-        if (!row)
-        {
-            return;
-        }
-        const std::string level = getChild<LLComboBox>(row->widget)->getValue().asString();
-        if (!levelAllowed(*row, level))
-        {
-            return;
-        }
-        LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
-        if (!configured.isMap())
-        {
-            configured = LLSD::emptyMap();
-        }
-        configured[key] = level;
-        gSavedSettings.setLLSD("LocalEventAPIPermissionClasses", configured);
-    }
-
-    void snapshotLocalAssistant()
-    {
-        LLControlVariable* bridge = gSavedSettings.getControl("EnableLocalEventAPIBridge");
-        LLControlVariable* perms = gSavedSettings.getControl("LocalEventAPIPermissionClasses");
-        if (!bridge || !perms)
-        {
-            mLocalAssistantSnapshotted = false;
-            return;
-        }
-        mBridgeRuntime = bridge->getValue().asBoolean();
-        mBridgeSaved = bridge->getSaveValue().asBoolean();
-        mBridgeUnsaved = bridge->hasUnsavedValue();
-        mPermsRuntime = perms->getValue();
-        mPermsSaved = perms->getSaveValue();
-        mPermsUnsaved = perms->hasUnsavedValue();
-        mLocalAssistantSnapshotted = true;
-    }
-
-    void restoreSavedControl(const char* name, const LLSD& saved, const LLSD& runtime, bool hadUnsaved)
-    {
-        LLControlVariable* control = gSavedSettings.getControl(name);
-        if (!control)
-        {
-            return;
-        }
-        if (llsd_equals(control->getValue(), runtime) &&
-            llsd_equals(control->getSaveValue(), saved) &&
-            control->hasUnsavedValue() == hadUnsaved)
-        {
-            return;
-        }
-        if (hadUnsaved)
-        {
-            if (!llsd_equals(control->getSaveValue(), saved) || !control->hasUnsavedValue())
-            {
-                control->setValue(saved, true);
-            }
-            if (!llsd_equals(control->getValue(), runtime) || !control->hasUnsavedValue())
-            {
-                control->setValue(runtime, false);
-            }
-        }
-        else
-        {
-            control->setValue(runtime, true);
-        }
-    }
-
-    void restoreLocalAssistant()
-    {
-        if (!mLocalAssistantSnapshotted)
-        {
-            return;
-        }
-        restoreSavedControl("EnableLocalEventAPIBridge", mBridgeSaved, mBridgeRuntime, mBridgeUnsaved);
-        restoreSavedControl("LocalEventAPIPermissionClasses", mPermsSaved, mPermsRuntime, mPermsUnsaved);
-        refreshLocalAssistantControls();
-    }
 
     // <FS:Ansariel> Send inventory item on autoresponse
     FSCopyTransInventoryDropTarget* mInvDropTarget;
@@ -4389,18 +4270,6 @@ private:
         childSetEnabled("clear_autoresponse_item", false);
     }
     // </FS:Ansariel>
-};
-
-const LLPanelPreferencePrivacy::LocalAssistantRow LLPanelPreferencePrivacy::kLocalAssistantRows[] = {
-    {"read", "local_assistant_perm_read", "allow", false},
-    {"camera", "local_assistant_perm_camera", "allow", true},
-    {"create", "local_assistant_perm_create", "allow", true},
-    {"edit", "local_assistant_perm_edit", "allow", true},
-    {"move", "local_assistant_perm_move", "allow", true},
-    {"trash", "local_assistant_perm_trash", "allow", true},
-    {"nocopy", "local_assistant_perm_nocopy", "ask", true},
-    {"wear", "local_assistant_perm_wear", "ask", true},
-    {"links", "local_assistant_perm_links", "ask", true},
 };
 
 static LLPanelInjector<LLPanelPreferenceGraphics> t_pref_graph("panel_preference_graphics");

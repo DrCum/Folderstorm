@@ -30,6 +30,7 @@
 
 #include "llfloaterreg.h"
 #include "llviewerfloaterreg.h"
+#include "fsassistantapproval.h"
 
 #include "llcommandhandler.h"
 #include "llcompilequeue.h"
@@ -397,6 +398,7 @@ void LLViewerFloaterReg::registerFloaters()
 
     LLFloaterAboutUtil::registerFloater();
     LLFloaterReg::add("360capture", "floater_360capture.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloater360Capture>);
+    LLFloaterReg::add("local_assistant_approval", "floater_local_assistant_approval.xml", &LLFloaterReg::build<FSAssistantApproval>);
     LLFloaterReg::add("block_timers", "floater_fast_timers.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFastTimerView>);
     LLFloaterReg::add("about_land", "floater_about_land.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLand>);
     LLFloaterReg::add("add_payment_method", "floater_add_payment_method.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAddPaymentMethod>);

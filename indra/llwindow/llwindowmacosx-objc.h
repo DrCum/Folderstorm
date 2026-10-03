@@ -31,6 +31,7 @@
 #include <map>
 #include <vector>
 #include <deque>
+#include <string>
 
 //fir CGSize
 #include <CoreGraphics/CGGeometry.h>
@@ -115,6 +116,16 @@ unsigned long getVramSize(GLViewRef view);
 float getDeviceUnitSize(GLViewRef view);
 CGRect getContentViewRect(NSWindowRef window);
 CGRect getBackingViewRect(NSWindowRef window, GLViewRef view);
+// Cocoa's screen coordinates are points; this bridge returns drawable pixels
+// relative to the content view's bottom-left edge, including off-window areas.
+struct NativeMonitorRect
+{
+    std::string id;
+    std::string name;
+    CGRect rect;
+};
+bool getMonitorRectsInBackingView(NSWindowRef window, GLViewRef view,
+                                 std::vector<NativeMonitorRect>& monitors);
 void getWindowSize(NSWindowRef window, float* size);
 void setWindowSize(NSWindowRef window, int width, int height);
 void getCursorPos(NSWindowRef window, float* pos);

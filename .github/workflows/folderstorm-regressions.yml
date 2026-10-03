@@ -1,0 +1,46 @@
+name: Folderstorm regressions
+
+on:
+  pull_request:
+    paths:
+      - "indra/newview/fsassistant*"
+      - "indra/newview/fslinkreplacement*"
+      - "indra/newview/fsworldview*"
+      - "indra/newview/fschromelayout*"
+      - "indra/newview/fssnapshotupload*"
+      - "indra/newview/fseventapibridge*"
+      - "indra/newview/llinventorylistener*"
+      - "indra/newview/tests/**"
+      - ".github/workflows/folderstorm-regressions.yml"
+  push:
+    branches: [main]
+    paths:
+      - "indra/newview/fsassistant*"
+      - "indra/newview/fslinkreplacement*"
+      - "indra/newview/fsworldview*"
+      - "indra/newview/fschromelayout*"
+      - "indra/newview/fssnapshotupload*"
+      - "indra/newview/fseventapibridge*"
+      - "indra/newview/llinventorylistener*"
+      - "indra/newview/tests/**"
+      - ".github/workflows/folderstorm-regressions.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  helpers:
+    name: C++ ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: cmake -S indra/newview/tests/folderstorm -B build-folderstorm-tests
+      - name: Build
+        run: cmake --build build-folderstorm-tests --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build-folderstorm-tests --build-config Release --output-on-failure

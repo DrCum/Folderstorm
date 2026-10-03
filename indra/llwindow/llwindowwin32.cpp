@@ -1180,6 +1180,91 @@ bool LLWindowWin32::getSize(LLCoordWindow *size)
     return true;
 }
 
+namespace
+{
+struct MonitorRectQuery
+{
+    POINT origin;
+    LONG client_height;
+    std::vector<LLWindow::MonitorRect> monitors;
+
+    static BOOL CALLBACK enumerate(HMONITOR monitor, HDC, LPRECT, LPARAM data)
+    {
+        auto& query = *reinterpret_cast<MonitorRectQuery*>(data);
+        MONITORINFOEXW info{};
+        info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&info)) ||
+            info.rcMonitor.right <= info.rcMonitor.left ||
+            info.rcMonitor.bottom <= info.rcMonitor.top)
+        {
+            return FALSE;
+        }
+
+        LLWindow::MonitorRect result;
+        result.id = ll_convert<std::string>(std::wstring(info.szDevice));
+        DISPLAY_DEVICEW device{};
+        device.cb = sizeof(device);
+        if (EnumDisplayDevicesW(info.szDevice, 0, &device, 0))
+        {
+            result.name = ll_convert<std::string>(std::wstring(device.DeviceString));
+        }
+        // Desktop coordinates are top-left based. Transform edges explicitly;
+        // convertCoords() transforms points and subtracts an extra pixel.
+        result.rect.set(info.rcMonitor.left - query.origin.x,
+                        query.client_height + query.origin.y - info.rcMonitor.top,
+                        info.rcMonitor.right - query.origin.x,
+                        query.client_height + query.origin.y - info.rcMonitor.bottom);
+        query.monitors.push_back(std::move(result));
+        return TRUE;
+    }
+};
+}
+
+bool LLWindowWin32::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
+{
+    ASSERT_MAIN_THREAD();
+    monitors.clear();
+    // Read-only Win32 geometry queries may run on the app thread, like
+    // convertCoords(). Do not enqueue references to caller-owned output on the
+    // window thread, whose queue can close or block during window destruction.
+    const HWND window = mWindowHandle;
+    if (!mWindowThread || !window || IsIconic(window))
+    {
+        return false;
+    }
+
+    RECT client{};
+    MonitorRectQuery query{};
+    if (!GetClientRect(window, &client) ||
+        client.right <= client.left || client.bottom <= client.top ||
+        !ClientToScreen(window, &query.origin))
+    {
+        return false;
+    }
+    query.client_height = client.bottom - client.top;
+    if (!EnumDisplayMonitors(nullptr, nullptr, MonitorRectQuery::enumerate,
+                             reinterpret_cast<LPARAM>(&query)) ||
+        query.monitors.empty())
+    {
+        return false;
+    }
+
+    // A native move/resize can occur during enumeration. Return unavailable
+    // instead of handing preferences geometry from two different placements.
+    RECT current_client{};
+    POINT current_origin{};
+    if (!mWindowThread || mWindowHandle != window || IsIconic(window) ||
+        !GetClientRect(window, &current_client) ||
+        !ClientToScreen(window, &current_origin) ||
+        !EqualRect(&client, &current_client) ||
+        current_origin.x != query.origin.x || current_origin.y != query.origin.y)
+    {
+        return false;
+    }
+    monitors = std::move(query.monitors);
+    return true;
+}
+
 bool LLWindowWin32::setPosition(const LLCoordScreen position)
 {
     LLCoordScreen size;

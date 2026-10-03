@@ -161,6 +161,10 @@ protected:
 
     // <FS> Custom world viewport presets for multi-monitor layouts.
     void onWorldViewPreset(const LLSD& preset);
+    void onWorldViewUseMonitor();
+    void onWorldViewMonitorSelected(const LLSD& id);
+    void saveViewportSettings();
+    void cancelViewportSettings(const std::vector<std::string>& settings_to_skip);
     void refreshChromeLayoutControls();
     void populateChromeProfileCombo();
     std::string getChromeProfileName() const;
@@ -339,6 +343,8 @@ private:
 
     bool mAllowPublish; // Allow showing agent in search
     std::string mSavedGraphicsPreset;
+    LLSD mViewportPreferenceBaseline;
+    U32 mViewportSettingsRevision = 0;
     LOG_CLASS(LLFloaterPreference);
 
     LLSearchEditor* mFilterEdit = nullptr;

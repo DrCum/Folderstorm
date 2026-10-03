@@ -264,6 +264,8 @@ public:
 
     // 3D world area, in raw unscaled pixels
     LLRect          getWorldViewRectRaw() const     { return mWorldViewRectRaw; }
+    // Normal world rectangle before custom percentage insets.
+    LLRect          getWorldViewBaseRectRaw(bool use_full_window = false) const;
     S32             getWorldViewHeightRaw() const;
     S32             getWorldViewWidthRaw() const;
 

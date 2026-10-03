@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="local_assistant_approval" title="Local assistant request" width="550" height="470"
+ can_resize="true" min_width="410" min_height="340" can_minimize="false" save_rect="false" layout="topleft">
+ <string name="action_rename">Rename [COUNT] inventory object(s)?</string>
+ <string name="action_batchRename">Rename [COUNT] inventory object(s)?</string>
+ <string name="action_move">Move [COUNT] inventory object(s)?</string>
+ <string name="action_batchMove">Move [COUNT] inventory object(s)?</string>
+ <string name="action_copy">Copy [COUNT] inventory object(s)?</string>
+ <string name="action_batchCopy">Copy [COUNT] inventory object(s)?</string>
+ <string name="action_confirmCopy">Move [COUNT] unique no-copy item(s)?</string>
+ <string name="action_replaceLinks">Replace [COUNT] inventory link(s)?</string>
+ <string name="action_trash">Move [COUNT] inventory object(s) to Trash?</string>
+ <string name="action_restore">Restore [COUNT] inventory object(s)?</string>
+ <string name="action_wearOutfit">Wear this outfit?</string>
+ <string name="action_wearItems">Wear [COUNT] item(s)?</string>
+ <string name="action_detachItems">Detach [COUNT] item(s)?</string>
+ <string name="action_snapshotUpload">Capture and upload a picture?</string>
+ <string name="action_snapshot">Take a picture?</string>
+ <string name="action_set">Move the camera?</string>
+ <string name="action_setPose">Apply this camera pose?</string>
+ <string name="action_reset">Reset the camera?</string>
+ <string name="action_createFolder">Create this folder?</string>
+ <string name="action_createItem">Create this inventory item?</string>
+ <string name="action_link">Create this inventory link?</string>
+ <string name="action_setDescription">Change this description?</string>
+ <string name="action_setThumbnail">Change this inventory image?</string>
+ <string name="action_setFavorite">Change this favorite flag?</string>
+ <string name="target">Target: </string>
+ <string name="destination">Destination: </string>
+ <string name="source">Source: </string>
+ <string name="copy_policy">Copy policy: </string>
+ <string name="dimensions">Picture dimensions: </string>
+ <string name="viewport">Capture the world viewport.</string>
+ <string name="whole_window">Capture the viewer window.</string>
+ <string name="price">Upload price: </string>
+ <string name="value">Requested value: </string>
+ <string name="ineligible">Cannot proceed: </string>
+ <string name="name_unavailable">Name unavailable:</string>
+ <string name="position">Camera position: </string>
+ <string name="focus">Camera focus: </string>
+ <string name="page_count">Objects [FIRST]–[LAST] of [TOTAL] ([OMITTED] on other pages).</string>
+ <string name="shortened">Long labels are shortened with an ellipsis.</string>
+ <string name="no_copy">These unique items will leave their source folders. This moves each item's only copy.</string>
+ <string name="copy_no_copy">Unique no-copy items require a separate move approval; they cannot be duplicated.</string>
+ <string name="trash_restore">Items in Trash can be restored.</string>
+ <string name="replace_links">Original links move to Trash only after each replacement is created. Individual replacements can fail.</string>
+ <string name="partial_batch">Batch results can be partial. Objects that cannot be changed will be reported individually.</string>
+ <string name="wear_append">Add this outfit to what you are wearing.</string>
+ <string name="wear_replace">Replace what you are wearing with this outfit.</string>
+ <string name="wear_replace_items">Wear these items, replacing the corresponding clothing types or attachment points.</string>
+ <string name="wear_add">Add these items to what you are wearing.</string>
+ <string name="thumbnail">Assign the captured image as this inventory object's thumbnail. No texture inventory item is created.</string>
+ <string name="texture">Create a texture inventory item and assign the captured image as this inventory object's thumbnail.</string>
+ <text name="heading" left="15" top="32" width="520" height="42" follows="left|top|right" wrap="true" font="SansSerifBold"/>
+ <text_editor name="details" left="15" top="78" right="-15" bottom="-112" follows="left|top|right|bottom"
+  read_only="true" word_wrap="true" parse_urls="false" max_length="1048576"/>
+ <text name="page" left="15" bottom="-86" width="520" height="20" follows="left|right|bottom" wrap="true"/>
+ <button name="previous" label="Previous" left="15" bottom="-62" width="100" height="23" follows="left|bottom"/>
+ <button name="next" label="Next" left="125" bottom="-62" width="100" height="23" follows="left|bottom"/>
+ <text name="request_only" left="15" bottom="-41" height="18" width="520" follows="left|right|bottom">
+  This choice applies to this request only.
+ </text>
+ <button name="deny" label="Deny" right="-125" bottom="-10" width="100" height="23" follows="right|bottom"/>
+ <button name="allow" label="Allow" right="-15" bottom="-10" width="100" height="23" follows="right|bottom"/>
+</floater>

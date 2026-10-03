@@ -53,7 +53,7 @@ The bridge lets an MCP client on this computer read and change inventory, change
 
 ### 1. Turn the bridge on
 
-Open **Preferences → Privacy → General** and enable **Local assistant**. That choice is saved. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
+Open **Preferences → Local assistant** and enable **Allow local assistant access**. That choice is saved. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
 
 `--mcp-api` still forces the bridge on for that one session. It does not save the preference. Quit and the next launch follows the saved checkbox.
 
@@ -77,7 +77,7 @@ Cursor on Windows starts the MCP command through `cmd.exe`. A path under `C:\Pro
 
 `C:\ProgramData\Folderstorm\fs-mcp.exe`
 
-That path has no spaces. It is the command to put in Cursor, Claude Code, and Codex, with no `cmd` wrapper and no extra quotes. The link points at the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays in that directory. An upgrade removes whatever link or file is already at the ProgramData path and creates the link again, so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty afterward. Removing the link leaves the real exe in place.
+That path has no spaces. Use it only if it resolves to your current installation; the Setup page checks this when copying configuration. The link points at the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays in that directory. An upgrade removes whatever link or file is already at the ProgramData path and creates the link again, so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty afterward. Removing the link leaves the real exe in place.
 
 A Velopack install is per-user and usually not elevated. It tries to create the same link. When `C:\ProgramData` is not writable, the install still succeeds and `fs-mcp.exe` stays in the Velopack `current` folder next to the viewer.
 
@@ -104,6 +104,23 @@ go build -o fs-mcp ./cmd/fs-mcp
 Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in place of `C:\ProgramData\Folderstorm\fs-mcp.exe` below. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
 
 `FIRESTORM_MCP_TIMEOUT` is how long one viewer call may take. The default is `90s`.
+
+
+### Copy configuration and check this viewer
+
+Open **Preferences → Local assistant → Setup**, choose Codex, Cursor, or Claude Code, then **Copy configuration**. Merge the entry into that client's file; keep your existing servers. Codex receives a TOML table; Cursor and Claude Code receive a JSON `mcpServers` entry. This uses the current installation and the viewer's actual settings directory, including directory overrides. It copies no discovery contents or bearer token and writes no client files.
+
+On Windows the copy uses the ProgramData link only when it resolves to this installation's sidecar. Otherwise Codex and Claude Code use the real absolute executable path. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. The installer link is not modified. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
+
+**Check connection** runs the installed sidecar asynchronously against this viewer. It checks authenticated bridge health even when inventory Read is Never. A successful check means the sidecar could reach this viewer at that moment; it does not mean your external assistant loaded its configuration. Inventory and recent authenticated external requests are shown separately. Diagnostic probes do not count as external assistant activity. Closing preferences or leaving the page cancels a running check; changes to bridge readiness or permissions clear an old result.
+
+For a terminal check, use the installed executable:
+
+```text
+fs-mcp --diagnose --viewer-pid 12345 --discovery "/absolute/path/to/user_settings"
+```
+
+Replace the PID and directory with this viewer's values (the discovery filename includes its PID). The command emits bounded JSON with fixed failure stages and readiness facts, never the bearer token or raw server errors. Exit status is 0 on success, 1 when the check fails, and 2 for invalid arguments/output failure. HTTP checks have a four-second timeout; the viewer terminates its subprocess after five seconds. A pre-login viewer can pass bridge health while inventory is unavailable. Running `fs-mcp` with no arguments still starts the MCP stdio server.
 
 ## Connect a client
 
@@ -234,7 +251,7 @@ If two viewers are open, say which one, or ask for the process list and pick a p
 
 ## When it does not connect
 
-- The local assistant switch is off. Turn it on under **Preferences → Privacy → General**. With the bridge off, the sidecar finds no viewer. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
+- The local assistant switch is off. Turn it on under **Preferences → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
 - `FIRESTORM_MCP_DISCOVERY` points at Firestorm's user_settings directory, or at any folder other than this viewer's Folderstorm `user_settings`. That variable replaces the default search. On Windows set it to `%APPDATA%\Folderstorm_x64\user_settings` (for an account named Jane, `C:\Users\Jane\AppData\Roaming\Folderstorm_x64\user_settings`). On Linux and macOS use the Folderstorm directory in the table above.
 - Inventory is still downloading. `viewer_status` shows fetch progress. Wait until `usable` is true.
 - The command is a relative path, the Go source directory, or a hand-built binary when this install already created `C:\ProgramData\Folderstorm\fs-mcp.exe`. Use that path. It has no spaces.

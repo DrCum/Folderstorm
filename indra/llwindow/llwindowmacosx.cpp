@@ -1063,6 +1063,29 @@ bool LLWindowMacOSX::getSize(LLCoordWindow *size)
     return (err == noErr);
 }
 
+bool LLWindowMacOSX::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
+{
+    monitors.clear();
+    std::vector<NativeMonitorRect> native_monitors;
+    if (!getMonitorRectsInBackingView(mWindow, mGLView, native_monitors))
+    {
+        return false;
+    }
+
+    for (const NativeMonitorRect& native_monitor : native_monitors)
+    {
+        const CGRect& rect = native_monitor.rect;
+        MonitorRect monitor;
+        monitor.id = native_monitor.id;
+        monitor.name = native_monitor.name;
+        // These are rectangle edges; unlike pointer coordinates there is no -1.
+        monitor.rect.set(ll_round(rect.origin.x), ll_round(rect.origin.y + rect.size.height),
+                         ll_round(rect.origin.x + rect.size.width), ll_round(rect.origin.y));
+        monitors.push_back(monitor);
+    }
+    return !monitors.empty();
+}
+
 bool LLWindowMacOSX::setPosition(const LLCoordScreen position)
 {
     if(mWindow)

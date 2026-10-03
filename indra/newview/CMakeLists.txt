@@ -103,6 +103,8 @@ set(viewer_SOURCE_FILES
     fsareasearch.cpp
     fsareasearchmenu.cpp
     fsassetblacklist.cpp
+    fsassistantapproval.cpp
+    fsassistantoperation.cpp
     fsavatarrenderpersistence.cpp
     fsavatarsearchmenu.cpp
     fsblocklistmenu.cpp
@@ -111,6 +113,9 @@ set(viewer_SOURCE_FILES
     fscommon.cpp
     fschromelayout.cpp
     fschromelayoutcontroller.cpp
+    fslinkreplacement.cpp
+    fspanelpreferencelocalassistant.cpp
+    fsworldviewdiagram.cpp
     fsconsoleutils.cpp
     fscontactsfriendsmenu.cpp
     fsdata.cpp
@@ -966,6 +971,10 @@ set(viewer_HEADER_FILES
     fsareasearch.h
     fsareasearchmenu.h
     fsassetblacklist.h
+    fsassistantapproval.h
+    fsassistantconfiguration.h
+    fsassistantoperation.h
+    fsassistantpolicy.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
     fsblocklistmenu.h
@@ -976,6 +985,10 @@ set(viewer_HEADER_FILES
     fscommon.h
     fschromelayout.h
     fschromelayoutcontroller.h
+    fslinkreplacement.h
+    fspanelpreferencelocalassistant.h
+    fsworldviewdiagram.h
+    fsworldviewgeometry.h
     fsconsoleutils.h
     fscontactsfriendsmenu.h
     fsdata.h
@@ -2349,6 +2362,7 @@ add_custom_command(
     "${FS_MCP_DIR}/go.mod"
     "${FS_MCP_DIR}/go.sum"
     "${FS_MCP_DIR}/cmd/fs-mcp/main.go"
+    "${FS_MCP_DIR}/internal/diagnose/diagnose.go"
     "${FS_MCP_DIR}/internal/discover/discover.go"
     "${FS_MCP_DIR}/internal/discover/pid_other.go"
     "${FS_MCP_DIR}/internal/discover/pid_unix.go"

@@ -9,6 +9,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fseventapibridge.h"
+#include "fsassistantapproval.h"
+#include "fsassistantoperation.h"
+#include "fsassistantpolicy.h"
+#include "fslinkreplacement.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -17,17 +21,19 @@
 #include "lleventapi.h"
 #include "llevents.h"
 #include "llfile.h"
+#include "llfloaterreg.h"
 #include "llhttpconstants.h"
 #include "llhttpnode.h"
 #include "lliohttpserver.h"
 #include "lliosocket.h"
-#include "llnotificationsutil.h"
 #include "llsdjson.h"
 #include "lltimer.h"
 #include "lluuid.h"
 #include "llviewercontrol.h"
 #include "fssnapshotupload.h"
 #include "llagentbenefits.h"
+#include "llcameralistener.h"
+#include "llinventorylistener.h"
 #include "llstring.h"
 
 #include <boost/json.hpp>
@@ -40,7 +46,6 @@
 #include <cerrno>
 #include <deque>
 #include <iomanip>
-#include <initializer_list>
 #include <map>
 #include <sstream>
 #include <vector>
@@ -115,6 +120,13 @@ const ClassDef* find_def(ActionClass kind)
     return nullptr;
 }
 
+const ClassDef* find_def(const std::string& id)
+{
+    for (const ClassDef& def : CLASS_DEFS)
+        if (id == def.id) return &def;
+    return nullptr;
+}
+
 bool level_allowed(const ClassDef& def, const std::string& level)
 {
     if (level == "allow" || level == "deny")
@@ -151,6 +163,33 @@ LLSD effective_permissions()
         permissions[def.id] = effective_level(def.kind);
     }
     return permissions;
+}
+
+std::vector<std::string> effective_levels(const std::vector<std::string>& classes)
+{
+    std::vector<std::string> levels;
+    for (const std::string& id : classes)
+    {
+        const ClassDef* def = find_def(id);
+        levels.push_back(def ? effective_level(def->kind) : "deny");
+    }
+    return levels;
+}
+
+LLSD policy_error_details(const std::string& op, const std::vector<std::string>& classes)
+{
+    LLSD extra = llsd::map("op", op, "policy_generation", gPolicyGeneration);
+    for (const std::string& id : classes)
+    {
+        extra["required_classes"].append(id);
+        const ClassDef* def = find_def(id);
+        if (!def || effective_level(def->kind) == "deny")
+        {
+            extra["denied_classes"].append(id);
+            if (!extra.has("class")) extra["class"] = id;
+        }
+    }
+    return extra;
 }
 
 bool is_read_op(const std::string& api, const std::string& op)
@@ -242,109 +281,6 @@ bool op_needs_confirm(const std::string& op)
 {
     return op == "wearOutfit" || op == "wearItems" || op == "detachItems" ||
            op == "replaceLinks" || op == "confirmCopy";
-}
-
-std::string first_text(const LLSD& input, std::initializer_list<const char*> keys)
-{
-    for (const char* key : keys)
-    {
-        if (!input.has(key))
-        {
-            continue;
-        }
-        const std::string text = input[key].asString();
-        if (!text.empty())
-        {
-            return text;
-        }
-    }
-    return {};
-}
-
-std::string target_label(const LLSD& input)
-{
-    const std::string named = first_text(
-        input, {"name", "folder_name", "new_name", "preset", "path"});
-    if (!named.empty())
-    {
-        return named;
-    }
-    if (input.has("items_id"))
-    {
-        const LLSD& items = input["items_id"];
-        if (items.isArray() && items.size() > 0)
-        {
-            return items.size() == 1 ? items[0].asString()
-                                     : items[0].asString() + " +" + std::to_string(items.size() - 1);
-        }
-        const std::string one = items.asString();
-        if (!one.empty())
-        {
-            return one;
-        }
-    }
-    return first_text(
-        input, {"folder_id", "id", "item_id", "source_id", "outfit_id", "parent_id"});
-}
-
-std::string action_phrase(const std::string& op, ActionClass kind)
-{
-    if (op == "wearOutfit")
-    {
-        return "Wear outfit";
-    }
-    if (op == "wearItems")
-    {
-        return "Wear items";
-    }
-    if (op == "detachItems")
-    {
-        return "Detach";
-    }
-    if (op == "trash")
-    {
-        return "Move to Trash";
-    }
-    if (op == "restore")
-    {
-        return "Restore";
-    }
-    if (op == "confirmCopy")
-    {
-        return "Move no-copy items";
-    }
-    if (op == "replaceLinks")
-    {
-        return "Replace links";
-    }
-    if (op == "snapshot")
-    {
-        return "Take a picture";
-    }
-    if (op == "snapshotUpload")
-    {
-        return "Set the folder image";
-    }
-    if (op == "set" || op == "setPose" || op == "reset")
-    {
-        return "Move the camera";
-    }
-    if (const ClassDef* def = find_def(kind))
-    {
-        return def->title;
-    }
-    return "Local assistant";
-}
-
-std::string action_message(const std::string& op, ActionClass kind, const LLSD& input)
-{
-    const std::string phrase = action_phrase(op, kind);
-    const std::string target = target_label(input);
-    if (target.empty())
-    {
-        return phrase;
-    }
-    return phrase + " " + target;
 }
 
 F64 now_seconds()
@@ -455,6 +391,24 @@ public:
             fail_response(response, HTTP_BAD_REQUEST, "Both api and op are required");
             return;
         }
+        // Authentication, loopback and Origin checks already ran in Node.
+        // Diagnostics expose no inventory and work when Read is Never.
+        if (api == "LocalAssistant" && op == "health")
+        {
+            mLastDiagnosticAt = now_seconds();
+            LLSD apis = LLSD::emptyMap();
+            for (const char* name : {"LLInventory", "LLAppearance", "LLCamera"})
+                apis[name] = LLEventAPI::getInstance(name) != nullptr;
+            response->extendedResult(HTTP_OK,
+                to_json(llsd::map("bridge_ready", mEnabled, "api_version", 1,
+                    "policy_generation", gPolicyGeneration, "apis_ready", apis)), json_headers());
+            return;
+        }
+        mLastExternalRequestAt = now_seconds();
+        mLastExternalApi = api.substr(0, 64);
+        mLastExternalOp = op.substr(0, 64);
+        for (char& c : mLastExternalApi) if (static_cast<unsigned char>(c) < 32) c = ' ';
+        for (char& c : mLastExternalOp) if (static_cast<unsigned char>(c) < 32) c = ' ';
         if (!bridge_api_allowed(api))
         {
             fail_response(
@@ -499,7 +453,26 @@ public:
         }
         if (level == "ask")
         {
-            enqueueAsk(input, response, api, op, kind);
+            FSAssistantPreparedOperation prepared;
+            std::string error;
+            if (!prepareOperation(input, {find_def(kind)->id}, prepared, error))
+            {
+                fail_response(response, HTTP_BAD_REQUEST, error);
+                return;
+            }
+            enqueueAsk(std::move(prepared), response, api, op);
+            return;
+        }
+        if (op == "replaceLinks")
+        {
+            FSAssistantPreparedOperation prepared;
+            std::string error;
+            if (!prepareOperation(input, {find_def(kind)->id}, prepared, error))
+            {
+                fail_response(response, HTTP_BAD_REQUEST, error);
+                return;
+            }
+            postEvent(prepared.request, response, api, op, true, &prepared);
             return;
         }
         postEvent(input, response, api, op, op_needs_confirm(op));
@@ -508,6 +481,7 @@ public:
     void disable()
     {
         mEnabled = false;
+        ++mSessionGeneration;
         denyQueuedAsks(ERR_DENIED);
         for (auto& pending : mPending)
         {
@@ -520,10 +494,40 @@ public:
         mPending.clear();
     }
 
-    void enable() { mEnabled = true; }
+    void enable() { mEnabled = true; ++mSessionGeneration; }
     bool enabled() const { return mEnabled; }
     void setToken(std::string token) { mToken = std::move(token); }
     const std::string& token() const { return mToken; }
+
+    void permissionsChanged()
+    {
+        mExecutions.erase(std::remove_if(mExecutions.begin(), mExecutions.end(), [](const auto& weak)
+        {
+            auto gate = weak.lock();
+            if (!gate) return true;
+            gate->observe(effective_levels(gate->classes()));
+            return false;
+        }), mExecutions.end());
+        std::vector<LLUUID> revoked;
+        for (const auto& entry : mAsks)
+            if (fs_assistant::decide(effective_levels(entry.second.prepared.requiredClasses)) == fs_assistant::Decision::Deny)
+                revoked.push_back(entry.first);
+        for (const LLUUID& key : revoked) resolveAsk(key, false, ERR_NOT_ALLOWED, false);
+    }
+
+    FSEventAPIBridge::StatusSnapshot snapshot() const
+    {
+        FSEventAPIBridge::StatusSnapshot result;
+        result.enabled = mEnabled;
+        result.ready = mEnabled;
+        result.policyGeneration = gPolicyGeneration;
+        result.pendingApprovals = static_cast<int>(mAsks.size());
+        result.lastExternalRequestAt = mLastExternalRequestAt;
+        result.lastDiagnosticAt = mLastDiagnosticAt;
+        result.lastExternalApi = mLastExternalApi;
+        result.lastExternalOp = mLastExternalOp;
+        return result;
+    }
 
 private:
     struct Posted
@@ -538,18 +542,16 @@ private:
     {
         LLUUID key;
         ResponsePtr response;
-        LLSD request;
+        FSAssistantPreparedOperation prepared;
         std::string api;
         std::string op;
         bool needsConfirm = false;
-        std::string title;
-        std::string message;
         F64 enqueuedAt = 0.0;
         F64 chainDeadline = 0.0;
         F64 dialogDeadline = 0.0;
         bool dialogPosted = false;
-        bool finished = false;
-        LLNotificationPtr notification;
+        fs_assistant::ApprovalGate gate;
+        LLHandle<LLFloater> dialog;
     };
 
     void dispatchSnapshotUpload(const LLSD& input, ResponsePtr response)
@@ -563,53 +565,147 @@ private:
             fail_response(response, HTTP_BAD_REQUEST, "destination must be thumbnail or texture");
             return;
         }
-        const bool has_width = input.has("width");
-        const bool has_height = input.has("height");
-        if (has_width != has_height)
+        FSAssistantPreparedOperation prepared;
+        std::string error;
+        LLSD request(input);
+        request["destination"] = destination;
+        if (!prepareOperation(request, fs_assistant::snapshot_classes(destination), prepared, error))
         {
-            fail_response(response, HTTP_BAD_REQUEST, "width and height must both be set");
+            fail_response(response, HTTP_BAD_REQUEST, error);
             return;
         }
-
-        const ActionClass kind = destination == "texture" ? ActionClass::Create : ActionClass::Edit;
-        const std::string level = effective_level(kind);
-        S32 texture_cost = 0;
-        if (destination == "texture")
-        {
-            const S32 width = has_width ? fs_snapshot::clamp_edge(input["width"].asInteger()) : fs_snapshot::kDefaultEdge;
-            const S32 height = has_height ? fs_snapshot::clamp_edge(input["height"].asInteger()) : fs_snapshot::kDefaultEdge;
-            texture_cost = LLAgentBenefitsMgr::current().getTextureUploadCost(width, height);
-        }
-        const S32 cost = fs_snapshot::quoted_cost(destination, texture_cost);
-        const fs_snapshot::UploadAction action = fs_snapshot::decide(level, cost);
-        if (action == fs_snapshot::UploadAction::Deny)
+        const S32 cost = prepared.summary["cost"].asInteger();
+        const auto action = fs_assistant::decide(effective_levels(prepared.requiredClasses), cost);
+        if (action == fs_assistant::Decision::Deny)
         {
             fail_response(
                 response,
                 HTTP_FORBIDDEN,
                 ERR_NOT_ALLOWED,
-                llsd::map("op", "snapshotUpload", "class", find_def(kind)->id));
+                policy_error_details("snapshotUpload", prepared.requiredClasses));
             return;
         }
-        if (action == fs_snapshot::UploadAction::Ask)
+        if (action == fs_assistant::Decision::Ask)
         {
-            std::string message;
-            if (destination == "texture")
-            {
-                message = "Upload a texture for L$" + std::to_string(cost);
-                const std::string target = target_label(input);
-                if (!target.empty())
-                {
-                    message += " and set it on " + target;
-                }
-            }
-            enqueueAsk(input, response, "LLInventory", "snapshotUpload", kind, message);
+            enqueueAsk(std::move(prepared), response, "LLInventory", "snapshotUpload");
             return;
         }
-        postEvent(input, response, "LLInventory", "snapshotUpload", false);
+        postEvent(prepared.request, response, "LLInventory", "snapshotUpload", false, &prepared);
     }
 
-    void postEvent(LLSD request, ResponsePtr response, const std::string& api, const std::string& op, bool needsConfirm)
+    std::shared_ptr<LLInventoryListener> inventoryListener() const
+    {
+        return std::dynamic_pointer_cast<LLInventoryListener>(LLEventAPI::getInstance("LLInventory"));
+    }
+
+    bool prepareOperation(const LLSD& input, const std::vector<std::string>& classes,
+                          FSAssistantPreparedOperation& prepared, std::string& error)
+    {
+        prepared.request = input;
+        prepared.requiredClasses = classes;
+        const std::string op = input["op"].asString();
+        if (op == "confirmCopy" || op == "replaceLinks")
+        {
+            auto listener = inventoryListener();
+            if (!listener) { error = "Inventory API is not ready"; return false; }
+            if (op == "confirmCopy")
+            {
+                if (!listener->prepareAssistantCopyConfirmation(input, prepared.summary, prepared.validation, error)) return false;
+                prepared.summary["consequences"] = LLSD::emptyArray();
+                prepared.summary["consequences"].append("no_copy");
+            }
+            else
+            {
+                auto selection = std::make_shared<FSLinkReplacementSelection>();
+                if (!listener->prepareLinkReplacement(input, *selection, error)) return false;
+                prepared.linkSelection = selection;
+                LLSD& summary = prepared.summary;
+                summary = llsd::map("subject_count", static_cast<S32>(selection->links.size()),
+                    "source", selection->source_path.empty() ? selection->source_id : selection->source_path,
+                    "target", selection->target_path.empty() ? selection->resolved_target_id : selection->target_path,
+                    "subjects", LLSD::emptyArray(), "consequences", LLSD::emptyArray());
+                for (const FSLinkReplacementCandidate& link : selection->links)
+                {
+                    LLSD row = llsd::map("id", link.id, "name", link.name, "path", link.path,
+                        "source", link.parent_path, "destination", link.parent_path);
+                    if (!link.skip_error.empty()) row["skip_error"] = link.skip_error;
+                    summary["subjects"].append(row);
+                }
+                summary["consequences"].append("replace_links");
+            }
+            prepared.summary["op"] = op;
+            return true;
+        }
+        if (!fs_prepare_assistant_operation(prepared, error)) return false;
+        if (op == "snapshotUpload" || op == "snapshot")
+        {
+            FSSnapshotDefaults defaults;
+            if (op == "snapshotUpload")
+            {
+                defaults.viewport_only = true;
+                defaults.square = true;
+                defaults.square_edge = fs_snapshot::kDefaultEdge;
+            }
+            FSSnapshotFrame frame;
+            if (!fs_parse_snapshot_frame(input, defaults, frame, error)) return false;
+            // Uploads already default to an explicit square. Preserve native
+            // camera snapshot's implicit-size path and its sub-64 thin edges.
+            if (op == "snapshotUpload" || frame.explicit_size)
+            {
+                prepared.request["width"] = frame.width;
+                prepared.request["height"] = frame.height;
+            }
+            prepared.request["viewport_only"] = frame.viewport_only;
+            prepared.request["show_ui"] = frame.show_ui;
+            prepared.request["show_hud"] = frame.show_hud;
+            prepared.summary["width"] = frame.width;
+            prepared.summary["height"] = frame.height;
+            prepared.summary["viewport_only"] = frame.viewport_only;
+            if (op == "snapshotUpload")
+            {
+                const std::string destination = input["destination"].asString();
+                prepared.summary["cost"] = fs_snapshot::quoted_cost(destination,
+                    destination == "texture" ? LLAgentBenefitsMgr::current().getTextureUploadCost(frame.width, frame.height) : 0);
+                prepared.summary["consequences"].append(destination == "texture" ? "texture" : "thumbnail");
+            }
+        }
+        return true;
+    }
+
+    bool validateOperation(const FSAssistantPreparedOperation& prepared, std::string& error)
+    {
+        const std::string op = prepared.request["op"].asString();
+        if (op == "confirmCopy" || op == "replaceLinks")
+        {
+            auto listener = inventoryListener();
+            if (!listener) { error = "Inventory API is not ready"; return false; }
+            return op == "confirmCopy"
+                ? listener->validateAssistantCopyConfirmation(prepared.request, prepared.validation, error)
+                : prepared.linkSelection && listener->validateLinkReplacementSelection(*prepared.linkSelection, error);
+        }
+        if (!fs_validate_assistant_operation(prepared, error)) return false;
+        if (op == "snapshot")
+        {
+            FSSnapshotFrame current;
+            if (!fs_parse_snapshot_frame(prepared.request, FSSnapshotDefaults(), current, error)) return false;
+            if (current.width != prepared.summary["width"].asInteger() || current.height != prepared.summary["height"].asInteger())
+            {
+                error = "The capture frame changed. Request a fresh confirmation.";
+                return false;
+            }
+        }
+        if (op == "snapshotUpload" && prepared.request["destination"].asString() == "texture" &&
+            LLAgentBenefitsMgr::current().getTextureUploadCost(prepared.request["width"].asInteger(),
+                prepared.request["height"].asInteger()) > prepared.summary["cost"].asInteger())
+        {
+            error = "The upload price increased. Request a fresh confirmation.";
+            return false;
+        }
+        return true;
+    }
+
+    void postEvent(LLSD request, ResponsePtr response, const std::string& api, const std::string& op,
+                   bool needsConfirm, const FSAssistantPreparedOperation* prepared = nullptr, F64 deadline = 0.0)
     {
         if (needsConfirm)
         {
@@ -635,20 +731,50 @@ private:
             }
             return;
         }
+        if (prepared && (op == "replaceLinks" || op == "snapshotUpload"))
+        {
+            const auto classes = prepared->requiredClasses;
+            const auto generation = mSessionGeneration;
+            auto gate = std::make_shared<fs_assistant::ExecutionGate>(classes);
+            mExecutions.erase(std::remove_if(mExecutions.begin(), mExecutions.end(),
+                [](const auto& weak) { return weak.expired(); }), mExecutions.end());
+            mExecutions.emplace_back(gate);
+            std::weak_ptr<State> weak = weak_from_this();
+            FSAssistantExecutionContext context;
+            context.deadline = deadline > 0.0 ? deadline : now_seconds() + CHAIN_GUARD_SECONDS;
+            context.allowed = [weak, classes, generation, gate]()
+            {
+                auto self = weak.lock();
+                return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation &&
+                    fs_assistant::decide(effective_levels(classes)) != fs_assistant::Decision::Deny;
+            };
+            auto listener = inventoryListener();
+            if (!listener)
+            {
+                fail_response(response, HTTP_NOT_FOUND, "Inventory API is not ready");
+                mPending.erase(request_id);
+                return;
+            }
+            if (op == "replaceLinks") listener->dispatchPreparedLinkReplacement(request, prepared->linkSelection, context);
+            else
+            {
+                context.approvedSnapshotCost = prepared->summary["cost"].asInteger();
+                listener->dispatchPreparedSnapshotUpload(request, context);
+            }
+            return;
+        }
         LLEventPumps::instance().obtain(api).post(request);
     }
 
-    void enqueueAsk(const LLSD& input, ResponsePtr response, const std::string& api, const std::string& op, ActionClass kind, const std::string& message = {})
+    void enqueueAsk(FSAssistantPreparedOperation prepared, ResponsePtr response, const std::string& api, const std::string& op)
     {
         Ask ask;
         ask.key = LLUUID::generateNewID();
         ask.response = response;
-        ask.request = input;
+        ask.prepared = std::move(prepared);
         ask.api = api;
         ask.op = op;
         ask.needsConfirm = op_needs_confirm(op);
-        ask.title = find_def(kind) ? find_def(kind)->title : "Local assistant";
-        ask.message = message.empty() ? action_message(op, kind, input) : message;
         ask.enqueuedAt = now_seconds();
         ask.chainDeadline = ask.enqueuedAt + CHAIN_GUARD_SECONDS;
         mAskOrder.push_back(ask.key);
@@ -707,7 +833,7 @@ private:
         for (const LLUUID& key : mAskOrder)
         {
             auto found = mAsks.find(key);
-            if (found == mAsks.end() || found->second.finished)
+            if (found == mAsks.end() || found->second.gate.finished())
             {
                 continue;
             }
@@ -732,11 +858,22 @@ private:
             return;
         }
         auto found = mAsks.find(mAskOrder.front());
-        if (found == mAsks.end() || found->second.finished || found->second.dialogPosted)
+        if (found == mAsks.end() || found->second.gate.finished() || found->second.dialogPosted)
         {
             return;
         }
         Ask& ask = found->second;
+        if (fs_assistant::decide(effective_levels(ask.prepared.requiredClasses)) == fs_assistant::Decision::Deny)
+        {
+            resolveAsk(ask.key, false, ERR_NOT_ALLOWED, false);
+            return;
+        }
+        std::string validation_error;
+        if (!validateOperation(ask.prepared, validation_error))
+        {
+            resolveAsk(ask.key, false, validation_error, false);
+            return;
+        }
         const F64 now = now_seconds();
         if (now + 1.0 >= ask.chainDeadline)
         {
@@ -748,18 +885,21 @@ private:
         ask.dialogDeadline = std::min(now + ASK_WAIT_SECONDS, ask.chainDeadline);
         const LLUUID key = ask.key;
         std::weak_ptr<State> weak = weak_from_this();
-        ask.notification = LLNotificationsUtil::add(
-            "LocalAssistantConfirm",
-            llsd::map("TITLE", ask.title, "MESSAGE", ask.message),
-            LLSD(),
-            [weak, key](const LLSD& notification, const LLSD& response)
+        auto dialog = LLFloaterReg::getTypedInstance<FSAssistantApproval>("local_assistant_approval");
+        if (!dialog)
+        {
+            resolveAsk(ask.key, false, "The local assistant approval window is unavailable", false);
+            return;
+        }
+        ask.dialog = dialog->getHandle();
+        dialog->present(ask.prepared.summary,
+            [weak, key](bool allow)
             {
                 std::shared_ptr<State> self = weak.lock();
                 if (!self)
                 {
                     return;
                 }
-                const bool allow = LLNotificationsUtil::getSelectedOption(notification, response) == 0;
                 self->resolveAsk(key, allow, allow ? std::string() : std::string(ERR_DENIED), true);
             });
     }
@@ -776,31 +916,39 @@ private:
     void resolveAsk(const LLUUID& key, bool allow, const std::string& error, bool fromDialog)
     {
         auto found = mAsks.find(key);
-        if (found == mAsks.end() || found->second.finished)
+        if (found == mAsks.end() || found->second.gate.finished())
         {
             return;
         }
+        const bool expired = now_seconds() >= (found->second.dialogPosted ? found->second.dialogDeadline : found->second.chainDeadline);
+        const auto outcome = found->second.gate.finish(allow,
+            effective_levels(found->second.prepared.requiredClasses), mEnabled, expired);
         Ask ask = found->second;
-        found->second.finished = true;
-        if (!fromDialog && ask.notification)
-        {
-            LLNotificationPtr notification = ask.notification;
-            found->second.notification = nullptr;
-            LLNotificationsUtil::cancel(notification);
-        }
+        // Remove the terminal request before dismissing any UI: close callbacks
+        // and old Yes callbacks cannot find or resurrect it.
         mAsks.erase(found);
         mAskOrder.erase(std::remove(mAskOrder.begin(), mAskOrder.end(), key), mAskOrder.end());
+        if (!fromDialog)
+            if (auto dialog = dynamic_cast<FSAssistantApproval*>(ask.dialog.get())) dialog->dismiss();
 
-        const bool expired = now_seconds() >= ask.chainDeadline;
-        if (!allow || !mEnabled || expired)
+        if (outcome != fs_assistant::ApprovalGate::Outcome::Allow)
         {
             // Send the denial ourselves while the chain is still inside its 75s budget.
             // extendedResult no-ops if that chain has already dropped the pipe.
-            fail_response(ask.response, HTTP_FORBIDDEN, expired ? ERR_TIMED_OUT : (error.empty() ? ERR_DENIED : error));
+            const std::string reason = outcome == fs_assistant::ApprovalGate::Outcome::TimedOut ? ERR_TIMED_OUT :
+                outcome == fs_assistant::ApprovalGate::Outcome::Revoked ? ERR_NOT_ALLOWED : (error.empty() ? ERR_DENIED : error);
+            fail_response(ask.response, HTTP_FORBIDDEN, reason, policy_error_details(ask.op, ask.prepared.requiredClasses));
             scheduleShow();
             return;
         }
-        postEvent(ask.request, ask.response, ask.api, ask.op, ask.needsConfirm);
+        std::string validation_error;
+        if (!validateOperation(ask.prepared, validation_error))
+        {
+            fail_response(ask.response, HTTP_FORBIDDEN, validation_error);
+            scheduleShow();
+            return;
+        }
+        postEvent(ask.prepared.request, ask.response, ask.api, ask.op, ask.needsConfirm, &ask.prepared, ask.chainDeadline);
         scheduleShow();
     }
 
@@ -830,6 +978,12 @@ private:
     std::map<LLUUID, Posted> mPending;
     std::map<LLUUID, Ask> mAsks;
     std::deque<LLUUID> mAskOrder;
+    std::vector<std::weak_ptr<fs_assistant::ExecutionGate>> mExecutions;
+    U64 mSessionGeneration = 1;
+    F64 mLastExternalRequestAt = 0.0;
+    F64 mLastDiagnosticAt = 0.0;
+    std::string mLastExternalApi;
+    std::string mLastExternalOp;
     bool mEnabled = false;
     bool mTicker = false;
     bool mShowScheduled = false;
@@ -890,6 +1044,7 @@ private:
 void FSEventAPIBridge::notePermissionClassesChanged()
 {
     ++gPolicyGeneration;
+    if (instanceExists() && instance().mState) instance().mState->permissionsChanged();
 }
 
 int FSEventAPIBridge::getPolicyGeneration()
@@ -934,6 +1089,7 @@ bool FSEventAPIBridge::applyEnabled(bool enabled)
         std::string token = make_token();
         if (token.empty())
         {
+            mLastError = "Unable to generate the local assistant access token";
             LL_WARNS("EventAPIBridge") << "Unable to generate authentication token" << LL_ENDL;
             return false;
         }
@@ -941,9 +1097,11 @@ bool FSEventAPIBridge::applyEnabled(bool enabled)
         mState->enable();
         if (!writeDiscovery())
         {
+            mLastError = "Unable to write the local assistant connection file";
             mState->disable();
             return false;
         }
+        mLastError.clear();
         LL_INFOS("EventAPIBridge") << "Local Event API bridge listening on 127.0.0.1:"
                                     << mPort << LL_ENDL;
         return true;
@@ -962,6 +1120,7 @@ bool FSEventAPIBridge::bindOnce()
     std::string token = make_token();
     if (token.empty())
     {
+        mLastError = "Unable to generate the local assistant access token";
         LL_WARNS("EventAPIBridge") << "Unable to generate authentication token" << LL_ENDL;
         return false;
     }
@@ -979,9 +1138,11 @@ bool FSEventAPIBridge::bindOnce()
     mState = std::move(state);
     if (!writeDiscovery())
     {
+        mLastError = "Unable to write the local assistant connection file";
         mState->disable();
         return false;
     }
+    mLastError.clear();
     LL_INFOS("EventAPIBridge") << "Local Event API bridge listening on 127.0.0.1:"
                                 << mPort << LL_ENDL;
     return true;
@@ -1059,4 +1220,15 @@ int FSEventAPIBridge::getPort() const
 const std::string& FSEventAPIBridge::getDiscoveryPath() const
 {
     return mDiscoveryPath;
+}
+
+FSEventAPIBridge::StatusSnapshot FSEventAPIBridge::getStatusSnapshot() const
+{
+    StatusSnapshot result = mState ? mState->snapshot() : StatusSnapshot();
+    result.enabled = gSavedSettings.getBOOL("EnableLocalEventAPIBridge");
+    result.ready = isRunning();
+    result.port = getPort();
+    result.policyGeneration = gPolicyGeneration;
+    result.error = mLastError;
+    return result;
 }
