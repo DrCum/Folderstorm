@@ -68,6 +68,8 @@ public:
     // permission was revoked. Permanent-delete settings remain irrelevant.
     static void notePermissionClassesChanged();
     static int getPolicyGeneration();
+    // Effective current class permission for trusted local inventory review UI.
+    static std::string getPermissionLevel(const std::string& class_id);
 
 private:
     class State;

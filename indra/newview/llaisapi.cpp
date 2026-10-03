@@ -378,6 +378,41 @@ void AISAPI::UpdateCategory(const LLUUID &categoryId, const LLSD &updates, compl
 }
 
 /*static*/
+void AISAPI::BulkRequest(const LLUUID& id, bool category, const LLSD& updates,
+                        std::function<bool()> session_valid,
+                        std::function<bool()> may_submit, result_completion_t callback, std::function<void()> submitted)
+{
+    const std::string cap = getInvCap();
+    if (cap.empty() || !isAvailable()) { callback(false, LLSD()); return; }
+    const bool patch = updates.isMap();
+    std::string url = cap + (category ? "/category/" : "/item/") + id.asString();
+    if (category && !patch) url += "/children?depth=0";
+    EnqueueAISCommand("BulkReview", [url, id, category, patch, updates, session_valid, may_submit, callback, submitted]
+        (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter, const LLUUID&)
+        {
+            if (gDisconnected || !session_valid() || !may_submit()) { callback(false, LLSD()); return; }
+            auto options = std::make_shared<LLCore::HttpOptions>();
+            options->setTimeout(30);
+            auto request = std::make_shared<LLCore::HttpRequest>();
+            if (patch && submitted) submitted();
+            LLSD response = patch ? adapter->patchAndSuspend(request, url, updates, options) :
+                                    adapter->getAndSuspend(request, url, options);
+            const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(
+                response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+            // A reply from an old login must never update the new inventory.
+            if (gDisconnected || !session_valid()) { callback(false, LLSD()); return; }
+            if (status && response.isMap())
+            {
+                LLSD body = patch ? updates : LLSD();
+                if (!patch && category) body["depth"] = 0;
+                onUpdateReceived(response, patch ? (category ? UPDATECATEGORY : UPDATEITEM) :
+                    (category ? FETCHCATEGORYCHILDREN : FETCHITEM), body);
+            }
+            callback(static_cast<bool>(status) && response.isMap(), response);
+        });
+}
+
+/*static*/
 void AISAPI::UpdateItem(const LLUUID &itemId, const LLSD &updates, completion_t callback)
 {
 
@@ -1829,4 +1864,3 @@ void AISUpdate::doUpdate()
 
     gInventory.notifyObservers();
 }
-

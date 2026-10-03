@@ -25,5 +25,6 @@ folderstorm_check(assistant_policy ../../fsassistantpolicy_test.cpp)
 folderstorm_check(world_view_geometry ../test_fsworldviewgeometry.cpp)
 folderstorm_check(link_replacement
   ../test_fslinkreplacement.cpp ../../fslinkreplacement.cpp)
-
 folderstorm_check(assistant_permissions ../test_fsassistantpermissions.cpp)
+folderstorm_check(inventory_bulk
+  ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)

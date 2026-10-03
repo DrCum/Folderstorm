@@ -113,6 +113,8 @@ set(viewer_SOURCE_FILES
     fscommon.cpp
     fschromelayout.cpp
     fschromelayoutcontroller.cpp
+    fsinventorybulk.cpp
+    fsinventorybulkmodel.cpp
     fslinkreplacement.cpp
     fspanelpreferencelocalassistant.cpp
     fsworldviewdiagram.cpp
@@ -990,6 +992,8 @@ set(viewer_HEADER_FILES
     fscommon.h
     fschromelayout.h
     fschromelayoutcontroller.h
+    fsinventorybulk.h
+    fsinventorybulkmodel.h
     fslinkreplacement.h
     fspanelpreferencelocalassistant.h
     fsworldviewdiagram.h
