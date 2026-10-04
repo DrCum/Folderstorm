@@ -24,6 +24,7 @@
 #include "lltextbox.h"
 #include "llviewercontrol.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace
@@ -102,8 +103,11 @@ void FSFloaterWorkspaces::refresh(bool force)
         mFavorites.clear();
         // Bound malformed settings input. Only IDs present in this list are used.
         if (favorites.isArray())
-            for (S32 i = 0; i < favorites.size() && i < 128; ++i)
+        {
+            const S32 favorite_count = static_cast<S32>(std::min<size_t>(favorites.size(), 128));
+            for (S32 i = 0; i < favorite_count; ++i)
                 if (favorites[i].isString()) mFavorites.insert(favorites[i].asString());
+        }
         if (ready)
         {
             struct Entry { std::string key, label; bool layout; };
