@@ -45,6 +45,8 @@ public:
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchLayout(const std::string& id);
+    bool hasPrevious() const;
+    bool returnPrevious();
     bool saveCurrentNow(const std::string& name, bool remember_folders = false);
     bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false);
     bool remembersInventoryFolders(const std::string& name) const;
@@ -100,6 +102,12 @@ private:
     void finishQuickSwitch();
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
+
+    void rememberPrevious();
+    FSWorkspaceLayout::Workspace mPrevious;
+    std::string mPreviousWorkspace, mPreviousLayout, mRestoredLayout;
+    LLUUID mPreviousAccount, mPreviousSession;
+    bool mHasPrevious = false, mRestoreLayout = false;
 
     bool mTransaction = false;
     bool mPendingPlacement = false;

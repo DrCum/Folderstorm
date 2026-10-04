@@ -24,6 +24,8 @@ namespace FSWorkspaceQuickAccess
 {
 constexpr const char* FAVORITES_SETTING = "FSWorkspaceQuickSwitchFavorites";
 struct Entry { std::string key, label; bool layout = false; };
+bool cycle(bool forward);
+bool shortcut();
 std::vector<Entry> entries();
 std::set<std::string> favorites(const std::vector<Entry>& entries);
 bool apply(const std::string& key, const LLUUID& account, const LLUUID& session);

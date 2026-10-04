@@ -146,6 +146,7 @@ void FSWorkspaceController::abandon()
     ++mGeneration;
     ++mRevision;
     mPendingPlacement = false;
+    mRestoreLayout = false;
     mQuickSwitch = false;
     mTransaction = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
@@ -305,6 +306,11 @@ bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
 {
     if (!canQuickSwitch()) return false;
     if (mQuickSwitch) finishQuickSwitch();
+    FSWorkspaceLayout::Workspace parsed;
+    std::string error;
+    const LLSD profiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    if (!profiles.has(id) || !FSWorkspaceLayout::fromLLSD(profiles[id], parsed, error)) return false;
+    rememberPrevious();
     // Discard any baseline captured during construction of a hidden panel.
     // This does not write profile definitions or unrelated preferences.
     abandon();
@@ -319,8 +325,15 @@ bool FSWorkspaceController::quickSwitchLayout(const std::string& id)
 {
     if (!canQuickSwitch()) return false;
     if (mQuickSwitch) finishQuickSwitch();
+    const auto prior = capture(true);
+    const auto workspace = activeId();
+    const auto layout = gSavedSettings.getString("FSChromeActiveProfile");
     abandon();
-    return FSChromeLayoutController::instance().applyProfile(id);
+    if (!FSChromeLayoutController::instance().applyProfile(id)) return false;
+    mPrevious = prior; mPreviousWorkspace = workspace; mPreviousLayout = layout;
+    mPreviousAccount = gAgent.getID(); mPreviousSession = gAgent.getSessionID(); mHasPrevious = true;
+    gSavedPerAccountSettings.setString("FSActiveWorkspace", "");
+    return true;
 }
 void FSWorkspaceController::finishQuickSwitch()
 {
@@ -329,7 +342,35 @@ void FSWorkspaceController::finishQuickSwitch()
     finishPlacement();
     // Save only the chosen identifier. Definitions remain unchanged.
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
+    if (mRestoreLayout) gSavedSettings.setString("FSChromeActiveProfile", mRestoredLayout);
     abandon();
+}
+void FSWorkspaceController::rememberPrevious()
+{
+    mPrevious = capture(true);
+    mPreviousWorkspace = activeId();
+    mPreviousLayout = gSavedSettings.getString("FSChromeActiveProfile");
+    mPreviousAccount = gAgent.getID(); mPreviousSession = gAgent.getSessionID();
+    mHasPrevious = true;
+}
+bool FSWorkspaceController::hasPrevious() const
+{
+    return canQuickSwitch() && mHasPrevious && mPreviousAccount == gAgent.getID() &&
+        mPreviousSession == gAgent.getSessionID();
+}
+bool FSWorkspaceController::returnPrevious()
+{
+    if (!hasPrevious()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    const auto target = mPrevious;
+    const auto workspace = mPreviousWorkspace, layout = mPreviousLayout;
+    rememberPrevious(); // Swap, including unsaved positions; never change named definitions.
+    abandon();
+    beginPreferencesSession();
+    if (!startPreview(target, workspace)) return false;
+    mQuickSwitch = true; mRestoreLayout = true; mRestoredLayout = layout;
+    mFocus.markDead();
+    return true;
 }
 bool FSWorkspaceController::saveCurrentNow(const std::string& name, bool remember_folders)
 {

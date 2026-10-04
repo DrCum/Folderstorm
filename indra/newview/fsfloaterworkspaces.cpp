@@ -41,6 +41,12 @@ bool isLayout(const std::string& key) { return key.compare(0, 7, LAYOUT_PREFIX) 
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    getChild<LLButton>("previous")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
+    getChild<LLButton>("shortcut")->setCommitCallback([this](LLUICtrl*, const LLSD&)
+    {
+        if (FSWorkspaceController::instance().canQuickSwitch() && mAccount == gAgent.getID() && mSession == gAgent.getSessionID())
+            gSavedPerAccountSettings.setString("FSWorkspaceShortcutTarget", selected());
+    });
     getChild<LLButton>("switch")->setCommitCallback([this](LLUICtrl*, const LLSD&) { switchSelected(); });
     getChild<LLButton>("favorite")->setCommitCallback([this](LLUICtrl*, const LLSD&) { toggleFavorite(); });
     getChild<LLButton>("manage")->setCommitCallback([this](LLUICtrl*, const LLSD&) { manageSelected(); });
@@ -155,6 +161,8 @@ void FSFloaterWorkspaces::updateButtons()
     const bool ready = controller.available();
     const bool can_switch = controller.canQuickSwitch();
     const bool has_selection = !selected().empty();
+    getChild<LLButton>("previous")->setEnabled(controller.hasPrevious());
+    getChild<LLButton>("shortcut")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("switch")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));

@@ -1584,5 +1584,9 @@
             <key>Value</key>
             <map/>
         </map>
-    </map>
+     <key>FSWorkspaceShortcutTarget</key><map>
+  <key>Comment</key><string>Account-local target for the assignable workspace_direct keybinding. Missing targets do nothing.</string>
+  <key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/>
+ </map>
+</map>
 </llsd>

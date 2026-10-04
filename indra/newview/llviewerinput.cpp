@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacequickaccess.h"
+#include "fsworkspacecontroller.h"
 
 #include "llviewerinput.h"
 
@@ -1037,10 +1039,33 @@ bool agent_control_lbutton_handle(EKeystate s)
     return true;
 }
 
+// Normal bindings respect the existing focus and mode routing. No defaults
+// are claimed; users assign these through Controls and its conflict handler.
+static bool workspace_key(EKeystate state, int action)
+{
+    auto* focus = dynamic_cast<LLUICtrl*>(gFocusMgr.getKeyboardFocus());
+    if (state != KEYSTATE_DOWN || (focus && focus->acceptsTextInput())) return false;
+    switch (action)
+    {
+    case 0: return FSWorkspaceQuickAccess::shortcut();
+    case 1: return FSWorkspaceQuickAccess::cycle(true);
+    case 2: return FSWorkspaceQuickAccess::cycle(false);
+    default: return FSWorkspaceController::instance().returnPrevious();
+    }
+}
+static bool workspace_direct(EKeystate state) { return workspace_key(state, 0); }
+static bool workspace_next(EKeystate state) { return workspace_key(state, 1); }
+static bool workspace_back(EKeystate state) { return workspace_key(state, 2); }
+static bool workspace_previous(EKeystate state) { return workspace_key(state, 3); }
+
 // In-world keybindings, like walking or camera
 #define REGISTER_KEYBOARD_ACTION(KEY, ACTION) LLREGISTER_STATIC(LLKeyboardActionRegistry, KEY, LLKeybindFunctionData(ACTION, false));
 // Global keybindings that should work even with floaters focused, like voice
 #define REGISTER_KEYBOARD_GLOBAL_ACTION(KEY, ACTION) LLREGISTER_STATIC(LLKeyboardActionRegistry, KEY, LLKeybindFunctionData(ACTION, true));
+REGISTER_KEYBOARD_ACTION("workspace_direct", workspace_direct);
+REGISTER_KEYBOARD_ACTION("workspace_next", workspace_next);
+REGISTER_KEYBOARD_ACTION("workspace_back", workspace_back);
+REGISTER_KEYBOARD_ACTION("workspace_previous", workspace_previous);
 REGISTER_KEYBOARD_ACTION("jump", agent_jump);
 REGISTER_KEYBOARD_ACTION("push_down", agent_push_down);
 REGISTER_KEYBOARD_ACTION("push_forward", agent_push_forward);

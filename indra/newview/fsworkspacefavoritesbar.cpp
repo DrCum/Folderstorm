@@ -185,6 +185,11 @@ void FSWorkspaceFavoritesBar::rebuild()
         LLMenuItemSeparatorGL::Params separator;
         menu->append(LLUICtrlFactory::create<LLMenuItemSeparatorGL>(separator));
     }
+    LLMenuItemCallGL::Params previous;
+    previous.name = "previous_arrangement"; previous.label = "Previous arrangement";
+    previous.enabled = FSWorkspaceController::instance().hasPrevious();
+    previous.on_click.function([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
+    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(previous));
     LLMenuItemCallGL::Params manage;
     manage.name = "manage_workspaces"; manage.label = getString("manage");
     manage.on_click.function([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_switch"); });

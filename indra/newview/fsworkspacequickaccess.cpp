@@ -59,3 +59,28 @@ bool FSWorkspaceQuickAccess::apply(const std::string& key, const LLUUID& account
             return entry.layout ? controller.quickSwitchLayout(key.substr(7)) : controller.quickSwitchWorkspace(key.substr(10));
     return false;
 }
+
+bool FSWorkspaceQuickAccess::shortcut()
+{
+    return apply(gSavedPerAccountSettings.getString("FSWorkspaceShortcutTarget"), gAgent.getID(), gAgent.getSessionID());
+}
+bool FSWorkspaceQuickAccess::cycle(bool forward)
+{
+    auto& controller = FSWorkspaceController::instance();
+    if (!controller.canQuickSwitch()) return false;
+    const auto all = entries();
+    const auto starred = favorites(all);
+    std::vector<std::string> keys;
+    for (const auto& entry : all) if (starred.count(entry.key)) keys.push_back(entry.key);
+    if (keys.empty()) return false;
+    const auto active = controller.activeId();
+    const auto current = active.empty() ? "layout:" + gSavedSettings.getString("FSChromeActiveProfile") : "workspace:" + active;
+    auto it = std::find(keys.begin(), keys.end(), current);
+    size_t index = forward ? 0 : keys.size() - 1;
+    if (it != keys.end())
+    {
+        const auto old = static_cast<size_t>(it - keys.begin());
+        index = forward ? (old + 1) % keys.size() : (old + keys.size() - 1) % keys.size();
+    }
+    return apply(keys[index], gAgent.getID(), gAgent.getSessionID());
+}
