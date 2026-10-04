@@ -32,6 +32,7 @@ constexpr int SCHEMA_VERSION = 1;
 constexpr int MAX_PROFILES = 32;
 constexpr int MAX_ROLES = 6;
 constexpr int MAX_EXTRA_INVENTORY_WINDOWS = 16;
+constexpr int MAX_EXPANDED_INVENTORY_FOLDERS = 256;
 constexpr float MAX_UI_SIZE = 16384.f;
 
 enum class Role
@@ -46,6 +47,8 @@ struct InventoryFolder
     bool single_folder = false;
     int view_mode = 0; // List, gallery or combination, matching Inventory's modes.
     std::string folder_id; // Optional selected folder for the normal view.
+    bool has_expanded_folders = false; // Absent in older saves: leave expansion alone.
+    std::vector<std::string> expanded_folders{}; // Folder references only, never items.
 };
 
 struct Window

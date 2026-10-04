@@ -36,6 +36,7 @@
 #include "llinventoryfilter.h"
 #include "llinventorymodel.h"
 #include "llscrollcontainer.h"
+#include "lltimer.h"
 #include "lluictrlfactory.h"
 #include <functional>
 #include <set>
@@ -190,6 +191,10 @@ public:
     // Live rollback state only; workspace profile serialization never sees this.
     LLSD captureWorkspaceSelection() const;
     void restoreWorkspaceSelection(const LLSD& state);
+    std::vector<LLUUID> captureWorkspaceExpandedFolders(bool bounded = true) const;
+    using WorkspaceExpansionCallback = std::function<void(const LLUUID&, const std::string&)>;
+    void restoreWorkspaceExpandedFolders(const std::vector<LLUUID>& folders, WorkspaceExpansionCallback callback = {});
+    void cancelWorkspaceExpandedFolders();
     selected_items_t getSelectedItems() const;
 
     bool isSelectionRemovable();
@@ -302,6 +307,12 @@ protected:
 
     LLUUID                      mSelectThisID;
     std::vector<LLUUID>          mWorkspaceSelection;
+    std::vector<LLUUID>          mWorkspaceExpandedFolders;
+    bool                        mWorkspaceExpansionReset = false;
+    bool                        mWorkspaceExpansionStarted = false;
+    LLUUID                      mWorkspaceExpansionAccount, mWorkspaceExpansionSession;
+    LLTimer                     mWorkspaceExpansionTimer;
+    WorkspaceExpansionCallback  mWorkspaceExpansionCallback;
     LLInventoryModel*           mInventory;
     LLInventoryObserver*        mInventoryObserver;
     LLInvPanelComplObserver*    mCompletionObserver;

@@ -15,6 +15,7 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacequickaccess.h"
+#include "fsworkspacefavorites.h"
 #include "fsworkspacecontroller.h"
 #include "fschromelayoutcontroller.h"
 #include "llagent.h"
@@ -38,16 +39,51 @@ std::vector<FSWorkspaceQuickAccess::Entry> FSWorkspaceQuickAccess::entries()
 }
 std::set<std::string> FSWorkspaceQuickAccess::favorites(const std::vector<Entry>& entries)
 {
-    std::set<std::string> valid, result;
-    for (const auto& entry : entries) valid.insert(entry.key);
+    std::set<std::string> result;
+    for (const auto& entry : orderedFavorites(entries)) result.insert(entry.key);
+    return result;
+}
+std::vector<FSWorkspaceQuickAccess::Entry> FSWorkspaceQuickAccess::orderedFavorites(const std::vector<Entry>& entries)
+{
+    std::vector<std::string> valid, saved;
+    for (const auto& entry : entries) valid.push_back(entry.key);
     const LLSD data = gSavedPerAccountSettings.getLLSD(FAVORITES_SETTING);
     if (data.isArray())
     {
         const S32 count = static_cast<S32>(std::min<size_t>(data.size(), 128));
         for (S32 i = 0; i < count; ++i)
-            if (data[i].isString() && valid.count(data[i].asString())) result.insert(data[i].asString());
+            if (data[i].isString()) saved.push_back(data[i].asString());
     }
+    std::vector<Entry> result;
+    for (const auto& key : orderedFavoriteKeys(saved, valid))
+        for (const auto& entry : entries) if (entry.key == key) { result.push_back(entry); break; }
     return result;
+}
+bool FSWorkspaceQuickAccess::toggleFavorite(const std::string& key, const LLUUID& account, const LLUUID& session)
+{
+    if (!FSWorkspaceController::instance().canQuickSwitch() || account != gAgent.getID() || session != gAgent.getSessionID()) return false;
+    const auto all = entries();
+    if (std::none_of(all.begin(), all.end(), [&](const Entry& entry) { return entry.key == key; })) return false;
+    auto ordered = orderedFavorites(all);
+    auto it = std::find_if(ordered.begin(), ordered.end(), [&](const Entry& entry) { return entry.key == key; });
+    if (it != ordered.end()) ordered.erase(it);
+    else if (ordered.size() < 128) ordered.push_back(*std::find_if(all.begin(), all.end(), [&](const Entry& entry) { return entry.key == key; }));
+    else return false;
+    LLSD data = LLSD::emptyArray();
+    for (const auto& entry : ordered) data.append(entry.key);
+    gSavedPerAccountSettings.setLLSD(FAVORITES_SETTING, data);
+    return true;
+}
+bool FSWorkspaceQuickAccess::moveFavorite(const std::string& key, bool forward, const LLUUID& account, const LLUUID& session)
+{
+    if (!FSWorkspaceController::instance().canQuickSwitch() || account != gAgent.getID() || session != gAgent.getSessionID()) return false;
+    std::vector<std::string> keys;
+    for (const auto& entry : orderedFavorites(entries())) keys.push_back(entry.key);
+    if (!moveFavoriteKey(keys, key, forward)) return false;
+    LLSD data = LLSD::emptyArray();
+    for (const auto& id : keys) data.append(id);
+    gSavedPerAccountSettings.setLLSD(FAVORITES_SETTING, data);
+    return true;
 }
 bool FSWorkspaceQuickAccess::apply(const std::string& key, const LLUUID& account, const LLUUID& session)
 {
@@ -69,9 +105,8 @@ bool FSWorkspaceQuickAccess::cycle(bool forward)
     auto& controller = FSWorkspaceController::instance();
     if (!controller.canQuickSwitch()) return false;
     const auto all = entries();
-    const auto starred = favorites(all);
     std::vector<std::string> keys;
-    for (const auto& entry : all) if (starred.count(entry.key)) keys.push_back(entry.key);
+    for (const auto& entry : orderedFavorites(all)) keys.push_back(entry.key);
     if (keys.empty()) return false;
     const auto active = controller.activeId();
     const auto current = active.empty() ? "layout:" + gSavedSettings.getString("FSChromeActiveProfile") : "workspace:" + active;

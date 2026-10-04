@@ -30,6 +30,7 @@
 #include "lliconctrl.h"
 #include "lltextbox.h"
 #include "llscreenchannel.h"
+#include "fsquietui.h"
 
 #include "lltoastpanel.h"
 #include "llviewercontrol.h"
@@ -287,6 +288,12 @@ void LLScreenChannel::addToast(const LLToast::Params& p)
     {
         show_toast = mWasStartUpToastShown && (mShowToasts || p.force_show);
     }
+    // Quiet UI routes only routine, storable notices to the existing well.
+    // Requests, force-show notices and high-priority/system alerts stay visible.
+    const auto quiet_notification = LLNotifications::instance().find(p.notif_id);
+    if (quiet_notification && p.can_be_stored && mCanStoreToasts &&
+        FSQuietUI::quietRoutineNotification(FSQuietUI::active(), p.force_show, quiet_notification->hasFormElements(),
+            quiet_notification->getPriority() >= NOTIFICATION_PRIORITY_HIGH, quiet_notification->getName())) show_toast = false;
     store_toast = !show_toast && p.can_be_stored && mCanStoreToasts;
 
     if(!show_toast && !store_toast)

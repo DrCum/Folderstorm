@@ -2258,6 +2258,12 @@ FSWorkspaceLayout::InventoryFolder LLPanelMainInventory::captureWorkspaceFolder(
     }
     if (gInventory.getCategory(id)) folder.folder_id = id.asString();
     else if (mSingleFolderMode) folder.present = false;
+    if (!mSingleFolderMode && mActivePanel == mAllItemsPanel)
+    {
+        folder.has_expanded_folders = true;
+        for (const auto& expanded : mAllItemsPanel->captureWorkspaceExpandedFolders())
+            folder.expanded_folders.push_back(expanded.asString());
+    }
     return folder;
 }
 
@@ -2287,6 +2293,10 @@ LLSD LLPanelMainInventory::captureWorkspaceFolderState()
             state["selections"][panel->getName()] = panel->captureWorkspaceSelection();
     state["list_selection"] = mCombinationInventoryPanel->captureWorkspaceSelection();
     state["gallery_selection"] = mCombinationGalleryPanel->captureWorkspaceSelection();
+    state["expanded_folders"] = LLSD::emptyArray();
+    // Live Cancel rollback must also preserve expansions beyond the named-save
+    // limit. This state never enters a workspace file.
+    for (const auto& id : mAllItemsPanel->captureWorkspaceExpandedFolders(false)) state["expanded_folders"].append(id);
     return state;
 }
 
@@ -2315,16 +2325,19 @@ void LLPanelMainInventory::updateWorkspaceFolderPresentation()
     mReshapeInvLayout = true;
 }
 
-bool LLPanelMainInventory::applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder)
+bool LLPanelMainInventory::applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder, std::string* failure,
+                                              LLInventoryPanel::WorkspaceExpansionCallback callback)
 {
-    if (!folder.present || !gInventory.isInventoryUsable() || folder.view_mode < MODE_LIST ||
-        folder.view_mode > MODE_COMBINATION) return false;
+    const auto fail = [failure](const char* reason) { if (failure) *failure = reason; return false; };
+    if (!gInventory.isInventoryUsable()) return fail("inventory_not_ready");
+    if (!folder.present || folder.view_mode < MODE_LIST || folder.view_mode > MODE_COMBINATION) return fail("folder_invalid");
     const LLUUID id = folder.folder_id.empty() ? LLUUID::null : LLUUID(folder.folder_id);
-    if ((!folder.folder_id.empty() && !gInventory.getCategory(id)) || (folder.single_folder && id.isNull())) return false;
+    if ((!folder.folder_id.empty() && !gInventory.getCategory(id)) || (folder.single_folder && id.isNull())) return fail("folder_unavailable");
     // A filtered folder must not clear or rewrite the user's current filter.
     if (!folder.single_folder && id.notNull())
         if (auto* view = mAllItemsPanel->getFolderByID(id))
-            if (!view->passedFilter()) return false;
+            if (!view->passedFilter()) return fail("folder_filtered");
+    mAllItemsPanel->cancelWorkspaceExpandedFolders();
     mApplyingWorkspaceFolder = true;
     if (mCombinationInventoryPanel->getRootFolder())
         mCombinationInventoryPanel->getRootFolder()->setForceArrange(false);
@@ -2337,12 +2350,18 @@ bool LLPanelMainInventory::applyWorkspaceFolder(const FSWorkspaceLayout::Invento
         mCombinationInventoryPanel->clearNavigationHistory();
         mCombinationGalleryPanel->clearNavigationHistory();
     }
-    else if (id.notNull())
+    else if (id.notNull() || folder.has_expanded_folders)
     {
         mFilterTabs->selectTabByName(ALL_ITEMS);
-        mAllItemsPanel->setSelectionByID(id, false);
+        if (id.notNull()) mAllItemsPanel->setSelectionByID(id, false);
     }
     updateWorkspaceFolderPresentation();
+    if (!mSingleFolderMode && folder.has_expanded_folders)
+    {
+        std::vector<LLUUID> expanded;
+        for (const auto& expanded_id : folder.expanded_folders) expanded.emplace_back(expanded_id);
+        mAllItemsPanel->restoreWorkspaceExpandedFolders(expanded, std::move(callback));
+    }
     mApplyingWorkspaceFolder = false;
     return true;
 }
@@ -2387,6 +2406,13 @@ bool LLPanelMainInventory::restoreWorkspaceFolderState(const LLSD& state)
                 panel->restoreWorkspaceSelection(state["selections"][panel->getName()]);
     mCombinationInventoryPanel->restoreWorkspaceSelection(state["list_selection"]);
     mCombinationGalleryPanel->restoreWorkspaceSelection(state["gallery_selection"]);
+    if (state["expanded_folders"].isArray())
+    {
+        std::vector<LLUUID> expanded;
+        for (auto it = state["expanded_folders"].beginArray(); it != state["expanded_folders"].endArray(); ++it)
+            if (it->isUUID() && gInventory.getCategory(it->asUUID())) expanded.push_back(it->asUUID());
+        mAllItemsPanel->restoreWorkspaceExpandedFolders(expanded);
+    }
     updateNavButtons();
     mApplyingWorkspaceFolder = false;
     return true;

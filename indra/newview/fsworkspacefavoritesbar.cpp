@@ -16,6 +16,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacefavoritesbar.h"
 #include "fsworkspacecontroller.h"
+#include "fsquietui.h"
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "llbutton.h"
@@ -75,7 +76,7 @@ void FSWorkspaceFavoritesBar::refresh()
     if (!navigation || !container || !landmarks) return;
     auto& controller = FSWorkspaceController::instance();
     const bool ready = controller.available();
-    const bool ui_shown = ready && gViewerWindow && gViewerWindow->getUIVisibility() && !gAgentCamera.cameraMouselook();
+    const bool ui_shown = ready && gViewerWindow && gViewerWindow->getUIVisibility() && !gAgentCamera.cameraMouselook() && !FSQuietUI::active();
     const bool shown = ui_shown && gSavedSettings.getBOOL(SHOW_SETTING);
     const bool landmarks_shown = ui_shown && gSavedSettings.getBOOL("ShowNavbarFavoritesPanel");
     const bool can_switch = controller.canQuickSwitch();
@@ -96,8 +97,7 @@ void FSWorkspaceFavoritesBar::refresh()
     if (changed)
     {
         mEntries.clear();
-        const auto entries = FSWorkspaceQuickAccess::entries(); const auto valid = FSWorkspaceQuickAccess::favorites(entries);
-        for (const auto& entry : entries) if (valid.count(entry.key)) mEntries.push_back(entry);
+        mEntries = FSWorkspaceQuickAccess::orderedFavorites(FSWorkspaceQuickAccess::entries());
     }
     const auto* font = landmarks->favoriteFont();
     const S32 maximum = std::max(36, static_cast<S32>(landmarks->favoriteButtonParams().rect.width));
@@ -188,6 +188,10 @@ void FSWorkspaceFavoritesBar::rebuild()
     previous.enabled = FSWorkspaceController::instance().hasPrevious();
     previous.on_click.function([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
     menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(previous));
+    LLMenuItemCallGL::Params report;
+    report.name = "workspace_restore_report"; report.label = getString("restore_report");
+    report.on_click.function([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_report"); });
+    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(report));
     LLMenuItemCallGL::Params manage;
     manage.name = "manage_workspaces"; manage.label = getString("manage");
     manage.on_click.function([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_switch"); });

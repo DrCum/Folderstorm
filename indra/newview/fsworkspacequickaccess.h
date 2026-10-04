@@ -28,6 +28,9 @@ bool cycle(bool forward);
 bool shortcut();
 std::vector<Entry> entries();
 std::set<std::string> favorites(const std::vector<Entry>& entries);
+std::vector<Entry> orderedFavorites(const std::vector<Entry>& entries);
+bool toggleFavorite(const std::string& key, const LLUUID& account, const LLUUID& session);
+bool moveFavorite(const std::string& key, bool forward, const LLUUID& account, const LLUUID& session);
 bool apply(const std::string& key, const LLUUID& account, const LLUUID& session);
 }
 #endif

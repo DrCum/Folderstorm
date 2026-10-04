@@ -500,6 +500,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("workspace_tools", "floater_workspace_tools.xml", &LLFloaterReg::build<FSFloaterWorkspaceTools>);
     LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
     LLFloaterReg::add("workspace_switch", "floater_workspaces.xml", &LLFloaterReg::build<FSFloaterWorkspaces>);
+    LLFloaterReg::add("workspace_report", "floater_workspace_report.xml", &LLFloaterReg::build<FSFloaterWorkspaceReport>);
     LLInspectAvatarUtil::registerFloater();
     LLInspectGroupUtil::registerFloater();
     LLInspectObjectUtil::registerFloater();

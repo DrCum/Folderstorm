@@ -10,6 +10,17 @@ Completed: assignable direct/favorite-cycle keyboard actions; session-only Previ
 
 The user also scheduled a one-time conditional continuation for **5:30 a.m. October 4, America/New_York**: resume only if implementation/publication is unfinished; otherwise do nothing. The completion PR and attached chat artifact are the completion record.
 
+## PR #6 usability follow-up — October 4, 2026
+
+The user explicitly authorized expanded Inventory branches, ordered favorites, a detailed restore report and a temporary quieter UI mode as a separate PR #6. These are implemented on `feat/workspace-usability`, based on unmerged PR #5 (`feat/workspace-tools`). Do not modify or merge PR #5 automatically. Retarget the follow-up to main only after its dependency merges.
+
+- **Remember Inventory folders** now includes visible expanded All Items branches (256 references per window), while older saves leave expansion alone. Live Cancel rollback also preserves the original expansions. Portable exports still omit all folder references by default.
+- Favorite up/down controls preserve one account-local order across the strip, overflow, switcher and keyboard cycling; new favorites append, stale/duplicate entries are filtered.
+- Last restore report records specific restrictions, incompatible/attached windows, fitting, missing/filtered/timed-out folders, omitted groups and unavailable toolbar commands. Deferred expansion results update the session-only report; failures offer a link to it. No file export or cross-session report history.
+- Quiet UI is session-only presentation, reached from World or the switcher. It hides navigation, favorites and toolbars, reduces routine notification popups, and retains menu access, interactive requests and high-priority/system alerts. Stored visibility/button preferences are unchanged.
+
+See [PR #6 focused checks and native pass](../testing/workspace-usability-validation.md). No viewer/build/packaging/GitHub tests or unrelated Go tests are authorized for this follow-up.
+
 ## Delivery and continuous implementation
 
 The latest user instruction replaces the earlier requirement to pause after each feature. The user authorized and scheduled a one-time start at **12:15 a.m. Eastern on October 4, 2026** (`America/New_York`, 04:15 UTC) after their usage reset. The automation was created successfully to resume this chat’s workspace work and create a PR after focused checks. The user explicitly resumed work after that kickoff fired early. Continue through the entire remaining roadmap without waiting for confirmation between features, including when the user is away/asleep. Keep meaningful progress updates and separately reviewable commits. Combine closely related work when useful; snapping and alignment can remain two smaller commits without a pause between them. If a genuine blocker needs user input, ask asynchronously and continue independent authorized work where possible.
@@ -62,7 +73,7 @@ Status: implemented as the second local checkpoint on `feat/workspace-enhancemen
 Goal: an Inventory sorting workspace reopens the folders being worked on, along with its windows.
 
 - Add a per-save Remember Inventory folders option, available in Preferences and the quick-save switcher. Older workspaces retain their geometry-only behavior.
-- For single-folder Inventory windows, capture the folder root and presentation mode. For normal Inventory windows, capture a selected folder where one exists. Do not serialize item selections, search filters, expanded trees or Inventory contents.
+- For single-folder Inventory windows, capture the folder root and presentation mode. For normal Inventory windows, capture a selected folder where one exists. Do not serialize item selections, search filters or Inventory contents. PR #6 subsequently adds optional expanded All Items folder references under the same folder checkbox; this supersedes the original exclusion of expanded trees.
 - Store optional, validated folder context against the primary Inventory slot, owned extra and ordered ordinary additional Inventory slots. IDs remain in account-local workspace settings; never accept arbitrary floater registry names/keys from persisted data.
 - Restore after Inventory and the target windows are ready, using existing folder-view APIs and account/session generation checks. Missing/deleted/inaccessible folders keep a usable window and produce a brief status rather than blocking the whole workspace.
 - Reuse current window instances and preserve Preview/Cancel behavior: capture the original folder presentation before applying saved context and restore it on Cancel. Loading older saves leaves current folder context alone.

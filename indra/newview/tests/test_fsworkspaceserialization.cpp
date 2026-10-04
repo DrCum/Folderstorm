@@ -193,6 +193,34 @@ int main()
     data = folders_valid; data["extra_inventory"][0]["inventory_folder"]["single_folder"] = 1;
     rejected(data, "Single-folder flag type is strict");
 
+    data = folders_valid;
+    data["extra_inventory"][0]["inventory_folder"]["expanded_folders"] = LLSD::emptyArray();
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory[0].inventory_folder.has_expanded_folders &&
+        parsed.extra_inventory[0].inventory_folder.expanded_folders.empty(), "Explicit empty expansion differs from legacy omitted expansion");
+    data["extra_inventory"][0]["inventory_folder"]["expanded_folders"].append(LLUUID(folder_id));
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory[0].inventory_folder.expanded_folders == std::vector<std::string>{folder_id} &&
+        toLLSD(parsed)["extra_inventory"][0]["inventory_folder"]["expanded_folders"][0].isUUID(), "Expanded folder references round trip without contents");
+    const LLSD expanded_valid = data;
+    data["extra_inventory"][0]["inventory_folder"]["expanded_folders"].append(LLUUID(folder_id));
+    rejected(data, "Duplicate expanded folders rejected");
+    data = expanded_valid; data["extra_inventory"][0]["inventory_folder"]["expanded_folders"][0] = folder_id;
+    rejected(data, "Expanded UUID strings are not coerced");
+    data = expanded_valid; data["extra_inventory"][0]["inventory_folder"]["expanded_folders"][0] = LLUUID::null;
+    rejected(data, "Null expanded folder rejected");
+    data = expanded_valid; data["extra_inventory"][0]["inventory_folder"]["expanded_folders"] = true;
+    rejected(data, "Expanded folder list type is strict");
+    data = expanded_valid; data["windows"]["inventory_primary"]["inventory_folder"]["expanded_folders"] = LLSD::emptyArray();
+    rejected(data, "Single-folder presentations cannot carry tree expansion");
+    data = expanded_valid; data["extra_inventory"][0]["inventory_folder"]["expanded_folders"] = LLSD::emptyArray();
+    for (int i = 0; i < MAX_EXPANDED_INVENTORY_FOLDERS; ++i)
+    {
+        LLUUID id(folder_id); id.mData[14] = static_cast<U8>(i / 256); id.mData[15] = static_cast<U8>(i % 256);
+        data["extra_inventory"][0]["inventory_folder"]["expanded_folders"].append(id);
+    }
+    expect(fromLLSD(data, parsed, error), "Expanded folders accept their count bound");
+    data["extra_inventory"][0]["inventory_folder"]["expanded_folders"].append(LLUUID(folder_id));
+    rejected(data, "Expanded folders reject above bound");
+
     for (const char* field : {"schema", "type", "chrome", "frame", "windows", "panels", "world_view_in_mouselook"})
     {
         data = valid; data.erase(field); rejected(data, "Missing envelope field rejected");

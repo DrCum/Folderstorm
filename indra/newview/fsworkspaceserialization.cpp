@@ -160,6 +160,12 @@ LLSD windowToLLSD(Role role, const Window& window)
         data["inventory_folder"]["view_mode"] = window.inventory_folder.view_mode;
         if (!window.inventory_folder.folder_id.empty())
             data["inventory_folder"]["folder_id"] = LLUUID(window.inventory_folder.folder_id);
+        if (window.inventory_folder.has_expanded_folders)
+        {
+            data["inventory_folder"]["expanded_folders"] = LLSD::emptyArray();
+            for (const auto& id : window.inventory_folder.expanded_folders)
+                data["inventory_folder"]["expanded_folders"].append(LLUUID(id));
+        }
     }
     return data;
 }
@@ -201,8 +207,19 @@ bool windowFromLLSD(const LLSD& data, Role role, Window& window, int& ignored)
             window.inventory_folder.folder_id = folder["folder_id"].asUUID().asString();
         }
         if (window.inventory_folder.single_folder && window.inventory_folder.folder_id.empty()) return false;
+        if (folder.has("expanded_folders"))
+        {
+            const auto& expanded = folder["expanded_folders"];
+            if (!expanded.isArray() || expanded.size() > MAX_EXPANDED_INVENTORY_FOLDERS ||
+                window.inventory_folder.single_folder) return false;
+            std::set<std::string> ids;
+            for (auto it = expanded.beginArray(); it != expanded.endArray(); ++it)
+                if (!it->isUUID() || it->asUUID().isNull() || !ids.insert(it->asUUID().asString()).second) return false;
+            window.inventory_folder.has_expanded_folders = true;
+            window.inventory_folder.expanded_folders.assign(ids.begin(), ids.end());
+        }
         window.inventory_folder.present = true;
-        countUnknown(folder, {"single_folder", "view_mode", "folder_id"}, ignored);
+        countUnknown(folder, {"single_folder", "view_mode", "folder_id", "expanded_folders"}, ignored);
     }
     countUnknown(data, {"visible", "minimized", "center_x", "center_y", "width_ui", "height_ui", "inventory_folder"}, ignored);
     return true;

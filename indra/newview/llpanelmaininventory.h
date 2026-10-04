@@ -152,10 +152,11 @@ public:
     bool isGalleryViewMode() { return (mViewMode == MODE_GALLERY); }
     bool isCombinationViewMode() { return (mViewMode == MODE_COMBINATION); }
     LLUUID getCurrentSFVRoot();
-    // Persist only a folder/presentation; richer state is runtime-only for Cancel.
+    // Persist folder/presentation and optional expanded folder references; richer state is live-only for Cancel.
     FSWorkspaceLayout::InventoryFolder captureWorkspaceFolder();
     LLSD captureWorkspaceFolderState();
-    bool applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder);
+    bool applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder, std::string* failure = nullptr,
+                              LLInventoryPanel::WorkspaceExpansionCallback callback = {});
     bool restoreWorkspaceFolderState(const LLSD& state);
     std::string getLocalizedRootName();
 
@@ -367,6 +368,5 @@ private:
 };
 
 #endif // LL_LLPANELMAININVENTORY_H
-
 
 

@@ -33,6 +33,7 @@
 #include "fsfloaternearbychat.h"
 // </FS:Ansariel> [FS communication UI]
 #include "llnotificationhandler.h"
+#include "fsquietui.h"
 #include "llnotifications.h"
 #include "lltoastnotifypanel.h"
 #include "llviewercontrol.h"
@@ -122,6 +123,10 @@ bool LLTipHandler::processNotification(const LLNotificationPtr& notification, bo
         }
     }
 
+    // Logging above still runs. Quiet mode only suppresses the routine tip's
+    // visual popup; it does not cancel the notification or answer a request.
+    if (FSQuietUI::quietRoutineNotification(FSQuietUI::active(), false, notification->hasFormElements(),
+        notification->getPriority() >= NOTIFICATION_PRIORITY_HIGH, notification->getName())) return false;
     LLToastPanel* notify_box = LLToastPanel::buidPanelFromNotification(notification);
 
     LLToast::Params p;
