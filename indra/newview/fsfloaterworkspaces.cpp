@@ -17,8 +17,10 @@
 #include "fsfloaterworkspaces.h"
 #include "fschromelayoutcontroller.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacequickaccess.h"
 #include "llagent.h"
 #include "llbutton.h"
+#include "llcheckboxctrl.h"
 #include "llfloaterpreference.h"
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
@@ -30,7 +32,7 @@
 
 namespace
 {
-constexpr const char* FAVORITES_SETTING = "FSWorkspaceQuickSwitchFavorites";
+constexpr const char* FAVORITES_SETTING = FSWorkspaceQuickAccess::FAVORITES_SETTING;
 constexpr const char* WORKSPACE_PREFIX = "workspace:";
 constexpr const char* LAYOUT_PREFIX = "layout:";
 bool isLayout(const std::string& key) { return key.compare(0, 7, LAYOUT_PREFIX) == 0; }
@@ -110,31 +112,10 @@ void FSFloaterWorkspaces::refresh(bool force)
         const auto prior = same_account ? selected() : "";
         const auto scroll = same_account ? list->getScrollPos() : 0;
         list->deleteAllItems();
-        mFavorites.clear();
-        // Bound malformed settings input. Only IDs present in this list are used.
-        if (favorites.isArray())
-        {
-            const S32 favorite_count = static_cast<S32>(std::min<size_t>(favorites.size(), 128));
-            for (S32 i = 0; i < favorite_count; ++i)
-                if (favorites[i].isString()) mFavorites.insert(favorites[i].asString());
-        }
+        const auto entries = FSWorkspaceQuickAccess::entries();
+        mFavorites = FSWorkspaceQuickAccess::favorites(entries);
         if (ready)
         {
-            struct Entry { std::string key, label; bool layout; };
-            std::vector<Entry> entries;
-            // Use saved definitions; pending Preferences edits stay in Preferences.
-            if (profiles.isMap())
-                for (auto it = profiles.beginMap(); it != profiles.endMap() && entries.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
-                    if (FSWorkspaceLayout::isSafeProfileName(it->first))
-                        entries.push_back({std::string(WORKSPACE_PREFIX) + it->first, it->first, false});
-            for (const auto& id : FSChromeLayoutController::instance().profileNames())
-                entries.push_back({std::string(LAYOUT_PREFIX) + id,
-                    FSChromeLayout::isBuiltinProfileId(id) ? FSChromeLayout::builtinProfileLabel(id) : id, true});
-            std::set<std::string> valid_keys;
-            for (const auto& entry : entries) valid_keys.insert(entry.key);
-            for (auto it = mFavorites.begin(); it != mFavorites.end();)
-                if (!valid_keys.count(*it)) it = mFavorites.erase(it);
-                else ++it;
             bool heading = false;
             for (const auto& entry : entries)
                 if (mFavorites.count(entry.key))
@@ -176,6 +157,7 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     getChild<LLButton>("manage")->setEnabled(ready);
+    getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
     getChild<LLButton>("save")->setEnabled(can_switch && !name.empty());
@@ -190,7 +172,7 @@ void FSFloaterWorkspaces::switchSelected()
     auto& controller = FSWorkspaceController::instance();
     const auto key = selected();
     if (!controller.canQuickSwitch() || key.empty() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
-    const bool applied = isLayout(key) ? controller.quickSwitchLayout(key.substr(7)) : controller.quickSwitchWorkspace(key.substr(10));
+    const bool applied = FSWorkspaceQuickAccess::apply(key, mAccount, mSession);
     if (applied) closeFloater(false);
     else { mActionStatus = "switch_failed"; updateButtons(); }
 }

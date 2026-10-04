@@ -29,6 +29,8 @@ For quick switching, choose **World → Workspaces & Layouts…**, or drag **Wor
 
 Tabbed **Conversations** restores size and position only; loading a workspace leaves its open/closed state and selected conversations unchanged. Detached **Nearby Chat** can restore visibility when its existing presentation is compatible. Workspace capture never stores messages, chat sessions, or inventory contents. The included workspace starting arrangements have been removed; your named workspaces remain available.
 
+Enable **Show workspace favorites strip** in the Workspaces switcher or Preferences → Move & View → Workspaces to show a separate row beneath the navigation/landmark bars. It uses the same account favorites as the switcher, labels Workspaces and Layouts separately, and places overflow entries in **More…**. More also opens the switcher or hides the strip. The row hides in Mouselook and when the viewer UI is hidden; switching is disabled while Preferences is open.
+
 Settings search also recognizes **MCP**, **dual monitor**, **workspace**, and **undo**. Matching tabs open automatically. Undo leads to **Local assistant → History**, where **History and undo…** opens the existing inventory review window. Searching or opening history does not authorize or execute inventory changes.
 
 ### Review Inventory changes

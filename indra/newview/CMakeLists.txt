@@ -114,6 +114,8 @@ set(viewer_SOURCE_FILES
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
     fsworkspacecontroller.cpp
+    fsworkspacequickaccess.cpp
+    fsworkspacefavoritesbar.cpp
     fsfloaterworkspaces.cpp
     fsworkspaceinventoryfloater.cpp
     fspanelpreferenceworkspaces.cpp
@@ -998,6 +1000,8 @@ set(viewer_HEADER_FILES
     fscommon.h
     fsworkspacelayout.h
     fsworkspacecontroller.h
+    fsworkspacequickaccess.h
+    fsworkspacefavoritesbar.h
     fsfloaterworkspaces.h
     fssettingssearch.h
     fsworkspaceinventoryfloater.h

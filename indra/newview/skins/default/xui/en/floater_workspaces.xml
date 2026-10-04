@@ -30,6 +30,8 @@
  <line_editor name="workspace_name" left="15" bottom="-66" right="-108" height="24" follows="left|right|bottom"
   max_length="64" tool_tip="New workspace name. Preferences and this switcher are excluded."/>
  <button name="save" label="Save" right="-15" bottom="-66" width="85" height="24" follows="right|bottom"/>
+ <check_box name="show_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"
+  left="15" bottom="-42" right="-15" height="18" follows="left|right|bottom"/>
  <button name="switch" label="Switch" left="15" bottom="-15" width="75" height="24" follows="left|bottom"/>
  <button name="favorite" label="Favorite" left="98" bottom="-15" width="125" height="24" follows="left|bottom"/>
  <button name="manage" label="Preferences…" right="-15" bottom="-15" width="105" height="24" follows="right|bottom"/>

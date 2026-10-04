@@ -18,7 +18,7 @@
  <string name="no_workspace">None</string>
  <string name="active_label">Current workspace:</string>
  <scroll_container follows="all" layout="topleft" left="0" right="-1" top="0" bottom="-1" name="workspace_scroll" opaque="false">
-  <panel follows="left|top|right" height="456" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
+  <panel follows="left|top|right" height="488" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
  <text follows="left|top|right" height="48" layout="topleft" left="16" top="12" right="-16" name="workspace_coverage" wrap="true">
   Save viewport, bars, Inventory, maps, compatible chat geometry, and the Received Items panel size. Preferences and the workspace switcher are excluded.
  </text>
@@ -34,7 +34,9 @@
  <button follows="left|top" height="24" layout="topleft" left="16" top="254" width="250" label="Add workspace inventory window" name="workspace_add_inventory" tool_tip="Open one extra inventory window managed by workspaces. All open additional Inventory windows are also saved."/>
  <text follows="left|top|right" height="48" layout="topleft" left="16" top="292" right="-16" name="workspace_chat_help" wrap="true">Tabbed Conversations saves size and position only. Its open/closed state, selected tabs, messages and inventory contents stay as they are.</text>
  <text follows="left|top|right" height="56" layout="topleft" left="16" top="352" right="-16" name="workspace_status" wrap="true"/>
- <text follows="left|top|right" height="32" layout="topleft" left="16" top="416" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
+ <check_box follows="left|top|right" height="24" layout="topleft" left="16" top="416" right="-16"
+  name="workspace_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"/>
+ <text follows="left|top|right" height="32" layout="topleft" left="16" top="448" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
   </panel>
  </scroll_container>
 </panel>
