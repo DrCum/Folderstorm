@@ -471,6 +471,11 @@ bool LLFolderView::setSelection(LLFolderViewItem* selection, bool openitem,
 
 bool LLFolderView::changeSelection(LLFolderViewItem* selection, bool selected)
 {
+    return changeSelection(selection, selected, true);
+}
+
+bool LLFolderView::changeSelection(LLFolderViewItem* selection, bool selected, bool take_keyboard_focus)
+{
     bool rv = false;
 
     // can't select root folder
@@ -506,7 +511,7 @@ bool LLFolderView::changeSelection(LLFolderViewItem* selection, bool selected)
 
     rv = LLFolderViewFolder::changeSelection(selection, selected);
 
-    mSignalSelectCallback = SIGNAL_KEYBOARD_FOCUS;
+    mSignalSelectCallback = take_keyboard_focus ? SIGNAL_KEYBOARD_FOCUS : SIGNAL_NO_KEYBOARD_FOCUS;
 
     return rv;
 }

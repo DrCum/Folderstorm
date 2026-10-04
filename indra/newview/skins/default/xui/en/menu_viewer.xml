@@ -1028,6 +1028,10 @@
      name="World"
      tear_off="true"
      visible="true">
+        <menu_item_call label="Workspaces &amp; Layouts…" name="Workspace Quick Switch">
+            <menu_item_call.on_click function="Floater.Toggle" parameter="workspace_switch" />
+        </menu_item_call>
+        <menu_item_separator/>
         <menu_item_call
          label="Resync Animations"
          name="Resync Animations"

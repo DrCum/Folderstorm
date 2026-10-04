@@ -7,6 +7,13 @@
       <key>Type</key><string>LLSD</string>
       <key>Value</key><map />
     </map>
+    <key>FSWorkspaceQuickSwitchFavorites</key>
+    <map>
+      <key>Comment</key><string>Account-local favorite workspace and layout identifiers for the quick switch list.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><array />
+    </map>
     <key>FSActiveWorkspace</key>
     <map>
       <key>Comment</key><string>Last manually accepted workspace; does not automatically restore at login.</string>

@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llpanelmaininventory.h"
 #include "fsfloaterinventorybulk.h"
+#include "fsworkspacelayout.h"
 
 #include "llagent.h"
 #include "llagentbenefits.h"
@@ -665,6 +666,10 @@ void LLPanelMainInventory::newFolderWindow(LLUUID folder_id, LLUUID item_to_sele
                 if (main_inventory && main_inventory->isSingleFolderMode()
                     && (main_inventory->getCurrentSFVRoot() == folder_id))
                 {
+                    // A workspace switch may have retained this window hidden.
+                    // Reopen it through the usual visibility/restriction checks.
+                    if (!inventory_container->LLView::getVisible() &&
+                        !LLFloaterReg::showInstance("inventory", inventory_container->getKey(), false)) return;
                     main_inventory->setFocus(true);
                     if(item_to_select.notNull())
                     {
@@ -1169,7 +1174,7 @@ void LLPanelMainInventory::onFilterTypeSelected(const std::string& filter_type_n
 
         return;
     }
-    // <FS:minerjr> [FIRE-35042] Inventory - Only Coalesced Filter - More accessible 
+    // <FS:minerjr> [FIRE-35042] Inventory - Only Coalesced Filter - More accessible
     // Special treatment for "coalesced" filter
     else if (filter_type_name == "filter_type_coalesced")
     {
@@ -1282,6 +1287,7 @@ void LLPanelMainInventory::updateFilterDropdown(const LLInventoryFilter* filter)
 
 void LLPanelMainInventory::onFilterSelected()
 {
+    if (mApplyingWorkspaceFolder) return;
     // <FS:PP> FIRE-35598: Custom filters in inventory (feature idea: Catznip)
     if (FSInventoryCustomTabs::maybeHandleAddTabSelected(this))
     {
@@ -2047,7 +2053,7 @@ void LLFloaterInventoryFinder::onOnlyCoalescedFilterCommit()
     if (mOnlyCoalescedFilterCheck && mFilter)
     {
         // Set the mFilter's Filter Coalesced Objects value to the Only Coalesced Filter Checkbox value
-        mFilter->setFilterCoalescedObjects(mOnlyCoalescedFilterCheck->getValue());        
+        mFilter->setFilterCoalescedObjects(mOnlyCoalescedFilterCheck->getValue());
     }
     FSInventoryCustomTabs::notifyFilterStateChanged(mPanelMainInventory); // <FS:PP> FIRE-35598: Custom filters in inventory (feature idea: Catznip)
 }
@@ -2232,6 +2238,158 @@ void LLPanelMainInventory::initInventoryViews()
         mRecentPanel->initializeViewBuilding();
     if (gSavedSettings.getBOOL("InventoryShowWornTab"))
         mWornItemsPanel->initializeViewBuilding();
+}
+
+FSWorkspaceLayout::InventoryFolder LLPanelMainInventory::captureWorkspaceFolder()
+{
+    FSWorkspaceLayout::InventoryFolder folder;
+    if (!gInventory.isInventoryUsable()) return folder;
+    folder.present = true;
+    folder.single_folder = mSingleFolderMode;
+    folder.view_mode = static_cast<int>(mViewMode);
+    LLUUID id;
+    if (mSingleFolderMode) id = getCurrentSFVRoot();
+    else if (mActivePanel == mAllItemsPanel && mAllItemsPanel->getRootFolder())
+    {
+        const auto selected = mAllItemsPanel->getRootFolder()->getSelectionList();
+        if (selected.size() == 1)
+            if (auto* model = dynamic_cast<LLFolderViewModelItemInventory*>((*selected.begin())->getViewModelItem()))
+                id = model->getUUID();
+    }
+    if (gInventory.getCategory(id)) folder.folder_id = id.asString();
+    else if (mSingleFolderMode) folder.present = false;
+    return folder;
+}
+
+LLSD LLPanelMainInventory::captureWorkspaceFolderState()
+{
+    LLSD state;
+    state["single_folder"] = mSingleFolderMode;
+    state["view_mode"] = static_cast<int>(mViewMode);
+    state["tab"] = mFilterTabs->getCurrentPanel() ? mFilterTabs->getCurrentPanel()->getName() : ALL_ITEMS;
+    state["list_root"] = mCombinationInventoryPanel->getSingleFolderRoot();
+    state["gallery_root"] = mCombinationGalleryPanel->getRootFolder();
+    state["force_list"] = mForceShowInvLayout;
+    state["list_thumbnails"] = static_cast<S32>(mCombinationInventoryPanel->getFilter().getFilterThumbnails());
+    state["gallery_thumbnails"] = static_cast<S32>(mCombinationGalleryPanel->getFilter().getFilterThumbnails());
+    const auto history = [](const std::list<LLUUID>& ids)
+    {
+        LLSD result = LLSD::emptyArray();
+        for (const auto& id : ids) result.append(id);
+        return result;
+    };
+    state["list_back"] = history(mCombinationInventoryPanel->getNavBackwardList());
+    state["list_forward"] = history(mCombinationInventoryPanel->getNavForwardList());
+    state["gallery_back"] = history(mCombinationGalleryPanel->getNavBackwardList());
+    state["gallery_forward"] = history(mCombinationGalleryPanel->getNavForwardList());
+    for (S32 i = 0; i < mFilterTabs->getTabCount(); ++i)
+        if (auto* panel = dynamic_cast<LLInventoryPanel*>(mFilterTabs->getPanelByIndex(i)))
+            state["selections"][panel->getName()] = panel->captureWorkspaceSelection();
+    state["list_selection"] = mCombinationInventoryPanel->captureWorkspaceSelection();
+    state["gallery_selection"] = mCombinationGalleryPanel->captureWorkspaceSelection();
+    return state;
+}
+
+void LLPanelMainInventory::updateWorkspaceFolderPresentation()
+{
+    // The ordinary view commands also copy search/filter settings. Workspace
+    // restoration changes presentation without modifying those settings.
+    updatePanelVisibility(false);
+    getChild<LLLayoutPanel>("collapse_expand_buttons")->setVisible(!mSingleFolderMode);
+    setActivePanel();
+    updateTitle();
+    updateSearchTypeCombo();
+    auto& filter = getCurrentFilter();
+    if (mFilterEditor) mFilterEditor->setText(filter.getFilterSubStringOrig());
+    if (auto* finder = getFinder())
+    {
+        finder->changeFilter(&filter);
+        finder->setTitle(mSingleFolderMode ? getLocalizedRootName() : filter.getName());
+    }
+    setFilterTextFromFilter();
+    if (mParentSidepanel)
+    {
+        if (mSingleFolderMode) mParentSidepanel->hideInbox();
+        else mParentSidepanel->toggleInbox();
+    }
+    mReshapeInvLayout = true;
+}
+
+bool LLPanelMainInventory::applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder)
+{
+    if (!folder.present || !gInventory.isInventoryUsable() || folder.view_mode < MODE_LIST ||
+        folder.view_mode > MODE_COMBINATION) return false;
+    const LLUUID id = folder.folder_id.empty() ? LLUUID::null : LLUUID(folder.folder_id);
+    if ((!folder.folder_id.empty() && !gInventory.getCategory(id)) || (folder.single_folder && id.isNull())) return false;
+    // A filtered folder must not clear or rewrite the user's current filter.
+    if (!folder.single_folder && id.notNull())
+        if (auto* view = mAllItemsPanel->getFolderByID(id))
+            if (!view->passedFilter()) return false;
+    mApplyingWorkspaceFolder = true;
+    if (mCombinationInventoryPanel->getRootFolder())
+        mCombinationInventoryPanel->getRootFolder()->setForceArrange(false);
+    mSingleFolderMode = folder.single_folder;
+    mViewMode = static_cast<EViewModeType>(folder.view_mode);
+    if (mSingleFolderMode)
+    {
+        mCombinationInventoryPanel->changeFolderRoot(id);
+        mCombinationGalleryPanel->setRootFolder(id);
+        mCombinationInventoryPanel->clearNavigationHistory();
+        mCombinationGalleryPanel->clearNavigationHistory();
+    }
+    else if (id.notNull())
+    {
+        mFilterTabs->selectTabByName(ALL_ITEMS);
+        mAllItemsPanel->setSelectionByID(id, false);
+    }
+    updateWorkspaceFolderPresentation();
+    mApplyingWorkspaceFolder = false;
+    return true;
+}
+
+bool LLPanelMainInventory::restoreWorkspaceFolderState(const LLSD& state)
+{
+    if (!state.isMap() || !gInventory.isInventoryUsable()) return false;
+    const LLUUID list_root = state["list_root"].asUUID(), gallery_root = state["gallery_root"].asUUID();
+    const bool single = state["single_folder"].asBoolean();
+    const auto mode = static_cast<EViewModeType>(state["view_mode"].asInteger());
+    if (single && !gInventory.getCategory(mode == MODE_GALLERY ? gallery_root : list_root)) return false;
+    mApplyingWorkspaceFolder = true;
+    if (mCombinationInventoryPanel->getRootFolder())
+        mCombinationInventoryPanel->getRootFolder()->setForceArrange(false);
+    if (gInventory.getCategory(list_root)) mCombinationInventoryPanel->changeFolderRoot(list_root);
+    if (gInventory.getCategory(gallery_root)) mCombinationGalleryPanel->setRootFolder(gallery_root);
+    mSingleFolderMode = single;
+    mViewMode = mode;
+    mFilterTabs->selectTabByName(state["tab"].asString());
+    updateWorkspaceFolderPresentation();
+    // A hidden gallery defers its root rebuild. Finish that rebuild before
+    // restoring selection, otherwise it would discard the restored items later.
+    if (mCombinationGalleryPanel->isRootDirty() && mCombinationGalleryPanel->getRootFolder().notNull())
+        mCombinationGalleryPanel->updateRootFolder();
+    mForceShowInvLayout = state["force_list"].asBoolean();
+    mCombinationInventoryPanel->getFilter().setFilterThumbnails(static_cast<U64>(state["list_thumbnails"].asInteger()));
+    mCombinationGalleryPanel->getFilter().setFilterThumbnails(static_cast<U64>(state["gallery_thumbnails"].asInteger()));
+    const auto history = [](const LLSD& data)
+    {
+        std::list<LLUUID> result;
+        for (auto it = data.beginArray(); it != data.endArray(); ++it)
+            if (it->isUUID() && gInventory.getCategory(it->asUUID())) result.push_back(it->asUUID());
+        return result;
+    };
+    mCombinationInventoryPanel->setNavBackwardList(history(state["list_back"]));
+    mCombinationInventoryPanel->setNavForwardList(history(state["list_forward"]));
+    mCombinationGalleryPanel->setNavBackwardList(history(state["gallery_back"]));
+    mCombinationGalleryPanel->setNavForwardList(history(state["gallery_forward"]));
+    for (S32 i = 0; i < mFilterTabs->getTabCount(); ++i)
+        if (auto* panel = dynamic_cast<LLInventoryPanel*>(mFilterTabs->getPanelByIndex(i)))
+            if (state["selections"].has(panel->getName()))
+                panel->restoreWorkspaceSelection(state["selections"][panel->getName()]);
+    mCombinationInventoryPanel->restoreWorkspaceSelection(state["list_selection"]);
+    mCombinationGalleryPanel->restoreWorkspaceSelection(state["gallery_selection"]);
+    updateNavButtons();
+    mApplyingWorkspaceFolder = false;
+    return true;
 }
 
 void LLPanelMainInventory::toggleViewMode()
@@ -3308,7 +3466,7 @@ void LLPanelMainInventory::onCombinationInventorySelectionChanged(const std::deq
     onSelectionChange(mCombinationInventoryPanel, items, user_action);
 }
 
-void LLPanelMainInventory::updatePanelVisibility()
+void LLPanelMainInventory::updatePanelVisibility(bool update_filter_defaults)
 {
     mDefaultViewPanel->setVisible(!mSingleFolderMode);
     mCombinationViewPanel->setVisible(mSingleFolderMode);
@@ -3321,11 +3479,11 @@ void LLPanelMainInventory::updatePanelVisibility()
         {
             LLInventoryFilter& comb_inv_filter = mCombinationInventoryPanel->getFilter();
             comb_inv_filter.setFilterThumbnails(LLInventoryFilter::FILTER_EXCLUDE_THUMBNAILS);
-            comb_inv_filter.markDefault();
+            if (update_filter_defaults) comb_inv_filter.markDefault();
 
             LLInventoryFilter& comb_gallery_filter = mCombinationGalleryPanel->getFilter();
             comb_gallery_filter.setFilterThumbnails(LLInventoryFilter::FILTER_ONLY_THUMBNAILS);
-            comb_gallery_filter.markDefault();
+            if (update_filter_defaults) comb_gallery_filter.markDefault();
 
             // visibility will be controled by updateCombinationVisibility()
             mCombinationGalleryLayoutPanel->setVisible(true);
@@ -3336,11 +3494,11 @@ void LLPanelMainInventory::updatePanelVisibility()
         {
             LLInventoryFilter& comb_inv_filter = mCombinationInventoryPanel->getFilter();
             comb_inv_filter.setFilterThumbnails(LLInventoryFilter::FILTER_INCLUDE_THUMBNAILS);
-            comb_inv_filter.markDefault();
+            if (update_filter_defaults) comb_inv_filter.markDefault();
 
             LLInventoryFilter& comb_gallery_filter = mCombinationGalleryPanel->getFilter();
             comb_gallery_filter.setFilterThumbnails(LLInventoryFilter::FILTER_INCLUDE_THUMBNAILS);
-            comb_gallery_filter.markDefault();
+            if (update_filter_defaults) comb_gallery_filter.markDefault();
 
             mCombinationLayoutStack->setPanelSpacing(0);
             mCombinationGalleryLayoutPanel->setVisible(mSingleFolderMode && isGalleryViewMode());

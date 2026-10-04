@@ -39,6 +39,7 @@
 #include "lluictrlfactory.h"
 #include <functional>
 #include <set>
+#include <vector>
 
 class LLInvFVBridge;
 class LLInventoryFolderViewModelBuilder;
@@ -186,6 +187,9 @@ public:
     void setSelection(const LLUUID& obj_id, bool take_keyboard_focus);
     void setSelectCallback(const std::function<void (const std::deque<LLFolderViewItem*>& items, bool user_action)>& cb);
     void clearSelection();
+    // Live rollback state only; workspace profile serialization never sees this.
+    LLSD captureWorkspaceSelection() const;
+    void restoreWorkspaceSelection(const LLSD& state);
     selected_items_t getSelectedItems() const;
 
     bool isSelectionRemovable();
@@ -297,6 +301,7 @@ protected:
     void onItemsCompletion();           // called when selected items are complete
 
     LLUUID                      mSelectThisID;
+    std::vector<LLUUID>          mWorkspaceSelection;
     LLInventoryModel*           mInventory;
     LLInventoryObserver*        mInventoryObserver;
     LLInvPanelComplObserver*    mCompletionObserver;

@@ -15583,6 +15583,9 @@ Folder names cannot contain / or \.
      yestext="Yes"/>
   </notification>
 
+  <notification name="WorkspaceInventoryFolderSkipped" type="notify">
+    Workspace windows were arranged, but some Inventory folders are unavailable or filtered. Try switching again after Inventory loads.
+  </notification>
   <notification name="ConfirmWorkspaceOverwrite" type="alertmodal">
     Replace the saved workspace “[NAME]” with your current arrangement?
     <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Replace"/>

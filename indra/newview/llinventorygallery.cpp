@@ -2509,6 +2509,21 @@ void LLInventoryGallery::deselectItem(const LLUUID& category_id)
     }
 }
 
+LLSD LLInventoryGallery::captureWorkspaceSelection() const
+{
+    LLSD state = LLSD::emptyArray();
+    for (const auto& id : mSelectedItemIDs) state.append(id);
+    for (const auto& id : mItemsToSelect) state.append(id);
+    return state;
+}
+void LLInventoryGallery::restoreWorkspaceSelection(const LLSD& state)
+{
+    clearSelection(); mItemsToSelect.clear();
+    if (state.isArray())
+        for (auto it = state.beginArray(); it != state.endArray(); ++it)
+            if (it->isUUID() && gInventory.getObject(it->asUUID())) addItemSelection(it->asUUID(), false);
+}
+
 void LLInventoryGallery::clearSelection()
 {
     for (const LLUUID& id: mSelectedItemIDs)

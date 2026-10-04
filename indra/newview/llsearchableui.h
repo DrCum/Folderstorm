@@ -52,6 +52,7 @@ namespace ll
         struct SearchableItem
         {
             LLWString mLabel;
+            std::vector<LLWString> mAliases;
             LLView const *mView;
             ll::ui::SearchableControl const *mCtrl;
 
@@ -80,6 +81,9 @@ namespace ll
         struct TabContainerData: public PanelData
         {
             LLTabContainer *mTabContainer;
+            // Restore the user's nested tabs when the search is cleared.
+            LLPanel* mBeforeSearchPanel = nullptr;
+            std::vector<std::pair<LLPanel const*, bool>> mBeforeSearchVisibility;
             virtual bool hightlightAndHide( LLWString const &aFilter );
         };
 

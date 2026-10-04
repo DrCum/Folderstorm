@@ -63,6 +63,8 @@ class LLComboBox;   // <FS:Zi> Filter dropdown
 // including all the fixin's (e.g. AllItems/RecentItems tabs, filter floaters).
 //
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+namespace FSWorkspaceLayout { struct InventoryFolder; }
+
 class LLPanelMainInventory : public LLPanel, LLInventoryObserver
 {
 public:
@@ -150,6 +152,11 @@ public:
     bool isGalleryViewMode() { return (mViewMode == MODE_GALLERY); }
     bool isCombinationViewMode() { return (mViewMode == MODE_COMBINATION); }
     LLUUID getCurrentSFVRoot();
+    // Persist only a folder/presentation; richer state is runtime-only for Cancel.
+    FSWorkspaceLayout::InventoryFolder captureWorkspaceFolder();
+    LLSD captureWorkspaceFolderState();
+    bool applyWorkspaceFolder(const FSWorkspaceLayout::InventoryFolder& folder);
+    bool restoreWorkspaceFolderState(const LLSD& state);
     std::string getLocalizedRootName();
 
     LLInventoryFilter& getCurrentFilter();
@@ -207,7 +214,8 @@ protected:
     bool isSaveTextureEnabled(const LLSD& userdata);
     void updateItemcountText();
 
-    void updatePanelVisibility();
+    void updatePanelVisibility(bool update_filter_defaults = true);
+    void updateWorkspaceFolderPresentation();
     void updateCombinationVisibility();
 
     // <FS:Zi> Inventory Collapse and Expand Buttons
@@ -350,6 +358,7 @@ private:
 
     bool                        mNeedUploadCost;
 
+    bool                        mApplyingWorkspaceFolder = false;
     bool                        mForceShowInvLayout;
     bool                        mReshapeInvLayout;
     LLUUID                      mCombInvUUIDNeedsRename;

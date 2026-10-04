@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel name="workspace_favorites_strip" width="1024" height="24" follows="all" layout="topleft"
+ background_visible="true" bg_alpha_color="FloaterDefaultBackgroundColor">
+ <string name="workspaces">Workspaces:</string>
+ <string name="layouts">Layouts:</string>
+ <string name="workspace_type">Workspace</string>
+ <string name="layout_type">Layout</string>
+ <string name="empty">Favorite entries in Workspaces &amp; layouts…</string>
+ <string name="overflow_hint">Workspace &amp; layout favorites →</string>
+ <string name="preferences_open">Finish Preferences with OK or Cancel before switching.</string>
+ <string name="switch_failed">This entry could not be applied. Check it in Preferences.</string>
+ <string name="manage">Workspaces &amp; layouts…</string>
+ <string name="hide">Hide favorites strip</string>
+ <string name="more_hint">More favorites, workspace management and strip visibility</string>
+ <text name="hint" left="6" top="4" right="-74" height="18" follows="left|right|top"
+  font="SansSerifSmall" use_ellipses="true"/>
+ <menu_button name="more" label="More…" right="-4" top="2" height="20" width="64"
+  follows="right|top" font="SansSerifSmall"/>
+</panel>

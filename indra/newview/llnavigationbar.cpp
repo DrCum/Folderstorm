@@ -71,6 +71,7 @@
 #include "lllandmarkactions.h"
 
 #include "llfavoritesbar.h"
+#include "fsworkspacefavoritesbar.h"
 #include "llagentui.h"
 
 #include <boost/regex.hpp>
@@ -326,6 +327,7 @@ void LLNavigationBar::setupPanel()
     // mCmbLocation= getChild<LLLocationInputCtrl>("location_combo");
 
     mView = LLUI::getInstance()->getRootView()->getChild<LLView>("navigation_bar");
+    FSWorkspaceFavoritesBar::install(mView);
 
     mBtnBack    = mView->getChild<LLPullButton>("back_btn");
     mBtnForward = mView->getChild<LLPullButton>("forward_btn");

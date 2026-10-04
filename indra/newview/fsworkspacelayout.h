@@ -22,6 +22,7 @@
 #include "fschromelayout.h"
 #include <map>
 #include <string>
+#include <vector>
 
 class LLSD;
 
@@ -30,12 +31,21 @@ namespace FSWorkspaceLayout
 constexpr int SCHEMA_VERSION = 1;
 constexpr int MAX_PROFILES = 32;
 constexpr int MAX_ROLES = 6;
+constexpr int MAX_EXTRA_INVENTORY_WINDOWS = 16;
 constexpr float MAX_UI_SIZE = 16384.f;
 
 enum class Role
 {
     InventoryPrimary, MiniMap, WorldMap, NearbyChat,
     ConversationsGeometry, InventoryExtra1
+};
+
+struct InventoryFolder
+{
+    bool present = false;
+    bool single_folder = false;
+    int view_mode = 0; // List, gallery or combination, matching Inventory's modes.
+    std::string folder_id; // Optional selected folder for the normal view.
 };
 
 struct Window
@@ -47,15 +57,19 @@ struct Window
     float center_y = .5f;
     float width_ui = 0.f;
     float height_ui = 0.f;
+    InventoryFolder inventory_folder;
 };
 
 struct Workspace
 {
     FSChromeLayout::Snapshot chrome;
     bool world_view_in_mouselook = true;
+    bool remember_inventory_folders = false;
     float frame_width = 1.f;
     float frame_height = 1.f;
     std::map<Role, Window> windows;
+    // Standard additional Inventory windows, separate from the owned legacy role.
+    std::vector<Window> extra_inventory;
     bool has_inbox = false;
     bool inbox_expanded = false;
     float inbox_height = 200.f;

@@ -1763,8 +1763,34 @@ void LLInventoryPanel::setSelectCallback(const std::function<void (const std::de
 
 void LLInventoryPanel::clearSelection()
 {
+    mWorkspaceSelection.clear();
     mSelectThisID.setNull();
     mFocusSelection = false;
+}
+
+LLSD LLInventoryPanel::captureWorkspaceSelection() const
+{
+    LLSD state;
+    state["pending"] = mSelectThisID;
+    state["focus"] = mFocusSelection;
+    state["selected"] = LLSD::emptyArray();
+    if (mFolderRoot.get())
+        for (auto* item : mFolderRoot.get()->getSelectionList())
+            if (auto* model = dynamic_cast<LLFolderViewModelItemInventory*>(item->getViewModelItem()))
+                state["selected"].append(model->getUUID());
+    for (const auto& id : mWorkspaceSelection) state["selected"].append(id);
+    return state;
+}
+void LLInventoryPanel::restoreWorkspaceSelection(const LLSD& state)
+{
+    clearSelection();
+    if (mFolderRoot.get()) mFolderRoot.get()->clearSelection();
+    const auto& selected = state["selected"];
+    if (selected.isArray())
+        for (auto it = selected.beginArray(); it != selected.endArray(); ++it)
+            if (it->isUUID() && it->asUUID().notNull()) mWorkspaceSelection.push_back(it->asUUID());
+    mSelectThisID = state["pending"].asUUID();
+    mFocusSelection = state["focus"].asBoolean();
 }
 
 LLInventoryPanel::selected_items_t LLInventoryPanel::getSelectedItems() const
@@ -1774,6 +1800,8 @@ LLInventoryPanel::selected_items_t LLInventoryPanel::getSelectedItems() const
 
 void LLInventoryPanel::onSelectionChange(const std::deque<LLFolderViewItem*>& items, bool user_action)
 {
+    // Explicit selection wins over a folder/rollback selection waiting on views.
+    if (user_action) clearSelection();
     // Schedule updating the folder view context menu when all selected items become complete (STORM-373).
     mCompletionObserver->reset();
     for (std::deque<LLFolderViewItem*>::const_iterator it = items.begin(); it != items.end(); ++it)
@@ -2459,6 +2487,7 @@ LLFolderViewFolder* LLInventoryPanel::getFolderByID(const LLUUID& id)
 
 void LLInventoryPanel::setSelectionByID( const LLUUID& obj_id, bool    take_keyboard_focus )
 {
+    mWorkspaceSelection.clear();
     LLFolderViewItem* itemp = getItemByID(obj_id);
 
     if (itemp && !itemp->areChildrenInited())
@@ -2487,9 +2516,24 @@ void LLInventoryPanel::setSelectionByID( const LLUUID& obj_id, bool    take_keyb
 
 void LLInventoryPanel::updateSelection()
 {
+    // Root changes rebuild their children asynchronously. Restore live rollback
+    // selections when their views arrive; a user selection cancels this queue.
+    auto pending = mWorkspaceSelection;
+    mWorkspaceSelection.clear();
     if (mSelectThisID.notNull())
     {
         setSelectionByID(mSelectThisID, mFocusSelection);
+    }
+    for (const auto& id : pending)
+    {
+        if (auto* item = getItemByID(id))
+        {
+            if (mFolderRoot.get() && item->passedFilter()) mFolderRoot.get()->changeSelection(item, true, false);
+            else if (item->getViewModelItem() &&
+                item->getViewModelItem()->getLastFilterGeneration() < getFilter().getFirstSuccessGeneration())
+                mWorkspaceSelection.push_back(id);
+        }
+        else if (gInventory.getObject(id)) mWorkspaceSelection.push_back(id);
     }
 }
 
@@ -3064,6 +3108,7 @@ void LLInventorySingleFolderPanel::updateSingleFolderRoot()
         mRootChangedSignal();
 
         LLUUID root_id = mFolderID;
+        clearSelection(); // Pending rollback selections belong to the previous root.
         if (mFolderRoot.get())
         {
             mItemMap.clear();

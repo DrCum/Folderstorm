@@ -4,23 +4,25 @@
  <string name="unavailable">Workspaces are available after login.</string>
  <string name="placing">Previewing workspace…</string>
  <string name="applied">Preview: [APPLIED] windows applied; [ADJUSTED] adjusted to fit; [SKIPPED] skipped.</string>
+ <string name="applied_folders_skipped">Preview: [APPLIED] applied; [ADJUSTED] adjusted; [SKIPPED] skipped. Some Inventory folders are unavailable or filtered. Try again after Inventory loads.</string>
  <string name="applied_chat_skipped">Preview: [APPLIED] applied; [ADJUSTED] adjusted; [SKIPPED] skipped. Nearby chat kept its current presentation.</string>
  <string name="applied_dependents_skipped">Preview: [APPLIED] applied; [ADJUSTED] adjusted; [SKIPPED] skipped. Windows with attached utility windows were left alone.</string>
  <string name="invalid_data">That workspace is damaged or uses an unsupported version. Its saved definition was kept.</string>
  <string name="invalid_name_or_data">Use a unique name of up to 64 letters, numbers, spaces, dashes, underscores or periods. Maximum: 32 workspaces.</string>
+ <string name="inventory_not_ready">Wait for Inventory to load before saving its folders. Your existing workspaces were kept.</string>
+ <string name="too_many_inventory_windows">Close some extra Inventory windows before saving. Maximum: 16 additional windows.</string>
  <string name="exists">A workspace with that name already exists.</string>
  <string name="saved">Workspace saved. Click OK to keep it; Cancel restores your previous arrangement.</string>
+ <string name="saved_immediately">Workspace saved from the switcher.</string>
  <string name="renamed">Workspace renamed. Click OK to keep the change.</string>
  <string name="deleted">Workspace deleted. Click OK to keep the change.</string>
  <string name="modified">Modified since it was saved.</string>
- <string name="sorting_name">Inventory sorting</string>
- <string name="driving_name">Driving</string>
  <string name="no_workspace">None</string>
  <string name="active_label">Current workspace:</string>
  <scroll_container follows="all" layout="topleft" left="0" right="-1" top="0" bottom="-1" name="workspace_scroll" opaque="false">
-  <panel follows="left|top|right" height="480" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
+  <panel follows="left|top|right" height="520" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
  <text follows="left|top|right" height="48" layout="topleft" left="16" top="12" right="-16" name="workspace_coverage" wrap="true">
-  Save viewport, bars, Inventory, maps, compatible chat geometry, and the Received Items panel size. Conversations and inventory contents stay as they are.
+  Save viewport, bars, Inventory, maps, compatible chat geometry, and the Received Items panel size. Preferences and the workspace switcher are excluded.
  </text>
  <text follows="left|top" height="20" layout="topleft" left="16" top="70" width="135" name="workspace_select_label">Saved workspace</text>
  <combo_box follows="left|top|right" height="24" layout="topleft" left="16" top="93" right="-126" name="workspace_combo" tool_tip="Workspaces are stored separately for each account."/>
@@ -28,15 +30,18 @@
  <text follows="left|top|right" height="24" layout="topleft" left="16" top="126" right="-16" name="workspace_active"/>
  <text follows="left|top" height="20" layout="topleft" left="16" top="157" width="150" name="workspace_name_label">Workspace name</text>
  <line_editor follows="left|top|right" height="24" layout="topleft" left="16" top="180" right="-16" name="workspace_name" max_length="64"/>
- <button follows="left|top" height="24" layout="topleft" left="16" top="214" width="130" label="Save current" name="workspace_save"/>
- <button follows="left|top" height="24" layout="topleft" left_pad="8" top="214" width="100" label="Rename" name="workspace_rename"/>
- <button follows="left|top" height="24" layout="topleft" left_pad="8" top="214" width="100" label="Delete" name="workspace_delete"/>
- <text follows="left|top" height="20" layout="topleft" left="16" top="254" width="220" name="workspace_templates_label">Starting arrangements</text>
- <button follows="left|top" height="24" layout="topleft" left="16" top="278" width="170" label="Inventory sorting" name="workspace_inventory_sorting" tool_tip="Arrange the primary and one workspace inventory window side by side; preserve your viewport and chat."/>
- <button follows="left|top" height="24" layout="topleft" left_pad="8" top="278" width="100" label="Driving" name="workspace_driving" tool_tip="Show Mini-map and hide Inventory and World Map; preserve your viewport, camera, vehicle controls and chat presentation."/>
- <button follows="left|top" height="24" layout="topleft" left="16" top="312" width="250" label="Add workspace inventory window" name="workspace_add_inventory" tool_tip="Open one extra inventory window managed by workspaces. Other inventory windows stay independent."/>
- <text follows="left|top|right" height="64" layout="topleft" left="16" top="352" right="-16" name="workspace_status" wrap="true"/>
- <text follows="left|top|right" height="40" layout="topleft" left="16" top="424" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
+ <check_box follows="left|top|right" height="22" layout="topleft" left="16" top="214" right="-16"
+  name="workspace_remember_folders" label="Remember Inventory folders"
+  tool_tip="For this save: restore single-folder roots and view modes, or a selected folder in All Items. Search filters and item selections are not saved."/>
+ <button follows="left|top" height="24" layout="topleft" left="16" top="246" width="130" label="Save current" name="workspace_save"/>
+ <button follows="left|top" height="24" layout="topleft" left_pad="8" top="246" width="100" label="Rename" name="workspace_rename"/>
+ <button follows="left|top" height="24" layout="topleft" left_pad="8" top="246" width="100" label="Delete" name="workspace_delete"/>
+ <button follows="left|top" height="24" layout="topleft" left="16" top="286" width="250" label="Add workspace inventory window" name="workspace_add_inventory" tool_tip="Open one extra inventory window managed by workspaces. All open additional Inventory windows are also saved."/>
+ <text follows="left|top|right" height="48" layout="topleft" left="16" top="324" right="-16" name="workspace_chat_help" wrap="true">Tabbed Conversations saves size and position only. Inventory folders are optional; search filters, item selections and inventory contents are never saved.</text>
+ <text follows="left|top|right" height="56" layout="topleft" left="16" top="384" right="-16" name="workspace_status" wrap="true"/>
+ <check_box follows="left|top|right" height="24" layout="topleft" left="16" top="448" right="-16"
+  name="workspace_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"/>
+ <text follows="left|top|right" height="32" layout="topleft" left="16" top="480" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
   </panel>
  </scroll_container>
 </panel>

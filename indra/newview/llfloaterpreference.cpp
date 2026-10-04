@@ -127,6 +127,8 @@
 #include "llsdutil.h"
 
 #include "llsearchableui.h"
+#include "llscrollcontainer.h"
+#include "fssettingssearch.h"
 #include "llperfstats.h"
 
 // Firestorm Includes
@@ -5299,6 +5301,37 @@ void LLFloaterPreferenceProxy::onChangeSocksSettings()
 
 }
 
+namespace
+{
+const LLView* firstVisiblePreferenceMatch(const ll::prefs::PanelData& data)
+{
+    for (const auto& item : data.mChildren)
+        if (item->mCtrl->getHighlighted() && item->mView->isInVisibleChain())
+            return item->mView;
+    for (const auto& panel : data.mChildPanel)
+        if (const LLView* match = firstVisiblePreferenceMatch(*panel))
+            return match;
+    return nullptr;
+}
+
+void revealPreferenceMatch(const LLView* match)
+{
+    if (!match)
+        return;
+    // A scroller's direct descendant is its document. Convert the control's
+    // local rectangle to that document, including every intermediate panel.
+    for (const LLView* document = match; document->getParent(); document = document->getParent())
+    {
+        if (auto* scroller = dynamic_cast<LLScrollContainer*>(document->getParent()))
+        {
+            LLRect documentRect;
+            if (match->localRectToOtherView(match->getLocalRect(), &documentRect, document))
+                scroller->scrollToShowRect(documentRect);
+        }
+    }
+}
+}
+
 void LLFloaterPreference::onUpdateFilterTerm(bool force)
 {
     LLWString seachValue = utf8str_to_wstring(mFilterEdit->getValue());
@@ -5319,9 +5352,9 @@ void LLFloaterPreference::onUpdateFilterTerm(bool force)
         return;
 
     mSearchData->mRootTab->hightlightAndHide( seachValue );
+    if (!seachValue.empty())
+        revealPreferenceMatch(firstVisiblePreferenceMatch(*mSearchData->mRootTab));
     //filterIgnorableNotifications(); // <FS:Ansariel> Using different solution
-    if (LLTabContainer* pRoot = getChild<LLTabContainer>("pref core"))
-        pRoot->selectFirstTab();
 }
 
 // <FS:Ansariel> Using different solution
@@ -5385,21 +5418,36 @@ void collectChildren( LLView const *aView, ll::prefs::PanelDataPtr aParentPanel,
             else if (aParentPanel)
                 aParentPanel->mChildPanel.push_back(pCurPanelData);
         }
-        else if (pSCtrl && pSCtrl->getSearchText().size())
+        else if (pSCtrl)
         {
-            ll::prefs::SearchableItemPtr item = ll::prefs::SearchableItemPtr(new ll::prefs::SearchableItem());
-            item->mView = pView;
-            item->mCtrl = pSCtrl;
+            std::vector<std::string> aliases;
+            for (const LLView* scope = pView->getParent(); scope; scope = scope->getParent())
+            {
+                const auto scoped = fs_settings_search::aliases(scope->getName(), pView->getName());
+                aliases.insert(aliases.end(), scoped.begin(), scoped.end());
+            }
+            if (!pSCtrl->getSearchText().empty() || !aliases.empty())
+            {
+                ll::prefs::SearchableItemPtr item = ll::prefs::SearchableItemPtr(new ll::prefs::SearchableItem());
+                item->mView = pView;
+                item->mCtrl = pSCtrl;
 
-            item->mLabel = utf8str_to_wstring(pSCtrl->getSearchText());
-            LLWStringUtil::toLower(item->mLabel);
+                item->mLabel = utf8str_to_wstring(pSCtrl->getSearchText());
+                LLWStringUtil::toLower(item->mLabel);
+                for (const auto& alias : aliases)
+                {
+                    LLWString text = utf8str_to_wstring(alias);
+                    LLWStringUtil::toLower(text);
+                    item->mAliases.push_back(text);
+                }
 
-            llassert_always(aParentPanel || aParentTabContainer);
+                llassert_always(aParentPanel || aParentTabContainer);
 
-            if (aParentPanel)
-                aParentPanel->mChildren.push_back(item);
-            if (aParentTabContainer)
-                aParentTabContainer->mChildren.push_back(item);
+                if (aParentPanel)
+                    aParentPanel->mChildren.push_back(item);
+                if (aParentTabContainer)
+                    aParentTabContainer->mChildren.push_back(item);
+            }
         }
         collectChildren(pView, pCurPanelData, pCurTabContainer);
     }
@@ -5407,6 +5455,9 @@ void collectChildren( LLView const *aView, ll::prefs::PanelDataPtr aParentPanel,
 
 void LLFloaterPreference::collectSearchableItems()
 {
+    // Rebuilding a live search must retain the pre-search tab state.
+    if (mSearchData && mSearchData->mRootTab && !mSearchData->mLastFilter.empty())
+        mSearchData->mRootTab->hightlightAndHide(LLWString());
     mSearchData.reset( nullptr );
     LLTabContainer *pRoot = getChild< LLTabContainer >( "pref core" );
     if( mFilterEdit && pRoot )
@@ -5418,9 +5469,35 @@ void LLFloaterPreference::collectSearchableItems()
         pRootTabcontainer->mLabel = pRoot->getLabel();
         mSearchData->mRootTab = pRootTabcontainer;
 
-        collectChildren( this, ll::prefs::PanelDataPtr(), pRootTabcontainer );
+        collectChildren( pRoot, ll::prefs::PanelDataPtr(), pRootTabcontainer );
     }
     mSearchDataDirty = false;
+}
+
+void LLFloaterPreference::showWorkspaceSettings(bool layout)
+{
+    auto* preferences = LLFloaterReg::getTypedInstance<LLFloaterPreference>("preferences");
+    if (!preferences)
+        return;
+    // Opening an already-visible editor would recapture its Cancel baseline.
+    if (!preferences->getVisible())
+    {
+        if (!LLFloaterReg::canShowInstance("preferences"))
+            return;
+        preferences = LLFloaterReg::showTypedInstance<LLFloaterPreference>("preferences");
+        if (!preferences)
+            return;
+    }
+    preferences->setFrontmost();
+    preferences->mFilterEdit->setText(LLStringExplicit(""));
+    preferences->onUpdateFilterTerm(true);
+    LLView* selected = preferences->getChild<LLPanel>(layout ? "tab-chrome-layout" : "tab-workspaces");
+    for (LLView* parent = selected->getParent(); parent; selected = parent, parent = parent->getParent())
+    {
+        if (auto* tabs = dynamic_cast<LLTabContainer*>(parent))
+            if (auto* panel = dynamic_cast<LLPanel*>(selected))
+                tabs->selectTabPanel(panel);
+    }
 }
 
 void LLFloaterPreference::saveIgnoredNotifications()
