@@ -28,6 +28,12 @@ public:
 private:
     void refreshWindows();
     void arrange();
+    void exportWorkspace();
+    void importWorkspace();
+    void reviewImport(const std::string& filename);
+    void applyImport();
+    unsigned long mPickerGeneration = 0, mImportRevision = 0;
+    LLSD mAccepted, mOriginals;
     bool currentSession() const;
     LLUUID mAccount, mSession;
     std::vector<LLHandle<LLFloater>> mWindows;

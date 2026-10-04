@@ -1073,3 +1073,22 @@ void FSWorkspaceController::applyToolbars(const FSWorkspaceLayout::Workspace& wo
             else ++mSkipped;
     }
 }
+
+bool FSWorkspaceController::importProfiles(const LLSD& accepted, const LLSD& originals, bool replace)
+{
+    if (!canQuickSwitch() || !accepted.isMap() || accepted.size() > FSWorkspaceLayout::MAX_PROFILES ||
+        originals != gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles") || (!originals.isMap() && !originals.isUndefined())) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    LLSD result = originals.isUndefined() ? LLSD::emptyMap() : originals;
+    for (auto it = accepted.beginMap(); it != accepted.endMap(); ++it)
+    {
+        if (result.has(it->first) && !replace) continue;
+        FSWorkspaceLayout::Workspace parsed; std::string error;
+        if (!FSWorkspaceLayout::canSaveProfile(result, it->first, error) ||
+            !FSWorkspaceLayout::fromLLSD(it->second, parsed, error)) return false;
+        result[it->first] = FSWorkspaceLayout::toLLSD(parsed);
+    }
+    if (result.size() > FSWorkspaceLayout::MAX_PROFILES) return false;
+    gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", result); // Single validated batch; no partial writes.
+    mExpectedId.clear(); ++mRevision; return true;
+}

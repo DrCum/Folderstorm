@@ -71,6 +71,7 @@ public:
     bool modified() const;
     bool readProfile(const std::string& id, FSWorkspaceLayout::Workspace& workspace) const;
     void requestUpdateCurrent();
+    bool importProfiles(const LLSD& accepted, const LLSD& originals, bool replace);
 
 private:
     using Role = FSWorkspaceLayout::Role;
