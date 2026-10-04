@@ -36,6 +36,7 @@
 #include "lluuid.h"
 //#include "llnotificationsutil.h"
 #include <set>
+#include <functional>
 #include <boost/signals2.hpp>
 
 class LLDragHandle;

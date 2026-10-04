@@ -36,6 +36,8 @@
 #include "llcallbacklist.h"
 #include "lltoolbarview.h"
 #include "llcommandmanager.h"
+#include "lluictrlfactory.h"
+#include "llxmlnode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -152,7 +154,7 @@ void FSWorkspaceController::abandon()
     ++mGeneration;
     ++mRevision;
     mPendingPlacement = false;
-    mRestoreLayout = false;
+    mRestoreLayout = false; mPreserveCoordinates = false;
     mQuickSwitch = false;
     mTransaction = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
@@ -367,7 +369,7 @@ void FSWorkspaceController::finishQuickSwitch()
         mExpected = capture(mPending.remember_inventory_folders, mPending.components, mPending.remember_toolbars);
         mExpectedDefinition = mProfiles[mActive]; mExpectedId = mActive;
         mExpectedAccount = mAccount; mExpectedSession = mSession;
-        mComparisonTimer.setAge(1.f);
+        mComparisonDirty = true;
     }
     // Save only the chosen identifier. Definitions remain unchanged.
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
@@ -397,7 +399,7 @@ bool FSWorkspaceController::returnPrevious()
     abandon();
     beginPreferencesSession();
     if (!startPreview(target, workspace)) return false;
-    mQuickSwitch = true; mRestoreLayout = true; mRestoredLayout = layout;
+    mQuickSwitch = true; mPreserveCoordinates = true; mRestoreLayout = true; mRestoredLayout = layout;
     mFocus.markDead();
     return true;
 }
@@ -451,7 +453,7 @@ bool FSWorkspaceController::rename(const std::string& old_name, const std::strin
     if (!FSWorkspaceLayout::isSafeProfileName(new_name) || mProfiles.has(new_name)) { mStatus = "invalid_name_or_data"; return false; }
     if (!FSWorkspaceLayout::fromLLSD(mProfiles[old_name], parsed, error)) { mStatus = "invalid_data"; return false; }
     mProfiles[new_name] = mProfiles[old_name]; mProfiles.erase(old_name);
-    mRenamed.emplace_back(old_name, new_name);
+    mRenamed.emplace_back("workspace:" + old_name, "workspace:" + new_name);
     if (mActive == old_name) mActive = new_name;
     mStatus = "renamed"; ++mRevision; return true;
 }
@@ -460,7 +462,7 @@ bool FSWorkspaceController::remove(const std::string& name)
     beginPreferencesSession();
     if (!available() || !isCustom(name)) return false;
     mProfiles.erase(name); if (mActive == name) mActive.clear();
-    mRenamed.emplace_back(name, "");
+    mRenamed.emplace_back("workspace:" + name, "");
     mStatus = "deleted"; ++mRevision; return true;
 }
 bool FSWorkspaceController::preview(const std::string& id)
@@ -582,22 +584,14 @@ bool FSWorkspaceController::placeWindow(LLFloater* floater, const FSWorkspaceLay
 {
     if (!saved.has_geometry) return true;
     S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
-    const auto placement = FSWorkspaceLayout::fit(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height));
-    LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
-                  ll_round(placement.rect.right), ll_round(placement.rect.bottom));
-    // Tiny frames may require overlap. Stagger coincident title edges.
-    for (const auto& prior : placed)
-        if (std::abs(target.mTop - prior.mTop) < 8 && std::abs(target.mLeft - prior.mLeft) < 24)
-            target.translate(16, -24);
+    std::vector<FSWorkspaceLayout::Rect> prior;
+    if (!mPreserveCoordinates) for (const auto& value : placed) prior.push_back(rect(value));
+    const auto placement = FSWorkspaceLayout::fitWithNeighbors(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height), prior);
+    const LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
+                        ll_round(placement.rect.right), ll_round(placement.rect.bottom));
+    // The shared fitter already respects minima and title reachability. The
+    // ordinary fitter would squeeze utility gutters back into the snap region.
     if (!floater->applyWorkspaceRect(target, primary_inventory)) return false;
-    gFloaterView->adjustToFitScreen(floater, false);
-    // The ordinary fitter may align oversized minima on the left/bottom.
-    // Keep the right-hand close control and title edge reachable instead.
-    LLRect final_rect = floater->getRect();
-    const auto client = frame();
-    if (final_rect.getWidth() > client.width()) final_rect.translate(ll_round(client.right) - final_rect.mRight, 0);
-    if (final_rect.getHeight() > client.height()) final_rect.translate(0, ll_round(client.top) - final_rect.mTop);
-    floater->applyWorkspaceRect(final_rect, primary_inventory);
     if (placement.adjusted || floater->getRect() != target) ++mAdjusted;
     placed.push_back(floater->getRect());
     return true;
@@ -695,16 +689,17 @@ void FSWorkspaceController::commitPendingSettings()
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     for (const auto& change : mRenamed)
     {
-        if (gSavedPerAccountSettings.getString("FSWorkspaceShortcutTarget") == "workspace:" + change.first)
-            gSavedPerAccountSettings.setString("FSWorkspaceShortcutTarget", change.second.empty() ? "" : "workspace:" + change.second);
-        if (gSavedPerAccountSettings.getString("FSWorkspaceStartupName") == change.first)
-            gSavedPerAccountSettings.setString("FSWorkspaceStartupName", change.second);
+        if (gSavedPerAccountSettings.getString("FSWorkspaceShortcutTarget") == change.first)
+            gSavedPerAccountSettings.setString("FSWorkspaceShortcutTarget", change.second);
+        if (change.first.compare(0, 10, "workspace:") == 0 &&
+            gSavedPerAccountSettings.getString("FSWorkspaceStartupName") == change.first.substr(10))
+            gSavedPerAccountSettings.setString("FSWorkspaceStartupName", change.second.empty() ? "" : change.second.substr(10));
         const auto old = gSavedPerAccountSettings.getLLSD("FSWorkspaceQuickSwitchFavorites");
         LLSD updated = LLSD::emptyArray();
         if (old.isArray()) for (S32 i = 0; i < static_cast<S32>(std::min<size_t>(old.size(), 128)); ++i)
         {
-            if (old[i].asString() != "workspace:" + change.first) updated.append(old[i]);
-            else if (!change.second.empty()) updated.append("workspace:" + change.second);
+            if (old[i].asString() != change.first) updated.append(old[i]);
+            else if (!change.second.empty()) updated.append(change.second);
         }
         gSavedPerAccountSettings.setLLSD("FSWorkspaceQuickSwitchFavorites", updated);
     }
@@ -839,9 +834,11 @@ bool FSWorkspaceController::readProfile(const std::string& id, FSWorkspaceLayout
 bool FSWorkspaceController::modified() const
 {
     if (!available() || mPendingPlacement || activeId().empty()) return false;
-    if (mComparisonTimer.getElapsedTimeF32() < .5f) return mModifiedCache;
-    mComparisonTimer.reset(); mModifiedCache = false;
     const auto id = activeId();
+    if (!mComparisonDirty && mComparedId == id && mComparedAccount == gAgent.getID() && mComparedSession == gAgent.getSessionID() &&
+        mComparisonTimer.getElapsedTimeF32() < .5f) return mModifiedCache;
+    mComparedId = id; mComparedAccount = gAgent.getID(); mComparedSession = gAgent.getSessionID();
+    mComparisonTimer.reset(); mModifiedCache = false; mComparisonDirty = false;
     FSWorkspaceLayout::Workspace saved;
     if (!readProfile(id, saved)) return false;
     const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
@@ -887,7 +884,7 @@ void FSWorkspaceController::requestUpdateCurrent()
             LLSD profiles = originals;
             profiles[name] = reviewed; // Save exactly the arrangement reviewed when confirmation opened.
             gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", profiles);
-            controller.mExpectedId.clear(); controller.mComparisonTimer.setAge(1.f); ++controller.mRevision;
+            controller.mExpectedId.clear(); controller.mComparisonDirty = true; ++controller.mRevision;
         });
 }
 
@@ -1012,6 +1009,7 @@ void FSWorkspaceController::lifecycleIdle(void* userdata)
     {
         controller.mHasPrevious = false; controller.mPrevious = FSWorkspaceLayout::Workspace{};
         controller.mPreviousWorkspace.clear(); controller.mPreviousLayout.clear();
+        controller.mExpectedId.clear(); controller.mExpectedDefinition = LLSD(); controller.mExpected = FSWorkspaceLayout::Workspace{};
     }
     if (!controller.mStartupScheduled) return;
     if (!controller.available() || controller.mStartupAccount != gAgent.getID() ||
@@ -1036,7 +1034,7 @@ void FSWorkspaceController::lifecycleIdle(void* userdata)
         {
             controller.abandon(); controller.beginPreferencesSession();
             applied = controller.startPreview(saved, "");
-            controller.mQuickSwitch = applied; controller.mFocus.markDead();
+            controller.mQuickSwitch = applied; controller.mPreserveCoordinates = true; controller.mFocus.markDead();
         }
         else if (gSavedPerAccountSettings.getLLSD("FSWorkspaceLastArrangement").isUndefined()) return;
     }
@@ -1091,4 +1089,64 @@ bool FSWorkspaceController::importProfiles(const LLSD& accepted, const LLSD& ori
     if (result.size() > FSWorkspaceLayout::MAX_PROFILES) return false;
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", result); // Single validated batch; no partial writes.
     mExpectedId.clear(); ++mRevision; return true;
+}
+
+FSWorkspaceController::Diagram FSWorkspaceController::diagram(const FSWorkspaceLayout::Workspace& workspace) const
+{
+    Diagram result; result.frame = frame(); result.chrome = workspace.chrome;
+    result.components = workspace.components; result.toolbars = workspace.remember_toolbars;
+    if (!available()) return result;
+    // Read skin-layered minima without constructing floaters or applying state.
+    const char* files[] = {"floater_my_inventory.xml", "floater_map.xml", "floater_world_map.xml",
+        "floater_fs_nearby_chat.xml", "floater_fs_im_container.xml", "floater_my_inventory.xml"};
+    const char* labels[] = {"Inventory", "Mini-map", "Map", "Nearby chat", "Conversations", "Inventory"};
+    std::vector<FSWorkspaceLayout::Rect> placed;
+    auto add = [&](const FSWorkspaceLayout::Window& saved, LLFloater* floater, const char* file, const std::string& label, bool host)
+    {
+        if (!saved.has_geometry) return;
+        S32 width = 1, height = 1;
+        if (floater) floater->getResizeLimits(&width, &height);
+        else
+        {
+            LLXMLNodePtr node;
+            if (LLUICtrlFactory::getLayeredXMLNode(file, node))
+            { node->getAttributeS32("min_width", width); node->getAttributeS32("min_height", height); }
+        }
+        const auto fitted = FSWorkspaceLayout::fitWithNeighbors(saved, result.frame, static_cast<F32>(width), static_cast<F32>(height), placed);
+        placed.push_back(fitted.rect);
+        if (saved.visible || (host && floater && floater->LLView::getVisible()))
+        {
+            result.windows.push_back({fitted.rect, label, saved.minimized});
+            if (fitted.adjusted) ++result.adjusted;
+        }
+        const auto& folder = saved.inventory_folder;
+        if (folder.present && !folder.folder_id.empty() && gInventory.isInventoryUsable() && !gInventory.getCategory(LLUUID(folder.folder_id))) ++result.missing_folders;
+    };
+    for (const auto& entry : workspace.windows)
+    {
+        auto* floater = find(entry.first);
+        if ((floater && (!standalone(floater) || floater->hasWorkspaceDependents() || floater->isDependent())) ||
+            (entry.first == Role::NearbyChat && (!chatCompatible(floater) || !find(Role::ConversationsGeometry))) ||
+            (entry.first == Role::ConversationsGeometry && (!standalone(floater) || floater->isMinimized())) ||
+            (entry.second.visible && !LLFloaterReg::canShowInstance(registryName(entry.first))))
+        { ++result.skipped; continue; }
+        const auto index = static_cast<size_t>(entry.first);
+        add(entry.second, floater, files[index], labels[index], entry.first == Role::ConversationsGeometry);
+    }
+    const auto extras = extraInventoryFloaters();
+    for (size_t i = 0; i < workspace.extra_inventory.size(); ++i)
+    {
+        auto* floater = i < extras.size() ? extras[i] : nullptr;
+        if ((floater && (floater->hasWorkspaceDependents() || floater->isDependent())) ||
+            !LLFloaterReg::canShowInstance(floater ? floater->getInstanceName() : "inventory", floater ? floater->getKey() : LLSD()))
+        { ++result.skipped; continue; }
+        add(workspace.extra_inventory[i], floater, "floater_my_inventory.xml", "Inventory " + std::to_string(i + 2), false);
+    }
+    return result;
+}
+
+void FSWorkspaceController::noteLayoutRename(const std::string& old_name, const std::string& new_name)
+{
+    beginPreferencesSession();
+    if (mTransaction && sameSession()) mRenamed.emplace_back("layout:" + old_name, new_name.empty() ? "" : "layout:" + new_name);
 }

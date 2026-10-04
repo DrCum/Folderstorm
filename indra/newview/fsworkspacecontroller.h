@@ -69,8 +69,12 @@ public:
     int adjustedCount() const { return mAdjusted; }
     int skippedCount() const { return mSkipped; }
     bool modified() const;
+    struct DiagramWindow { FSWorkspaceLayout::Rect rect; std::string label; bool minimized = false; };
+    struct Diagram { FSWorkspaceLayout::Rect frame; FSChromeLayout::Snapshot chrome; std::vector<DiagramWindow> windows; int components = 0, adjusted = 0, skipped = 0, missing_folders = 0; bool toolbars = false; };
+    Diagram diagram(const FSWorkspaceLayout::Workspace& workspace) const;
     bool readProfile(const std::string& id, FSWorkspaceLayout::Workspace& workspace) const;
     void requestUpdateCurrent();
+    void noteLayoutRename(const std::string& old_name, const std::string& new_name);
     bool importProfiles(const LLSD& accepted, const LLSD& originals, bool replace);
 
 private:
@@ -128,7 +132,7 @@ private:
 
     bool mTransaction = false;
     bool mPendingPlacement = false;
-    bool mQuickSwitch = false;
+    bool mQuickSwitch = false, mPreserveCoordinates = false;
     unsigned long mRevision = 0;
     unsigned long mGeneration = 0;
     LLUUID mAccount, mSession;
@@ -140,7 +144,9 @@ private:
     std::string mExpectedId;
     LLUUID mExpectedAccount, mExpectedSession;
     mutable LLTimer mComparisonTimer;
-    mutable bool mModifiedCache = false;
+    mutable bool mModifiedCache = false, mComparisonDirty = true;
+    mutable std::string mComparedId;
+    mutable LLUUID mComparedAccount, mComparedSession;
     std::vector<std::pair<std::string, std::string>> mRenamed;
     std::map<Role, RuntimeBaseline> mRuntime;
     std::map<std::string, ControlBaseline> mControls;

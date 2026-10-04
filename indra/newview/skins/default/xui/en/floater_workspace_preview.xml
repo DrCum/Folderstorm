@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<floater name="workspace_preview" title="Arrangement preview" width="520" height="490" min_width="380" min_height="400" can_resize="true" save_rect="true" layout="topleft">
+ <string name="invalid">Choose a valid saved entry after login. No arrangement has been changed.</string>
+ <string name="geometry_help">Read-only fitted geometry. Bars use current tool sizes; window minima come from live utilities or this skin. Restrictions, folder filters and available space may change before loading.</string>
+ <text name="entry" left="15" top="30" right="-15" height="20" follows="left|right|top"/>
+ <workspace_diagram name="diagram" left="15" top="60" right="-15" bottom="-150" follows="all"/>
+ <text name="details" left="15" bottom="-55" right="-15" height="90" follows="left|right|bottom" wrap="true"/>
+ <button name="switch" label="Switch" right="-15" bottom="-15" width="100" height="24" follows="right|bottom"/>
+</floater>

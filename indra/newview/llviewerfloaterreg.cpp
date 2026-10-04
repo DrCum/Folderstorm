@@ -213,6 +213,7 @@
 #include "fsfloaterpartialinventory.h"
 #include "fsworkspaceinventoryfloater.h"
 #include "fsfloaterworkspaces.h"
+#include "fsworkspacepreview.h"
 #include "fsfloaterworkspacetools.h"
 #include "fsfloaterplacedetails.h"
 #include "fsfloaterposestand.h"
@@ -497,6 +498,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("inventory_settings", "floater_inventory_settings.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterInventorySettings>);
     LLFloaterReg::add("inventory_bulk_review", "floater_inventory_bulk.xml", &LLFloaterReg::build<FSFloaterInventoryBulk>);
     LLFloaterReg::add("workspace_tools", "floater_workspace_tools.xml", &LLFloaterReg::build<FSFloaterWorkspaceTools>);
+    LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
     LLFloaterReg::add("workspace_switch", "floater_workspaces.xml", &LLFloaterReg::build<FSFloaterWorkspaces>);
     LLInspectAvatarUtil::registerFloater();
     LLInspectGroupUtil::registerFloater();

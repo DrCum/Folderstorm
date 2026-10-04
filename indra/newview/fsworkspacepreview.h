@@ -13,30 +13,35 @@
  * Lesser General Public License for more details.
  * $/LicenseInfo$
  */
-#ifndef FS_FLOATER_WORKSPACE_TOOLS_H
-#define FS_FLOATER_WORKSPACE_TOOLS_H
+#ifndef FS_WORKSPACE_PREVIEW_H
+#define FS_WORKSPACE_PREVIEW_H
+#include "fsworkspacecontroller.h"
 #include "llfloater.h"
-#include "lluuid.h"
-#include <vector>
+#include "lluictrl.h"
+#include "lltimer.h"
 
-class FSFloaterWorkspaceTools final : public LLFloater
+class FSWorkspaceDiagram : public LLUICtrl
 {
 public:
-    explicit FSFloaterWorkspaceTools(const LLSD& key) : LLFloater(key) {}
+    struct Params : public LLInitParam::Block<Params, LLUICtrl::Params> {};
+    explicit FSWorkspaceDiagram(const Params& params) : LLUICtrl(params) {}
+    void setDiagram(const FSWorkspaceController::Diagram& diagram) { mDiagram = diagram; }
+    void draw() override;
+private:
+    FSWorkspaceController::Diagram mDiagram;
+};
+class FSFloaterWorkspacePreview final : public LLFloater
+{
+public:
+    explicit FSFloaterWorkspacePreview(const LLSD& key) : LLFloater(key) {}
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
     void draw() override;
+    void select(const std::string& key);
 private:
-    void refreshWindows();
-    void arrange();
-    void exportWorkspace();
-    void importWorkspace();
-    void reviewImport(const std::string& filename);
-    void applyImport();
-    unsigned long mPickerGeneration = 0, mImportRevision = 0;
-    LLSD mAccepted, mOriginals;
-    bool currentSession() const;
+    void refresh();
+    std::string mEntry;
     LLUUID mAccount, mSession;
-    std::vector<LLHandle<LLFloater>> mWindows;
+    LLTimer mTimer;
 };
 #endif

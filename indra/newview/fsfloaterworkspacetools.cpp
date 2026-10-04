@@ -24,6 +24,7 @@
 #include "lltextbox.h"
 #include "llcheckboxctrl.h"
 #include "llviewercontrol.h"
+#include "llcheckboxctrl.h"
 #include "llfilepicker.h"
 #include "llviewermenufile.h"
 #include "llfile.h"
@@ -218,4 +219,20 @@ void FSFloaterWorkspaceTools::applyImport()
             tools->getChild<LLButton>("apply_import")->setEnabled(false);
             if (imported) tools->mAccepted = LLSD();
         });
+}
+
+void FSFloaterWorkspaceTools::draw()
+{
+    const bool valid = currentSession();
+    for (const char* name : {"arrange", "refresh_windows", "export", "import", "apply_import", "snapping", "include_folders", "replace_collisions", "windows", "alignment", "export_profile"})
+        getChild<LLUICtrl>(name)->setEnabled(valid && (std::string(name) != "apply_import" || (mAccepted.isMap() && mAccepted.size() != 0)));
+    if (mAccount != gAgent.getID() || mSession != gAgent.getSessionID())
+    {
+        mWindows.clear(); mAccepted = LLSD(); mOriginals = LLSD(); ++mPickerGeneration;
+        getChild<LLScrollListCtrl>("windows")->deleteAllItems();
+        getChild<LLScrollListCtrl>("import_review")->deleteAllItems();
+        getChild<LLComboBox>("export_profile")->removeall();
+        getChild<LLTextBox>("transfer_status")->setText("");
+    }
+    LLFloater::draw();
 }

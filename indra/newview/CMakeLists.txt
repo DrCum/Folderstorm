@@ -111,6 +111,7 @@ set(viewer_SOURCE_FILES
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
+    fsworkspacepreview.cpp
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
     fsworkspacecontroller.cpp
@@ -999,6 +1000,7 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fsworkspacepreview.h
     fsworkspacelayout.h
     fsworkspacecontroller.h
     fsworkspacequickaccess.h

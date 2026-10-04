@@ -14,6 +14,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacecontroller.h"
 
 #include "fschromelayoutcontroller.h"
 
@@ -686,6 +687,7 @@ bool FSChromeLayoutController::renameUserProfile(const std::string& old_name, co
     {
         gSavedSettings.setString(SETTING_ACTIVE_PROFILE, new_name);
     }
+    FSWorkspaceController::instance().noteLayoutRename(old_name, new_name);
     return true;
 }
 
@@ -707,6 +709,7 @@ bool FSChromeLayoutController::deleteUserProfile(const std::string& name)
     {
         gSavedSettings.setString(SETTING_ACTIVE_PROFILE, "standard_window");
     }
+    FSWorkspaceController::instance().noteLayoutRename(name, "");
     return true;
 }
 

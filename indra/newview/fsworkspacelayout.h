@@ -122,6 +122,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error);
 // Geometry uses bottom-left UI logical units, never native display pixels.
 // An oversized minimum retains its size with the title/close edge in frame.
 Placement fit(const Window& window, const Rect& frame, float min_width, float min_height);
+Placement fitWithNeighbors(const Window& window, const Rect& frame, float min_width, float min_height, const std::vector<Rect>& placed);
 Window capture(const Rect& rect, const Rect& frame, bool visible, bool minimized);
 } // namespace FSWorkspaceLayout
 

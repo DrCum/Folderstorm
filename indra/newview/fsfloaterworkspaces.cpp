@@ -18,6 +18,7 @@
 #include "fschromelayoutcontroller.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacequickaccess.h"
+#include "fsworkspacepreview.h"
 #include "llagent.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -54,6 +55,7 @@ int captureComponents(LLView* view)
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    getChild<LLButton>("diagram_preview")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_preview", selected()); });
     getChild<LLButton>("update")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().requestUpdateCurrent(); });
     getChild<LLButton>("tools")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_tools", selected()); });
     getChild<LLButton>("previous")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
@@ -70,7 +72,10 @@ bool FSFloaterWorkspaces::postBuild()
     { static_cast<FSFloaterWorkspaces*>(userdata)->updateButtons(); }, this);
     auto* list = getChild<LLScrollListCtrl>("profiles");
     list->setCommitOnSelectionChange(true);
-    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons(); });
+    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons();
+        if (auto* preview = LLFloaterReg::findTypedInstance<FSFloaterWorkspacePreview>("workspace_preview"))
+            if (preview->LLView::getVisible()) preview->select(selected());
+    });
     list->setDoubleClickCallback([this]() { switchSelected(); });
     refresh(true);
     return LLFloater::postBuild();
@@ -184,6 +189,7 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLTextBox>("active")->setText(active.empty() ? getString("no_active") : getString("active_label") + active + (controller.modified() ? " *" : ""));
     getChild<LLButton>("shortcut")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("switch")->setEnabled(can_switch && has_selection);
+    getChild<LLButton>("diagram_preview")->setEnabled(ready && has_selection);
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     getChild<LLButton>("manage")->setEnabled(ready);
