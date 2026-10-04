@@ -10,7 +10,7 @@ FALSE=1
 #echo "DEBUG ARGS: $@"
 #echo "DEBUG `pwd`"
 
-# args ../indra
+# Source directory is resolved from this script before invoking CMake.
 #                  <string>-DCMAKE_BUILD_TYPE:STRING=Release</string>
 #                  <string>-DADDRESS_SIZE:STRING=32</string>
 #                  <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
@@ -354,9 +354,9 @@ echo -e "       Logging to $LOG"
 # Fresh checkouts ship compiler switches in-repo. Autobuild reads
 # AUTOBUILD_VARIABLES_FILE before it launches this script; set the default
 # first so a later `autobuild source_environment` on Windows sees it.
+_cfg_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)" || exit 1
 if [ -z "$AUTOBUILD_VARIABLES_FILE" ]
 then
-    _cfg_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     _vars_bash="$(cd "${_cfg_script_dir}/../fs-build-variables" && pwd)/variables"
     if [ ! -f "$_vars_bash" ]
     then
@@ -492,6 +492,12 @@ fi
 
 if [ $WANTS_CONFIG -eq $TRUE ] ; then
     echo "Configuring $TARGET_PLATFORM..."
+    # A native CMake process resolves ../indra against the physical build
+    # directory, which can live on another drive behind a Windows junction.
+    _cfg_source_dir="$(cd "${_cfg_script_dir}/../indra" && pwd -P)" || exit 1
+    case "$OSTYPE" in
+        cygwin*|msys*) _cfg_source_dir="$(cygpath -m "$_cfg_source_dir")" || exit 1 ;;
+    esac
 
     if [ $WANTS_KDU -eq $TRUE ] ; then
         KDU="-DUSE_KDU:BOOL=ON"
@@ -629,7 +635,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $LTO $TESTBUILD $PACKAGE $VELOPACK \
+    cmake -G "$TARGET" $CMAKE_ARCH "$_cfg_source_dir" $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $LTO $TESTBUILD $PACKAGE $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}
@@ -638,7 +644,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
     if [ $configure_status -ne 0 ]; then
         echo "Configure failed!"
         exit 1
-    fi    
+    fi
 fi
 if [ $WANTS_BUILD -eq $TRUE ] ; then
     echo "Building $TARGET_PLATFORM..."
@@ -682,7 +688,7 @@ if [ $WANTS_BUILD -eq $TRUE ] ; then
     if [ $build_status -ne 0 ]; then
         echo "Build failed!"
         exit 1
-    fi    
+    fi
 fi
 echo "finished"
 exit 0

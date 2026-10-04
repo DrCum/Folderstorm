@@ -147,7 +147,7 @@ FSWorkspaceLayout::Workspace FSWorkspaceController::capture() const
     {
         S32 height = 0;
         result.has_inbox = panel->captureWorkspaceInbox(result.inbox_expanded, height);
-        if (result.has_inbox) result.inbox_height = height;
+        if (result.has_inbox) result.inbox_height = static_cast<F32>(height);
     }
     return result;
 }
@@ -423,7 +423,7 @@ void FSWorkspaceController::finishPlacement()
         if (saved.has_geometry)
         {
             S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
-            const auto placement = FSWorkspaceLayout::fit(saved, frame(), min_width, min_height);
+            const auto placement = FSWorkspaceLayout::fit(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height));
             LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
                           ll_round(placement.rect.right), ll_round(placement.rect.bottom));
             // Tiny frames may require overlap. Stagger coincident title edges.
@@ -510,7 +510,7 @@ void FSWorkspaceController::cancelPreferencesSession()
         if (!standalone(floater) || (role == Role::NearbyChat && (!chatCompatible(floater) || !find(Role::ConversationsGeometry)))) continue;
         if (role == Role::ConversationsGeometry && floater->isMinimized()) continue;
         S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
-        auto placement = FSWorkspaceLayout::fit(baseline.window, frame(), min_width, min_height);
+        auto placement = FSWorkspaceLayout::fit(baseline.window, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height));
         const bool host = role == Role::ConversationsGeometry;
         const bool may_show = host || !baseline.window.visible || LLFloaterReg::canShowInstance(registryName(role));
         floater->restoreWorkspaceState(LLRect(ll_round(placement.rect.left), ll_round(placement.rect.top),

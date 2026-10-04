@@ -314,10 +314,10 @@ void FSFloaterInventoryBulk::updateRows()
     list->setColumnLabel("before", getString(history ? "action_column" : "before_column"));
     list->setColumnLabel("after", getString(history ? "count_column" : "after_column"));
     const auto& rows = mData[history ? "operations" : "rows"];
-    const S32 total = history ? mHistoryTotal : rows.size();
+    const S32 total = history ? mHistoryTotal : static_cast<S32>(rows.size());
     mPage = std::max<S32>(0, std::min<S32>(mPage, std::max<S32>(0, (total - 1) / PAGE_SIZE)));
     const S32 first = history ? 0 : mPage * PAGE_SIZE;
-    const S32 end = std::min<S32>(rows.size(), first + PAGE_SIZE);
+    const S32 end = std::min<S32>(static_cast<S32>(rows.size()), first + PAGE_SIZE);
     for (S32 i = first; i < end; ++i)
     {
         const auto& row = rows[i];
@@ -398,7 +398,7 @@ void FSFloaterInventoryBulk::updateButtons()
     getChild<LLUICtrl>("open_operation")->setEnabled(mMode == Mode::History &&
         !getChild<LLScrollListCtrl>("rows")->getValue().asString().empty());
     getChild<LLUICtrl>("stop")->setEnabled(!mOperationID.empty() && (mBusy || mData["status"].asString() == "executing"));
-    const S32 total = mMode == Mode::History ? mHistoryTotal : mData["rows"].size();
+    const S32 total = mMode == Mode::History ? mHistoryTotal : static_cast<S32>(mData["rows"].size());
     getChild<LLUICtrl>("previous")->setEnabled(mPage > 0);
     getChild<LLUICtrl>("next")->setEnabled((mPage + 1) * PAGE_SIZE < total);
 }
