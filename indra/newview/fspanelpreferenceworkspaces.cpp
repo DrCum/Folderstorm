@@ -28,7 +28,7 @@ static LLPanelInjector<FSPanelPreferenceWorkspaces> t_workspace_panel("panel_pre
 
 bool FSPanelPreferenceWorkspaces::postBuild()
 {
-    const char* actions[] = {"preview", "save", "rename", "delete", "inventory_sorting", "driving", "add_inventory"};
+    const char* actions[] = {"preview", "save", "rename", "delete", "add_inventory"};
     for (const char* name : actions)
         getChild<LLButton>(std::string("workspace_") + name)->setCommitCallback(
             [this, name](LLUICtrl*, const LLSD&) { action(name); });
@@ -75,10 +75,7 @@ void FSPanelPreferenceWorkspaces::refresh()
         {
             for (const auto& name : controller.names())
             {
-                std::string label = name;
-                if (name == "builtin:inventory_sorting") label = getString("sorting_name");
-                else if (name == "builtin:driving") label = getString("driving_name");
-                combo->add(label, name);
+                combo->add(name, name);
             }
             if (!prior.empty()) combo->setValue(prior);
             if (combo->getCurrentIndex() < 0 && !controller.activeId().empty()) combo->setValue(controller.activeId());
@@ -92,8 +89,7 @@ void FSPanelPreferenceWorkspaces::refresh()
     getChild<LLButton>("workspace_save")->setEnabled(ready);
     getChild<LLButton>("workspace_rename")->setEnabled(ready && controller.isCustom(selected()));
     getChild<LLButton>("workspace_delete")->setEnabled(ready && controller.isCustom(selected()));
-    for (const char* name : {"inventory_sorting", "driving", "add_inventory"})
-        getChild<LLButton>(std::string("workspace_") + name)->setEnabled(ready);
+    getChild<LLButton>("workspace_add_inventory")->setEnabled(ready);
     std::string status = getString(ready ? controller.status() : "unavailable");
     LLStringUtil::format_map_t args;
     args["[APPLIED]"] = std::to_string(controller.appliedCount());
@@ -103,8 +99,6 @@ void FSPanelPreferenceWorkspaces::refresh()
     if (ready && controller.modified()) status += " " + getString("modified");
     getChild<LLTextBox>("workspace_status")->setText(status);
     std::string active = controller.activeId();
-    if (active == "builtin:inventory_sorting") active = getString("sorting_name");
-    else if (active == "builtin:driving") active = getString("driving_name");
     if (active.empty()) active = getString("no_workspace");
     getChild<LLTextBox>("workspace_active")->setText(getString("active_label") + " " + active);
 }
@@ -120,7 +114,6 @@ void FSPanelPreferenceWorkspaces::action(const std::string& name)
     else if (name == "rename") controller.rename(selected(), enteredName());
     else if (name == "delete") confirm("delete", selected());
     else if (name == "add_inventory") controller.addInventoryWindow();
-    else controller.preview("builtin:" + name);
     refresh();
 }
 void FSPanelPreferenceWorkspaces::confirm(const std::string& action, const std::string& name)

@@ -24,6 +24,7 @@
 #include "llfloaterreg.h"
 #include "llfloatersidepanelcontainer.h"
 #include "llfocusmgr.h"
+#include "llpanelmaininventory.h"
 #include "llsidepanelinventory.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
@@ -54,7 +55,7 @@ const char* registryName(Role role)
 LLFloater* find(Role role) { return LLFloaterReg::findInstance(registryName(role)); }
 bool standalone(LLFloater* floater)
 {
-    return floater && !floater->getHost() && floater->getParent() == gFloaterView;
+    return floater && !floater->isDead() && !floater->getHost() && floater->getParent() == gFloaterView;
 }
 FSWorkspaceLayout::Rect rect(const LLRect& value)
 {
@@ -79,17 +80,30 @@ bool chatCompatible(LLFloater* floater)
 {
     return standalone(floater) && gSavedSettings.getBOOL("ChatHistoryTornOff");
 }
+std::vector<std::string> inventoryControls(const std::string& registry, const LLSD& key = LLSD())
+{
+    const std::string name = LLFloaterReg::getBaseControlName(LLFloater::getControlName(registry, key));
+    return {"floater_rect_" + name, "floater_pos_" + name + "_x", "floater_pos_" + name + "_y"};
+}
 std::vector<std::string> controlsFor(Role role)
 {
     const std::string name = LLFloaterReg::getBaseControlName(registryName(role));
-    std::vector<std::string> result = {"floater_rect_" + name,
-        "floater_pos_" + name + "_x", "floater_pos_" + name + "_y"};
+    auto result = inventoryControls(registryName(role));
     if (role != Role::ConversationsGeometry) result.push_back("floater_vis_" + name);
     if (role == Role::InventoryPrimary)
     {
         result.push_back("InventoryInboxToggleState");
         result.push_back("InventoryInboxHeight");
     }
+    return result;
+}
+std::vector<LLFloater*> extraInventoryFloaters()
+{
+    std::vector<LLFloater*> result;
+    LLFloater* primary = find(Role::InventoryPrimary);
+    for (const char* registry : {"inventory", "secondary_inventory"})
+        for (LLFloater* floater : LLFloaterReg::getFloaterList(registry))
+            if (floater != primary && standalone(floater)) result.push_back(floater);
     return result;
 }
 bool equalWindow(const FSWorkspaceLayout::Window& a, const FSWorkspaceLayout::Window& b, bool host)
@@ -122,8 +136,10 @@ void FSWorkspaceController::abandon()
     ++mGeneration;
     ++mRevision;
     mPendingPlacement = false;
+    mQuickSwitch = false;
     mTransaction = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
+    mExtraControls.clear(); mExtraRuntime.clear(); mPendingExtraInventory.clear();
     mFocus.markDead();
     mProfiles = LLSD(); mActive.clear();
     mInboxTouched = mInboxBaselineValid = false;
@@ -134,6 +150,8 @@ FSWorkspaceLayout::Workspace FSWorkspaceController::capture() const
     result.chrome = FSChromeLayoutController::instance().captureSnapshot();
     result.world_view_in_mouselook = gSavedSettings.getBOOL("FSWorldViewInMouselook");
     result.frame_width = frame().width(); result.frame_height = frame().height();
+    // Capture registered utility roles and additional Inventory instances only.
+    // Preferences, the workspace switcher and other management windows are excluded.
     for (Role role : ROLES)
     {
         LLFloater* floater = find(role);
@@ -148,7 +166,38 @@ FSWorkspaceLayout::Workspace FSWorkspaceController::capture() const
         result.has_inbox = panel->captureWorkspaceInbox(result.inbox_expanded, height);
         if (result.has_inbox) result.inbox_height = static_cast<F32>(height);
     }
+    for (LLFloater* floater : extraInventoryFloaters())
+        if (floater->LLView::getVisible()) result.extra_inventory.push_back(window(floater));
     return result;
+}
+void FSWorkspaceController::rememberExtraInventoryControls(const std::string& registry, const LLSD& key)
+{
+    auto names = inventoryControls(registry, key);
+    names.push_back("floater_vis_" + LLFloaterReg::getBaseControlName(LLFloater::getControlName(registry, key)));
+    for (const auto& name : names)
+    {
+        if (mExtraControls.count(name)) continue;
+        ControlBaseline baseline;
+        if (LLControlVariable* control = gSavedPerAccountSettings.getControl(name))
+        {
+            baseline.existed = true; baseline.unsaved = control->hasUnsavedValue();
+            baseline.saved = control->getSaveValue(); baseline.effective = control->getValue();
+        }
+        mExtraControls.emplace(name, baseline);
+    }
+}
+void FSWorkspaceController::rememberExtraInventory(LLFloater* floater, bool created)
+{
+    for (const auto& entry : mExtraRuntime)
+        if (entry.state.handle.get() == floater) return;
+    ExtraInventoryBaseline baseline;
+    baseline.registry = floater->getInstanceName(); baseline.key = floater->getKey();
+    baseline.state.existed = !created;
+    baseline.state.handle = floater->getDerivedHandle<LLFloater>();
+    baseline.state.window = window(floater);
+    baseline.state.positioning = floater->getWorkspacePositioning();
+    rememberExtraInventoryControls(baseline.registry, baseline.key);
+    mExtraRuntime.push_back(baseline);
 }
 void FSWorkspaceController::rememberControls(Role role)
 {
@@ -185,26 +234,92 @@ void FSWorkspaceController::rememberRole(Role role)
 void FSWorkspaceController::beginPreferencesSession()
 {
     if (mTransaction && (!sameSession() || !available())) abandon();
+    // Opening Preferences during the deferred placement must capture the
+    // accepted quick switch, rather than adopt its temporary rollback state.
+    if (mQuickSwitch) finishQuickSwitch();
     if (!available() || mTransaction) return;
     mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
     mProfiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     mActive = gSavedPerAccountSettings.getString("FSActiveWorkspace");
     mBaseline = capture();
     for (Role role : ROLES) rememberRole(role);
+    for (LLFloater* floater : extraInventoryFloaters()) rememberExtraInventory(floater);
     mTransaction = true;
     ++mRevision;
 }
 std::vector<std::string> FSWorkspaceController::names() const
 {
     std::vector<std::string> result;
-    if (mProfiles.isMap())
-        for (auto it = mProfiles.beginMap(); it != mProfiles.endMap() && result.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
+    if (!available()) return result;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    if (profiles.isMap())
+        for (auto it = profiles.beginMap(); it != profiles.endMap() && result.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
             if (FSWorkspaceLayout::isSafeProfileName(it->first)) result.push_back(it->first);
     return result;
 }
 bool FSWorkspaceController::isCustom(const std::string& id) const
 {
-    return mTransaction && mProfiles.isMap() && mProfiles.has(id) && !FSWorkspaceLayout::isBuiltinProfileId(id);
+    if (!available()) return false;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    return profiles.isMap() && profiles.has(id) && !FSWorkspaceLayout::isBuiltinProfileId(id);
+}
+std::string FSWorkspaceController::activeId() const
+{
+    if (!available()) return "";
+    const auto id = mTransaction && sameSession() ? mActive : gSavedPerAccountSettings.getString("FSActiveWorkspace");
+    // Starting arrangements are retired; previously accepted template IDs
+    // are not named workspaces. Saved user definitions remain usable.
+    return FSWorkspaceLayout::isBuiltinProfileId(id) ? "" : id;
+}
+bool FSWorkspaceController::canQuickSwitch() const
+{
+    // Includes minimized Preferences: no pending settings are accepted by a
+    // quick switch, and later Cancel must not undo a switch made elsewhere.
+    return available() && !LLFloaterReg::instanceVisible("preferences");
+}
+bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
+{
+    if (!canQuickSwitch()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    // Discard any baseline captured during construction of a hidden panel.
+    // This does not write profile definitions or unrelated preferences.
+    abandon();
+    if (!preview(id)) { abandon(); return false; }
+    mQuickSwitch = true;
+    // The quick-switch list closes after selection. Its controls stay alive,
+    // so the deferred placement must not restore focus to that hidden window.
+    mFocus.markDead();
+    return true;
+}
+bool FSWorkspaceController::quickSwitchLayout(const std::string& id)
+{
+    if (!canQuickSwitch()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    abandon();
+    return FSChromeLayoutController::instance().applyProfile(id);
+}
+void FSWorkspaceController::finishQuickSwitch()
+{
+    if (!mQuickSwitch) return;
+    if (!sameSession() || !available()) { abandon(); return; }
+    finishPlacement();
+    // Save only the chosen identifier. Definitions remain unchanged.
+    gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
+    abandon();
+}
+bool FSWorkspaceController::saveCurrentNow(const std::string& name)
+{
+    if (!canQuickSwitch()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    abandon();
+    // Reuse strict capture/validation, allowing only creation from this UI.
+    // Pending Preferences edits are excluded by the guard above.
+    if (!saveCurrent(name)) { abandon(); return false; }
+    gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
+    gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
+    mStatus = "saved_immediately";
+    abandon();
+    return true;
 }
 bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite)
 {
@@ -215,6 +330,8 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite)
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
     if (mProfiles.has(name) && !overwrite) { mStatus = "exists"; return false; }
     const auto current = capture();
+    if (current.extra_inventory.size() > static_cast<size_t>(FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS))
+    { mStatus = "too_many_inventory_windows"; return false; }
     FSWorkspaceLayout::Workspace validated;
     const LLSD data = FSWorkspaceLayout::toLLSD(current);
     if (!FSWorkspaceLayout::fromLLSD(data, validated, error)) { mStatus = "invalid_data"; return false; }
@@ -240,48 +357,16 @@ bool FSWorkspaceController::remove(const std::string& name)
     mProfiles.erase(name); if (mActive == name) mActive.clear();
     mStatus = "deleted"; ++mRevision; return true;
 }
-FSWorkspaceLayout::Workspace FSWorkspaceController::startingArrangement(const std::string& id) const
-{
-    auto result = capture();
-    const auto area = frame();
-    auto place = [&](Role role, float cx, float cy, float width, float height)
-    {
-        FSWorkspaceLayout::Window value;
-        value.visible = true; value.has_geometry = true;
-        value.center_x = cx; value.center_y = cy; value.width_ui = width; value.height_ui = height;
-        result.windows[role] = value;
-    };
-    auto hide = [&](Role role) { result.windows[role].visible = false; result.windows[role].minimized = false; };
-    if (id == "builtin:inventory_sorting")
-    {
-        // Use viewport utility gutters when they can hold a readable inventory;
-        // otherwise use the corresponding side of the full UI client.
-        const float left = result.chrome.viewport_enabled ? result.chrome.inset_left * .01f : 0.f;
-        const float right = result.chrome.viewport_enabled ? result.chrome.inset_right * .01f : 0.f;
-        const float width = std::min(370.f, area.width() * .42f);
-        const float height = std::min(650.f, area.height() * .85f);
-        place(Role::InventoryPrimary, right * area.width() >= 330.f ? 1.f - right / 2.f : .78f, .5f, width, height);
-        place(Role::InventoryExtra1, left * area.width() >= 330.f ? left / 2.f : .22f, .5f, width, height);
-        hide(Role::MiniMap); hide(Role::WorldMap);
-    }
-    else
-    {
-        place(Role::MiniMap, std::min(.5f, 125.f / area.width()), std::max(.5f, 1.f - 125.f / area.height()), 220.f, 220.f);
-        hide(Role::InventoryPrimary); hide(Role::InventoryExtra1); hide(Role::WorldMap);
-        if (chatCompatible(find(Role::NearbyChat))) place(Role::NearbyChat, .25f, .2f, 400.f, 220.f);
-    }
-    return result;
-}
 bool FSWorkspaceController::preview(const std::string& id)
 {
     beginPreferencesSession();
     if (!available() || !mTransaction) { mStatus = "unavailable"; return false; }
     FSWorkspaceLayout::Workspace workspace;
     std::string error;
-    if (FSWorkspaceLayout::isBuiltinProfileId(id) && id != "builtin:inventory_sorting" && id != "builtin:driving")
+    if (FSWorkspaceLayout::isBuiltinProfileId(id))
     { mStatus = "invalid_data"; return false; }
     const LLSD& profiles = mProfiles; // Lookup must not insert a missing definition.
-    const LLSD data = FSWorkspaceLayout::isBuiltinProfileId(id) ? FSWorkspaceLayout::toLLSD(startingArrangement(id)) : profiles[id];
+    const LLSD data = profiles[id];
     if (!FSWorkspaceLayout::fromLLSD(data, workspace, error)) { mStatus = "invalid_data"; return false; }
     return startPreview(workspace, id);
 }
@@ -299,6 +384,7 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
 {
     ++mGeneration; ++mRevision;
     mPendingPlacement = false; mPendingHandles.clear();
+    mPendingExtraInventory.clear();
     mPending = workspace; mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
     mFocus.markDead();
     if (auto* focus = dynamic_cast<LLView*>(gFocusMgr.getKeyboardFocus())) mFocus = focus->getDerivedHandle<LLView>();
@@ -321,7 +407,7 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
         if (floater && (floater->hasWorkspaceDependents() || floater->isDependent()))
         { ++mSkipped; mDependentSkipped = true; continue; }
         // Adopt a newly opened allowed utility's current state as its rollback
-        // baseline. Arbitrary keyed/manual extra Inventory windows are excluded.
+        // baseline. Additional Inventory instances have their own baseline below.
         if (!mRuntime[role].existed && floater && !mCreated.count(role)) rememberRole(role);
         const bool needs_open = role != Role::ConversationsGeometry && entry.second.visible &&
             (!floater || !floater->LLView::getVisible());
@@ -338,6 +424,32 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
         mTouched.insert(role);
         mPendingHandles[role] = floater->getDerivedHandle<LLFloater>();
     }
+    auto extras = extraInventoryFloaters();
+    // Reuse registered instances in the same order used by capture, including
+    // hidden windows from earlier switches. Folder views are not saved.
+    const size_t count = std::max(extras.size(), workspace.extra_inventory.size());
+    for (size_t i = 0; i < count; ++i)
+    {
+        const auto saved = i < workspace.extra_inventory.size() ? workspace.extra_inventory[i] : FSWorkspaceLayout::Window{};
+        LLFloater* floater = i < extras.size() ? extras[i] : nullptr;
+        if (floater && (floater->hasWorkspaceDependents() || floater->isDependent()))
+        { ++mSkipped; mDependentSkipped = true; continue; }
+        if (saved.visible && !LLFloaterReg::canShowInstance(floater ? floater->getInstanceName() : "inventory",
+                                                         floater ? floater->getKey() : LLSD()))
+        { ++mSkipped; continue; }
+        const bool created = !floater;
+        if (!floater && saved.visible)
+        {
+            rememberExtraInventoryControls("inventory");
+            floater = LLPanelMainInventory::newWindow();
+            if (!floater) { ++mSkipped; continue; }
+        }
+        if (!floater) continue;
+        rememberExtraInventory(floater, created);
+        for (auto& baseline : mExtraRuntime)
+            if (baseline.state.handle.get() == floater) { baseline.touched = true; break; }
+        mPendingExtraInventory.push_back({floater->getDerivedHandle<LLFloater>(), saved});
+    }
     mActive = id;
     mPendingPlacement = true; mStatus = "placing";
     const auto generation = mGeneration;
@@ -353,6 +465,32 @@ void FSWorkspaceController::placePending(unsigned long generation, const LLUUID&
     if (generation != mGeneration || !mPendingPlacement) return;
     if (!available() || account != gAgent.getID() || session != gAgent.getSessionID()) { abandon(); return; }
     finishPlacement();
+    if (mQuickSwitch) finishQuickSwitch();
+}
+bool FSWorkspaceController::placeWindow(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
+    bool primary_inventory, std::vector<LLRect>& placed)
+{
+    if (!saved.has_geometry) return true;
+    S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
+    const auto placement = FSWorkspaceLayout::fit(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height));
+    LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
+                  ll_round(placement.rect.right), ll_round(placement.rect.bottom));
+    // Tiny frames may require overlap. Stagger coincident title edges.
+    for (const auto& prior : placed)
+        if (std::abs(target.mTop - prior.mTop) < 8 && std::abs(target.mLeft - prior.mLeft) < 24)
+            target.translate(16, -24);
+    if (!floater->applyWorkspaceRect(target, primary_inventory)) return false;
+    gFloaterView->adjustToFitScreen(floater, false);
+    // The ordinary fitter may align oversized minima on the left/bottom.
+    // Keep the right-hand close control and title edge reachable instead.
+    LLRect final_rect = floater->getRect();
+    const auto client = frame();
+    if (final_rect.getWidth() > client.width()) final_rect.translate(ll_round(client.right) - final_rect.mRight, 0);
+    if (final_rect.getHeight() > client.height()) final_rect.translate(0, ll_round(client.top) - final_rect.mTop);
+    floater->applyWorkspaceRect(final_rect, primary_inventory);
+    if (placement.adjusted || floater->getRect() != target) ++mAdjusted;
+    placed.push_back(floater->getRect());
+    return true;
 }
 void FSWorkspaceController::finishPlacement()
 {
@@ -370,33 +508,29 @@ void FSWorkspaceController::finishPlacement()
         { ++mSkipped; mDependentSkipped = true; continue; }
         const bool host = role == Role::ConversationsGeometry;
         if (!host) floater->setMinimized(false);
-        if (saved.has_geometry)
-        {
-            S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
-            const auto placement = FSWorkspaceLayout::fit(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height));
-            LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
-                          ll_round(placement.rect.right), ll_round(placement.rect.bottom));
-            // Tiny frames may require overlap. Stagger coincident title edges.
-            for (const auto& prior : placed)
-                if (std::abs(target.mTop - prior.mTop) < 8 && std::abs(target.mLeft - prior.mLeft) < 24)
-                    target.translate(16, -24);
-            if (!floater->applyWorkspaceRect(target, role == Role::InventoryPrimary)) { ++mSkipped; continue; }
-            gFloaterView->adjustToFitScreen(floater, false);
-            // The ordinary fitter may align oversized minima on the left/bottom.
-            // Keep the right-hand close control and title edge reachable instead.
-            LLRect final_rect = floater->getRect();
-            const auto client = frame();
-            if (final_rect.getWidth() > client.width()) final_rect.translate(ll_round(client.right) - final_rect.mRight, 0);
-            if (final_rect.getHeight() > client.height()) final_rect.translate(0, ll_round(client.top) - final_rect.mTop);
-            floater->applyWorkspaceRect(final_rect, role == Role::InventoryPrimary);
-            if (placement.adjusted || floater->getRect() != target) ++mAdjusted;
-            placed.push_back(floater->getRect());
-        }
+        if (!placeWindow(floater, saved, role == Role::InventoryPrimary, placed)) { ++mSkipped; continue; }
         if (!host)
         {
             if (!saved.visible) floater->closeFloater(false);
             else if (role != Role::NearbyChat) floater->setMinimized(saved.minimized);
         }
+        ++mApplied;
+    }
+    for (const auto& entry : mPendingExtraInventory)
+    {
+        LLFloater* floater = entry.handle.get();
+        if (!standalone(floater)) { ++mSkipped; continue; }
+        if (floater->hasWorkspaceDependents() || floater->isDependent())
+        { ++mSkipped; mDependentSkipped = true; continue; }
+        const auto& saved = entry.window;
+        if (saved.visible && !LLFloaterReg::canShowInstance(floater->getInstanceName(), floater->getKey()))
+        { ++mSkipped; continue; }
+        floater->setMinimized(false);
+        if (!placeWindow(floater, saved, false, placed)) { ++mSkipped; continue; }
+        // closeFloater destroys ordinary extra Inventory instances. Hiding
+        // preserves their views for reuse and exact Preferences Cancel rollback.
+        floater->setVisible(saved.visible);
+        if (saved.visible) floater->setMinimized(saved.minimized);
         ++mApplied;
     }
     if (mPending.has_inbox)
@@ -427,6 +561,32 @@ void FSWorkspaceController::commitPendingSettings()
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     abandon();
     beginPreferencesSession();
+}
+void FSWorkspaceController::restoreExtraInventories()
+{
+    for (const auto& entry : mExtraRuntime)
+    {
+        if (!entry.touched) continue;
+        const auto& baseline = entry.state;
+        LLFloater* floater = baseline.handle.get();
+        if (!baseline.existed)
+        {
+            if (standalone(floater))
+                floater->restoreWorkspaceState(floater->getWorkspaceRect(), false, false,
+                                              floater->getWorkspacePositioning());
+            continue;
+        }
+        if (!floater && baseline.window.visible && LLFloaterReg::canShowInstance(entry.registry, entry.key))
+            floater = LLFloaterReg::showInstance(entry.registry, entry.key, false);
+        if (!standalone(floater)) continue;
+        S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
+        const auto placement = FSWorkspaceLayout::fit(baseline.window, frame(),
+            static_cast<F32>(min_width), static_cast<F32>(min_height));
+        const bool may_show = !baseline.window.visible || LLFloaterReg::canShowInstance(entry.registry, entry.key);
+        floater->restoreWorkspaceState(LLRect(ll_round(placement.rect.left), ll_round(placement.rect.top),
+            ll_round(placement.rect.right), ll_round(placement.rect.bottom)),
+            baseline.window.visible && may_show, baseline.window.minimized, baseline.positioning);
+    }
 }
 void FSWorkspaceController::cancelPreferencesSession()
 {
@@ -468,10 +628,25 @@ void FSWorkspaceController::cancelPreferencesSession()
             host ? floater->LLView::getVisible() : baseline.window.visible && may_show,
             host ? floater->isMinimized() : baseline.window.minimized, baseline.positioning, role == Role::InventoryPrimary, host);
     }
+    restoreExtraInventories();
     if (mInboxTouched && mInboxBaselineValid)
         if (auto* panel = inbox(find(Role::InventoryPrimary)))
             panel->applyWorkspaceInbox(mInboxBaselineExpanded, mInboxBaselineHeight);
     // Restore controls last: close/destroy and Inbox destructors also persist.
+    if (std::any_of(mExtraRuntime.begin(), mExtraRuntime.end(),
+                    [](const ExtraInventoryBaseline& entry) { return entry.touched; }))
+        for (const auto& entry : mExtraControls)
+            if (LLControlVariable* control = gSavedPerAccountSettings.getControl(entry.first))
+            {
+                const auto& baseline = entry.second;
+                if (!baseline.existed) control->resetToDefault(true);
+                else
+                {
+                    control->setValue(baseline.saved, true);
+                    if (baseline.unsaved) control->setValue(baseline.effective, false);
+                }
+            }
+    // Primary/owned role baselines take precedence for shared Inventory controls.
     for (Role role : mTouched)
         for (const auto& name : controlsFor(role))
         {
@@ -514,6 +689,9 @@ bool FSWorkspaceController::modified() const
         auto it = current.windows.find(entry.first);
         if (it == current.windows.end() || !equalWindow(entry.second, it->second, entry.first == Role::ConversationsGeometry)) return true;
     }
+    if (saved.extra_inventory.size() != current.extra_inventory.size()) return true;
+    for (size_t i = 0; i < saved.extra_inventory.size(); ++i)
+        if (!equalWindow(saved.extra_inventory[i], current.extra_inventory[i], false)) return true;
     return saved.has_inbox && (!current.has_inbox || saved.inbox_expanded != current.inbox_expanded ||
         std::fabs(saved.inbox_height - current.inbox_height) > 1.f);
 }

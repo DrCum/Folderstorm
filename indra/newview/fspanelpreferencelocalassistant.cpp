@@ -18,6 +18,7 @@
 #include "fspanelpreferencelocalassistant.h"
 #include "fseventapibridge.h"
 #include "fsassistantconfiguration.h"
+#include "fsfloaterinventorybulk.h"
 #include "fsassistantpermissions.h"
 #include "fsassistantlaunchpath.h"
 #include "llversioninfo.h"
@@ -110,6 +111,9 @@ bool FSPanelPreferenceLocalAssistant::postBuild()
     getChild<LLComboBox>("client")->setCommitCallback([this](LLUICtrl*, const LLSD&) { refreshConfiguration(); });
     getChild<LLButton>("copy_configuration")->setCommitCallback([this](LLUICtrl*, const LLSD&) { copyConfiguration(); });
     getChild<LLButton>("check_connection")->setCommitCallback([this](LLUICtrl*, const LLSD&) { checkConnection(); });
+    getChild<LLButton>("history_and_undo")->setCommitCallback([](LLUICtrl*, const LLSD&) {
+        FSFloaterInventoryBulk::showHistory();
+    });
     getChild<LLButton>("setup_guide")->setCommitCallback([](LLUICtrl*, const LLSD&) {
         LLWeb::loadURLExternal("https://github.com/DrCum/Folderstorm/blob/main/doc/help.md#the-local-assistant-bridge");
     });
@@ -338,6 +342,7 @@ void FSPanelPreferenceLocalAssistant::restoreLocalAssistant()
 
 void FSPanelPreferenceLocalAssistant::refreshLocalAssistantStatus()
 {
+    getChild<LLButton>("history_and_undo")->setEnabled(LLStartUp::getStartupState() == STATE_STARTED);
     std::string access = getString("access_off");
     std::string activity = getString("activity_none");
     std::string details;

@@ -31,8 +31,8 @@
 class LLFloater;
 class LLView;
 
-// Main-thread only. Profiles are pending until explicit Preferences OK.
-// Generic Preferences apply/saveSettings calls are baseline capture only.
+// Main-thread only. Preferences previews require explicit OK. Quick switching
+// accepts only an existing workspace and is blocked while Preferences is open.
 class FSWorkspaceController
 {
 public:
@@ -42,13 +42,17 @@ public:
     void commitPendingSettings();
     void cancelPreferencesSession();
     bool preview(const std::string& id);
+    bool canQuickSwitch() const;
+    bool quickSwitchWorkspace(const std::string& id);
+    bool quickSwitchLayout(const std::string& id);
+    bool saveCurrentNow(const std::string& name);
     bool saveCurrent(const std::string& name, bool overwrite = false);
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
     bool addInventoryWindow();
     std::vector<std::string> names() const;
     bool isCustom(const std::string& id) const;
-    const std::string& activeId() const { return mActive; }
+    std::string activeId() const;
     unsigned long revision() const { return mRevision; }
     const std::string& status() const { return mStatus; }
     int appliedCount() const { return mApplied; }
@@ -66,18 +70,36 @@ private:
         bool existed = false;
         LLFloater::WorkspacePositioning positioning{};
     };
+    struct ExtraInventoryBaseline
+    {
+        RuntimeBaseline state;
+        std::string registry;
+        LLSD key;
+        bool touched = false;
+    };
+    struct PendingExtraInventory
+    {
+        LLHandle<LLFloater> handle;
+        FSWorkspaceLayout::Window window;
+    };
     FSWorkspaceLayout::Workspace capture() const;
-    FSWorkspaceLayout::Workspace startingArrangement(const std::string& id) const;
     void rememberRole(Role role);
     void rememberControls(Role role);
+    void rememberExtraInventory(LLFloater* floater, bool created = false);
+    void rememberExtraInventoryControls(const std::string& registry, const LLSD& key = LLSD());
+    void restoreExtraInventories();
+    bool placeWindow(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
+                     bool primary_inventory, std::vector<LLRect>& placed);
     void placePending(unsigned long generation, const LLUUID& account, const LLUUID& session);
     void abandon();
     void finishPlacement();
+    void finishQuickSwitch();
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
 
     bool mTransaction = false;
     bool mPendingPlacement = false;
+    bool mQuickSwitch = false;
     unsigned long mRevision = 0;
     unsigned long mGeneration = 0;
     LLUUID mAccount, mSession;
@@ -87,6 +109,9 @@ private:
     FSWorkspaceLayout::Workspace mBaseline, mPending;
     std::map<Role, RuntimeBaseline> mRuntime;
     std::map<std::string, ControlBaseline> mControls;
+    std::map<std::string, ControlBaseline> mExtraControls;
+    std::vector<ExtraInventoryBaseline> mExtraRuntime;
+    std::vector<PendingExtraInventory> mPendingExtraInventory;
     std::map<Role, LLHandle<LLFloater>> mPendingHandles;
     std::set<Role> mTouched;
     std::set<Role> mCreated;

@@ -53,7 +53,10 @@ bool ll::prefs::SearchableItem::hightlightAndHide( LLWString const &aFilter )
         return true;
     }
 
-    if( mLabel.find( aFilter ) != LLWString::npos )
+    bool matches = mLabel.find(aFilter) != LLWString::npos;
+    for (const auto& alias : mAliases)
+        matches |= alias.find(aFilter) != LLWString::npos;
+    if (matches)
     {
         mCtrl->setHighlighted( true );
         return true;
@@ -101,6 +104,14 @@ void ll::prefs::PanelData::setNotHighlighted()
 
 bool ll::prefs::TabContainerData::hightlightAndHide( LLWString const &aFilter )
 {
+    LLPanel* currentPanel = mTabContainer->getCurrentPanel();
+    if (!aFilter.empty() && mBeforeSearchVisibility.empty())
+    {
+        mBeforeSearchPanel = mTabContainer->getCurrentPanel();
+        for (const auto& panel : mChildPanel)
+            if (panel->mPanel)
+                mBeforeSearchVisibility.emplace_back(panel->mPanel, mTabContainer->getTabVisibility(panel->mPanel));
+    }
     for( tSearchableItemList::iterator itr = mChildren.begin(); itr  != mChildren.end(); ++itr )
         (*itr)->setNotHighlighted( );
 
@@ -108,14 +119,49 @@ bool ll::prefs::TabContainerData::hightlightAndHide( LLWString const &aFilter )
     for( tSearchableItemList::iterator itr = mChildren.begin(); itr  != mChildren.end(); ++itr )
         bVisible |= (*itr)->hightlightAndHide( aFilter );
 
+    LLPanel const* firstMatch = nullptr;
     for( tPanelDataList::iterator itr = mChildPanel.begin(); itr  != mChildPanel.end(); ++itr )
     {
-        bool bPanelVisible = (*itr)->hightlightAndHide( aFilter );
+        bool searchable = true;
+        if (!aFilter.empty())
+        {
+            for (const auto& visibility : mBeforeSearchVisibility)
+                if (visibility.first == (*itr)->mPanel && !visibility.second)
+                    searchable = false;
+        }
+        // Search must not reveal tabs hidden by a feature or platform gate.
+        if (!searchable)
+            (*itr)->setNotHighlighted();
+        bool bPanelVisible = searchable && (*itr)->hightlightAndHide(aFilter);
         if( (*itr)->mPanel )
-            mTabContainer->setTabVisibility( (*itr)->mPanel, bPanelVisible );
+        {
+            // With no active search, keep feature-gated visibility intact.
+            // A cleared search restores its captured visibility below.
+            if (!aFilter.empty())
+                mTabContainer->setTabVisibility((*itr)->mPanel, bPanelVisible);
+            if (bPanelVisible && !firstMatch)
+                firstMatch = (*itr)->mPanel;
+        }
         bVisible |= bPanelVisible;
     }
 
+    if (aFilter.empty() && !mBeforeSearchVisibility.empty())
+    {
+        for (const auto& visibility : mBeforeSearchVisibility)
+            mTabContainer->setTabVisibility(visibility.first, visibility.second);
+        if (mBeforeSearchPanel)
+            mTabContainer->selectTabPanel(mBeforeSearchPanel);
+        mBeforeSearchVisibility.clear();
+        mBeforeSearchPanel = nullptr;
+    }
+    else if (!aFilter.empty() && firstMatch)
+    {
+        mTabContainer->selectTabPanel(const_cast<LLPanel*>(firstMatch));
+    }
+    else if (aFilter.empty() && currentPanel)
+    {
+        mTabContainer->selectTabPanel(currentPanel);
+    }
     return bVisible;
 }
 

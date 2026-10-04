@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="workspace_switch" title="Workspaces &amp; layouts" width="440" height="500"
+ min_width="360" min_height="420" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
+ <string name="ready">Double-click an entry or choose Switch. Workspaces arrange windows; layouts arrange the viewport and bars.</string>
+ <string name="unavailable">Workspaces and layouts are available after login.</string>
+ <string name="preferences_open">Finish Preferences with OK or Cancel before switching or saving.</string>
+ <string name="switch_failed">This saved entry could not be applied. Check it in Preferences.</string>
+ <string name="favorite_label">Favorite</string>
+ <string name="unfavorite_label">Remove favorite</string>
+ <string name="favorites_heading">Favorites</string>
+ <string name="workspaces_heading">Workspaces</string>
+ <string name="layouts_heading">Layouts</string>
+ <string name="workspace_type">Workspace</string>
+ <string name="layout_type">Layout</string>
+ <string name="saved_immediately">Saved “[NAME]”. Preferences and this switcher were excluded.</string>
+ <string name="too_many_inventory_windows">Close some extra Inventory windows before saving. Maximum: 16 additional windows.</string>
+ <string name="exists">That name is already used. Choose a new name, or replace the workspace in Preferences.</string>
+ <string name="invalid_name_or_data">Use up to 64 letters, numbers, spaces, dashes, underscores or periods. Maximum: 32 workspaces.</string>
+ <string name="invalid_data">The workspace could not be saved. Check your saved definitions in Preferences.</string>
+ <text name="intro" left="15" top="30" right="-15" height="36" follows="left|right|top" wrap="true">
+  Switch your saved arrangement. Mark favorites to keep them at the top of this list.
+ </text>
+ <scroll_list name="profiles" left="15" top="76" right="-15" bottom="-176" follows="all"
+  draw_heading="false" multi_select="false" can_sort="false" column_padding="8" search_column="0">
+  <scroll_list.columns name="name" dynamic_width="true"/>
+  <scroll_list.columns name="kind" width="85"/>
+ </scroll_list>
+ <text name="status" left="15" bottom="-122" right="-15" height="46" follows="left|right|bottom" wrap="true"/>
+ <text name="save_label" left="15" bottom="-94" right="-15" height="18" follows="left|right|bottom">Save current as a new workspace</text>
+ <line_editor name="workspace_name" left="15" bottom="-66" right="-108" height="24" follows="left|right|bottom"
+  max_length="64" tool_tip="New workspace name. Preferences and this switcher are excluded."/>
+ <button name="save" label="Save" right="-15" bottom="-66" width="85" height="24" follows="right|bottom"/>
+ <button name="switch" label="Switch" left="15" bottom="-15" width="75" height="24" follows="left|bottom"/>
+ <button name="favorite" label="Favorite" left="98" bottom="-15" width="125" height="24" follows="left|bottom"/>
+ <button name="manage" label="Preferences…" right="-15" bottom="-15" width="105" height="24" follows="right|bottom"/>
+</floater>

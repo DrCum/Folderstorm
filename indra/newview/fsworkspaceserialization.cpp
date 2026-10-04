@@ -197,6 +197,9 @@ LLSD toLLSD(const Workspace& workspace)
     data["windows"] = LLSD::emptyMap();
     for (const auto& entry : workspace.windows)
         data["windows"][roleId(entry.first)] = windowToLLSD(entry.first, entry.second);
+    data["extra_inventory"] = LLSD::emptyArray();
+    for (const auto& window : workspace.extra_inventory)
+        data["extra_inventory"].append(windowToLLSD(Role::InventoryExtra1, window));
     data["panels"] = LLSD::emptyMap();
     if (workspace.has_inbox)
     {
@@ -240,6 +243,19 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
             return fail(error, "windows." + it->first);
         parsed.windows.emplace(role, window);
     }
+    if (data.has("extra_inventory"))
+    {
+        const LLSD& extras = data["extra_inventory"];
+        if (!extras.isArray() || extras.size() > static_cast<size_t>(MAX_EXTRA_INVENTORY_WINDOWS))
+            return fail(error, "extra_inventory");
+        for (auto it = extras.beginArray(); it != extras.endArray(); ++it)
+        {
+            Window window;
+            if (!windowFromLLSD(*it, Role::InventoryExtra1, window, parsed.ignored_details))
+                return fail(error, "extra_inventory");
+            parsed.extra_inventory.push_back(window);
+        }
+    }
     if (!data["panels"].isMap()) return fail(error, "panels");
     const LLSD& panels = data["panels"];
     countUnknown(panels, {"inventory_primary_inbox"}, parsed.ignored_details);
@@ -252,7 +268,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         parsed.has_inbox = true;
         countUnknown(inbox, {"expanded", "height_ui"}, parsed.ignored_details);
     }
-    countUnknown(data, {"schema", "type", "chrome", "world_view_in_mouselook", "frame", "windows", "panels"},
+    countUnknown(data, {"schema", "type", "chrome", "world_view_in_mouselook", "frame", "windows", "extra_inventory", "panels"},
                  parsed.ignored_details);
     workspace = parsed;
     return true;
