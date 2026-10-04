@@ -19,6 +19,8 @@
 #include "fspanelpreferenceworkspaces.h"
 #include "fsworkspacecontroller.h"
 #include "llbutton.h"
+#include "llcheckboxctrl.h"
+#include "llagent.h"
 #include "llcombobox.h"
 #include "lllineeditor.h"
 #include "llnotificationsutil.h"
@@ -83,6 +85,15 @@ void FSPanelPreferenceWorkspaces::refresh()
         }
         mObservedRevision = controller.revision();
     }
+    auto* remember = getChild<LLCheckBoxCtrl>("workspace_remember_folders");
+    if (!ready || selected() != mFolderOptionWorkspace || gAgent.getID() != mFolderOptionAccount ||
+        gAgent.getSessionID() != mFolderOptionSession)
+    {
+        remember->set(ready && controller.remembersInventoryFolders(selected()));
+        mFolderOptionWorkspace = selected();
+        mFolderOptionAccount = gAgent.getID(); mFolderOptionSession = gAgent.getSessionID();
+    }
+    remember->setEnabled(ready);
     combo->setEnabled(ready && combo->getItemCount());
     getChild<LLLineEditor>("workspace_name")->setEnabled(ready);
     getChild<LLButton>("workspace_preview")->setEnabled(ready && !selected().empty());
@@ -109,7 +120,7 @@ void FSPanelPreferenceWorkspaces::action(const std::string& name)
     else if (name == "save")
     {
         const auto label = enteredName();
-        if (!controller.saveCurrent(label) && controller.status() == "exists") confirm("overwrite", label);
+        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get()) && controller.status() == "exists") confirm("overwrite", label);
     }
     else if (name == "rename") controller.rename(selected(), enteredName());
     else if (name == "delete") confirm("delete", selected());
@@ -121,17 +132,18 @@ void FSPanelPreferenceWorkspaces::confirm(const std::string& action, const std::
     auto& controller = FSWorkspaceController::instance();
     if (!controller.available() || !controller.isCustom(name)) return;
     const auto revision = controller.revision();
+    const bool remember_folders = getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get();
     const auto handle = getDerivedHandle<FSPanelPreferenceWorkspaces>();
     LLSD args;
     args["NAME"] = name;
     LLNotificationsUtil::add(action == "overwrite" ? "ConfirmWorkspaceOverwrite" : "ConfirmWorkspaceDelete",
-        args, LLSD(), [handle, revision, action, name](const LLSD& notification, const LLSD& response)
+        args, LLSD(), [handle, revision, action, name, remember_folders](const LLSD& notification, const LLSD& response)
         {
             auto* panel = handle.get();
             auto& controller = FSWorkspaceController::instance();
             if (!panel || !controller.available() || controller.revision() != revision ||
                 LLNotificationsUtil::getSelectedOption(notification, response) != 0) return;
-            if (action == "overwrite") controller.saveCurrent(name, true);
+            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders);
             else controller.remove(name);
             panel->refresh();
         });

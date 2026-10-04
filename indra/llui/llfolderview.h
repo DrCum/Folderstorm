@@ -162,6 +162,7 @@ public:
     // This method is used to toggle the selection of an item. Walks
     // children, and keeps track of selected objects.
     virtual bool changeSelection(LLFolderViewItem* selection, bool selected);
+    bool changeSelection(LLFolderViewItem* selection, bool selected, bool take_keyboard_focus);
 
     virtual std::set<LLFolderViewItem*> getSelectionList() const;
 

@@ -19,6 +19,7 @@
 #define FS_PANEL_PREFERENCE_WORKSPACES_H
 #include "llpanel.h"
 #include "lltimer.h"
+#include "lluuid.h"
 
 class FSPanelPreferenceWorkspaces : public LLPanel
 {
@@ -33,5 +34,7 @@ private:
     std::string enteredName() const;
     LLTimer mRefreshTimer;
     unsigned long mObservedRevision = 0;
+    std::string mFolderOptionWorkspace;
+    LLUUID mFolderOptionAccount, mFolderOptionSession;
 };
 #endif

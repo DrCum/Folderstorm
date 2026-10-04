@@ -45,8 +45,9 @@ public:
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchLayout(const std::string& id);
-    bool saveCurrentNow(const std::string& name);
-    bool saveCurrent(const std::string& name, bool overwrite = false);
+    bool saveCurrentNow(const std::string& name, bool remember_folders = false);
+    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false);
+    bool remembersInventoryFolders(const std::string& name) const;
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
     bool addInventoryWindow();
@@ -68,6 +69,8 @@ private:
         LLHandle<LLFloater> handle;
         FSWorkspaceLayout::Window window;
         bool existed = false;
+        LLSD folder_state; // Live rollback only; never serialized.
+        bool folder_touched = false;
         LLFloater::WorkspacePositioning positioning{};
     };
     struct ExtraInventoryBaseline
@@ -82,7 +85,8 @@ private:
         LLHandle<LLFloater> handle;
         FSWorkspaceLayout::Window window;
     };
-    FSWorkspaceLayout::Workspace capture() const;
+    FSWorkspaceLayout::Workspace capture(bool remember_folders = false) const;
+    void applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved, RuntimeBaseline& baseline);
     void rememberRole(Role role);
     void rememberControls(Role role);
     void rememberExtraInventory(LLFloater* floater, bool created = false);
@@ -116,6 +120,7 @@ private:
     std::set<Role> mTouched;
     std::set<Role> mCreated;
     LLHandle<LLView> mFocus;
+    bool mFolderSkipped = false;
     bool mChatSkipped = false;
     bool mDependentSkipped = false;
     bool mInboxTouched = false;

@@ -57,6 +57,7 @@ bool FSFloaterWorkspaces::postBuild()
 void FSFloaterWorkspaces::onOpen(const LLSD& key)
 {
     mActionStatus.clear();
+    getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
     refresh(true);
 }
@@ -105,6 +106,7 @@ void FSFloaterWorkspaces::refresh(bool force)
         const bool same_account = gAgent.getID() == mAccount && gAgent.getSessionID() == mSession;
         if (!same_account)
         {
+            getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
             getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
             mActionStatus.clear(); mSavedName.clear();
         }
@@ -158,6 +160,7 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
+    getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
     getChild<LLButton>("save")->setEnabled(can_switch && !name.empty());
@@ -198,7 +201,7 @@ void FSFloaterWorkspaces::saveCurrent()
     if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    if (controller.saveCurrentNow(name))
+    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get()))
     {
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");

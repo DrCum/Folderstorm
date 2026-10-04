@@ -18,6 +18,7 @@
  */
 #include "fsworkspacelayout.h"
 #include "llsd.h"
+#include "lluuid.h"
 
 #include <algorithm>
 #include <cmath>
@@ -152,6 +153,13 @@ LLSD windowToLLSD(Role role, const Window& window)
         data["width_ui"] = window.width_ui;
         data["height_ui"] = window.height_ui;
     }
+    if (window.inventory_folder.present)
+    {
+        data["inventory_folder"]["single_folder"] = window.inventory_folder.single_folder;
+        data["inventory_folder"]["view_mode"] = window.inventory_folder.view_mode;
+        if (!window.inventory_folder.folder_id.empty())
+            data["inventory_folder"]["folder_id"] = LLUUID(window.inventory_folder.folder_id);
+    }
     return data;
 }
 
@@ -180,7 +188,22 @@ bool windowFromLLSD(const LLSD& data, Role role, Window& window, int& ignored)
         window.has_geometry = true;
     }
     else if (window.minimized) return false;
-    countUnknown(data, {"visible", "minimized", "center_x", "center_y", "width_ui", "height_ui"}, ignored);
+    if (data.has("inventory_folder"))
+    {
+        if (role != Role::InventoryPrimary && role != Role::InventoryExtra1) return false;
+        const auto& folder = data["inventory_folder"];
+        if (!folder.isMap() || !boolean(folder, "single_folder", window.inventory_folder.single_folder) ||
+            !integer(folder, "view_mode", window.inventory_folder.view_mode, 0, 2)) return false;
+        if (folder.has("folder_id"))
+        {
+            if (!folder["folder_id"].isUUID() || folder["folder_id"].asUUID().isNull()) return false;
+            window.inventory_folder.folder_id = folder["folder_id"].asUUID().asString();
+        }
+        if (window.inventory_folder.single_folder && window.inventory_folder.folder_id.empty()) return false;
+        window.inventory_folder.present = true;
+        countUnknown(folder, {"single_folder", "view_mode", "folder_id"}, ignored);
+    }
+    countUnknown(data, {"visible", "minimized", "center_x", "center_y", "width_ui", "height_ui", "inventory_folder"}, ignored);
     return true;
 }
 } // namespace
@@ -192,6 +215,7 @@ LLSD toLLSD(const Workspace& workspace)
     data["type"] = "workspace";
     data["chrome"] = chromeToLLSD(workspace.chrome);
     data["world_view_in_mouselook"] = workspace.world_view_in_mouselook;
+    data["remember_inventory_folders"] = workspace.remember_inventory_folders;
     data["frame"]["width_ui"] = workspace.frame_width;
     data["frame"]["height_ui"] = workspace.frame_height;
     data["windows"] = LLSD::emptyMap();
@@ -224,6 +248,9 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
     if (!chromeFromLLSD(data["chrome"], parsed.chrome, parsed.ignored_details, error)) return false;
     if (!boolean(data, "world_view_in_mouselook", parsed.world_view_in_mouselook))
         return fail(error, "world_view_in_mouselook");
+    if (data.has("remember_inventory_folders") &&
+        !boolean(data, "remember_inventory_folders", parsed.remember_inventory_folders))
+        return fail(error, "remember_inventory_folders");
     if (!data["frame"].isMap() ||
         !number(data["frame"], "width_ui", parsed.frame_width, 0.f, MAX_UI_SIZE, true) ||
         !number(data["frame"], "height_ui", parsed.frame_height, 0.f, MAX_UI_SIZE, true)) return fail(error, "frame");
@@ -241,6 +268,8 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         Window window;
         if (!windowFromLLSD(it->second, role, window, parsed.ignored_details))
             return fail(error, "windows." + it->first);
+        if (window.inventory_folder.present && !parsed.remember_inventory_folders)
+            return fail(error, "remember_inventory_folders");
         parsed.windows.emplace(role, window);
     }
     if (data.has("extra_inventory"))
@@ -253,6 +282,8 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
             Window window;
             if (!windowFromLLSD(*it, Role::InventoryExtra1, window, parsed.ignored_details))
                 return fail(error, "extra_inventory");
+            if (window.inventory_folder.present && !parsed.remember_inventory_folders)
+                return fail(error, "remember_inventory_folders");
             parsed.extra_inventory.push_back(window);
         }
     }
@@ -268,7 +299,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         parsed.has_inbox = true;
         countUnknown(inbox, {"expanded", "height_ui"}, parsed.ignored_details);
     }
-    countUnknown(data, {"schema", "type", "chrome", "world_view_in_mouselook", "frame", "windows", "extra_inventory", "panels"},
+    countUnknown(data, {"schema", "type", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels"},
                  parsed.ignored_details);
     workspace = parsed;
     return true;

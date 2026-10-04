@@ -34,6 +34,8 @@ Checkpoint: the optional row displays the same favorites as the switcher, switch
 
 ## 2. Remember Inventory folders — original idea 1
 
+Status: implemented as the second local checkpoint on `feat/workspace-enhancements`. Both save UIs offer an opt-in checkbox. Bounded, validated account-local folder context covers the primary, owned extra and ordinary additional Inventory slots. A scoped Inventory adapter preserves search filters; live-only folder/navigation/selection snapshots support Preview/Cancel. Missing or filtered folders skip with a status/notification. Inventory must be usable; an early switch may need repeating after it loads. XML/binding and diff checks only; no builds or native run. Keyboard shortcuts are the next checkpoint.
+
 Goal: an Inventory sorting workspace reopens the folders being worked on, along with its windows.
 
 - Add a per-save Remember Inventory folders option, available in Preferences and the quick-save switcher. Older workspaces retain their geometry-only behavior.

@@ -18,6 +18,7 @@
  */
 #include "../fsworkspacelayout.h"
 #include "llsd.h"
+#include "lluuid.h"
 #include <iostream>
 #include <limits>
 
@@ -131,6 +132,40 @@ int main()
     expect(fromLLSD(data, parsed, error) && parsed.extra_inventory.size() == 2 &&
            parsed.windows.size() == 3 && parsed.ignored_details == 2,
            "Unknown extra Inventory fields are ignored and cannot select registered roles");
+
+    data = valid; data.erase("remember_inventory_folders");
+    expect(fromLLSD(data, parsed, error) && !parsed.remember_inventory_folders &&
+           !parsed.windows[Role::InventoryPrimary].inventory_folder.present,
+           "Legacy workspace keeps geometry-only behavior");
+    Workspace folders = with_extras;
+    folders.remember_inventory_folders = true;
+    const std::string folder_id = "01234567-89ab-cdef-0123-456789abcdef";
+    folders.windows[Role::InventoryPrimary].inventory_folder = {true, true, 2, folder_id};
+    folders.extra_inventory[0].inventory_folder = {true, false, 0, folder_id};
+    const LLSD folders_valid = toLLSD(folders);
+    expect(fromLLSD(folders_valid, parsed, error) && parsed.remember_inventory_folders &&
+           parsed.windows[Role::InventoryPrimary].inventory_folder.single_folder &&
+           parsed.windows[Role::InventoryPrimary].inventory_folder.view_mode == 2 &&
+           parsed.extra_inventory[0].inventory_folder.folder_id == folder_id,
+           "Primary and ordinary extra folder context round trips");
+    data = folders_valid; data["windows"]["inventory_primary"]["inventory_folder"].erase("folder_id");
+    rejected(data, "Single-folder context requires a root");
+    data = folders_valid; data["extra_inventory"][0]["inventory_folder"].erase("folder_id");
+    expect(fromLLSD(data, parsed, error), "Normal presentation permits no selected folder");
+    data = folders_valid; data["remember_inventory_folders"] = false;
+    rejected(data, "Folder context requires explicit opt-in");
+    data = folders_valid; data["remember_inventory_folders"] = 1;
+    rejected(data, "Folder opt-in type is strict");
+    data = folders_valid; data["windows"]["mini_map"]["inventory_folder"] = folders_valid["windows"]["inventory_primary"]["inventory_folder"];
+    rejected(data, "Non-Inventory roles cannot carry folders");
+    data = folders_valid; data["extra_inventory"][0]["inventory_folder"]["folder_id"] = folder_id;
+    rejected(data, "Folder UUID strings are not coerced");
+    data = folders_valid; data["extra_inventory"][0]["inventory_folder"]["folder_id"] = LLUUID::null;
+    rejected(data, "Null folder UUID rejected");
+    data = folders_valid; data["extra_inventory"][0]["inventory_folder"]["view_mode"] = 3;
+    rejected(data, "Folder presentation modes are bounded");
+    data = folders_valid; data["extra_inventory"][0]["inventory_folder"]["single_folder"] = 1;
+    rejected(data, "Single-folder flag type is strict");
 
     for (const char* field : {"schema", "type", "chrome", "frame", "windows", "panels", "world_view_in_mouselook"})
     {

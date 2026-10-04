@@ -40,6 +40,14 @@ enum class Role
     ConversationsGeometry, InventoryExtra1
 };
 
+struct InventoryFolder
+{
+    bool present = false;
+    bool single_folder = false;
+    int view_mode = 0; // List, gallery or combination, matching Inventory's modes.
+    std::string folder_id; // Optional selected folder for the normal view.
+};
+
 struct Window
 {
     bool visible = false;
@@ -49,12 +57,14 @@ struct Window
     float center_y = .5f;
     float width_ui = 0.f;
     float height_ui = 0.f;
+    InventoryFolder inventory_folder;
 };
 
 struct Workspace
 {
     FSChromeLayout::Snapshot chrome;
     bool world_view_in_mouselook = true;
+    bool remember_inventory_folders = false;
     float frame_width = 1.f;
     float frame_height = 1.f;
     std::map<Role, Window> windows;
