@@ -17,6 +17,7 @@
 #include "fsfloaterworkspacetools.h"
 #include "fsworkspacecontroller.h"
 #include "llagent.h"
+#include "fsworkspacefile.h"
 #include "llbutton.h"
 #include "llcombobox.h"
 #include "llscrolllistctrl.h"
@@ -24,7 +25,6 @@
 #include "lltextbox.h"
 #include "llcheckboxctrl.h"
 #include "llviewercontrol.h"
-#include "llcheckboxctrl.h"
 #include "llfilepicker.h"
 #include "llviewermenufile.h"
 #include "llfile.h"
@@ -89,30 +89,6 @@ void FSFloaterWorkspaceTools::arrange()
     getChild<LLTextBox>("status")->setText(applied ? getString("arranged") : getString("choose_windows"));
 }
 
-namespace
-{
-constexpr size_t MAX_TRANSFER_BYTES = 1024 * 1024;
-// Before LLSD parsing, bound nesting/node count and reject DTD/entities.
-// Workspace exports contain only simple LLSD values; no XML extensions needed.
-bool boundedXML(const std::string& text)
-{
-    if (text.empty() || text.size() > MAX_TRANSFER_BYTES) return false;
-    int depth = 0, nodes = 0;
-    for (size_t i = 0; (i = text.find('<', i)) != std::string::npos;)
-    {
-        const auto end = text.find('>', i + 1);
-        if (end == std::string::npos || i + 1 == end || ++nodes > 20000 || text[i + 1] == '!') return false;
-        if (text[i + 1] != '?')
-        {
-            if (text[i + 1] == '/') --depth;
-            else if (text[end - 1] != '/') ++depth;
-            if (depth < 0 || depth > 24) return false;
-        }
-        i = end + 1;
-    }
-    return depth == 0;
-}
-}
 void FSFloaterWorkspaceTools::exportWorkspace()
 {
     if (!currentSession()) return;
@@ -129,7 +105,7 @@ void FSFloaterWorkspaceTools::exportWorkspace()
     envelope["profiles"][name] = FSWorkspaceLayout::toLLSD(saved);
     std::ostringstream stream; LLSDSerialize::toPrettyXML(envelope, stream);
     const auto document = stream.str();
-    if (document.size() > MAX_TRANSFER_BYTES) return;
+    if (document.size() > FSWorkspaceFile::MAX_TRANSFER_BYTES) return;
     const auto handle = getDerivedHandle<FSFloaterWorkspaceTools>(); const auto generation = ++mPickerGeneration;
     LLFilePickerReplyThread::startPicker([handle, generation, document](const std::vector<std::string>& files,
         LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
@@ -159,12 +135,12 @@ void FSFloaterWorkspaceTools::reviewImport(const std::string& filename)
     getChild<LLButton>("apply_import")->setEnabled(false);
     llifstream input(filename, std::ios::binary | std::ios::ate);
     const auto size = input.tellg();
-    if (!input.good() || size <= 0 || size > static_cast<std::streamoff>(MAX_TRANSFER_BYTES))
+    if (!input.good() || size <= 0 || size > static_cast<std::streamoff>(FSWorkspaceFile::MAX_TRANSFER_BYTES))
     { getChild<LLTextBox>("transfer_status")->setText(getString("file_failed")); return; }
     input.seekg(0); std::string document(static_cast<size_t>(size), '\0');
     input.read(&document[0], static_cast<std::streamsize>(document.size()));
     LLSD envelope; std::istringstream stream(document);
-    if (!input.good() || !boundedXML(document) || LLSDSerialize::fromXML(envelope, stream) <= 0 ||
+    if (!input.good() || !FSWorkspaceFile::boundedXML(document) || LLSDSerialize::fromXML(envelope, stream) <= 0 ||
         !envelope.isMap() || envelope.size() != 3 || !envelope["format"].isString() ||
         envelope["format"].asString() != "folderstorm-workspaces" || !envelope["version"].isInteger() ||
         envelope["version"].asInteger() != 1 || !envelope["profiles"].isMap() ||

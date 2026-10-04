@@ -1000,6 +1000,7 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fsworkspacefile.h
     fsworkspacepreview.h
     fsworkspacelayout.h
     fsworkspacecontroller.h

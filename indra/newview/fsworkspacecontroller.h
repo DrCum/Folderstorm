@@ -120,7 +120,7 @@ private:
     bool sameSession() const;
 
     static void lifecycleIdle(void*);
-    void rememberPrevious();
+    bool rememberPrevious();
     LLTimer mLifecycleTimer, mStartupTimer;
     bool mStartupScheduled = false;
     unsigned long mStartupGeneration = 0;

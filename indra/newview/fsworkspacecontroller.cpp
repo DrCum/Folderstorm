@@ -125,9 +125,9 @@ bool equalWindow(const FSWorkspaceLayout::Window& a, const FSWorkspaceLayout::Wi
     const bool equal_folder = !af.present || (bf.present && af.single_folder == bf.single_folder &&
         af.view_mode == bf.view_mode && af.folder_id == bf.folder_id);
     return equal_folder && (host || (a.visible == b.visible && a.minimized == b.minimized)) &&
-        a.has_geometry == b.has_geometry && (!a.has_geometry ||
+        (!a.has_geometry || (b.has_geometry &&
         (std::fabs(a.center_x - b.center_x) < .002f && std::fabs(a.center_y - b.center_y) < .002f &&
-         std::fabs(a.width_ui - b.width_ui) <= 1.f && std::fabs(a.height_ui - b.height_ui) <= 1.f));
+         std::fabs(a.width_ui - b.width_ui) <= 1.f && std::fabs(a.height_ui - b.height_ui) <= 1.f)));
 }
 }
 
@@ -334,7 +334,7 @@ bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
     std::string error;
     const LLSD profiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     if (!profiles.has(id) || !FSWorkspaceLayout::fromLLSD(profiles[id], parsed, error)) return false;
-    rememberPrevious();
+    if (!rememberPrevious()) return false;
     // Discard any baseline captured during construction of a hidden panel.
     // This does not write profile definitions or unrelated preferences.
     abandon();
@@ -349,13 +349,10 @@ bool FSWorkspaceController::quickSwitchLayout(const std::string& id)
 {
     if (!canQuickSwitch()) return false;
     if (mQuickSwitch) finishQuickSwitch();
-    const auto prior = capture(true, FSWorkspaceLayout::All, true);
-    const auto workspace = activeId();
-    const auto layout = gSavedSettings.getString("FSChromeActiveProfile");
+    const auto ids = FSChromeLayoutController::instance().profileNames();
+    if (std::find(ids.begin(), ids.end(), id) == ids.end() || !rememberPrevious()) return false;
     abandon();
     if (!FSChromeLayoutController::instance().applyProfile(id)) return false;
-    mPrevious = prior; mPreviousWorkspace = workspace; mPreviousLayout = layout;
-    mPreviousAccount = gAgent.getID(); mPreviousSession = gAgent.getSessionID(); mHasPrevious = true;
     gSavedPerAccountSettings.setString("FSActiveWorkspace", "");
     return true;
 }
@@ -364,9 +361,30 @@ void FSWorkspaceController::finishQuickSwitch()
     if (!mQuickSwitch) return;
     if (!sameSession() || !available()) { abandon(); return; }
     finishPlacement();
-    if (!mActive.empty() && mProfiles.has(mActive))
+    if (!mRestoreLayout && !mActive.empty() && mProfiles.has(mActive))
     {
-        mExpected = capture(mPending.remember_inventory_folders, mPending.components, mPending.remember_toolbars);
+        const auto live = capture(mPending.remember_inventory_folders, mPending.components, mPending.remember_toolbars);
+        mExpected = mPending;
+        if (mPending.components & FSWorkspaceLayout::Chrome)
+        { mExpected.chrome = live.chrome; mExpected.world_view_in_mouselook = live.world_view_in_mouselook; }
+        for (auto it = mExpected.windows.begin(); it != mExpected.windows.end();)
+        {
+            const auto current = live.windows.find(it->first);
+            if (current == live.windows.end() || (!mPendingHandles.count(it->first) && it->second.visible))
+            { it = mExpected.windows.erase(it); continue; }
+            const bool geometry = it->second.has_geometry, folder = it->second.inventory_folder.present;
+            it->second = current->second;
+            if (!geometry) it->second.has_geometry = false;
+            if (!folder) it->second.inventory_folder = FSWorkspaceLayout::InventoryFolder{};
+            ++it;
+        }
+        mExpected.extra_inventory = live.extra_inventory;
+        for (size_t i = 0; i < mExpected.extra_inventory.size(); ++i)
+            if (i >= mPending.extra_inventory.size() || !mPending.extra_inventory[i].inventory_folder.present)
+                mExpected.extra_inventory[i].inventory_folder = FSWorkspaceLayout::InventoryFolder{};
+        if (mExpected.has_inbox)
+        { mExpected.has_inbox = live.has_inbox; mExpected.inbox_expanded = live.inbox_expanded; mExpected.inbox_height = live.inbox_height; }
+        if (mExpected.remember_toolbars) mExpected.toolbars = live.toolbars;
         mExpectedDefinition = mProfiles[mActive]; mExpectedId = mActive;
         mExpectedAccount = mAccount; mExpectedSession = mSession;
         mComparisonDirty = true;
@@ -376,13 +394,18 @@ void FSWorkspaceController::finishQuickSwitch()
     if (mRestoreLayout) gSavedSettings.setString("FSChromeActiveProfile", mRestoredLayout);
     abandon();
 }
-void FSWorkspaceController::rememberPrevious()
+bool FSWorkspaceController::rememberPrevious()
 {
-    mPrevious = capture(true, FSWorkspaceLayout::All, true);
+    const auto current = capture(true, FSWorkspaceLayout::All, true);
+    FSWorkspaceLayout::Workspace validated; std::string error;
+    if (!FSWorkspaceLayout::fromLLSD(FSWorkspaceLayout::toLLSD(current), validated, error))
+    { mStatus = current.extra_inventory.size() > FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS ? "too_many_inventory_windows" : "invalid_data"; return false; }
+    mPrevious = current;
     mPreviousWorkspace = activeId();
     mPreviousLayout = gSavedSettings.getString("FSChromeActiveProfile");
     mPreviousAccount = gAgent.getID(); mPreviousSession = gAgent.getSessionID();
     mHasPrevious = true;
+    return true;
 }
 bool FSWorkspaceController::hasPrevious() const
 {
@@ -395,7 +418,7 @@ bool FSWorkspaceController::returnPrevious()
     if (mQuickSwitch) finishQuickSwitch();
     const auto target = mPrevious;
     const auto workspace = mPreviousWorkspace, layout = mPreviousLayout;
-    rememberPrevious(); // Swap, including unsaved positions; never change named definitions.
+    if (!rememberPrevious()) return false; // Swap, including unsaved positions; never change named definitions.
     abandon();
     beginPreferencesSession();
     if (!startPreview(target, workspace)) return false;
@@ -422,6 +445,7 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite,
     beginPreferencesSession();
     if (!available() || !mTransaction) { mStatus = "unavailable"; return false; }
     finishPlacement();
+    remember_folders = remember_folders && (components & FSWorkspaceLayout::Inventory);
     if (remember_folders && !gInventory.isInventoryUsable()) { mStatus = "inventory_not_ready"; return false; }
     std::string error;
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
@@ -844,6 +868,27 @@ bool FSWorkspaceController::modified() const
     const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     if (id == mExpectedId && mExpectedAccount == gAgent.getID() && mExpectedSession == gAgent.getSessionID() &&
         mExpectedDefinition == profiles[id]) saved = mExpected; // Accepted fitted geometry, not original screen sizes.
+    else
+    {
+        // Refit the saved definition for this display. Returning to Previous
+        // must compare its unsaved positions with the named definition, rather
+        // than bless the returned live snapshot as a new clean workspace.
+        std::vector<FSWorkspaceLayout::Rect> placed;
+        auto fit_saved = [&](FSWorkspaceLayout::Window& window, LLFloater* floater)
+        {
+            if (!window.has_geometry) return;
+            S32 width = 1, height = 1;
+            if (floater) floater->getResizeLimits(&width, &height);
+            const auto fitted = FSWorkspaceLayout::fitWithNeighbors(window, frame(), static_cast<F32>(width), static_cast<F32>(height), placed);
+            placed.push_back(fitted.rect);
+            const auto geometry = FSWorkspaceLayout::capture(fitted.rect, frame(), window.visible, window.minimized);
+            window.center_x = geometry.center_x; window.center_y = geometry.center_y;
+            window.width_ui = geometry.width_ui; window.height_ui = geometry.height_ui;
+        };
+        for (auto& entry : saved.windows) fit_saved(entry.second, find(entry.first));
+        const auto extras = extraInventoryFloaters();
+        for (size_t i = 0; i < saved.extra_inventory.size(); ++i) fit_saved(saved.extra_inventory[i], i < extras.size() ? extras[i] : nullptr);
+    }
     const auto current = capture(saved.remember_inventory_folders, saved.components, saved.remember_toolbars);
     bool changed = (saved.components & FSWorkspaceLayout::Chrome) && (FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
         saved.world_view_in_mouselook != current.world_view_in_mouselook);
@@ -866,7 +911,7 @@ void FSWorkspaceController::requestUpdateCurrent()
     if (mQuickSwitch) finishQuickSwitch();
     const auto name = activeId();
     FSWorkspaceLayout::Workspace saved;
-    if (!readProfile(name, saved) || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
+    if (!readProfile(name, saved) || saved.ignored_details != 0 || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
     const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components, saved.remember_toolbars));
     const auto originals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     FSWorkspaceLayout::Workspace validated; std::string error;
@@ -953,7 +998,7 @@ bool FSWorkspaceController::arrange(const std::vector<LLHandle<LLFloater>>& sele
             if (std::any_of(allowed.begin(), allowed.end(), [floater](const Utility& item) { return item.first.get() == floater; }) &&
                 std::find(windows.begin(), windows.end(), floater) == windows.end()) windows.push_back(floater);
     if (windows.size() < 2 || (operation >= 4 && windows.size() < 3)) return false;
-    rememberPrevious();
+    if (!rememberPrevious()) return false;
     LLRect bounds = windows.front()->getRect();
     for (auto* floater : windows)
     {
@@ -994,7 +1039,9 @@ bool FSWorkspaceController::arrange(const std::vector<LLHandle<LLFloater>>& sele
 
 void FSWorkspaceController::scheduleStartupRestore()
 {
-    mHasPrevious = false;
+    mHasPrevious = false; mPrevious = FSWorkspaceLayout::Workspace{};
+    mPreviousWorkspace.clear(); mPreviousLayout.clear();
+    mPreviousAccount.setNull(); mPreviousSession.setNull();
     mStartupScheduled = available() && gSavedPerAccountSettings.getString("FSWorkspaceStartupMode") != "off";
     mStartupAccount = gAgent.getID(); mStartupSession = gAgent.getSessionID();
     mStartupGeneration = mGeneration; mStartupTimer.reset();
@@ -1011,6 +1058,9 @@ void FSWorkspaceController::lifecycleIdle(void* userdata)
         controller.mPreviousWorkspace.clear(); controller.mPreviousLayout.clear();
         controller.mExpectedId.clear(); controller.mExpectedDefinition = LLSD(); controller.mExpected = FSWorkspaceLayout::Workspace{};
     }
+    if (controller.mTransaction && (!controller.available() || !controller.sameSession())) controller.abandon();
+    if (!controller.mExpectedId.empty() && (!controller.available() || controller.mExpectedAccount != gAgent.getID() || controller.mExpectedSession != gAgent.getSessionID()))
+    { controller.mExpectedId.clear(); controller.mExpectedDefinition = LLSD(); controller.mExpected = FSWorkspaceLayout::Workspace{}; }
     if (!controller.mStartupScheduled) return;
     if (!controller.available() || controller.mStartupAccount != gAgent.getID() ||
         controller.mStartupSession != gAgent.getSessionID() || controller.mStartupGeneration != controller.mGeneration)

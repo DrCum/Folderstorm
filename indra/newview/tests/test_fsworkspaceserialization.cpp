@@ -69,6 +69,32 @@ int main()
            parsed.has_inbox && parsed.inbox_height == 200.f, "Nested chrome/window/panel round trip");
     expect(!valid["windows"]["conversations_geometry"].has("visible") &&
            !valid["windows"]["conversations_geometry"].has("minimized"), "Host geometry omits lifecycle fields");
+    LLSD legacy = valid; legacy.erase("components");
+    expect(fromLLSD(legacy, parsed, error) && parsed.components == All && !parsed.remember_toolbars,
+           "Legacy records restore all groups without replacing toolbar content");
+    LLSD masked = valid; masked["components"] = Inventory;
+    rejected(masked, "Excluded map/chat records cannot smuggle group changes");
+    masked["windows"].erase("mini_map"); masked["windows"].erase("conversations_geometry");
+    expect(fromLLSD(masked, parsed, error) && parsed.components == Inventory, "Inventory-only record accepted");
+    masked["components"] = "2"; rejected(masked, "Component mask rejects coercion");
+    masked["components"] = 16; rejected(masked, "Unknown component bits rejected");
+    masked["components"] = 0; rejected(masked, "Empty restoration without toolbar content rejected");
+    Workspace toolbar_only; toolbar_only.components = 0; toolbar_only.remember_toolbars = true;
+    toolbar_only.toolbars = {{1, 0, {"inventory", "workspace_switch"}}, {2, 1, {"map"}}, {3, 2, {}}};
+    LLSD toolbar_data = toLLSD(toolbar_only);
+    expect(fromLLSD(toolbar_data, parsed, error) && parsed.remember_toolbars && parsed.toolbars.size() == 3 &&
+           parsed.toolbars[0].commands[1] == "workspace_switch", "Ordered toolbar-only set round trips");
+    LLSD bad_toolbar = toolbar_data; bad_toolbar["toolbars"][1]["location"] = 1;
+    rejected(bad_toolbar, "Duplicate toolbar locations rejected");
+    bad_toolbar = toolbar_data; bad_toolbar["toolbars"][2]["display_mode"] = 3;
+    rejected(bad_toolbar, "Unsupported toolbar display mode rejected");
+    bad_toolbar = toolbar_data; bad_toolbar["toolbars"][2]["commands"].append("inventory");
+    rejected(bad_toolbar, "Duplicate commands across toolbars rejected");
+    bad_toolbar = toolbar_data; bad_toolbar["toolbars"][2]["commands"].append("arbitrary.action()");
+    rejected(bad_toolbar, "Command names cannot contain operations or paths");
+    bad_toolbar = toolbar_data;
+    for (int n = 0; n <= MAX_TOOLBAR_COMMANDS; ++n) bad_toolbar["toolbars"][2]["commands"].append("tool_" + std::to_string(n));
+    rejected(bad_toolbar, "Toolbar command count is bounded");
     LLSD data = valid;
     data["windows"]["mini_map"].erase("minimized");
     expect(fromLLSD(data, parsed, error) && !parsed.windows[Role::MiniMap].has_geometry,
@@ -225,6 +251,8 @@ int main()
     for (int i = 0; i < MAX_PROFILES; ++i) profiles["Profile " + std::to_string(i)] = valid;
     expect(!canSaveProfile(profiles, "New", error) && canSaveProfile(profiles, "Profile 0", error),
            "32-profile limit allows replacement only");
+    profiles["Profile 0"]["future_extension"] = true;
+    expect(!canSaveProfile(profiles, "Profile 0", error), "Unknown extensions remain protected on replacement");
     profiles["Profile 0"]["schema"] = 2;
     expect(!canSaveProfile(profiles, "Profile 0", error), "Future-schema definition cannot be overwritten accidentally");
     expect(!canSaveProfile(LLSD("bad collection"), "New", error), "Malformed collection is not discarded");

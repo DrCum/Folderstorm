@@ -375,6 +375,7 @@ bool canSaveProfile(const LLSD& profiles, const std::string& name, std::string& 
     {
         Workspace existing;
         if (!fromLLSD(profiles[name], existing, error)) return false;
+        if (existing.ignored_details != 0) { error = "Existing workspace has unsupported extensions"; return false; }
     }
     return true;
 }
