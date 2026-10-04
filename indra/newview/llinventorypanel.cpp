@@ -1800,7 +1800,8 @@ LLInventoryPanel::selected_items_t LLInventoryPanel::getSelectedItems() const
 
 void LLInventoryPanel::onSelectionChange(const std::deque<LLFolderViewItem*>& items, bool user_action)
 {
-    if (user_action) mWorkspaceSelection.clear();
+    // Explicit selection wins over a folder/rollback selection waiting on views.
+    if (user_action) clearSelection();
     // Schedule updating the folder view context menu when all selected items become complete (STORM-373).
     mCompletionObserver->reset();
     for (std::deque<LLFolderViewItem*>::const_iterator it = items.begin(); it != items.end(); ++it)

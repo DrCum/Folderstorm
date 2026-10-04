@@ -553,6 +553,9 @@ void FSWorkspaceController::finishPlacement()
         if (floater->hasWorkspaceDependents() || floater->isDependent())
         { ++mSkipped; mDependentSkipped = true; continue; }
         const bool host = role == Role::ConversationsGeometry;
+        // Restrictions may change between opening the window and this idle pass.
+        if (!host && saved.visible && !LLFloaterReg::canShowInstance(registryName(role)))
+        { ++mSkipped; continue; }
         if (!host) floater->setMinimized(false);
         if (role == Role::InventoryPrimary || role == Role::InventoryExtra1)
             applyInventoryFolder(floater, saved, mRuntime[role]);

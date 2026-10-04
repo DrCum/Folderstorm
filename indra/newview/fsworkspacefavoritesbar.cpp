@@ -191,7 +191,10 @@ void FSWorkspaceFavoritesBar::rebuild()
     menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(manage));
     LLMenuItemCallGL::Params hide;
     hide.name = "hide_strip"; hide.label = getString("hide"); hide.enabled = mCanSwitch;
-    hide.on_click.function([](LLUICtrl*, const LLSD&) { gSavedSettings.setBOOL(SHOW_SETTING, false); });
+    hide.on_click.function([](LLUICtrl*, const LLSD&)
+    {
+        if (FSWorkspaceController::instance().canQuickSwitch()) gSavedSettings.setBOOL(SHOW_SETTING, false);
+    });
     menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(hide));
     mMore->setMenu(menu, LLMenuButton::MP_BOTTOM_RIGHT, true);
     mMore->setToolTip(getString(mCanSwitch ? "more_hint" : "preferences_open"));
