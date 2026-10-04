@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<floater name="workspace_switch" title="Workspaces &amp; layouts" width="440" height="524"
- min_width="360" min_height="444" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
+<floater name="workspace_switch" title="Workspaces &amp; layouts" width="440" height="690"
+ min_width="360" min_height="650" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
  <string name="active_label">Current: </string>
  <string name="no_active">Current: unsaved arrangement</string>
  <string name="ready">Double-click an entry or choose Switch. Workspaces arrange windows; layouts arrange the viewport and bars.</string>
@@ -28,21 +28,25 @@
  <button name="tools" label="Arrange windows / more…" left="15" top="108" right="-148" height="24" follows="left|right|top"/>
  <button name="update" label="Update current" right="-15" top="108" width="125" height="24" follows="right|top"/>
  <text name="active" left="15" top="140" right="-15" height="20" follows="left|right|top" tool_tip="An asterisk means supported workspace components have changed."/>
- <scroll_list name="profiles" left="15" top="166" right="-15" bottom="-200" follows="all"
+ <scroll_list name="profiles" left="15" top="166" right="-15" bottom="-336" follows="all"
   draw_heading="false" multi_select="false" can_sort="false" column_padding="8" search_column="0">
   <scroll_list.columns name="name" dynamic_width="true"/>
   <scroll_list.columns name="kind" width="85"/>
  </scroll_list>
- <text name="status" left="15" bottom="-146" right="-15" height="46" follows="left|right|bottom" wrap="true"/>
- <text name="save_label" left="15" bottom="-118" right="-15" height="18" follows="left|right|bottom">Save current as a new workspace</text>
- <line_editor name="workspace_name" left="15" bottom="-90" right="-108" height="24" follows="left|right|bottom"
+ <text name="status" left="15" bottom="-282" right="-15" height="28" follows="left|right|bottom" wrap="true"/>
+ <text name="save_label" left="15" bottom="-254" right="-15" height="18" follows="left|right|bottom">Save current as a new workspace</text>
+ <line_editor name="workspace_name" left="15" bottom="-226" right="-108" height="24" follows="left|right|bottom"
   max_length="64" tool_tip="New workspace name. Preferences and this switcher are excluded."/>
- <button name="save" label="Save" right="-15" bottom="-90" width="85" height="24" follows="right|bottom"/>
+ <button name="save" label="Save" right="-15" bottom="-226" width="85" height="24" follows="right|bottom"/>
+ <check_box name="capture_chrome" label="Restore viewport and bar placement" initial_value="true" left="15" bottom="-202" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_inventory" label="Restore Inventory windows and Received Items" initial_value="true" left="15" bottom="-178" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_maps" label="Restore maps" initial_value="true" left="15" bottom="-154" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_chat" label="Restore compatible chat geometry" initial_value="true" left="15" bottom="-130" right="-15" height="18" follows="left|right|bottom"/>
  <check_box name="remember_inventory_folders" label="Remember Inventory folders"
-  left="15" bottom="-66" right="-15" height="18" follows="left|right|bottom"
+  left="15" bottom="-106" right="-15" height="18" follows="left|right|bottom"
   tool_tip="For this save: restore single-folder roots and view modes, or a selected folder in All Items. Search filters and item selections are not saved."/>
  <check_box name="show_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"
-  left="15" bottom="-42" right="-15" height="18" follows="left|right|bottom"/>
+  left="15" bottom="-80" right="-15" height="18" follows="left|right|bottom"/>
  <button name="switch" label="Switch" left="15" bottom="-15" width="75" height="24" follows="left|bottom"/>
  <button name="favorite" label="Favorite" left="98" bottom="-15" width="125" height="24" follows="left|bottom"/>
  <button name="manage" label="Preferences…" right="-15" bottom="-15" width="105" height="24" follows="right|bottom"/>

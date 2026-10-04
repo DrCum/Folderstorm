@@ -60,8 +60,12 @@ struct Window
     InventoryFolder inventory_folder;
 };
 
+enum Component { Chrome = 1, Inventory = 2, Maps = 4, Chat = 8, All = 15 };
+int componentForRole(Role role);
+
 struct Workspace
 {
+    int components = All;
     FSChromeLayout::Snapshot chrome;
     bool world_view_in_mouselook = true;
     bool remember_inventory_folders = false;

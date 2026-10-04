@@ -137,3 +137,13 @@ Placement fit(const Window& window, const Rect& frame, float min_width, float mi
     return placement;
 }
 } // namespace FSWorkspaceLayout
+
+int FSWorkspaceLayout::componentForRole(Role role)
+{
+    switch (role)
+    {
+    case Role::InventoryPrimary: case Role::InventoryExtra1: return Inventory;
+    case Role::MiniMap: case Role::WorldMap: return Maps;
+    default: return Chat;
+    }
+}

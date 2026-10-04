@@ -160,17 +160,20 @@ void FSWorkspaceController::abandon()
     mProfiles = LLSD(); mActive.clear(); mRenamed.clear();
     mInboxTouched = mInboxBaselineValid = false;
 }
-FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folders) const
+FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folders, int components) const
 {
     FSWorkspaceLayout::Workspace result;
+    result.components = components;
+    remember_folders = remember_folders && (components & FSWorkspaceLayout::Inventory);
     result.remember_inventory_folders = remember_folders;
-    result.chrome = FSChromeLayoutController::instance().captureSnapshot();
-    result.world_view_in_mouselook = gSavedSettings.getBOOL("FSWorldViewInMouselook");
+    if (components & FSWorkspaceLayout::Chrome) result.chrome = FSChromeLayoutController::instance().captureSnapshot();
+    if (components & FSWorkspaceLayout::Chrome) result.world_view_in_mouselook = gSavedSettings.getBOOL("FSWorldViewInMouselook");
     result.frame_width = frame().width(); result.frame_height = frame().height();
     // Capture registered utility roles and additional Inventory instances only.
     // Preferences, the workspace switcher and other management windows are excluded.
     for (Role role : ROLES)
     {
+        if (!(components & FSWorkspaceLayout::componentForRole(role))) continue;
         LLFloater* floater = find(role);
         if (role == Role::NearbyChat && !chatCompatible(floater)) continue;
         if (role == Role::ConversationsGeometry && !standalone(floater)) continue;
@@ -181,12 +184,14 @@ FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folder
             if (auto* panel = inventoryPanel(floater))
                 result.windows[role].inventory_folder = panel->captureWorkspaceFolder();
     }
+    if (components & FSWorkspaceLayout::Inventory)
     if (auto* panel = inbox(find(Role::InventoryPrimary)))
     {
         S32 height = 0;
         result.has_inbox = panel->captureWorkspaceInbox(result.inbox_expanded, height);
         if (result.has_inbox) result.inbox_height = static_cast<F32>(height);
     }
+    if (components & FSWorkspaceLayout::Inventory)
     for (LLFloater* floater : extraInventoryFloaters())
         if (floater->LLView::getVisible())
         {
@@ -347,7 +352,7 @@ void FSWorkspaceController::finishQuickSwitch()
     finishPlacement();
     if (!mActive.empty() && mProfiles.has(mActive))
     {
-        mExpected = capture(mPending.remember_inventory_folders);
+        mExpected = capture(mPending.remember_inventory_folders, mPending.components);
         mExpectedDefinition = mProfiles[mActive]; mExpectedId = mActive;
         mExpectedAccount = mAccount; mExpectedSession = mSession;
         mComparisonTimer.setAge(1.f);
@@ -384,21 +389,21 @@ bool FSWorkspaceController::returnPrevious()
     mFocus.markDead();
     return true;
 }
-bool FSWorkspaceController::saveCurrentNow(const std::string& name, bool remember_folders)
+bool FSWorkspaceController::saveCurrentNow(const std::string& name, bool remember_folders, int components)
 {
     if (!canQuickSwitch()) return false;
     if (mQuickSwitch) finishQuickSwitch();
     abandon();
     // Reuse strict capture/validation, allowing only creation from this UI.
     // Pending Preferences edits are excluded by the guard above.
-    if (!saveCurrent(name, false, remember_folders)) { abandon(); return false; }
+    if (!saveCurrent(name, false, remember_folders, components)) { abandon(); return false; }
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     mStatus = "saved_immediately";
     abandon();
     return true;
 }
-bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite, bool remember_folders)
+bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite, bool remember_folders, int components)
 {
     beginPreferencesSession();
     if (!available() || !mTransaction) { mStatus = "unavailable"; return false; }
@@ -407,7 +412,7 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite,
     std::string error;
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
     if (mProfiles.has(name) && !overwrite) { mStatus = "exists"; return false; }
-    const auto current = capture(remember_folders);
+    const auto current = capture(remember_folders, components);
     if (current.extra_inventory.size() > static_cast<size_t>(FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS))
     { mStatus = "too_many_inventory_windows"; return false; }
     FSWorkspaceLayout::Workspace validated;
@@ -477,11 +482,14 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     mPending = workspace; mFolderSkipped = mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
     mFocus.markDead();
     if (auto* focus = dynamic_cast<LLView*>(gFocusMgr.getKeyboardFocus())) mFocus = focus->getDerivedHandle<LLView>();
+    if (workspace.components & FSWorkspaceLayout::Chrome)
+    {
     FSChromeLayoutController::instance().applySnapshot(workspace.chrome);
     gSavedSettings.setBOOL("FSWorldViewInMouselook", workspace.world_view_in_mouselook);
     gSavedSettings.setString("FSChromeActiveProfile", "");
     if (gViewerWindow) gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
     FSChromeLayoutController::instance().apply();
+    }
     for (const auto& entry : workspace.windows)
     {
         const Role role = entry.first;
@@ -516,7 +524,7 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     auto extras = extraInventoryFloaters();
     // Reuse registered instances in the same order used by capture, including
     // hidden windows from earlier switches. Folder restoration is optional.
-    const size_t count = std::max(extras.size(), workspace.extra_inventory.size());
+    const size_t count = (workspace.components & FSWorkspaceLayout::Inventory) ? std::max(extras.size(), workspace.extra_inventory.size()) : 0;
     for (size_t i = 0; i < count; ++i)
     {
         const auto saved = i < workspace.extra_inventory.size() ? workspace.extra_inventory[i] : FSWorkspaceLayout::Window{};
@@ -825,9 +833,9 @@ bool FSWorkspaceController::modified() const
     const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     if (id == mExpectedId && mExpectedAccount == gAgent.getID() && mExpectedSession == gAgent.getSessionID() &&
         mExpectedDefinition == profiles[id]) saved = mExpected; // Accepted fitted geometry, not original screen sizes.
-    const auto current = capture(saved.remember_inventory_folders);
-    bool changed = FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
-        saved.world_view_in_mouselook != current.world_view_in_mouselook;
+    const auto current = capture(saved.remember_inventory_folders, saved.components);
+    bool changed = (saved.components & FSWorkspaceLayout::Chrome) && (FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
+        saved.world_view_in_mouselook != current.world_view_in_mouselook);
     for (const auto& entry : saved.windows)
     {
         auto it = current.windows.find(entry.first);
@@ -847,7 +855,7 @@ void FSWorkspaceController::requestUpdateCurrent()
     const auto name = activeId();
     FSWorkspaceLayout::Workspace saved;
     if (!readProfile(name, saved) || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
-    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders));
+    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components));
     const auto originals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (!FSWorkspaceLayout::fromLLSD(reviewed, validated, error)) return;
