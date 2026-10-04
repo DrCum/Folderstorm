@@ -418,7 +418,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
 #if LL_WINDOWS
     // A saved configuration must remain bound to this installation, even if
     // another channel changes the legacy ProgramData alias after it is copied.
-    std::string package_id = LL_VIEWER_CHANNEL;
+    std::string package_id = LL_TO_STRING(LL_VIEWER_CHANNEL);
     if (package_id.rfind("Folderstorm", 0) == 0) package_id.erase(0, 10);
 #ifdef OPENSIM
     package_id = "FolderstormOS" + package_id;
@@ -443,7 +443,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     if (!launch.canCopy())
     {
         mConfiguration.clear();
-        getChild<LLTextEditor>("configuration")->setText("");
+        getChild<LLTextEditor>("configuration")->setText(LLStringExplicit(""));
         return;
     }
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;

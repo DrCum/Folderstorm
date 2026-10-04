@@ -192,8 +192,8 @@ void FSWorldViewDiagram::refreshGeometry()
 LLRect FSWorldViewDiagram::diagramRect(const LLRect& raw) const
 {
     if (!hasArea(mClient)) return LLRect();
-    const F32 width = llmax(1, getRect().getWidth() - 20);
-    const F32 height = llmax(1, getRect().getHeight() - 24);
+    const F32 width = llmax(1.f, static_cast<F32>(getRect().getWidth() - 20));
+    const F32 height = llmax(1.f, static_cast<F32>(getRect().getHeight() - 24));
     const F32 scale = llmin(width / mClient.getWidth(), height / mClient.getHeight());
     const F32 left = (getRect().getWidth() - mClient.getWidth() * scale) * .5f;
     const F32 bottom = 10.f + (height - mClient.getHeight() * scale) * .5f;
