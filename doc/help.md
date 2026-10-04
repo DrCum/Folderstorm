@@ -25,6 +25,10 @@ Open **Preferences → Move & View → Workspaces** after login. Arrange your wi
 
 **Preview** changes the arrangement immediately. Preferences **OK** keeps the arrangement and saved definitions; **Cancel** restores the previous arrangement. Conversations, Inventory contents and filters stay as they are. Manually opened extra Inventory windows remain independent; **Add workspace inventory window** creates one extra window managed by workspaces. Workspaces are restored manually, rather than automatically at login.
 
+For quick switching, choose **World → Workspaces & Layouts…**, or drag **Workspaces** from **Toolbar Buttons** to any toolbar. Double-click an entry or choose **Switch**. **Favorite** puts entries in a separate Favorites section at the top of this list; landmark favorites remain in their own bar. Workspaces include supported window arrangements; Layouts change only the viewport and bars. Saved workspace definitions stay unchanged when switching. Finish Preferences with **OK** or **Cancel** before using the quick switch. **Preferences…** opens the selected entry's Workspaces or Layout settings.
+
+Settings search also recognizes **MCP**, **dual monitor**, **workspace**, and **undo**. Matching tabs open automatically. Undo leads to **Local assistant → History**, where **History and undo…** opens the existing inventory review window. Searching or opening history does not authorize or execute inventory changes.
+
 ### Review Inventory changes
 
 Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. Review the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.

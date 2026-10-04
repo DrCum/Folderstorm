@@ -31,8 +31,8 @@
 class LLFloater;
 class LLView;
 
-// Main-thread only. Profiles are pending until explicit Preferences OK.
-// Generic Preferences apply/saveSettings calls are baseline capture only.
+// Main-thread only. Preferences previews require explicit OK. Quick switching
+// accepts only an existing workspace and is blocked while Preferences is open.
 class FSWorkspaceController
 {
 public:
@@ -42,13 +42,16 @@ public:
     void commitPendingSettings();
     void cancelPreferencesSession();
     bool preview(const std::string& id);
+    bool canQuickSwitch() const;
+    bool quickSwitchWorkspace(const std::string& id);
+    bool quickSwitchLayout(const std::string& id);
     bool saveCurrent(const std::string& name, bool overwrite = false);
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
     bool addInventoryWindow();
     std::vector<std::string> names() const;
     bool isCustom(const std::string& id) const;
-    const std::string& activeId() const { return mActive; }
+    std::string activeId() const;
     unsigned long revision() const { return mRevision; }
     const std::string& status() const { return mStatus; }
     int appliedCount() const { return mApplied; }
@@ -73,11 +76,13 @@ private:
     void placePending(unsigned long generation, const LLUUID& account, const LLUUID& session);
     void abandon();
     void finishPlacement();
+    void finishQuickSwitch();
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
 
     bool mTransaction = false;
     bool mPendingPlacement = false;
+    bool mQuickSwitch = false;
     unsigned long mRevision = 0;
     unsigned long mGeneration = 0;
     LLUUID mAccount, mSession;

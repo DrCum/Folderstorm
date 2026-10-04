@@ -119,6 +119,7 @@ public:
     // updates click/double-click action controls depending on values from settings.xml
     void updateClickActionViews();
     void updateSearchableItems();
+    static void showWorkspaceSettings(bool layout = false);
 
     void        onBtnOK(const LLSD& userdata);
     void        onBtnCancel(const LLSD& userdata);

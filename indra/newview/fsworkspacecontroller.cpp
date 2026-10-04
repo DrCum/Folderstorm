@@ -122,6 +122,7 @@ void FSWorkspaceController::abandon()
     ++mGeneration;
     ++mRevision;
     mPendingPlacement = false;
+    mQuickSwitch = false;
     mTransaction = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
     mFocus.markDead();
@@ -185,6 +186,9 @@ void FSWorkspaceController::rememberRole(Role role)
 void FSWorkspaceController::beginPreferencesSession()
 {
     if (mTransaction && (!sameSession() || !available())) abandon();
+    // Opening Preferences during the deferred placement must capture the
+    // accepted quick switch, rather than adopt its temporary rollback state.
+    if (mQuickSwitch) finishQuickSwitch();
     if (!available() || mTransaction) return;
     mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
     mProfiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
@@ -197,14 +201,59 @@ void FSWorkspaceController::beginPreferencesSession()
 std::vector<std::string> FSWorkspaceController::names() const
 {
     std::vector<std::string> result;
-    if (mProfiles.isMap())
-        for (auto it = mProfiles.beginMap(); it != mProfiles.endMap() && result.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
+    if (!available()) return result;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    if (profiles.isMap())
+        for (auto it = profiles.beginMap(); it != profiles.endMap() && result.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
             if (FSWorkspaceLayout::isSafeProfileName(it->first)) result.push_back(it->first);
     return result;
 }
 bool FSWorkspaceController::isCustom(const std::string& id) const
 {
-    return mTransaction && mProfiles.isMap() && mProfiles.has(id) && !FSWorkspaceLayout::isBuiltinProfileId(id);
+    if (!available()) return false;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    return profiles.isMap() && profiles.has(id) && !FSWorkspaceLayout::isBuiltinProfileId(id);
+}
+std::string FSWorkspaceController::activeId() const
+{
+    if (!available()) return "";
+    return mTransaction && sameSession() ? mActive : gSavedPerAccountSettings.getString("FSActiveWorkspace");
+}
+bool FSWorkspaceController::canQuickSwitch() const
+{
+    // Includes minimized Preferences: no pending settings are accepted by a
+    // quick switch, and later Cancel must not undo a switch made elsewhere.
+    return available() && !LLFloaterReg::instanceVisible("preferences");
+}
+bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
+{
+    if (!canQuickSwitch()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    // Discard any baseline captured during construction of a hidden panel.
+    // This does not write profile definitions or unrelated preferences.
+    abandon();
+    if (!preview(id)) { abandon(); return false; }
+    mQuickSwitch = true;
+    // The quick-switch list closes after selection. Its controls stay alive,
+    // so the deferred placement must not restore focus to that hidden window.
+    mFocus.markDead();
+    return true;
+}
+bool FSWorkspaceController::quickSwitchLayout(const std::string& id)
+{
+    if (!canQuickSwitch()) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    abandon();
+    return FSChromeLayoutController::instance().applyProfile(id);
+}
+void FSWorkspaceController::finishQuickSwitch()
+{
+    if (!mQuickSwitch) return;
+    if (!sameSession() || !available()) { abandon(); return; }
+    finishPlacement();
+    // Save only the chosen identifier. Definitions remain unchanged.
+    gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
+    abandon();
 }
 bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite)
 {
@@ -353,6 +402,7 @@ void FSWorkspaceController::placePending(unsigned long generation, const LLUUID&
     if (generation != mGeneration || !mPendingPlacement) return;
     if (!available() || account != gAgent.getID() || session != gAgent.getSessionID()) { abandon(); return; }
     finishPlacement();
+    if (mQuickSwitch) finishQuickSwitch();
 }
 void FSWorkspaceController::finishPlacement()
 {

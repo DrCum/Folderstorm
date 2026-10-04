@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <commands>
+  <command name="workspaces"
+           available_in_toybox="true"
+           icon="Icon_Restore_Foreground"
+           label_ref="Command_Workspaces_Label"
+           tooltip_ref="Command_Workspaces_Tooltip"
+           execute_function="Floater.Toggle"
+           execute_parameters="workspace_switch"
+           is_running_function="Floater.IsOpen"
+           is_running_parameters="workspace_switch"
+           />
   <command name="aboutland"
            available_in_toybox="true"
            icon="Command_AboutLand_Icon"

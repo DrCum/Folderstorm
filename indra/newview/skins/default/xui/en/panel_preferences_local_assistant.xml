@@ -131,5 +131,10 @@
    <check_box height="16" layout="topleft" left="8" top="317" width="155" label="Technical details" name="show_details" />
    <text visible="false" follows="left|top|right" height="30" layout="topleft" left="171" top="317" width="337" name="bridge_details" font="SansSerifSmall" wrap="true" />
   </panel>
+  <panel follows="all" layout="topleft" label="History" name="assistant_history" height="355" width="520">
+   <text follows="left|top|right" height="60" layout="topleft" left="8" top="8" right="-8" name="history_help" wrap="true">Review inventory changes from this session. Select an operation to review its undo preview before applying any supported reversal.</text>
+   <button follows="left|top" height="23" layout="topleft" left="8" top="76" width="220" label="History and undo…" name="history_and_undo" />
+   <text follows="left|top|right" height="48" layout="topleft" left="8" top="108" right="-8" name="history_scope" wrap="true">History is shared with inventory bulk actions. Undo availability depends on the operation and the current inventory state.</text>
+  </panel>
  </tab_container>
 </panel>
