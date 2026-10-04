@@ -1,6 +1,6 @@
 # Folderstorm improvement plans
 
-The next workspace features are delivered one at a time: see [workspace enhancement roadmap](workspace-enhancements.md). The first local checkpoint implements the optional favorite workspace/layout strip. Folder context, shortcuts, previous arrangement, snapping/alignment and startup restore follow in that order. Testing and the next PR are deferred until requested.
+The remaining [workspace enhancement roadmap](workspace-enhancements.md) is implemented on `feat/workspace-tools`, based on merged PR #4/current `main`. It covers keyboard switching, Previous arrangement, snapping/alignment, startup restore, indicators and Update, selective groups, toolbar sets, export/import and a fitted diagram. Workspace favorites now share the landmark row using its skin style and a divider. Focused checks, the completed checklist and remaining native acceptance are in [workspace tools verification](../testing/workspace-tools-validation.md). The user authorized continuous implementation, affected-path checks and publication; viewer/packaging/GitHub builds and unrelated suites remain excluded.
 
 The follow-up batch for items **5, 7, 8 and 10** is described in [next improvements](next-improvements.md). Its implementation and verification are recorded separately in [follow-up validation](../next-improvements-validation.md). The first batch below remains the baseline for PR #1.
 

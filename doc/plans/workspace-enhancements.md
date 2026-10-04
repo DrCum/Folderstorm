@@ -2,9 +2,17 @@
 
 PR #3 supplies the Workspaces toolbar button, World menu entry, favorites and quick saving. [PR #4](https://github.com/DrCum/Folderstorm/pull/4) adds the optional favorites strip and Inventory folder restoration, and carries PR #3 into `main`. Those two additions are implemented; native Windows/skin testing remains outstanding. Verify PR #4’s merge state when the next coding session starts.
 
+## Follow-up implementation status — October 4, 2026
+
+PR #4 was verified merged into `main` at `33e371fb3f`. The isolated follow-up branch `feat/workspace-tools` implements every remaining section below, with separately reviewable commits and focused checks. The user subsequently requested that workspace favorites share the landmark row: the follow-up uses the existing skin's landmark button style, a `|` divider, separate overflow menus and no labels or additional opaque row.
+
+Completed: assignable direct/favorite-cycle keyboard actions; session-only Previous; optional snapping and selected-window alignment/distribution; optional named/Last startup restore; active/modified indicators; reviewed Update current; selective groups; optional toolbar button sets; bounded portable export/import with collision review; and a read-only fitted diagram. Native Windows and skin acceptance remains outstanding. See [follow-up verification and completed checklist](../testing/workspace-tools-validation.md).
+
+The user also scheduled a one-time conditional continuation for **5:30 a.m. October 4, America/New_York**: resume only if implementation/publication is unfinished; otherwise do nothing. The completion PR and attached chat artifact are the completion record.
+
 ## Delivery and continuous implementation
 
-The latest user instruction replaces the earlier requirement to pause after each feature. The user authorized and scheduled a one-time start at **12:15 a.m. Eastern on October 4, 2026** (`America/New_York`, 04:15 UTC) after their usage reset. The automation was created successfully to resume this chat’s workspace work and create a PR after focused checks. Do not start implementation before that scheduled instruction or an explicit earlier start. When that instruction arrives, continue through the entire remaining roadmap without waiting for confirmation between features, including when the user is away/asleep. Keep meaningful progress updates and separately reviewable commits. Combine closely related work when useful; snapping and alignment can remain two smaller commits without a pause between them. If a genuine blocker needs user input, ask asynchronously and continue independent authorized work where possible.
+The latest user instruction replaces the earlier requirement to pause after each feature. The user authorized and scheduled a one-time start at **12:15 a.m. Eastern on October 4, 2026** (`America/New_York`, 04:15 UTC) after their usage reset. The automation was created successfully to resume this chat’s workspace work and create a PR after focused checks. The user explicitly resumed work after that kickoff fired early. Continue through the entire remaining roadmap without waiting for confirmation between features, including when the user is away/asleep. Keep meaningful progress updates and separately reviewable commits. Combine closely related work when useful; snapping and alignment can remain two smaller commits without a pause between them. If a genuine blocker needs user input, ask asynchronously and continue independent authorized work where possible.
 
 Remaining delivery order:
 
@@ -29,7 +37,7 @@ Status: implemented as the first local checkpoint on `feat/workspace-enhancement
 
 Goal: one-click access to starred workspaces/layouts without opening the switcher.
 
-Suggested arrangement, as a separate row near the existing landmark favorites bar:
+Original arrangement (superseded by the user's shared-row request in this follow-up):
 
     Landmarks:   [Coworking Space] [Cherry's Fruit Bar] ...
     Workspaces:  [Driving] [Inventory sorting] | Layouts: [Dual monitor] [More…]
@@ -64,6 +72,8 @@ Checkpoint: a named workspace restores different folder roots into multiple Inve
 
 ## 3. Workspace keyboard shortcuts — original idea 2
 
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
+
 Goal: load a chosen workspace/layout or cycle favorite entries from the keyboard.
 
 - Add workspace actions to the existing keybinding system rather than installing a separate global key handler.
@@ -75,6 +85,8 @@ Goal: load a chosen workspace/layout or cycle favorite entries from the keyboard
 Checkpoint: direct and favorite-cycle actions work consistently with buttons and do not activate while typing in fields where the existing binding system suppresses viewer actions.
 
 ## 4. Return to previous arrangement — original idea 3
+
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
 
 Goal: undo a workspace/layout switch even when the previous setup was never saved.
 
@@ -89,6 +101,8 @@ Checkpoint: switch from an unsaved arrangement, return to it, and toggle back wi
 
 ## 5. Window snapping and alignment — original idea 5
 
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
+
 Goal: arrange supported utility windows cleanly around the viewport and monitor gutters.
 
 - Start with optional snapping during ordinary drag/resize for standalone Inventory, Chat and Map windows. Use UI logical coordinates and existing viewport/gutter geometry.
@@ -100,6 +114,8 @@ Goal: arrange supported utility windows cleanly around the viewport and monitor 
 Checkpoint A: opt-in dragging snaps correctly and can be bypassed. Checkpoint B: selected utility windows align/distribute within their valid bounds.
 
 ## 6. Optional restore at login — original idea 6
+
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
 
 Goal: arrive in a chosen workspace, or resume the last arrangement.
 
@@ -114,6 +130,8 @@ Checkpoint: the selected startup behavior restores once, Off preserves manual st
 
 ## 7. Active workspace and modified indicator
 
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
+
 Goal: make the current arrangement identifiable without opening Preferences.
 
 - Highlight the active workspace's favorite button and identify the active workspace in the switcher. Use text/icon/tooltip cues as well as skin colors; an unfavorited active workspace still has a visible identity in the switcher.
@@ -125,6 +143,8 @@ Goal: make the current arrangement identifiable without opening Preferences.
 Acceptance: current/modified cues reflect supported changes, clear after updating, and cannot retain another account's identity. Later selective restoration and toolbar sets extend the same comparison.
 
 ## 8. Update current workspace from the switcher
+
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
 
 Goal: save adjustments to the active workspace without reopening Preferences or inventing a new name.
 
@@ -138,6 +158,8 @@ Acceptance: Update replaces exactly the named workspace with the reviewed setup,
 
 ## 9. Choose what a workspace restores
 
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
+
 Goal: change Inventory or maps without necessarily changing viewport, bars or chat.
 
 - Add per-workspace capture/restoration choices for viewport/bars, Inventory, maps and compatible chat geometry. Keep Inventory folder restoration a subordinate opt-in choice. Explain these choices in both save/management workflows without crowding the quick switcher.
@@ -149,6 +171,8 @@ Goal: change Inventory or maps without necessarily changing viewport, bars or ch
 Acceptance: an Inventory-only workspace leaves viewport, bars, maps and chat alone; old definitions still behave as before; invalid masks fail without changing saved data.
 
 ## 10. Save toolbar button sets
+
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
 
 Goal: let Driving and Inventory sorting workspaces expose different useful toolbar tools.
 
@@ -162,6 +186,8 @@ Acceptance: switching changes ordered button sets only when requested, Cancel/Pr
 
 ## 11. Export and import workspaces
 
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
+
 Goal: move arrangements between computers without manually copying settings files.
 
 - Use the native file picker and a versioned, bounded export format containing selected workspace definitions. Export portable layout data by default; offer an explicit option to include account-specific Inventory folder references.
@@ -174,6 +200,8 @@ Goal: move arrangements between computers without manually copying settings file
 Acceptance: export/import round trips portable arrangements, collisions do not silently overwrite, and malformed or oversized files cannot partially change settings.
 
 ## 12. Visual preview before switching
+
+Status: implemented in the follow-up branch; focused checks and native verification limits are recorded in `doc/testing/workspace-tools-validation.md`.
 
 Goal: understand a saved arrangement before applying it.
 
