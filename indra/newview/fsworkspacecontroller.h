@@ -54,8 +54,8 @@ public:
     void saveLastArrangement();
     bool hasPrevious() const;
     bool returnPrevious();
-    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All);
-    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All);
+    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
+    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
     bool remembersInventoryFolders(const std::string& name) const;
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
@@ -96,7 +96,9 @@ private:
         LLHandle<LLFloater> handle;
         FSWorkspaceLayout::Window window;
     };
-    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All) const;
+    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false) const;
+    void applyToolbars(const FSWorkspaceLayout::Workspace& workspace);
+    bool mToolbarTouched = false;
     void applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved, RuntimeBaseline& baseline);
     void rememberRole(Role role);
     void rememberControls(Role role);

@@ -81,6 +81,7 @@ void FSFloaterWorkspaces::onOpen(const LLSD& key)
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
     for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->set(true);
+    getChild<LLCheckBoxCtrl>("capture_toolbars")->set(false);
     refresh(true);
 }
 void FSFloaterWorkspaces::draw()
@@ -188,10 +189,10 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch && getChild<LLCheckBoxCtrl>("capture_inventory")->get());
-    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
+    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && captureComponents(this) != 0);
+    getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("capture_toolbars")->get()));
     getChild<LLLineEditor>("workspace_name")->setEnabled(can_switch);
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
     LLStringUtil::format_map_t args;
@@ -229,7 +230,7 @@ void FSFloaterWorkspaces::saveCurrent()
     if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this)))
+    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get()))
     {
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");

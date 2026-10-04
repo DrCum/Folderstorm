@@ -114,17 +114,18 @@ void FSPanelPreferenceWorkspaces::refresh()
         getChild<LLCheckBoxCtrl>("workspace_capture_maps")->set((mask & FSWorkspaceLayout::Maps) != 0);
         getChild<LLCheckBoxCtrl>("workspace_capture_chat")->set((mask & FSWorkspaceLayout::Chat) != 0);
 
+        getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->set(saved.remember_toolbars);
         mFolderOptionWorkspace = selected();
         mFolderOptionAccount = gAgent.getID(); mFolderOptionSession = gAgent.getSessionID();
     }
     remember->setEnabled(ready && getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get());
-    for (const char* name : {"workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
+    for (const char* name : {"workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat", "workspace_capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
     getChild<LLComboBox>("workspace_startup_mode")->setEnabled(ready);
     getChild<LLComboBox>("workspace_startup_name")->setEnabled(ready && getChild<LLComboBox>("workspace_startup_mode")->getValue().asString() == "named");
     combo->setEnabled(ready && combo->getItemCount());
     getChild<LLLineEditor>("workspace_name")->setEnabled(ready);
     getChild<LLButton>("workspace_preview")->setEnabled(ready && !selected().empty());
-    getChild<LLButton>("workspace_save")->setEnabled(ready && captureComponents(this) != 0);
+    getChild<LLButton>("workspace_save")->setEnabled(ready && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get()));
     getChild<LLButton>("workspace_rename")->setEnabled(ready && controller.isCustom(selected()));
     getChild<LLButton>("workspace_delete")->setEnabled(ready && controller.isCustom(selected()));
     getChild<LLButton>("workspace_add_inventory")->setEnabled(ready);
@@ -147,7 +148,7 @@ void FSPanelPreferenceWorkspaces::action(const std::string& name)
     else if (name == "save")
     {
         const auto label = enteredName();
-        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get(), captureComponents(this)) && controller.status() == "exists") confirm("overwrite", label);
+        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get()) && controller.status() == "exists") confirm("overwrite", label);
     }
     else if (name == "rename") controller.rename(selected(), enteredName());
     else if (name == "delete") confirm("delete", selected());
@@ -161,17 +162,18 @@ void FSPanelPreferenceWorkspaces::confirm(const std::string& action, const std::
     const auto revision = controller.revision();
     const bool remember_folders = getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get();
     const int components = captureComponents(this);
+    const bool toolbars = getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get();
     const auto handle = getDerivedHandle<FSPanelPreferenceWorkspaces>();
     LLSD args;
     args["NAME"] = name;
     LLNotificationsUtil::add(action == "overwrite" ? "ConfirmWorkspaceOverwrite" : "ConfirmWorkspaceDelete",
-        args, LLSD(), [handle, revision, action, name, remember_folders, components](const LLSD& notification, const LLSD& response)
+        args, LLSD(), [handle, revision, action, name, remember_folders, components, toolbars](const LLSD& notification, const LLSD& response)
         {
             auto* panel = handle.get();
             auto& controller = FSWorkspaceController::instance();
             if (!panel || !controller.available() || controller.revision() != revision ||
                 LLNotificationsUtil::getSelectedOption(notification, response) != 0) return;
-            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders, components);
+            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders, components, toolbars);
             else controller.remove(name);
             panel->refresh();
         });
