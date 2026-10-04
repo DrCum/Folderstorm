@@ -69,6 +69,8 @@ public:
     int adjustedCount() const { return mAdjusted; }
     int skippedCount() const { return mSkipped; }
     bool modified() const;
+    bool readProfile(const std::string& id, FSWorkspaceLayout::Workspace& workspace) const;
+    void requestUpdateCurrent();
 
 private:
     using Role = FSWorkspaceLayout::Role;
@@ -130,7 +132,13 @@ private:
     LLSD mProfiles;
     std::string mActive;
     std::string mStatus = "ready";
-    FSWorkspaceLayout::Workspace mBaseline, mPending;
+    FSWorkspaceLayout::Workspace mBaseline, mPending, mExpected;
+    LLSD mExpectedDefinition;
+    std::string mExpectedId;
+    LLUUID mExpectedAccount, mExpectedSession;
+    mutable LLTimer mComparisonTimer;
+    mutable bool mModifiedCache = false;
+    std::vector<std::pair<std::string, std::string>> mRenamed;
     std::map<Role, RuntimeBaseline> mRuntime;
     std::map<std::string, ControlBaseline> mControls;
     std::map<std::string, ControlBaseline> mExtraControls;

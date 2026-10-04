@@ -104,10 +104,13 @@ void FSWorkspaceFavoritesBar::refresh()
     const LLSD profiles = ready ? gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles") : LLSD();
     const LLSD layouts = ready ? gSavedSettings.getLLSD("FSChromeLayoutProfiles") : LLSD();
     const LLSD favorites = ready ? gSavedPerAccountSettings.getLLSD(FSWorkspaceQuickAccess::FAVORITES_SETTING) : LLSD();
-    if (mWidth != getRect().getWidth() || shown != mShown || can_switch != mCanSwitch ||
+    const auto active = controller.activeId();
+    const bool modified = controller.modified(), previous = controller.hasPrevious();
+    if (active != mActive || modified != mModified || previous != mHasPrevious || mWidth != getRect().getWidth() || shown != mShown || can_switch != mCanSwitch ||
         gAgent.getID() != mAccount || gAgent.getSessionID() != mSession ||
         profiles != mProfiles || layouts != mLayouts || favorites != mFavorites)
     {
+        mActive = active; mModified = modified; mHasPrevious = previous;
         mWidth = getRect().getWidth(); mShown = shown; mCanSwitch = can_switch;
         mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
         mProfiles = profiles; mLayouts = layouts; mFavorites = favorites;
@@ -152,10 +155,12 @@ void FSWorkspaceFavoritesBar::rebuild()
                 mDynamicChildren.push_back(label); x += label_width; labeled = true;
             }
             LLButton::Params p;
-            p.name = entry.key; p.label = entry.label; p.font = font; p.use_ellipses = true;
+            const bool active = entry.key == "workspace:" + mActive;
+            p.name = entry.key; p.label = (active ? "• " : "") + entry.label + (active && mModified ? " *" : ""); p.font = font; p.use_ellipses = true;
             p.rect = LLRect(x, ROW_HEIGHT - 2, x + button_width, 2);
             auto* button = LLUICtrlFactory::create<LLButton>(p, this);
             button->setEnabled(mCanSwitch);
+            button->setToggleState(active);
             button->setToolTip(entry.label + (mCanSwitch ? "" : " — " + getString("preferences_open")));
             const auto key = entry.key;
             button->setCommitCallback([this, key](LLUICtrl*, const LLSD&) { switchEntry(key); });

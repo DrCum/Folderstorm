@@ -34,7 +34,8 @@ private:
     void switchEntry(const std::string& key);
     LLHandle<LLView> mNavigation, mStack, mContainer;
     S32 mNavigationHeight = 0, mStackHeight = 0, mWidth = -1;
-    bool mShown = false, mCanSwitch = false;
+    bool mShown = false, mCanSwitch = false, mModified = false, mHasPrevious = false;
+    std::string mActive;
     LLUUID mAccount, mSession;
     LLSD mProfiles, mLayouts, mFavorites;
     LLTimer mRefreshTimer;

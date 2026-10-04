@@ -157,7 +157,7 @@ void FSWorkspaceController::abandon()
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
     mExtraControls.clear(); mExtraRuntime.clear(); mPendingExtraInventory.clear();
     mFocus.markDead();
-    mProfiles = LLSD(); mActive.clear();
+    mProfiles = LLSD(); mActive.clear(); mRenamed.clear();
     mInboxTouched = mInboxBaselineValid = false;
 }
 FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folders) const
@@ -345,6 +345,13 @@ void FSWorkspaceController::finishQuickSwitch()
     if (!mQuickSwitch) return;
     if (!sameSession() || !available()) { abandon(); return; }
     finishPlacement();
+    if (!mActive.empty() && mProfiles.has(mActive))
+    {
+        mExpected = capture(mPending.remember_inventory_folders);
+        mExpectedDefinition = mProfiles[mActive]; mExpectedId = mActive;
+        mExpectedAccount = mAccount; mExpectedSession = mSession;
+        mComparisonTimer.setAge(1.f);
+    }
     // Save only the chosen identifier. Definitions remain unchanged.
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     if (mRestoreLayout) gSavedSettings.setString("FSChromeActiveProfile", mRestoredLayout);
@@ -427,6 +434,7 @@ bool FSWorkspaceController::rename(const std::string& old_name, const std::strin
     if (!FSWorkspaceLayout::isSafeProfileName(new_name) || mProfiles.has(new_name)) { mStatus = "invalid_name_or_data"; return false; }
     if (!FSWorkspaceLayout::fromLLSD(mProfiles[old_name], parsed, error)) { mStatus = "invalid_data"; return false; }
     mProfiles[new_name] = mProfiles[old_name]; mProfiles.erase(old_name);
+    mRenamed.emplace_back(old_name, new_name);
     if (mActive == old_name) mActive = new_name;
     mStatus = "renamed"; ++mRevision; return true;
 }
@@ -435,6 +443,7 @@ bool FSWorkspaceController::remove(const std::string& name)
     beginPreferencesSession();
     if (!available() || !isCustom(name)) return false;
     mProfiles.erase(name); if (mActive == name) mActive.clear();
+    mRenamed.emplace_back(name, "");
     mStatus = "deleted"; ++mRevision; return true;
 }
 bool FSWorkspaceController::preview(const std::string& id)
@@ -663,6 +672,21 @@ void FSWorkspaceController::commitPendingSettings()
     ++mGeneration;
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
+    for (const auto& change : mRenamed)
+    {
+        if (gSavedPerAccountSettings.getString("FSWorkspaceShortcutTarget") == "workspace:" + change.first)
+            gSavedPerAccountSettings.setString("FSWorkspaceShortcutTarget", change.second.empty() ? "" : "workspace:" + change.second);
+        if (gSavedPerAccountSettings.getString("FSWorkspaceStartupName") == change.first)
+            gSavedPerAccountSettings.setString("FSWorkspaceStartupName", change.second);
+        const auto old = gSavedPerAccountSettings.getLLSD("FSWorkspaceQuickSwitchFavorites");
+        LLSD updated = LLSD::emptyArray();
+        if (old.isArray()) for (S32 i = 0; i < static_cast<S32>(std::min<size_t>(old.size(), 128)); ++i)
+        {
+            if (old[i].asString() != "workspace:" + change.first) updated.append(old[i]);
+            else if (!change.second.empty()) updated.append("workspace:" + change.second);
+        }
+        gSavedPerAccountSettings.setLLSD("FSWorkspaceQuickSwitchFavorites", updated);
+    }
     abandon();
     beginPreferencesSession();
 }
@@ -783,25 +807,65 @@ void FSWorkspaceController::cancelPreferencesSession()
             }
     abandon();
 }
+bool FSWorkspaceController::readProfile(const std::string& id, FSWorkspaceLayout::Workspace& workspace) const
+{
+    if (!available()) return false;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    std::string error;
+    return profiles.has(id) && FSWorkspaceLayout::fromLLSD(profiles[id], workspace, error);
+}
 bool FSWorkspaceController::modified() const
 {
-    if (!mTransaction || !available() || !sameSession() || mPendingPlacement || mActive.empty()) return false;
+    if (!available() || mPendingPlacement || activeId().empty()) return false;
+    if (mComparisonTimer.getElapsedTimeF32() < .5f) return mModifiedCache;
+    mComparisonTimer.reset(); mModifiedCache = false;
+    const auto id = activeId();
     FSWorkspaceLayout::Workspace saved;
-    std::string error;
-    if (!isCustom(mActive) || !FSWorkspaceLayout::fromLLSD(mProfiles[mActive], saved, error)) return false;
+    if (!readProfile(id, saved)) return false;
+    const LLSD profiles = mTransaction && sameSession() ? mProfiles : gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    if (id == mExpectedId && mExpectedAccount == gAgent.getID() && mExpectedSession == gAgent.getSessionID() &&
+        mExpectedDefinition == profiles[id]) saved = mExpected; // Accepted fitted geometry, not original screen sizes.
     const auto current = capture(saved.remember_inventory_folders);
-    if (FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
-        saved.world_view_in_mouselook != current.world_view_in_mouselook) return true;
+    bool changed = FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
+        saved.world_view_in_mouselook != current.world_view_in_mouselook;
     for (const auto& entry : saved.windows)
     {
         auto it = current.windows.find(entry.first);
-        if (it == current.windows.end() || !equalWindow(entry.second, it->second, entry.first == Role::ConversationsGeometry)) return true;
+        if (it != current.windows.end() && !equalWindow(entry.second, it->second, entry.first == Role::ConversationsGeometry)) changed = true;
     }
-    if (saved.extra_inventory.size() != current.extra_inventory.size()) return true;
-    for (size_t i = 0; i < saved.extra_inventory.size(); ++i)
-        if (!equalWindow(saved.extra_inventory[i], current.extra_inventory[i], false)) return true;
-    return saved.has_inbox && (!current.has_inbox || saved.inbox_expanded != current.inbox_expanded ||
-        std::fabs(saved.inbox_height - current.inbox_height) > 1.f);
+    if (saved.extra_inventory.size() != current.extra_inventory.size()) changed = true;
+    else for (size_t i = 0; i < saved.extra_inventory.size(); ++i)
+        if (!equalWindow(saved.extra_inventory[i], current.extra_inventory[i], false)) changed = true;
+    if (saved.has_inbox && (!current.has_inbox || saved.inbox_expanded != current.inbox_expanded ||
+        std::fabs(saved.inbox_height - current.inbox_height) > 1.f)) changed = true;
+    return mModifiedCache = changed;
+}
+void FSWorkspaceController::requestUpdateCurrent()
+{
+    if (!canQuickSwitch()) return;
+    if (mQuickSwitch) finishQuickSwitch();
+    const auto name = activeId();
+    FSWorkspaceLayout::Workspace saved;
+    if (!readProfile(name, saved) || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
+    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders));
+    const auto originals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
+    FSWorkspaceLayout::Workspace validated; std::string error;
+    if (!FSWorkspaceLayout::fromLLSD(reviewed, validated, error)) return;
+    const auto account = gAgent.getID(), session = gAgent.getSessionID();
+    const auto revision = mRevision;
+    LLSD args; args["NAME"] = name;
+    LLNotificationsUtil::add("ConfirmWorkspaceOverwrite", args, LLSD(),
+        [account, session, revision, name, reviewed, originals](const LLSD& notification, const LLSD& response)
+        {
+            auto& controller = instance();
+            if (LLNotificationsUtil::getSelectedOption(notification, response) != 0 || !controller.canQuickSwitch() ||
+                account != gAgent.getID() || session != gAgent.getSessionID() || revision != controller.revision() ||
+                originals != gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles") || controller.activeId() != name) return;
+            LLSD profiles = originals;
+            profiles[name] = reviewed; // Save exactly the arrangement reviewed when confirmation opened.
+            gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", profiles);
+            controller.mExpectedId.clear(); controller.mComparisonTimer.setAge(1.f); ++controller.mRevision;
+        });
 }
 
 std::vector<FSWorkspaceController::Utility> FSWorkspaceController::utilityWindows() const
