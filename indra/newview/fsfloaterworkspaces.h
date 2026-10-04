@@ -36,6 +36,7 @@ private:
     void switchSelected();
     void toggleFavorite();
     void manageSelected();
+    void saveCurrent();
     std::string selected() const;
     void addHeading(const std::string& label);
     void addEntry(const std::string& key, const std::string& label, bool layout);
@@ -46,6 +47,6 @@ private:
     std::set<std::string> mFavorites;
     unsigned long mRevision = 0;
     bool mReady = false;
-    bool mSwitchFailed = false;
+    std::string mActionStatus, mSavedName;
 };
 #endif

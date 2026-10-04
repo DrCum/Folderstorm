@@ -50,9 +50,12 @@ void rejected(const LLSD& data, const char* message)
 {
     Workspace workspace = fixture();
     workspace.frame_width = 123.f;
+    workspace.extra_inventory.push_back(workspace.windows[Role::InventoryPrimary]);
     std::string error;
     expect(!fromLLSD(data, workspace, error) && !error.empty(), message);
-    expect(workspace.frame_width == 123.f && workspace.windows.size() == 3, "Failed parse leaves output untouched");
+    expect(workspace.frame_width == 123.f && workspace.windows.size() == 3 &&
+           workspace.extra_inventory.size() == 1 && workspace.extra_inventory.front().visible,
+           "Failed parse leaves output untouched");
 }
 }
 int main()
@@ -69,6 +72,65 @@ int main()
     data["windows"]["mini_map"].erase("minimized");
     expect(fromLLSD(data, parsed, error) && !parsed.windows[Role::MiniMap].has_geometry,
            "Hidden never-created window accepts visible:false alone");
+
+    expect(valid["extra_inventory"].isArray() && valid["extra_inventory"].size() == 0 &&
+           parsed.extra_inventory.empty(), "Empty extra Inventory array round trips");
+    parsed.extra_inventory.push_back(fixture().windows[Role::InventoryPrimary]);
+    data = valid; data.erase("extra_inventory");
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory.empty(),
+           "Legacy workspace without extra Inventory array restores no extras");
+    Workspace with_extras = fixture();
+    with_extras.extra_inventory.push_back(capture({100.f, 200.f, 500.f, 800.f},
+                                                {0.f, 0.f, 2400.f, 1000.f}, true, false));
+    with_extras.extra_inventory.push_back(capture({600.f, 200.f, 900.f, 700.f},
+                                                {0.f, 0.f, 2400.f, 1000.f}, false, true));
+    const LLSD extras_valid = toLLSD(with_extras);
+    expect(fromLLSD(extras_valid, parsed, error) && parsed.extra_inventory.size() == 2 &&
+           parsed.extra_inventory[0].visible && !parsed.extra_inventory[0].minimized &&
+           parsed.extra_inventory[0].has_geometry && parsed.extra_inventory[0].width_ui == 400.f &&
+           !parsed.extra_inventory[1].visible && parsed.extra_inventory[1].minimized &&
+           parsed.extra_inventory[1].height_ui == 500.f && parsed.windows.size() == 3,
+           "Extra Inventory visibility, minimization, order and geometry round trip");
+    data = valid; data["extra_inventory"] = LLSD::emptyMap();
+    rejected(data, "Extra Inventory array type required");
+    data = valid; data["extra_inventory"].append(false);
+    rejected(data, "Extra Inventory entries require objects");
+    data = valid; data["extra_inventory"].append(LLSD::emptyMap());
+    rejected(data, "Extra Inventory entry requires visibility");
+    data = valid; data["extra_inventory"][0]["visible"] = false;
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory.size() == 1 &&
+           !parsed.extra_inventory[0].has_geometry, "Hidden extra Inventory may omit geometry");
+    data["extra_inventory"][0]["minimized"] = true;
+    rejected(data, "Minimized extra Inventory requires geometry even when hidden");
+    data = extras_valid; data["extra_inventory"][0]["visible"] = 1;
+    rejected(data, "Extra Inventory visibility type is strict");
+    data = extras_valid; data["extra_inventory"][0]["minimized"] = 1;
+    rejected(data, "Extra Inventory minimized type is strict");
+    for (const char* field : {"center_x", "center_y", "width_ui", "height_ui"})
+    {
+        data = extras_valid; data["extra_inventory"][0].erase(field);
+        rejected(data, "Extra Inventory partial geometry rejected");
+    }
+    for (double bad : {0., -1., 16385., std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()})
+    {
+        data = extras_valid; data["extra_inventory"][0]["width_ui"] = bad;
+        rejected(data, "Extra Inventory dimensions are finite, positive and bounded");
+    }
+    data = extras_valid; data["extra_inventory"][0]["center_y"] = std::numeric_limits<double>::quiet_NaN();
+    rejected(data, "Extra Inventory centers must be finite");
+    data = valid;
+    for (int i = 0; i < MAX_EXTRA_INVENTORY_WINDOWS; ++i)
+        data["extra_inventory"].append(extras_valid["extra_inventory"][0]);
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory.size() == MAX_EXTRA_INVENTORY_WINDOWS,
+           "Extra Inventory count accepts bound");
+    data["extra_inventory"].append(extras_valid["extra_inventory"][0]);
+    rejected(data, "Extra Inventory count rejects above bound");
+    data = extras_valid;
+    data["extra_inventory"][0]["role"] = "unregistered_editor";
+    data["extra_inventory"][0]["registry"] = "world_map";
+    expect(fromLLSD(data, parsed, error) && parsed.extra_inventory.size() == 2 &&
+           parsed.windows.size() == 3 && parsed.ignored_details == 2,
+           "Unknown extra Inventory fields are ignored and cannot select registered roles");
 
     for (const char* field : {"schema", "type", "chrome", "frame", "windows", "panels", "world_view_in_mouselook"})
     {

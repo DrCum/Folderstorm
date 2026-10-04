@@ -20,6 +20,7 @@
 #include "llagent.h"
 #include "llbutton.h"
 #include "llfloaterpreference.h"
+#include "lllineeditor.h"
 #include "llscrolllistctrl.h"
 #include "lltextbox.h"
 #include "llviewercontrol.h"
@@ -41,16 +42,20 @@ bool FSFloaterWorkspaces::postBuild()
     getChild<LLButton>("switch")->setCommitCallback([this](LLUICtrl*, const LLSD&) { switchSelected(); });
     getChild<LLButton>("favorite")->setCommitCallback([this](LLUICtrl*, const LLSD&) { toggleFavorite(); });
     getChild<LLButton>("manage")->setCommitCallback([this](LLUICtrl*, const LLSD&) { manageSelected(); });
+    getChild<LLButton>("save")->setCommitCallback([this](LLUICtrl*, const LLSD&) { saveCurrent(); });
+    getChild<LLLineEditor>("workspace_name")->setKeystrokeCallback([](LLLineEditor*, void* userdata)
+    { static_cast<FSFloaterWorkspaces*>(userdata)->updateButtons(); }, this);
     auto* list = getChild<LLScrollListCtrl>("profiles");
     list->setCommitOnSelectionChange(true);
-    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mSwitchFailed = false; updateButtons(); });
+    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons(); });
     list->setDoubleClickCallback([this]() { switchSelected(); });
     refresh(true);
     return LLFloater::postBuild();
 }
 void FSFloaterWorkspaces::onOpen(const LLSD& key)
 {
-    mSwitchFailed = false;
+    mActionStatus.clear();
+    getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
     refresh(true);
 }
 void FSFloaterWorkspaces::draw()
@@ -96,6 +101,11 @@ void FSFloaterWorkspaces::refresh(bool force)
         profiles != mProfiles || layouts != mLayouts || favorites != mFavoriteData || controller.revision() != mRevision)
     {
         const bool same_account = gAgent.getID() == mAccount && gAgent.getSessionID() == mSession;
+        if (!same_account)
+        {
+            getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
+            mActionStatus.clear(); mSavedName.clear();
+        }
         auto* list = getChild<LLScrollListCtrl>("profiles");
         const auto prior = same_account ? selected() : "";
         const auto scroll = same_account ? list->getScrollPos() : 0;
@@ -111,13 +121,10 @@ void FSFloaterWorkspaces::refresh(bool force)
         if (ready)
         {
             struct Entry { std::string key, label; bool layout; };
-            std::vector<Entry> entries = {
-                {std::string(WORKSPACE_PREFIX) + "builtin:driving", getString("driving_name"), false},
-                {std::string(WORKSPACE_PREFIX) + "builtin:inventory_sorting", getString("sorting_name"), false}
-            };
+            std::vector<Entry> entries;
             // Use saved definitions; pending Preferences edits stay in Preferences.
             if (profiles.isMap())
-                for (auto it = profiles.beginMap(); it != profiles.endMap() && entries.size() < FSWorkspaceLayout::MAX_PROFILES + 2; ++it)
+                for (auto it = profiles.beginMap(); it != profiles.endMap() && entries.size() < FSWorkspaceLayout::MAX_PROFILES; ++it)
                     if (FSWorkspaceLayout::isSafeProfileName(it->first))
                         entries.push_back({std::string(WORKSPACE_PREFIX) + it->first, it->first, false});
             for (const auto& id : FSChromeLayoutController::instance().profileNames())
@@ -169,8 +176,14 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     getChild<LLButton>("manage")->setEnabled(ready);
+    std::string name = getChild<LLLineEditor>("workspace_name")->getText();
+    LLStringUtil::trim(name);
+    getChild<LLButton>("save")->setEnabled(can_switch && !name.empty());
+    getChild<LLLineEditor>("workspace_name")->setEnabled(can_switch);
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
-    getChild<LLTextBox>("status")->setText(getString(!ready ? "unavailable" : !can_switch ? "preferences_open" : mSwitchFailed ? "switch_failed" : "ready"));
+    LLStringUtil::format_map_t args;
+    args["[NAME]"] = mSavedName;
+    getChild<LLTextBox>("status")->setText(getString(!ready ? "unavailable" : !can_switch ? "preferences_open" : mActionStatus.empty() ? "ready" : mActionStatus, args));
 }
 void FSFloaterWorkspaces::switchSelected()
 {
@@ -179,7 +192,7 @@ void FSFloaterWorkspaces::switchSelected()
     if (!controller.canQuickSwitch() || key.empty() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     const bool applied = isLayout(key) ? controller.quickSwitchLayout(key.substr(7)) : controller.quickSwitchWorkspace(key.substr(10));
     if (applied) closeFloater(false);
-    else { mSwitchFailed = true; refresh(); }
+    else { mActionStatus = "switch_failed"; updateButtons(); }
 }
 void FSFloaterWorkspaces::toggleFavorite()
 {
@@ -196,4 +209,23 @@ void FSFloaterWorkspaces::toggleFavorite()
 void FSFloaterWorkspaces::manageSelected()
 {
     LLFloaterPreference::showWorkspaceSettings(isLayout(selected()));
+}
+void FSFloaterWorkspaces::saveCurrent()
+{
+    auto& controller = FSWorkspaceController::instance();
+    if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
+    std::string name = getChild<LLLineEditor>("workspace_name")->getText();
+    LLStringUtil::trim(name);
+    if (controller.saveCurrentNow(name))
+    {
+        refresh(true);
+        auto* list = getChild<LLScrollListCtrl>("profiles");
+        list->setSelectedByValue(std::string(WORKSPACE_PREFIX) + name, true);
+        list->scrollToShowSelected();
+        getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
+        mSavedName = name;
+        mActionStatus = "saved_immediately";
+    }
+    else mActionStatus = controller.status();
+    updateButtons();
 }

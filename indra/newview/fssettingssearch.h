@@ -43,8 +43,7 @@ inline std::vector<std::string> aliases(const std::string& scope, const std::str
     if (scope == "workspace_editor")
     {
         if (control == "workspace_combo" || control == "workspace_preview" || control == "workspace_save" ||
-            control == "workspace_rename" || control == "workspace_delete" ||
-            control == "workspace_inventory_sorting" || control == "workspace_driving")
+            control == "workspace_rename" || control == "workspace_delete")
             return {"workspace", "window arrangement"};
     }
     return {};

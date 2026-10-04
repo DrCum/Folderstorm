@@ -45,6 +45,7 @@ public:
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchLayout(const std::string& id);
+    bool saveCurrentNow(const std::string& name);
     bool saveCurrent(const std::string& name, bool overwrite = false);
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
@@ -69,10 +70,26 @@ private:
         bool existed = false;
         LLFloater::WorkspacePositioning positioning{};
     };
+    struct ExtraInventoryBaseline
+    {
+        RuntimeBaseline state;
+        std::string registry;
+        LLSD key;
+        bool touched = false;
+    };
+    struct PendingExtraInventory
+    {
+        LLHandle<LLFloater> handle;
+        FSWorkspaceLayout::Window window;
+    };
     FSWorkspaceLayout::Workspace capture() const;
-    FSWorkspaceLayout::Workspace startingArrangement(const std::string& id) const;
     void rememberRole(Role role);
     void rememberControls(Role role);
+    void rememberExtraInventory(LLFloater* floater, bool created = false);
+    void rememberExtraInventoryControls(const std::string& registry, const LLSD& key = LLSD());
+    void restoreExtraInventories();
+    bool placeWindow(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
+                     bool primary_inventory, std::vector<LLRect>& placed);
     void placePending(unsigned long generation, const LLUUID& account, const LLUUID& session);
     void abandon();
     void finishPlacement();
@@ -92,6 +109,9 @@ private:
     FSWorkspaceLayout::Workspace mBaseline, mPending;
     std::map<Role, RuntimeBaseline> mRuntime;
     std::map<std::string, ControlBaseline> mControls;
+    std::map<std::string, ControlBaseline> mExtraControls;
+    std::vector<ExtraInventoryBaseline> mExtraRuntime;
+    std::vector<PendingExtraInventory> mPendingExtraInventory;
     std::map<Role, LLHandle<LLFloater>> mPendingHandles;
     std::set<Role> mTouched;
     std::set<Role> mCreated;

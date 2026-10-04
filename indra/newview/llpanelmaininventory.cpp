@@ -665,6 +665,10 @@ void LLPanelMainInventory::newFolderWindow(LLUUID folder_id, LLUUID item_to_sele
                 if (main_inventory && main_inventory->isSingleFolderMode()
                     && (main_inventory->getCurrentSFVRoot() == folder_id))
                 {
+                    // A workspace switch may have retained this window hidden.
+                    // Reopen it through the usual visibility/restriction checks.
+                    if (!inventory_container->LLView::getVisible() &&
+                        !LLFloaterReg::showInstance("inventory", inventory_container->getKey(), false)) return;
                     main_inventory->setFocus(true);
                     if(item_to_select.notNull())
                     {
@@ -1169,7 +1173,7 @@ void LLPanelMainInventory::onFilterTypeSelected(const std::string& filter_type_n
 
         return;
     }
-    // <FS:minerjr> [FIRE-35042] Inventory - Only Coalesced Filter - More accessible 
+    // <FS:minerjr> [FIRE-35042] Inventory - Only Coalesced Filter - More accessible
     // Special treatment for "coalesced" filter
     else if (filter_type_name == "filter_type_coalesced")
     {
@@ -2047,7 +2051,7 @@ void LLFloaterInventoryFinder::onOnlyCoalescedFilterCommit()
     if (mOnlyCoalescedFilterCheck && mFilter)
     {
         // Set the mFilter's Filter Coalesced Objects value to the Only Coalesced Filter Checkbox value
-        mFilter->setFilterCoalescedObjects(mOnlyCoalescedFilterCheck->getValue());        
+        mFilter->setFilterCoalescedObjects(mOnlyCoalescedFilterCheck->getValue());
     }
     FSInventoryCustomTabs::notifyFilterStateChanged(mPanelMainInventory); // <FS:PP> FIRE-35598: Custom filters in inventory (feature idea: Catznip)
 }

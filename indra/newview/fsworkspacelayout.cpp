@@ -65,7 +65,7 @@ bool parseRole(const std::string& id, Role& role)
 
 bool isBuiltinProfileId(const std::string& id)
 {
-    // Reserve the namespace as well as known IDs for future builtin templates.
+    // Reserve legacy template IDs so they cannot become user profile names.
     return id.compare(0, 8, "builtin:") == 0;
 }
 
