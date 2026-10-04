@@ -1588,5 +1588,8 @@
   <key>Comment</key><string>Account-local target for the assignable workspace_direct keybinding. Missing targets do nothing.</string>
   <key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/>
  </map>
+ <key>FSWorkspaceStartupMode</key><map><key>Comment</key><string>Startup restoration: off, named or last. Default off.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string>off</string></map>
+ <key>FSWorkspaceStartupName</key><map><key>Comment</key><string>Named startup workspace, account-local.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/></map>
+ <key>FSWorkspaceLastArrangement</key><map><key>Comment</key><string>Bounded supported arrangement saved before orderly quit closes windows. No conversation or Inventory contents.</string><key>Persist</key><integer>1</integer><key>Type</key><string>LLSD</string><key>Value</key><undef/></map>
 </map>
 </llsd>

@@ -33,6 +33,8 @@
 #include "llviewerwindow.h"
 #include "llagentcamera.h"
 #include "llkeyboard.h"
+#include "llcallbacklist.h"
+#include "lltoolbarview.h"
 
 #include <algorithm>
 #include <cmath>
@@ -129,7 +131,7 @@ bool equalWindow(const FSWorkspaceLayout::Window& a, const FSWorkspaceLayout::Wi
 FSWorkspaceController& FSWorkspaceController::instance()
 {
     static FSWorkspaceController controller;
-    static const bool installed = []() { LLFloater::setWorkspaceSnap(FSWorkspaceController::snap); return true; }();
+    static const bool installed = []() { LLFloater::setWorkspaceSnap(FSWorkspaceController::snap); gIdleCallbacks.addFunction(lifecycleIdle, &controller); return true; }();
     (void)installed;
     return controller;
 }
@@ -904,4 +906,67 @@ bool FSWorkspaceController::arrange(const std::vector<LLHandle<LLFloater>>& sele
     }
     ++mRevision;
     return true;
+}
+
+void FSWorkspaceController::scheduleStartupRestore()
+{
+    mHasPrevious = false;
+    mStartupScheduled = available() && gSavedPerAccountSettings.getString("FSWorkspaceStartupMode") != "off";
+    mStartupAccount = gAgent.getID(); mStartupSession = gAgent.getSessionID();
+    mStartupGeneration = mGeneration; mStartupTimer.reset();
+}
+void FSWorkspaceController::lifecycleIdle(void* userdata)
+{
+    auto& controller = *static_cast<FSWorkspaceController*>(userdata);
+    if (controller.mLifecycleTimer.getElapsedTimeF32() < .5f) return;
+    controller.mLifecycleTimer.reset();
+    if (controller.mHasPrevious && (!controller.available() || controller.mPreviousAccount != gAgent.getID() ||
+        controller.mPreviousSession != gAgent.getSessionID()))
+    {
+        controller.mHasPrevious = false; controller.mPrevious = FSWorkspaceLayout::Workspace{};
+        controller.mPreviousWorkspace.clear(); controller.mPreviousLayout.clear();
+    }
+    if (!controller.mStartupScheduled) return;
+    if (!controller.available() || controller.mStartupAccount != gAgent.getID() ||
+        controller.mStartupSession != gAgent.getSessionID() || controller.mStartupGeneration != controller.mGeneration)
+    { controller.mStartupScheduled = false; return; }
+    if (controller.mStartupTimer.getElapsedTimeF32() > 120.f)
+    {
+        controller.mStartupScheduled = false;
+        LLSD args; args["MESSAGE"] = "Startup workspace was not restored because the UI or Inventory was not ready. Switch it manually when ready.";
+        LLNotificationsUtil::add("GenericAlert", args); return;
+    }
+    if (!gInventory.isInventoryUsable() || !gToolBarView || !controller.canQuickSwitch()) return;
+    controller.mStartupScheduled = false;
+    const auto mode = gSavedPerAccountSettings.getString("FSWorkspaceStartupMode");
+    if (mode == "off") return;
+    bool applied = false;
+    if (mode == "named") applied = controller.quickSwitchWorkspace(gSavedPerAccountSettings.getString("FSWorkspaceStartupName"));
+    else if (mode == "last")
+    {
+        FSWorkspaceLayout::Workspace saved; std::string error;
+        if (FSWorkspaceLayout::fromLLSD(gSavedPerAccountSettings.getLLSD("FSWorkspaceLastArrangement"), saved, error))
+        {
+            controller.abandon(); controller.beginPreferencesSession();
+            applied = controller.startPreview(saved, "");
+            controller.mQuickSwitch = applied; controller.mFocus.markDead();
+        }
+        else if (gSavedPerAccountSettings.getLLSD("FSWorkspaceLastArrangement").isUndefined()) return;
+    }
+    if (!applied)
+    {
+        LLSD args; args["MESSAGE"] = "The startup workspace is missing or invalid. Your current arrangement was kept.";
+        LLNotificationsUtil::add("GenericAlert", args);
+    }
+    controller.mHasPrevious = false; // Startup is not a user switch.
+}
+void FSWorkspaceController::saveLastArrangement()
+{
+    if (!canQuickSwitch() || !gInventory.isInventoryUsable() || gDisconnected ||
+        gSavedPerAccountSettings.getString("FSWorkspaceStartupMode") != "last") return;
+    if (mQuickSwitch) finishQuickSwitch();
+    const auto data = FSWorkspaceLayout::toLLSD(capture(true));
+    FSWorkspaceLayout::Workspace validated; std::string error;
+    if (FSWorkspaceLayout::fromLLSD(data, validated, error))
+        gSavedPerAccountSettings.setLLSD("FSWorkspaceLastArrangement", data);
 }

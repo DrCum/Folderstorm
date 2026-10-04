@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
 #include "llstartup.h"
@@ -3367,6 +3368,7 @@ bool idle_startup()
         // </FS:PP>
 
         LLStartUp::setStartupState( STATE_STARTED );
+        FSWorkspaceController::instance().scheduleStartupRestore();
         do_startup_frame();
 
         // <FS:Ansariel> Draw Distance stepping; originally based on SpeedRez by Henri Beauchamp, licensed under LGPL

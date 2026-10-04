@@ -23,6 +23,7 @@
 #include "llfloater.h"
 #include "llsd.h"
 #include "lluuid.h"
+#include "lltimer.h"
 #include <map>
 #include <set>
 #include <string>
@@ -49,6 +50,8 @@ public:
     std::vector<Utility> utilityWindows() const;
     bool arrange(const std::vector<LLHandle<LLFloater>>& selection, int operation);
     static bool snap(LLFloater* floater, S32& edge, LLView::ESnapEdge snap_edge);
+    void scheduleStartupRestore();
+    void saveLastArrangement();
     bool hasPrevious() const;
     bool returnPrevious();
     bool saveCurrentNow(const std::string& name, bool remember_folders = false);
@@ -107,7 +110,12 @@ private:
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
 
+    static void lifecycleIdle(void*);
     void rememberPrevious();
+    LLTimer mLifecycleTimer, mStartupTimer;
+    bool mStartupScheduled = false;
+    unsigned long mStartupGeneration = 0;
+    LLUUID mStartupAccount, mStartupSession;
     FSWorkspaceLayout::Workspace mPrevious;
     std::string mPreviousWorkspace, mPreviousLayout, mRestoredLayout;
     LLUUID mPreviousAccount, mPreviousSession;

@@ -83,6 +83,11 @@ void FSPanelPreferenceWorkspaces::refresh()
             if (combo->getCurrentIndex() < 0 && !controller.activeId().empty()) combo->setValue(controller.activeId());
             if (combo->getCurrentIndex() < 0 && combo->getItemCount()) combo->selectFirstItem();
         }
+        auto* startup = getChild<LLComboBox>("workspace_startup_name");
+        const auto prior_startup = startup->getValue();
+        startup->removeall();
+        if (ready) for (const auto& name : controller.names()) startup->add(name, name);
+        startup->setValue(prior_startup);
         mObservedRevision = controller.revision();
     }
     auto* remember = getChild<LLCheckBoxCtrl>("workspace_remember_folders");
@@ -94,6 +99,8 @@ void FSPanelPreferenceWorkspaces::refresh()
         mFolderOptionAccount = gAgent.getID(); mFolderOptionSession = gAgent.getSessionID();
     }
     remember->setEnabled(ready);
+    getChild<LLComboBox>("workspace_startup_mode")->setEnabled(ready);
+    getChild<LLComboBox>("workspace_startup_name")->setEnabled(ready && getChild<LLComboBox>("workspace_startup_mode")->getValue().asString() == "named");
     combo->setEnabled(ready && combo->getItemCount());
     getChild<LLLineEditor>("workspace_name")->setEnabled(ready);
     getChild<LLButton>("workspace_preview")->setEnabled(ready && !selected().empty());
