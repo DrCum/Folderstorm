@@ -45,6 +45,10 @@ public:
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchLayout(const std::string& id);
+    using Utility = std::pair<LLHandle<LLFloater>, std::string>;
+    std::vector<Utility> utilityWindows() const;
+    bool arrange(const std::vector<LLHandle<LLFloater>>& selection, int operation);
+    static bool snap(LLFloater* floater, S32& edge, LLView::ESnapEdge snap_edge);
     bool hasPrevious() const;
     bool returnPrevious();
     bool saveCurrentNow(const std::string& name, bool remember_folders = false);

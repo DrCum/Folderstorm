@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<floater name="workspace_tools" title="Workspace tools" width="500" height="410" min_width="400" min_height="410" can_resize="true" save_rect="true" layout="topleft">
+ <string name="arranged">Arranged selected utility windows. Previous arrangement can undo this.</string>
+ <string name="choose_windows">Select two windows to align, or three to distribute. Unavailable or attached windows are excluded.</string>
+ <text name="intro" left="15" top="30" right="-15" height="36" follows="left|right|top" wrap="true">Select utility windows with Ctrl/Shift, then align their edges or distribute spacing.</text>
+ <scroll_list name="windows" left="15" top="76" right="-15" height="155" follows="left|right|top" multi_select="true" can_sort="false"><scroll_list.columns name="name" dynamic_width="true"/></scroll_list>
+ <combo_box name="alignment" left="15" top="241" right="-140" height="24" follows="left|right|top">
+  <combo_box.item label="Align left" value="0"/><combo_box.item label="Align right" value="1"/>
+  <combo_box.item label="Align top" value="2"/><combo_box.item label="Align bottom" value="3"/>
+  <combo_box.item label="Distribute horizontally" value="4"/><combo_box.item label="Distribute vertically" value="5"/>
+ </combo_box>
+ <button name="arrange" label="Arrange" right="-15" top="241" width="115" height="24" follows="right|top"/>
+ <button name="refresh_windows" label="Refresh window list" left="15" top="275" width="175" height="24" follows="left|top"/>
+ <check_box name="snapping" label="Snap utility windows (hold Shift to bypass)" control_name="FSWorkspaceWindowSnapping" left="15" top="309" right="-15" height="22" follows="left|right|top"/>
+ <text name="status" left="15" top="345" right="-15" height="46" follows="left|right|top" wrap="true"/>
+</floater>

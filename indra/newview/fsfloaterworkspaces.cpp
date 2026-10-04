@@ -22,6 +22,7 @@
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
 #include "llfloaterpreference.h"
+#include "llfloaterreg.h"
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
 #include "lltextbox.h"
@@ -41,6 +42,7 @@ bool isLayout(const std::string& key) { return key.compare(0, 7, LAYOUT_PREFIX) 
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    getChild<LLButton>("tools")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_tools", selected()); });
     getChild<LLButton>("previous")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
     getChild<LLButton>("shortcut")->setCommitCallback([this](LLUICtrl*, const LLSD&)
     {

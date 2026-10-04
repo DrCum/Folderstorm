@@ -23,7 +23,8 @@
  </text>
  <button name="previous" label="Previous" left="15" top="76" width="95" height="24" follows="left|top" tool_tip="Return to the setup before switching, including unsaved positions."/>
  <button name="shortcut" label="Use for shortcut" left="118" top="76" width="160" height="24" follows="left|top" tool_tip="Assign this entry to Switch assigned workspace / layout. Set its key in Preferences > Controls."/>
- <scroll_list name="profiles" left="15" top="108" right="-15" bottom="-200" follows="all"
+ <button name="tools" label="Arrange windows / more…" left="15" top="108" right="-15" height="24" follows="left|right|top"/>
+ <scroll_list name="profiles" left="15" top="140" right="-15" bottom="-200" follows="all"
   draw_heading="false" multi_select="false" can_sort="false" column_padding="8" search_column="0">
   <scroll_list.columns name="name" dynamic_width="true"/>
   <scroll_list.columns name="kind" width="85"/>

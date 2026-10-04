@@ -32,6 +32,7 @@
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
 #include "llagentcamera.h"
+#include "llkeyboard.h"
 
 #include <algorithm>
 #include <cmath>
@@ -128,6 +129,8 @@ bool equalWindow(const FSWorkspaceLayout::Window& a, const FSWorkspaceLayout::Wi
 FSWorkspaceController& FSWorkspaceController::instance()
 {
     static FSWorkspaceController controller;
+    static const bool installed = []() { LLFloater::setWorkspaceSnap(FSWorkspaceController::snap); return true; }();
+    (void)installed;
     return controller;
 }
 bool FSWorkspaceController::available() const
@@ -797,4 +800,108 @@ bool FSWorkspaceController::modified() const
         if (!equalWindow(saved.extra_inventory[i], current.extra_inventory[i], false)) return true;
     return saved.has_inbox && (!current.has_inbox || saved.inbox_expanded != current.inbox_expanded ||
         std::fabs(saved.inbox_height - current.inbox_height) > 1.f);
+}
+
+std::vector<FSWorkspaceController::Utility> FSWorkspaceController::utilityWindows() const
+{
+    std::vector<Utility> result;
+    if (!available()) return result;
+    auto add = [&](LLFloater* floater, const std::string& label)
+    {
+        if (standalone(floater) && floater->LLView::getVisible() && !floater->isMinimized() &&
+            !floater->hasWorkspaceDependents() && !floater->isDependent() &&
+            LLFloaterReg::canShowInstance(floater->getInstanceName(), floater->getKey()))
+            result.emplace_back(floater->getDerivedHandle<LLFloater>(), label);
+    };
+    for (Role role : ROLES)
+    {
+        if (role == Role::ConversationsGeometry) continue;
+        auto* floater = find(role);
+        if (role == Role::NearbyChat && !chatCompatible(floater)) continue;
+        add(floater, floater ? floater->getTitle() : "");
+    }
+    size_t index = 1;
+    for (auto* floater : extraInventoryFloaters())
+        if (result.size() < 22) add(floater, floater->getTitle() + " " + std::to_string(index++));
+    return result;
+}
+bool FSWorkspaceController::snap(LLFloater* floater, S32& edge, LLView::ESnapEdge snap_edge)
+{
+    auto& controller = instance();
+    if (!gSavedSettings.getBOOL("FSWorkspaceWindowSnapping") || !controller.canQuickSwitch()) return false;
+    const auto utilities = controller.utilityWindows();
+    if (std::none_of(utilities.begin(), utilities.end(), [floater](const Utility& item) { return item.first.get() == floater; })) return false;
+    // Shift bypasses both utility and ordinary snapping during drag or resize.
+    if (gKeyboard && (gKeyboard->currentMask(true) & MASK_SHIFT)) return true;
+    const bool horizontal = snap_edge == LLView::SNAP_LEFT || snap_edge == LLView::SNAP_RIGHT;
+    std::vector<LLRect> targets{gFloaterView->getLocalRect()};
+    if (gViewerWindow)
+    {
+        LLRect viewport = gViewerWindow->getWorldViewRectScaled();
+        S32 x = 0, y = 0; gFloaterView->localPointToScreen(0, 0, &x, &y);
+        viewport.translate(-x, -y); targets.push_back(viewport);
+    }
+    for (const auto& item : utilities)
+        if (item.first.get() != floater) targets.push_back(item.first.get()->getRect());
+    const auto own = floater->getRect();
+    S32 best = 9, candidate = edge;
+    for (size_t i = 0; i < targets.size(); ++i)
+    {
+        const auto& target = targets[i];
+        if (i >= 2 && (horizontal ? own.mTop < target.mBottom - 8 || own.mBottom > target.mTop + 8 :
+                                        own.mRight < target.mLeft - 8 || own.mLeft > target.mRight + 8)) continue;
+        for (S32 value : {horizontal ? target.mLeft : target.mBottom, horizontal ? target.mRight : target.mTop})
+            if (std::abs(value - edge) < best) { best = std::abs(value - edge); candidate = value; }
+    }
+    edge = candidate;
+    return true;
+}
+bool FSWorkspaceController::arrange(const std::vector<LLHandle<LLFloater>>& selection, int operation)
+{
+    if (!canQuickSwitch() || operation < 0 || operation > 5) return false;
+    if (mQuickSwitch) finishQuickSwitch();
+    const auto allowed = utilityWindows();
+    std::vector<LLFloater*> windows;
+    for (const auto& handle : selection)
+        if (auto* floater = handle.get())
+            if (std::any_of(allowed.begin(), allowed.end(), [floater](const Utility& item) { return item.first.get() == floater; }) &&
+                std::find(windows.begin(), windows.end(), floater) == windows.end()) windows.push_back(floater);
+    if (windows.size() < 2 || (operation >= 4 && windows.size() < 3)) return false;
+    rememberPrevious();
+    LLRect bounds = windows.front()->getRect();
+    for (auto* floater : windows)
+    {
+        const auto r = floater->getRect();
+        bounds.mLeft = std::min(bounds.mLeft, r.mLeft); bounds.mRight = std::max(bounds.mRight, r.mRight);
+        bounds.mBottom = std::min(bounds.mBottom, r.mBottom); bounds.mTop = std::max(bounds.mTop, r.mTop);
+    }
+    const bool horizontal = operation == 4;
+    if (operation >= 4)
+        std::stable_sort(windows.begin(), windows.end(), [horizontal](LLFloater* a, LLFloater* b)
+        { return horizontal ? a->getRect().mLeft < b->getRect().mLeft : a->getRect().mBottom < b->getRect().mBottom; });
+    F32 total = 0.f;
+    for (auto* floater : windows) total += static_cast<F32>(horizontal ? floater->getRect().getWidth() : floater->getRect().getHeight());
+    const F32 gap = ((horizontal ? static_cast<F32>(bounds.getWidth()) : static_cast<F32>(bounds.getHeight())) - total) /
+        static_cast<F32>(windows.size() - 1);
+    F32 position = static_cast<F32>(horizontal ? bounds.mLeft : bounds.mBottom);
+    for (auto* floater : windows)
+    {
+        auto r = floater->getRect();
+        switch (operation)
+        {
+        case 0: r.translate(bounds.mLeft - r.mLeft, 0); break;
+        case 1: r.translate(bounds.mRight - r.mRight, 0); break;
+        case 2: r.translate(0, bounds.mTop - r.mTop); break;
+        case 3: r.translate(0, bounds.mBottom - r.mBottom); break;
+        default:
+            if (horizontal) r.translate(ll_round(position) - r.mLeft, 0);
+            else r.translate(0, ll_round(position) - r.mBottom);
+            position += static_cast<F32>(horizontal ? r.getWidth() : r.getHeight()) + gap;
+        }
+        const auto saved = FSWorkspaceLayout::capture(rect(r), frame(), true, false);
+        std::vector<LLRect> placed; // Deliberate alignment does not stagger matching edges.
+        placeWindow(floater, saved, floater == find(Role::InventoryPrimary), placed);
+    }
+    ++mRevision;
+    return true;
 }
