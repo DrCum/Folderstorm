@@ -4,7 +4,7 @@
 <map>
     <key>FSShowWorkspaceFavoritesStrip</key>
     <map>
-      <key>Comment</key><string>Show a separate workspace and layout favorites row below the navigation and landmark bars.</string>
+      <key>Comment</key><string>Show workspace and layout favorites beside landmarks, with a divider and separate overflow.</string>
       <key>Persist</key><integer>1</integer>
       <key>Type</key><string>Boolean</string>
       <key>Value</key><integer>0</integer>

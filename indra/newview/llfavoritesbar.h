@@ -74,6 +74,11 @@ public:
     /*virtual*/ void reshape(S32 width, S32 height, bool called_from_parent = true) override;
     /*virtual*/ void draw() override;
 
+    // Shared-row workspace controls use the same skin button style/font and
+    // reserve space without changing landmark ordering or overflow behavior.
+    S32 preferredWidth();
+    const LLButton::Params& favoriteButtonParams() { return getButtonParams(); }
+    const LLFontGL* favoriteFont() const { return mFont; }
     void showDragMarker(bool show) { mShowDragMarker = show; }
     void setLandingTab(LLUICtrl* tab) { mLandingTab = tab; }
 

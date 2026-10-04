@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<floater name="workspace_tools" title="Workspace tools" width="500" height="720" min_width="400" min_height="450" can_resize="true" save_rect="true" layout="topleft">
+<floater name="workspace_tools" title="Workspace tools" width="500" height="720" min_width="400" min_height="450" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
  <string name="exported">Workspace exported.</string>
  <string name="file_failed">Could not read/write the workspace file (maximum 1 MiB).</string>
  <string name="invalid_file">Invalid or unsupported workspace file. No settings changed.</string>
