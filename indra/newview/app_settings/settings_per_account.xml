@@ -1,5 +1,19 @@
 <llsd>
     <map>
+    <key>FSWorkspaceProfiles</key>
+    <map>
+      <key>Comment</key><string>Named account-local viewport and allowlisted utility-window workspaces.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><map />
+    </map>
+    <key>FSActiveWorkspace</key>
+    <map>
+      <key>Comment</key><string>Last manually accepted workspace; does not automatically restore at login.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>String</string>
+      <key>Value</key><string />
+    </map>
     <key>AvatarHoverOffsetZ</key>
     <map>
       <key>Comment</key>

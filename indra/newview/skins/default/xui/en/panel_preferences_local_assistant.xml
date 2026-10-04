@@ -3,12 +3,21 @@
  <string name="access_off">Viewer access: Off</string>
  <string name="access_ready">Viewer access: Ready for local connection</string>
  <string name="access_failed">Viewer access: Could not enable access; see Setup details</string>
- <string name="session_override_text">Session override is active; your saved preference is unchanged.</string>
+ <string name="session_override_text">Session settings: your saved settings resume after restarting.</string>
+ <string name="external_override_text">A startup or external session override is active; saved settings are unchanged.</string>
+ <string name="saved_scope_text">Changes preview now and are saved when you click OK.</string>
+ <string name="settings_conflict">Assistant settings changed elsewhere; review your choices again.</string>
+ <string name="summary_read_only">Allows reading inventory and outfits. All changes, camera movement and pictures are blocked.</string>
+ <string name="summary_ask_changes">Allows reading. Asks before changes, including camera movement and pictures.</string>
+ <string name="summary_custom">Individual permissions define what is allowed, requires confirmation or is blocked.</string>
  <string name="inventory_login">Inventory: Log in to use inventory</string>
  <string name="inventory_loading">Inventory: Loading inventory</string>
  <string name="inventory_ready">Inventory: Ready</string>
  <string name="activity_none">No external requests observed this session</string>
  <string name="activity_recent">Last authenticated external request: [SECONDS] seconds ago</string>
+ <string name="sidecar_stable_current">Sidecar found. This command follows this installation's updates.</string>
+ <string name="sidecar_recopy_after_update">Sidecar found. Update location is unverified; copy configuration again after updating.</string>
+ <string name="sidecar_update_in_progress">Update in progress. Restart the viewer, then copy configuration again. Diagnostics still check this running viewer.</string>
  <string name="sidecar_found">Installed sidecar: [PATH]</string>
  <string name="sidecar_missing">Sidecar missing: [PATH]. Reinstall or build the packaged sidecar.</string>
  <string name="check_not_run">Connection has not been checked.</string>
@@ -23,11 +32,21 @@
  <check_box height="20" label="Allow local assistant access" layout="topleft" left="12" top="8" width="510" name="local_assistant_enable" tool_tip="Allow authenticated programs running as your OS account to access this viewer." />
  <text follows="left|top|right" height="18" layout="topleft" left="12" top="33" width="510" name="intro" wrap="true">Connect your assistant separately. Choose what it can do below.</text>
  <text follows="left|top|right" height="18" layout="topleft" left="12" top="54" width="510" name="local_assistant_status">Viewer access: Off</text>
- <text follows="left|top|right" height="18" layout="topleft" left="12" top="75" width="510" name="session_override" font="SansSerifSmall" />
+ <text follows="left|top|right" height="18" layout="topleft" left="12" top="75" width="510" name="session_override" wrap="true" font="SansSerifSmall" />
  <tab_container follows="all" layout="topleft" left="5" right="-5" top="99" bottom="-5" name="tabs" tab_position="top">
   <panel follows="all" layout="topleft" label="Permissions" name="permissions" height="355" width="520">
    <text follows="left|top|right" height="32" layout="topleft" left="8" top="8" width="500" name="access_help" wrap="true">Other programs running as your OS account can use this access. Ask shows a confirmation before the action.</text>
-   <scroll_container follows="all" layout="topleft" left="4" right="-4" top="47" bottom="-3" name="permissions_scroll" opaque="false">
+   <text follows="left|top" height="20" layout="topleft" left="8" top="48" width="160" name="preset_label">Permission preset</text>
+   <combo_box follows="left|top" height="23" layout="topleft" left="178" top="45" width="245" name="permission_preset" tool_tip="Read only, Ask before changes, or Custom individual permissions">
+    <item label="Read only" name="read_only" value="read_only" />
+    <item label="Ask before changes" name="ask_changes" value="ask_changes" />
+    <item label="Custom" name="custom" value="custom" />
+   </combo_box>
+   <text follows="left|top|right" height="42" layout="topleft" left="8" top="76" width="500" name="preset_summary" wrap="true" />
+   <check_box follows="left|top" height="20" layout="topleft" left="8" top="121" width="500" label="Use these settings for this session only" name="session_only" tool_tip="Applies to local assistant access and every permission. Saved settings resume when the viewer restarts." />
+   <text follows="left|top|right" height="34" layout="topleft" left="8" top="145" width="500" name="scope_help" wrap="true" font="SansSerifSmall">Your saved settings resume when the viewer restarts. Uncheck and click OK to save the settings shown here.</text>
+   <check_box follows="left|top" height="20" layout="topleft" left="8" top="184" width="500" label="Individual permissions" name="individual_permissions" tool_tip="Show permissions for reading, camera, create, edit, move, Trash, no-copy items, wear and replace links." />
+   <scroll_container visible="false" follows="all" layout="topleft" left="4" right="-4" top="211" bottom="-3" name="permissions_scroll" opaque="false">
     <panel follows="left|top|right" height="352" layout="topleft" left="0" top="0" width="500" name="permission_rows">
      <text follows="left|top" height="18" layout="topleft" left="5" top="2" width="335" name="local_assistant_read_label">Read inventory and outfits</text>
      <text follows="left|top" height="18" layout="topleft" left="5" top="20" width="335" font="SansSerifSmall" name="local_assistant_read_help" wrap="true">Search and inspect items without changing them.</text>

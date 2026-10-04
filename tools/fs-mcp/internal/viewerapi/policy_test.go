@@ -44,3 +44,17 @@ func TestMissingPermissionsIsAnOlderViewer(t *testing.T) {
 		t.Fatal("a non-object status parsed")
 	}
 }
+
+func TestBulkReviewCapabilityIsAnExactVersion(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  int
+	}{
+		{"1", 1}, {"0", 0}, {"2", 0}, {"1.5", 0}, {"true", 0}, {`"1"`, 0}, {"null", 0},
+	} {
+		policy, ok := ParseStatusPolicy([]byte(`{"permissions":{"read":"allow"},"capabilities":{"bulk_inventory_review":` + test.value + `}}`))
+		if !ok || policy.BulkInventoryReview != test.want {
+			t.Fatalf("version %s parsed as %#v", test.value, policy)
+		}
+	}
+}

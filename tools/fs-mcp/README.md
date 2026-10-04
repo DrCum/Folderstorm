@@ -4,15 +4,13 @@
 
 The viewer does not link this program or start it. The viewer build compiles this module and the packaged installer copies `fs-mcp` (`fs-mcp.exe` on Windows) into the install folder next to the viewer, beside `migrate-settings`. An MCP client still has to be pointed at that file. The installer does not write a client MCP config. The bridge is off until you enable **Preferences → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` still forces it on for one session and does not save that choice. Nothing in this sidecar listens on the network. It does not receive Second Life credentials, session cookies, or simulator capability URLs.
 
-On Windows, point Cursor, Claude Code, and Codex at:
+On Windows, use **Preferences → Local assistant → Setup → Copy configuration** in the installation you want to connect. New installers do not create or retarget a shared ProgramData command. Each installation keeps its own sidecar. Codex and Claude Code use that absolute executable path; Cursor's entry includes a quoted `cmd.exe` adapter when the path contains spaces.
 
-`C:\ProgramData\Folderstorm\fs-mcp.exe`
+A normal Velopack installation uses its stable `current\fs-mcp.exe` path. Setup verifies the package layout/id/version before describing that command as following updates. If the location is unverified, Setup uses the actual executable and asks you to recopy after updating. If the installed package changed while this viewer is running, restart before copying. Nonadmin installs need no writable ProgramData directory or symlink privilege for MCP configuration.
 
-That path has no spaces. Cursor starts the MCP command through `cmd.exe`, and a path under `C:\Program Files` is split at the space (`'C:\Program' is not recognized`). Use the Setup page to copy a command verified for the running installation. The Windows installers create it as a symbolic link, not a `.lnk` shortcut, to the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays there. An upgrade replaces the link so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty. Removing the link leaves the real exe in place.
+Older configurations may still use `C:\ProgramData\Folderstorm\fs-mcp.exe`. That legacy alias is kept unchanged during new installs and updates. Uninstall removes only file symlinks independently proven to target the uninstalling installation; unverified/busy links and unrelated files remain untouched. Old installers can still change the alias, so recopy existing client entries from their intended viewer's Setup page. No client files are rewritten automatically.
 
-A Velopack install is per-user and usually not elevated. It tries to create the same link. When `C:\ProgramData` is not writable, the install still succeeds and `fs-mcp.exe` stays in the Velopack `current` folder next to the viewer.
-
-The link targets the Release-channel copy below. A different channel uses that channel's directory.
+Typical Release paths are below; private/OpenSim channels use their own installation directory.
 
 | Install | `fs-mcp.exe` beside the viewer |
 | --- | --- |
@@ -54,7 +52,7 @@ Restrained Love locks are honored. A locked wearable, attachment, or folder retu
 
 ## Build
 
-A packaged Windows install already has the binary next to the viewer, and the installers link `C:\ProgramData\Folderstorm\fs-mcp.exe` at it. Use that ProgramData path in the client config. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.
+A packaged Windows install already has the binary next to the viewer. Copy an installation-bound client entry from its Setup page. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.
 
 ```bash
 cd tools/fs-mcp
@@ -78,7 +76,7 @@ Logs go to stderr so they do not corrupt the stdio stream. The bearer token is n
 
 Open **Preferences → Local assistant → Setup**, choose Codex, Cursor, or Claude Code, then **Copy configuration**. Merge the entry into that client's file; keep your existing servers. Codex receives a TOML table; Cursor and Claude Code receive a JSON `mcpServers` entry. This uses the current installation and the viewer's actual settings directory, including directory overrides. It copies no discovery contents or bearer token and writes no client files.
 
-On Windows the copy uses the ProgramData link only when it resolves to this installation's sidecar. Otherwise Codex and Claude Code use the real absolute executable path. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. The installer link is not modified. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
+On Windows copied commands always belong to this installation; a shared ProgramData alias is never selected. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. Legacy aliases are not modified during setup/install/update. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
 
 **Check connection** runs the installed sidecar asynchronously against this viewer. It checks authenticated bridge health even when inventory Read is Never. A successful check means the sidecar could reach this viewer at that moment; it does not mean your external assistant loaded its configuration. Inventory and recent authenticated external requests are shown separately. Diagnostic probes do not count as external assistant activity. Closing preferences or leaving the page cancels a running check; changes to bridge readiness or permissions clear an old result.
 
@@ -151,7 +149,7 @@ Each entry is the `user_settings` directory inside that folder. The sidecar read
 
 ## Connect a client
 
-The viewer does not start `fs-mcp`. Enable **Local assistant**, or the sidecar finds no viewer. Cursor, Claude Code, and Codex each have their own file. One file does not configure the other two. On Windows the command is `C:\ProgramData\Folderstorm\fs-mcp.exe` for NSIS, Velopack, and a private channel. The same instructions are in [doc/help.md](../../doc/help.md).
+The viewer does not start `fs-mcp`. Enable **Local assistant**, or the sidecar finds no viewer. Cursor, Claude Code, and Codex each have their own file. One file does not configure the other two. On Windows copy the command from the intended installation's Setup page. The same instructions are in [doc/help.md](../../doc/help.md).
 
 On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM_MCP_DISCOVERY` to that platform's Folderstorm user_settings directory.
 
@@ -163,8 +161,10 @@ On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM
 {
   "mcpServers": {
     "folderstorm": {
-      "command": "C:\\ProgramData\\Folderstorm\\fs-mcp.exe",
+      "command": "cmd.exe",
+      "args": ["/d", "/s", "/c", "\"\"%FOLDERSTORM_MCP_BINARY%\"\""],
       "env": {
+        "FOLDERSTORM_MCP_BINARY": "C:\\Program Files\\Folderstorm-Release\\fs-mcp.exe",
         "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
       }
     }
@@ -177,7 +177,7 @@ On Linux and macOS, use the `fs-mcp` binary beside the viewer and set `FIRESTORM
 `claude mcp add --transport stdio --scope user` writes `%USERPROFILE%\.claude.json`:
 
 ```bat
-claude mcp add --transport stdio --scope user folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
+claude mcp add --transport stdio --scope user folderstorm -- "C:\Program Files\Folderstorm-Release\fs-mcp.exe"
 ```
 
 For a single project, use `.mcp.json` in that project's root. If the CLI has no environment flag, add the env block in the file it wrote:
@@ -193,12 +193,12 @@ For a single project, use `.mcp.json` in that project's root. If the CLI has no 
 Codex is ChatGPT's coding client. `codex mcp add` writes `%USERPROFILE%\.codex\config.toml`:
 
 ```bat
-codex mcp add folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
+codex mcp add folderstorm -- "C:\Program Files\Folderstorm-Release\fs-mcp.exe"
 ```
 
 ```toml
 [mcp_servers.folderstorm]
-command = 'C:\ProgramData\Folderstorm\fs-mcp.exe'
+command = 'C:\Program Files\Folderstorm-Release\fs-mcp.exe'
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 
@@ -247,6 +247,11 @@ Annotations: read-only tools set `readOnlyHint`. Move, copy, wear, trash, and pu
 | `inventory_move` | Move `id` to `parent_id`. This is a move, including no-copy items. Follows Move and copy. |
 | `inventory_batch_move` | Up to 50 ids into one `parent_id`. Per-item results. Follows Move and copy. |
 | `inventory_batch_rename` | Up to 50 `{id, name}` entries. Per-item results. |
+| `inventory_preview_batch_rename` | Dry-run up to 50 `{id, name}` entries, returning a viewer-owned plan and exact skips. Requires bulk review version 1 and Read. |
+| `inventory_preview_batch_move` | Dry-run up to 50 `ids` into `parent_id`. Requires bulk review version 1 and Read. |
+| `inventory_execute_plan` | Execute `plan_id` once, or retrieve its existing operation on a repeated call. The viewer derives current Edit/Move permission from the plan. |
+| `inventory_history` | Session-only assistant inventory outcomes. Optional `operation_id`, or `offset`/`limit` (default 20, maximum 50). Requires Read. |
+| `inventory_preview_undo` | Review limited eligible undo for `operation_id`; optional exact `ids` subset. Execute the returned plan separately. Requires Read. |
 | `inventory_copy` | Copy `id` into `parent_id`. Optional `policy`. Copyable items follow Move and copy. |
 | `inventory_batch_copy` | Up to 50 items. Folders still use `inventory_copy`. Copyable items follow Move and copy. |
 | `inventory_confirm_copy` | Older-viewer follow-up for a no-copy copy plan. A current viewer asks in its own dialog. |
@@ -306,6 +311,38 @@ An older viewer has no `permissions` object. Wear, detach, link replacement, and
 
 Wearing returns before the avatar finishes baking. Poll `appearance_worn` and look at `outfit_dirty` before you take a picture.
 
+### Bulk review and recovery
+
+The five new review/history tools require authenticated status to advertise
+`capabilities.bulk_inventory_review: 1` and a current permission map. They remain
+listed by the sidecar when an older viewer is selected, but calls return
+`unsupported_feature`; they never fall back to immediate batch mutation.
+Existing batch tools remain available with their existing behavior.
+
+Prepare a rename or move preview, inspect its exact before/after rows and skips,
+then pass only its `plan_id` to `inventory_execute_plan` for the same viewer.
+Plans expire after ten minutes and are bound to that viewer's login session.
+Preview does not authorize execution. The viewer revalidates the frozen scope,
+rejects stale plans, derives Edit or Move from its own plan, and asks in the viewer
+when required. The sidecar never accepts caller-supplied permission classes,
+candidate lists, confirmation overrides, or trusted deadlines for execution.
+Repeated Execute returns the existing operation rather than replaying writes.
+
+Inspect `status` and per-row outcomes instead of treating legacy `ok` as server
+confirmation. `submitted` or `unconfirmed` means the viewer sent work whose
+completion is not established. Inspect its history and inventory before retrying.
+Partial results remain structured and do not trigger automatic rollback. With
+Read set to Never, plan execution can still use its current Edit/Move permission,
+but its response omits stored names and paths; preview and history are denied.
+
+`inventory_preview_undo` prepares a separate limited inverse over eligible,
+confirmed history rows. It does not reverse changes itself. Current state and
+permissions must still permit execution. Link replacement, copies, no-copy
+moves, folder moves, Trash, wear, asset edits, and payments have no undo here.
+Unknown server completion never qualifies for recovery. History is bounded and
+kept in memory for the current login session; it is cleared on logout or by
+Clear history. Clearing history does not cancel work already sent to the server.
+
 ### Camera presets
 
 Presets are offsets from the avatar, rotated by the avatar's horizontal facing:
@@ -343,7 +380,7 @@ A texture creates a real inventory texture, then sets the folder image. It requi
 }
 ```
 
-Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `snapshotUpload`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
+Inventory ops: `status`, `get`, `list`, `search`, `systemFolder`, `createFolder`, `move`, `rename`, `copy`, `confirmCopy`, `types`, `getMany`, `resolvePath`, `protectedFolders`, `setDescription`, `setThumbnail`, `snapshotUpload`, `setFavorite`, `link`, `replaceLinks`, `createItem`, `batchMove`, `batchRename`, `batchCopy`, `previewBatchRename`, `previewBatchMove`, `executeBulkPlan`, `bulkHistory`, `previewBulkUndo`, `trash`, `restore`, `emptyTrash`, `purge`, `readNotecard`, `readScript`, `landmark`, `changes`.
 
 Appearance ops: `getOutfitsList`, `getOutfitItems`, `worn`, `wearOutfit`, `wearItems`, `detachItems`.
 

@@ -343,80 +343,6 @@
         </combo_box>
     </panel>
 
-    <!-- <FS> Visual viewport setup; percentages remain the saved representation. -->
-    <panel top_pad="5" bottom="-1" left="1" right="-1" follows="all" label="Viewport" name="tab-viewport">
-        <scroll_container name="viewport_scroll" top="0" left="0" right="0" bottom="0"
-         follows="all" layout="topleft" reserve_scroll_corner="false">
-            <panel name="viewport_editor" width="495" height="510" layout="topleft" follows="left|top|right">
-                <string name="world_view_diagram_label">World view</string>
-                <string name="world_view_display_label">Display [NUMBER]</string>
-                <string name="world_view_monitors_unavailable">Monitor positions are unavailable. Use the diagram or percentages.</string>
-                <string name="world_view_monitor_no_fit">Too little of this display is covered by the viewer window. Select another display.</string>
-                <string name="world_view_monitor_help">Fits the covered part of this display. Fit again after moving or resizing the window.</string>
-                <string name="world_view_profile_modified">Current layout differs from the selected saved profile.</string>
-                <string name="world_view_select_display">Select a display</string>
-                <string name="world_view_topology_changed">Display layout changed. Select a display again before fitting the world view.</string>
-                <text name="world_view_explanation" top="10" left="16" right="-16" height="32"
-                 follows="left|top|right" layout="topleft" wrap="true">
-                    Reserve room for Inventory and other floaters. Drag the white boundaries or choose a display for the world view.
-                </text>
-                <check_box name="world_view_enabled" control_name="FSWorldViewEnabled" top_pad="4" left="16"
-                 width="330" height="20" follows="left|top" layout="topleft" label="Use a custom world viewport"/>
-                <world_view_diagram name="world_view_diagram" top_pad="4" left="16" right="-16" height="128"
-                 follows="left|top|right" layout="topleft" tab_stop="true"
-                 tool_tip="Drag a white boundary to resize the world view. Escape cancels a drag. Use the percentage controls for keyboard adjustments."/>
-                <combo_box name="world_view_monitor_combo" top_pad="4" left="16" width="170" height="23"
-                 follows="left|top" layout="topleft" tool_tip="Select the display to fit; only the part covered by the viewer window is used.">
-                    <combo_box.commit_callback function="Pref.WorldViewMonitorSelected"/>
-                </combo_box>
-                <button name="world_view_use_monitor" left_pad="8" width="165" height="23"
-                 follows="left|top" layout="topleft" label="Use this monitor" enabled="false">
-                    <button.commit_callback function="Pref.WorldViewUseMonitor"/>
-                </button>
-                <text name="world_view_monitor_status" top_pad="5" left="16" right="-16" height="42"
-                 follows="left|top|right" layout="topleft" wrap="true" text_color="White_50"/>
-                <slider name="world_view_inset_left" control_name="FSWorldViewInsetLeft" enabled_control="FSWorldViewEnabled"
-                 top_pad="4" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
-                 label="Reserve left (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
-                 decimal_digits="1" can_edit_text="true" show_text="true"/>
-                <slider name="world_view_inset_right" control_name="FSWorldViewInsetRight" enabled_control="FSWorldViewEnabled"
-                 top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
-                 label="Reserve right (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
-                 decimal_digits="1" can_edit_text="true" show_text="true"/>
-                <slider name="world_view_inset_top" control_name="FSWorldViewInsetTop" enabled_control="FSWorldViewEnabled"
-                 top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
-                 label="Reserve top (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
-                 decimal_digits="1" can_edit_text="true" show_text="true"/>
-                <slider name="world_view_inset_bottom" control_name="FSWorldViewInsetBottom" enabled_control="FSWorldViewEnabled"
-                 top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
-                 label="Reserve bottom (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
-                 decimal_digits="1" can_edit_text="true" show_text="true"/>
-                <text name="world_view_presets_label" top_pad="12" left="16" width="58" height="20" layout="topleft">Presets:</text>
-                <button name="world_view_full" top_delta="-2" left_pad="4" width="95" height="23" layout="topleft" label="Full window">
-                    <button.commit_callback function="Pref.WorldViewPreset" parameter="full"/>
-                </button>
-                <button name="world_view_left_half" left_pad="5" width="83" height="23" layout="topleft" label="Left half">
-                    <button.commit_callback function="Pref.WorldViewPreset" parameter="left_half"/>
-                </button>
-                <button name="world_view_right_half" left_pad="5" width="83" height="23" layout="topleft" label="Right half">
-                    <button.commit_callback function="Pref.WorldViewPreset" parameter="right_half"/>
-                </button>
-                <button name="world_view_center_third" left_pad="5" width="98" height="23" layout="topleft" label="Center third">
-                    <button.commit_callback function="Pref.WorldViewPreset" parameter="center_third"/>
-                </button>
-                <check_box name="world_view_in_mouselook" control_name="FSWorldViewInMouselook" enabled_control="FSWorldViewEnabled"
-                 top_pad="12" left="20" width="380" height="20" layout="topleft" label="Keep the custom viewport in Mouselook"/>
-                <text name="world_view_profile_status" top_pad="4" left="20" right="-20" height="20"
-                 follows="left|top|right" layout="topleft" text_color="White_50"/>
-                <text name="world_view_inset_note" top_pad="8" left="20" right="-20" height="32" wrap="true"
-                 follows="left|top|right" layout="topleft" text_color="White_50">
-                    At least 5% of the normal world area stays visible. Larger combined margins are scaled proportionally. Changes preview immediately; Cancel restores them.
-                </text>
-            </panel>
-        </scroll_container>
-    </panel>
-    <!-- </FS> -->
-
     <!-- <FS> Viewport-relative chrome layout -->
     <panel
      top_pad="5"
@@ -426,491 +352,569 @@
      follows="all"
      label="Layout"
      name="tab-chrome-layout">
-        <text
-         follows="left|top|right"
-         height="32"
-         layout="topleft"
-         left="20"
-         right="-20"
-         top="12"
-         name="chrome_layout_explanation"
-         wrap="true">
-            Place toolbars, chat, and the top bars around the custom world viewport. Smart side bars sit outside the viewport when there is room, otherwise they stay just inside it.
-        </text>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_profile_label"
-         top_pad="10"
-         width="70">
-            Profile:
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         follows="left|top"
-         height="23"
-         left_pad="6"
-         name="chrome_profile_combo"
-         top_delta="-4"
-         width="250"/>
-        <button
-         follows="left|top"
-         height="23"
-         label="Apply"
-         layout="topleft"
-         left_pad="6"
-         name="chrome_profile_apply"
-         width="70">
-            <button.commit_callback
-             function="Pref.ChromeProfileApply"/>
-        </button>
-        <button
-         follows="left|top"
-         height="23"
-         label="Reset"
-         layout="topleft"
-         left_pad="6"
-         name="chrome_layout_reset"
-         width="70">
-            <button.commit_callback
-             function="Pref.ChromeLayoutReset"/>
-        </button>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_profile_name_label"
-         top_pad="10"
-         width="70">
-            Name:
-        </text>
-        <line_editor
-         follows="left|top"
-         height="23"
-         left_pad="6"
-         max_length_chars="64"
-         name="chrome_profile_name"
-         top_delta="-4"
-         width="250"/>
-        <button
-         follows="left|top"
-         height="23"
-         label="Save As"
-         layout="topleft"
-         left_pad="6"
-         name="chrome_profile_save"
-         width="70">
-            <button.commit_callback
-             function="Pref.ChromeProfileSave"/>
-        </button>
-        <button
-         follows="left|top"
-         height="23"
-         label="Rename"
-         layout="topleft"
-         left_pad="6"
-         name="chrome_profile_rename"
-         width="70">
-            <button.commit_callback
-             function="Pref.ChromeProfileRename"/>
-        </button>
-        <button
-         follows="left|top"
-         height="23"
-         label="Delete"
-         layout="topleft"
-         left_pad="6"
-         name="chrome_profile_delete"
-         width="70">
-            <button.commit_callback
-             function="Pref.ChromeProfileDelete"/>
-        </button>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_left_label"
-         top_pad="16"
-         width="120">
-            Left toolbar
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         control_name="FSChromeLeftToolbarPlacement"
-         follows="left|top"
-         height="23"
-         left_pad="8"
-         name="chrome_left_placement"
-         top_delta="-4"
-         width="180">
-            <combo_box.item label="Window edge" name="left_window" value="0"/>
-            <combo_box.item label="Inside viewport" name="left_inside" value="1"/>
-            <combo_box.item label="Outside viewport" name="left_outside" value="2"/>
-            <combo_box.item label="Smart" name="left_smart" value="3"/>
-            <combo_box.item label="Hidden" name="left_hidden" value="4"/>
-        </combo_box>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left_pad="16"
-         name="chrome_right_label"
-         width="120">
-            Right toolbar
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         control_name="FSChromeRightToolbarPlacement"
-         follows="left|top"
-         height="23"
-         left_pad="8"
-         name="chrome_right_placement"
-         top_delta="-4"
-         width="180">
-            <combo_box.item label="Window edge" name="right_window" value="0"/>
-            <combo_box.item label="Inside viewport" name="right_inside" value="1"/>
-            <combo_box.item label="Outside viewport" name="right_outside" value="2"/>
-            <combo_box.item label="Smart" name="right_smart" value="3"/>
-            <combo_box.item label="Hidden" name="right_hidden" value="4"/>
-        </combo_box>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeLeftToolbarOffset"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Left offset (px)"
-         label_width="150"
-         layout="topleft"
-         left="45"
-         max_val="200"
-         min_val="0"
-         name="chrome_left_offset"
-         show_text="true"
-         top_pad="12"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeRightToolbarOffset"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Right offset (px)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_right_offset"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_bottom_label"
-         top_pad="14"
-         width="160">
-            Bottom dock
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         control_name="FSChromeBottomDockRegion"
-         follows="left|top"
-         height="23"
-         left_pad="8"
-         name="chrome_bottom_region"
-         top_delta="-4"
-         width="200">
-            <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
-            <combo_box.item label="Full window" name="bottom_full" value="0"/>
-            <combo_box.item label="Viewport" name="bottom_viewport" value="1"/>
-            <combo_box.item label="Left utility" name="bottom_left" value="2"/>
-            <combo_box.item label="Right utility" name="bottom_right" value="3"/>
-            <combo_box.item label="Custom span" name="bottom_custom" value="4"/>
-        </combo_box>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_nav_label"
-         top_pad="12"
-         width="160">
-            Address / favorites
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         control_name="FSChromeNavFavoritesRegion"
-         follows="left|top"
-         height="23"
-         left_pad="8"
-         name="chrome_nav_region"
-         top_delta="-4"
-         width="200">
-            <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
-            <combo_box.item label="Full window" name="nav_full" value="0"/>
-            <combo_box.item label="Viewport" name="nav_viewport" value="1"/>
-            <combo_box.item label="Left utility" name="nav_left" value="2"/>
-            <combo_box.item label="Right utility" name="nav_right" value="3"/>
-            <combo_box.item label="Custom span" name="nav_custom" value="4"/>
-        </combo_box>
-        <text
-         follows="left|top"
-         height="16"
-         layout="topleft"
-         left="20"
-         name="chrome_menu_label"
-         top_pad="12"
-         width="160">
-            Menu / status
-        </text>
-        <combo_box
-         allow_text_entry="false"
-         control_name="FSChromeMenuStatusRegion"
-         follows="left|top"
-         height="23"
-         left_pad="8"
-         name="chrome_menu_region"
-         top_delta="-4"
-         width="200">
-            <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
-            <combo_box.item label="Full window" name="menu_full" value="0"/>
-            <combo_box.item label="Viewport" name="menu_viewport" value="1"/>
-            <combo_box.item label="Left utility" name="menu_left" value="2"/>
-            <combo_box.item label="Right utility" name="menu_right" value="3"/>
-            <combo_box.item label="Custom span" name="menu_custom" value="4"/>
-        </combo_box>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeBottomDockSpanStart"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Bottom start (%)"
-         label_width="150"
-         layout="topleft"
-         left="45"
-         max_val="100"
-         min_val="0"
-         name="chrome_bottom_span_start"
-         show_text="true"
-         top_pad="16"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeBottomDockSpanEnd"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Bottom end (%)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="100"
-         min_val="0"
-         name="chrome_bottom_span_end"
-         show_text="true"
-         top_pad="8"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeNavFavoritesSpanStart"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Nav start (%)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="100"
-         min_val="0"
-         name="chrome_nav_span_start"
-         show_text="true"
-         top_pad="8"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeNavFavoritesSpanEnd"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Nav end (%)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="100"
-         min_val="0"
-         name="chrome_nav_span_end"
-         show_text="true"
-         top_pad="8"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeMenuStatusSpanStart"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Menu start (%)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="100"
-         min_val="0"
-         name="chrome_menu_span_start"
-         show_text="true"
-         top_pad="8"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeMenuStatusSpanEnd"
-         decimal_digits="1"
-         follows="left|top"
-         height="20"
-         increment="0.5"
-         label="Menu end (%)"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="100"
-         min_val="0"
-         name="chrome_menu_span_end"
-         show_text="true"
-         top_pad="8"
-         visible="false"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeBottomDockMarginLeft"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Bottom left margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_bottom_margin_left"
-         show_text="true"
-         top_pad="12"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeBottomDockMarginRight"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Bottom right margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_bottom_margin_right"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeNavFavoritesMarginLeft"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Nav left margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_nav_margin_left"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeNavFavoritesMarginRight"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Nav right margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_nav_margin_right"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeMenuStatusMarginLeft"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Menu left margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_menu_margin_left"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <slider
-         can_edit_text="true"
-         control_name="FSChromeMenuStatusMarginRight"
-         decimal_digits="0"
-         follows="left|top"
-         height="20"
-         increment="1"
-         label="Menu right margin"
-         label_width="150"
-         layout="topleft"
-         left_delta="0"
-         max_val="200"
-         min_val="0"
-         name="chrome_menu_margin_right"
-         show_text="true"
-         top_pad="8"
-         width="400"/>
-        <text
-         follows="left|top|right"
-         height="42"
-         layout="topleft"
-         left="20"
-         right="-20"
-         name="chrome_layout_note"
-         text_color="White_50"
-         top_pad="12"
-         wrap="true">
-            Nearby chat moves with the bottom dock. Favorites move with the address bar. Menu and status stay together above the viewport. Changes preview immediately.
-        </text>
+        <scroll_container name="chrome_layout_scroll" layout="topleft"
+         top="0" left="0" right="-1" bottom="-1" follows="all"
+         reserve_scroll_corner="false" opaque="false">
+            <panel name="chrome_layout_editor" layout="topleft" left="0" top="0"
+             width="495" height="1400" follows="left|top|right">
+                <text
+                 follows="left|top|right"
+                 height="32"
+                 layout="topleft"
+                 left="20"
+                 right="-20"
+                 top="12"
+                 name="chrome_layout_explanation"
+                 wrap="true">
+                    Place toolbars, chat, and the top bars around the custom world viewport. Smart side bars sit outside the viewport when there is room, otherwise they stay just inside it.
+                </text>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_profile_label"
+                 top_pad="10"
+                 width="70">
+                    Profile:
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 follows="left|top|right"
+                 height="23"
+                 left="96"
+                 right="-20"
+                 name="chrome_profile_combo"
+                 top_delta="-4"/>
+                <button
+                 follows="left|top"
+                 height="23"
+                 label="Apply"
+                 layout="topleft"
+                 left="96"
+                 top_pad="8"
+                 name="chrome_profile_apply"
+                 width="100">
+                    <button.commit_callback
+                     function="Pref.ChromeProfileApply"/>
+                </button>
+                <button
+                 follows="left|top"
+                 height="23"
+                 label="Reset"
+                 layout="topleft"
+                 left_pad="8"
+                 name="chrome_layout_reset"
+                 width="90">
+                    <button.commit_callback
+                     function="Pref.ChromeLayoutReset"/>
+                </button>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_profile_name_label"
+                 top_pad="10"
+                 width="70">
+                    Name:
+                </text>
+                <line_editor
+                 follows="left|top|right"
+                 height="23"
+                 max_length_chars="64"
+                 left="96"
+                 right="-20"
+                 name="chrome_profile_name"
+                 top_delta="-4"/>
+                <button
+                 follows="left|top"
+                 height="23"
+                 label="Save As"
+                 layout="topleft"
+                 left="96"
+                 top_pad="8"
+                 name="chrome_profile_save"
+                 width="100">
+                    <button.commit_callback
+                     function="Pref.ChromeProfileSave"/>
+                </button>
+                <button
+                 follows="left|top"
+                 height="23"
+                 label="Rename"
+                 layout="topleft"
+                 left_pad="8"
+                 name="chrome_profile_rename"
+                 width="90">
+                    <button.commit_callback
+                     function="Pref.ChromeProfileRename"/>
+                </button>
+                <button
+                 follows="left|top"
+                 height="23"
+                 label="Delete"
+                 layout="topleft"
+                 left_pad="8"
+                 name="chrome_profile_delete"
+                 width="90">
+                    <button.commit_callback
+                     function="Pref.ChromeProfileDelete"/>
+                </button>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_left_label"
+                 top_pad="16"
+                 width="160">
+                    Left toolbar
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 control_name="FSChromeLeftToolbarPlacement"
+                 follows="left|top|right"
+                 height="23"
+                 left="188"
+                 right="-20"
+                 name="chrome_left_placement"
+                 top_delta="-4">
+                    <combo_box.item label="Window edge" name="left_window" value="0"/>
+                    <combo_box.item label="Inside viewport" name="left_inside" value="1"/>
+                    <combo_box.item label="Outside viewport" name="left_outside" value="2"/>
+                    <combo_box.item label="Smart" name="left_smart" value="3"/>
+                    <combo_box.item label="Hidden" name="left_hidden" value="4"/>
+                </combo_box>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 top_pad="12"
+                 name="chrome_right_label"
+                 width="160">
+                    Right toolbar
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 control_name="FSChromeRightToolbarPlacement"
+                 follows="left|top|right"
+                 height="23"
+                 left="188"
+                 right="-20"
+                 name="chrome_right_placement"
+                 top_delta="-4">
+                    <combo_box.item label="Window edge" name="right_window" value="0"/>
+                    <combo_box.item label="Inside viewport" name="right_inside" value="1"/>
+                    <combo_box.item label="Outside viewport" name="right_outside" value="2"/>
+                    <combo_box.item label="Smart" name="right_smart" value="3"/>
+                    <combo_box.item label="Hidden" name="right_hidden" value="4"/>
+                </combo_box>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeLeftToolbarOffset"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Left offset (px)"
+                 label_width="150"
+                 layout="topleft"
+                 left="20"
+                 max_val="200"
+                 min_val="0"
+                 right="-20"
+                 name="chrome_left_offset"
+                 show_text="true"
+                 top_pad="12"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeRightToolbarOffset"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Right offset (px)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_right_offset"
+                 show_text="true"
+                 top_pad="8"/>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_bottom_label"
+                 top_pad="14"
+                 width="160">
+                    Bottom dock
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 control_name="FSChromeBottomDockRegion"
+                 follows="left|top|right"
+                 height="23"
+                 left="188"
+                 right="-20"
+                 name="chrome_bottom_region"
+                 top_delta="-4">
+                    <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
+                    <combo_box.item label="Full window" name="bottom_full" value="0"/>
+                    <combo_box.item label="Viewport" name="bottom_viewport" value="1"/>
+                    <combo_box.item label="Left utility" name="bottom_left" value="2"/>
+                    <combo_box.item label="Right utility" name="bottom_right" value="3"/>
+                    <combo_box.item label="Custom span" name="bottom_custom" value="4"/>
+                </combo_box>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_nav_label"
+                 top_pad="12"
+                 width="160">
+                    Address / favorites
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 control_name="FSChromeNavFavoritesRegion"
+                 follows="left|top|right"
+                 height="23"
+                 left="188"
+                 right="-20"
+                 name="chrome_nav_region"
+                 top_delta="-4">
+                    <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
+                    <combo_box.item label="Full window" name="nav_full" value="0"/>
+                    <combo_box.item label="Viewport" name="nav_viewport" value="1"/>
+                    <combo_box.item label="Left utility" name="nav_left" value="2"/>
+                    <combo_box.item label="Right utility" name="nav_right" value="3"/>
+                    <combo_box.item label="Custom span" name="nav_custom" value="4"/>
+                </combo_box>
+                <text
+                 follows="left|top"
+                 height="16"
+                 layout="topleft"
+                 left="20"
+                 name="chrome_menu_label"
+                 top_pad="12"
+                 width="160">
+                    Menu / status
+                </text>
+                <combo_box
+                 allow_text_entry="false"
+                 control_name="FSChromeMenuStatusRegion"
+                 follows="left|top|right"
+                 height="23"
+                 left="188"
+                 right="-20"
+                 name="chrome_menu_region"
+                 top_delta="-4">
+                    <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
+                    <combo_box.item label="Full window" name="menu_full" value="0"/>
+                    <combo_box.item label="Viewport" name="menu_viewport" value="1"/>
+                    <combo_box.item label="Left utility" name="menu_left" value="2"/>
+                    <combo_box.item label="Right utility" name="menu_right" value="3"/>
+                    <combo_box.item label="Custom span" name="menu_custom" value="4"/>
+                </combo_box>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeBottomDockSpanStart"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Bottom start (%)"
+                 label_width="150"
+                 layout="topleft"
+                 left="20"
+                 max_val="100"
+                 min_val="0"
+                 right="-20"
+                 name="chrome_bottom_span_start"
+                 show_text="true"
+                 top_pad="16"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeBottomDockSpanEnd"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Bottom end (%)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="100"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_bottom_span_end"
+                 show_text="true"
+                 top_pad="8"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeNavFavoritesSpanStart"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Nav start (%)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="100"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_nav_span_start"
+                 show_text="true"
+                 top_pad="8"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeNavFavoritesSpanEnd"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Nav end (%)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="100"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_nav_span_end"
+                 show_text="true"
+                 top_pad="8"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeMenuStatusSpanStart"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Menu start (%)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="100"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_menu_span_start"
+                 show_text="true"
+                 top_pad="8"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeMenuStatusSpanEnd"
+                 decimal_digits="1"
+                 follows="left|top|right"
+                 height="20"
+                 increment="0.5"
+                 label="Menu end (%)"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="100"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_menu_span_end"
+                 show_text="true"
+                 top_pad="8"
+                 visible="false"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeBottomDockMarginLeft"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Bottom left margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_bottom_margin_left"
+                 show_text="true"
+                 top_pad="12"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeBottomDockMarginRight"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Bottom right margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_bottom_margin_right"
+                 show_text="true"
+                 top_pad="8"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeNavFavoritesMarginLeft"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Nav left margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_nav_margin_left"
+                 show_text="true"
+                 top_pad="8"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeNavFavoritesMarginRight"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Nav right margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_nav_margin_right"
+                 show_text="true"
+                 top_pad="8"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeMenuStatusMarginLeft"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Menu left margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_menu_margin_left"
+                 show_text="true"
+                 top_pad="8"/>
+                <slider
+                 can_edit_text="true"
+                 control_name="FSChromeMenuStatusMarginRight"
+                 decimal_digits="0"
+                 follows="left|top|right"
+                 height="20"
+                 increment="1"
+                 label="Menu right margin"
+                 label_width="150"
+                 layout="topleft"
+                 max_val="200"
+                 min_val="0"
+                 left="20"
+                 right="-20"
+                 name="chrome_menu_margin_right"
+                 show_text="true"
+                 top_pad="8"/>
+                <text
+                 follows="left|top|right"
+                 height="42"
+                 layout="topleft"
+                 left="20"
+                 right="-20"
+                 name="chrome_layout_note"
+                 text_color="White_50"
+                 top_pad="12"
+                 wrap="true">
+                    Nearby chat moves with the bottom dock. Favorites move with the address bar. Menu and status stay together above the viewport. Changes preview immediately.
+                </text>
+                <panel name="viewport_editor" left="0" top_pad="16" width="495" height="560" layout="topleft" follows="left|top|right">
+                    <string name="world_view_diagram_label">World view</string>
+                    <string name="world_view_display_label">Display [NUMBER]</string>
+                    <string name="world_view_monitors_unavailable">Monitor positions are unavailable. Use the diagram or percentages.</string>
+                    <string name="world_view_monitor_no_fit">Too little of this display is covered by the viewer window. Select another display.</string>
+                    <string name="world_view_monitor_help">Fits the covered part of this display. Fit again after moving or resizing the window.</string>
+                    <string name="world_view_profile_modified">Current layout differs from the selected saved profile.</string>
+                    <string name="world_view_select_display">Select a display</string>
+                    <string name="world_view_topology_changed">Display layout changed. Select a display again before fitting the world view.</string>
+                    <text name="world_view_heading" top="10" left="16" right="-16" height="20"
+                     follows="left|top|right" layout="topleft" font="SansSerifBold">World viewport</text>
+                    <text name="world_view_explanation" top="36" left="16" right="-16" height="32"
+                     follows="left|top|right" layout="topleft" wrap="true">
+                        Reserve room for Inventory and other floaters. Drag the white boundaries or choose a display for the world view.
+                    </text>
+                    <check_box name="world_view_enabled" control_name="FSWorldViewEnabled" top_pad="4" left="16"
+                     width="330" height="20" follows="left|top" layout="topleft" label="Use a custom world viewport"/>
+                    <world_view_diagram name="world_view_diagram" top_pad="4" left="16" right="-16" height="128"
+                     follows="left|top|right" layout="topleft" tab_stop="true"
+                     tool_tip="Drag a white boundary to resize the world view. Escape cancels a drag. Use the percentage controls for keyboard adjustments."/>
+                    <combo_box name="world_view_monitor_combo" top_pad="4" left="16" width="170" height="23"
+                     follows="left|top" layout="topleft" tool_tip="Select the display to fit; only the part covered by the viewer window is used.">
+                        <combo_box.commit_callback function="Pref.WorldViewMonitorSelected"/>
+                    </combo_box>
+                    <button name="world_view_use_monitor" left_pad="8" width="165" height="23"
+                     follows="left|top" layout="topleft" label="Use this monitor" enabled="false">
+                        <button.commit_callback function="Pref.WorldViewUseMonitor"/>
+                    </button>
+                    <text name="world_view_monitor_status" top_pad="5" left="16" right="-16" height="42"
+                     follows="left|top|right" layout="topleft" wrap="true" text_color="White_50"/>
+                    <slider name="world_view_inset_left" control_name="FSWorldViewInsetLeft" enabled_control="FSWorldViewEnabled"
+                     top_pad="4" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
+                     label="Reserve left (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
+                     decimal_digits="1" can_edit_text="true" show_text="true"/>
+                    <slider name="world_view_inset_right" control_name="FSWorldViewInsetRight" enabled_control="FSWorldViewEnabled"
+                     top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
+                     label="Reserve right (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
+                     decimal_digits="1" can_edit_text="true" show_text="true"/>
+                    <slider name="world_view_inset_top" control_name="FSWorldViewInsetTop" enabled_control="FSWorldViewEnabled"
+                     top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
+                     label="Reserve top (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
+                     decimal_digits="1" can_edit_text="true" show_text="true"/>
+                    <slider name="world_view_inset_bottom" control_name="FSWorldViewInsetBottom" enabled_control="FSWorldViewEnabled"
+                     top_pad="8" left="20" right="-20" height="20" follows="left|top|right" layout="topleft"
+                     label="Reserve bottom (%)" label_width="145" min_val="0" max_val="95" increment="0.5"
+                     decimal_digits="1" can_edit_text="true" show_text="true"/>
+                    <text name="world_view_presets_label" top_pad="12" left="16" width="58" height="20" layout="topleft">Presets:</text>
+                    <button name="world_view_full" top_delta="-2" left_pad="4" width="95" height="23" layout="topleft" label="Full window">
+                        <button.commit_callback function="Pref.WorldViewPreset" parameter="full"/>
+                    </button>
+                    <button name="world_view_left_half" left_pad="5" width="83" height="23" layout="topleft" label="Left half">
+                        <button.commit_callback function="Pref.WorldViewPreset" parameter="left_half"/>
+                    </button>
+                    <button name="world_view_right_half" left_pad="5" width="83" height="23" layout="topleft" label="Right half">
+                        <button.commit_callback function="Pref.WorldViewPreset" parameter="right_half"/>
+                    </button>
+                    <button name="world_view_center_third" left_pad="5" width="98" height="23" layout="topleft" label="Center third">
+                        <button.commit_callback function="Pref.WorldViewPreset" parameter="center_third"/>
+                    </button>
+                    <check_box name="world_view_in_mouselook" control_name="FSWorldViewInMouselook" enabled_control="FSWorldViewEnabled"
+                     top_pad="12" left="20" width="380" height="20" layout="topleft" label="Keep the custom viewport in Mouselook"/>
+                    <text name="world_view_profile_status" top_pad="4" left="20" right="-20" height="20"
+                     follows="left|top|right" layout="topleft" text_color="White_50"/>
+                    <text name="world_view_inset_note" top_pad="8" left="20" right="-20" height="42" wrap="true"
+                     follows="left|top|right" layout="topleft" text_color="White_50">
+                        At least 5% of the normal world area stays visible. Larger combined margins are scaled proportionally. Changes preview immediately; Cancel restores them.
+                    </text>
+                </panel>
+            </panel>
+        </scroll_container>
     </panel>
     <!-- </FS> -->
 
@@ -1601,5 +1605,7 @@
          tool_tip="Enables teleporting via double click to a destination on the World Map."/>
 
 	 </panel>
+    <panel class="panel_preference_workspaces" filename="panel_preferences_workspaces.xml"
+     top_pad="5" bottom="-1" left="1" right="-1" follows="all" label="Workspaces" name="tab-workspaces"/>
 </tab_container>
 </panel>

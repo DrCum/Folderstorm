@@ -135,6 +135,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 		Annotations: withTitle(destructive, "Confirm no-copy copy"),
 	}, state.inventoryConfirmCopy)
 	registerInventoryExtra(s, state, readOnly, mutating, destructive)
+	registerInventoryBulkReview(s, state, readOnly, destructive)
 	registerAppearance(s, state, readOnly, destructive)
 	registerCamera(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{

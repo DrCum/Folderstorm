@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "indra/newview/fsassistant*"
+      - "indra/newview/fsinventorybulk*"
+      - "indra/newview/fsworkspace*"
+      - "indra/newview/fspanelpreferenceworkspaces*"
+      - "indra/newview/llaisapi*"
+      - "indra/llui/llfloater*"
       - "indra/newview/fslinkreplacement*"
       - "indra/newview/fsworldview*"
       - "indra/newview/fschromelayout*"
@@ -16,6 +21,11 @@ on:
     branches: [main]
     paths:
       - "indra/newview/fsassistant*"
+      - "indra/newview/fsinventorybulk*"
+      - "indra/newview/fsworkspace*"
+      - "indra/newview/fspanelpreferenceworkspaces*"
+      - "indra/newview/llaisapi*"
+      - "indra/llui/llfloater*"
       - "indra/newview/fslinkreplacement*"
       - "indra/newview/fsworldview*"
       - "indra/newview/fschromelayout*"

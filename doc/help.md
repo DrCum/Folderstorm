@@ -10,7 +10,7 @@ The window title, preferences tab, icons, and crash reports use the name Folders
 
 ### Wide-screen layout
 
-Open **Preferences → Move & View**.
+Open **Preferences → Move & View → Layout**.
 
 - **Viewport.** Turn on **Use a custom world viewport** and set the left, right, top, and bottom margins. The camera, HUD, and mouse stay in the remaining world area so Inventory and other windows can sit in the margins of a stretched window. If two opposite margins would leave less than 5% of the window, they are scaled down. The change previews immediately. There is a separate switch for mouselook.
 - **Layout.** Place the toolbars, chat bar, and top bars around that viewport. Side bars sit outside the viewport when there is room, and just inside it when there is not. Save the arrangement as a named profile, then apply, rename, or delete profiles later. **Reset** restores the default chrome.
@@ -18,6 +18,18 @@ Open **Preferences → Move & View**.
 ### Outfit Gallery
 
 Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo width from 80 to 256 pixels. The name row stays a fixed height. 256 is the photo size the gallery fetches.
+
+### Workspaces
+
+Open **Preferences → Move & View → Workspaces** after login. Arrange your windows and choose **Save current**, or preview **Inventory sorting** or **Driving** as a starting arrangement. Workspaces are stored separately for each account. They include viewport and bars, supported Inventory/map windows, compatible chat geometry, and the primary Inventory's Received Items panel size.
+
+**Preview** changes the arrangement immediately. Preferences **OK** keeps the arrangement and saved definitions; **Cancel** restores the previous arrangement. Conversations, Inventory contents and filters stay as they are. Manually opened extra Inventory windows remain independent; **Add workspace inventory window** creates one extra window managed by workspaces. Workspaces are restored manually, rather than automatically at login.
+
+### Review Inventory changes
+
+Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. Review the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
+
+The gear menu's **Assistant inventory history…** shows this session's tracked rename/move operations. **Stop** prevents additional work; submitted changes may still finish. **Clear history** removes the visible records without changing Inventory. Undo is offered only for confirmed changes that still match their recorded state; ordinary renames and copyable-item moves have narrower rules than general Inventory actions. Unconfirmed changes, folder moves, moves involving Trash, and non-copyable-item moves cannot be undone here. See [bulk review and recovery](local-assistant-bulk-inventory.md) for the exact limits.
 
 ## Settings from Firestorm
 
@@ -53,7 +65,9 @@ The bridge lets an MCP client on this computer read and change inventory, change
 
 ### 1. Turn the bridge on
 
-Open **Preferences → Local assistant** and enable **Allow local assistant access**. That choice is saved. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
+Open **Preferences → Local assistant** and enable **Allow local assistant access**. Choose **Read only**, **Ask before changes**, or **Custom** permissions. Selecting Custom exposes individual controls; it does not restore an earlier set of values. Existing saved permissions are kept until you choose a preset or change a control.
+
+Changes preview immediately and are saved when you click **OK**. **Use these settings for this session only** keeps both access and permissions temporary; the saved settings resume after restart. **Cancel** restores the previous settings. The viewer listens on `127.0.0.1` and writes a discovery file named `fs-mcp-<pid>.json`. The file can exist at the login screen, before inventory is usable. Log in and wait until inventory has loaded before asking the assistant to use it.
 
 `--mcp-api` still forces the bridge on for that one session. It does not save the preference. Quit and the next launch follows the saved checkbox.
 
@@ -73,15 +87,13 @@ On Linux you can point the viewer at another directory with `FOLDERSTORM_X64_USE
 
 The installer ships `fs-mcp` in the same folder as the viewer and `migrate-settings`. On Windows that file is `fs-mcp.exe`. The viewer does not start it. The installer does not write a config for Cursor, Claude Code, or Codex.
 
-Cursor on Windows starts the MCP command through `cmd.exe`. A path under `C:\Program Files` is split at the space, and cmd reports `'C:\Program' is not recognized`. The sidecar never starts. The Windows installers create a symbolic link, not a `.lnk` shortcut, at:
+On Windows, use **Preferences → Local assistant → Setup → Copy configuration** in the installation you want to connect. New installers do not create or retarget a shared ProgramData command. Each installation keeps its own sidecar. Codex and Claude Code use that absolute executable path; Cursor's entry includes a quoted `cmd.exe` adapter when the path contains spaces.
 
-`C:\ProgramData\Folderstorm\fs-mcp.exe`
+A normal Velopack installation uses its stable `current\fs-mcp.exe` path. Setup verifies the package layout/id/version before describing that command as following updates. If the location is unverified, Setup uses the actual executable and asks you to recopy after updating. If the installed package changed while this viewer is running, restart before copying. Nonadmin installs need no writable ProgramData directory or symlink privilege for MCP configuration.
 
-That path has no spaces. Use it only if it resolves to your current installation; the Setup page checks this when copying configuration. The link points at the `fs-mcp.exe` just installed beside the viewer. The channel directory may be `Folderstorm-Release`, `FolderstormOS-private-<host>`, or another channel name. The real exe stays in that directory. An upgrade removes whatever link or file is already at the ProgramData path and creates the link again, so it points at the new install. Uninstall removes the link, and removes `C:\ProgramData\Folderstorm` only when that directory is empty afterward. Removing the link leaves the real exe in place.
+Older configurations may still use `C:\ProgramData\Folderstorm\fs-mcp.exe`. That legacy alias is kept unchanged during new installs and updates. Uninstall removes only file symlinks independently proven to target the uninstalling installation; unverified/busy links and unrelated files remain untouched. Old installers can still change the alias, so recopy existing client entries from their intended viewer's Setup page. No client files are rewritten automatically.
 
-A Velopack install is per-user and usually not elevated. It tries to create the same link. When `C:\ProgramData` is not writable, the install still succeeds and `fs-mcp.exe` stays in the Velopack `current` folder next to the viewer.
-
-The link targets the Release-channel copy below. A different channel uses that channel's directory.
+Typical Release paths are below; private/OpenSim channels use their own installation directory.
 
 | Install | `fs-mcp.exe` beside the viewer |
 | --- | --- |
@@ -101,7 +113,7 @@ cd tools/fs-mcp
 go build -o fs-mcp ./cmd/fs-mcp
 ```
 
-Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in place of `C:\ProgramData\Folderstorm\fs-mcp.exe` below. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
+Windows output name: `fs-mcp.exe`. Use that binary's absolute path in your client entry. The sidecar speaks MCP over stdin and stdout. It has no port of its own.
 
 `FIRESTORM_MCP_TIMEOUT` is how long one viewer call may take. The default is `90s`.
 
@@ -110,7 +122,7 @@ Windows output name: `fs-mcp.exe`. Use the absolute path of that binary in place
 
 Open **Preferences → Local assistant → Setup**, choose Codex, Cursor, or Claude Code, then **Copy configuration**. Merge the entry into that client's file; keep your existing servers. Codex receives a TOML table; Cursor and Claude Code receive a JSON `mcpServers` entry. This uses the current installation and the viewer's actual settings directory, including directory overrides. It copies no discovery contents or bearer token and writes no client files.
 
-On Windows the copy uses the ProgramData link only when it resolves to this installation's sidecar. Otherwise Codex and Claude Code use the real absolute executable path. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. The installer link is not modified. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
+On Windows copied commands always belong to this installation; a shared ProgramData alias is never selected. Cursor uses an explicit quoted `cmd.exe` adapter with the executable in `FOLDERSTORM_MCP_BINARY` when that path contains spaces. Legacy aliases are not modified during setup/install/update. On Linux the installed sidecar is at the package root, one directory above the viewer's `bin` directory; on macOS it is in `Contents/Resources`.
 
 **Check connection** runs the installed sidecar asynchronously against this viewer. It checks authenticated bridge health even when inventory Read is Never. A successful check means the sidecar could reach this viewer at that moment; it does not mean your external assistant loaded its configuration. Inventory and recent authenticated external requests are shown separately. Diagnostic probes do not count as external assistant activity. Closing preferences or leaving the page cancels a running check; changes to bridge readiness or permissions clear an old result.
 
@@ -128,7 +140,7 @@ Cursor, Claude Code, and Codex each keep their own file. `mcp.json`, `.claude.js
 
 The server name is `folderstorm`. Tool names inside the sidecar stay `inventory_search`, `camera_snapshot`, and so on. Claude Code shows them to you as `mcp__folderstorm__inventory_search`.
 
-The command in the snippets is `C:\ProgramData\Folderstorm\fs-mcp.exe`. It is the same for NSIS and Velopack, and for a private channel. Leave `FIRESTORM_MCP_DISCOVERY` on `%APPDATA%\Folderstorm_x64\user_settings`. For an account named Jane that is `C:\Users\Jane\AppData\Roaming\Folderstorm_x64\user_settings`.
+The snippets show an NSIS Release installation under `C:\Program Files\Folderstorm-Release`. Use your installation's copied entry for Velopack or another channel. Leave `FIRESTORM_MCP_DISCOVERY` on `%APPDATA%\Folderstorm_x64\user_settings`. For an account named Jane that is `C:\Users\Jane\AppData\Roaming\Folderstorm_x64\user_settings`.
 
 ### Cursor
 
@@ -138,8 +150,10 @@ Open **Settings → MCP**, or edit `%USERPROFILE%\.cursor\mcp.json`. The entry i
 {
   "mcpServers": {
     "folderstorm": {
-      "command": "C:\\ProgramData\\Folderstorm\\fs-mcp.exe",
+      "command": "cmd.exe",
+      "args": ["/d", "/s", "/c", "\"\"%FOLDERSTORM_MCP_BINARY%\"\""],
       "env": {
+        "FOLDERSTORM_MCP_BINARY": "C:\\Program Files\\Folderstorm-Release\\fs-mcp.exe",
         "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
       }
     }
@@ -154,7 +168,7 @@ A single project can use `.cursor/mcp.json` in that project. That file is separa
 User scope writes `%USERPROFILE%\.claude.json`. Flags go before the server name. The double dash separates the sidecar command:
 
 ```bat
-claude mcp add --transport stdio --scope user folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
+claude mcp add --transport stdio --scope user folderstorm -- "C:\Program Files\Folderstorm-Release\fs-mcp.exe"
 ```
 
 For a single project, use `.mcp.json` in that project's root. That file is approved the first time the folder is opened. The user-scope file remains `%USERPROFILE%\.claude.json`. Claude Code does not read `%USERPROFILE%\.claude\mcp.json`.
@@ -174,7 +188,7 @@ A project `.mcp.json` looks like this:
   "mcpServers": {
     "folderstorm": {
       "type": "stdio",
-      "command": "C:\\ProgramData\\Folderstorm\\fs-mcp.exe",
+      "command": "C:\\Program Files\\Folderstorm-Release\\fs-mcp.exe",
       "args": [],
       "env": {
         "FIRESTORM_MCP_DISCOVERY": "%APPDATA%\\Folderstorm_x64\\user_settings"
@@ -191,14 +205,14 @@ Check with `claude mcp list`.
 Codex is ChatGPT's coding client. `codex mcp add` writes `%USERPROFILE%\.codex\config.toml`. The table name is `mcp_servers`.
 
 ```bat
-codex mcp add folderstorm -- C:\ProgramData\Folderstorm\fs-mcp.exe
+codex mcp add folderstorm -- "C:\Program Files\Folderstorm-Release\fs-mcp.exe"
 ```
 
 The file should contain the command and the Folderstorm discovery directory:
 
 ```toml
 [mcp_servers.folderstorm]
-command = 'C:\ProgramData\Folderstorm\fs-mcp.exe'
+command = 'C:\Program Files\Folderstorm-Release\fs-mcp.exe'
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 
@@ -216,7 +230,7 @@ A project file `.codex/config.toml` is loaded only when that project is trusted.
 
 ### What is the same everywhere
 
-- One command, no arguments, stdio transport. On Windows the command is `C:\ProgramData\Folderstorm\fs-mcp.exe`. On Linux and macOS it is the `fs-mcp` binary beside the viewer.
+- Stdio transport with an installation-bound command. Cursor on Windows may use the quoted adapter shown above. On Linux and macOS it is the `fs-mcp` binary beside the viewer.
 - The same tool names and arguments.
 - `FIRESTORM_MCP_DISCOVERY` set to this viewer's Folderstorm `user_settings` directory. Each client still has its own file.
 - **Local assistant** is on. With the bridge off, the sidecar finds no viewer.
@@ -254,7 +268,7 @@ If two viewers are open, say which one, or ask for the process list and pick a p
 - The local assistant switch is off. Turn it on under **Preferences → Local assistant**. With the bridge off, the sidecar finds no viewer. `--mcp-api` forces one session on without saving that choice. You do not need to quit and relaunch.
 - `FIRESTORM_MCP_DISCOVERY` points at Firestorm's user_settings directory, or at any folder other than this viewer's Folderstorm `user_settings`. That variable replaces the default search. On Windows set it to `%APPDATA%\Folderstorm_x64\user_settings` (for an account named Jane, `C:\Users\Jane\AppData\Roaming\Folderstorm_x64\user_settings`). On Linux and macOS use the Folderstorm directory in the table above.
 - Inventory is still downloading. `viewer_status` shows fetch progress. Wait until `usable` is true.
-- The command is a relative path, the Go source directory, or a hand-built binary when this install already created `C:\ProgramData\Folderstorm\fs-mcp.exe`. Use that path. It has no spaces.
+- The command points at another installation or a retired shared alias. Recopy the entry from this viewer's Setup page; Cursor needs the provided adapter for paths containing spaces.
 - Codex is using a project `.codex/config.toml` in an untrusted folder, the table is named `mcpServers`, or the ChatGPT desktop app was expected to read `%USERPROFILE%\.codex\config.toml`.
 - Claude Code's file has no `env` block. If `claude mcp add` has no environment flag, add `FIRESTORM_MCP_DISCOVERY` in the file it wrote (`%USERPROFILE%\.claude.json`, or `.mcp.json` for one project). Flags that do exist go before `folderstorm`.
 - A tool dies around 10–30 seconds while inventory is still loading. Raise the client tool timeout above 90 seconds, or set `FIRESTORM_MCP_TIMEOUT` to match a timeout you accept.

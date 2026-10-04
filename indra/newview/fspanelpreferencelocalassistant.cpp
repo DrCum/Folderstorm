@@ -18,6 +18,9 @@
 #include "fspanelpreferencelocalassistant.h"
 #include "fseventapibridge.h"
 #include "fsassistantconfiguration.h"
+#include "fsassistantpermissions.h"
+#include "fsassistantlaunchpath.h"
+#include "llversioninfo.h"
 #include "llapp.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -34,32 +37,72 @@
 #include "llviewercontrol.h"
 #include "llweb.h"
 #include <boost/json.hpp>
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <vector>
 
 static LLPanelInjector<FSPanelPreferenceLocalAssistant> t_pref_local_assistant("panel_preference_local_assistant");
 
-const FSPanelPreferenceLocalAssistant::LocalAssistantRow FSPanelPreferenceLocalAssistant::kLocalAssistantRows[] = {
-    {"read", "local_assistant_perm_read", "allow", false},
-    {"camera", "local_assistant_perm_camera", "allow", true},
-    {"create", "local_assistant_perm_create", "allow", true},
-    {"edit", "local_assistant_perm_edit", "allow", true},
-    {"move", "local_assistant_perm_move", "allow", true},
-    {"trash", "local_assistant_perm_trash", "allow", true},
-    {"nocopy", "local_assistant_perm_nocopy", "ask", true},
-    {"wear", "local_assistant_perm_wear", "ask", true},
-    {"links", "local_assistant_perm_links", "ask", true},
+namespace
+{
+// Viewer-process state, deliberately absent from settings.xml and workspace profiles.
+struct SessionScope
+{
+    bool initialized = false;
+    bool session = false;
+    bool externalOverride = false;
+    LLSD accessSaved, accessRuntime, permissionsSaved, permissionsRuntime;
+    bool accessUnsaved = false, permissionsUnsaved = false;
+    bool matches(LLControlVariable& access, LLControlVariable& permissions) const
+    {
+        return llsd_equals(accessSaved, access.getSaveValue()) && llsd_equals(accessRuntime, access.getValue()) &&
+            llsd_equals(permissionsSaved, permissions.getSaveValue()) && llsd_equals(permissionsRuntime, permissions.getValue()) &&
+            accessUnsaved == access.hasUnsavedValue() && permissionsUnsaved == permissions.hasUnsavedValue();
+    }
+    void remember(LLControlVariable& access, LLControlVariable& permissions)
+    {
+        accessSaved = access.getSaveValue(); accessRuntime = access.getValue();
+        permissionsSaved = permissions.getSaveValue(); permissionsRuntime = permissions.getValue();
+        accessUnsaved = access.hasUnsavedValue(); permissionsUnsaved = permissions.hasUnsavedValue();
+    }
+} sAssistantScope;
+struct SettingsWriteGuard
+{
+    explicit SettingsWriteGuard(bool& writing) : mWriting(writing) { mWriting = true; }
+    ~SettingsWriteGuard() { mWriting = false; }
+    bool& mWriting;
 };
+}
 
-FSPanelPreferenceLocalAssistant::~FSPanelPreferenceLocalAssistant() { stopConnection(); }
+FSPanelPreferenceLocalAssistant::~FSPanelPreferenceLocalAssistant()
+{
+    stopConnection();
+    mAccessConnection.disconnect();
+    mPermissionsConnection.disconnect();
+    if (mEditor && mEditor->dirty())
+    {
+        SettingsWriteGuard guard(mWritingSettings);
+        if (mEditor->changedElsewhere())
+        {
+            mEditor->discardForExternalChange([](const LLSD& access) { return access.asBoolean(); });
+            sAssistantScope.session = mEditor->session();
+            sAssistantScope.externalOverride = sAssistantScope.session;
+            sAssistantScope.remember(*gSavedSettings.getControl("EnableLocalEventAPIBridge"),
+                *gSavedSettings.getControl("LocalEventAPIPermissionClasses"));
+        }
+        else mEditor->cancel(mEditor->baselineAccess().asBoolean());
+    }
+}
 
 bool FSPanelPreferenceLocalAssistant::postBuild()
 {
     getChild<LLCheckBoxCtrl>("local_assistant_enable")->setCommitCallback(
         [this](LLUICtrl*, const LLSD&) { onLocalAssistantToggled(); });
-    for (const LocalAssistantRow& row : kLocalAssistantRows)
+    for (const auto& row : fs_assistant::permissionClasses)
     {
         getChild<LLComboBox>(row.widget)->setCommitCallback(
-            [this, key = row.key](LLUICtrl*, const LLSD&) { onLocalAssistantPermission(key); });
+            [this, key = row.id](LLUICtrl*, const LLSD&) { onLocalAssistantPermission(key); });
     }
     getChild<LLCheckBoxCtrl>("show_details")->setCommitCallback([this](LLUICtrl*, const LLSD& value) {
         getChild<LLTextBox>("bridge_details")->setVisible(value.asBoolean());
@@ -70,6 +113,16 @@ bool FSPanelPreferenceLocalAssistant::postBuild()
     getChild<LLButton>("setup_guide")->setCommitCallback([](LLUICtrl*, const LLSD&) {
         LLWeb::loadURLExternal("https://github.com/DrCum/Folderstorm/blob/main/doc/help.md#the-local-assistant-bridge");
     });
+    getChild<LLComboBox>("permission_preset")->setCommitCallback(
+        [this](LLUICtrl*, const LLSD&) { onPreset(); });
+    getChild<LLCheckBoxCtrl>("session_only")->setCommitCallback(
+        [this](LLUICtrl*, const LLSD&) { onSessionScope(); });
+    getChild<LLCheckBoxCtrl>("individual_permissions")->setCommitCallback(
+        [this](LLUICtrl*, const LLSD&) { onIndividualPermissions(); });
+    snapshotLocalAssistant();
+    auto listener = [this](LLControlVariable*, const LLSD&, const LLSD&) { settingsChangedElsewhere(); };
+    mAccessConnection = gSavedSettings.getControl("EnableLocalEventAPIBridge")->getSignal()->connect(listener);
+    mPermissionsConnection = gSavedSettings.getControl("LocalEventAPIPermissionClasses")->getSignal()->connect(listener);
     refreshLocalAssistantControls();
     refreshConfiguration();
     return LLPanelPreference::postBuild();
@@ -99,6 +152,7 @@ void FSPanelPreferenceLocalAssistant::cancel(const std::vector<std::string> sett
 void FSPanelPreferenceLocalAssistant::draw()
 {
     if (!isInVisibleChain()) { stopConnection(); return; }
+    settingsChangedElsewhere(); // Also catches equal-value saved-layer changes, which emit no signal.
     pollConnection();
     if (mStatusTimer.getElapsedTimeF32() >= 1.f)
     {
@@ -118,130 +172,165 @@ void FSPanelPreferenceLocalAssistant::onVisibilityChange(bool visible)
     }
 }
 
-bool FSPanelPreferenceLocalAssistant::levelAllowed(const LocalAssistantRow& row, const std::string& level)
-{
-    if (level == "allow" || level == "deny")
-    {
-        return true;
-    }
-    return row.ask && level == "ask";
-}
-
 void FSPanelPreferenceLocalAssistant::refreshLocalAssistantControls()
 {
-    const bool enabled = gSavedSettings.getBOOL("EnableLocalEventAPIBridge");
-    getChild<LLCheckBoxCtrl>("local_assistant_enable")->setValue(enabled);
-    LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
-    if (!configured.isMap())
+    getChild<LLCheckBoxCtrl>("local_assistant_enable")->setValue(gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+    const LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
+    for (const auto& row : fs_assistant::permissionClasses)
     {
-        configured = LLSD::emptyMap();
+        getChild<LLComboBox>(row.widget)->setValue(fs_assistant::effectivePermissionLevel(row,
+            configured.isMap() && configured.has(row.id) ? configured[row.id].asString() : ""));
     }
-    for (const LocalAssistantRow& row : kLocalAssistantRows)
-    {
-        std::string level = row.fallback;
-        if (configured.has(row.key) && levelAllowed(row, configured[row.key].asString()))
-        {
-            level = configured[row.key].asString();
-        }
-        getChild<LLComboBox>(row.widget)->setValue(level);
-    }
+    getChild<LLCheckBoxCtrl>("session_only")->setValue(mEditor && mEditor->session());
+    getChild<LLCheckBoxCtrl>("individual_permissions")->setValue(mIndividualPermissions);
+    getChild<LLView>("permissions_scroll")->setVisible(mIndividualPermissions);
+    refreshPreset();
     refreshLocalAssistantStatus();
+}
+
+void FSPanelPreferenceLocalAssistant::refreshPreset()
+{
+    const LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
+    const auto preset = fs_assistant::permissionPreset([&configured](const char* key) {
+        return configured.isMap() && configured.has(key) ? configured[key].asString() : "";
+    });
+    const char* name = preset == fs_assistant::PermissionPreset::ReadOnly ? "read_only" :
+        preset == fs_assistant::PermissionPreset::AskBeforeChanges ? "ask_changes" : "custom";
+    getChild<LLComboBox>("permission_preset")->setValue(name);
+    getChild<LLTextBox>("preset_summary")->setText(getString(std::string("summary_") + name));
+}
+
+void FSPanelPreferenceLocalAssistant::previewSettings(const LLSD& access, const LLSD& permissions)
+{
+    if (!mEditor) return;
+    SettingsWriteGuard guard(mWritingSettings);
+    mEditor->preview(access, permissions, access.asBoolean());
+    mSettingsConflict = false;
+    refreshLocalAssistantControls();
 }
 
 void FSPanelPreferenceLocalAssistant::onLocalAssistantToggled()
 {
-    const bool enabled = getChild<LLCheckBoxCtrl>("local_assistant_enable")->getValue().asBoolean();
+    if (settingsChangedElsewhere()) return;
     stopConnection();
     getChild<LLTextBox>("diagnostic_status")->setText(getString("check_not_run"));
-    gSavedSettings.setBOOL("EnableLocalEventAPIBridge", enabled);
-    refreshLocalAssistantStatus();
+    previewSettings(getChild<LLCheckBoxCtrl>("local_assistant_enable")->getValue(),
+        gSavedSettings.getLLSD("LocalEventAPIPermissionClasses"));
 }
 
 void FSPanelPreferenceLocalAssistant::onLocalAssistantPermission(const char* key)
 {
-    const LocalAssistantRow* row = nullptr;
-    for (const LocalAssistantRow& candidate : kLocalAssistantRows)
+    if (settingsChangedElsewhere()) return;
+    for (const auto& row : fs_assistant::permissionClasses)
     {
-        if (std::string(candidate.key) == key)
-        {
-            row = &candidate;
-            break;
-        }
-    }
-    if (!row)
-    {
+        if (std::string(row.id) != key) continue;
+        const std::string level = getChild<LLComboBox>(row.widget)->getValue().asString();
+        if (!fs_assistant::permissionLevelAllowed(row, level)) return;
+        LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
+        if (!configured.isMap()) configured = LLSD::emptyMap();
+        configured[key] = level;
+        previewSettings(gSavedSettings.getLLSD("EnableLocalEventAPIBridge"), configured);
         return;
     }
-    const std::string level = getChild<LLComboBox>(row->widget)->getValue().asString();
-    if (!levelAllowed(*row, level))
+}
+
+void FSPanelPreferenceLocalAssistant::onPreset()
+{
+    if (settingsChangedElsewhere()) return;
+    const std::string name = getChild<LLComboBox>("permission_preset")->getValue().asString();
+    if (name == "custom")
     {
+        mIndividualPermissions = true;
+        refreshLocalAssistantControls();
         return;
     }
+    if (name != "read_only" && name != "ask_changes") return;
     LLSD configured = gSavedSettings.getLLSD("LocalEventAPIPermissionClasses");
-    if (!configured.isMap())
-    {
-        configured = LLSD::emptyMap();
-    }
-    configured[key] = level;
-    gSavedSettings.setLLSD("LocalEventAPIPermissionClasses", configured);
+    if (!configured.isMap()) configured = LLSD::emptyMap();
+    fs_assistant::applyPermissionPreset(name == "read_only" ? fs_assistant::PermissionPreset::ReadOnly :
+        fs_assistant::PermissionPreset::AskBeforeChanges,
+        [&configured](const char* key, const char* level) { configured[key] = level; });
+    previewSettings(gSavedSettings.getLLSD("EnableLocalEventAPIBridge"), configured);
+}
+
+void FSPanelPreferenceLocalAssistant::onSessionScope()
+{
+    if (settingsChangedElsewhere()) return;
+    if (!mEditor) return;
+    mEditor->setSession(getChild<LLCheckBoxCtrl>("session_only")->getValue().asBoolean());
+    mSettingsConflict = false;
+    refreshLocalAssistantStatus();
+}
+
+void FSPanelPreferenceLocalAssistant::onIndividualPermissions()
+{
+    mIndividualPermissions = getChild<LLCheckBoxCtrl>("individual_permissions")->getValue().asBoolean();
+    getChild<LLView>("permissions_scroll")->setVisible(mIndividualPermissions);
 }
 
 void FSPanelPreferenceLocalAssistant::snapshotLocalAssistant()
 {
-    LLControlVariable* bridge = gSavedSettings.getControl("EnableLocalEventAPIBridge");
-    LLControlVariable* perms = gSavedSettings.getControl("LocalEventAPIPermissionClasses");
-    if (!bridge || !perms)
+    if (mEditor && mEditor->dirty())
     {
-        mLocalAssistantSnapshotted = false;
-        return;
+        settingsChangedElsewhere();
+        return; // Generic baseline capture must not accept an unpublished preview.
     }
-    mBridgeRuntime = bridge->getValue().asBoolean();
-    mBridgeSaved = bridge->getSaveValue().asBoolean();
-    mBridgeUnsaved = bridge->hasUnsavedValue();
-    mPermsRuntime = perms->getValue();
-    mPermsSaved = perms->getSaveValue();
-    mPermsUnsaved = perms->hasUnsavedValue();
-    mLocalAssistantSnapshotted = true;
+    auto bridge = gSavedSettings.getControl("EnableLocalEventAPIBridge");
+    auto permissions = gSavedSettings.getControl("LocalEventAPIPermissionClasses");
+    if (!bridge || !permissions) return;
+    if (!mEditor) mEditor.reset(new AssistantEditor(*bridge, *permissions, EqualSettings()));
+    if (!sAssistantScope.initialized || !sAssistantScope.matches(*bridge, *permissions))
+    {
+        sAssistantScope.initialized = true;
+        sAssistantScope.session = mEditor->hasRuntimeOverrides();
+        sAssistantScope.externalOverride = sAssistantScope.session;
+    }
+    mEditor->captureBaseline(sAssistantScope.session);
+    sAssistantScope.remember(*bridge, *permissions);
 }
 
-void FSPanelPreferenceLocalAssistant::restoreSavedControl(const char* name, const LLSD& saved, const LLSD& runtime, bool hadUnsaved)
+void FSPanelPreferenceLocalAssistant::commitPendingSettings()
 {
-    LLControlVariable* control = gSavedSettings.getControl(name);
-    if (!control)
+    if (settingsChangedElsewhere()) return;
+    if (!mEditor) return;
+    SettingsWriteGuard guard(mWritingSettings);
+    mEditor->accept(gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+    sAssistantScope.session = mEditor->session();
+    sAssistantScope.externalOverride = false;
+    sAssistantScope.remember(*gSavedSettings.getControl("EnableLocalEventAPIBridge"),
+        *gSavedSettings.getControl("LocalEventAPIPermissionClasses"));
+    mSettingsConflict = false;
+}
+
+bool FSPanelPreferenceLocalAssistant::settingsChangedElsewhere()
+{
+    if (mWritingSettings || !mEditor || !mEditor->changedElsewhere()) return false;
+    // Keep external changes and discard our unpublished preview. Cancel must
+    // never resurrect that preview or overwrite a newer external value.
+    mSettingsConflict = mSettingsConflict || mEditor->dirty();
     {
-        return;
+        SettingsWriteGuard guard(mWritingSettings);
+        mEditor->discardForExternalChange([](const LLSD& access) { return access.asBoolean(); });
     }
-    if (llsd_equals(control->getValue(), runtime) &&
-        llsd_equals(control->getSaveValue(), saved) &&
-        control->hasUnsavedValue() == hadUnsaved)
-    {
-        return;
-    }
-    if (hadUnsaved)
-    {
-        if (!llsd_equals(control->getSaveValue(), saved) || !control->hasUnsavedValue())
-        {
-            control->setValue(saved, true);
-        }
-        if (!llsd_equals(control->getValue(), runtime) || !control->hasUnsavedValue())
-        {
-            control->setValue(runtime, false);
-        }
-    }
-    else
-    {
-        control->setValue(runtime, true);
-    }
+    sAssistantScope.session = mEditor->hasRuntimeOverrides();
+    sAssistantScope.externalOverride = sAssistantScope.session;
+    mEditor->snapshot(sAssistantScope.session);
+    sAssistantScope.remember(*gSavedSettings.getControl("EnableLocalEventAPIBridge"),
+        *gSavedSettings.getControl("LocalEventAPIPermissionClasses"));
+    stopConnection();
+    getChild<LLTextBox>("diagnostic_status")->setText(getString("check_not_run"));
+    refreshLocalAssistantControls();
+    return true;
 }
 
 void FSPanelPreferenceLocalAssistant::restoreLocalAssistant()
 {
-    if (!mLocalAssistantSnapshotted)
+    settingsChangedElsewhere();
+    if (!mEditor) return;
     {
-        return;
+        SettingsWriteGuard guard(mWritingSettings);
+        mEditor->cancel(mEditor->baselineAccess().asBoolean());
     }
-    restoreSavedControl("EnableLocalEventAPIBridge", mBridgeSaved, mBridgeRuntime, mBridgeUnsaved);
-    restoreSavedControl("LocalEventAPIPermissionClasses", mPermsSaved, mPermsRuntime, mPermsUnsaved);
     refreshLocalAssistantControls();
 }
 
@@ -273,8 +362,10 @@ void FSPanelPreferenceLocalAssistant::refreshLocalAssistantStatus()
         }
         if (status.ready) details = llformat("127.0.0.1:%d", status.port);
     }
-    LLControlVariable* enabled = gSavedSettings.getControl("EnableLocalEventAPIBridge");
-    getChild<LLTextBox>("session_override")->setText(enabled && enabled->hasUnsavedValue() ? getString("session_override_text") : "");
+    const bool session = mEditor && mEditor->session();
+    const char* scope_message = mSettingsConflict ? "settings_conflict" :
+        session ? (sAssistantScope.externalOverride ? "external_override_text" : "session_override_text") : "saved_scope_text";
+    getChild<LLTextBox>("session_override")->setText(getString(scope_message));
     getChild<LLTextBox>("local_assistant_status")->setText(access);
     getChild<LLTextBox>("inventory_status")->setText(getString(
         LLStartUp::getStartupState() != STATE_STARTED ? "inventory_login" :
@@ -286,7 +377,20 @@ void FSPanelPreferenceLocalAssistant::refreshLocalAssistantStatus()
 std::string FSPanelPreferenceLocalAssistant::sidecarPath() const
 {
 #if LL_WINDOWS
-    return gDirUtilp->getExecutableDir() + gDirUtilp->getDirDelimiter() + "fs-mcp.exe";
+    // GetModuleFileNameW preserves the logical current path; grow the buffer
+    // rather than relying on LLDir's historical MAX_PATH initialization.
+    std::vector<wchar_t> module(512);
+    for (; module.size() <= 32768; module.resize(module.size() * 2))
+    {
+        const DWORD length = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+        if (!length) break;
+        if (length < module.size())
+        {
+            const auto path = std::filesystem::path(std::wstring(module.data(), length)).parent_path() / L"fs-mcp.exe";
+            return ll_convert<std::string>(path.wstring());
+        }
+    }
+    return {}; // Refuse a truncated or unresolvable installation path.
 #elif LL_DARWIN
     // The package keeps the sidecar in Contents/Resources, viewer in Contents/MacOS.
     return gDirUtilp->getAppRODataDir() + gDirUtilp->getDirDelimiter() + "fs-mcp";
@@ -303,6 +407,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     const bool found = LLFile::isfile(path);
     LLStringUtil::format_map_t args;
     args["[PATH]"] = path;
+    getChild<LLTextBox>("sidecar_status")->setToolTip(path);
     getChild<LLTextBox>("sidecar_status")->setText(getString(found ? "sidecar_found" : "sidecar_missing", args));
     getChild<LLButton>("copy_configuration")->setEnabled(found);
     getChild<LLButton>("check_connection")->setEnabled(found && !mDiagnostic);
@@ -311,16 +416,35 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     bool cursor_adapter = false;
     const std::string client = getChild<LLComboBox>("client")->getValue().asString();
 #if LL_WINDOWS
-    // Use the shared link only if it resolves to this installation, not a different channel.
-    const auto program_data = LLStringUtil::getoptenv("ProgramData");
-    if (program_data)
+    // A saved configuration must remain bound to this installation, even if
+    // another channel changes the legacy ProgramData alias after it is copied.
+    std::string package_id = LL_TO_STRING(LL_VIEWER_CHANNEL);
+    if (package_id.rfind("Folderstorm", 0) == 0) package_id.erase(0, 10);
+#ifdef OPENSIM
+    package_id = "FolderstormOS" + package_id;
+#else
+    package_id = "Folderstorm" + package_id;
+#endif
+    package_id.erase(std::remove_if(package_id.begin(), package_id.end(),
+        [](unsigned char c) { return std::isspace(c); }), package_id.end());
+    const auto& version = LLVersionInfo::instance();
+    const std::string package_version = version.getShortVersion() + "-" + version.getBuildVersion();
+    const auto launch = FSAssistantLaunchPath::resolve(std::filesystem::path(ll_convert<std::wstring>(path)),
+                                                       package_id, package_version);
+    command = ll_convert<std::string>(launch.command.wstring());
+    if (found)
     {
-        const std::string shared = *program_data + "\\Folderstorm\\fs-mcp.exe";
-        std::error_code ec;
-        if (std::filesystem::equivalent(std::filesystem::path(ll_convert<std::wstring>(shared)), std::filesystem::path(ll_convert<std::wstring>(path)), ec) && !ec)
-        {
-            command = shared;
-        }
+        const char* status = launch.state == FSAssistantLaunchPath::State::StableCurrent ? "sidecar_stable_current" :
+            launch.state == FSAssistantLaunchPath::State::UpdateInProgress ? "sidecar_update_in_progress" :
+            launch.state == FSAssistantLaunchPath::State::RecopyAfterUpdate ? "sidecar_recopy_after_update" : "sidecar_found";
+        getChild<LLTextBox>("sidecar_status")->setText(getString(status, args));
+    }
+    getChild<LLButton>("copy_configuration")->setEnabled(found && launch.canCopy());
+    if (!launch.canCopy())
+    {
+        mConfiguration.clear();
+        getChild<LLTextEditor>("configuration")->setText(LLStringExplicit(""));
+        return;
     }
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;
 #endif
@@ -332,7 +456,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
 void FSPanelPreferenceLocalAssistant::copyConfiguration()
 {
     refreshConfiguration();
-    if (!LLFile::isfile(sidecarPath())) return;
+    if (!LLFile::isfile(sidecarPath()) || mConfiguration.empty()) return;
     const LLWString text = utf8str_to_wstring(mConfiguration);
     LLClipboard::instance().copyToClipboard(text, 0, static_cast<S32>(text.size()));
 }

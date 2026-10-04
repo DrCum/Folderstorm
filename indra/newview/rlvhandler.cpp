@@ -1,4 +1,5 @@
 /**
+ * $LicenseInfo:firstyear=2009&license=lgpl$
  *
  * Copyright (c) 2009-2018, Kitty Barnett
  *
@@ -12,6 +13,7 @@
  * you have read and understood your obligations described above, and agree to
  * abide by those obligations.
  *
+ * $/LicenseInfo$
  */
 
 // Generic includes
@@ -2576,6 +2578,8 @@ void RlvBehaviourToggleHandler<RLV_BHVR_SHOWINV>::onCommandToggle(ERlvBehaviour 
         LLFloaterReg::const_instance_list_t lSecFloaters = LLFloaterReg::getFloaterList("secondary_inventory");
         for (LLFloaterReg::const_instance_list_t::const_iterator itSecFloater = lSecFloaters.begin(); itSecFloater != lSecFloaters.end(); ++itSecFloater)
             (*itSecFloater)->closeFloater();
+        const auto workspace_floaters = LLFloaterReg::getFloaterList("fs_workspace_inventory");
+        for (LLFloater* floater : workspace_floaters) floater->closeFloater();
     }
 
     //
@@ -2615,11 +2619,13 @@ void RlvBehaviourToggleHandler<RLV_BHVR_SHOWINV>::onCommandToggle(ERlvBehaviour 
     {
         RLV_VERIFY(RlvUIEnabler::instance().addGenericFloaterFilter("inventory"));
         RLV_VERIFY(RlvUIEnabler::instance().addGenericFloaterFilter("secondary_inventory"));
+        RLV_VERIFY(RlvUIEnabler::instance().addGenericFloaterFilter("fs_workspace_inventory"));
     }
     else
     {
         RLV_VERIFY(RlvUIEnabler::instance().removeGenericFloaterFilter("inventory"));
         RLV_VERIFY(RlvUIEnabler::instance().removeGenericFloaterFilter("secondary_inventory"));
+        RLV_VERIFY(RlvUIEnabler::instance().removeGenericFloaterFilter("fs_workspace_inventory"));
     }
 }
 

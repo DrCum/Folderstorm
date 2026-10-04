@@ -34,6 +34,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpreference.h"
+#include "fspanelpreferencelocalassistant.h"
 
 #include "message.h"
 #include "llfloaterautoreplacesettings.h"
@@ -132,6 +133,7 @@
 #include "exogroupmutelist.h"
 #include "fsavatarrenderpersistence.h"
 #include "fschromelayoutcontroller.h"
+#include "fsworkspacecontroller.h"
 #include "fsworldviewdiagram.h"
 #include "fsdroptarget.h"
 #include "fsfloaterimcontainer.h"
@@ -986,6 +988,7 @@ LLFloaterPreference::~LLFloaterPreference()
 void LLFloaterPreference::saveSettings()
 {
     saveViewportSettings();
+    FSWorkspaceController::instance().beginPreferencesSession();
     LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
     child_list_t::const_iterator iter = tabcontainer->getChildList()->begin();
     child_list_t::const_iterator end = tabcontainer->getChildList()->end();
@@ -1087,6 +1090,7 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
         if (panel)
             panel->cancel(settings_to_skip);
     }
+    FSWorkspaceController::instance().cancelPreferencesSession();
     cancelViewportSettings(settings_to_skip);
     // hide joystick pref floater
     LLFloaterReg::hideInstance("pref_joystick");
@@ -1587,6 +1591,12 @@ void LLFloaterPreference::onBtnOK(const LLSD& userdata)
 
     if (canClose())
     {
+        // Runtime previews become saved preferences only on explicit acceptance.
+        if (auto* assistant = findChild<FSPanelPreferenceLocalAssistant>("local_assistant"))
+            assistant->commitPendingSettings();
+        // Only explicit OK accepts workspace previews. saveSettings()/apply()
+        // are also used on construction/open and cannot commit a transaction.
+        FSWorkspaceController::instance().commitPendingSettings();
         saveSettings();
         apply();
 

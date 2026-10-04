@@ -47,6 +47,16 @@ public:
     typedef std::function<void(const LLUUID& invItem)> completion_t;
 
     static bool isAvailable();
+    // Bulk review needs HTTP truth, not the legacy UUID callback (which can be
+    // null on successful updates). Undefined updates means an authoritative GET.
+    typedef std::function<void(bool success, const LLSD& response)> result_completion_t;
+    static void BulkRequest(const LLUUID& id, bool category, const LLSD& updates,
+                            std::function<bool()> session_valid,
+                            std::function<bool()> may_submit, result_completion_t callback,
+                            std::function<void()> submitted = {});
+    // True only while synchronously applying this object's bulk AIS response.
+    // Inventory observers use this provenance to distinguish other writers.
+    static bool isBulkUpdateFor(const LLUUID& id);
     static void getCapNames(LLSD& capNames);
 
     static void CreateInventory(const LLUUID& parentId, const LLSD& newInventory, completion_t callback = completion_t());

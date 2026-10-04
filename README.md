@@ -25,7 +25,7 @@ It can capture a snapshot of the world viewport and set that image on an outfit 
 ## Also included
 
 - An opt-in migrator can copy Firestorm settings into Folderstorm.
-- Configure finds Go 1.25 or newer before the rest of the build. The installer ships `fs-mcp` and the settings migrator next to the viewer. On Windows it also adds a space-free link at `C:\ProgramData\Folderstorm\fs-mcp.exe`.
+- Configure finds Go 1.25 or newer before the rest of the build. The installer ships `fs-mcp` and the settings migrator next to the viewer. Windows installs include a conservative utility for cleaning owned legacy MCP links during uninstall.
 
 ## Get a build
 
@@ -33,7 +33,7 @@ Get a build from [folderstorm.sodie.net](https://folderstorm.sodie.net). To buil
 
 ## MCP setup
 
-How to turn the bridge on and connect a client is in [doc/help.md](doc/help.md) and [tools/fs-mcp/README.md](tools/fs-mcp/README.md). On Windows, the command is `C:\ProgramData\Folderstorm\fs-mcp.exe`.
+How to turn the bridge on and connect a client is in [doc/help.md](doc/help.md) and [tools/fs-mcp/README.md](tools/fs-mcp/README.md). Copy an installation-bound command from Preferences → Local assistant → Setup.
 
 ## License
 

@@ -15583,4 +15583,12 @@ Folder names cannot contain / or \.
      yestext="Yes"/>
   </notification>
 
+  <notification name="ConfirmWorkspaceOverwrite" type="alertmodal">
+    Replace the saved workspace “[NAME]” with your current arrangement?
+    <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Replace"/>
+  </notification>
+  <notification name="ConfirmWorkspaceDelete" type="alertmodal">
+    Delete the saved workspace “[NAME]”?
+    <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Delete"/>
+  </notification>
 </notifications>

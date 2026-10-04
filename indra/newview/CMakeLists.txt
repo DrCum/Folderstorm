@@ -111,8 +111,15 @@ set(viewer_SOURCE_FILES
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
+    fsworkspacelayout.cpp
+    fsworkspaceserialization.cpp
+    fsworkspacecontroller.cpp
+    fsworkspaceinventoryfloater.cpp
+    fspanelpreferenceworkspaces.cpp
     fschromelayout.cpp
     fschromelayoutcontroller.cpp
+    fsinventorybulk.cpp
+    fsinventorybulkmodel.cpp
     fslinkreplacement.cpp
     fspanelpreferencelocalassistant.cpp
     fsworldviewdiagram.cpp
@@ -124,6 +131,7 @@ set(viewer_SOURCE_FILES
     fsfloateraddtocontactset.cpp
     fsfavoritegroups.cpp
     fsinventorycustomtabs.cpp
+    fsfloaterinventorybulk.cpp
     fsfloaterassetblacklist.cpp
     fsfloateravataralign.cpp
     fsfloateravatarrendersettings.cpp
@@ -972,9 +980,13 @@ set(viewer_HEADER_FILES
     fsareasearchmenu.h
     fsassetblacklist.h
     fsassistantapproval.h
+    fsassistantlaunchpath.h
     fsassistantconfiguration.h
     fsassistantoperation.h
+    fsassistantpermissions.h
+    fsassistantsettings.h
     fsassistantpolicy.h
+    fsfloaterinventorybulk.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
     fsblocklistmenu.h
@@ -983,8 +995,15 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fsworkspacelayout.h
+    fsworkspacecontroller.h
+    fsworkspaceinventoryfloater.h
+    fspanelpreferenceworkspaces.h
     fschromelayout.h
     fschromelayoutcontroller.h
+    fsinventorybulk.h
+    fsinventorybulkmodel.h
+    fsinventorybulkscope.h
     fslinkreplacement.h
     fspanelpreferencelocalassistant.h
     fsworldviewdiagram.h
@@ -2382,6 +2401,28 @@ add_custom_command(
 )
 add_custom_target(fs-mcp ALL DEPENDS "${FS_MCP_OUTPUT}")
 
+# Windows uninstallation alone uses this conservative legacy-link utility.
+if(WINDOWS)
+  set(FS_MCP_MAINTENANCE_DIR "${CMAKE_SOURCE_DIR}/../tools/windows-mcp-launcher")
+  set(FS_MCP_MAINTENANCE_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/fs-mcp-launcher-maintenance${CMAKE_EXECUTABLE_SUFFIX}")
+  add_custom_command(
+    OUTPUT "${FS_MCP_MAINTENANCE_OUTPUT}"
+    COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
+            "${GO_EXECUTABLE}" build -o "${FS_MCP_MAINTENANCE_OUTPUT}" .
+    WORKING_DIRECTORY "${FS_MCP_MAINTENANCE_DIR}"
+    DEPENDS
+      "${FS_MCP_MAINTENANCE_DIR}/go.mod"
+      "${FS_MCP_MAINTENANCE_DIR}/main.go"
+      "${FS_MCP_MAINTENANCE_DIR}/cleanup.go"
+      "${FS_MCP_MAINTENANCE_DIR}/cleanup_windows.go"
+      "${FS_MCP_MAINTENANCE_DIR}/reparse.go"
+    COMMENT "Building fs-mcp-launcher-maintenance"
+    VERBATIM
+  )
+  add_custom_target(fs-mcp-launcher-maintenance ALL DEPENDS "${FS_MCP_MAINTENANCE_OUTPUT}")
+  add_dependencies(${VIEWER_BINARY_NAME} fs-mcp-launcher-maintenance)
+endif()
+
 if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
@@ -2425,6 +2466,7 @@ if (WINDOWS)
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       "${MIGRATE_SETTINGS_OUTPUT}"
       "${FS_MCP_OUTPUT}"
+      "${FS_MCP_MAINTENANCE_OUTPUT}"
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
@@ -3189,6 +3231,11 @@ if (LL_TESTS)
           lllogin
           )
 
+  LL_ADD_INTEGRATION_TEST(fsassistantsettings
+    ""
+    "${test_libs}"
+    )
+
   LL_ADD_INTEGRATION_TEST(cppfeatures
     ""
     "${test_libs}"
@@ -3257,7 +3304,7 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
-  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp)
+  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance)
 endif()
 if(TARGET copy_l_viewer_manifest)
   add_dependencies(copy_l_viewer_manifest migrate-settings fs-mcp)

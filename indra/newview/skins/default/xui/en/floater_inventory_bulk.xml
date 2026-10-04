@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="inventory_bulk_review" title="Assistant inventory review and history"
+ width="820" height="690" min_width="700" min_height="650" can_resize="true"
+ can_minimize="true" save_rect="true" layout="topleft">
+ <string name="selection_limit">Select 1–50 inventory objects, then choose Review bulk changes again.</string>
+ <string name="frozen_selection">[COUNT] objects selected. This selection stays fixed while you review.</string>
+ <string name="preview_needed">Settings changed. Preview again before executing.</string>
+ <string name="select_folder">Select one destination folder in an inventory window, then click Use selected folder.</string>
+ <string name="invalid_folder">Enter a valid inventory folder UUID, or use a selected folder.</string>
+ <string name="preview_counts">Requested: [COUNT] · Eligible: [ELIGIBLE] · Skipped: [SKIPPED]</string>
+ <string name="executing">Executing. Submitted requests may complete after stopping or closing this window.</string>
+ <string name="stop_requested">Stop requested. Remaining work will stop; submitted requests may still complete.</string>
+ <string name="history_heading">Session history. Double-click an operation to view its objects and outcomes.</string>
+ <string name="operation_heading">Operation outcomes. Submitted is not server confirmation.</string>
+ <string name="operation_counts">Objects: [count] · Submitted: [submitted_count] · Confirmed: [confirmed_count] · Skipped: [skipped_count]. Submitted is not confirmation.</string>
+ <string name="history_cleared">History and undo metadata cleared. Submitted requests continue.</string>
+ <string name="session_changed">The inventory session changed. Select objects again or open this session's history.</string>
+ <string name="action_column">Action</string>
+ <string name="count_column">Objects</string>
+ <string name="before_column">Before name</string>
+ <string name="after_column">After name / destination</string>
+ <string name="kind_rename">Rename</string>
+ <string name="kind_move">Move</string>
+ <string name="history_age">[MINUTES] min ago</string>
+ <string name="status_executing">Executing</string>
+ <string name="status_completed">Finished; see row results</string>
+ <string name="status_not_started">Not submitted</string>
+ <string name="status_skipped">Skipped</string>
+ <string name="status_submitted">Submitted</string>
+ <string name="status_confirmed">Server confirmed</string>
+ <string name="status_failed">Failed</string>
+ <string name="status_unconfirmed">Unconfirmed</string>
+ <string name="status_cancelled_before_submission">Stopped before submission</string>
+ <string name="eligible">Eligible</string>
+ <string name="skipped">Skipped</string>
+ <string name="undo_if_confirmed">If server confirmed</string>
+ <string name="undo_available">Review available</string>
+ <string name="undo_unavailable">Unavailable</string>
+ <string name="page_count">[FIRST]–[LAST] of [TOTAL]</string>
+ <string name="operation_id">Operation UUID: </string>
+ <string name="object_id">Object UUID: </string>
+ <string name="source">Source: </string>
+ <string name="destination_label">Destination: </string>
+ <string name="skip_label">Skip: </string>
+ <string name="result_label">Result: </string>
+ <string name="open_history_hint">Select an operation and click Open operation, or double-click it, to view its outcomes.</string>
+ <string name="row_hint">Select a row for its folder context, UUID, and skip/result reason. Review undo uses the selected row, or all eligible rows when nothing is selected.</string>
+ <string name="partial_notice">Results can be partial. Unconfirmed requests are not safe to retry or undo. History is kept in memory for this login session, for up to two hours.</string>
+ <string name="unique_move_notice">Moving a no-copy item relocates its only copy. Move undo is unavailable for no-copy items and folders.</string>
+ <string name="allow_execute">Allow and execute</string>
+ <string name="execute_label">Execute</string>
+ <string name="one_request">Execute authorizes this frozen request only. Permissions are checked again before it starts.</string>
+ <string name="permission_blocked">Execution blocked by current permissions. Preview grants no permission.</string>
+ <string name="history_scope">Clear history removes undo metadata; it does not stop submitted requests.</string>
+ <text name="intro" left="15" top="30" right="-15" height="34" follows="left|right|top" wrap="true">
+  Preview selected names or locations before changing them. Review does not modify inventory.
+ </text>
+ <combo_box name="kind" left="15" top="70" width="150" height="23" follows="left|top">
+  <combo_box.item label="Rename" name="rename" value="rename"/>
+  <combo_box.item label="Move" name="move" value="move"/>
+ </combo_box>
+ <text name="pattern_label" left="180" top="74" width="100" height="18" follows="left|top">Name pattern:</text>
+ <line_editor name="name_pattern" left="285" top="70" right="-15" height="23" follows="left|right|top"
+  value="{name}" max_length_bytes="256" tool_tip="Use {name} for the current name and {n} for the selection number."/>
+ <text name="pattern_help" left="180" top="98" right="-15" height="18" follows="left|right|top">Example: Sorted {n} - {name}</text>
+ <text name="destination_label_ui" left="15" top="127" width="150" height="18" follows="left|top">Destination folder UUID:</text>
+ <line_editor name="destination" left="175" top="122" right="-205" height="23" follows="left|right|top" max_length_bytes="36"/>
+ <button name="use_folder" label="Use selected folder" right="-15" top="122" width="180" height="23" follows="right|top"/>
+ <button name="preview" label="Preview changes" left="15" top="157" width="145" height="23" follows="left|top"/>
+ <button name="history" label="Session history" left="170" top="157" width="145" height="23" follows="left|top"/>
+ <button name="refresh" label="Refresh" left="325" top="157" width="95" height="23" follows="left|top"/>
+ <check_box name="review_large" control_name="FSAssistantReviewBulkOperations" left="15" top="191" right="-15" height="23"
+  follows="left|right|top" label="Review assistant rename/move operations affecting 10 or more objects"/>
+ <text name="heading" left="15" top="222" right="-15" height="40" follows="left|right|top" wrap="true" font="SansSerifBold"/>
+ <scroll_list name="rows" left="15" top="267" right="-15" bottom="-242" follows="left|right|top|bottom"
+  column_padding="8" draw_heading="true" multi_select="false" can_sort="false">
+  <scroll_list.columns name="before" label="Before name" relative_width="0.27"/>
+  <scroll_list.columns name="after" label="After name / destination" relative_width="0.31"/>
+  <scroll_list.columns name="status" label="Status" relative_width="0.22"/>
+  <scroll_list.columns name="undo" label="Undo" relative_width="0.20"/>
+ </scroll_list>
+ <text_editor name="details" left="15" bottom="-125" right="-15" height="105" follows="left|right|bottom"
+  read_only="true" word_wrap="true" parse_urls="false" max_length="16384"/>
+ <text name="page" left="15" bottom="-96" width="170" height="18" follows="left|bottom"/>
+ <button name="previous" label="Previous" left="190" bottom="-93" width="90" height="23" follows="left|bottom"/>
+ <button name="next" label="Next" left="290" bottom="-93" width="90" height="23" follows="left|bottom"/>
+ <button name="open_operation" label="Open operation" right="-15" bottom="-93" width="145" height="23" follows="right|bottom"/>
+ <text name="permission" left="15" bottom="-54" right="-15" height="34" follows="left|right|bottom" wrap="true"/>
+ <button name="clear_history" label="Clear history" left="15" bottom="-15" width="120" height="23" follows="left|bottom"/>
+ <button name="stop" label="Stop remaining" left="145" bottom="-15" width="130" height="23" follows="left|bottom"/>
+ <button name="review_undo" label="Review undo" left="285" bottom="-15" width="120" height="23" follows="left|bottom"/>
+ <button name="execute" label="Execute" right="-15" bottom="-15" width="160" height="23" follows="right|bottom"/>
+</floater>

@@ -1,5 +1,7 @@
 # Folderstorm improvement plans
 
+The follow-up batch for items **5, 7, 8 and 10** is described in [next improvements](next-improvements.md). Its implementation and verification are recorded separately in [follow-up validation](../next-improvements-validation.md). The first batch below remains the baseline for PR #1.
+
 Planning baseline: `9aa5cbb0d6` (2026-10-03). These documents cover the user-selected review items **1–4, 6, and 9**. They preserve the handoff plans written before implementation was authorized. The implementation is now included in the same change; see [validation and remaining acceptance checks](../assistant-viewport-validation.md).
 
 ## Feature plans

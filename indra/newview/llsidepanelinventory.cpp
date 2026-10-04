@@ -201,7 +201,11 @@ bool LLSidepanelInventory::postBuild()
     }
 
     // Received items inbox setup
-    if (!sInboxInitalized) // <FS:Ansariel> Inbox panel randomly shown on secondary inventory window
+    auto* parent_floater = dynamic_cast<LLFloater*>(getParent());
+    const bool workspace_secondary = parent_floater && parent_floater->getKey()["workspace_secondary"].asBoolean();
+    // The dedicated workspace extra never claims primary Inbox ownership,
+    // including when it is the first Inventory window opened after login.
+    if (!sInboxInitalized && !workspace_secondary) // <FS:Ansariel> Inbox panel randomly shown on secondary inventory window
     {
         // <FS:Ansariel> FIRE-17603: Received Items button sometimes vanishing
         //LLLayoutStack* inv_stack = getChild<LLLayoutStack>(INVENTORY_LAYOUT_STACK_NAME);
@@ -424,6 +428,34 @@ void LLSidepanelInventory::openInbox()
         getChild<LLButton>(INBOX_BUTTON_NAME)->setToggleState(true);
         onToggleInboxBtn();
     }
+}
+
+bool LLSidepanelInventory::captureWorkspaceInbox(bool& expanded, S32& height) const
+{
+    const auto* button = findChild<LLButton>(INBOX_BUTTON_NAME);
+    if (!mInboxEnabled || !mInboxLayoutPanel || !mInboxLayoutPanel->getVisible() || !button) return false;
+    expanded = button->getToggleState();
+    height = mInboxLayoutPanel->getTargetDim();
+    return true;
+}
+
+bool LLSidepanelInventory::applyWorkspaceInbox(bool expanded, S32 height)
+{
+    auto* button = findChild<LLButton>(INBOX_BUTTON_NAME);
+    auto* stack = findChild<LLLayoutStack>(INVENTORY_LAYOUT_STACK_NAME);
+    auto* main = findChild<LLLayoutPanel>("main_inventory_layout_panel");
+    if (!mInboxEnabled || !mInboxLayoutPanel || !mInboxLayoutPanel->getVisible() || !button || !stack || !main) return false;
+    const S32 minimum = mInboxLayoutPanel->getExpandedMinDim();
+    const S32 maximum = llmax(minimum, stack->getRect().getHeight() - main->getMinDim());
+    height = llclamp(height, minimum, maximum);
+    // Do not invoke onToggleInboxBtn(): arranging a pane is not reading Inbox
+    // and must not update LastInventoryInboxActivity or enable/fetch content.
+    button->setToggleState(expanded);
+    stack->collapsePanel(mInboxLayoutPanel, !expanded);
+    mInboxLayoutPanel->setTargetDim(height);
+    gSavedPerAccountSettings.setBOOL("InventoryInboxToggleState", expanded);
+    gSavedPerAccountSettings.setS32("InventoryInboxHeight", height);
+    return true;
 }
 
 void LLSidepanelInventory::onInboxChanged(const LLUUID& inbox_id)
@@ -694,6 +726,11 @@ void LLSidepanelInventory::cleanup()
         }
     }
     // </FS:Ansariel>
+    // Workspace-owned inventory has independent placement but participates in
+    // the same content teardown when the account inventory is cleaned up.
+    const auto workspace_instances = LLFloaterReg::getFloaterList("fs_workspace_inventory");
+    for (LLFloater* floater : workspace_instances)
+        if (auto* inventory = dynamic_cast<LLFloaterSidePanelContainer*>(floater)) inventory->cleanup();
 }
 
 // <FS:Zi> Add reload button to inventory inbox

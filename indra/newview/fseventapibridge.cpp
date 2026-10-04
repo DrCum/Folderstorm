@@ -25,10 +25,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fseventapibridge.h"
+#include "fsassistantpermissions.h"
 #include "fsassistantapproval.h"
 #include "fsassistantoperation.h"
 #include "fsassistantpolicy.h"
 #include "fslinkreplacement.h"
+#include "fsinventorybulk.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -88,41 +90,9 @@ constexpr const char* ERR_TIMED_OUT = "Action confirmation timed out";
 
 int gPolicyGeneration = 1;
 
-enum class ActionClass
-{
-    Unknown,
-    Read,
-    Camera,
-    Create,
-    Edit,
-    Move,
-    Trash,
-    NoCopy,
-    Wear,
-    Links,
-    Permanent
-};
-
-struct ClassDef
-{
-    ActionClass kind;
-    const char* id;
-    const char* title;
-    const char* fallback;
-    bool ask;
-};
-
-const ClassDef CLASS_DEFS[] = {
-    {ActionClass::Read, "read", "Read inventory and outfits", "allow", false},
-    {ActionClass::Camera, "camera", "Move camera and take pictures", "allow", true},
-    {ActionClass::Create, "create", "Create folders and items", "allow", true},
-    {ActionClass::Edit, "edit", "Rename and edit details", "allow", true},
-    {ActionClass::Move, "move", "Move and copy", "allow", true},
-    {ActionClass::Trash, "trash", "Trash (can be restored)", "allow", true},
-    {ActionClass::NoCopy, "nocopy", "Move no-copy items during a copy", "ask", true},
-    {ActionClass::Wear, "wear", "Wear and detach", "ask", true},
-    {ActionClass::Links, "links", "Replace links", "ask", true},
-};
+using ActionClass = fs_assistant::ActionClass;
+using ClassDef = fs_assistant::PermissionClass;
+const auto& CLASS_DEFS = fs_assistant::permissionClasses;
 
 const ClassDef* find_def(ActionClass kind)
 {
@@ -145,11 +115,7 @@ const ClassDef* find_def(const std::string& id)
 
 bool level_allowed(const ClassDef& def, const std::string& level)
 {
-    if (level == "allow" || level == "deny")
-    {
-        return true;
-    }
-    return def.ask && level == "ask";
+    return fs_assistant::permissionLevelAllowed(def, level);
 }
 
 std::string effective_level(ActionClass kind)
@@ -218,7 +184,9 @@ bool is_read_op(const std::string& api, const std::string& op)
                op == "readScript" || op == "landmark" || op == "changes" ||
                op == "getItemsInfo" || op == "getFolderTypeNames" ||
                op == "getAssetTypeNames" || op == "getBasicFolderID" ||
-               op == "getDirectDescendants" || op == "collectDescendantsIf";
+               op == "getDirectDescendants" || op == "collectDescendantsIf" ||
+               op == "previewBatchRename" || op == "previewBatchMove" ||
+               op == "previewBulkUndo" || op == "bulkHistory";
     }
     if (api == "LLAppearance")
     {
@@ -417,7 +385,8 @@ public:
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
             response->extendedResult(HTTP_OK,
                 to_json(llsd::map("bridge_ready", mEnabled, "api_version", 1,
-                    "policy_generation", gPolicyGeneration, "apis_ready", apis)), json_headers());
+                    "policy_generation", gPolicyGeneration, "apis_ready", apis,
+                    "capabilities", llsd::map("bulk_inventory_review", 1))), json_headers());
             return;
         }
         mLastExternalRequestAt = now_seconds();
@@ -448,6 +417,17 @@ public:
             return;
         }
 
+        if (api == "LLInventory" && op == "executeBulkPlan")
+        {
+            std::string error;
+            FSAssistantPreparedOperation prepared;
+            if (!prepareOperation(input, {}, prepared, error)) { fail_response(response, HTTP_BAD_REQUEST, error); return; }
+            const auto decision = fs_assistant::decide(effective_levels(prepared.requiredClasses));
+            if (decision == fs_assistant::Decision::Deny) { fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, policy_error_details(op, prepared.requiredClasses)); return; }
+            if (decision == fs_assistant::Decision::Ask && !FSInventoryBulk::plan(prepared.validation["bulk_plan_id"].asString(), error).has("operation_id")) enqueueAsk(std::move(prepared), response, api, op);
+            else postEvent(input, response, api, op, false, &prepared);
+            return;
+        }
         const ActionClass kind = classify(api, op);
         if (kind == ActionClass::Unknown || kind == ActionClass::Permanent)
         {
@@ -463,8 +443,27 @@ public:
             {
                 extra["permissions"] = effective_permissions();
                 extra["policy_generation"] = gPolicyGeneration;
+                extra["capabilities"] = llsd::map("bulk_inventory_review", 1);
             }
             fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, extra);
+            return;
+        }
+        if (api == "LLInventory" && (op == "previewBatchRename" || op == "previewBatchMove" || op == "previewBulkUndo" || op == "bulkHistory"))
+        {
+            std::string error;
+            LLSD result = op == "bulkHistory" ? FSInventoryBulk::history(input, error) : FSInventoryBulk::preview(input, error);
+            if (!error.empty()) fail_response(response, HTTP_BAD_REQUEST, error);
+            else response->extendedResult(HTTP_OK, to_json(result), json_headers());
+            return;
+        }
+        if (api == "LLInventory" && (op == "rename" || op == "move" || op == "batchRename" || op == "batchMove"))
+        {
+            FSAssistantPreparedOperation prepared;
+            std::string error;
+            if (!prepareOperation(input, {find_def(kind)->id}, prepared, error)) { fail_response(response, HTTP_BAD_REQUEST, error); return; }
+            const bool review = gSavedSettings.controlExists("FSAssistantReviewBulkOperations") && gSavedSettings.getBOOL("FSAssistantReviewBulkOperations") && prepared.summary["subject_count"].asInteger() >= 10;
+            if (level == "ask" || review) enqueueAsk(std::move(prepared), response, api, op);
+            else postEvent(input, response, api, op, false, &prepared);
             return;
         }
         if (level == "ask")
@@ -620,6 +619,21 @@ private:
         prepared.request = input;
         prepared.requiredClasses = classes;
         const std::string op = input["op"].asString();
+        if (op == "executeBulkPlan" || op == "rename" || op == "move" || op == "batchRename" || op == "batchMove")
+        {
+            std::string plan_id;
+            if (op == "executeBulkPlan")
+            {
+                plan_id = input["plan_id"].asUUID().asString();
+                const std::string required = FSInventoryBulk::requiredClass(plan_id, error);
+                if (!error.empty()) return false;
+                prepared.requiredClasses = {required};
+            }
+            else if (!FSInventoryBulk::prepareLegacy(input, plan_id, error)) return false;
+            prepared.validation["bulk_plan_id"] = plan_id;
+            prepared.summary = FSInventoryBulk::summary(plan_id, error);
+            return error.empty() && FSInventoryBulk::validate(plan_id, error);
+        }
         if (op == "confirmCopy" || op == "replaceLinks")
         {
             auto listener = inventoryListener();
@@ -691,6 +705,7 @@ private:
     bool validateOperation(const FSAssistantPreparedOperation& prepared, std::string& error)
     {
         const std::string op = prepared.request["op"].asString();
+        if (prepared.validation.has("bulk_plan_id")) return FSInventoryBulk::validate(prepared.validation["bulk_plan_id"].asString(), error);
         if (op == "confirmCopy" || op == "replaceLinks")
         {
             auto listener = inventoryListener();
@@ -747,7 +762,7 @@ private:
             }
             return;
         }
-        if (prepared && (op == "replaceLinks" || op == "snapshotUpload"))
+        if (prepared && (prepared->validation.has("bulk_plan_id") || op == "replaceLinks" || op == "snapshotUpload"))
         {
             const auto classes = prepared->requiredClasses;
             const auto generation = mSessionGeneration;
@@ -764,6 +779,20 @@ private:
                 return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation &&
                     fs_assistant::decide(effective_levels(classes)) != fs_assistant::Decision::Deny;
             };
+            if (prepared->validation.has("bulk_plan_id"))
+            {
+                const std::string plan_id = prepared->validation["bulk_plan_id"].asString();
+                FSInventoryBulk::execute(plan_id, context, [weak, request, op](const LLSD& result)
+                {
+                    if (auto self = weak.lock())
+                    {
+                        LLSD reply = op == "executeBulkPlan" ? result : FSInventoryBulk::legacyResult(request, result);
+                        reply["reqid"] = request["reqid"];
+                        self->onReply(reply);
+                    }
+                });
+                return;
+            }
             auto listener = inventoryListener();
             if (!listener)
             {
@@ -982,6 +1011,7 @@ private:
         {
             body["permissions"] = effective_permissions();
             body["policy_generation"] = gPolicyGeneration;
+            body["capabilities"] = llsd::map("bulk_inventory_review", 1);
         }
         found->second.response->extendedResult(HTTP_OK, to_json(body), json_headers());
         mPending.erase(found);
@@ -1060,12 +1090,19 @@ private:
 void FSEventAPIBridge::notePermissionClassesChanged()
 {
     ++gPolicyGeneration;
+    FSInventoryBulk::permissionsChanged();
     if (instanceExists() && instance().mState) instance().mState->permissionsChanged();
 }
 
 int FSEventAPIBridge::getPolicyGeneration()
 {
     return gPolicyGeneration;
+}
+
+std::string FSEventAPIBridge::getPermissionLevel(const std::string& class_id)
+{
+    const auto* def = find_def(class_id);
+    return def ? effective_level(def->kind) : "deny";
 }
 
 FSEventAPIBridge::FSEventAPIBridge() = default;

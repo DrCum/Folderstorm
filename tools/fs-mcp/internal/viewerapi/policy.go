@@ -2,6 +2,10 @@ package viewerapi
 
 import "encoding/json"
 
+// BulkInventoryReviewVersion is the additive preview/history protocol this
+// sidecar understands. Unknown versions must not fall back to direct mutation.
+const BulkInventoryReviewVersion = 1
+
 // Preference classes published on inventory status. Permanent delete is not
 // one of them: purge and emptyTrash are denied by the viewer with no key
 // that can enable them.
@@ -21,9 +25,10 @@ const (
 // Present is false when the status payload has no permissions object,
 // which is an older viewer.
 type StatusPolicy struct {
-	Present    bool
-	Generation int
-	Levels     map[string]string
+	Present             bool
+	Generation          int
+	Levels              map[string]string
+	BulkInventoryReview int
 }
 
 type classDefault struct {
@@ -74,13 +79,19 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 	if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
 		return StatusPolicy{}, false
 	}
+	bulkVersion := 0
+	if capabilities, ok := payload["capabilities"].(map[string]any); ok {
+		if version, ok := capabilities["bulk_inventory_review"].(float64); ok && version == BulkInventoryReviewVersion {
+			bulkVersion = BulkInventoryReviewVersion
+		}
+	}
 	perms, ok := payload["permissions"]
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}}, true
+		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion}, true
 	}
 	obj, ok := perms.(map[string]any)
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}}, true
+		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion}, true
 	}
 	levels := map[string]string{}
 	for _, def := range classDefaults {
@@ -91,9 +102,10 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 		}
 	}
 	return StatusPolicy{
-		Present:    true,
-		Generation: generationFrom(payload["policy_generation"]),
-		Levels:     levels,
+		Present:             true,
+		Generation:          generationFrom(payload["policy_generation"]),
+		Levels:              levels,
+		BulkInventoryReview: bulkVersion,
 	}, true
 }
 

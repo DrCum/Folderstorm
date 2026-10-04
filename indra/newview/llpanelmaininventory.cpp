@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llpanelmaininventory.h"
+#include "fsfloaterinventorybulk.h"
 
 #include "llagent.h"
 #include "llagentbenefits.h"
@@ -2470,6 +2471,16 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 
     const std::string command_name = userdata.asString();
 
+    if (command_name == "review_bulk_changes")
+    {
+        FSFloaterInventoryBulk::showForSelection(getActivePanel());
+        return;
+    }
+    if (command_name == "assistant_inventory_history")
+    {
+        FSFloaterInventoryBulk::showHistory();
+        return;
+    }
     if (command_name == "new_window")
     {
         newWindow();
@@ -2759,6 +2770,13 @@ bool LLPanelMainInventory::isSaveTextureEnabled(const LLSD& userdata)
 bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
 {
     const std::string command_name = userdata.asString();
+    if (command_name == "review_bulk_changes")
+    {
+        auto* panel = getActivePanel();
+        if (!panel || !panel->isInVisibleChain() || !panel->getRootFolder()) return false;
+        const auto count = panel->getRootFolder()->getSelectionList().size();
+        return count > 0 && count <= 50;
+    }
     // <FS:Ansariel> Unused changes from STORM-2091 that has been fixed by LL differently in the meantime
     //if (command_name == "not_empty")
     //{
