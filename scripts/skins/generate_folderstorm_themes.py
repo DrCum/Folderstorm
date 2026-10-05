@@ -157,7 +157,7 @@ def texture_paths(skin="firestorm"):
             chrome = file.startswith(("widgets/", "containers/", "windows/", "navbar/", "bottomtray/"))
             if chrome and file.endswith(".png") and (stem.startswith(prefixes) or stem in extras):
                 excluded = ("Arrow", "Login", "Sign")
-                if skin != "ansastorm":
+                if skin != "ansastorm" or not stem.startswith("Checkbox_"):
                     excluded += ("Transparent",)
                 if not any(x in stem for x in excluded):
                     paths.add(file)

@@ -34,7 +34,7 @@ The script draws original assets from shared palette definitions. It reads the
 selected skin's images only for dimensions, preserves their filenames and
 existing nine-slice registrations, and excludes icons and animated loading
 sprites. Each Folderstorm palette has 117 chrome textures; each AnsaStorm
-palette has 123, including its transparent checkbox variants.
+palette has 121, including its transparent checkbox variants.
 
 AnsaStorm has additional accent aliases and an RGB window tint. Its theme
 floater template retains every original AnsaStorm default and changes only the
@@ -103,7 +103,7 @@ acceptance result.
 
 The same two palettes are also registered under **AnsaStorm** after its four
 existing schemes. Each has 132 unique color names, valid component ranges and
-resolvable references; shared Firestorm-only roles are omitted. Checked all 123
+resolvable references; shared Firestorm-only roles are omitted. Checked all 121
 texture dimensions and RGBA content against AnsaStorm/default resources, the
 full floater defaults against the original AnsaStorm template, and the manifest
 coverage of its two theme widget files. Regeneration is deterministic, and
