@@ -139,7 +139,7 @@ void FSWorkspaceFavoritesBar::rebuild()
     const S32 limit = mMore->getRect().mLeft - 4;
     if (mDivider)
     {
-        LLTextBox::Params p; p.name = "workspace_divider"; p.font = font; p.text = "|";
+        LLTextBox::Params p; p.name = "workspace_divider"; p.font = font; p.initial_value = "|";
         p.rect = LLRect(2, height, 12, 0);
         mDynamicChildren.push_back(LLUICtrlFactory::create<LLTextBox>(p, this));
     }
@@ -176,29 +176,29 @@ void FSWorkspaceFavoritesBar::rebuild()
         item.enabled = mCanSwitch;
         const auto key = entry.key;
         item.on_click.function([this, key](LLUICtrl*, const LLSD&) { switchEntry(key); });
-        menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
+        menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
     }
     if (!overflow.empty())
     {
         LLMenuItemSeparatorGL::Params separator;
-        menu->append(LLUICtrlFactory::create<LLMenuItemSeparatorGL>(separator));
+        menu->addChild(LLUICtrlFactory::create<LLMenuItemSeparatorGL>(separator));
     }
     LLMenuItemCallGL::Params previous;
     previous.name = "previous_arrangement"; previous.label = "Previous arrangement";
     previous.enabled = FSWorkspaceController::instance().hasPrevious();
     previous.on_click.function([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
-    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(previous));
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(previous));
     LLMenuItemCallGL::Params manage;
     manage.name = "manage_workspaces"; manage.label = getString("manage");
     manage.on_click.function([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_switch"); });
-    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(manage));
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(manage));
     LLMenuItemCallGL::Params hide;
     hide.name = "hide_strip"; hide.label = getString("hide"); hide.enabled = mCanSwitch;
     hide.on_click.function([](LLUICtrl*, const LLSD&)
     {
         if (FSWorkspaceController::instance().canQuickSwitch()) gSavedSettings.setBOOL(SHOW_SETTING, false);
     });
-    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(hide));
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(hide));
     mMore->setMenu(menu, LLMenuButton::MP_BOTTOM_RIGHT, true);
     mMore->setToolTip(getString(mCanSwitch ? "more_hint" : "preferences_open"));
 }

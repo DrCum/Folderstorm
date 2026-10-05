@@ -208,7 +208,7 @@ void FSFloaterWorkspaceTools::draw()
         getChild<LLScrollListCtrl>("windows")->deleteAllItems();
         getChild<LLScrollListCtrl>("import_review")->deleteAllItems();
         getChild<LLComboBox>("export_profile")->removeall();
-        getChild<LLTextBox>("transfer_status")->setText("");
+        getChild<LLTextBox>("transfer_status")->setText(LLStringExplicit(""));
     }
     LLFloater::draw();
 }
