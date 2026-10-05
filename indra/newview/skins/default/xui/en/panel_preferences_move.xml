@@ -37,7 +37,7 @@
              width="495" height="1400" follows="left|top|right">
                 <text
                  follows="left|top|right"
-                 height="32"
+                 height="48"
                  layout="topleft"
                  left="20"
                  right="-20"
