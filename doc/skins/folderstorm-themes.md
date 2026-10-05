@@ -55,7 +55,38 @@ Checked with Pillow 12.3.0:
 - Regeneration produces identical resources with the installed Pillow version.
 - The complete diff passes whitespace checks; the authored PNGs were inspected.
 
-No viewer build, packaging, GitHub builds or unrelated tests were run.
+The original focused checks did not include a viewer build.
+
+## Native Linux preview
+
+On October 5, 2026, a local viewer was built with current main and PRs #5, #6
+and #7 combined in an isolated checkout. The ReleaseFS_open_AVX2 configuration
+used GCC 14, `-O1 -g0`, nonfatal compiler warnings, tests off and packaging off.
+Normal resource staging needed local links for binaries placed in the OpenJPEG
+build directory. The Go helper was compiled with VCS stamping disabled; no Go
+tests, installer/archive packaging or GitHub builds were run.
+
+Both themes were launched on a 1600 × 1000 virtual display with Mesa llvmpipe.
+The captures below are actual viewer screenshots at login, showing Preferences
+and the built-in widget test floater. The login browser pane is blank and no
+account was logged in. Workspace actions correctly remain unavailable at login;
+these screenshots do not verify account-dependent workspace restoration.
+
+![Folderstorm Violet in the running Linux viewer](screenshots/folderstorm-violet.png)
+
+![Electric Jungle in the running Linux viewer](screenshots/electric-jungle.png)
+
+Checked native headers, tabs, buttons, checkbox/radio states, list selections,
+inputs, dropdowns, sliders, scrollbars and window resizing. The preview exposed
+two small visual fixes: room for the Layout introduction's third line in the
+workspace PRs, and Electric Jungle's diagonal strokes bleeding into stretched
+title pixels. Its generator now keeps all strokes within the four-pixel edge
+slices; a pixel check confirms the stretch center remains uniform.
+
+Viewer UI API corrections found during compilation are published in PR #5 and
+carried into PR #6. Both changed C++ files compiled and the combined viewer
+linked successfully. This is a preview build, not a Windows or production-build
+acceptance result.
 
 ## Native acceptance still needed
 

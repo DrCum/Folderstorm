@@ -156,9 +156,12 @@ def draw_texture(file, size, p, wild):
             d.rectangle((1, 1, w - 2, 24), fill=p["title"])
             d.line((1, 25, w - 2, 25), fill=edge)
             if wild:
+                # Window textures stretch columns 4..25. Even a two-pixel
+                # diagonal can bleed into that center and across title text.
+                # Keep the pattern strictly within the four-pixel edge slices.
                 for y in range(2, 24, 6):
-                    d.line((1, y, 3, y + 2), fill=p["accent"], width=2)
-                    d.line((w - 4, y, w - 2, y + 2), fill=p["gold"], width=2)
+                    d.line((1, y, 2, y + 2), fill=p["accent"], width=1)
+                    d.line((w - 3, y, w - 2, y + 2), fill=p["gold"], width=1)
     elif stem.startswith("TextField_"):
         d.rectangle((0, 0, w - 1, h - 1), fill=p["panel"] if disabled else p["input"], outline=edge)
     elif stem.startswith(("NavBar_BG", "BottomTray_BG")):
