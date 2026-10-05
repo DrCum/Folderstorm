@@ -1,7 +1,8 @@
-# Folderstorm Violet and Electric Jungle
+# Folderstorm Violet and Electric Jungle for Folderstorm and AnsaStorm
 
-Choose **Preferences → Skins → Skin: Folderstorm**, then select either new
-theme. Click OK and restart the viewer, as with the existing themes.
+Choose **Preferences → Skins → Skin: Folderstorm or AnsaStorm**, then select
+either new theme (called **Colour scheme** in AnsaStorm). Click OK and restart
+the viewer, as with the existing themes.
 The current theme remains the default; both additions are opt-in.
 
 **Folderstorm Violet** follows folderstorm.sodie.net: near-black purple
@@ -11,7 +12,7 @@ violet buttons, lime list/menu selections and small patterned frame accents.
 Inventory uses a darker green selection so library entries, links and favorite
 text remain readable; those entries have separate foreground-color rules.
 
-Both inherit the existing Folderstorm/Firestorm layout, language files and
+Each palette uses the selected skin's existing layout, language files and
 icons. They supply colors and chrome for windows, navigation, buttons, tabs,
 dropdowns, text fields, scrollbars, sliders, progress bars, checkboxes and radio
 buttons. Their illustrative selector previews are UI samples, not viewer
@@ -29,15 +30,25 @@ require Pillow. To regenerate them, use Python 3 and Pillow >= 10.1:
 python3 scripts/skins/generate_folderstorm_themes.py
 ```
 
-The script draws original assets from palette definitions. It reads the
-inherited images only for dimensions, preserves their filenames and existing
-nine-slice registrations, and excludes icons and animated loading sprites.
-The existing viewer manifest globs already include every added XML/PNG file;
-no packaging or application-code changes are needed.
+The script draws original assets from shared palette definitions. It reads the
+selected skin's images only for dimensions, preserves their filenames and
+existing nine-slice registrations, and excludes icons and animated loading
+sprites. Each Folderstorm palette has 117 chrome textures; each AnsaStorm
+palette has 123, including its transparent checkbox variants.
+
+AnsaStorm has additional accent aliases and an RGB window tint. Its theme
+floater template retains every original AnsaStorm default and changes only the
+two image tint colors, keeping its existing 66% alpha. Widget templates use
+CURRENT_SKIN lookup, so this template includes all original attributes rather
+than relying on partial inheritance. Generated colors also retain AnsaStorm's
+accent/background alpha variants and hyperlink roles. The manifest now includes
+theme widget XML alongside the existing color/texture globs. No application-code
+or runtime dependency changes are needed. AnsaStorm Modern is a separate skin
+and is not changed by this addition.
 
 ## Focused validation
 
-Checked with Pillow 12.3.0:
+Original Folderstorm checks with Pillow 12.3.0:
 
 - Both registered theme names, their folders and globally available preview
   image names match the existing skin selector's lookup rules.
@@ -88,9 +99,32 @@ carried into PR #6. Both changed C++ files compiled and the combined viewer
 linked successfully. This is a preview build, not a Windows or production-build
 acceptance result.
 
+## AnsaStorm native preview
+
+The same two palettes are also registered under **AnsaStorm** after its four
+existing schemes. Each has 132 unique color names, valid component ranges and
+resolvable references; shared Firestorm-only roles are omitted. Checked all 123
+texture dimensions and RGBA content against AnsaStorm/default resources, the
+full floater defaults against the original AnsaStorm template, and the manifest
+coverage of its two theme widget files. Regeneration is deterministic, and
+existing Folderstorm theme resources remain byte-for-byte unchanged.
+
+Both AnsaStorm themes were run and inspected using the already-built Linux
+viewer, with no new compilation, installer/archive packaging, GitHub builds or
+unrelated tests. The selector lists both additions, resolves their previews and
+shows the active AnsaStorm scheme. Headers, window buttons, selected controls,
+text, dropdowns and resized floaters render correctly at login; no missing
+floater-image warnings remain. These captures show the actual native selector
+and widget floater. The small image inside Skins is the illustrative palette
+preview, not logged-in Inventory or workspace contents.
+
+![AnsaStorm with Folderstorm Violet](screenshots/ansastorm-violet.png)
+
+![AnsaStorm with Electric Jungle](screenshots/ansastorm-electric-jungle.png)
+
 ## Native acceptance still needed
 
-On Windows, select each theme, confirm with OK and restart. Check Inventory
+On Windows, select each theme under both skins, confirm with OK and restart. Check Inventory
 including selected links/library/favorites, ordinary and minimized floaters,
 Preferences, chat, dropdown arrows, selected/disabled controls and active versus
 inactive windows. Confirm navigation and all toolbar orientations, including
