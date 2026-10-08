@@ -462,8 +462,18 @@ void FSFloaterGestureTileEditor::onOpen(const LLSD& key)
     mKey = key; mExpected = key["expected"]; mAccount = gAgent.getID(); mSession = gAgent.getSessionID(); mToken = LLUUID::generateNewID();
     const auto* board = findBoard(controller.data(), key["board"].asString());
     const bool tile_mode = key["mode"].asString() == "tile";
-    reshape(440, tile_mode ? 560 : 188, false);
     getChild<LLView>("tile_controls")->setVisible(tile_mode); getChild<LLView>("board_controls")->setVisible(!tile_mode);
+    // The reused editor changes height between board and tile modes. Anchor
+    // both panels to the final skin header rather than their initial XML rect;
+    // otherwise shrinking can leave the name field above the floater.
+    reshape(440, getHeaderHeight() + (tile_mode ? 535 : 163), false);
+    const S32 top = getRect().getHeight() - getHeaderHeight() - 6;
+    const S32 right = getRect().getWidth() - 12;
+    getChild<LLView>("board_controls")->setShape(LLRect(12, top, right, top - 64));
+    getChild<LLView>("tile_controls")->setShape(LLRect(12, top, right, top - 430));
+    getChild<LLTextBox>("status")->setShape(LLRect(12, 88, right, 48));
+    getChild<LLButton>("save")->setShape(LLRect(12, 36, 122, 12));
+    getChild<LLButton>("cancel")->setShape(LLRect(right - 110, 36, right, 12));
     getChild<LLLineEditor>("board_name")->setText(LLStringExplicit(board && key["mode"].asString() != "new" ? board->name : ""));
     const auto* tile = board ? findTile(*board, key["tile"].asString()) : nullptr;
     mTile = tile ? *tile : Tile{};
@@ -516,6 +526,7 @@ void FSFloaterGestureTileEditor::updatePreview()
     LLUUID item, asset; std::string name, reason;
     if (!FSGestureBoardController::instance().resolve(LLUUID(mTile.item), item, asset, name, reason)) name = getString("missing_tile");
     getChild<LLTextBox>("gesture_name")->setText(LLStringExplicit(name));
+    getChild<LLTextBox>("gesture_name")->setToolTip(name);
     // Recreate only the editor's sample so theme reset restores every button
     // state, rather than retaining a prior custom tint.
     auto* sample = getChild<LLView>("sample"); sample->deleteAllChildren();
