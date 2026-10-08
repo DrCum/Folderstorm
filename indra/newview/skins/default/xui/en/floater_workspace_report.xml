@@ -42,6 +42,7 @@ Folder expansion may still be loading. Details below update as views become read
  <string name="restored">Restored.</string>
  <string name="adjusted">Restored with size or position adjusted to fit this viewer.</string>
  <string name="omitted">Not included in this workspace; left unchanged.</string>
+ <string name="not_selected">Not selected for this load; left unchanged. The saved workspace was kept.</string>
  <string name="already_closed">Already closed; no window needed.</string>
  <string name="restricted">Window or folder restoration blocked by current restrictions.</string>
  <string name="dependents">Skipped to protect attached or dependent utility windows.</string>

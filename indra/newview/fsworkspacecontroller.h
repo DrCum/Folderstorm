@@ -46,6 +46,7 @@ public:
     bool preview(const std::string& id);
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
+    bool quickSwitchWorkspaceGroups(const std::string& id, int components, bool toolbars = false);
     bool quickSwitchLayout(const std::string& id);
     using Utility = std::pair<LLHandle<LLFloater>, std::string>;
     std::vector<Utility> utilityWindows() const;

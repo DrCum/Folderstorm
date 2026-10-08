@@ -4,6 +4,8 @@ Status: implemented on `feat/workspace-context`, based on PR #6 head `658e5f2d58
 
 Implemented scope and actual validation: [workspace-context-validation.md](workspace-context-validation.md). Graphics/camera use supported subsets; HUDs are additive and Previous does not detach them. Recovery fits supported utility windows inside the viewer, without relocating the main OS window. Portable exports omit HUD references.
 
+Authorized follow-up additions are also implemented in PR #8: the switcher's save/capture section is collapsed by default and reflows on demand; **Apply only… / Apply group** loads a saved camera, graphics, window arrangement or other available group through the shared controller without editing the definition. Full switching/shortcuts/MCP retain all-group behavior. Partial combinations use an unsaved active marker, Previous and explicit report details. Focused subset/serialization and XUI bounds checks passed; native GUI acceptance remains pending.
+
 ## Scope and evidence
 
 Extend workspaces with optional graphics settings, camera settings and selected HUD attachments; recover arrangements after monitor changes; add MCP workspace/layout control; fix the in-viewer snapshot capture and distorted preview when a custom viewport is enabled.
