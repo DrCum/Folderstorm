@@ -112,6 +112,8 @@ set(viewer_SOURCE_FILES
     fschatoptionsmenu.cpp
     fscommon.cpp
     fsquietui.cpp
+    fsgestureboardmodel.cpp
+    fsgestureboardcontroller.cpp
     fsworkspacepreview.cpp
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
@@ -1005,6 +1007,8 @@ set(viewer_HEADER_FILES
     fsdispatchclassifiedclickthrough.h
     fscommon.h
     fsquietui.h
+    fsgestureboardmodel.h
+    fsgestureboardcontroller.h
     fsworkspacefile.h
     fsworkspacepreview.h
     fsworkspacelayout.h
