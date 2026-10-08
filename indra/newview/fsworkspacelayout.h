@@ -95,6 +95,10 @@ struct Workspace
     int ignored_details = 0;
 };
 
+// Select a transient subset of a validated save. The source and output on
+// failure are unchanged; absent groups never acquire default values.
+bool selectGroups(const Workspace& source, int components, bool toolbars, Workspace& result);
+
 struct Rect
 {
     float left = 0.f;

@@ -398,17 +398,43 @@ bool FSWorkspaceController::canQuickSwitch() const
 }
 bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
 {
-    if (!canQuickSwitch()) return false;
+    return quickSwitchWorkspaceGroups(id, FSWorkspaceLayout::AllComponents, true);
+}
+bool FSWorkspaceController::quickSwitchWorkspaceGroups(const std::string& id, int components, bool toolbars)
+{
+    if (!canQuickSwitch() || !FSWorkspaceLayout::isSafeProfileName(id)) return false;
     if (mQuickSwitch) finishQuickSwitch();
     FSWorkspaceLayout::Workspace parsed;
     std::string error;
     const LLSD profiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     if (!profiles.has(id) || !FSWorkspaceLayout::fromLLSD(profiles[id], parsed, error)) return false;
-    if (!rememberPrevious(parsed.context)) return false;
+    FSWorkspaceLayout::Workspace selected;
+    if (!FSWorkspaceLayout::selectGroups(parsed, components, toolbars, selected)) return false;
+    const bool complete = selected.components == parsed.components && selected.remember_toolbars == parsed.remember_toolbars;
+    if (!rememberPrevious(selected.context)) return false;
     // Discard any baseline captured during construction of a hidden panel.
     // This does not write profile definitions or unrelated preferences.
     abandon();
-    if (!preview(id)) { abandon(); return false; }
+    beginPreferencesSession();
+    // A partial load is an unsaved combination, not a clean instance of the
+    // full named profile. Keep its source name in the report, not active state.
+    if (!mTransaction || !sameSession() || !startPreview(selected, complete ? id : "")) { abandon(); return false; }
+    if (!complete)
+    {
+        mExpectedId.clear(); mExpectedDefinition = LLSD(); mComparisonDirty = true;
+        mReport.name = id;
+        for (const auto& group : std::vector<std::pair<int, std::string>>{
+             {FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"},
+             {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"},
+             {FSWorkspaceLayout::Graphics, "graphics"}, {FSWorkspaceLayout::Camera, "camera"}, {FSWorkspaceLayout::HUDs, "huds"}})
+            if ((parsed.components & group.first) && !(selected.components & group.first))
+            {
+                mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [&](const ReportLine& line)
+                    { return line.subject == group.second && line.reason == "omitted"; }), mReport.lines.end());
+                report(group.second, "not_selected");
+            }
+        if (parsed.remember_toolbars && !selected.remember_toolbars) report("toolbars", "not_selected");
+    }
     mQuickSwitch = true;
     // The quick-switch list closes after selection. Its controls stay alive,
     // so the deferred placement must not restore focus to that hidden window.

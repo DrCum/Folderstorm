@@ -34,6 +34,9 @@ private:
     void refresh(bool force = false);
     void updateButtons();
     void switchSelected();
+    void refreshGroups();
+    void applySelectedGroup();
+    void setSaveExpanded(bool expanded);
     void toggleFavorite();
     void moveFavorite(bool forward);
     void manageSelected();
@@ -48,6 +51,10 @@ private:
     std::set<std::string> mFavorites;
     unsigned long mRevision = 0;
     bool mReady = false;
+    bool mSaveExpanded = true; // XUI starts expanded; postBuild collapses it.
+    S32 mSaveSectionHeight = 0;
+    std::string mGroupKey;
+    LLSD mGroupDefinition;
     std::string mActionStatus, mSavedName;
 };
 class FSFloaterWorkspaceReport final : public LLFloater
