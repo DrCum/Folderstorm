@@ -34,7 +34,7 @@
  <string name="invalid_name_or_data">Use up to 64 letters, numbers, spaces, dashes, underscores or periods. Maximum: 32 workspaces.</string>
  <string name="invalid_data">The workspace could not be saved. Check your saved definitions in Preferences.</string>
  <scroll_container name="workspace_scroll" left="0" top="26" right="-1" bottom="-48" follows="all" opaque="false">
- <panel name="workspace_content" left="0" top="0" width="415" height="1160" layout="topleft" follows="left|top|right">
+ <panel name="workspace_content" left="0" top="0" width="415" height="1184" layout="topleft" follows="left|top|right">
  <text name="intro" left="15" top="4" right="-15" height="36" follows="left|right|top" wrap="true">
   Switch your saved arrangement. Mark favorites to keep them at the top of this list.
  </text>
@@ -56,7 +56,7 @@
   tool_tip="Load only the selected saved group. Other groups stay unchanged. Previous returns to the arrangement before this load."/>
  <text name="status" left="15" top="390" right="-15" height="42" follows="left|right|top" wrap="true"/>
  <button name="save_toggle" label="Save current as a new workspace…" left="15" top="440" right="-15" height="24" follows="left|right|top"/>
- <panel name="save_controls" left="15" top="472" right="-15" height="504" follows="left|right|top" layout="topleft">
+ <panel name="save_controls" left="15" top="472" right="-15" height="528" follows="left|right|top" layout="topleft">
   <line_editor name="workspace_name" left="0" top="0" right="-93" height="24" follows="left|right|top"
    max_length="64" tool_tip="New workspace name. Preferences and this switcher are excluded."/>
   <button name="save" label="Save" right="-1" top="0" width="85" height="24" follows="right|top"/>
@@ -67,7 +67,7 @@
   <check_box name="remember_inventory_folders" label="Remember Inventory folders" left="0" top="128" right="-1" height="18" follows="left|right|top"
    tool_tip="For this save: restore single-folder roots and view modes, or a selected folder and expanded branches in All Items (up to 256). Search filters and item selections are not saved."/>
   <check_box name="capture_toolbars" label="Restore toolbar buttons and display mode" left="0" top="152" right="-1" height="18" follows="left|right|top"/>
-  <panel name="workspace_context" filename="panel_workspace_context.xml" left="0" top="184" right="-1" height="310" follows="left|right|top"/>
+  <panel name="workspace_context" filename="panel_workspace_context.xml" left="0" top="184" right="-1" height="334" follows="left|right|top"/>
  </panel>
  <panel name="workspace_utilities" left="15" bottom="-1" right="-15" height="176" follows="left|right|bottom" layout="topleft">
   <button name="recover_windows" label="Recover windows now" left="0" top="0" right="-1" height="24" follows="left|right|top"/>
