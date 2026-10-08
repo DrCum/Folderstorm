@@ -405,3 +405,19 @@ The viewer still requires `confirm: true` on wear, detach, link replacement, emp
 ## Security boundary
 
 The token stops accidental cross-process use and browser DNS rebinding. It does not sandbox another program already running as the same desktop user: that program can read the discovery file. Leave the flag off when you are not using an assistant. Never forward the discovery file or the port off the machine.
+
+## Workspace and layout switching
+
+Viewers advertising `capabilities.workspace_tools: 1` expose these tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `workspace_list` | Saved workspace/layout IDs, names and favorites |
+| `workspace_status` | Active/modified state, Previous availability and restore report |
+| `workspace_preview` | Fitted window/bar geometry and optional camera, graphics and HUD effects; no changes |
+| `workspace_apply` | Switch using `kind` (`workspace` or `layout`) and the exact `id` returned by the list |
+| `workspace_previous` | Return to the one session-only Previous arrangement |
+
+Each accepts an optional `viewer_pid`. Read tools require Read. Switching requires the new **Switch workspaces and layouts** permission (default Ask); workspaces with camera/HUD groups also require Camera/Wear. Any Never value blocks the compound switch, and the viewer owns approval. Changing the saved definition, resolved preset, worn HUD state or login while approval is pending invalidates it.
+
+Finish Preferences before switching. Check status after a switch: `accepted` means the viewer accepted the arrangement, while missing HUDs remain Pending until observed or timed out. Previous restores compatible settings/geometry but does not detach added HUDs. Older viewers return Unsupported; these tools never fall back to arbitrary settings writes or raw appearance operations.

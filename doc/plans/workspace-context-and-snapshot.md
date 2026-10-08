@@ -1,6 +1,8 @@
 # Folderstorm workspace context, monitor recovery and snapshot plan
 
-Status: planning only. Requested after PR #7 theme testing. No implementation, build, publication or native verification is included in this planning checkpoint.
+Status: implemented on `feat/workspace-context`, based on PR #6 head `658e5f2d58` (which includes PR #5). Current main remains `33e371fb3f`; PR #5/#6/#7 were still open when checked. Snapshot, schema, runtime/UI and MCP work use separate commits. Focused checks passed; native Windows/skin acceptance is pending. No viewer build or packaging was run.
+
+Implemented scope and actual validation: [workspace-context-validation.md](workspace-context-validation.md). Graphics/camera use supported subsets; HUDs are additive and Previous does not detach them. Recovery fits supported utility windows inside the viewer, without relocating the main OS window. Portable exports omit HUD references.
 
 ## Scope and evidence
 
