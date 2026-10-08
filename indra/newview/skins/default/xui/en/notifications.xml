@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <notifications>
+ <notification name="ConfirmGestureBoardDelete" type="alertmodal">
+  Delete the board “[NAME]” and its tile configuration? Inventory gestures will be kept.
+  <usetemplate name="okcancelbuttons" yestext="Delete board" notext="Cancel" />
+ </notification>
     <global name="skipnexttime">
 
 		Do not show me this again

@@ -42,6 +42,8 @@ inline std::vector<std::string> aliases(const std::string& scope, const std::str
     }
     if (scope == "workspace_editor")
     {
+        if (control == "gesture_board_launcher")
+            return {"gesture board", "gesture launcher", "soundboard", "gesture tiles"};
         if (control == "workspace_startup_mode" || control == "workspace_startup_name")
             return {"workspace", "startup restore", "login arrangement", "last arrangement"};
         if (control == "workspace_snapping")

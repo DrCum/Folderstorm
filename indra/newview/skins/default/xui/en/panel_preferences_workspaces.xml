@@ -21,7 +21,7 @@
  <string name="no_workspace">None</string>
  <string name="active_label">Current workspace:</string>
  <scroll_container follows="all" layout="topleft" left="0" right="-1" top="0" bottom="-1" name="workspace_scroll" opaque="false">
-  <panel follows="left|top|right" height="1210" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
+  <panel follows="left|top|right" height="1242" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
  <text follows="left|top|right" height="48" layout="topleft" left="16" top="12" right="-16" name="workspace_coverage" wrap="true">
   Save viewport, bars, Inventory, maps, compatible chat geometry, and the Received Items panel size. Preferences and the workspace switcher are excluded.
  </text>
@@ -58,6 +58,7 @@
  <check_box name="display_recovery" label="Recover arrangement when displays change" control_name="FSWorkspaceDisplayRecovery" left="16" top="1098" right="-16" height="22"/>
  <button name="recover_windows" label="Recover windows now" left="16" top="1128" width="200" height="24" tool_tip="Preview fitting live supported windows. OK keeps recovery; Cancel restores the previous arrangement."/>
  <text follows="left|top|right" height="32" layout="topleft" left="16" top="1172" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
+ <button name="gesture_board_launcher" label="Open gesture board…" left="16" top="1210" right="-16" height="24" follows="left|right|top" tool_tip="Choose Inventory gestures and customize launcher tiles; board edits save separately from Preferences."/>
   </panel>
  </scroll_container>
 </panel>

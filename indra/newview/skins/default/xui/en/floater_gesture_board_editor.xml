@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="gesture_board_editor" title="Edit gesture board / tile" width="440" height="400" can_resize="false"
+ can_minimize="false" reuse_instance="true" single_instance="true" layout="topleft">
+ <string name="ready">Click a tile to play; click a playing tile to stop. Right-click to customize it.</string>
+ <string name="logged_out">Gesture boards are available after login.</string>
+ <string name="invalid_data">Saved board data could not be read. It was kept unchanged.</string>
+ <string name="inventory_not_ready">Wait for Inventory to finish loading.</string>
+ <string name="missing">The gesture or its Inventory link is unavailable. Replace it through the tile menu.</string>
+ <string name="blocked">Gestures are disabled or blocked by current restrictions.</string>
+ <string name="loading">Loading the selected gesture… Clicks will not queue more plays.</string>
+ <string name="playing">Gesture started through the normal viewer engine.</string>
+ <string name="stopped">Pending board plays cancelled; board-started gestures stopped. Already emitted sound/chat cannot be recalled.</string>
+ <string name="cancelled">Pending board playback cancelled.</string>
+ <string name="load_failed">The gesture could not be loaded. Try again or replace its tile.</string>
+ <string name="timeout">The gesture did not load within 30 seconds. No delayed play is queued.</string>
+ <string name="changed">The board, gesture or login changed. Reopen the editor/picker and try again.</string>
+ <string name="full">Maximum: 16 boards and 64 tiles per board. Your saved setup was kept.</string>
+ <string name="exists">That board name is already used. Choose another name.</string>
+ <string name="invalid_name">Use 1–64 characters for board names and up to 64 for tile text; avoid control characters.</string>
+ <string name="saved">Board configuration saved. Inventory gestures were unchanged.</string>
+ <string name="duplicate_tile">That gesture already has a tile on this board.</string>
+ <string name="missing_tile">Unavailable gesture</string>
+ <string name="editor_help">Text and colors belong to this tile. Save applies them; Cancel keeps the original tile.</string>
+ <string name="board_help">Choose a board name. This changes the board configuration, not Inventory.</string>
+ <panel name="board_controls" left="12" top="32" right="-12" height="64" layout="topleft">
+  <text name="board_name_label" left="0" top="0" right="-1" height="18">Board name</text>
+  <line_editor name="board_name" left="0" top="24" right="-1" height="24" max_length="64"/>
+ </panel>
+ <panel name="tile_controls" left="12" top="32" right="-12" height="252" layout="topleft">
+  <text name="gesture_name" left="0" top="0" right="-1" height="20"/>
+  <button name="replace" label="Replace gesture…" left="0" top="28" right="-1" height="24"/>
+  <text name="label_caption" left="0" top="60" right="-1" height="18">Display text (blank uses the gesture name)</text>
+  <line_editor name="label" left="0" top="84" right="-1" height="24" max_length="64"/>
+  <button name="reset_label" label="Use gesture name" left="0" top="116" right="-1" height="24"/>
+  <check_box name="custom_color" label="Custom tile color (off uses theme color)" left="0" top="148" width="310" height="24"/>
+  <color_swatch name="color" label="Color" left="320" top="148" width="80" height="48" can_apply_immediately="true"/>
+  <panel name="sample" left="0" top="204" right="-1" height="44"/>
+ </panel>
+ <text name="status" left="12" top="296" right="-12" height="52" wrap="true"/>
+ <button name="save" label="Save" left="12" bottom="-12" width="110" height="24" follows="left|bottom"/>
+ <button name="cancel" label="Cancel" right="-12" bottom="-12" width="110" height="24" follows="right|bottom"/>
+</floater>
