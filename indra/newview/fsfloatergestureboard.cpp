@@ -52,8 +52,8 @@ bool sameSession(const LLUUID& account, const LLUUID& session)
 class FSGestureBoardTile final : public LLButton
 {
 public:
-    FSGestureBoardTile(const Params& p, FSFloaterGestureBoard* owner, const Tile& tile)
-        : LLButton(p), mOwner(owner->getHandle()), mID(tile.id)
+    FSGestureBoardTile(const Params& p, FSFloaterGestureBoard* board_owner, const Tile& tile)
+        : LLButton(p), mOwner(board_owner->getHandle()), mID(tile.id)
     {
         initFromParams(p);
         style(this, tile);
@@ -64,7 +64,7 @@ public:
         mText = LLUICtrlFactory::create<LLTextBox>(text, this);
         text.name = "tile_state"; text.rect = LLRect(8, 24, p.rect().getWidth() - 8, 4); text.wrap = false;
         mState = LLUICtrlFactory::create<LLTextBox>(text, this);
-        setCommitCallback([this](LLUICtrl*, const LLSD&) { if (auto* board = owner()) board->playTile(mID); });
+        setCommitCallback([this](LLUICtrl*, const LLSD&) { if (auto* board = this->owner()) board->playTile(mID); });
     }
     const std::string& id() const { return mID; }
     void update(const Tile& tile)
