@@ -120,7 +120,7 @@ std::vector<HUD> attachedHUDs()
             for (const auto& object : entry.second->mAttachedObjects)
                 if (object)
                     if (const auto* item = gInventory.getItem(object->getAttachmentItemID()))
-                        result.push_back({item->getLinkedUUID().asString(), item->getName().substr(0, 128), entry.first});
+                        result.push_back({item->getLinkedUUID().asString(), utf8str_truncate(item->getName(), 128), entry.first});
     return result;
 }
 bool hudWorn(const HUD& hud)

@@ -120,7 +120,7 @@ private:
     void applyContext(const FSWorkspaceLayout::Workspace& workspace);
     void acceptHUDs();
     void pollHUDs();
-    bool mHUDReviewed = false;
+    bool mHUDReviewed = false, mHUDPreviewPending = false;
     std::function<bool()> mHUDAllowed;
     void pollDisplays();
     std::vector<FSWorkspaceContext::HUD> mPendingHUDs;

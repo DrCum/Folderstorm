@@ -200,7 +200,7 @@ void FSWorkspaceController::abandon()
     mRestoreLayout = false; mPreserveCoordinates = false;
     mQuickSwitch = false;
     mTransaction = false;
-    mHUDReviewed = false; mHUDAllowed = {};
+    mHUDReviewed = mHUDPreviewPending = false; mHUDAllowed = {};
     mContextControls.clear(); mContextTouched = mCameraTouched = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
     mExtraControls.clear(); mExtraRuntime.clear(); mPendingExtraInventory.clear();
@@ -606,6 +606,7 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     for (const auto& group : std::vector<std::pair<int, std::string>>{{FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"}, {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}})
         if (!(workspace.components & group.first)) report(group.second, "omitted");
     if (workspace.ignored_details) report("arrangement", "unknown_details", workspace.ignored_details);
+    mHUDPreviewPending = !workspace.context.huds.empty();
     mPending = workspace; mFolderSkipped = mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
     applyContext(workspace);
     mFocus.markDead();
@@ -1447,6 +1448,8 @@ void FSWorkspaceController::applyContext(const FSWorkspaceLayout::Workspace& wor
 
 void FSWorkspaceController::acceptHUDs()
 {
+    if (!mHUDPreviewPending) return;
+    mHUDPreviewPending = false; // A later Preferences OK must not replay an accepted/declined switch.
     std::vector<FSWorkspaceContext::HUD> missing;
     for (const auto& hud : mPending.context.huds)
     {
@@ -1555,6 +1558,7 @@ bool FSWorkspaceController::recoverWindows(bool automatic)
     if (preferences_preview)
     {
         beginPreferencesSession(); finishPlacement();
+        mHUDPreviewPending = false;
         mPending = capture(); // Recovery only; accepting it never adds HUDs or reloads context.
     }
     else
