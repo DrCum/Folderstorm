@@ -124,3 +124,5 @@ Included in PR #9 after the user tested the first Windows delivery:
 - Stored schema version 2 accepts original version 1 collections. Presentation fields are bounded and validated; no Inventory or gesture contents are introduced. Downgrading to the original version-one board implementation after saving new presentation data is unsupported; that older reader preserves unknown data rather than replacing it.
 
 Actual checks and pending native acceptance are in the validation document. No native viewer build was run for this refinement.
+
+The compact board's entire frame is now positioned at runtime from final window dimensions and the actual skin header height. This accounts for the viewer's legacy header stretch, which leaves initial XML controls unmoved, and prevents tiles from covering the control strip. Page controls are footer-local; the XML Next fallback uses negative right-edge anchoring. Final-frame, populated-tile and click-area bounds checks are recorded in the validation document; native Windows acceptance remains pending.

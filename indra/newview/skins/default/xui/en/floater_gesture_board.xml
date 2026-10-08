@@ -40,6 +40,6 @@
  <panel name="pagination" left="8" right="-8" bottom="-6" height="22" follows="left|right|bottom" layout="topleft" visible="false">
   <button name="previous_page" label="&lt;" left="0" top="0" width="24" height="22" follows="left|top" tool_tip="Previous page"/>
   <text name="page_number" left="30" right="-30" top="2" height="18" halign="center" follows="left|right|top"/>
-  <button name="next_page" label="&gt;" right="0" top="0" width="24" height="22" follows="right|top" tool_tip="Next page"/>
+  <button name="next_page" label="&gt;" right="-1" top="0" width="24" height="22" follows="right|top" tool_tip="Next page"/>
  </panel>
 </floater>

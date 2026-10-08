@@ -193,11 +193,17 @@ void FSFloaterGestureBoard::rebuild()
     const auto& data = FSGestureBoardController::instance().data();
     const auto* board = findBoard(data, data.selected);
     if (data.selected != mDisplayedBoard) { mPage = 0; mDisplayedBoard = data.selected; }
-    const S32 width = std::max(1, mGridWidth - 16), full_height = std::max(1, mGridHeight - 64);
-    auto pages = board ? paginate(*board, width, full_height) : std::vector<Page>(1);
+    // LLFloater adds legacy header stretch after building XML children without
+    // translating them. Lay out every surface from the same final dimensions;
+    // mixing those XML positions with runtime tile positions covers the strip.
+    auto frame = layoutFrame(mGridWidth, mGridHeight, getHeaderHeight(), false);
+    auto pages = board ? paginate(*board, frame.grid.width, frame.grid.height) : std::vector<Page>(1);
     const bool multiple = pages.size() > 1;
-    const S32 height = std::max(1, full_height - (multiple ? 26 : 0));
-    if (multiple && board) pages = paginate(*board, width, height);
+    if (multiple && board)
+    {
+        frame = layoutFrame(mGridWidth, mGridHeight, getHeaderHeight(), true);
+        pages = paginate(*board, frame.grid.width, frame.grid.height);
+    }
     mPage = std::clamp(mPage, 0, static_cast<S32>(pages.size()) - 1);
     if (board && mFocusReference.notNull())
     {
@@ -208,7 +214,19 @@ void FSFloaterGestureBoard::rebuild()
                 { mPage = page; found = true; }
         if (!found) mFocusReference.setNull();
     }
-    grid->setRect(LLRect(8, mGridHeight - 58, 8 + width, mGridHeight - 58 - height));
+    const auto position_view = [](LLView* view, const Rect& rect, S32 parent_height)
+    { view->setShape(LLRect(rect.x, parent_height - rect.y, rect.x + rect.width, parent_height - rect.y - rect.height)); };
+    position_view(getChild<LLComboBox>("boards"), frame.boards, mGridHeight);
+    position_view(getChild<LLTextBox>("status"), frame.status, mGridHeight);
+    position_view(getChild<LLButton>("add_gestures"), frame.add, mGridHeight);
+    position_view(getChild<LLButton>("stop"), frame.stop, mGridHeight);
+    position_view(getChild<LLButton>("options"), frame.options, mGridHeight);
+    position_view(grid, frame.grid, mGridHeight);
+    position_view(getChild<LLTextBox>("empty"), frame.empty, mGridHeight);
+    position_view(getChild<LLView>("pagination"), frame.pagination, mGridHeight);
+    position_view(getChild<LLButton>("previous_page"), frame.previous, frame.pagination.height);
+    position_view(getChild<LLTextBox>("page_number"), frame.number, frame.pagination.height);
+    position_view(getChild<LLButton>("next_page"), frame.next, frame.pagination.height);
     getChild<LLView>("pagination")->setVisible(multiple);
     getChild<LLButton>("previous_page")->setEnabled(mPage > 0);
     getChild<LLButton>("next_page")->setEnabled(mPage + 1 < static_cast<S32>(pages.size()));
@@ -221,7 +239,7 @@ void FSFloaterGestureBoard::rebuild()
             const auto& definition = board->tiles[place.index];
             LLButton::Params p(LLUICtrlFactory::getDefaultParams<LLButton>()); p.name = definition.id; p.label = ""; p.auto_resize = false; p.commit_on_capture_lost = false;
             p.use_ellipses = true;
-            p.rect = LLRect(place.x, height - place.y, place.x + place.width, height - place.y - place.height);
+            p.rect = LLRect(place.x, frame.grid.height - place.y, place.x + place.width, frame.grid.height - place.y - place.height);
             auto* tile = new FSGestureBoardTile(p, this, definition); grid->addChild(tile); mTiles.push_back(tile); tile->update(definition);
         }
     }

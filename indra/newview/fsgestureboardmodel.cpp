@@ -145,6 +145,26 @@ std::vector<Page> paginate(const Board& board, int width, int height)
     }
     return pages;
 }
+Frame layoutFrame(int width, int height, int header_height, bool multiple_pages)
+{
+    const int controls_top = header_height + 4;
+    const int grid_top = controls_top + 22 + 4;
+    const int grid_width = std::max(1, width - 16);
+    const int grid_height = std::max(1, height - grid_top - 6 - (multiple_pages ? 26 : 0));
+    Frame frame;
+    frame.boards = {8, controls_top, std::max(1, width - 108), 22};
+    frame.status = {width - 98, controls_top + 2, 10, 18};
+    frame.add = {width - 86, controls_top, 24, 22};
+    frame.stop = {width - 60, controls_top, 24, 22};
+    frame.options = {width - 32, controls_top, 24, 22};
+    frame.grid = {8, grid_top, grid_width, grid_height};
+    frame.empty = {12, grid_top + 4, std::max(1, grid_width - 8), std::min(24, grid_height - 4)};
+    frame.pagination = {8, height - 28, grid_width, 22};
+    frame.previous = {0, 0, 24, 22};
+    frame.number = {30, 2, std::max(1, grid_width - 60), 18};
+    frame.next = {grid_width - 24, 0, 24, 22};
+    return frame;
+}
 Board* findBoard(Collection& collection, const std::string& id)
 { for (auto& board : collection.boards) if (board.id == id) return &board; return nullptr; }
 const Board* findBoard(const Collection& collection, const std::string& id)

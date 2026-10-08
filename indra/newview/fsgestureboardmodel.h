@@ -26,6 +26,14 @@ struct Board { std::string id, name; std::vector<Tile> tiles; bool compact = tru
 struct Collection { std::string selected; std::vector<Board> boards; };
 struct Placement { int index, x, y, width, height; }; // Top-left coordinates.
 using Page = std::vector<Placement>;
+struct Rect { int x, y, width, height; }; // Top-left within the owning view.
+struct Frame
+{
+    Rect boards, status, add, stop, options, grid, empty, pagination;
+    Rect previous, number, next; // Local to pagination.
+};
+// Uses final floater dimensions, after native header stretch/saved-rect restore.
+Frame layoutFrame(int width, int height, int header_height, bool multiple_pages);
 // Fixed presentation sizes, independent of gesture names. Only a viewport
 // smaller than a tile may constrain its rendered size; its saved size is kept.
 std::vector<Page> paginate(const Board& board, int width, int height);
