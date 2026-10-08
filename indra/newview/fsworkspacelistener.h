@@ -1,6 +1,6 @@
 /**
- * @file fsworkspacecontroller.cpp
- * @brief Manual workspace adapters and reversible Preferences previews
+ * @file fsworkspacelistener.h
+ * @brief Versioned workspace API and prepared assistant switches
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
  *

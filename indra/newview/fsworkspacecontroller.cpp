@@ -1082,7 +1082,7 @@ bool FSWorkspaceController::modified() const
         FSWorkspaceContext::Values expected; std::string error;
         if (group.mode != FSWorkspaceContext::Mode::Off)
         {
-            if (!FSWorkspaceContext::resolveGroup(group, camera, expected, error)) changed = true;
+            if (!FSWorkspaceContext::resolveGroup(group, camera, expected, error, false)) changed = true;
             else
             {
                 const auto live = FSWorkspaceContext::captureGroup(camera).values;

@@ -1,6 +1,6 @@
 /**
- * @file fsworkspacecontroller.cpp
- * @brief Manual workspace adapters and reversible Preferences previews
+ * @file fsworkspacecontextadapter.cpp
+ * @brief Bounded graphics, camera and additive HUD adapters
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
  *
@@ -28,6 +28,7 @@
 #include "lldir.h"
 #include "llviewerobject.h"
 #include "lltrans.h"
+#include "lltimer.h"
 #include <algorithm>
 #include "llfollowcam.h"
 #include "llvoavatarself.h"
@@ -79,32 +80,47 @@ Group captureGroup(bool camera)
     if (camera) group.values["CameraZoomFraction"] = {static_cast<double>(gAgentCamera.getWorkspaceCameraZoom())};
     return group;
 }
-bool resolveGroup(const Group& group, bool camera, Values& values, std::string& error)
+bool resolveGroup(const Group& group, bool camera, Values& values, std::string& error, bool fresh)
 {
     values.clear(); error.clear();
     if (group.mode == Mode::Off) return true;
     if (group.mode == Mode::Current) { values = group.values; return true; }
+    struct CachedPreset { Values values; std::string error; LLTimer age; };
+    static std::map<std::string, CachedPreset> cache;
+    const auto key = std::string(camera ? "camera:" : "graphics:") + group.preset;
+    auto found = cache.find(key);
+    // The modified indicator may run twice per second. Never enumerate/log
+    // preset directories or reparse a file on each draw. Real apply and MCP
+    // approval/validation always bypass this short, bounded display cache.
+    if (!fresh && found != cache.end() && found->second.age.getElapsedTimeF32() < 5.f)
+    { values = found->second.values; error = found->second.error; return error.empty(); }
+    auto finish = [&](bool valid)
+    {
+        if (cache.size() >= 64 && !cache.count(key)) cache.clear();
+        auto& saved = cache[key]; saved.values = values; saved.error = error; saved.age.reset();
+        return valid;
+    };
     const auto directory = camera ? PRESETS_CAMERA : PRESETS_GRAPHIC;
     LLPresetsManager::preset_name_list_t names;
     LLPresetsManager::instance().loadPresetNamesFromDir(directory, names, DEFAULT_SHOW);
-    if (std::find(names.begin(), names.end(), group.preset) == names.end()) { error = "preset_unavailable"; return false; }
+    if (std::find(names.begin(), names.end(), group.preset) == names.end()) { error = "preset_unavailable"; return finish(false); }
     const auto path = LLPresetsManager::getPresetsDir(directory) + gDirUtilp->getDirDelimiter() + LLURI::escape(group.preset == LLTrans::getString(PRESETS_DEFAULT) ? PRESETS_DEFAULT : group.preset) + ".xml";
     llifstream input(path.c_str(), std::ios::binary);
     std::string document(FSWorkspaceFile::MAX_TRANSFER_BYTES + 1, '\0');
     input.read(&document[0], static_cast<std::streamsize>(document.size())); document.resize(static_cast<size_t>(input.gcount()));
     LLSD data; std::istringstream stream(document);
     if (!input.eof() || !FSWorkspaceFile::boundedXML(document) || LLSDSerialize::fromXML(data, stream) <= 0 || !data.isMap())
-    { error = "preset_unavailable"; return false; }
+    { error = "preset_unavailable"; return finish(false); }
     for (const auto& control : controls(camera))
         if (data.has(control.name))
         {
             std::vector<double> value;
             if (!data[control.name].isMap() || !extract(control, data[control.name]["Value"], value))
-            { error = "preset_invalid"; values.clear(); return false; }
+            { error = "preset_invalid"; values.clear(); return finish(false); }
             values[control.name] = value;
         }
-    if (values.empty()) { error = "preset_invalid"; return false; }
-    return true;
+    if (values.empty()) { error = "preset_invalid"; return finish(false); }
+    return finish(true);
 }
 bool cameraAllowed()
 {
