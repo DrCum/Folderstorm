@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<floater name="gesture_board_editor" title="Edit gesture board / tile" width="440" height="400" can_resize="false"
+<floater name="gesture_board_editor" title="Edit gesture board / tile" width="440" height="560" can_resize="false"
  can_minimize="false" reuse_instance="true" single_instance="true" layout="topleft">
  <string name="ready">Click a tile to play; click a playing tile to stop. Right-click to customize it.</string>
  <string name="logged_out">Gesture boards are available after login.</string>
@@ -26,7 +26,7 @@
   <text name="board_name_label" left="0" top="0" right="-1" height="18">Board name</text>
   <line_editor name="board_name" left="0" top="24" right="-1" height="24" max_length="64"/>
  </panel>
- <panel name="tile_controls" left="12" top="32" right="-12" height="252" layout="topleft">
+ <panel name="tile_controls" left="12" top="32" right="-12" height="430" layout="topleft">
   <text name="gesture_name" left="0" top="0" right="-1" height="20"/>
   <button name="replace" label="Replace gesture…" left="0" top="28" right="-1" height="24"/>
   <text name="label_caption" left="0" top="60" right="-1" height="18">Display text (blank uses the gesture name)</text>
@@ -34,9 +34,12 @@
   <button name="reset_label" label="Use gesture name" left="0" top="116" right="-1" height="24"/>
   <check_box name="custom_color" label="Custom tile color (off uses theme color)" left="0" top="148" width="310" height="24"/>
   <color_swatch name="color" label="Color" left="320" top="148" width="80" height="48" can_apply_immediately="true"/>
-  <panel name="sample" left="0" top="204" right="-1" height="44"/>
+  <check_box name="board_size" label="Use board tile size" left="0" top="198" width="310" height="24"/>
+  <spinner name="tile_width" label="Width (px)" left="0" top="230" width="190" height="24" label_width="100" min_val="48" max_val="320" initial_value="100" increment="1" decimal_digits="0"/>
+  <spinner name="tile_height" label="Height (px)" left="204" top="230" width="190" height="24" label_width="100" min_val="24" max_val="160" initial_value="28" increment="1" decimal_digits="0"/>
+  <panel name="sample" left="0" top="266" right="-1" height="160"/>
  </panel>
- <text name="status" left="12" top="296" right="-12" height="52" wrap="true"/>
+ <text name="status" left="12" bottom="-48" right="-12" height="40" wrap="true" follows="left|right|bottom"/>
  <button name="save" label="Save" left="12" bottom="-12" width="110" height="24" follows="left|bottom"/>
  <button name="cancel" label="Cancel" right="-12" bottom="-12" width="110" height="24" follows="right|bottom"/>
 </floater>

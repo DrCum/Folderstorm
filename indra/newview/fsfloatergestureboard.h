@@ -35,6 +35,9 @@ public:
 private:
     void refresh(bool force = false);
     void rebuild();
+    void optionsMenu();
+    void boardAction(const std::string& action, const std::string& board, const LLSD& expected);
+    void changePage(S32 direction);
     void editBoard(const std::string& mode);
     void addGestures();
     void tileAction(const std::string& action, const std::string& board, const std::string& tile, const LLSD& expected);
@@ -43,7 +46,8 @@ private:
     LLTimer mRefreshTimer;
     LLUUID mAccount, mSession, mFocusReference;
     LLSD mDisplayed;
-    S32 mGridWidth = 0;
+    S32 mGridWidth = 0, mGridHeight = 0, mPage = 0;
+    std::string mDisplayedBoard;
     bool mBuilt = false;
     std::vector<FSGestureBoardTile*> mTiles;
     LLHandle<LLContextMenu> mMenu;

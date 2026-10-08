@@ -1,12 +1,12 @@
 # Gesture board implementation plan
 
-Status: implemented on `feat/gesture-board`, stacked on open PR #8 (`feat/workspace-context`, head `34ab510d3d`). The user authorized implementation and publication. Inventory selection, native playback, saved boards, tile reordering and editable tile text/colors are included. Keyboard shortcuts are excluded. Actual focused checks and remaining native acceptance are recorded in [gesture-board-validation.md](gesture-board-validation.md).
+Status: implemented on `feat/gesture-board`, stacked on open PR #8 (`feat/workspace-context`, head `34ab510d3d`). The user authorized implementation and publication. Inventory selection, native playback, saved boards, tile reordering, editable tile text/colors, compact paged presentation and individual tile sizes are included. Keyboard shortcuts are excluded. Actual focused checks and remaining native acceptance are recorded in [gesture-board-validation.md](gesture-board-validation.md).
 
 Planning source: `feat/workspace-context` at `34ab510d3d`, the current PR #8 worktree. PR #8 was verified open/unmerged and current main remained `33e371fb3f`; implementation uses a separate worktree at `/workspace/Folderstorm-gesture-board` from the PR #8 head plus the plan-only commit `aa828a9447`. Preserve user edits and published history. Do not mix this feature into a workspace/snapshot fix without an explicit delivery decision.
 
 ## User experience
 
-Add a standard **Gesture board** toolbar button and a World-menu entry. Both open a resizable floater with a board selector, a responsive grid of gesture tiles and compact management controls.
+Add a standard **Gesture board** toolbar button and a World-menu entry. Both open a resizable floater with a board selector, a paged grid of fixed-size gesture tiles and one compact control strip.
 
 1. Choose **Add gestures…** and select one or more gestures in an Inventory picker, or drag gestures from Inventory onto the board. No chat commands, UUID entry, trigger phrases or gesture editing are required.
 2. Click a tile to play its entire gesture through the normal viewer gesture engine. Loading and playing states are visible; an unavailable tile offers a useful explanation rather than silently doing nothing.
@@ -14,7 +14,7 @@ Add a standard **Gesture board** toolbar button and a World-menu entry. Both ope
 4. Edit the tile's displayed text and choose its color through the existing color picker or a small theme-aware palette. Provide **Use gesture name** and **Use theme color** resets. Tile changes do not rename, recolor or modify the original Inventory gesture.
 5. Create, rename, duplicate and delete named boards, such as Driving or Parties. Remember the selected board for that account. Board deletion confirms the loss of its tile configuration, not deletion of the referenced gestures.
 
-Illustrative layout:
+Original illustrative layout (superseded by the compact refinement below):
 
 ```text
 Gesture board                         [Driving       v]
@@ -30,7 +30,7 @@ Gesture board                         [Driving       v]
 └──────────────────┘ └──────────────────┘
 ```
 
-Color notes above describe the mockup; actual tiles show the selected label, with Inventory name/path available in a tooltip. The UI does not show UUIDs or programming details. Long labels wrap within a bounded tile and retain a full tooltip. Play/loading status uses an icon or text as well as color.
+Color notes above describe the mockup; actual tiles show the selected label, with Inventory name/path available in a tooltip. The UI does not show UUIDs or programming details. Long labels truncate with ellipses and retain a full tooltip; they never grow tiles. Ready tiles do not display Play. Playing tiles use the standard pressed state; loading, restrictions and unavailable details remain in tooltips. A small warning indicator offers full error details on hover.
 
 ## Source-backed behavior and limits
 
@@ -48,8 +48,8 @@ Introduce a small board model and shared controller, separate from the floater. 
 
 Account-local, versioned data:
 
-- Board: stable generated ID, bounded name and ordered tiles. Renaming does not change the ID.
-- Tile: stable generated tile ID, gesture Inventory item reference, optional custom label and optional custom RGB color. An absent label/color means current Inventory name/current skin styling.
+- Board: stable generated ID, bounded name, ordered tiles and compact/regular density. Renaming does not change the ID.
+- Tile: stable generated tile ID, gesture Inventory item reference, optional custom label, optional custom RGB color and optional paired width/height in pixels. An absent label/color means current Inventory name/current skin styling.
 - Board settings: collection and selected board ID in `settings_per_account.xml`; definitions contain references and presentation choices only.
 - Initial limits: 16 boards, 64 tiles per board; board names and custom labels up to 64 Unicode characters with a bounded UTF-8 representation. Reject malformed IDs, nonfinite/out-of-range color channels, unknown versions and excessive collections. Keep malformed stored data for diagnosis rather than silently replacing it with an empty save.
 - Resolve gesture links at playback time, revalidate the authoritative item type/asset, and handle a renamed, moved, deleted or broken link. Resolve aliases to one underlying item for duplicate-play protection. Adding an existing gesture on the same board selects its tile instead of creating an accidental duplicate; the same gesture can appear on different boards.
@@ -110,3 +110,17 @@ Use separate reviewable commits for model/playback, customization and saved-boar
 - Manual Windows acceptance on the user's build: Inventory picker/drop, linked/inactive/loading gestures, play/stop, missing assets, customization Save/Cancel, reorder, board management, relogin, Preferences Cancel and two supported skins at normal/larger UI scale. Verify sound/chat/animation behavior with a few known gestures; do not claim Stop mutes an emitted sound.
 
 Definition of done: users can fill, customize, order, save and use gesture boards entirely through the UI; native playback and restrictions remain authoritative; no stale request plays after cancellation/session change; actual focused checks and remaining native acceptance are reported honestly. Keyboard shortcuts remain out of scope.
+
+## Testing feedback — compact board refinement
+
+Included in PR #9 after the user tested the first Windows delivery:
+
+- One top strip: board selector plus Add, Stop and Options icons with hover tooltips. New/Rename/Duplicate/Delete and Compact tiles live in Options. Every anchored control follows window resizing; no wide management rows or persistent instruction/status paragraphs.
+- Default board size 280 × 190; minimum 220 × 120. Existing saved floater geometry is retained, so an already-open large board can be resized by the user. Compact tiles are 100 × 28 and regular tiles 132 × 44. Density is per board and defaults to compact for both new and migrated boards.
+- Tile editor offers Use board tile size or explicit width 48–320 and height 24–160. Save/Cancel stage these fields alongside colors, label and gesture reference; Duplicate preserves them. A sample renders the requested size without playing. The board-name editor uses a shorter window.
+- Fixed, single-line ellipsized labels; no name-dependent resizing and no repeated Play label. Hover retains full label/name/path and non-ready state details. Playing uses native pressed styling. The warning marker offers full controller errors without reserving a bottom status row.
+- Ordered shelf packing with mixed sizes and no scrollbar. Only the current page is instantiated. Number and Previous/Next appear only when necessary; resizing recomputes pages, clamps the current page and retains configured sizes. A tile larger than the available window is constrained for rendering, without changing its stored dimensions. Add or duplicate focus selects the page containing that gesture. Cross-page ordering remains available through Move earlier/later.
+- Inventory drag/drop is handled before child dispatch. The previous scroll container always returned handled even for rejection, and mouse-opaque child views could also swallow drops. Item source/type/reference/link validation, duplicate handling and login/session guards are retained; a drop adds a tile and never plays it.
+- Stored schema version 2 accepts original version 1 collections. Presentation fields are bounded and validated; no Inventory or gesture contents are introduced. Downgrading to the original version-one board implementation after saving new presentation data is unsupported; that older reader preserves unknown data rather than replacing it.
+
+Actual checks and pending native acceptance are in the validation document. No native viewer build was run for this refinement.
