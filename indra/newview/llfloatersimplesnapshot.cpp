@@ -294,8 +294,8 @@ void LLFloaterSimpleSnapshot::Impl::updateResolution(void* data)
 
         if (gSavedSettings.getBOOL("RenderHUDInSnapshot"))
         { //clamp snapshot resolution to window size when showing UI HUD in snapshot
-            width = llmin(width, gViewerWindow->getWindowWidthRaw());
-            height = llmin(height, gViewerWindow->getWindowHeightRaw());
+            width = llmin(width, LLSnapshotLivePreview::sourceRectRaw().getWidth());
+            height = llmin(height, LLSnapshotLivePreview::sourceRectRaw().getHeight());
         }
 
         llassert(width > 0 && height > 0);

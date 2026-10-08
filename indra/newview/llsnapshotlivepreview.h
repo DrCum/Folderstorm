@@ -56,6 +56,10 @@ public:
     LLSnapshotLivePreview(const LLSnapshotLivePreview::Params& p);
     ~LLSnapshotLivePreview();
 
+    static bool viewportOnly();
+    static LLRect sourceRectRaw();
+    static LLRect sourceRectScaled();
+
     void setContainer(LLView* container) { mViewContainer = container; }
 
     /*virtual*/ void draw();
@@ -127,6 +131,8 @@ public:
     static bool onIdle( void* snapshot_preview );
 
 private:
+    LLRect                      mSourceRect;
+    bool                        mSourceViewport = false;
     LLView*                     mViewContainer;
 
     LLColor4                    mColor;
