@@ -79,11 +79,24 @@ void FSFloaterWorkspacePreview::refresh()
     if (workspace.components & FSWorkspaceLayout::Inventory) groups += "Inventory; ";
     if (workspace.components & FSWorkspaceLayout::Maps) groups += "maps; ";
     if (workspace.components & FSWorkspaceLayout::Chat) groups += "compatible chat; ";
+    if (workspace.components & FSWorkspaceLayout::Graphics) groups += "graphics settings; ";
+    if (workspace.components & FSWorkspaceLayout::Camera) groups += "camera settings; ";
+    if (workspace.components & FSWorkspaceLayout::HUDs) groups += std::to_string(workspace.context.huds.size()) + " selected HUDs (reviewed); ";
     if (workspace.remember_toolbars) groups += "toolbar buttons; ";
     groups += "other groups stay as they are.\n";
     groups += std::to_string(diagram.adjusted) + " windows adjusted to fit; " + std::to_string(diagram.skipped) + " skipped; " + std::to_string(diagram.missing_folders) + " missing folders.\n";
     groups += getString("geometry_help");
     getChild<LLTextBox>("details")->setText(groups);
+    std::string context;
+    for (bool camera : {false, true})
+    {
+        const auto& group = camera ? workspace.context.camera : workspace.context.graphics;
+        if (group.mode != FSWorkspaceContext::Mode::Off)
+            context += std::string(camera ? "Camera: " : "Graphics: ") +
+                (group.mode == FSWorkspaceContext::Mode::Preset ? group.preset : "captured settings") + "\n";
+    }
+    for (const auto& hud : workspace.context.huds) context += "HUD: " + hud.name + " (add if missing)\n";
+    getChild<LLTextBox>("details")->setToolTip(context);
 }
 void FSWorkspaceDiagram::draw()
 {

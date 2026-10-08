@@ -22,7 +22,7 @@
  <string name="invalid_name_or_data">Use up to 64 letters, numbers, spaces, dashes, underscores or periods. Maximum: 32 workspaces.</string>
  <string name="invalid_data">The workspace could not be saved. Check your saved definitions in Preferences.</string>
  <scroll_container name="workspace_scroll" left="0" top="26" right="-1" bottom="-48" follows="all" opaque="false">
- <panel name="workspace_content" left="0" top="0" width="415" height="746" layout="topleft" follows="left|top|right">
+ <panel name="workspace_content" left="0" top="0" width="415" height="1148" layout="topleft" follows="left|top|right">
  <text name="intro" left="15" top="4" right="-15" height="36" follows="left|right|top" wrap="true">
   Switch your saved arrangement. Mark favorites to keep them at the top of this list.
  </text>
@@ -38,21 +38,24 @@
  </scroll_list>
  <button name="favorite_up" label="Favorite up" left="15" top="326" width="130" height="24" follows="left|top" tool_tip="Move the selected favorite earlier in the strip, list and shortcut cycle."/>
  <button name="favorite_down" label="Favorite down" left="153" top="326" width="130" height="24" follows="left|top" tool_tip="Move the selected favorite later in the strip, list and shortcut cycle."/>
- <text name="status" left="15" bottom="-332" right="-15" height="28" follows="left|right|bottom" wrap="true"/>
- <text name="save_label" left="15" bottom="-304" right="-15" height="18" follows="left|right|bottom">Save current as a new workspace</text>
- <line_editor name="workspace_name" left="15" bottom="-276" right="-108" height="24" follows="left|right|bottom"
+ <text name="status" left="15" bottom="-734" right="-15" height="28" follows="left|right|bottom" wrap="true"/>
+ <text name="save_label" left="15" bottom="-706" right="-15" height="18" follows="left|right|bottom">Save current as a new workspace</text>
+ <line_editor name="workspace_name" left="15" bottom="-678" right="-108" height="24" follows="left|right|bottom"
   max_length="64" tool_tip="New workspace name. Preferences and this switcher are excluded."/>
- <button name="save" label="Save" right="-15" bottom="-276" width="85" height="24" follows="right|bottom"/>
- <check_box name="capture_chrome" label="Restore viewport and bar placement" initial_value="true" left="15" bottom="-252" right="-15" height="18" follows="left|right|bottom"/>
- <check_box name="capture_inventory" label="Restore Inventory windows and Received Items" initial_value="true" left="15" bottom="-228" right="-15" height="18" follows="left|right|bottom"/>
- <check_box name="capture_maps" label="Restore maps" initial_value="true" left="15" bottom="-204" right="-15" height="18" follows="left|right|bottom"/>
- <check_box name="capture_chat" label="Restore compatible chat geometry" initial_value="true" left="15" bottom="-180" right="-15" height="18" follows="left|right|bottom"/>
- <check_box name="capture_toolbars" label="Restore toolbar buttons and display mode" left="15" bottom="-132" right="-15" height="18" follows="left|right|bottom"/>
+ <button name="save" label="Save" right="-15" bottom="-678" width="85" height="24" follows="right|bottom"/>
+ <check_box name="capture_chrome" label="Restore viewport and bar placement" initial_value="true" left="15" bottom="-654" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_inventory" label="Restore Inventory windows and Received Items" initial_value="true" left="15" bottom="-630" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_maps" label="Restore maps" initial_value="true" left="15" bottom="-606" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_chat" label="Restore compatible chat geometry" initial_value="true" left="15" bottom="-582" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="capture_toolbars" label="Restore toolbar buttons and display mode" left="15" bottom="-534" right="-15" height="18" follows="left|right|bottom"/>
  <check_box name="remember_inventory_folders" label="Remember Inventory folders"
-  left="15" bottom="-156" right="-15" height="18" follows="left|right|bottom"
+  left="15" bottom="-558" right="-15" height="18" follows="left|right|bottom"
   tool_tip="For this save: restore single-folder roots and view modes, or a selected folder and expanded branches in All Items (up to 256). Search filters and item selections are not saved."/>
+ <panel name="workspace_context" filename="panel_workspace_context.xml" left="15" bottom="-208" right="-15" height="310" follows="left|right|bottom"/>
  <check_box name="show_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"
   left="15" bottom="-104" right="-15" height="18" follows="left|right|bottom"/>
+ <check_box name="display_recovery" label="Recover arrangement when displays change" control_name="FSWorkspaceDisplayRecovery" left="15" bottom="-148" right="-15" height="18" follows="left|right|bottom"/>
+ <button name="recover_windows" label="Recover windows now" left="15" bottom="-180" right="-15" height="24" follows="left|right|bottom"/>
  <button name="diagram_preview" label="Diagram preview…" left="15" bottom="-72" right="-15" height="24" follows="left|right|bottom"/>
  <button name="restore_report" label="Last restore report…" left="15" bottom="-16" right="-15" height="24" follows="left|right|bottom"/>
  <check_box name="quiet_ui" label="Quiet UI (this session)" left="15" bottom="-48" right="-15" height="18" follows="left|right|bottom"

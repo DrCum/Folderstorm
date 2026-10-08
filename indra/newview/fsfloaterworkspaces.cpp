@@ -17,6 +17,7 @@
 #include "fsfloaterworkspaces.h"
 #include "fschromelayoutcontroller.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacecontextui.h"
 #include "fsworkspacequickaccess.h"
 #include "fsworkspacepreview.h"
 #include "fsquietui.h"
@@ -52,12 +53,18 @@ int captureComponents(LLView* view)
     if (view->getChild<LLCheckBoxCtrl>("capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
     if (view->getChild<LLCheckBoxCtrl>("capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
     if (view->getChild<LLCheckBoxCtrl>("capture_chat")->get()) mask |= FSWorkspaceLayout::Chat;
+    const auto context = FSWorkspaceContextUI::options(view);
+    if (context.graphics.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Graphics;
+    if (context.camera.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Camera;
+    if (!context.huds.empty()) mask |= FSWorkspaceLayout::HUDs;
     return mask;
 }
 }
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    FSWorkspaceContextUI::initialize(this);
+    getChild<LLButton>("recover_windows")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().recoverWindows(); });
     getChild<LLCheckBoxCtrl>("quiet_ui")->setCommitCallback([this](LLUICtrl*, const LLSD&) { FSQuietUI::setEnabled(getChild<LLCheckBoxCtrl>("quiet_ui")->get()); });
     getChild<LLButton>("restore_report")->setCommitCallback([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_report"); });
     getChild<LLButton>("diagram_preview")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_preview", selected()); });
@@ -90,6 +97,7 @@ bool FSFloaterWorkspaces::postBuild()
 void FSFloaterWorkspaces::onOpen(const LLSD& key)
 {
     mActionStatus.clear();
+    FSWorkspaceContextUI::setOptions(this, {});
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
     for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->set(true);
@@ -141,6 +149,7 @@ void FSFloaterWorkspaces::refresh(bool force)
         const bool same_account = gAgent.getID() == mAccount && gAgent.getSessionID() == mSession;
         if (!same_account)
         {
+            FSWorkspaceContextUI::setOptions(this, {});
             getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
             getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
             mActionStatus.clear(); mSavedName.clear();
@@ -211,6 +220,8 @@ void FSFloaterWorkspaces::updateButtons()
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
     getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("capture_toolbars")->get()));
+    getChild<LLView>("workspace_context")->setEnabled(can_switch);
+    getChild<LLButton>("recover_windows")->setEnabled(can_switch);
     getChild<LLLineEditor>("workspace_name")->setEnabled(can_switch);
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
     LLStringUtil::format_map_t args;
@@ -244,7 +255,7 @@ void FSFloaterWorkspaces::saveCurrent()
     if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get()))
+    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get(), FSWorkspaceContextUI::options(this)))
     {
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");

@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="workspace_report" title="Workspace restore report" width="560" height="420"
  min_width="360" min_height="240" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
+ <string name="preset_unavailable">The named preset is missing or unavailable; current settings were kept.</string>
+ <string name="preset_invalid">The preset contains invalid or unsupported values; current settings were kept.</string>
+ <string name="camera_blocked">Camera settings were kept because of a restriction, Mouselook or an active scripted camera.</string>
+ <string name="graphics_limited">This graphics setting is unavailable on the current hardware.</string>
+ <string name="hud_review">HUD changes will be reviewed after accepting this arrangement.</string>
+ <string name="hud_not_ready">HUD restoration needs a ready avatar and Inventory.</string>
+ <string name="hud_unavailable">This HUD Inventory item or attachment point is unavailable.</string>
+ <string name="hud_other_point">This item is already worn at a different attachment point; it was left there.</string>
+ <string name="hud_limit">The avatar attachment limit was reached.</string>
+ <string name="hud_pending">Attachment requested; waiting to observe the HUD (up to 30 seconds).</string>
+ <string name="hud_timeout">The requested HUD was not observed within 30 seconds.</string>
+ <string name="hud_switch_blocked">HUD changes were skipped because Preferences opened or the switch permission was revoked. Switch again after finishing Preferences.</string>
+ <string name="graphics">Graphics settings</string>
+ <string name="camera">Camera settings</string>
+ <string name="huds">Selected HUDs</string>
+ <string name="hud_declined">HUD changes were declined; the window arrangement remains applied.</string>
+ <string name="display_unavailable">Monitor geometry is unavailable; recovery used the current viewer frame.</string>
+ <string name="display_recovered">Live utility windows were fitted to the current viewer frame. Named workspaces were kept.</string>
  <string name="empty_report">No workspace or layout has been restored in this login session.</string>
  <string name="summary">[NAME] — window placement complete.
 Windows placed: [APPLIED]; adjusted to fit: [ADJUSTED]; skipped windows/fields: [SKIPPED].

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel name="workspace_context" width="390" height="310" layout="topleft" follows="left|top|right">
+ <text name="graphics_label" left="0" top="0" right="-1" height="18">Graphics settings (supported subset)</text>
+ <combo_box name="graphics_mode" tool_tip="Optional draw distance, shadows, reflections, avatar detail, particles, glow, depth of field and frame limit. Display mode and settings that require restarting are excluded." left="0" top="23" width="165" height="24">
+  <combo_box.item label="Do not change" value="off"/><combo_box.item label="Capture current" value="current"/><combo_box.item label="Use named preset" value="preset"/>
+ </combo_box>
+ <combo_box name="graphics_preset" left="173" top="23" right="-1" height="24" follows="left|top|right" tool_tip="A named preset follows future edits to that preset. Only supported rendering settings are restored; display mode stays unchanged."/>
+ <text name="camera_label" left="0" top="55" right="-1" height="18">Camera settings (avatar-relative)</text>
+ <combo_box name="camera_mode" left="0" top="78" width="165" height="24">
+  <combo_box.item label="Do not change" value="off"/><combo_box.item label="Capture current" value="current"/><combo_box.item label="Use named preset" value="preset"/>
+ </combo_box>
+ <combo_box name="camera_preset" left="173" top="78" right="-1" height="24" follows="left|top|right" tool_tip="Restores compatible camera offsets and settings, not an absolute position in a region. Restrictions and scripted cameras are respected."/>
+ <check_box name="remember_huds" label="Remember selected HUDs (add missing only)" left="0" top="112" right="-1" height="22"/>
+ <scroll_list name="hud_list" left="0" top="139" right="-1" height="96" follows="left|top|right" multi_select="true" draw_heading="true">
+  <scroll_list.columns name="name" label="HUD" relative_width="0.8"/><scroll_list.columns name="point" label="Point" relative_width="0.2"/>
+ </scroll_list>
+ <button name="hud_refresh" label="Refresh HUDs" left="0" top="241" width="125" height="24"/>
+ <button name="hud_all" label="Select all HUDs" left="133" top="241" width="135" height="24"/>
+ <text name="context_help" left="0" top="273" right="-1" height="35" follows="left|top|right" wrap="true">Select HUD rows with Ctrl/Shift. Saved HUDs are reviewed on restore; unrelated HUDs and clothing stay worn. HUD internal state is not saved.</text>
+</panel>

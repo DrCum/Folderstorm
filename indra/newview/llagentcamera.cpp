@@ -833,6 +833,16 @@ F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
     return clamp_rescale(distance, min_zoom, max_zoom, 1.f, 0.f);
 }
 
+F32 LLAgentCamera::getWorkspaceCameraZoom() const
+{
+    return clamp_rescale(mCameraZoomFraction, MIN_ZOOM_FRACTION, MAX_ZOOM_FRACTION, 1.f, 0.f);
+}
+
+void LLAgentCamera::setWorkspaceCameraZoom(F32 fraction)
+{
+    mCameraZoomFraction = rescale(llclamp(fraction, 0.f, 1.f), 0.f, 1.f, MAX_ZOOM_FRACTION, MIN_ZOOM_FRACTION);
+}
+
 void LLAgentCamera::setCameraZoomFraction(F32 fraction)
 {
     // 0.f -> camera zoomed all the way out

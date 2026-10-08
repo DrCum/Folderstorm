@@ -15599,4 +15599,7 @@ Folder names cannot contain / or \.
   Import the reviewed workspace batch using the selected collision policy? Only workspace definitions will change.
   <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Import"/>
  </notification>
+ <notification name="ConfirmWorkspaceHUDs" type="alertmodal"><message>Add these saved HUDs?
+[HUDS]
+Unrelated attachments and clothing will stay worn.</message><tag>confirm</tag><usetemplate name="okcancelbuttons" notext="Cancel" yestext="Add HUDs"/></notification>
 </notifications>
