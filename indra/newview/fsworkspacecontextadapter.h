@@ -1,6 +1,6 @@
 /**
- * @file fsworkspacecontroller.cpp
- * @brief Manual workspace adapters and reversible Preferences previews
+ * @file fsworkspacecontextadapter.h
+ * @brief Bounded graphics, camera and additive HUD adapters
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
  *
@@ -22,7 +22,7 @@
 namespace FSWorkspaceContext
 {
 Group captureGroup(bool camera);
-bool resolveGroup(const Group& group, bool camera, Values& values, std::string& error);
+bool resolveGroup(const Group& group, bool camera, Values& values, std::string& error, bool fresh = true);
 LLSD controlValue(const Control& control, const std::vector<double>& values);
 bool cameraAllowed();
 std::vector<HUD> attachedHUDs();

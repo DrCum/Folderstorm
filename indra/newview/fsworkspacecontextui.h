@@ -1,6 +1,6 @@
 /**
- * @file fsworkspacecontroller.cpp
- * @brief Manual workspace adapters and reversible Preferences previews
+ * @file fsworkspacecontextui.h
+ * @brief Shared optional workspace context controls
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 The Phoenix Firestorm Project, Inc.
  *

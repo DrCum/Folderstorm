@@ -6257,9 +6257,11 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     }
 
     //check if there is enough memory for the snapshot image
-    if(image_width * image_height > (1 << 22)) //if snapshot image is larger than 2K by 2K
+    const U64 image_pixels = static_cast<U64>(image_width) * static_cast<U64>(image_height);
+    if (image_pixels > static_cast<U64>(U32_MAX) / 3) return false;
+    if (image_pixels > (1 << 22)) //if snapshot image is larger than 2K by 2K
     {
-        if(!LLMemory::tryToAlloc(NULL, image_width * image_height * 3))
+        if (!LLMemory::tryToAlloc(NULL, static_cast<U32>(image_pixels * 3)))
         {
             LL_WARNS() << "No enough memory to take the snapshot with size (w : h): " << image_width << " : " << image_height << LL_ENDL ;
             return false ; //there is no enough memory for taking this snapshot.
@@ -6299,6 +6301,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         LLPipeline::sShowHUDAttachments = previous_huds;
         gSnapshotNoPost = previous_no_post; gDisplaySwapBuffers = previous_swap;
         const LLRect capture_world_scaled = mWorldViewRectScaled;
+        if (mWorldViewRectRaw != previous_world) gResizeScreenTexture = true;
         mWorldViewRectRaw = previous_world; mWorldViewRectScaled = previous_world_scaled;
         if (capture_world_scaled != previous_world_scaled)
             mOnWorldViewRectUpdated(capture_world_scaled, previous_world_scaled);
@@ -6336,6 +6339,18 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // the full window.
     const bool use_full_window = !viewport_only && !show_ui;
     updateWorldViewRect(use_full_window);
+    if (use_full_window && mWorldViewRectRaw != getWindowRectRaw())
+    {
+        // The live mouselook policy may retain its inset. An explicit full
+        // snapshot must still use the entire source, without saving settings.
+        const LLRect old_scaled = mWorldViewRectScaled;
+        mWorldViewRectRaw = getWindowRectRaw();
+        mWorldViewRectScaled = calcScaledRect(mWorldViewRectRaw, mDisplayScale);
+        gResizeScreenTexture = true;
+        LLViewerCamera::getInstance()->setViewHeightInPixels(mWorldViewRectRaw.getHeight());
+        LLViewerCamera::getInstance()->setAspect(getWorldViewAspectRatio());
+        mOnWorldViewRectUpdated(old_scaled, mWorldViewRectScaled);
+    }
 
     // Copy screen to a buffer
     // crop sides or top and bottom, if taking a snapshot of different aspect ratio
