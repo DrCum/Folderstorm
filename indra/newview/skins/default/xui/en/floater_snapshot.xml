@@ -5,7 +5,7 @@
  can_minimize="true"
  can_resize="false"
  can_close="true"
- height="510"
+ height="534"
  layout="topleft"
  name="Snapshot"
  single_instance="true"
@@ -14,7 +14,7 @@
  save_visibility="false"
  title="Snapshot"
  width="624"
- min_height="475">
+ min_height="499">
     <floater.string
      name="unknown">
         unknown
@@ -175,6 +175,9 @@
              name="Depth24"
              value="depth24" />
         </combo_box>
+        <check_box name="full_window_check" control_name="FSSnapshotFullWindow"
+         label="Full window (ignore viewport)" tool_tip="Off: use the custom world viewport when enabled. Output resolution is selected separately."
+         layout="topleft" left="10" height="16" top_pad="3" width="195"/>
         <check_box
          label="Interface"
          layout="topleft"
