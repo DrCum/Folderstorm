@@ -32,6 +32,14 @@ inline std::vector<std::string> snapshot_classes(const std::string& destination)
                                     : std::vector<std::string>{"camera", "edit"};
 }
 
+inline std::vector<std::string> workspace_classes(bool camera, bool huds)
+{
+    std::vector<std::string> classes{"workspace"};
+    if (camera) classes.push_back("camera");
+    if (huds) classes.push_back("wear");
+    return classes;
+}
+
 // A price can require approval, but can never override a denied permission.
 inline Decision decide(const std::vector<std::string>& levels, int cost = 0)
 {

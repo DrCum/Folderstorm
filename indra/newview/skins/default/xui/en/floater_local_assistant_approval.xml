@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="local_assistant_approval" title="Local assistant request" width="550" height="470"
  can_resize="true" min_width="410" min_height="340" can_minimize="false" save_rect="false" layout="topleft">
+ <string name="action_workspace_apply">Switch to saved workspace or layout</string>
+ <string name="action_workspace_previous">Return to Previous arrangement</string>
+ <string name="workspace_graphics">This setup changes supported graphics settings.</string>
+ <string name="workspace_camera">This setup changes compatible camera settings.</string>
  <string name="action_rename">Rename [COUNT] inventory object(s)?</string>
  <string name="action_batchRename">Rename [COUNT] inventory object(s)?</string>
  <string name="action_move">Move [COUNT] inventory object(s)?</string>

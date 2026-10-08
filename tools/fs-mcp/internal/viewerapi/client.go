@@ -20,7 +20,8 @@ import (
 
 const (
 	// DefaultAPI is the LLEventAPI instance name for inventory.
-	DefaultAPI = "LLInventory"
+	DefaultAPI   = "LLInventory"
+	WorkspaceAPI = "LLWorkspace"
 	// AppearanceAPI is the LLEventAPI instance name for outfits and worn items.
 	AppearanceAPI = "LLAppearance"
 	// CameraAPI is the LLEventAPI instance name for camera pose and snapshots.

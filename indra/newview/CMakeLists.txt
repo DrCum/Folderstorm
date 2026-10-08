@@ -116,6 +116,7 @@ set(viewer_SOURCE_FILES
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
     fsworkspacecontextui.cpp
+    fsworkspacelistener.cpp
     fsworkspacecontextadapter.cpp
     fsworkspacecontroller.cpp
     fsworkspacequickaccess.cpp
@@ -1008,6 +1009,7 @@ set(viewer_HEADER_FILES
     fsworkspacepreview.h
     fsworkspacelayout.h
     fsworkspacecontextui.h
+    fsworkspacelistener.h
     fsworkspacecontext.h
     fsworkspacecontextadapter.h
     fsworkspacecontroller.h
