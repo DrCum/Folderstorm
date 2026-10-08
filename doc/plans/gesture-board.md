@@ -1,8 +1,8 @@
 # Gesture board implementation plan
 
-Status: planned only. User requested a gesture launcher with Inventory selection, saved boards, tile reordering and customizable tile text/colors. Keyboard shortcuts are excluded. This document authorizes no implementation, viewer build or new PR by itself.
+Status: implemented on `feat/gesture-board`, stacked on open PR #8 (`feat/workspace-context`, head `34ab510d3d`). The user authorized implementation and publication. Inventory selection, native playback, saved boards, tile reordering and editable tile text/colors are included. Keyboard shortcuts are excluded. Actual focused checks and remaining native acceptance are recorded in [gesture-board-validation.md](gesture-board-validation.md).
 
-Planning source: `feat/workspace-context` at `34ab510d3d`, the current PR #8 worktree. Before implementation, verify the current merge state and use a follow-up branch from the appropriate merged or stacked baseline. Preserve user edits and published history. Do not mix this feature into a workspace/snapshot fix without an explicit delivery decision.
+Planning source: `feat/workspace-context` at `34ab510d3d`, the current PR #8 worktree. PR #8 was verified open/unmerged and current main remained `33e371fb3f`; implementation uses a separate worktree at `/workspace/Folderstorm-gesture-board` from the PR #8 head plus the plan-only commit `aa828a9447`. Preserve user edits and published history. Do not mix this feature into a workspace/snapshot fix without an explicit delivery decision.
 
 ## User experience
 

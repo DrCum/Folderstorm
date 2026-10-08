@@ -55,6 +55,7 @@ public:
     FSGestureBoardTile(const Params& p, FSFloaterGestureBoard* owner, const Tile& tile)
         : LLButton(p), mOwner(owner->getHandle()), mID(tile.id)
     {
+        initFromParams(p);
         style(this, tile);
         LLTextBox::Params text; text.name = "tile_text"; text.rect = LLRect(8, 68, p.rect().getWidth() - 8, 28);
         text.mouse_opaque = false; text.tab_stop = false; text.enabled = false; text.wrap = true; text.parse_urls = false; text.plain_text = true;
@@ -201,7 +202,7 @@ void FSFloaterGestureBoard::rebuild()
         const S32 width = (mGridWidth - 8) / columns - 8;
         for (S32 i = 0; i < count; ++i)
         {
-            LLButton::Params p(LLUICtrlFactory::getDefaultParams<LLButton>()); p.name = board->tiles[i].id; p.label = ""; p.commit_on_capture_lost = false;
+            LLButton::Params p(LLUICtrlFactory::getDefaultParams<LLButton>()); p.name = board->tiles[i].id; p.label = ""; p.auto_resize = false; p.commit_on_capture_lost = false;
             const S32 left = 8 + (i % columns) * (width + 8), top = height - 8 - (i / columns) * 88;
             p.rect = LLRect(left, top, left + width, top - 80);
             auto* tile = new FSGestureBoardTile(p, this, board->tiles[i]); grid->addChild(tile); mTiles.push_back(tile); tile->update(board->tiles[i]);
