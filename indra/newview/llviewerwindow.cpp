@@ -6275,6 +6275,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     const LLRect previous_world_scaled = mWorldViewRectScaled;
     const F32 previous_aspect = LLViewerCamera::getInstance()->getAspect();
     const S32 previous_view_height = LLViewerCamera::getInstance()->getViewHeightInPixels();
+    const F32 previous_zoom = LLViewerCamera::getInstance()->getZoomFactor();
+    const S16 previous_subregion = LLViewerCamera::getInstance()->getZoomSubRegion();
     const auto previous_cursor = mWindow->getCursor();
     LLView* balance = gStatusBar ? gStatusBar->findChild<LLView>("balance") : nullptr;
     const bool previous_balance = balance && balance->getVisible();
@@ -6302,6 +6304,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
             mOnWorldViewRectUpdated(capture_world_scaled, previous_world_scaled);
         LLViewerCamera::getInstance()->setViewHeightInPixels(previous_view_height);
         LLViewerCamera::getInstance()->setAspect(previous_aspect);
+        LLViewerCamera::getInstance()->setZoomParameters(previous_zoom, previous_subregion);
         setup3DViewport(); setCursor(previous_cursor);
         if (balance) balance->setVisible(previous_balance);
     }};
