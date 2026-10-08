@@ -49,6 +49,8 @@
 #include "llnotificationsutil.h"
 #include "llslurl.h"
 #include "llsnapshotlivepreview.h"
+#include "llfloatersnapshot.h"
+#include "fsworldviewgeometry.h"
 #include "lltoolfocus.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"   // upload_new_resource()
@@ -188,30 +190,9 @@ void LLSnapshotLivePreview::updateSnapshot(bool new_snapshot, bool new_thumbnail
         }
         mSnapshotUpToDate = false;
 
-        // Update snapshot source rect depending on whether we keep the aspect ratio.
-        LLRect& rect = mImageRect[mCurImageIndex];
-        rect = sourceRectScaled();
-
-        F32 image_aspect_ratio = ((F32)getWidth()) / ((F32)getHeight());
-        F32 window_aspect_ratio = (F32)rect.getWidth() / llmax(1.f, (F32)rect.getHeight());
-
-        // Fit the captured image without stretching, regardless of crop policy.
-        {
-            if (image_aspect_ratio > window_aspect_ratio)
-            {
-                // trim off top and bottom
-                S32 new_height = ll_round((F32)sourceRectScaled().getWidth() / image_aspect_ratio);
-                rect.mBottom += (sourceRectScaled().getHeight() - new_height) / 2;
-                rect.mTop -= (sourceRectScaled().getHeight() - new_height) / 2;
-            }
-            else if (image_aspect_ratio < window_aspect_ratio)
-            {
-                // trim off left and right
-                S32 new_width = ll_round((F32)sourceRectScaled().getHeight() * image_aspect_ratio);
-                rect.mLeft += (sourceRectScaled().getWidth() - new_width) / 2;
-                rect.mRight -= (sourceRectScaled().getWidth() - new_width) / 2;
-            }
-        }
+        const auto source = sourceRectScaled();
+        const auto fitted = FSWorldViewGeometry::fitImage({source.mLeft, source.mBottom, source.mRight, source.mTop}, getWidth(), getHeight());
+        mImageRect[mCurImageIndex].set(fitted.left, fitted.top, fitted.right, fitted.bottom);
 
         // Stop shining animation.
         mShineAnimTimer.stop();
@@ -707,6 +688,8 @@ bool LLSnapshotLivePreview::onIdle( void* snapshot_preview )
     {
         previewp->mSourceRect = source;
         previewp->mSourceViewport = viewportOnly();
+        if (auto* floater = LLFloaterReg::findTypedInstance<LLFloaterSnapshot>("snapshot"))
+            if (floater->impl->getPreviewView() == previewp) floater->impl->updateControls(floater);
         previewp->updateSnapshot(true, true, AUTO_SNAPSHOT_TIME_DELAY);
     }
     if (previewp->getWidth() == 0 || previewp->getHeight() == 0)
