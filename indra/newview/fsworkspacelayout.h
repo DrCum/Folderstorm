@@ -20,6 +20,7 @@
 #define FSWORKSPACELAYOUT_H
 
 #include "fschromelayout.h"
+#include "fsworkspacecontext.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -28,7 +29,7 @@ class LLSD;
 
 namespace FSWorkspaceLayout
 {
-constexpr int SCHEMA_VERSION = 1;
+constexpr int SCHEMA_VERSION = 2;
 constexpr int MAX_PROFILES = 32;
 constexpr int MAX_ROLES = 6;
 constexpr int MAX_EXTRA_INVENTORY_WINDOWS = 16;
@@ -63,7 +64,7 @@ struct Window
     InventoryFolder inventory_folder;
 };
 
-enum Component { Chrome = 1, Inventory = 2, Maps = 4, Chat = 8, All = 15 };
+enum Component { Chrome = 1, Inventory = 2, Maps = 4, Chat = 8, All = 15, Graphics = 16, Camera = 32, HUDs = 64, AllComponents = 127 };
 int componentForRole(Role role);
 
 struct Toolbar
@@ -76,6 +77,7 @@ constexpr int MAX_TOOLBAR_COMMANDS = 64;
 
 struct Workspace
 {
+    FSWorkspaceContext::Options context;
     bool remember_toolbars = false;
     std::vector<Toolbar> toolbars;
     int components = All;

@@ -235,7 +235,7 @@ int main()
     {
         data = valid; data["chrome"]["bottom_dock"].erase(field); rejected(data, "Missing span field rejected");
     }
-    data = valid; data["schema"] = 2; rejected(data, "Future workspace schema rejected");
+    data = valid; data["schema"] = SCHEMA_VERSION + 1; rejected(data, "Future workspace schema rejected");
     data = valid; data["chrome"]["schema"] = 2; rejected(data, "Future nested chrome schema rejected");
     data = valid; data["schema"] = "1"; rejected(data, "Schema string not coerced");
     data = valid; data["world_view_in_mouselook"] = 1; rejected(data, "Boolean integer not coerced");
@@ -273,6 +273,24 @@ int main()
     data = valid;
     for (int i = 0; i < 4; ++i) data["windows"]["unknown" + std::to_string(i)] = LLSD::emptyMap();
     rejected(data, "Role record count bounded including unknown roles");
+
+    data = valid; data["schema"] = 1;
+    expect(fromLLSD(data, parsed, error), "Version-one workspace remains compatible");
+    Workspace context = fixture(); context.components |= Graphics | Camera | HUDs;
+    context.context.graphics.mode = FSWorkspaceContext::Mode::Current;
+    context.context.graphics.values["RenderFarClip"] = {128.};
+    context.context.camera.mode = FSWorkspaceContext::Mode::Preset; context.context.camera.preset = "Driving";
+    context.context.huds.push_back({"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Driving HUD", 31});
+    const auto context_data = toLLSD(context);
+    expect(fromLLSD(context_data, parsed, error) && parsed.context.huds.size() == 1 && parsed.context.camera.preset == "Driving", "Context groups round trip");
+    data = context_data; data["schema"] = 1; rejected(data, "Old schema cannot silently accept new groups");
+    data = context_data; data["graphics"]["values"]["FullScreen"] = true; rejected(data, "Display-mode injection rejected");
+    data = context_data; data["graphics"]["values"]["RenderFarClip"] = "128"; rejected(data, "Graphics numeric strings rejected");
+    data = context_data; data["graphics"]["values"]["RenderFarClip"] = std::numeric_limits<double>::infinity(); rejected(data, "Nonfinite context rejected");
+    data = context_data; data["huds"][0]["point"] = 1; rejected(data, "Non-HUD points rejected");
+    data = context_data; data["huds"].append(data["huds"][0]); rejected(data, "Duplicate HUD references rejected");
+    data = context_data; data["huds"][0]["item"] = "not-a-uuid"; rejected(data, "Malformed HUD reference rejected");
+    data = context_data; data.erase("camera"); rejected(data, "Selected group requires its definition");
 
     LLSD profiles = LLSD::emptyMap();
     expect(canSaveProfile(profiles, "New", error), "Empty map permits first save");
