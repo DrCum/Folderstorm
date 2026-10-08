@@ -21,7 +21,7 @@
  <string name="no_workspace">None</string>
  <string name="active_label">Current workspace:</string>
  <scroll_container follows="all" layout="topleft" left="0" right="-1" top="0" bottom="-1" name="workspace_scroll" opaque="false">
-  <panel follows="left|top|right" height="808" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
+  <panel follows="left|top|right" height="1210" layout="topleft" left="0" top="0" width="495" name="workspace_editor">
  <text follows="left|top|right" height="48" layout="topleft" left="16" top="12" right="-16" name="workspace_coverage" wrap="true">
   Save viewport, bars, Inventory, maps, compatible chat geometry, and the Received Items panel size. Preferences and the workspace switcher are excluded.
  </text>
@@ -39,22 +39,25 @@
  <check_box name="workspace_capture_maps" label="Restore maps" initial_value="true" left="16" top="294" right="-16" height="22" follows="left|right|top"/>
  <check_box name="workspace_capture_chat" label="Restore compatible chat geometry" initial_value="true" left="16" top="320" right="-16" height="22" follows="left|right|top"/>
  <check_box name="workspace_capture_toolbars" label="Restore toolbar buttons and display mode" left="16" top="346" right="-16" height="22" follows="left|right|top"/>
- <button follows="left|top" height="24" layout="topleft" left="16" top="384" width="130" label="Save current" name="workspace_save"/>
- <button follows="left|top" height="24" layout="topleft" left_pad="8" top="384" width="100" label="Rename" name="workspace_rename"/>
- <button follows="left|top" height="24" layout="topleft" left_pad="8" top="384" width="100" label="Delete" name="workspace_delete"/>
- <button follows="left|top" height="24" layout="topleft" left="16" top="424" width="250" label="Add workspace inventory window" name="workspace_add_inventory" tool_tip="Open one extra inventory window managed by workspaces. All open additional Inventory windows are also saved."/>
- <text follows="left|top|right" height="48" layout="topleft" left="16" top="462" right="-16" name="workspace_chat_help" wrap="true">Tabbed Conversations saves size and position only. Inventory folders are optional; search filters, item selections and inventory contents are never saved.</text>
- <text follows="left|top|right" height="56" layout="topleft" left="16" top="522" right="-16" name="workspace_status" wrap="true"/>
- <check_box follows="left|top|right" height="24" layout="topleft" left="16" top="586" right="-16"
+ <panel name="workspace_context" filename="panel_workspace_context.xml" left="16" top="384" right="-16" height="310" follows="left|top|right"/>
+ <button follows="left|top" height="24" layout="topleft" left="16" top="710" width="130" label="Save current" name="workspace_save"/>
+ <button follows="left|top" height="24" layout="topleft" left_pad="8" top="710" width="100" label="Rename" name="workspace_rename"/>
+ <button follows="left|top" height="24" layout="topleft" left_pad="8" top="710" width="100" label="Delete" name="workspace_delete"/>
+ <button follows="left|top" height="24" layout="topleft" left="16" top="750" width="250" label="Add workspace inventory window" name="workspace_add_inventory" tool_tip="Open one extra inventory window managed by workspaces. All open additional Inventory windows are also saved."/>
+ <text follows="left|top|right" height="48" layout="topleft" left="16" top="788" right="-16" name="workspace_chat_help" wrap="true">Tabbed Conversations saves size and position only. Inventory folders are optional; search filters, item selections and inventory contents are never saved.</text>
+ <text follows="left|top|right" height="56" layout="topleft" left="16" top="848" right="-16" name="workspace_status" wrap="true"/>
+ <check_box follows="left|top|right" height="24" layout="topleft" left="16" top="912" right="-16"
   name="workspace_favorites_strip" label="Show workspace favorites strip" control_name="FSShowWorkspaceFavoritesStrip"/>
- <check_box name="workspace_snapping" label="Snap utility windows (Shift bypass)" control_name="FSWorkspaceWindowSnapping" left="16" top="618" right="-16" height="22" follows="left|right|top"/>
- <text name="startup_label" left="16" top="652" right="-16" height="18" follows="left|right|top">Restore at login (this account)</text>
- <combo_box name="workspace_startup_mode" control_name="FSWorkspaceStartupMode" left="16" top="678" right="-16" height="24" follows="left|right|top">
+ <check_box name="workspace_snapping" label="Snap utility windows (Shift bypass)" control_name="FSWorkspaceWindowSnapping" left="16" top="944" right="-16" height="22" follows="left|right|top"/>
+ <text name="startup_label" left="16" top="978" right="-16" height="18" follows="left|right|top">Restore at login (this account)</text>
+ <combo_box name="workspace_startup_mode" control_name="FSWorkspaceStartupMode" left="16" top="1004" right="-16" height="24" follows="left|right|top">
   <combo_box.item label="Off" value="off"/><combo_box.item label="Named workspace" value="named"/><combo_box.item label="Last arrangement at orderly quit" value="last"/>
  </combo_box>
- <combo_box name="workspace_startup_name" control_name="FSWorkspaceStartupName" left="16" top="712" right="-16" height="24" follows="left|right|top" tool_tip="Choose a saved workspace. Restore waits for UI and Inventory readiness."/>
- <text name="startup_help" left="16" top="742" right="-16" height="22" follows="left|right|top">Last arrangement excludes Preferences and workspace tools.</text>
- <text follows="left|top|right" height="32" layout="topleft" left="16" top="770" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
+ <combo_box name="workspace_startup_name" control_name="FSWorkspaceStartupName" left="16" top="1038" right="-16" height="24" follows="left|right|top" tool_tip="Choose a saved workspace. Restore waits for UI and Inventory readiness."/>
+ <text name="startup_help" left="16" top="1068" right="-16" height="22" follows="left|right|top">Last arrangement excludes Preferences and workspace tools.</text>
+ <check_box name="display_recovery" label="Recover arrangement when displays change" control_name="FSWorkspaceDisplayRecovery" left="16" top="1098" right="-16" height="22"/>
+ <button name="recover_windows" label="Recover windows now" left="16" top="1128" width="200" height="24" tool_tip="Preview fitting live supported windows. OK keeps recovery; Cancel restores the previous arrangement."/>
+ <text follows="left|top|right" height="32" layout="topleft" left="16" top="1172" right="-16" name="workspace_commit_help" wrap="true">Changes preview immediately. Preferences OK keeps them; Cancel restores them.</text>
   </panel>
  </scroll_container>
 </panel>

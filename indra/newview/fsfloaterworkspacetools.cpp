@@ -101,7 +101,10 @@ void FSFloaterWorkspaceTools::exportWorkspace()
         for (auto& entry : saved.windows) entry.second.inventory_folder = FSWorkspaceLayout::InventoryFolder{};
         for (auto& entry : saved.extra_inventory) entry.inventory_folder = FSWorkspaceLayout::InventoryFolder{};
     }
-    LLSD envelope; envelope["format"] = "folderstorm-workspaces"; envelope["version"] = 1;
+    saved.context.huds.clear(); saved.components &= ~FSWorkspaceLayout::HUDs; // Portable exports never carry account-specific attachment IDs.
+    if (!saved.components && !saved.remember_toolbars)
+    { getChild<LLTextBox>("transfer_status")->setText(getString("no_portable_groups")); return; }
+    LLSD envelope; envelope["format"] = "folderstorm-workspaces"; envelope["version"] = 2;
     envelope["profiles"][name] = FSWorkspaceLayout::toLLSD(saved);
     std::ostringstream stream; LLSDSerialize::toPrettyXML(envelope, stream);
     const auto document = stream.str();
@@ -143,7 +146,7 @@ void FSFloaterWorkspaceTools::reviewImport(const std::string& filename)
     if (!input.good() || !FSWorkspaceFile::boundedXML(document) || LLSDSerialize::fromXML(envelope, stream) <= 0 ||
         !envelope.isMap() || envelope.size() != 3 || !envelope["format"].isString() ||
         envelope["format"].asString() != "folderstorm-workspaces" || !envelope["version"].isInteger() ||
-        envelope["version"].asInteger() != 1 || !envelope["profiles"].isMap() ||
+        (envelope["version"].asInteger() != 1 && envelope["version"].asInteger() != 2) || !envelope["profiles"].isMap() ||
         envelope["profiles"].size() > FSWorkspaceLayout::MAX_PROFILES)
     { getChild<LLTextBox>("transfer_status")->setText(getString("invalid_file")); return; }
     mOriginals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");

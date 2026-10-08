@@ -61,6 +61,11 @@ using Values = std::map<std::string, std::vector<double>>;
 struct Group { Mode mode = Mode::Off; std::string preset; Values values; };
 struct HUD { std::string item, name; int point = 0; };
 constexpr int MAX_HUDS = 64;
+inline const char* hudPointName(int point)
+{
+    static const char* names[] = {"Center 2", "Top right", "Top", "Top left", "Center", "Bottom left", "Bottom", "Bottom right"};
+    return point >= 31 && point <= 38 ? names[point - 31] : "Unavailable";
+}
 struct Options { Group graphics, camera; std::vector<HUD> huds; };
 inline bool validValue(const Control& control, const std::vector<double>& values)
 {

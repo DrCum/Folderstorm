@@ -320,6 +320,10 @@ public:
 
     void            resetCameraZoomFraction();
     F32             getCurrentCameraZoomFraction() const { return mCameraZoomFraction; }
+    // Workspace zoom always targets the avatar-relative camera, even if a HUD
+    // is selected in the build tools. It uses the normalized slider convention.
+    F32             getWorkspaceCameraZoom() const;
+    void            setWorkspaceCameraZoom(F32 fraction);
 
     //--------------------------------------------------------------------
     // Pan
