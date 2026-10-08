@@ -52,7 +52,8 @@ bool decode(const LLSD& data, Collection& result)
 {
     Collection parsed;
     if (data.isMap() && data.size() == 0) { result = parsed; return true; }
-    if (!data.isMap() || data.size() != 3 || !data["version"].isInteger() || data["version"].asInteger() != VERSION ||
+    if (!data.isMap() || data.size() != 3 || !data["version"].isInteger() ||
+        (data["version"].asInteger() != 1 && data["version"].asInteger() != VERSION) ||
         !data["boards"].isArray() || data["boards"].size() > static_cast<size_t>(MAX_BOARDS) || !data["selected"].isUUID()) return false;
     parsed.selected = data["selected"].asUUID().asString();
     if (data["selected"].asUUID().isNull()) parsed.selected.clear();
@@ -60,15 +61,19 @@ bool decode(const LLSD& data, Collection& result)
     for (S32 b = 0; b < static_cast<S32>(data["boards"].size()); ++b)
     {
         const auto& entry = data["boards"][b];
-        if (!entry.isMap() || entry.size() != 3 || !id(entry["id"]) || !entry["name"].isString() ||
+        if (!entry.isMap() || entry.size() < 3 || entry.size() > 4 || !id(entry["id"]) || !entry["name"].isString() ||
             !validText(entry["name"].asString()) || !entry["tiles"].isArray() || entry["tiles"].size() > static_cast<size_t>(MAX_TILES)) return false;
         Board board; board.id = entry["id"].asUUID().asString(); board.name = entry["name"].asString();
+        if (entry.has("compact"))
+        { if (!entry["compact"].isBoolean()) return false; board.compact = entry["compact"].asBoolean(); }
+        for (auto it = entry.beginMap(); it != entry.endMap(); ++it)
+            if (it->first != "id" && it->first != "name" && it->first != "tiles" && it->first != "compact") return false;
         if (!board_ids.insert(board.id).second || !names.insert(board.name).second) return false;
         std::set<std::string> items;
         for (S32 t = 0; t < static_cast<S32>(entry["tiles"].size()); ++t)
         {
             const auto& row = entry["tiles"][t];
-            if (!row.isMap() || row.size() < 2 || row.size() > 4 || !id(row["id"]) || !id(row["item"])) return false;
+            if (!row.isMap() || row.size() < 2 || row.size() > 6 || !id(row["id"]) || !id(row["item"])) return false;
             Tile tile; tile.id = row["id"].asUUID().asString(); tile.item = row["item"].asUUID().asString();
             if (!tile_ids.insert(tile.id).second || !items.insert(tile.item).second) return false;
             if (row.has("label"))
@@ -85,8 +90,16 @@ bool decode(const LLSD& data, Collection& result)
                 }
                 tile.custom_color = true;
             }
+            if (row.has("width") || row.has("height"))
+            {
+                if (!row["width"].isInteger() || !row["height"].isInteger()) return false;
+                tile.width = row["width"].asInteger(); tile.height = row["height"].asInteger();
+                if (tile.width < MIN_TILE_WIDTH || tile.width > MAX_TILE_WIDTH ||
+                    tile.height < MIN_TILE_HEIGHT || tile.height > MAX_TILE_HEIGHT) return false;
+            }
             for (auto it = row.beginMap(); it != row.endMap(); ++it)
-                if (it->first != "id" && it->first != "item" && it->first != "label" && it->first != "color") return false;
+                if (it->first != "id" && it->first != "item" && it->first != "label" && it->first != "color" &&
+                    it->first != "width" && it->first != "height") return false;
             board.tiles.push_back(tile);
         }
         parsed.boards.push_back(std::move(board));
@@ -100,16 +113,37 @@ LLSD encode(const Collection& collection)
     for (const auto& board : collection.boards)
     {
         LLSD entry; entry["id"] = LLUUID(board.id); entry["name"] = board.name; entry["tiles"] = LLSD::emptyArray();
+        entry["compact"] = board.compact;
         for (const auto& tile : board.tiles)
         {
             LLSD row; row["id"] = LLUUID(tile.id); row["item"] = LLUUID(tile.item);
             if (!tile.label.empty()) row["label"] = tile.label;
             if (tile.custom_color) { row["color"] = LLSD::emptyArray(); for (float c : tile.color) row["color"].append(LLSD::Real(c)); }
+            if (tile.width || tile.height) { row["width"] = tile.width; row["height"] = tile.height; }
             entry["tiles"].append(row);
         }
         data["boards"].append(entry);
     }
     return data;
+}
+std::vector<Page> paginate(const Board& board, int width, int height)
+{
+    std::vector<Page> pages(1);
+    width = std::max(1, width); height = std::max(1, height);
+    int x = 0, y = 0, row_height = 0;
+    constexpr int gap = 4;
+    for (int i = 0; i < static_cast<int>(board.tiles.size()); ++i)
+    {
+        const auto& tile = board.tiles[i];
+        const int w = std::clamp(tile.width ? tile.width : board.compact ? 100 : 132, 1, width);
+        const int h = std::clamp(tile.height ? tile.height : board.compact ? 28 : 44, 1, height);
+        if (x && x + w > width) { x = 0; y += row_height + gap; row_height = 0; }
+        if (y + h > height)
+        { pages.emplace_back(); x = 0; y = 0; row_height = 0; }
+        pages.back().push_back({i, x, y, w, h});
+        x += w + gap; row_height = std::max(row_height, h);
+    }
+    return pages;
 }
 Board* findBoard(Collection& collection, const std::string& id)
 { for (auto& board : collection.boards) if (board.id == id) return &board; return nullptr; }

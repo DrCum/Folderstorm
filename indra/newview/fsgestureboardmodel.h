@@ -13,15 +13,22 @@
 class LLSD;
 namespace FSGestureBoard
 {
-constexpr int VERSION = 1, MAX_BOARDS = 16, MAX_TILES = 64;
+constexpr int VERSION = 2, MAX_BOARDS = 16, MAX_TILES = 64;
+constexpr int MIN_TILE_WIDTH = 48, MAX_TILE_WIDTH = 320, MIN_TILE_HEIGHT = 24, MAX_TILE_HEIGHT = 160;
 struct Tile
 {
     std::string id, item, label;
     bool custom_color = false;
     std::array<float, 3> color{.3f, .3f, .3f};
+    int width = 0, height = 0; // Both zero follows the board's density.
 };
-struct Board { std::string id, name; std::vector<Tile> tiles; };
+struct Board { std::string id, name; std::vector<Tile> tiles; bool compact = true; };
 struct Collection { std::string selected; std::vector<Board> boards; };
+struct Placement { int index, x, y, width, height; }; // Top-left coordinates.
+using Page = std::vector<Placement>;
+// Fixed presentation sizes, independent of gesture names. Only a viewport
+// smaller than a tile may constrain its rendered size; its saved size is kept.
+std::vector<Page> paginate(const Board& board, int width, int height);
 bool validText(const std::string& text, bool empty = false);
 bool decode(const LLSD& data, Collection& result);
 LLSD encode(const Collection& collection);
