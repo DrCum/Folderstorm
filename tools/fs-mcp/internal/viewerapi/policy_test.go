@@ -58,3 +58,14 @@ func TestBulkReviewCapabilityIsAnExactVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceCapabilityAndSafeDefault(t *testing.T) {
+	policy, ok := ParseStatusPolicy([]byte(`{"permissions":{"read":"allow"},"capabilities":{"workspace_tools":1}}`))
+	if !ok || policy.WorkspaceTools != WorkspaceToolsVersion || policy.Level(ClassWorkspace) != "ask" {
+		t.Fatal("workspace capability or default is wrong")
+	}
+	policy, _ = ParseStatusPolicy([]byte(`{"permissions":{"workspace":"allow"},"capabilities":{"workspace_tools":2}}`))
+	if policy.WorkspaceTools != 0 {
+		t.Fatal("unknown workspace protocol accepted")
+	}
+}

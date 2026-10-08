@@ -319,6 +319,7 @@ func TestToolAnnotations(t *testing.T) {
 		"appearance_outfits", "appearance_outfit_items", "appearance_worn",
 		"appearance_wear_outfit", "appearance_wear_items", "appearance_detach",
 		"camera_get", "camera_set_pose", "camera_set", "camera_reset", "camera_snapshot",
+		"workspace_list", "workspace_status", "workspace_preview", "workspace_apply", "workspace_previous",
 		"inventory_snapshot_upload",
 		"confirm_action",
 	} {

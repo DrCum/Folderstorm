@@ -5,20 +5,22 @@ import "encoding/json"
 // BulkInventoryReviewVersion is the additive preview/history protocol this
 // sidecar understands. Unknown versions must not fall back to direct mutation.
 const BulkInventoryReviewVersion = 1
+const WorkspaceToolsVersion = 1
 
 // Preference classes published on inventory status. Permanent delete is not
 // one of them: purge and emptyTrash are denied by the viewer with no key
 // that can enable them.
 const (
-	ClassRead   = "read"
-	ClassCamera = "camera"
-	ClassCreate = "create"
-	ClassEdit   = "edit"
-	ClassMove   = "move"
-	ClassTrash  = "trash"
-	ClassNoCopy = "nocopy"
-	ClassWear   = "wear"
-	ClassLinks  = "links"
+	ClassRead      = "read"
+	ClassCamera    = "camera"
+	ClassCreate    = "create"
+	ClassEdit      = "edit"
+	ClassMove      = "move"
+	ClassTrash     = "trash"
+	ClassNoCopy    = "nocopy"
+	ClassWear      = "wear"
+	ClassLinks     = "links"
+	ClassWorkspace = "workspace"
 )
 
 // StatusPolicy is the viewer's effective permission map.
@@ -29,6 +31,7 @@ type StatusPolicy struct {
 	Generation          int
 	Levels              map[string]string
 	BulkInventoryReview int
+	WorkspaceTools      int
 }
 
 type classDefault struct {
@@ -47,6 +50,7 @@ var classDefaults = []classDefault{
 	{ClassNoCopy, "ask", true},
 	{ClassWear, "ask", true},
 	{ClassLinks, "ask", true},
+	{ClassWorkspace, "ask", true},
 }
 
 // Level returns the effective level for a preference class.
@@ -80,18 +84,22 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 		return StatusPolicy{}, false
 	}
 	bulkVersion := 0
+	workspaceVersion := 0
 	if capabilities, ok := payload["capabilities"].(map[string]any); ok {
+		if version, ok := capabilities["workspace_tools"].(float64); ok && version == WorkspaceToolsVersion {
+			workspaceVersion = WorkspaceToolsVersion
+		}
 		if version, ok := capabilities["bulk_inventory_review"].(float64); ok && version == BulkInventoryReviewVersion {
 			bulkVersion = BulkInventoryReviewVersion
 		}
 	}
 	perms, ok := payload["permissions"]
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion}, true
+		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion}, true
 	}
 	obj, ok := perms.(map[string]any)
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion}, true
+		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion}, true
 	}
 	levels := map[string]string{}
 	for _, def := range classDefaults {
@@ -106,6 +114,7 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 		Generation:          generationFrom(payload["policy_generation"]),
 		Levels:              levels,
 		BulkInventoryReview: bulkVersion,
+		WorkspaceTools:      workspaceVersion,
 	}, true
 }
 

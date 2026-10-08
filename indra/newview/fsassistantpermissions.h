@@ -22,7 +22,7 @@
 
 namespace fs_assistant
 {
-enum class ActionClass { Unknown, Read, Camera, Create, Edit, Move, Trash, NoCopy, Wear, Links, Permanent };
+enum class ActionClass { Unknown, Read, Camera, Create, Edit, Move, Trash, NoCopy, Wear, Links, Workspace, Permanent };
 struct PermissionClass
 {
     ActionClass kind;
@@ -32,7 +32,7 @@ struct PermissionClass
     bool ask;
     const char* widget;
 };
-inline constexpr std::array<PermissionClass, 9> permissionClasses {{
+inline constexpr std::array<PermissionClass, 10> permissionClasses {{
     {ActionClass::Read, "read", "Read inventory and outfits", "allow", false, "local_assistant_perm_read"},
     {ActionClass::Camera, "camera", "Move camera and take pictures", "allow", true, "local_assistant_perm_camera"},
     {ActionClass::Create, "create", "Create folders and items", "allow", true, "local_assistant_perm_create"},
@@ -41,6 +41,7 @@ inline constexpr std::array<PermissionClass, 9> permissionClasses {{
     {ActionClass::Trash, "trash", "Trash (can be restored)", "allow", true, "local_assistant_perm_trash"},
     {ActionClass::NoCopy, "nocopy", "Move no-copy items during a copy", "ask", true, "local_assistant_perm_nocopy"},
     {ActionClass::Wear, "wear", "Wear and detach", "ask", true, "local_assistant_perm_wear"},
+    {ActionClass::Workspace, "workspace", "Switch workspaces and layouts", "ask", true, "local_assistant_perm_workspace"},
     {ActionClass::Links, "links", "Replace links", "ask", true, "local_assistant_perm_links"},
 }};
 inline bool permissionLevelAllowed(const PermissionClass& def, const std::string& level)

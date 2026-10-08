@@ -138,6 +138,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 	registerInventoryBulkReview(s, state, readOnly, destructive)
 	registerAppearance(s, state, readOnly, destructive)
 	registerCamera(s, state, readOnly, mutating)
+	registerWorkspaces(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "confirm_action",
 		Description: "Resume a wear, detach, or link-replacement plan stored for an older viewer. A current viewer asks in its own dialog instead. Purge and empty-trash plans are denied and are not sent.",
