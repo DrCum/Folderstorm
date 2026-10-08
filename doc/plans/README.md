@@ -51,3 +51,7 @@ The preceding review ran the existing Go tests and standalone chrome-layout and 
 ## Definition of done for this planning batch
 
 All selected items have concrete scope, implementation stages, code touchpoints, acceptance criteria, failure behavior, and handoff boundaries. The original planning deliverable changed only these documents. The subsequently authorized implementation preserves the contracts above; graphical and native platform acceptance checks remain separate from the automated evidence.
+
+## Workspace context and snapshot follow-up
+
+[Workspace context, monitor recovery and snapshot plan](workspace-context-and-snapshot.md) covers the implemented follow-up to PR #6: optional graphics/camera settings, selected HUDs, display recovery, viewport snapshots and versioned MCP switching. [Validation and Windows acceptance](workspace-context-validation.md) separates actual focused checks from the remaining native checks.
