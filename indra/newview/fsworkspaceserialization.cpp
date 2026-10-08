@@ -226,12 +226,82 @@ bool windowFromLLSD(const LLSD& data, Role role, Window& window, int& ignored)
 }
 } // namespace
 
+namespace
+{
+LLSD groupData(const FSWorkspaceContext::Group& group, bool camera)
+{
+    LLSD data; data["mode"] = group.mode == FSWorkspaceContext::Mode::Preset ? "preset" : "current";
+    if (group.mode == FSWorkspaceContext::Mode::Preset) data["preset"] = group.preset;
+    else
+    {
+        data["values"] = LLSD::emptyMap();
+        for (const auto& control : FSWorkspaceContext::controls(camera))
+        {
+            auto found = group.values.find(control.name);
+            if (found == group.values.end() || !FSWorkspaceContext::validValue(control, found->second)) continue;
+            const auto& value = found->second;
+            if (control.kind == FSWorkspaceContext::Kind::Vector)
+                for (double element : value) data["values"][control.name].append(element);
+            else if (control.kind == FSWorkspaceContext::Kind::Boolean) data["values"][control.name] = value[0] != 0;
+            else if (control.kind == FSWorkspaceContext::Kind::Integer) data["values"][control.name] = static_cast<S32>(value[0]);
+            else data["values"][control.name] = value[0];
+        }
+    }
+    return data;
+}
+bool parseGroup(const LLSD& data, FSWorkspaceContext::Group& group, bool camera)
+{
+    using namespace FSWorkspaceContext;
+    if (!data.isMap() || data.size() != 2 || !data["mode"].isString()) return false;
+    if (data["mode"].asString() == "preset")
+    {
+        if (!data["preset"].isString() || data["preset"].asString().empty() || data["preset"].asString().size() > 128) return false;
+        group.mode = Mode::Preset; group.preset = data["preset"].asString(); return true;
+    }
+    if (data["mode"].asString() != "current" || !data["values"].isMap() || !data["values"].size() ||
+        data["values"].size() > static_cast<S32>(controls(camera).size())) return false;
+    group.mode = Mode::Current;
+    for (auto it = data["values"].beginMap(); it != data["values"].endMap(); ++it)
+    {
+        const Control* definition = nullptr;
+        for (const auto& control : controls(camera)) if (it->first == control.name) definition = &control;
+        if (!definition) return false;
+        std::vector<double> values;
+        const auto& value = it->second;
+        if (definition->kind == Kind::Vector)
+        {
+            if (!value.isArray() || value.size() != 3) return false;
+            for (S32 index = 0; index < 3; ++index)
+            { if (!value[index].isReal() && !value[index].isInteger()) return false; values.push_back(value[index].asReal()); }
+        }
+        else
+        {
+            if ((definition->kind == Kind::Boolean && !value.isBoolean()) ||
+                (definition->kind == Kind::Integer && !value.isInteger()) ||
+                (definition->kind == Kind::Real && !value.isInteger() && !value.isReal())) return false;
+            values.push_back(definition->kind == Kind::Boolean ? (value.asBoolean() ? 1. : 0.) : value.asReal());
+        }
+        if (!validValue(*definition, values)) return false;
+        group.values[it->first] = values;
+    }
+    return true;
+}
+}
+
 LLSD toLLSD(const Workspace& workspace)
 {
     LLSD data = LLSD::emptyMap();
     data["schema"] = SCHEMA_VERSION;
     data["type"] = "workspace";
     data["components"] = workspace.components;
+    if (workspace.components & Graphics) data["graphics"] = groupData(workspace.context.graphics, false);
+    if (workspace.components & Camera) data["camera"] = groupData(workspace.context.camera, true);
+    if (workspace.components & HUDs)
+    {
+        data["huds"] = LLSD::emptyArray();
+        for (const auto& hud : workspace.context.huds)
+        { LLSD item; item["item"] = hud.item; item["point"] = hud.point; item["name"] = hud.name; data["huds"].append(item); }
+    }
     if (workspace.remember_toolbars)
     {
         data["toolbars"] = LLSD::emptyArray();
@@ -269,13 +339,35 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
     Workspace parsed;
     int schema;
     if (!data.isMap()) return fail(error, "envelope");
-    if (!integer(data, "schema", schema, SCHEMA_VERSION, SCHEMA_VERSION))
+    if (!integer(data, "schema", schema, 1, SCHEMA_VERSION))
     {
         error = "Unsupported or missing workspace schema";
         return false;
     }
     if (!data["type"].isString() || data["type"].asString() != "workspace") return fail(error, "type");
-    if (data.has("components") && !integer(data, "components", parsed.components, 0, All)) return fail(error, "components");
+    if (data.has("components") && !integer(data, "components", parsed.components, 0, schema == 1 ? All : AllComponents)) return fail(error, "components");
+    for (bool camera : {false, true})
+    {
+        const char* field = camera ? "camera" : "graphics";
+        const int flag = camera ? Camera : Graphics;
+        if (data.has(field) != ((parsed.components & flag) != 0)) return fail(error, field);
+        if (data.has(field) && (schema < 2 || !parseGroup(data[field], camera ? parsed.context.camera : parsed.context.graphics, camera))) return fail(error, field);
+    }
+    if (data.has("huds") != ((parsed.components & HUDs) != 0)) return fail(error, "huds");
+    if (data.has("huds"))
+    {
+        if (schema < 2 || !data["huds"].isArray() || data["huds"].size() > FSWorkspaceContext::MAX_HUDS) return fail(error, "huds");
+        std::set<std::string> ids;
+        for (auto it = data["huds"].beginArray(); it != data["huds"].endArray(); ++it)
+        {
+            FSWorkspaceContext::HUD hud;
+            if (!it->isMap() || it->size() != 3 || !(*it)["item"].isString() || !(*it)["name"].isString() ||
+                (*it)["name"].asString().size() > 128 || !integer(*it, "point", hud.point, 31, 38)) return fail(error, "hud");
+            hud.item = (*it)["item"].asString(); hud.name = (*it)["name"].asString();
+            LLUUID id; if (!id.set(hud.item, false) || id.isNull() || !ids.insert(hud.item).second) return fail(error, "hud item");
+            parsed.context.huds.push_back(hud);
+        }
+    }
     if (data.has("toolbars"))
     {
         const auto& bars = data["toolbars"];
@@ -362,7 +454,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         countUnknown(inbox, {"expanded", "height_ui"}, parsed.ignored_details);
     }
     if (parsed.remember_inventory_folders && !(parsed.components & Inventory)) return fail(error, "excluded folders");
-    countUnknown(data, {"schema", "type", "components", "toolbars", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels"},
+    countUnknown(data, {"schema", "type", "components", "toolbars", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels", "graphics", "camera", "huds"},
                  parsed.ignored_details);
     workspace = parsed;
     return true;
