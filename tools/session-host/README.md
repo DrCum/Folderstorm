@@ -1,6 +1,6 @@
 # Character sessions feasibility prototype (Windows)
 
-This is the first checkpoint of [the multi-character roadmap](../../doc/plans/multi-character-sessions.md), stacked on PR #9. It launches two isolated viewer workers and tests reversible warm standby plus optional native window hosting. It is not the completed shared-chat/economy/monitor interface.
+This is the first checkpoint of [the multi-character roadmap](../../doc/plans/multi-character-sessions.md), in [PR #10](https://github.com/DrCum/Folderstorm/pull/10) against main after PR #9 merged. It launches two isolated viewer workers and tests reversible warm standby plus optional native window hosting. It is not the completed shared-chat/economy/monitor interface.
 
 Normal viewer startup never launches this tool or extra accounts. The Windows viewer target builds `folderstorm-session-host.exe` beside its matching viewer and the Windows manifest copies it into the installation. Launch that executable explicitly when testing. The manifest supplies a bounded installation-local filename for the renamed packaged viewer; build-directory launches fall back to the filename compiled by CMake. The controller never searches PATH for a viewer.
 
@@ -33,7 +33,7 @@ An exclusive file handle is inherited by the worker to reserve its profile. The 
 
 Workers receive only their connected pipe and profile-lease handles through an explicit Windows inheritance list. The pipe has a current-user ACL and rejects remote clients; managed control opens no network listener. Bootstrap identity/handle variables are removed before ordinary child processes launch, and handles lose their inherit flag. Commands are fixed-size, versioned, account/session-generation bound and sequenced. Credentials are neither pipe payloads nor command-line arguments. Child environment formation preserves inherited runtime/proxy/trust variables without printing them or changing the controller's environment. Detachment reapplies ordinary voice/assistant choices; normal multiple-viewer port conflicts can still appear in assistant diagnostics.
 
-Native login names are reserved before authentication to catch duplicate managed logins. This cannot discover arbitrary external viewer sessions or every possible server-side alias. Use two genuinely distinct accounts when testing. Account UUIDs in ready status remain qualified by grid; a disconnected reservation is released.
+Native credential IDs are reserved before authentication to catch duplicate managed logins. The null-safe native startup API supplies `first_last` for agent credentials (including `Resident`) or `account_name` for account credentials; normalization and grid qualification remain in place. These keys are not display names or passwords. This cannot discover arbitrary external viewer sessions or every possible server-side alias. Use two genuinely distinct accounts when testing. Account UUIDs in ready status remain qualified by grid; a disconnected reservation is released.
 
 The host tracks worker process health, ordinary rendered swaps per second, main-loop iterations per second and working-set MiB. These are diagnostics, not claimed CPU/GPU/VRAM savings. Compare with two ordinary viewers, including an ordinary minimized second viewer, because the viewer already reduces drawing when hidden/minimized. Measure aggregate processes using native tools.
 

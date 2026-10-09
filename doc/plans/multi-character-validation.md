@@ -1,6 +1,6 @@
 # Multi-character prototype validation
 
-Branch: `feat/multi-character-prototype`, stacked on open PR #9. Scope: checkpoint 1 source implementation and Windows hosting experiment. Native feasibility gates are not passed yet.
+Branch: `feat/multi-character-prototype`, [PR #10](https://github.com/DrCum/Folderstorm/pull/10) against main after PR #9 merged. Scope: checkpoint 1 source implementation and Windows hosting experiment. Native runtime feasibility gates are not passed yet.
 
 ## Added in this checkpoint
 
@@ -29,6 +29,16 @@ Branch: `feat/multi-character-prototype`, stacked on open PR #9. Scope: checkpoi
 - CMake source/header/host-target and manifest-guide registration checks, documentation links/code fences and `git diff --check` passed.
 
 No native Windows compiler/runtime is available in this managed Linux workspace. No viewer, build, packaging, GitHub build, graphical/native login, performance benchmark or unrelated Go suite was run. The portable test does not establish MSVC compilation, pipe/kernel behavior, renderer correctness, crash recovery or performance savings.
+
+## Reviewed local-build findings (2026-10-09)
+
+The user supplied a local build-agent patch and reported successful Windows viewer/controller compilation, the protocol test under MSVC `/std:c++17 /W4 /WX`, and NSIS file-list verification after local fixes. These are reported local results, not builds or runtime tests performed in this workspace. The patch was reviewed against the APIs before applying changes:
+
+- Prototype: retain `LLControlVariablePtr` ownership when accessing temporary settings; reuse null-safe `LLStartUp::getUserId()` for credential-key reservations; write the matching viewer guide as UTF-8 bytes and register its generated file for installer inclusion.
+- Inherited gesture-board fix: use `LLStringUtil::format_map_t` and decimal string arguments for the localized page count.
+- Inherited manifest fix: resolve both plugin compatibility manifests from the absolute source location, supporting separate-drive/junction builds and relative source arguments.
+
+Focused follow-up checks passed: the existing portable protocol/handoff test, with added native credential-key reservation/release cases; actual filename-generation and NSIS inclusion/removal logic for packaged, UTF-8 and build-directory names; actual compatibility-manifest copying for absolute/relative source paths with an unrelated build root; changed Python syntax and `git diff --check`. No native renderer/input policy, session isolation, restriction guard or Preferences save/restore behavior was bypassed. Native login/switching/hosting tests below remain pending.
 
 ## Windows acceptance before proceeding through the roadmap gates
 
