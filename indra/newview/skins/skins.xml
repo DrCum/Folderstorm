@@ -31,6 +31,18 @@
           <key>folder</key>
           <string>blood</string>
         </map>
+        <map>
+          <key>name</key>
+          <string>Folderstorm Violet</string>
+          <key>folder</key>
+          <string>folderstorm</string>
+        </map>
+        <map>
+          <key>name</key>
+          <string>Electric Jungle</string>
+          <key>folder</key>
+          <string>electric_jungle</string>
+        </map>
       </array>
     </map>
 
@@ -89,6 +101,18 @@
           <string>CtrlAltStudio</string>
           <key>folder</key>
           <string>ctrlaltstudio</string>
+        </map>
+        <map>
+          <key>name</key>
+          <string>Folderstorm Violet</string>
+          <key>folder</key>
+          <string>folderstorm</string>
+        </map>
+        <map>
+          <key>name</key>
+          <string>Electric Jungle</string>
+          <key>folder</key>
+          <string>electric_jungle</string>
         </map>
       </array>
     </map>

@@ -922,6 +922,10 @@ with the same filename but different name
   <texture name="skin firestorm blue" file_name="skinspreview/fs_blue.jpg" preload="true" />
   <texture name="skin firestorm high contrast" file_name="skinspreview/fs_contrast.jpg" preload="true" />
   <texture name="skin firestorm ctrlaltstudio" file_name="skinspreview/fs_ctrlaltstudio.jpg" preload="true" />
+  <texture name="skin folderstorm folderstorm violet" file_name="skinspreview/folderstorm.png" preload="false" />
+  <texture name="skin folderstorm electric jungle" file_name="skinspreview/electric_jungle.png" preload="false" />
+  <texture name="skin ansastorm folderstorm violet" file_name="skinspreview/folderstorm.png" preload="false" />
+  <texture name="skin ansastorm electric jungle" file_name="skinspreview/electric_jungle.png" preload="false" />
   <texture name="skin metaharper modern coolocean" file_name="skinspreview/meta_coolocean.jpg" preload="true" />
   <texture name="skin metaharper modern appalachiansky" file_name="skinspreview/meta_appalachia.jpg" preload="true" />
   <texture name="skin metaharper modern blackglass" file_name="skinspreview/meta_blackglass.jpg" preload="true" />

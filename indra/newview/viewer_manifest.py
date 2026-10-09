@@ -272,6 +272,8 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                     self.path("*/xui/*/*.xml")
                     self.path("*/xui/*/widgets/*.xml")
                     self.path("*/themes/*/colors.xml")
+                    # Theme-specific widget color defaults (e.g. AnsaStorm tints).
+                    self.path("*/themes/*/xui/*/widgets/*.xml")
                     with self.prefix(src_dst="*/themes/*/textures"):
                         self.path("*/*.tga")
                         self.path("*/*.jpg")
