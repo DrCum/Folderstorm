@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 #include "fsworkspacequickaccess.h"
 #include "fsworkspacecontroller.h"
 
@@ -1144,6 +1145,14 @@ LLViewerInput::LLViewerInput()
     }
 }
 
+void LLViewerInput::releaseHeldInputs()
+{
+    for (auto& state : mMouseLevel) state = MOUSE_STATE_SILENT;
+    for (auto& handled : mKeyHandledByUI) handled = false;
+    // mKeysSkippedByUI contains configured keypad behavior, not held state.
+    if (gKeyboard) gKeyboard->resetKeys();
+}
+
 LLViewerInput::~LLViewerInput()
 {
 
@@ -1227,6 +1236,7 @@ bool LLViewerInput::mouseFromString(const std::string& string, EMouseClickType *
 
 bool LLViewerInput::handleKey(KEY translated_key, MASK translated_mask, bool repeated)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     // check for re-map
     EKeyboardMode mode = gViewerInput.getMode();
     U32 keyidx = (translated_mask<<16) | translated_key;
@@ -1266,11 +1276,13 @@ bool LLViewerInput::handleKey(KEY translated_key, MASK translated_mask, bool rep
 
 bool LLViewerInput::handleKeyUp(KEY translated_key, MASK translated_mask)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     return gViewerWindow->handleKeyUp(translated_key, translated_mask);
 }
 
 bool LLViewerInput::handleGlobalBindsKeyDown(KEY key, MASK mask)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     if (LLSetKeyBindDialog::isRecording())
     {
         // handleGlobalBindsKeyDown happens before view handling, so can't
@@ -1283,6 +1295,7 @@ bool LLViewerInput::handleGlobalBindsKeyDown(KEY key, MASK mask)
 
 bool LLViewerInput::handleGlobalBindsKeyUp(KEY key, MASK mask)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     if (LLSetKeyBindDialog::isRecording())
     {
         // handleGlobalBindsKeyUp happens before view handling, so can't
@@ -1296,6 +1309,7 @@ bool LLViewerInput::handleGlobalBindsKeyUp(KEY key, MASK mask)
 
 bool LLViewerInput::handleGlobalBindsMouse(EMouseClickType clicktype, MASK mask, bool down)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     if (LLSetKeyBindDialog::isRecording())
     {
         // handleGlobalBindsMouse happens before view handling, so can't
@@ -1745,6 +1759,7 @@ bool LLViewerInput::scanKey(const std::vector<LLKeyboardBinding> &binding,
 // Called from scanKeyboard.
 bool LLViewerInput::scanKey(KEY key, bool key_down, bool key_up, bool key_level) const
 {
+    if (!FSSessionWorker::keyAllowed(key)) return true;
     if (LLApp::isExiting())
     {
         return false;
@@ -1769,6 +1784,7 @@ bool LLViewerInput::scanKey(KEY key, bool key_down, bool key_up, bool key_level)
 
 bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down)
 {
+    if (!FSSessionWorker::inputAllowed()) return true;
     bool is_toolmgr_action = false;
     bool handled = gViewerWindow->handleAnyMouseClick(window_impl, pos, mask, clicktype, down, is_toolmgr_action);
 

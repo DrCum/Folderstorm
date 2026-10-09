@@ -302,6 +302,7 @@ using namespace LL;
 #include "fsradar.h"
 #include "fsassetblacklist.h"
 #include "fseventapibridge.h"
+#include "fssessionworker.h"
 #include "bugsplatattributes.h"
 
 #if LL_LINUX && LL_GTK
@@ -861,6 +862,12 @@ public:
 bool LLAppViewer::init()
 {
     LL_PROFILE_ZONE_SCOPED;
+
+    if (!FSSessionWorker::initialize())
+    {
+        OSMessageBox("Unable to initialize the character session connection. Start the viewer normally or relaunch it from the session controller.", "Folderstorm", OSMB_OK);
+        return false;
+    }
 
     setupErrorHandling(mSecondInstance);
 
@@ -1593,6 +1600,7 @@ bool LLAppViewer::frame()
 bool LLAppViewer::doFrame()
 {
     resumeMainloopTimeout("Main:doFrameStart");
+    FSSessionWorker::tick();
 #ifdef LL_DISCORD
     {
         LL_PROFILE_ZONE_NAMED("discord_callbacks");
@@ -1604,7 +1612,7 @@ bool LLAppViewer::doFrame()
     LL_PROFILE_GPU_ZONE("Frame");
     {
     // and now adjust the visuals from previous frame.
-    if(LLPerfStats::tunables.userAutoTuneEnabled && LLPerfStats::tunables.tuningFlag != LLPerfStats::Tunables::Nothing)
+    if(FSSessionWorker::renderAllowed() && LLPerfStats::tunables.userAutoTuneEnabled && LLPerfStats::tunables.tuningFlag != LLPerfStats::Tunables::Nothing)
     {
         LLPerfStats::tunables.applyUpdates();
     }
@@ -1740,7 +1748,8 @@ bool LLAppViewer::doFrame()
                     && !gViewerWindow->getWindow()->getMinimized()
                     && LLStartUp::getStartupState() == STATE_STARTED
                     && (gHeadlessClient || !gViewerWindow->getShowProgress())
-                    && !gFocusMgr.focusLocked())
+                    && !gFocusMgr.focusLocked()
+                    && FSSessionWorker::inputAllowed())
                 {
                     LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df JoystickKeyboard"); // <FS:Beq/> Move this to the right place
                     LLPerfStats::RecordSceneTime T(LLPerfStats::StatType_t::RENDER_IDLE);
@@ -1809,11 +1818,17 @@ bool LLAppViewer::doFrame()
                     LLPerfStats::RecordSceneTime T(LLPerfStats::StatType_t::RENDER_IDLE);
                     LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df Snapshot");
                     pingMainloopTimeout("Main:Snapshot");
-                    gPipeline.mReflectionMapManager.update();
-                    LLFloaterSnapshot::update(); // take snapshots
-                    LLFloaterSimpleSnapshot::update();
-                    LLFloaterFlickr::update(); // <FS:Beq/> FIRE-35002 - Flickr preview not updating whne opened directly from tool tray icon
-                    FSFloaterPrimfeed::update(); // <FS:Beq/> Primfeed support
+                    // display() retains the native hidden-window maintenance
+                    // path in standby, including teleport state and textures.
+                    // Suppress render-dependent side work until promotion.
+                    if (FSSessionWorker::renderAllowed())
+                    {
+                        gPipeline.mReflectionMapManager.update();
+                        LLFloaterSnapshot::update(); // take snapshots
+                        LLFloaterSimpleSnapshot::update();
+                        LLFloaterFlickr::update(); // <FS:Beq/> FIRE-35002 - Flickr preview not updating whne opened directly from tool tray icon
+                        FSFloaterPrimfeed::update(); // <FS:Beq/> Primfeed support
+                    }
                     gGLActive = false;
                 }
 
@@ -1863,6 +1878,7 @@ bool LLAppViewer::doFrame()
                 // <FS:Ansariel> FIRE-32722: Make sure to idle if actually minimized
                 //S32 milliseconds_to_sleep = llclamp((S32)s_background_yield_time, 0, 1000);
                 S32 milliseconds_to_sleep = llclamp((S32)s_background_yield_time, (gViewerWindow && gViewerWindow->getWindow()->getMinimized()) ? 1 : 0, 1000);
+                milliseconds_to_sleep = FSSessionWorker::backgroundYield(milliseconds_to_sleep);
                 // </FS:Ansariel>
                 // don't sleep when BackgroundYieldTime set to 0, since this will still yield to other threads
                 // of equal priority on Windows
@@ -1934,7 +1950,7 @@ bool LLAppViewer::doFrame()
             // <FS:Ansariel> FIRE-22297: FPS limiter not working properly on Mac/Linux
             static LLCachedControl<U32> max_fps(gSavedSettings, "FramePerSecondLimit");
             static LLCachedControl<bool> fsLimitFramerate(gSavedSettings, "FSLimitFramerate");
-            if (fsLimitFramerate && LLStartUp::getStartupState() == STATE_STARTED && !gTeleportDisplay && !logoutRequestSent() && max_fps > F_APPROXIMATELY_ZERO)
+            if (fsLimitFramerate && FSSessionWorker::renderAllowed() && LLStartUp::getStartupState() == STATE_STARTED && !gTeleportDisplay && !logoutRequestSent() && max_fps > F_APPROXIMATELY_ZERO)
             {
                 // Sleep a while to limit frame rate.
                 LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_FPSLIMIT );
@@ -1982,6 +1998,7 @@ bool LLAppViewer::doFrame()
         destroyMainloopTimeout();
 
         LL_INFOS() << "Exiting main_loop" << LL_ENDL;
+        FSSessionWorker::shutdown();
     }
     }LLPerfStats::StatsRecorder::endFrame();
 
@@ -3442,6 +3459,7 @@ bool LLAppViewer::initConfiguration()
 //                               gSavedSettings.getString("Language"));
     }
 
+    FSSessionWorker::configure();
     if (gNonInteractive)
     {
         tempSetControl("AllowMultipleViewers", "true");
@@ -6319,13 +6337,13 @@ void LLAppViewer::idle()
     {
         gAgentPilot.moveCamera();
     }
-    else if (LLViewerJoystick::getInstance()->getOverrideCamera())
+    else if (FSSessionWorker::inputAllowed() && LLViewerJoystick::getInstance()->getOverrideCamera())
     {
         LLViewerJoystick::getInstance()->moveFlycam();
     }
     else
     {
-        if (LLToolMgr::getInstance()->inBuildMode())
+        if (FSSessionWorker::inputAllowed() && LLToolMgr::getInstance()->inBuildMode())
         {
             LLViewerJoystick::getInstance()->moveObjects();
         }

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 
 #include "llviewerdisplay.h"
 
@@ -533,6 +534,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     if (   !gViewerWindow->getActive()
         || !gViewerWindow->getWindow()->getVisible()
         || gViewerWindow->getWindow()->getMinimized()
+        || !FSSessionWorker::renderAllowed()
         || gNonInteractive)
     {
         // Clean up memory the pools may have allocated
@@ -1726,6 +1728,7 @@ void swap()
     if (gDisplaySwapBuffers)
     {
         gViewerWindow->getWindow()->swapBuffers();
+        FSSessionWorker::framePresented();
     }
     gDisplaySwapBuffers = true;
 }

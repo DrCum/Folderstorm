@@ -59,3 +59,7 @@ All selected items have concrete scope, implementation stages, code touchpoints,
 ## Gesture board
 
 [Gesture board implementation plan](gesture-board.md) covers Inventory selection and drag/drop, direct native gesture playback, saved/reorderable boards, and editable tile text/colors. Keyboard shortcuts are excluded. Workspace associations are a separate optional follow-up. Implemented on `feat/gesture-board`, stacked on PR #8. [Focused checks and native acceptance](gesture-board-validation.md) record completed scope and remaining Windows/skin checks.
+
+## Multi-character sessions
+
+[Multi-character sessions plan](multi-character-sessions.md) describes one interface with isolated viewer workers, warm/economy standby, account-bound shared chat, safe foreground/microphone handoff, workspace/lifecycle integration and a later optional low-resolution 1 FPS monitor. Checkpoint 1 source is implemented on `feat/multi-character-prototype` in [PR #10](https://github.com/DrCum/Folderstorm/pull/10), targeting main after PR #9 merged, with two-character warm standby and an optional native-window hosting experiment. [Usage](../../tools/session-host/README.md) and [validation/native gates](multi-character-validation.md) distinguish the portable checks from the pending Windows feasibility tests and checkpoints 2–6.

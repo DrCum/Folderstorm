@@ -175,10 +175,13 @@ class FSViewerManifest:
         from shutil import copyfile
         self.fs_strip_windows_manifest( "%s/slplugin.exe" % self.args['configuration'].lower() )
         self.fs_strip_windows_manifest( "%s/llplugin/dullahan_host.exe" % self.args['configuration'].lower() )
-        if self.prefix(src=os.path.join(self.args['build'], os.pardir, os.pardir, 'indra', 'tools', 'manifests')):
+        # The build root may be on another drive or junction. Use an absolute
+        # source path so prefix() also handles a relative --source correctly.
+        manifest_source = os.path.abspath(os.path.join(self.args['source'], os.pardir, 'tools', 'manifests'))
+        if self.prefix(src=manifest_source):
             self.path( "compatibility.manifest", "slplugin.exe.manifest" )
             self.end_prefix()
-        if self.prefix(src=os.path.join(self.args['build'], os.pardir, os.pardir, 'indra', 'tools', 'manifests'), dst="llplugin"):
+        if self.prefix(src=manifest_source, dst="llplugin"):
             self.path( "compatibility.manifest", "dullahan_host.exe.manifest" )
             self.end_prefix()
 
