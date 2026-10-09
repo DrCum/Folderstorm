@@ -927,8 +927,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
         self.path(self.stage_session_host(), "folderstorm-session-host.exe")
         # Packaging renames firestorm-bin.exe. The controller uses only this
         # installation-local basename; it never searches PATH for a viewer.
-        self.put_in_file((self.final_exe() if self.is_packaging_viewer() else "firestorm-bin.exe") + "\n",
-                         "folderstorm-session-viewer.txt")
+        self.put_in_file(((self.final_exe() if self.is_packaging_viewer() else "firestorm-bin.exe") + "\n").encode("utf-8"),
+                         "folderstorm-session-viewer.txt", src="session viewer filename")
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"

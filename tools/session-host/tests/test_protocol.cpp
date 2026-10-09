@@ -84,5 +84,17 @@ int main()
     other = original; candidate.name = "another name"; assert(!loginCollision(candidate, other, original.name));
     candidate.account = original.account; assert(loginCollision(candidate, other, original.name));
     other.state = State::Disconnected; assert(!loginCollision(candidate, other, {}));
+    // Native credential userID uses first_last for agents (including Resident),
+    // or account_name for account credentials. The same grid reserves all forms
+    // while connecting; a disconnected/released reservation must be reusable.
+    for (const std::string name : {"alex_resident", "alex_smith", "alex"})
+    {
+        candidate = original; candidate.name = name; candidate.account.clear();
+        other = candidate; other.state = State::Connecting;
+        assert(loginCollision(candidate, other, name));
+        other.grid = "another-grid"; assert(!loginCollision(candidate, other, name));
+        other.grid = candidate.grid; other.state = State::Disconnected;
+        assert(!loginCollision(candidate, other, {}));
+    }
     std::cout << "Session wire bounds/identity, serial handoff/rollback and login reservations passed.\n";
 }

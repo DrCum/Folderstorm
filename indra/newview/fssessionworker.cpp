@@ -130,7 +130,7 @@ struct Worker
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
         // Restore only our temporary overrides. Saved values were never changed.
         for (const auto& control : controls)
-            if (auto* value = gSavedSettings.getControl(control.first))
+            if (auto value = gSavedSettings.getControl(control.first))
             {
                 const LLSD saved = value->getSaveValue();
                 value->setValue(saved.asBoolean() == control.second.saved ? control.second.effective : saved, false);
@@ -282,7 +282,7 @@ void FSSessionWorker::configure()
         {"AllowMultipleViewers", true}, {"SLURLPassToOtherInstance", false}, {"AutoLogin", false},
         {"HeadlessClient", false}, {"NonInteractive", false}};
     for (const auto& change : changes)
-        if (auto* control = gSavedSettings.getControl(change.first))
+        if (auto control = gSavedSettings.getControl(change.first))
         {
             worker->controls.emplace(change.first, Worker::Override{control->getValue(), control->getSaveValue().asBoolean()});
             control->setValue(LLSD(change.second), false);

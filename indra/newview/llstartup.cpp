@@ -1746,7 +1746,9 @@ bool idle_startup()
     if(STATE_LOGIN_AUTH_INIT == LLStartUp::getStartupState())
     {
         // Reserve identity before authentication; never send the credential.
-        std::string session_name = LLPanelLogin::getUserName(gUserCredential);
+        // Use the native credential key (including Resident), not display text.
+        // getUserId() already handles a null credential without dereferencing it.
+        std::string session_name = LLStartUp::getUserId();
         LLStringUtil::toLower(session_name);
         LLStringUtil::trim(session_name);
         const auto gate = FSSessionWorker::loginGate(LLGridManager::instance().getGrid(), session_name);
