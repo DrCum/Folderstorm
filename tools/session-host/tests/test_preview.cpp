@@ -34,9 +34,11 @@ int main()
     bad = frame; bad.mode = Mode::Active; assert(!previewIdentity(bad, session));
     bad = frame; bad.state = State::Disconnected; assert(!previewIdentity(bad, session));
     bad = frame; bad.flags |= PreviewUnavailable; assert(!previewIdentity(bad, session));
+    bad = frame; bad.flags |= Transitioning; assert(!previewIdentity(bad, session));
     bad = frame; bad.flags = 0; assert(!previewIdentity(bad, session));
     bad = frame; bad.event = 0; assert(!previewIdentity(bad, session));
     bad = frame; bad.width = 10000; assert(!previewIdentity(bad, session));
     session.mode = Mode::Active; assert(!previewIdentity(frame, session));
+    session.mode = Mode::Warm; session.flags = ChatRestricted; assert(!previewIdentity(frame, session));
     std::cout << "Bounded preview geometry, rates, wire metadata and session/owner guards passed.\n";
 }

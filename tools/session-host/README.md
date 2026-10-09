@@ -39,7 +39,7 @@ Native credential IDs are reserved before authentication to catch duplicate mana
 
 The host tracks worker process health, ordinary rendered swaps per second, main-loop iterations per second, keyboard-focus state and working-set MiB. These are diagnostics, not claimed CPU/GPU/VRAM savings. Compare with two ordinary viewers, including an ordinary minimized second viewer, because the viewer already reduces drawing when hidden/minimized. Measure aggregate processes using native tools.
 
-Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 7, and mixed versions are deliberately rejected.
+Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 8, and mixed versions are deliberately rejected.
 
 ## Recovery and current native risks
 
@@ -49,7 +49,7 @@ Window hosting remains opt-in pending Windows acceptance. This checkpoint replac
 
 The compact character dropdown and optional Chat panel use DPI-scaled Windows shell controls; the hosted viewer keeps its own skin and UI scale. Fullscreen uses separate windows. Native z-order, minimize/restore, owned file/color dialogs, DPI/monitor changes, host forced-crash recovery and large UI-scale/skin behavior still need Windows tests. This source change removes the foreign-parent destruction path, but is not evidence that all platform behavior is validated.
 
-The optional bird’s-eye transition remains the next source checkpoint. Native hosting, resource savings and monitor cost remain unmeasured.
+All seven source checkpoints are implemented in the PR stack. Native hosting, transition appearance, resource savings and monitor cost remain unverified or unmeasured.
 
 ## Focused checks
 
@@ -80,3 +80,11 @@ Choose **Session… → Monitor character 1/2** after that character logs in. Th
 Default target: **320 × 180 at 1 FPS**; optional caps 480 × 270 / 640 × 360 and target rates 0.5 / 2 / 5 FPS. Geometry fits the character's current world viewport without stretching. Rates limit preview rendering/readback, not simulator servicing. Capture uses a bounded offscreen PBR target, never a full-window render shrunk afterward. Unsupported target/graphics modes show unavailable status instead of that fallback. Economy releases disposable buffers after each capture; Warm rebuilds its retained buffers. Native post-effects and allocator work can still cost GPU/CPU time; no performance benefit is claimed without measurements.
 
 Only one latest BGRA frame is retained in a bounded inherited local mapping. A nonblocking mutex prevents partial frames; busy samples are dropped. Worker/account/grid/generation, dimensions and sequence are checked before display. UI/HUD and snapshot files/animations/sounds are excluded; native snapshot cleanup restores the live viewport/projection/debug options. The monitor shows frame age, stale/waiting/paused/unavailable state and never stores images. Save host choices retains only size/rate, never monitor enablement, an account or image.
+
+## Optional bird’s-eye switching
+
+Enable **Session… → Bird’s-eye transitions** (Off by default). A switch rises above the outgoing avatar for about 1.1 seconds, performs the acknowledged handoff, then descends to the incoming character's own live camera for about 1.1 seconds. The height is bounded by view range. This is a temporary render-camera pose; avatar movement, agent camera controls, saved camera/graphics choices and workspace modified state are untouched. Normal camera/frustum state is restored after every frame, including early display returns, before native snapshot/reflection/idle work.
+
+Press **Escape**, or choose **Session… → Switch instantly**, to skip a pending visual leg and finish the switch. Cancellation targets the exact worker/account/grid/generation and pending mode-request sequence; it never retargets a later switch or grants input. Camera restrictions, mouselook, scripted/follow camera, flycam, a long-range/invalid camera, native modal dialogs, minimized/other-app focus and Windows reduced-motion settings skip the effect. Region/session/disconnect changes end old visual work. Rollback uses ordinary instant promotion. Input/microphone stay revoked during visual work, and incoming input still waits for normal frame readiness. Selecting shared chat does not animate or change the visible character.
+
+Save host choices can retain the effect preference; older saved choices load it as Off. Native animation appearance/timing and platform recovery still need Windows testing. The shared-chat timeout notice also now keeps its uncertain-delivery/no-retry explanation visible.

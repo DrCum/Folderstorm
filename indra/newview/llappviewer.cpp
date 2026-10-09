@@ -1811,7 +1811,11 @@ bool LLAppViewer::doFrame()
                 pingMainloopTimeout("Main:Display");
                 gGLActive = true;
 
-                display();
+                {
+                    FSSessionWorker::beginCameraFrame();
+                    struct CameraFrame { ~CameraFrame() { FSSessionWorker::endCameraFrame(); } } camera_frame;
+                    display();
+                }
                 FSSessionWorker::renderMonitor();
 
                 if (LLStartUp::getStartupState() == STATE_STARTED) // <FS:Beq/> FIRE-34590 - Bugsplat caused by updating maps before world is loaded.

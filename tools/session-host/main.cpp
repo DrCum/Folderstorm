@@ -148,6 +148,8 @@ struct Slot
     ChatView chat;
     Message pendingSend, pendingTyping;
     Message pendingAction;
+    Message pendingSkip;
+    bool hasPendingSkip = false;
     Message closingAction;
     bool hasPendingAction = false;
     std::string workspace;
@@ -191,6 +193,7 @@ struct Host
     Message monitorFrame;
     std::vector<std::uint8_t> monitorPixels;
     bool showChat = true;
+    bool cinematic = false, handoffAnimated = false, escapeHeld = false;
     UINT dpi = 96;
     HFONT font = nullptr;
     HWND chatAccount = nullptr, chatConversation = nullptr, chatHistory = nullptr, chatCompose = nullptr;
@@ -245,7 +248,7 @@ struct Host
         if (bound)
         {
             if (!slot.chat.identity.owns(*bound) || !slot.chat.identity.owns(slot.snapshot) || (slot.snapshot.state != State::Ready && kind != Kind::Quit))
-            { message(L"The selected sending session changed. Text was not sent."); return false; }
+            { message(L"The selected character/session changed. The action was not sent."); return false; }
             request = *bound;
         }
         request.worker = slot.id; request.kind = kind; request.mode = mode; request.surface = surface;
@@ -257,6 +260,11 @@ struct Host
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
         if (kind == Kind::WorkspaceInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
+        if (kind == Kind::SetMode)
+        {
+            request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
+            request.unread = handoff.step() != Handoff::Step::Idle && handoff.step() != Handoff::Step::Rollback && handoffAnimated ? 1u : 0u;
+        }
         if (kind == Kind::MonitorPolicy)
         {
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
@@ -281,6 +289,7 @@ struct Host
         HostOptions result; result.standby[0] = standby[0]; result.standby[1] = standby[1];
         result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
         result.previewSize = monitorSize; result.previewRate = monitorRate;
+        result.cinematic = cinematic;
         return result;
     }
     void saveOptions()
@@ -312,6 +321,8 @@ struct Host
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
         AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
+        AppendMenuW(menu, MF_STRING | (cinematic ? MF_CHECKED : 0), 207, L"Bird's-eye transitions (Escape skips)");
+        AppendMenuW(menu, MF_STRING | (handoff.step() != Handoff::Step::Idle ? 0 : MF_GRAYED), 208, L"Switch instantly (skip this animation)");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, 210, L"Monitor character 1 (read only)");
         AppendMenuW(menu, MF_STRING, 211, L"Monitor character 2 (read only)");
@@ -343,6 +354,8 @@ struct Host
         else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 206) saveOptions();
+        else if (choice == 207) cinematic = !cinematic;
+        else if (choice == 208) skipTransition();
         else if (choice == 210 || choice == 211) openMonitor(choice == 210 ? 0 : 1);
         else if (choice == 212) { monitorEnabled = false; monitorPixels.clear(); if (monitor) ShowWindow(monitor, SW_HIDE); }
         else if (choice >= 220 && choice <= 222) { monitorSize = choice - 220; monitorPixels.clear(); }
@@ -570,7 +583,23 @@ struct Host
         }
         const auto oldGeneration = active >= 0 && slots[active] ? slots[active]->snapshot.generation : 0;
         if (handoff.begin(active, index, oldGeneration, slots[index]->snapshot.generation, active < 0 ? Mode::Warm : standby[active]))
-            message(L"Switching character; waiting for the viewer's ready frame…");
+        {
+            BOOL animation = TRUE;
+            const bool reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animation, 0) && !animation;
+            handoffAnimated = cinematic && !reduced; escapeHeld = false;
+            message(L"Switching to " + wide(slots[index]->snapshot.name) + L"; waiting for its ready frame…");
+        }
+    }
+    void skipTransition()
+    {
+        handoffAnimated = false;
+        if (handoff.step() == Handoff::Step::Idle) return;
+        const int index = handoff.worker();
+        if (index < 0 || !slots[index]) return;
+        auto& slot = *slots[index];
+        if (!slot.waiting || slot.request.kind != Kind::SetMode) return;
+        slot.pendingSkip = slot.request; slot.pendingSkip.kind = Kind::CancelTransition;
+        slot.pendingSkip.cursor = slot.request.sequence; slot.hasPendingSkip = true;
     }
     void failHandoff(int index, const std::wstring& error)
     {
@@ -684,6 +713,7 @@ struct Host
             {
                 active = step == Handoff::Step::Rollback ? handoff.original() : handoff.target();
                 message(step == Handoff::Step::Rollback ? L"Returned to the previous character." : L"Character ready. Other characters use their chosen standby mode.");
+                if (!response.detail.empty()) message(L"Character ready. " + wide(response.detail));
                 if (embedding)
                 {
                     // Promotion may have restored the standalone target first.
@@ -722,12 +752,29 @@ struct Host
     }
     void tick()
     {
+        DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
+        bool ownForeground = foregroundPid == GetCurrentProcessId();
+        for (const auto& slot : slots) if (slot && slot->pid == foregroundPid) ownForeground = true;
+        const bool escape = ownForeground && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
+        if (escape && !escapeHeld && busy()) skipTransition();
+        escapeHeld = escape;
         for (int index = 0; index < 2; ++index)
         {
             if (!slots[index]) continue;
             auto& slot = *slots[index];
             Message response;
             if (slot.pipe.receive(response)) reply(index, response);
+            if (slot.hasPendingSkip)
+            {
+                if (!slot.waiting || slot.request.kind != Kind::SetMode || slot.request.sequence != slot.pendingSkip.cursor ||
+                    !slot.chat.identity.owns(slot.pendingSkip)) slot.hasPendingSkip = false;
+                else if (!slot.pipe.writing())
+                {
+                    slot.pendingSkip.sequence = ++slot.nextSequence;
+                    slot.pipe.send(slot.pendingSkip); // No reply/retry; pending SetMode still owns its response.
+                    slot.hasPendingSkip = false;
+                }
+            }
             if (!slot.running() || !slot.pipe.alive())
             {
                 if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat))
@@ -741,9 +788,9 @@ struct Host
             if (slot.waiting && GetTickCount64() - slot.sentAt > (slot.snapshot.state == State::Ready ? 12000ULL : 60000ULL))
             {
                 slot.pipe.close(); slot.waiting = false; slot.detached = true;
-                if (slot.request.kind == Kind::SendChat)
-                    message(L"Chat send timed out: delivery is uncertain and will not be retried. Check the native conversation.");
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"The viewer did not respond; returning it to an ordinary window.");
+                else if (slot.request.kind == Kind::SendChat)
+                    message(L"Chat send timed out: delivery is uncertain and will not be retried. Check the native conversation; the watchdog restores an ordinary window.");
                 else message(L"The viewer did not respond; its local watchdog will return it to an ordinary window.");
             }
             if (!slot.waiting && slot.pipe.alive() && !slot.detached)
@@ -918,7 +965,13 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         RECT client{}; GetClientRect(window, &client);
         // Only the labelled footer promotes a character. Image clicks do nothing.
         if (static_cast<short>(HIWORD(lparam)) >= client.bottom - host->scaled(28))
-        { SetForegroundWindow(host->window); host->switchTo(host->monitorIndex); }
+        {
+            const auto* slot = host->slots[host->monitorIndex].get();
+            if (!host->monitorEnabled || !slot || !slot->running() || slot->detached ||
+                !slot->pipe.alive() || slot->snapshot.state != State::Ready || !host->monitorKey.owns(slot->snapshot))
+                host->message(L"The monitored session changed. Choose its monitor again before switching.");
+            else { SetForegroundWindow(host->window); host->switchTo(host->monitorIndex); }
+        }
         return 0;
     }
     case WM_PAINT:
@@ -941,6 +994,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         }
         RECT footer{0, height, client.right, client.bottom};
         FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+        SetTextColor(dc, GetSysColor(host->monitorEnabled ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
         SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         EndPaint(window, &paint); return 0;
     }
@@ -1144,6 +1198,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
             state.standby[0] = choices.standby[0]; state.standby[1] = choices.standby[1];
             state.voice = choices.voice; state.muteBackground = choices.muteBackground; state.embedding = choices.hosted; state.showChat = choices.chat;
             state.monitorSize = choices.previewSize; state.monitorRate = choices.previewRate;
+            state.cinematic = choices.cinematic;
         }
     }
     host = &state;
@@ -1163,7 +1218,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     ShowWindow(window, show); UpdateWindow(window);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
+    {
+        if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
+        { state.skipTransition(); continue; }
         if (!IsDialogMessageW(window, &message)) { TranslateMessage(&message); DispatchMessageW(&message); }
+    }
     host = nullptr;
     return static_cast<int>(message.wParam);
 }

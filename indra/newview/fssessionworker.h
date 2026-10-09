@@ -21,6 +21,8 @@ public:
     static void prepareDisplay(); // Current GL context only; reversible economy buffers.
     static bool monitorRendering();
     static void renderMonitor(); // Current GL context, after ordinary display maintenance.
+    static void beginCameraFrame(); // Temporary renderer pose only, never LLAgentCamera.
+    static void endCameraFrame();   // Paired even when display returns early.
     static bool inputAllowed();
     static bool voiceAllowed();
     static bool backgroundAudioMuted();

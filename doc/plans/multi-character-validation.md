@@ -63,7 +63,7 @@ The controller reports the viewer's actual callback-derived keyboard-focus state
 
 ## Remaining roadmap
 
-Checkpoint 1 needs native feasibility evidence. Checkpoints 2–6 remain: proven warm/economy resource policies, source-bound shared chat/events and microphone ownership, production one-interface switching, complete workspace/lifecycle integration, and the optional genuinely low-resolution 1 FPS monitor. Keep the hosting mechanism decision and economy performance claims gated on native measurements.
+Source implementation covers all seven checkpoints in PRs #10 and #12–#17. Native feasibility/acceptance and measured resource/monitor cost remain outstanding; these source-complete drafts are not a claim of release readiness. Use the individual checklists below and the completion table in multi-character-sessions.md.
 
 ## Checkpoint 2: background policy (follow-up branch)
 
@@ -128,3 +128,16 @@ Windows checkpoint: use different workspaces/cameras/graphics/HUDs/boards in eac
 Actual checks: strict portable protocol, preview and changed host-options checks passed. New checks cover resolution/rate policy, landscape/portrait/extreme/overflow geometry, frame metadata round-trip and source/account/grid/generation/PID/ownership rejection; options cover backward compatibility and invalid preview choices. Source review traced inherited mapping/mutex bootstrap, bounded pixel copy, snapshot RAII cleanup, forced small target and no full-window fallback, offscreen-only render gates and two-normal-frame promotion. `git diff --check` passed. No viewer/build/packaging/native/GitHub tests ran. Protocol version 7 requires matching binaries.
 
 Windows checkpoint: open a monitor for the inactive character in Warm and Economy; compare scene/aspect/color/orientation with its active view. Test all size/rate targets, teleport/region crossing, restrictions, monitor/controller minimize/close, active switching, stale frames and disconnect/relogin without retargeting. Ensure native snapshot UI/HUD/projection and active viewer buffers/shadows recover, no hidden window presents, image clicks cause no action, and the switch footer names/promotes the expected character. Measure aggregate GPU/CPU/VRAM and network while Off versus 1 FPS; bounded resolution is source-verified but allocator/post-effect/readback cost and visible results remain unmeasured. Unsupported Forward graphics should show unavailable status.
+
+## Checkpoint 7: optional finite bird’s-eye transition
+
+- [x] Off-default ~1.1-second outgoing rise and incoming descent; serialized native handoff, finite clock, bounded height and no effect for chat selection.
+- [x] Renderer-camera pose only; per-frame RAII restoration of native pose/frustum before other GL work, without agent camera/position/settings changes.
+- [x] Escape and instant-menu cancellation bound to exact source/account/grid/generation/pending mode-request sequence; no reply/retry/action replay or input acquisition from cancellation.
+- [x] Reduced-motion, camera restrictions/modes, modal/Preferences/flycam, invalid/far camera, other-app/minimize, region/session/disconnect/detach/watchdog guards; rollback remains instant.
+- [x] Input/PTT revoked before visual work; no ownership while animating, incoming native frames still required, background audio temporarily muted during legs.
+- [x] Bounded saved effect preference with backward-compatible Off default, named switching status and retained uncertain-send timeout wording.
+
+Actual checks: strict portable C++17 transition, changed protocol/handoff, preview identity and host-options tests passed. Tests exercise finite clock/easing bounds and monotonicity, generation/time/permission expiry, exact cancellation nonce/account/grid/worker binding, stale later-switch rejection, Transitioning ownership refusal and preview restriction/transition refusal. Source review traces every start/finish/cancel path, original camera/frustum restoration, native modal/camera/restriction/foreground guards and absence of agent camera/position/settings mutation. `git diff --check` passed. No viewer/build/packaging/native/GitHub builds or unrelated Go tests. Protocol 8 requires matching binaries.
+
+Windows checkpoint: enable the effect in hosted and separate-window modes; verify rise above the outgoing avatar and descent to the incoming character's own live camera in same/different regions. Check unsaved camera angles/zoom, workspaces staying unmodified, HUDs/chrome and shadows/reflections, modest draw distance, sitting/moving avatars and slow preparation. Escape/instant in each leg, rapid repeated selection, Alt-Tab/minimize, disconnect/relogin, native dialogs and controller loss must leave normal camera and one usable input owner. Check mouselook/scripted/follow/flycam/restrictions and Windows reduced-motion instant fallbacks. Ensure shared chat remains source-bound, voice never overlaps, monitor pauses across promotion and ordinary snapshots after switching use the normal camera. Visual polish and stability need native results; source checks alone cannot establish a finished release.

@@ -79,6 +79,7 @@ int main()
     assert(handoff.step() == Handoff::Step::Promote && handoff.worker() == 1 && handoff.generation() == 9);
     reply.mode = Mode::Active; reply.generation = 9; reply.flags = Promoting;
     assert(!handoff.accept(1, reply)); // No ownership until the rendered-frame acknowledgment.
+    reply.flags = Transitioning; assert(!handoff.accept(1, reply)); // A visual leg cannot grant ownership.
     reply.flags = 0; assert(handoff.accept(1, reply)); assert(handoff.step() == Handoff::Step::Idle);
 
     assert(handoff.begin(0, 1, 7, 9));

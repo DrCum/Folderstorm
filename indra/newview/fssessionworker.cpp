@@ -11,9 +11,11 @@
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fssessionframepipe.h"
+#include "fssessiontransition.h"
 #include "llimage.h"
 #include "fseventapibridge.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacecontextadapter.h"
 #include "llagent.h"
 #include "llagentdata.h"
 #include "llagentui.h"
@@ -31,6 +33,8 @@
 #include "llkeyboard.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
+#include "llviewercamera.h"
+#include "llviewerregion.h"
 #include "llviewerdisplay.h"
 #include "llviewerinput.h"
 #include "llviewerjoystick.h"
@@ -43,6 +47,7 @@
 #include <cstdlib>
 #include <memory>
 #include <map>
+#include <cmath>
 
 namespace
 {
@@ -57,6 +62,13 @@ struct Worker
     ULONGLONG previewAt = 0;
     bool previewPass = false;
     std::string previewError;
+    TransitionClock transition;
+    bool demoting = false, escapeHeld = false;
+    Message pendingDemotion;
+    LLUUID transitionRegion;
+    std::string transitionNotice;
+    LLCamera cameraBefore;
+    bool cameraOverridden = false;
     HANDLE profileLease = INVALID_HANDLE_VALUE;
     WorkerId id{};
     DWORD host = 0;
@@ -85,6 +97,45 @@ struct Worker
 
     bool ready() const { return LLStartUp::getStartupState() == STATE_STARTED && !gDisconnected; }
     bool embedded() const { return parent != nullptr; }
+    bool appForeground() const
+    {
+        DWORD pid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+        return pid == host || pid == GetCurrentProcessId();
+    }
+    bool cameraAllowed() const
+    {
+        const HWND popup = window ? GetLastActivePopup(window) : nullptr;
+        return ready() && gViewerWindow && window && IsWindowVisible(window) && !IsIconic(window) && appForeground() &&
+            !gTeleportDisplay && gAgent.getTeleportState() == LLAgent::TELEPORT_NONE && gAgent.getRegion() &&
+            sharingAllowed() && FSWorkspaceContext::cameraAllowed() && !gFocusMgr.focusLocked() &&
+            (!popup || popup == window || !IsWindowVisible(popup)) &&
+            !LLFloaterReg::instanceVisible("preferences") &&
+            (!LLViewerJoystick::instanceExists() || !LLViewerJoystick::instance().getOverrideCamera());
+    }
+    void startTransition(bool requested)
+    {
+        transition.cancel(); transitionNotice.clear();
+        if (!requested) return;
+        BOOL animation = TRUE;
+        const bool reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animation, 0) && !animation;
+        // A hidden standby target is made visible before calling this helper.
+        if (reduced || !cameraAllowed() || (GetAsyncKeyState(VK_ESCAPE) & 0x8000))
+        { transitionNotice = "Bird's-eye transition skipped: camera, restrictions, focus or reduced-motion setting."; return; }
+        transitionRegion = gAgent.getRegion()->getRegionID();
+        escapeHeld = false; transition.begin(GetTickCount64(), generation);
+    }
+    void finishDemotion()
+    {
+        transition.cancel(); demoting = false;
+        if (!unembed(false))
+        {
+            EnableWindow(window, TRUE); grantInput();
+            reply(pendingDemotion, "Unable to detach the hosted window; finish in this viewer before switching."); return;
+        }
+        mode = pendingDemotion.mode;
+        EnableWindow(window, FALSE); ShowWindow(window, SW_HIDE);
+        reply(pendingDemotion);
+    }
     bool hostForeground() const
     {
         if (!parent || !IsWindow(parent)) return false;
@@ -340,7 +391,7 @@ struct Worker
         const bool previousGrant = inputGranted;
         releaseInput();
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
-        promoting = false; mode = Mode::Active;
+        transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
         detached = true;
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); events.reset();
@@ -379,7 +430,8 @@ struct Worker
         if (ready() && !gAgentID.isNull()) reply.account = gAgentID.asString();
         if (loginRequested && gate == FSSessionWorker::LoginGate::Wait) reply.flags |= LoginPending;
         if (embedded()) reply.flags |= Embedded;
-        if (promoting) reply.flags |= Promoting;
+        if (promoting || demoting) reply.flags |= Promoting;
+        if (transition.active()) reply.flags |= Transitioning;
         if (inputGranted && gFocusMgr.getAppHasFocus()) reply.flags |= ClientFocused;
         if (economyTrimmed) reply.flags |= EconomyTrimmed;
         if (hostedStyle) reply.flags |= HostedStyle;
@@ -390,6 +442,7 @@ struct Worker
             reply.flags |= PreviewUnavailable;
             if (error.empty()) reply.detail = boundedText(previewError, 119);
         }
+        if (!transitionNotice.empty() && error.empty()) reply.detail = transitionNotice;
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
         return reply;
     }
@@ -409,6 +462,8 @@ struct Worker
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
+            if (request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            { reply(request, "Invalid transition policy or changed account."); break; }
             const HWND popup = window ? GetLastActivePopup(window) : nullptr;
             if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
                 (popup && popup != window && IsWindowVisible(popup)) || LLFloaterReg::instanceVisible("preferences"))
@@ -416,6 +471,16 @@ struct Worker
             const bool previousGrant = inputGranted;
             releaseInput();
             const Mode previousMode = mode;
+            if (request.mode != Mode::Active && previousMode == Mode::Active)
+            {
+                startTransition(request.unread != 0);
+                if (transition.active())
+                {
+                    pendingDemotion = request; demoting = true;
+                    EnableWindow(window, FALSE); break;
+                }
+            }
+            else { transition.cancel(); transitionNotice.clear(); }
             mode = request.mode;
             if (mode != Mode::Active)
             {
@@ -444,6 +509,7 @@ struct Worker
                         heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
                     }
                 EnableWindow(window, FALSE); ShowWindow(window, SW_RESTORE);
+                startTransition(request.unread != 0);
                 // Reply/grant input only after an actual normal buffer swap.
             }
             break;
@@ -584,7 +650,7 @@ void FSSessionWorker::tick()
     if (gViewerWindow && gViewerWindow->getWindow()) value.window = static_cast<HWND>(gViewerWindow->getWindow()->getPlatformWindow());
     if (value.session != gAgentSessionID)
     {
-        const bool wasPromoting = value.promoting;
+        const bool wasPromoting = value.promoting, wasDemoting = value.demoting;
         const bool wasReady = value.readyApplied;
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
@@ -592,11 +658,14 @@ void FSSessionWorker::tick()
         value.events.reset();
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
+        value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
         value.promoting = false; value.mode = Mode::Warm; value.readyApplied = false;
         if (wasPromoting) value.reply(value.pendingPromotion, "Session changed before the character was ready.");
+        else if (wasDemoting) value.reply(value.pendingDemotion, "Session changed before switching completed.");
     }
     if (gDisconnected && value.readyApplied && value.mode == Mode::Active)
     {
+        value.transition.cancel();
         value.releaseInput(); value.unembed(); value.mode = Mode::Warm;
         if (value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         if (value.promoting)
@@ -604,6 +673,8 @@ void FSSessionWorker::tick()
             value.promoting = false;
             value.reply(value.pendingPromotion, "Character disconnected before switching completed.");
         }
+        else if (value.demoting)
+        { value.demoting = false; value.reply(value.pendingDemotion, "Character disconnected before switching completed."); }
     }
     if (gKeyboard)
         for (std::size_t key = 0; key < value.heldKeys.size(); ++key)
@@ -624,6 +695,18 @@ void FSSessionWorker::tick()
         if (value.mode != Mode::Active && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
     }
     value.fitSurface();
+    if (value.transition.active())
+    {
+        const bool escape = value.appForeground() && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
+        const bool allowed = value.cameraAllowed() && gAgent.getRegion()->getRegionID() == value.transitionRegion && !(escape && !value.escapeHeld);
+        value.escapeHeld = escape;
+        if (value.transition.finished(GetTickCount64(), value.generation, allowed))
+        {
+            if (!allowed) value.transitionNotice = "Bird's-eye transition skipped; switching instantly.";
+            value.transition.cancel();
+        }
+    }
+    if (value.demoting && !value.transition.active()) value.finishDemotion();
     if (value.embedded() && (!IsWindow(value.parent) || gViewerWindow->getWindow()->getFullscreen())) value.unembed();
     if (value.ready())
     {
@@ -637,11 +720,26 @@ void FSSessionWorker::tick()
         }
     }
     Message request;
-    // A pending promotion owns its response slot until first frame/timeout.
-    if (!value.promoting && !value.pipe.writing() && value.pipe.receive(request)) value.command(request);
+    // Visual-only cancellation has no reply and names the exact pending mode
+    // request. It cannot acquire input or cancel a later switch.
+    if (!value.pipe.writing() && value.pipe.receive(request))
+    {
+        if (request.kind == Kind::CancelTransition)
+        {
+            if (request.sequence > value.sequence && request.generation == value.generation &&
+                ((value.promoting && transitionCancelMatches(request, value.pendingPromotion)) ||
+                    (value.demoting && transitionCancelMatches(request, value.pendingDemotion))))
+            {
+                value.sequence = request.sequence; value.lastCommand = GetTickCount64();
+                value.transition.cancel(); value.transitionNotice = "Bird's-eye transition skipped; switching instantly.";
+            }
+        }
+        else if (!value.promoting && !value.demoting) value.command(request);
+        else { value.detach(); value.pipe.close(); } // Single-response contract violated.
+    }
     if (!value.pipe.alive() || GetTickCount64() - value.lastCommand > 15000)
     {
-        if (!value.detach()) { value.releaseInput(); value.mode = Mode::Warm; value.promoting = false; }
+        if (!value.detach()) { value.releaseInput(); value.mode = Mode::Warm; value.promoting = value.demoting = false; value.transition.cancel(); }
         value.pipe.close();
     }
 }
@@ -651,7 +749,8 @@ bool FSSessionWorker::renderAllowed()
 }
 bool FSSessionWorker::hostForeground()
 {
-    return managed() && worker->readyApplied && worker->mode == Mode::Active && worker->hostForeground();
+    return managed() && worker->readyApplied && worker->mode == Mode::Active &&
+        (worker->hostForeground() || (worker->transition.active() && worker->appForeground()));
 }
 void FSSessionWorker::prepareDisplay()
 {
@@ -714,14 +813,45 @@ void FSSessionWorker::renderMonitor()
     frame.flags |= PreviewFrame; frame.event = ++value.previewSequence; frame.cursor = now;
     value.preview.publish(frame, pixels.data(), pixels.size());
 }
+void FSSessionWorker::beginCameraFrame()
+{
+    if (!managed() || !worker->transition.active() || worker->previewPass || !worker->cameraAllowed()) return;
+    auto& value = *worker;
+    auto& camera = LLViewerCamera::instance();
+    const LLVector3 avatar = gAgent.getPositionAgent();
+    const F32 cap = llmin(96.f, camera.getFar() * 0.65f);
+    const F32 distance = (camera.getOrigin() - avatar).length();
+    if (!camera.isFinite() || !avatar.isFinite() || !std::isfinite(cap) || cap < 16.f || distance > cap)
+    { value.transition.cancel(); value.transitionNotice = "Bird's-eye transition skipped: long-range or unavailable camera."; return; }
+    const F32 height = llmin(cap, llmax(64.f, distance * 1.25f));
+    LLVector3 horizontal = camera.getAtAxis(); horizontal.mV[VZ] = 0.f;
+    if (horizontal.normalize() < 0.001f) horizontal.set(1.f, 0.f, 0.f);
+    const LLVector3 bird_origin = avatar + LLVector3(0.f, 0.f, height) - horizontal * (height * 0.12f);
+    LLCoordFrame bird(bird_origin, avatar + LLVector3(0.f, 0.f, 1.f) - bird_origin);
+    const F32 t = value.transition.fraction(GetTickCount64());
+    const F32 weight = value.demoting ? t : 1.f - t;
+    value.cameraBefore = camera; value.cameraOverridden = true;
+    camera.setOrigin(camera.getOrigin() + (bird_origin - camera.getOrigin()) * weight);
+    camera.setAxes(slerp(weight, value.cameraBefore.getQuaternion(), bird.getQuaternion()));
+}
+void FSSessionWorker::endCameraFrame()
+{
+    if (!worker || !worker->cameraOverridden) return;
+    auto& value = *worker;
+    // Restore native pose/frustum before snapshot/reflection/idle work. Agent
+    // camera controls and simulator camera messages are never changed here.
+    static_cast<LLCamera&>(LLViewerCamera::instance()) = value.cameraBefore;
+    value.cameraOverridden = false;
+    gViewerWindow->setup3DRender();
+}
 bool FSSessionWorker::inputAllowed()
 {
-    return !managed() || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting);
+    return !managed() || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting && !worker->demoting);
 }
 bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed(); }
 bool FSSessionWorker::backgroundAudioMuted()
 {
-    return managed() && worker->readyApplied && worker->mode != Mode::Active && worker->muteBackground;
+    return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
 }
 void FSSessionWorker::nearbyMessage(const LLChat& chat)
 {
@@ -757,7 +887,7 @@ void FSSessionWorker::framePresented()
 {
     if (!managed() || worker->previewPass) return;
     ++worker->frames;
-    if (worker->promoting && worker->ready() && worker->frames - worker->promotionStart >= 2)
+    if (worker->promoting && !worker->transition.active() && worker->ready() && worker->frames - worker->promotionStart >= 2)
     {
         worker->promoting = false;
         if (!worker->grantInput())
@@ -804,6 +934,8 @@ bool FSSessionWorker::hostForeground() { return false; }
 void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::monitorRendering() { return false; }
 void FSSessionWorker::renderMonitor() {}
+void FSSessionWorker::beginCameraFrame() {}
+void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }
