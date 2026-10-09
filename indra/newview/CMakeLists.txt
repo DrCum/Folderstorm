@@ -1436,6 +1436,7 @@ set(viewer_HEADER_FILES
     fssessionworker.h
     fssessionprotocol.h
     fssessionchatmodel.h
+    fssessionhostoptions.h
     fssessionpipe.h
     llinventorybridge.h
     llinventorycopypolicy.h

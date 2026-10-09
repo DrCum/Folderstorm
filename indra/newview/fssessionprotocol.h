@@ -18,14 +18,14 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-constexpr std::uint32_t Version = 5;
+constexpr std::uint32_t Version = 6;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
-    Status = 16
+    Status = 16, WorkspaceInfo, WorkspaceMenu
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
@@ -53,7 +53,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return (kind >= Kind::Poll && kind <= Kind::Typing) || kind == Kind::Status;
+    return kind >= Kind::Poll && kind <= Kind::WorkspaceMenu;
 }
 inline bool validUtf8(const std::string& text, bool multiline = false)
 {

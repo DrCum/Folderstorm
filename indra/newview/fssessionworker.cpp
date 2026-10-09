@@ -11,6 +11,7 @@
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fseventapibridge.h"
+#include "fsworkspacecontroller.h"
 #include "llagent.h"
 #include "llagentdata.h"
 #include "llagentui.h"
@@ -449,6 +450,28 @@ struct Worker
             if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
             applyVoice(); reply(request); break;
+        case Kind::WorkspaceInfo:
+        case Kind::WorkspaceMenu:
+        {
+            if (!ready() || request.account != gAgentID.asString() || request.grid != loginGrid)
+            { reply(request, "Workspace session changed or is not ready."); break; }
+            auto& workspaces = FSWorkspaceController::instance();
+            if (request.kind == Kind::WorkspaceMenu)
+            {
+                if (!inputGranted || mode != Mode::Active || promoting || !workspaces.canQuickSwitch())
+                { reply(request, "Switch to this character and close Preferences before managing its workspaces."); break; }
+                LLFloaterReg::showInstance("workspace_switch", LLSD(), true); reply(request); break;
+            }
+            auto response = status(request);
+            if (workspaces.available() && sharingAllowed())
+            {
+                response.title = boundedText(workspaces.activeId(), 255);
+                response.text = boundedText(workspaces.status(), 3071, true);
+                response.unread = 4u | (workspaces.modified() ? 1u : 0u) | (LLFloaterReg::instanceVisible("preferences") ? 2u : 0u);
+            }
+            if (!pipe.send(response)) { detach(); pipe.close(); }
+            break;
+        }
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
