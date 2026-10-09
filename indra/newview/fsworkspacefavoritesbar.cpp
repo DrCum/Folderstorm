@@ -22,6 +22,7 @@
 #include "llcallbacklist.h"
 #include "llfloaterreg.h"
 #include "lllayoutstack.h"
+#include "llfavoritesbar.h"
 #include "llmenubutton.h"
 #include "llmenugl.h"
 #include "llnotificationsutil.h"
@@ -34,32 +35,21 @@
 
 namespace
 {
-constexpr S32 ROW_HEIGHT = 24;
-constexpr S32 MORE_WIDTH = 64;
+constexpr S32 MORE_WIDTH = 15;
 constexpr const char* SHOW_SETTING = "FSShowWorkspaceFavoritesStrip";
 }
 void FSWorkspaceFavoritesBar::install(LLView* navigation)
 {
-    if (!navigation || navigation->findChildView("workspace_favorites_row")) return;
-    auto* stack = navigation->findChild<LLLayoutStack>("navigation_favorites_bar_visibility_stack");
-    if (!stack) return;
+    if (!navigation || navigation->findChildView("workspace_favorites_strip")) return;
+    auto* container = navigation->findChild<LLLayoutPanel>("favorites_bar_visibility_panel");
+    auto* landmarks = navigation->findChild<LLFavoritesBarCtrl>("favorite");
+    if (!container || !landmarks) return;
     auto* bar = new FSWorkspaceFavoritesBar();
     if (!bar->buildFromFile("panel_workspace_favorites.xml")) { delete bar; return; }
-    bar->mNavigation = navigation->getHandle(); bar->mStack = stack->getHandle();
-    bar->mNavigationHeight = navigation->getRect().getHeight();
-    bar->mStackHeight = stack->getRect().getHeight();
-    LLLayoutPanel::Params p;
-    p.name = "workspace_favorites_row";
-    p.rect = LLRect(0, ROW_HEIGHT, stack->getRect().getWidth(), 0);
-    p.auto_resize = false; p.user_resize = false; p.min_dim = ROW_HEIGHT; p.visible = false;
-    auto* container = LLUICtrlFactory::create<LLLayoutPanel>(p);
-    container->addChild(bar);
-    bar->setShape(container->getLocalRect());
-    bar->mContainer = container->getHandle();
-    stack->addPanel(container);
+    bar->mNavigation = navigation->getHandle(); bar->mContainer = container->getHandle();
+    bar->mLandmarks = landmarks->getHandle();
+    container->addChild(bar); bar->setVisible(false);
     bar->refresh();
-    // Polling continues while hidden, so login/account/UI-mode changes and
-    // favorites edited through the switcher never leave stale buttons behind.
     gIdleCallbacks.addFunction(idle, bar);
 }
 FSWorkspaceFavoritesBar::~FSWorkspaceFavoritesBar()
@@ -80,42 +70,58 @@ void FSWorkspaceFavoritesBar::idle(void* userdata)
 }
 void FSWorkspaceFavoritesBar::refresh()
 {
-    auto* navigation = mNavigation.get();
-    auto* stack = static_cast<LLLayoutStack*>(mStack.get());
-    auto* container = mContainer.get();
-    if (!navigation || !stack || !container) return;
+    auto* navigation = mNavigation.get(); auto* container = mContainer.get();
+    auto* landmarks = static_cast<LLFavoritesBarCtrl*>(mLandmarks.get());
+    if (!navigation || !container || !landmarks) return;
     auto& controller = FSWorkspaceController::instance();
     const bool ready = controller.available();
-    const bool shown = ready && gSavedSettings.getBOOL(SHOW_SETTING) &&
-        gViewerWindow && gViewerWindow->getUIVisibility() && !gAgentCamera.cameraMouselook();
+    const bool ui_shown = ready && gViewerWindow && gViewerWindow->getUIVisibility() && !gAgentCamera.cameraMouselook();
+    const bool shown = ui_shown && gSavedSettings.getBOOL(SHOW_SETTING);
+    const bool landmarks_shown = ui_shown && gSavedSettings.getBOOL("ShowNavbarFavoritesPanel");
     const bool can_switch = controller.canQuickSwitch();
-    if (shown != mShown)
-    {
-        if (!shown) mMore->hideMenu();
-        container->setVisible(shown);
-        LLRect bounds = navigation->getRect();
-        bounds.mBottom = bounds.mTop - mNavigationHeight - (shown ? ROW_HEIGHT : 0);
-        navigation->setShape(bounds);
-        bounds = stack->getRect();
-        bounds.mBottom = bounds.mTop - mStackHeight - (shown ? ROW_HEIGHT : 0);
-        stack->setShape(bounds);
-        stack->updateLayout();
-    }
+    const bool divider = shown && landmarks_shown;
+    // One existing row, even when only workspace favorites are enabled.
+    const bool row_visible = landmarks_shown || shown;
+    if (gSavedSettings.getBOOL("FSInternalShowNavbarFavoritesPanel") != row_visible)
+        gSavedSettings.setBOOL("FSInternalShowNavbarFavoritesPanel", row_visible);
+    landmarks->setVisible(landmarks_shown); setVisible(shown);
     const LLSD profiles = ready ? gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles") : LLSD();
     const LLSD layouts = ready ? gSavedSettings.getLLSD("FSChromeLayoutProfiles") : LLSD();
     const LLSD favorites = ready ? gSavedPerAccountSettings.getLLSD(FSWorkspaceQuickAccess::FAVORITES_SETTING) : LLSD();
-    if (mWidth != getRect().getWidth() || shown != mShown || can_switch != mCanSwitch ||
-        gAgent.getID() != mAccount || gAgent.getSessionID() != mSession ||
-        profiles != mProfiles || layouts != mLayouts || favorites != mFavorites)
+    const auto active = controller.activeId();
+    const bool modified = controller.modified(), previous = controller.hasPrevious();
+    const bool changed = shown != mShown || can_switch != mCanSwitch || divider != mDivider ||
+        gAgent.getID() != mAccount || gAgent.getSessionID() != mSession || profiles != mProfiles ||
+        layouts != mLayouts || favorites != mFavorites || active != mActive || modified != mModified || previous != mHasPrevious;
+    if (changed)
     {
-        mWidth = getRect().getWidth(); mShown = shown; mCanSwitch = can_switch;
+        mEntries.clear();
+        const auto entries = FSWorkspaceQuickAccess::entries(); const auto valid = FSWorkspaceQuickAccess::favorites(entries);
+        for (const auto& entry : entries) if (valid.count(entry.key)) mEntries.push_back(entry);
+    }
+    const auto* font = landmarks->favoriteFont();
+    const S32 maximum = std::max(36, static_cast<S32>(landmarks->favoriteButtonParams().rect.width));
+    S32 desired = MORE_WIDTH + 8 + (divider ? 12 : 0);
+    for (const auto& entry : mEntries) desired += llclamp(font->getWidth(entry.label) + 30, 36, maximum) + 4;
+    const S32 available = std::max(0, container->getRect().getWidth());
+    // Keep ample room for landmarks on crowded rows; both groups retain their
+    // own overflow menus. On roomy rows the divider follows the last landmark.
+    const S32 reserved = std::min(desired, landmarks_shown ? std::max(MORE_WIDTH + 16, available / 2) : available);
+    const S32 landmark_width = !shown ? available : landmarks_shown ? std::min(landmarks->preferredWidth(), std::max(0, available - reserved)) : 0;
+    LLRect landmark_bounds = landmarks->getRect();
+    landmark_bounds.mRight = landmark_bounds.mLeft + landmark_width;
+    if (landmarks->getRect() != landmark_bounds) landmarks->setShape(landmark_bounds);
+    const S32 width = shown ? std::min(desired, std::max(0, available - landmark_width)) : 0;
+    const LLRect bounds(landmark_width, landmark_bounds.mTop, landmark_width + width, landmark_bounds.mBottom);
+    const bool resized = width != mWidth || bounds != getRect();
+    if (resized) setShape(bounds);
+    if (changed || resized)
+    {
+        if (!shown) mMore->hideMenu();
+        mWidth = width; mShown = shown; mCanSwitch = can_switch; mDivider = divider;
+        mActive = active; mModified = modified; mHasPrevious = previous;
         mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
         mProfiles = profiles; mLayouts = layouts; mFavorites = favorites;
-        mEntries.clear();
-        const auto entries = FSWorkspaceQuickAccess::entries();
-        const auto valid = FSWorkspaceQuickAccess::favorites(entries);
-        for (const auto& entry : entries)
-            if (valid.count(entry.key)) mEntries.push_back(entry);
         rebuild();
     }
 }
@@ -124,48 +130,40 @@ void FSWorkspaceFavoritesBar::rebuild()
     mMore->hideMenu();
     for (LLView* child : mDynamicChildren) { removeChild(child); delete child; }
     mDynamicChildren.clear();
-    const auto* font = LLFontGL::getFontSansSerifSmall();
-    const S32 more_width = std::min(MORE_WIDTH, std::max(0, mWidth - 8));
-    mMore->setShape(LLRect(std::max(4, mWidth - more_width - 4), ROW_HEIGHT - 2,
-                         std::max(4, mWidth - 4), 2));
-    S32 x = 6;
-    const S32 limit = mMore->getRect().mLeft - 6;
-    std::vector<FSWorkspaceQuickAccess::Entry> overflow;
-    for (bool layout : {false, true})
+    auto* landmarks = static_cast<LLFavoritesBarCtrl*>(mLandmarks.get());
+    const auto* font = landmarks ? landmarks->favoriteFont() : LLFontGL::getFontSansSerifSmall();
+    const S32 height = std::max(1, getRect().getHeight());
+    const S32 more_width = std::min(MORE_WIDTH, std::max(0, mWidth - 4));
+    mMore->setShape(LLRect(std::max(0, mWidth - more_width), height, mWidth, 0));
+    S32 x = mDivider ? 12 : 0;
+    const S32 limit = mMore->getRect().mLeft - 4;
+    if (mDivider)
     {
-        bool labeled = false;
-        for (const auto& entry : mEntries)
-        {
-            if (entry.layout != layout) continue;
-            const auto group = getString(layout ? "layouts" : "workspaces");
-            const S32 label_width = labeled ? 0 : font->getWidth(group) + 8;
-            const S32 button_width = llclamp(font->getWidth(entry.label) + 20, 72, 170);
-            if (x + label_width + button_width > limit)
-            { overflow.push_back(entry); continue; }
-            if (!labeled)
-            {
-                LLTextBox::Params p;
-                p.name = layout ? "layout_group" : "workspace_group";
-                p.rect = LLRect(x, ROW_HEIGHT - 4, x + label_width, 2);
-                p.font = font; p.text = group;
-                auto* label = LLUICtrlFactory::create<LLTextBox>(p, this);
-                mDynamicChildren.push_back(label); x += label_width; labeled = true;
-            }
-            LLButton::Params p;
-            p.name = entry.key; p.label = entry.label; p.font = font; p.use_ellipses = true;
-            p.rect = LLRect(x, ROW_HEIGHT - 2, x + button_width, 2);
-            auto* button = LLUICtrlFactory::create<LLButton>(p, this);
-            button->setEnabled(mCanSwitch);
-            button->setToolTip(entry.label + (mCanSwitch ? "" : " — " + getString("preferences_open")));
-            const auto key = entry.key;
-            button->setCommitCallback([this, key](LLUICtrl*, const LLSD&) { switchEntry(key); });
-            mDynamicChildren.push_back(button); x += button_width + 4;
-        }
+        LLTextBox::Params p; p.name = "workspace_divider"; p.font = font; p.initial_value = "|";
+        p.rect = LLRect(2, height, 12, 0);
+        mDynamicChildren.push_back(LLUICtrlFactory::create<LLTextBox>(p, this));
     }
-    auto* hint = getChild<LLTextBox>("hint");
-    hint->setShape(LLRect(6, ROW_HEIGHT - 4, std::max(6, limit), 2));
-    hint->setText(getString(mEntries.empty() ? "empty" : "overflow_hint"));
-    hint->setVisible(mDynamicChildren.empty());
+    std::vector<FSWorkspaceQuickAccess::Entry> overflow;
+    for (const auto& entry : mEntries)
+    {
+        LLButton::Params p;
+        if (landmarks) p = landmarks->favoriteButtonParams();
+        const bool active = entry.key == "workspace:" + mActive;
+        const std::string label = (active ? "• " : "") + entry.label + (active && mModified ? " *" : "");
+        const S32 maximum = std::max(36, static_cast<S32>(p.rect.width));
+        const S32 button_width = llclamp(font->getWidth(label) + 20, 36, maximum);
+        if (x + button_width > limit) { overflow.push_back(entry); continue; }
+        p.name = entry.key; p.label = label; p.font = font; p.use_ellipses = true;
+        p.rect = LLRect(x, height, x + button_width, 0);
+        auto* button = LLUICtrlFactory::create<LLButton>(p, this);
+        button->setEnabled(mCanSwitch);
+        button->setToolTip(getString(entry.layout ? "layout_type" : "workspace_type") + ": " + entry.label +
+            (active ? (mModified ? " — current, modified" : " — current") : "") +
+            (mCanSwitch ? "" : " — " + getString("preferences_open")));
+        const auto key = entry.key;
+        button->setCommitCallback([this, key](LLUICtrl*, const LLSD&) { switchEntry(key); });
+        mDynamicChildren.push_back(button); x += button_width + 4;
+    }
     LLToggleableMenu::Params p;
     p.name = "workspace_favorites_overflow"; p.visible = false; p.can_tear_off = false;
     p.scrollable = true; p.max_scrollable_items = 12;
@@ -178,24 +176,29 @@ void FSWorkspaceFavoritesBar::rebuild()
         item.enabled = mCanSwitch;
         const auto key = entry.key;
         item.on_click.function([this, key](LLUICtrl*, const LLSD&) { switchEntry(key); });
-        menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
+        menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
     }
     if (!overflow.empty())
     {
         LLMenuItemSeparatorGL::Params separator;
-        menu->append(LLUICtrlFactory::create<LLMenuItemSeparatorGL>(separator));
+        menu->addChild(LLUICtrlFactory::create<LLMenuItemSeparatorGL>(separator));
     }
+    LLMenuItemCallGL::Params previous;
+    previous.name = "previous_arrangement"; previous.label = "Previous arrangement";
+    previous.enabled = FSWorkspaceController::instance().hasPrevious();
+    previous.on_click.function([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(previous));
     LLMenuItemCallGL::Params manage;
     manage.name = "manage_workspaces"; manage.label = getString("manage");
     manage.on_click.function([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_switch"); });
-    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(manage));
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(manage));
     LLMenuItemCallGL::Params hide;
     hide.name = "hide_strip"; hide.label = getString("hide"); hide.enabled = mCanSwitch;
     hide.on_click.function([](LLUICtrl*, const LLSD&)
     {
         if (FSWorkspaceController::instance().canQuickSwitch()) gSavedSettings.setBOOL(SHOW_SETTING, false);
     });
-    menu->append(LLUICtrlFactory::create<LLMenuItemCallGL>(hide));
+    menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(hide));
     mMore->setMenu(menu, LLMenuButton::MP_BOTTOM_RIGHT, true);
     mMore->setToolTip(getString(mCanSwitch ? "more_hint" : "preferences_open"));
 }

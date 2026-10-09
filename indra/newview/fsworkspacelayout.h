@@ -60,8 +60,22 @@ struct Window
     InventoryFolder inventory_folder;
 };
 
+enum Component { Chrome = 1, Inventory = 2, Maps = 4, Chat = 8, All = 15 };
+int componentForRole(Role role);
+
+struct Toolbar
+{
+    int location = 1; // Registered toolbar locations: left, right, bottom.
+    int display_mode = 0;
+    std::vector<std::string> commands;
+};
+constexpr int MAX_TOOLBAR_COMMANDS = 64;
+
 struct Workspace
 {
+    bool remember_toolbars = false;
+    std::vector<Toolbar> toolbars;
+    int components = All;
     FSChromeLayout::Snapshot chrome;
     bool world_view_in_mouselook = true;
     bool remember_inventory_folders = false;
@@ -108,6 +122,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error);
 // Geometry uses bottom-left UI logical units, never native display pixels.
 // An oversized minimum retains its size with the title/close edge in frame.
 Placement fit(const Window& window, const Rect& frame, float min_width, float min_height);
+Placement fitWithNeighbors(const Window& window, const Rect& frame, float min_width, float min_height, const std::vector<Rect>& placed);
 Window capture(const Rect& rect, const Rect& frame, bool visible, bool minimized);
 } // namespace FSWorkspaceLayout
 

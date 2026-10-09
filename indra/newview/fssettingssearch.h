@@ -42,6 +42,12 @@ inline std::vector<std::string> aliases(const std::string& scope, const std::str
     }
     if (scope == "workspace_editor")
     {
+        if (control == "workspace_startup_mode" || control == "workspace_startup_name")
+            return {"workspace", "startup restore", "login arrangement", "last arrangement"};
+        if (control == "workspace_snapping")
+            return {"workspace", "snap windows", "alignment", "arrange windows"};
+        if (control.compare(0, 18, "workspace_capture_") == 0)
+            return {"workspace", "selective restore", "toolbar buttons", "restore components"};
         if (control == "workspace_remember_folders")
             return {"workspace", "inventory folders", "remember folders", "folder workspace"};
         if (control == "workspace_favorites_strip")

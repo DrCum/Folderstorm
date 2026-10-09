@@ -36,6 +36,7 @@
 #include "lluuid.h"
 //#include "llnotificationsutil.h"
 #include <set>
+#include <functional>
 #include <boost/signals2.hpp>
 
 class LLDragHandle;
@@ -317,6 +318,11 @@ public:
     // Account-local workspace geometry, independent of minimized icon placement.
     const LLRect& getWorkspaceRect() const { return mMinimized ? mExpandedRect : getRect(); }
     bool applyWorkspaceRect(const LLRect& rect, bool primary_inventory = false);
+    // Viewer-provided policy, keeping llui independent of utility registry names.
+    using WorkspaceSnap = std::function<bool(LLFloater*, S32&, ESnapEdge)>;
+    static void setWorkspaceSnap(WorkspaceSnap callback);
+    LLView* findSnapEdge(S32& edge, const LLCoordGL& direction, ESnapEdge snap_edge,
+                        ESnapType type, S32 threshold, S32 padding = 0) override;
     struct WorkspacePositioning
     {
         bool workspace;

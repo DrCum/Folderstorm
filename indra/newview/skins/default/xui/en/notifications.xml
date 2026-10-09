@@ -15594,4 +15594,8 @@ Folder names cannot contain / or \.
     Delete the saved workspace “[NAME]”?
     <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Delete"/>
   </notification>
+ <notification name="ConfirmWorkspaceImport" type="alertmodal">
+  Import the reviewed workspace batch using the selected collision policy? Only workspace definitions will change.
+  <usetemplate name="okcancelbuttons" notext="Cancel" yestext="Import"/>
+ </notification>
 </notifications>

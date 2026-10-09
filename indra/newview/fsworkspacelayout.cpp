@@ -137,3 +137,32 @@ Placement fit(const Window& window, const Rect& frame, float min_width, float mi
     return placement;
 }
 } // namespace FSWorkspaceLayout
+
+int FSWorkspaceLayout::componentForRole(Role role)
+{
+    switch (role)
+    {
+    case Role::InventoryPrimary: case Role::InventoryExtra1: return Inventory;
+    case Role::MiniMap: case Role::WorldMap: return Maps;
+    default: return Chat;
+    }
+}
+
+FSWorkspaceLayout::Placement FSWorkspaceLayout::fitWithNeighbors(const Window& window, const Rect& frame,
+    float min_width, float min_height, const std::vector<Rect>& placed)
+{
+    auto result = fit(window, frame, min_width, min_height);
+    if (!window.has_geometry || result.rect.width() <= 0.f || result.rect.height() <= 0.f) return result;
+    auto& r = result.rect;
+    r = {std::round(r.left), std::round(r.bottom), std::round(r.right), std::round(r.top)};
+    for (const auto& prior : placed)
+        if (std::abs(r.top - prior.top) < 8.f && std::abs(r.left - prior.left) < 24.f)
+        {
+            r.left += 16.f; r.right += 16.f; r.bottom -= 24.f; r.top -= 24.f;
+            result.adjusted = true;
+        }
+    const auto clamped = fit(capture(r, frame, window.visible, window.minimized), frame, min_width, min_height);
+    result.adjusted = result.adjusted || clamped.adjusted;
+    result.rect = {std::round(clamped.rect.left), std::round(clamped.rect.bottom), std::round(clamped.rect.right), std::round(clamped.rect.top)};
+    return result;
+}

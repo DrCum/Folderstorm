@@ -77,6 +77,17 @@ int main()
     const auto rejected = fit(invalid, frame, 100.f, 100.f);
     expect(rejected.rect.width() == 0.f && rejected.adjusted, "Invalid raw geometry rejected before placement");
     expect(fit(window, {0.f, 0.f, 0.f, 0.f}, 100.f, 100.f).rect.height() == 0.f, "Unavailable client frame rejected");
+    const auto staggered = fitWithNeighbors(window, frame, 100.f, 100.f, {original});
+    expect(near(staggered.rect.left, original.left + 16.f) && near(staggered.rect.top, original.top - 24.f) && staggered.adjusted,
+           "Coincident title edges stagger using shared preview/placement geometry");
+    const auto unchanged = fitWithNeighbors(window, frame, 100.f, 100.f, {});
+    expect(near(unchanged.rect.left, original.left) && near(unchanged.rect.top, original.top),
+           "Previous can preserve intentional overlap by omitting neighbors");
+    const auto tiny_neighbors = fitWithNeighbors(window, {20.f, 30.f, 100.f, 70.f}, 200.f, 150.f, {{-100.f, -80.f, 100.f, 70.f}});
+    expect(near(tiny_neighbors.rect.right, 100.f) && near(tiny_neighbors.rect.top, 70.f),
+           "Staggering cannot move an oversized minimum's close/title edge out of frame");
+    expect(componentForRole(Role::MiniMap) == Maps && componentForRole(Role::InventoryExtra1) == Inventory &&
+           componentForRole(Role::ConversationsGeometry) == Chat, "Utility roles map to restoration groups");
     if (!failures) std::cout << "Workspace geometry/name tests passed\n";
     return failures ? 1 : 0;
 }

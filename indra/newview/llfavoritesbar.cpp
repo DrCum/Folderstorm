@@ -2499,3 +2499,15 @@ void AddFavoriteLandmarkCallback::fire(const LLUUID& inv_item_id)
 }
 
 // EOF
+
+S32 LLFavoritesBarCtrl::preferredWidth()
+{
+    if (mItems.empty()) return mBarLabel->getRect().mRight;
+    const auto& style = getButtonParams();
+    const S32 maximum = std::max(1, static_cast<S32>(style.rect.width));
+    const S32 spacing = std::max(0, static_cast<S32>(style.rect.left)) * 2;
+    S32 width = mMoreCtrl->getRect().getWidth() + 4;
+    for (const auto& item : mItems)
+        width = std::min(16384, width + std::min(maximum, mFont->getWidth(item->getName()) + 20) + spacing);
+    return width;
+}

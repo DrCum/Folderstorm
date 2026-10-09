@@ -26,6 +26,18 @@
 #include "llnotificationsutil.h"
 #include "lltextbox.h"
 
+
+namespace {
+int captureComponents(LLView* view)
+{
+    int mask = 0;
+    if (view->getChild<LLCheckBoxCtrl>("workspace_capture_chrome")->get()) mask |= FSWorkspaceLayout::Chrome;
+    if (view->getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
+    if (view->getChild<LLCheckBoxCtrl>("workspace_capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
+    if (view->getChild<LLCheckBoxCtrl>("workspace_capture_chat")->get()) mask |= FSWorkspaceLayout::Chat;
+    return mask;
+}
+}
 static LLPanelInjector<FSPanelPreferenceWorkspaces> t_workspace_panel("panel_preference_workspaces");
 
 bool FSPanelPreferenceWorkspaces::postBuild()
@@ -83,6 +95,11 @@ void FSPanelPreferenceWorkspaces::refresh()
             if (combo->getCurrentIndex() < 0 && !controller.activeId().empty()) combo->setValue(controller.activeId());
             if (combo->getCurrentIndex() < 0 && combo->getItemCount()) combo->selectFirstItem();
         }
+        auto* startup = getChild<LLComboBox>("workspace_startup_name");
+        const auto prior_startup = startup->getValue();
+        startup->removeall();
+        if (ready) for (const auto& name : controller.names()) startup->add(name, name);
+        startup->setValue(prior_startup);
         mObservedRevision = controller.revision();
     }
     auto* remember = getChild<LLCheckBoxCtrl>("workspace_remember_folders");
@@ -90,14 +107,25 @@ void FSPanelPreferenceWorkspaces::refresh()
         gAgent.getSessionID() != mFolderOptionSession)
     {
         remember->set(ready && controller.remembersInventoryFolders(selected()));
+        FSWorkspaceLayout::Workspace saved;
+        const int mask = ready && controller.readProfile(selected(), saved) ? saved.components : FSWorkspaceLayout::All;
+        getChild<LLCheckBoxCtrl>("workspace_capture_chrome")->set((mask & FSWorkspaceLayout::Chrome) != 0);
+        getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->set((mask & FSWorkspaceLayout::Inventory) != 0);
+        getChild<LLCheckBoxCtrl>("workspace_capture_maps")->set((mask & FSWorkspaceLayout::Maps) != 0);
+        getChild<LLCheckBoxCtrl>("workspace_capture_chat")->set((mask & FSWorkspaceLayout::Chat) != 0);
+
+        getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->set(saved.remember_toolbars);
         mFolderOptionWorkspace = selected();
         mFolderOptionAccount = gAgent.getID(); mFolderOptionSession = gAgent.getSessionID();
     }
-    remember->setEnabled(ready);
+    remember->setEnabled(ready && getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get());
+    for (const char* name : {"workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat", "workspace_capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
+    getChild<LLComboBox>("workspace_startup_mode")->setEnabled(ready);
+    getChild<LLComboBox>("workspace_startup_name")->setEnabled(ready && getChild<LLComboBox>("workspace_startup_mode")->getValue().asString() == "named");
     combo->setEnabled(ready && combo->getItemCount());
     getChild<LLLineEditor>("workspace_name")->setEnabled(ready);
     getChild<LLButton>("workspace_preview")->setEnabled(ready && !selected().empty());
-    getChild<LLButton>("workspace_save")->setEnabled(ready);
+    getChild<LLButton>("workspace_save")->setEnabled(ready && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get()));
     getChild<LLButton>("workspace_rename")->setEnabled(ready && controller.isCustom(selected()));
     getChild<LLButton>("workspace_delete")->setEnabled(ready && controller.isCustom(selected()));
     getChild<LLButton>("workspace_add_inventory")->setEnabled(ready);
@@ -120,7 +148,7 @@ void FSPanelPreferenceWorkspaces::action(const std::string& name)
     else if (name == "save")
     {
         const auto label = enteredName();
-        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get()) && controller.status() == "exists") confirm("overwrite", label);
+        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get()) && controller.status() == "exists") confirm("overwrite", label);
     }
     else if (name == "rename") controller.rename(selected(), enteredName());
     else if (name == "delete") confirm("delete", selected());
@@ -133,17 +161,19 @@ void FSPanelPreferenceWorkspaces::confirm(const std::string& action, const std::
     if (!controller.available() || !controller.isCustom(name)) return;
     const auto revision = controller.revision();
     const bool remember_folders = getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get();
+    const int components = captureComponents(this);
+    const bool toolbars = getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get();
     const auto handle = getDerivedHandle<FSPanelPreferenceWorkspaces>();
     LLSD args;
     args["NAME"] = name;
     LLNotificationsUtil::add(action == "overwrite" ? "ConfirmWorkspaceOverwrite" : "ConfirmWorkspaceDelete",
-        args, LLSD(), [handle, revision, action, name, remember_folders](const LLSD& notification, const LLSD& response)
+        args, LLSD(), [handle, revision, action, name, remember_folders, components, toolbars](const LLSD& notification, const LLSD& response)
         {
             auto* panel = handle.get();
             auto& controller = FSWorkspaceController::instance();
             if (!panel || !controller.available() || controller.revision() != revision ||
                 LLNotificationsUtil::getSelectedOption(notification, response) != 0) return;
-            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders);
+            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders, components, toolbars);
             else controller.remove(name);
             panel->refresh();
         });

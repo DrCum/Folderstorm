@@ -111,11 +111,13 @@ set(viewer_SOURCE_FILES
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
+    fsworkspacepreview.cpp
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
     fsworkspacecontroller.cpp
     fsworkspacequickaccess.cpp
     fsworkspacefavoritesbar.cpp
+    fsfloaterworkspacetools.cpp
     fsfloaterworkspaces.cpp
     fsworkspaceinventoryfloater.cpp
     fspanelpreferenceworkspaces.cpp
@@ -998,10 +1000,13 @@ set(viewer_HEADER_FILES
     fschatparticipants.h
     fsdispatchclassifiedclickthrough.h
     fscommon.h
+    fsworkspacefile.h
+    fsworkspacepreview.h
     fsworkspacelayout.h
     fsworkspacecontroller.h
     fsworkspacequickaccess.h
     fsworkspacefavoritesbar.h
+    fsfloaterworkspacetools.h
     fsfloaterworkspaces.h
     fssettingssearch.h
     fsworkspaceinventoryfloater.h

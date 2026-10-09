@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
 
@@ -5114,6 +5115,7 @@ void LLAppViewer::requestQuit()
     LLHUDManager::getInstance()->sendEffects();
     effectp->markDead() ;//remove it.
 
+    FSWorkspaceController::instance().saveLastArrangement();
     pingMainloopTimeout("Main:qFloaters");
     // Attempt to close all floaters that might be
     // editing things.

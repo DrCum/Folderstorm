@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<floater name="workspace_tools" title="Workspace tools" width="500" height="720" min_width="400" min_height="450" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
+ <string name="exported">Workspace exported.</string>
+ <string name="file_failed">Could not read/write the workspace file (maximum 1 MiB).</string>
+ <string name="invalid_file">Invalid or unsupported workspace file. No settings changed.</string>
+ <string name="skipped_entry">Skipped / unsupported</string><string name="collision">Existing name</string><string name="new_entry">New</string>
+ <string name="imported">Reviewed batch imported. Select it in the switcher to load it.</string>
+ <string name="import_failed">Import cancelled: settings changed, a name cannot be replaced, or the 32-workspace limit would be exceeded.</string>
+ <string name="arranged">Arranged selected utility windows. Previous arrangement can undo this.</string>
+ <string name="choose_windows">Select two windows to align, or three to distribute. Unavailable or attached windows are excluded.</string>
+ <scroll_container name="tools_scroll" left="0" top="26" right="-1" bottom="-1" follows="all" opaque="false">
+ <panel name="tools_content" left="0" top="0" width="475" height="864" follows="left|top|right" layout="topleft">
+ <text name="intro" left="15" top="30" right="-15" height="36" follows="left|right|top" wrap="true">Select utility windows with Ctrl/Shift, then align their edges or distribute spacing.</text>
+ <scroll_list name="windows" left="15" top="76" right="-15" height="155" follows="left|right|top" multi_select="true" can_sort="false"><scroll_list.columns name="name" dynamic_width="true"/></scroll_list>
+ <combo_box name="alignment" left="15" top="241" right="-140" height="24" follows="left|right|top">
+  <combo_box.item label="Align left" value="0"/><combo_box.item label="Align right" value="1"/>
+  <combo_box.item label="Align top" value="2"/><combo_box.item label="Align bottom" value="3"/>
+  <combo_box.item label="Distribute horizontally" value="4"/><combo_box.item label="Distribute vertically" value="5"/>
+ </combo_box>
+ <button name="arrange" label="Arrange" right="-15" top="241" width="115" height="24" follows="right|top"/>
+ <button name="refresh_windows" label="Refresh window list" left="15" top="275" width="175" height="24" follows="left|top"/>
+ <check_box name="snapping" label="Snap utility windows (hold Shift to bypass)" control_name="FSWorkspaceWindowSnapping" left="15" top="309" right="-15" height="22" follows="left|right|top"/>
+ <text name="status" left="15" top="345" right="-15" height="46" follows="left|right|top" wrap="true"/>
+ <text name="transfer_heading" left="15" top="405" right="-15" height="20" follows="left|right|top">Export / import named workspaces</text>
+ <combo_box name="export_profile" left="15" top="435" right="-15" height="24" follows="left|right|top"/>
+ <button name="export" label="Export selected…" left="15" top="469" width="155" height="24" follows="left|top"/>
+ <button name="import" label="Review file…" left_pad="8" top="469" width="155" height="24" follows="left|top"/>
+ <check_box name="include_folders" label="Include Inventory folder references" left="15" top="503" right="-15" height="22" follows="left|right|top"/>
+ <scroll_list name="import_review" left="15" top="537" right="-15" height="120" follows="left|right|top" multi_select="false" can_sort="false">
+  <scroll_list.columns name="name" dynamic_width="true"/><scroll_list.columns name="result" width="150"/>
+ </scroll_list>
+ <check_box name="replace_collisions" label="Replace reviewed existing names" left="15" top="667" right="-15" height="22" follows="left|right|top"/>
+ <button name="apply_import" label="Import reviewed batch…" left="15" top="701" width="220" height="24" follows="left|top" enabled="false"/>
+ <text name="transfer_status" left="15" top="735" right="-15" height="60" follows="left|right|top" wrap="true"/>
+ <button name="startup_settings" label="Startup restore / capture settings…" left="15" top="817" right="-15" height="24" follows="left|right|top"/>
+ </panel></scroll_container>
+</floater>

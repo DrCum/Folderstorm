@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <set>
 
 namespace FSWorkspaceLayout
 {
@@ -213,6 +214,18 @@ LLSD toLLSD(const Workspace& workspace)
     LLSD data = LLSD::emptyMap();
     data["schema"] = SCHEMA_VERSION;
     data["type"] = "workspace";
+    data["components"] = workspace.components;
+    if (workspace.remember_toolbars)
+    {
+        data["toolbars"] = LLSD::emptyArray();
+        for (const auto& toolbar : workspace.toolbars)
+        {
+            LLSD bar; bar["location"] = toolbar.location; bar["display_mode"] = toolbar.display_mode;
+            bar["commands"] = LLSD::emptyArray();
+            for (const auto& command : toolbar.commands) bar["commands"].append(command);
+            data["toolbars"].append(bar);
+        }
+    }
     data["chrome"] = chromeToLLSD(workspace.chrome);
     data["world_view_in_mouselook"] = workspace.world_view_in_mouselook;
     data["remember_inventory_folders"] = workspace.remember_inventory_folders;
@@ -245,6 +258,35 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         return false;
     }
     if (!data["type"].isString() || data["type"].asString() != "workspace") return fail(error, "type");
+    if (data.has("components") && !integer(data, "components", parsed.components, 0, All)) return fail(error, "components");
+    if (data.has("toolbars"))
+    {
+        const auto& bars = data["toolbars"];
+        if (!bars.isArray() || bars.size() != 3) return fail(error, "toolbars");
+        std::set<int> locations;
+        std::set<std::string> all_commands;
+        for (auto it = bars.beginArray(); it != bars.endArray(); ++it)
+        {
+            Toolbar bar;
+            if (!it->isMap() || !integer(*it, "location", bar.location, 1, 3) ||
+                !locations.insert(bar.location).second || !integer(*it, "display_mode", bar.display_mode, 0, 2))
+                return fail(error, "toolbar location/display");
+            const auto& commands = (*it)["commands"];
+            if (!commands.isArray() || commands.size() > MAX_TOOLBAR_COMMANDS) return fail(error, "toolbar commands");
+            for (auto command = commands.beginArray(); command != commands.endArray(); ++command)
+            {
+                if (!command->isString()) return fail(error, "toolbar command");
+                const auto name = command->asString();
+                if (name.empty() || name.size() > 64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string::npos ||
+                    !all_commands.insert(name).second) return fail(error, "toolbar command");
+                bar.commands.push_back(name);
+            }
+            countUnknown(*it, {"location", "display_mode", "commands"}, parsed.ignored_details);
+            parsed.toolbars.push_back(bar);
+        }
+        parsed.remember_toolbars = true;
+    }
+    if (parsed.components == 0 && !parsed.remember_toolbars) return fail(error, "empty components");
     if (!chromeFromLLSD(data["chrome"], parsed.chrome, parsed.ignored_details, error)) return false;
     if (!boolean(data, "world_view_in_mouselook", parsed.world_view_in_mouselook))
         return fail(error, "world_view_in_mouselook");
@@ -265,6 +307,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
             ++parsed.ignored_details;
             continue;
         }
+        if (!(parsed.components & componentForRole(role))) return fail(error, "excluded window component");
         Window window;
         if (!windowFromLLSD(it->second, role, window, parsed.ignored_details))
             return fail(error, "windows." + it->first);
@@ -277,6 +320,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         const LLSD& extras = data["extra_inventory"];
         if (!extras.isArray() || extras.size() > static_cast<size_t>(MAX_EXTRA_INVENTORY_WINDOWS))
             return fail(error, "extra_inventory");
+        if (!(parsed.components & Inventory) && extras.size()) return fail(error, "excluded Inventory");
         for (auto it = extras.beginArray(); it != extras.endArray(); ++it)
         {
             Window window;
@@ -292,6 +336,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
     countUnknown(panels, {"inventory_primary_inbox"}, parsed.ignored_details);
     if (panels.has("inventory_primary_inbox"))
     {
+        if (!(parsed.components & Inventory)) return fail(error, "excluded Inbox");
         const LLSD& inbox = panels["inventory_primary_inbox"];
         if (!inbox.isMap() || !boolean(inbox, "expanded", parsed.inbox_expanded) ||
             !number(inbox, "height_ui", parsed.inbox_height, 0.f, MAX_UI_SIZE, true))
@@ -299,7 +344,8 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         parsed.has_inbox = true;
         countUnknown(inbox, {"expanded", "height_ui"}, parsed.ignored_details);
     }
-    countUnknown(data, {"schema", "type", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels"},
+    if (parsed.remember_inventory_folders && !(parsed.components & Inventory)) return fail(error, "excluded folders");
+    countUnknown(data, {"schema", "type", "components", "toolbars", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels"},
                  parsed.ignored_details);
     workspace = parsed;
     return true;
@@ -329,6 +375,7 @@ bool canSaveProfile(const LLSD& profiles, const std::string& name, std::string& 
     {
         Workspace existing;
         if (!fromLLSD(profiles[name], existing, error)) return false;
+        if (existing.ignored_details != 0) { error = "Existing workspace has unsupported extensions"; return false; }
     }
     return true;
 }

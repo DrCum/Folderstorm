@@ -18,10 +18,12 @@
 #include "fschromelayoutcontroller.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacequickaccess.h"
+#include "fsworkspacepreview.h"
 #include "llagent.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
 #include "llfloaterpreference.h"
+#include "llfloaterreg.h"
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
 #include "lltextbox.h"
@@ -38,9 +40,30 @@ constexpr const char* LAYOUT_PREFIX = "layout:";
 bool isLayout(const std::string& key) { return key.compare(0, 7, LAYOUT_PREFIX) == 0; }
 }
 
+
+namespace {
+int captureComponents(LLView* view)
+{
+    int mask = 0;
+    if (view->getChild<LLCheckBoxCtrl>("capture_chrome")->get()) mask |= FSWorkspaceLayout::Chrome;
+    if (view->getChild<LLCheckBoxCtrl>("capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
+    if (view->getChild<LLCheckBoxCtrl>("capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
+    if (view->getChild<LLCheckBoxCtrl>("capture_chat")->get()) mask |= FSWorkspaceLayout::Chat;
+    return mask;
+}
+}
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    getChild<LLButton>("diagram_preview")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_preview", selected()); });
+    getChild<LLButton>("update")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().requestUpdateCurrent(); });
+    getChild<LLButton>("tools")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_tools", selected()); });
+    getChild<LLButton>("previous")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().returnPrevious(); });
+    getChild<LLButton>("shortcut")->setCommitCallback([this](LLUICtrl*, const LLSD&)
+    {
+        if (FSWorkspaceController::instance().canQuickSwitch() && mAccount == gAgent.getID() && mSession == gAgent.getSessionID())
+            gSavedPerAccountSettings.setString("FSWorkspaceShortcutTarget", selected());
+    });
     getChild<LLButton>("switch")->setCommitCallback([this](LLUICtrl*, const LLSD&) { switchSelected(); });
     getChild<LLButton>("favorite")->setCommitCallback([this](LLUICtrl*, const LLSD&) { toggleFavorite(); });
     getChild<LLButton>("manage")->setCommitCallback([this](LLUICtrl*, const LLSD&) { manageSelected(); });
@@ -49,7 +72,10 @@ bool FSFloaterWorkspaces::postBuild()
     { static_cast<FSFloaterWorkspaces*>(userdata)->updateButtons(); }, this);
     auto* list = getChild<LLScrollListCtrl>("profiles");
     list->setCommitOnSelectionChange(true);
-    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons(); });
+    list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons();
+        if (auto* preview = LLFloaterReg::findTypedInstance<FSFloaterWorkspacePreview>("workspace_preview"))
+            if (preview->LLView::getVisible()) preview->select(selected());
+    });
     list->setDoubleClickCallback([this]() { switchSelected(); });
     refresh(true);
     return LLFloater::postBuild();
@@ -59,6 +85,8 @@ void FSFloaterWorkspaces::onOpen(const LLSD& key)
     mActionStatus.clear();
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
+    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->set(true);
+    getChild<LLCheckBoxCtrl>("capture_toolbars")->set(false);
     refresh(true);
 }
 void FSFloaterWorkspaces::draw()
@@ -155,15 +183,22 @@ void FSFloaterWorkspaces::updateButtons()
     const bool ready = controller.available();
     const bool can_switch = controller.canQuickSwitch();
     const bool has_selection = !selected().empty();
+    getChild<LLButton>("previous")->setEnabled(controller.hasPrevious());
+    getChild<LLButton>("update")->setEnabled(can_switch && controller.isCustom(controller.activeId()));
+    const auto active = controller.activeId();
+    getChild<LLTextBox>("active")->setText(active.empty() ? getString("no_active") : getString("active_label") + active + (controller.modified() ? " *" : ""));
+    getChild<LLButton>("shortcut")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("switch")->setEnabled(can_switch && has_selection);
+    getChild<LLButton>("diagram_preview")->setEnabled(ready && has_selection);
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
-    getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch);
+    getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch && getChild<LLCheckBoxCtrl>("capture_inventory")->get());
+    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    getChild<LLButton>("save")->setEnabled(can_switch && !name.empty());
+    getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("capture_toolbars")->get()));
     getChild<LLLineEditor>("workspace_name")->setEnabled(can_switch);
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
     LLStringUtil::format_map_t args;
@@ -201,7 +236,7 @@ void FSFloaterWorkspaces::saveCurrent()
     if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get()))
+    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get()))
     {
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");

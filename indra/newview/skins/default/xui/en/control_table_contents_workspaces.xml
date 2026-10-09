@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contents>
+ <rows name="workspace_direct" value="workspace_direct"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch assigned workspace / layout"/></rows>
+ <rows name="workspace_next" value="workspace_next"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Next favorite workspace / layout"/></rows>
+ <rows name="workspace_back" value="workspace_back"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Previous favorite workspace / layout"/></rows>
+ <rows name="workspace_previous" value="workspace_previous"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Return to previous arrangement"/></rows>
+</contents>

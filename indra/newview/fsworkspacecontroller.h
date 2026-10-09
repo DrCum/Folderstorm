@@ -23,6 +23,7 @@
 #include "llfloater.h"
 #include "llsd.h"
 #include "lluuid.h"
+#include "lltimer.h"
 #include <map>
 #include <set>
 #include <string>
@@ -45,8 +46,16 @@ public:
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchLayout(const std::string& id);
-    bool saveCurrentNow(const std::string& name, bool remember_folders = false);
-    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false);
+    using Utility = std::pair<LLHandle<LLFloater>, std::string>;
+    std::vector<Utility> utilityWindows() const;
+    bool arrange(const std::vector<LLHandle<LLFloater>>& selection, int operation);
+    static bool snap(LLFloater* floater, S32& edge, LLView::ESnapEdge snap_edge);
+    void scheduleStartupRestore();
+    void saveLastArrangement();
+    bool hasPrevious() const;
+    bool returnPrevious();
+    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
+    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
     bool remembersInventoryFolders(const std::string& name) const;
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
@@ -60,6 +69,13 @@ public:
     int adjustedCount() const { return mAdjusted; }
     int skippedCount() const { return mSkipped; }
     bool modified() const;
+    struct DiagramWindow { FSWorkspaceLayout::Rect rect; std::string label; bool minimized = false; };
+    struct Diagram { FSWorkspaceLayout::Rect frame; FSChromeLayout::Snapshot chrome; std::vector<DiagramWindow> windows; int components = 0, adjusted = 0, skipped = 0, missing_folders = 0; bool toolbars = false; };
+    Diagram diagram(const FSWorkspaceLayout::Workspace& workspace) const;
+    bool readProfile(const std::string& id, FSWorkspaceLayout::Workspace& workspace) const;
+    void requestUpdateCurrent();
+    void noteLayoutRename(const std::string& old_name, const std::string& new_name);
+    bool importProfiles(const LLSD& accepted, const LLSD& originals, bool replace);
 
 private:
     using Role = FSWorkspaceLayout::Role;
@@ -85,7 +101,9 @@ private:
         LLHandle<LLFloater> handle;
         FSWorkspaceLayout::Window window;
     };
-    FSWorkspaceLayout::Workspace capture(bool remember_folders = false) const;
+    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false) const;
+    void applyToolbars(const FSWorkspaceLayout::Workspace& workspace);
+    bool mToolbarTouched = false;
     void applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved, RuntimeBaseline& baseline);
     void rememberRole(Role role);
     void rememberControls(Role role);
@@ -101,16 +119,35 @@ private:
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
 
+    static void lifecycleIdle(void*);
+    bool rememberPrevious();
+    LLTimer mLifecycleTimer, mStartupTimer;
+    bool mStartupScheduled = false;
+    unsigned long mStartupGeneration = 0;
+    LLUUID mStartupAccount, mStartupSession;
+    FSWorkspaceLayout::Workspace mPrevious;
+    std::string mPreviousWorkspace, mPreviousLayout, mRestoredLayout;
+    LLUUID mPreviousAccount, mPreviousSession;
+    bool mHasPrevious = false, mRestoreLayout = false;
+
     bool mTransaction = false;
     bool mPendingPlacement = false;
-    bool mQuickSwitch = false;
+    bool mQuickSwitch = false, mPreserveCoordinates = false;
     unsigned long mRevision = 0;
     unsigned long mGeneration = 0;
     LLUUID mAccount, mSession;
     LLSD mProfiles;
     std::string mActive;
     std::string mStatus = "ready";
-    FSWorkspaceLayout::Workspace mBaseline, mPending;
+    FSWorkspaceLayout::Workspace mBaseline, mPending, mExpected;
+    LLSD mExpectedDefinition;
+    std::string mExpectedId;
+    LLUUID mExpectedAccount, mExpectedSession;
+    mutable LLTimer mComparisonTimer;
+    mutable bool mModifiedCache = false, mComparisonDirty = true;
+    mutable std::string mComparedId;
+    mutable LLUUID mComparedAccount, mComparedSession;
+    std::vector<std::pair<std::string, std::string>> mRenamed;
     std::map<Role, RuntimeBaseline> mRuntime;
     std::map<std::string, ControlBaseline> mControls;
     std::map<std::string, ControlBaseline> mExtraControls;

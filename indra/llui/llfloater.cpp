@@ -4206,3 +4206,12 @@ void LL_COORD_FLOATER::convertFromCommon(const LLCoordCommon& from)
         self.mY = rescale((F32)from_y, (F32)snap_rect.mBottom, (F32)(snap_rect.mTop - floater_height), -0.5f, 0.5f);
     }
 }
+
+namespace { LLFloater::WorkspaceSnap sWorkspaceSnap; }
+void LLFloater::setWorkspaceSnap(WorkspaceSnap callback) { sWorkspaceSnap = std::move(callback); }
+LLView* LLFloater::findSnapEdge(S32& edge, const LLCoordGL& direction, ESnapEdge snap_edge,
+                              ESnapType type, S32 threshold, S32 padding)
+{
+    if (sWorkspaceSnap && sWorkspaceSnap(this, edge, snap_edge)) return nullptr;
+    return LLView::findSnapEdge(edge, direction, snap_edge, type, threshold, padding);
+}

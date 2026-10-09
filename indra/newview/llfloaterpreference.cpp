@@ -4720,6 +4720,12 @@ void LLPanelPreferenceControls::populateControlTable()
         LL_WARNS("Preferences") << "Unimplemented mode" << LL_ENDL;
     }
 
+    if (mEditingMode < LLKeyConflictHandler::MODE_SAVED_SETTINGS)
+    {
+        addControlTableSeparator();
+        addControlTableRows("control_table_contents_workspaces.xml");
+    }
+
     // explicit update to make sure table is ready for llsearchableui
     pControlsTable->updateColumns();
 
