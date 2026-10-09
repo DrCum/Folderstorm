@@ -17,6 +17,7 @@ public:
     static bool temporaryControl(const std::string& name);
     static void tick();       // Main-thread protocol/lifecycle; never a render timer.
     static bool renderAllowed();
+    static void prepareDisplay(); // Current GL context only; reversible economy buffers.
     static bool inputAllowed();
     static bool keyAllowed(unsigned int key);
     static void keyReleased(unsigned int key);

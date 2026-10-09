@@ -33,6 +33,7 @@ namespace
 {
 using namespace fs_session;
 constexpr int Launch1 = 101, Launch2 = 102, Switch1 = 103, Switch2 = 104, HostSurface = 105, DetachAll = 106;
+constexpr int Standby1 = 107, Standby2 = 108;
 constexpr UINT_PTR Timer = 1;
 struct Handle
 {
@@ -154,6 +155,8 @@ struct Host
 {
     HWND window = nullptr, viewport = nullptr, status[2]{}, notice = nullptr, embedControl = nullptr;
     HWND launchButton[2]{}, switchButton[2]{};
+    HWND standbyControl[2]{};
+    Mode standby[2]{Mode::Warm, Mode::Warm};
     std::unique_ptr<Slot> slots[2];
     Handoff handoff;
     int active = -1;
@@ -235,7 +238,8 @@ struct Host
             return;
         }
         const auto oldGeneration = active >= 0 && slots[active] ? slots[active]->snapshot.generation : 0;
-        if (handoff.begin(active, index, oldGeneration, slots[index]->snapshot.generation)) message(L"Switching character; waiting for the viewer's ready frame…");
+        if (handoff.begin(active, index, oldGeneration, slots[index]->snapshot.generation, active < 0 ? Mode::Warm : standby[active]))
+            message(L"Switching character; waiting for the viewer's ready frame…");
     }
     void failHandoff(int index, const std::wstring& error)
     {
@@ -275,7 +279,17 @@ struct Host
             if (request.kind == Kind::Detach) { detaching = closing = false; }
             if (request.kind == Kind::Embed) { embedding = false; SendMessageW(embedControl, BM_SETCHECK, BST_UNCHECKED, 0); }
             if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle) failHandoff(index, wide(response.detail));
-            else message(wide(response.detail));
+            else
+            {
+                // A blocked policy change needs a new deliberate choice, not
+                // an automatic retry every timer tick while a modal is open.
+                if (request.kind == Kind::SetMode && response.mode != Mode::Active)
+                {
+                    standby[index] = response.mode;
+                    SendMessageW(standbyControl[index], CB_SETCURSEL, response.mode == Mode::Economy ? 1 : 0, 0);
+                }
+                message(wide(response.detail));
+            }
             return;
         }
         if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle)
@@ -285,7 +299,7 @@ struct Host
             if (handoff.step() == Handoff::Step::Idle)
             {
                 active = step == Handoff::Step::Rollback ? handoff.original() : handoff.target();
-                message(step == Handoff::Step::Rollback ? L"Returned to the previous character." : L"Character ready. Other connected characters use warm standby.");
+                message(step == Handoff::Step::Rollback ? L"Returned to the previous character." : L"Character ready. Other characters use their chosen standby mode.");
                 if (embedding)
                 {
                     // Promotion may have restored the standalone target first.
@@ -306,7 +320,9 @@ struct Host
         std::wostringstream text;
         text << (index == 0 ? L"1: " : L"2: ") << (slot.snapshot.name.empty() ? L"Login" : wide(slot.snapshot.name));
         text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
-            slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" : L" · active");
+            slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
+                slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
+        if (slot.snapshot.flags & EconomyTrimmed) text << L" · render targets released";
         if (slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
             text << ((slot.snapshot.flags & ClientFocused) ? L" · keyboard focused" : L" · keyboard unfocused");
         PROCESS_MEMORY_COUNTERS memory{}; memory.cb = sizeof(memory);
@@ -370,6 +386,8 @@ struct Host
                 {
                     if (send(index, Kind::Focus)) focusRequested = false;
                 }
+                else if (!busy() && index != active && slot.snapshot.state == State::Ready && slot.snapshot.mode != standby[index])
+                    send(index, Kind::SetMode, standby[index]);
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
@@ -404,7 +422,11 @@ struct Host
     {
         RECT rect{}; GetClientRect(window, &rect);
         const int width = static_cast<int>((std::max)(760L, rect.right));
-        for (int i = 0; i < 2; ++i) MoveWindow(status[i], 10, 48 + i * 22, width - 20, 20, TRUE);
+        for (int i = 0; i < 2; ++i)
+        {
+            MoveWindow(status[i], 10, 48 + i * 24, width - 215, 20, TRUE);
+            MoveWindow(standbyControl[i], width - 200, 46 + i * 24, 190, 130, TRUE);
+        }
         MoveWindow(viewport, 0, 99, width, (std::max)(1L, rect.bottom - 126), TRUE);
         MoveWindow(notice, 10, (std::max)(102L, rect.bottom - 23), width - 20, 20, TRUE);
     }
@@ -432,6 +454,13 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON, 630, 10, 125, 28, DetachAll);
         host->status[0] = control(window, L"STATIC", L"Character 1: not launched", SS_LEFT, 10, 48, 850, 20);
         host->status[1] = control(window, L"STATIC", L"Character 2: not launched", SS_LEFT, 10, 70, 850, 20);
+        for (int i = 0; i < 2; ++i)
+        {
+            host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, i == 0 ? Standby1 : Standby2);
+            SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Background: Warm"));
+            SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Economy (experimental)"));
+            SendMessageW(host->standbyControl[i], CB_SETCURSEL, 0, 0);
+        }
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | WS_CLIPCHILDREN, 0, 99, 880, 490);
         host->notice = control(window, L"STATIC", L"Prototype: warm standby, separate profiles. Voice and MCP are off.", SS_LEFT, 10, 600, 850, 20);
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
@@ -453,6 +482,15 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case Launch2: host->launch(1); break;
         case Switch1: host->switchTo(0); break;
         case Switch2: host->switchTo(1); break;
+        case Standby1:
+        case Standby2:
+            if (HIWORD(wparam) == CBN_SELCHANGE)
+            {
+                const int index = LOWORD(wparam) == Standby1 ? 0 : 1;
+                host->standby[index] = SendMessageW(host->standbyControl[index], CB_GETCURSEL, 0, 0) == 1 ? Mode::Economy : Mode::Warm;
+                host->message(L"Background choice applies to this character when inactive. Economy releases disposable render targets; measure savings on your GPU.");
+            }
+            break;
         case HostSurface:
             host->embedding = SendMessageW(host->embedControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
             host->focusRequested = host->embedding;

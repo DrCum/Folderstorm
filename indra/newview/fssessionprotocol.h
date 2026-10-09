@@ -18,7 +18,7 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 512;
-constexpr std::uint32_t Version = 2;
+constexpr std::uint32_t Version = 3;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
@@ -26,10 +26,10 @@ enum class Kind : std::uint32_t
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Status = 16
 };
-enum class Mode : std::uint32_t { Active, Warm };
+enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed;
 
 struct Message
 {
@@ -119,7 +119,7 @@ inline bool getText(const Frame& frame, std::size_t offset, std::size_t size, st
 inline bool valid(const Message& message)
 {
     return validKind(message.kind) && message.generation && message.sequence &&
-        message.mode <= Mode::Warm && message.state <= State::Disconnected &&
+        message.mode <= Mode::Economy && message.state <= State::Disconnected &&
         !(message.flags & ~KnownFlags) && validAccount(message.account) &&
         std::any_of(message.worker.begin(), message.worker.end(), [](std::uint8_t c) { return c != 0; });
 }
@@ -169,17 +169,19 @@ class Handoff
 {
 public:
     enum class Step { Idle, Revoke, Promote, Rollback };
-    bool begin(int current, int target, std::uint64_t current_generation, std::uint64_t target_generation)
+    bool begin(int current, int target, std::uint64_t current_generation, std::uint64_t target_generation, Mode standby = Mode::Warm)
     {
-        if (mStep != Step::Idle || target < 0 || target == current || !target_generation) return false;
+        if (mStep != Step::Idle || target < 0 || target == current || !target_generation ||
+            standby == Mode::Active || standby > Mode::Economy) return false;
         mOld = current; mTarget = target; mOldGeneration = current_generation; mTargetGeneration = target_generation;
+        mStandby = standby;
         mStep = current < 0 ? Step::Promote : Step::Revoke;
         return true;
     }
     Step step() const { return mStep; }
     int worker() const { return mStep == Step::Promote ? mTarget : mOld; }
     std::uint64_t generation() const { return mStep == Step::Promote ? mTargetGeneration : mOldGeneration; }
-    Mode mode() const { return mStep == Step::Revoke ? Mode::Warm : Mode::Active; }
+    Mode mode() const { return mStep == Step::Revoke ? mStandby : Mode::Active; }
     int target() const { return mTarget; }
     int original() const { return mOld; }
     bool accept(int worker, const Message& reply)
@@ -200,6 +202,7 @@ private:
     Step mStep = Step::Idle;
     int mOld = -1, mTarget = -1;
     std::uint64_t mOldGeneration = 0, mTargetGeneration = 0;
+    Mode mStandby = Mode::Warm;
 };
 
 inline bool loginCollision(const Message& candidate, const Message& other, const std::string& reservation)

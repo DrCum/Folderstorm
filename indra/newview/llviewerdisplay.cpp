@@ -492,7 +492,9 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
     LLViewerCamera& camera = LLViewerCamera::instance(); // <FS:Ansariel> Factor out calls to getInstance
 
-    if (gWindowResized)
+    FSSessionWorker::prepareDisplay();
+
+    if (gWindowResized && FSSessionWorker::renderAllowed())
     { //skip render on frames where window has been resized
         LL_DEBUGS("Window") << "Resizing window" << LL_ENDL;
         LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Resize Window");
@@ -506,7 +508,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         return;
     }
 
-    if (gResizeShadowTexture)
+    if (gResizeShadowTexture && FSSessionWorker::renderAllowed())
     { //skip render on frames where window has been resized
         gPipeline.resizeShadowTexture();
         // gResizeShadowTexture = false; // <FS:Beq/> This prevents the deferred resize from working properly.

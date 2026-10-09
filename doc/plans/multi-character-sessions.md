@@ -1,6 +1,6 @@
 # Multi-character sessions implementation plan
 
-Status: checkpoint 1 source implemented on `feat/multi-character-prototype` after the user authorized starting on 2026-10-09. Native Windows feasibility remains pending. The user chose **one interface with isolated session workers**, warm and economy background modes, shared access to each character's chat, and a later optional low-resolution monitor for an inactive character. Checkpoints 2–6 remain gated follow-ups. See [prototype usage](../../tools/session-host/README.md) and [actual checks/native acceptance](multi-character-validation.md).
+Status: checkpoint 1 is published in PR #10; checkpoint 2 adds per-character Warm/Economy choices. On 2026-10-09 the user authorized continuous implementation, a separate PR at every useful Windows testing checkpoint, and an optional bird’s-eye camera transition as the final checkpoint. Native acceptance gates below remain explicit outstanding checks, not requirements to pause source implementation awaiting the sleeping user. Do not claim native reliability or resource savings without measurements. See [usage](../../tools/session-host/README.md) and [actual checks/native acceptance](multi-character-validation.md).
 
 Original implementation baseline: PR #9 (`feat/gesture-board`, `54092832ed`), containing the recent workspace/context and gesture-board work. PR #9 subsequently merged into `main` at `56bfe960fb` on 2026-10-09. Prototype [PR #10](https://github.com/DrCum/Folderstorm/pull/10) incorporates that main and targets `main`; its published history is preserved. The original plan-only commit `c8e20429b9` remains on the separate `docs/multi-character-sessions` worktree and is carried into the isolated prototype branch. Existing feature branches and user edits are preserved. Recheck merge states before later checkpoints.
 
@@ -196,6 +196,12 @@ Gate: each character retains unsaved windows and profile state. Cancel still rol
 Add actual low-resolution rendering, default 1 FPS scheduling, freshness labels, bounded latest-frame transport and explicit promotion. Account for additional warm/economy cost and pause hidden monitors.
 
 Gate: chat/network health continues between frames. Aspect/identity remain correct through resize/reconnect. Obsolete frames stop and promotion safely takes over context/surface ownership. Measure the added cost. Opening the monitor never moves an avatar or sends chat.
+
+### 7. Optional bird’s-eye character transition
+
+Default Off. Animate the old character’s camera upward to a bounded bird’s-eye view, perform the existing acknowledged input handoff, then descend from the target character’s bird’s-eye view to its own saved live camera. Keep this visual effect separate from chat selection and avatar movement; never teleport or change avatar position. Restore each original camera exactly on completion, cancellation, restrictions, disconnect or host detachment. Respect camera restrictions, mouselook, scripted/follow cameras and reduced-motion/instant switching. Bind delayed animation steps to the account/session and cancel stale operations. Expose a skip/instant fallback; never wait indefinitely for an animation or stream unbounded frames.
+
+Gate: same/different regions, camera modes and restrictions, rapid switches, cancellation, delayed first frames, disconnect and Alt-Tab do not leave a changed camera or input owner. Native visual quality and timing need Windows testing.
 
 ## Verification and measurements
 
