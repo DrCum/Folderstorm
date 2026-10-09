@@ -68,6 +68,25 @@ inline Rect intersection(const Rect& a, const Rect& b)
             std::min(a.right, b.right), std::min(a.top, b.top)};
 }
 
+// Fit output-image aspect into an arbitrary source rectangle without losing its origin.
+inline Rect fitImage(Rect bounds, int image_width, int image_height)
+{
+    if (bounds.empty() || image_width <= 0 || image_height <= 0) return {};
+    const double aspect = static_cast<double>(image_width) / image_height;
+    const double frame_aspect = static_cast<double>(bounds.width()) / bounds.height();
+    if (aspect > frame_aspect)
+    {
+        const int height = std::max(1, static_cast<int>(std::llround(bounds.width() / aspect)));
+        bounds.bottom += (bounds.height() - height) / 2; bounds.top = bounds.bottom + height;
+    }
+    else
+    {
+        const int width = std::max(1, static_cast<int>(std::llround(bounds.height() * aspect)));
+        bounds.left += (bounds.width() - width) / 2; bounds.right = bounds.left + width;
+    }
+    return bounds;
+}
+
 // Compare display layouts independently of the viewer window's translation.
 // All monitors are expressed in the same client space; the first monitor is
 // only an anchor, not necessarily the desktop primary monitor.

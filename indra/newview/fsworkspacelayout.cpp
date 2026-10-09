@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace FSWorkspaceLayout
 {
@@ -83,6 +84,30 @@ bool isSafeProfileName(const std::string& name)
         has_label = has_label || ch != ' ';
     }
     return has_label;
+}
+
+bool selectGroups(const Workspace& source, int components, bool toolbars, Workspace& result)
+{
+    if (components < 0 || (components & ~AllComponents)) return false;
+    Workspace selected = source;
+    selected.components &= components;
+    selected.remember_toolbars = toolbars && source.remember_toolbars;
+    if (!selected.components && !selected.remember_toolbars) return false;
+    if (!selected.remember_toolbars) selected.toolbars.clear();
+    for (auto it = selected.windows.begin(); it != selected.windows.end();)
+        if (!(selected.components & componentForRole(it->first))) it = selected.windows.erase(it);
+        else ++it;
+    if (!(selected.components & Inventory))
+    {
+        selected.extra_inventory.clear();
+        selected.has_inbox = false;
+        selected.remember_inventory_folders = false;
+    }
+    if (!(selected.components & Graphics)) selected.context.graphics = {};
+    if (!(selected.components & Camera)) selected.context.camera = {};
+    if (!(selected.components & HUDs)) selected.context.huds.clear();
+    result = std::move(selected);
+    return true;
 }
 
 Window capture(const Rect& rect, const Rect& frame, bool visible, bool minimized)

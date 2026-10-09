@@ -2,6 +2,10 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+ <key>FSWorkspaceDisplayRecovery</key><map><key>Comment</key><string>Recover live utility windows after monitor or UI scale changes.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
+
+    <key>FSSnapshotFullWindow</key><map><key>Comment</key><string>Snapshot the full window instead of the custom viewport.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
+
     <key>FSShowWorkspaceFavoritesStrip</key>
     <map>
       <key>Comment</key><string>Show workspace and layout favorites beside landmarks, with a divider and separate overflow.</string>

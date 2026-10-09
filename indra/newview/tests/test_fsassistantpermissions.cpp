@@ -59,7 +59,7 @@ int main()
     auto write = [&](const char* key, const char* value) { policy[key] = value; };
     check(permissionPreset(lookup) == PermissionPreset::Custom);
     applyPermissionPreset(PermissionPreset::ReadOnly, write);
-    check(policy.size() == 10 && policy["future-class"] == "future-value");
+    check(policy.size() == permissionClasses.size() + 1 && policy["future-class"] == "future-value");
     check(permissionPreset(lookup) == PermissionPreset::ReadOnly);
     for (const auto& def : permissionClasses) check(policy[def.id] == (def.ask ? "deny" : "allow"));
     const auto before = policy;

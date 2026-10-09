@@ -34,6 +34,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <functional>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
@@ -6239,9 +6240,9 @@ void LLViewerWindow::resetSnapshotLoc() const
     gSavedPerAccountSettings.setString("SnapshotBaseDir", std::string());
 }
 
-bool LLViewerWindow::thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 preview_height, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, LLSnapshotModel::ESnapshotLayerType type)
+bool LLViewerWindow::thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 preview_height, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, LLSnapshotModel::ESnapshotLayerType type, bool viewport_only)
 {
-    return rawSnapshot(raw, preview_width, preview_height, false, false, show_ui, show_hud, do_rebuild, no_post, gSavedSettings.getBOOL("RenderBalanceInSnapshot"), type);
+    return rawSnapshot(raw, preview_width, preview_height, false, false, show_ui, show_hud, do_rebuild, no_post, gSavedSettings.getBOOL("RenderBalanceInSnapshot"), type, MAX_SNAPSHOT_IMAGE_SIZE, viewport_only);
 }
 
 // Saves the image from the screen to a raw image
@@ -6250,20 +6251,66 @@ bool LLViewerWindow::thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 p
 bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_height,
     bool keep_window_aspect, bool is_texture, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, bool show_balance, LLSnapshotModel::ESnapshotLayerType type, S32 max_size, bool viewport_only)
 {
-    if (!raw)
+    if (!raw || image_width <= 0 || image_height <= 0)
     {
         return false;
     }
 
     //check if there is enough memory for the snapshot image
-    if(image_width * image_height > (1 << 22)) //if snapshot image is larger than 2K by 2K
+    const U64 image_pixels = static_cast<U64>(image_width) * static_cast<U64>(image_height);
+    if (image_pixels > static_cast<U64>(U32_MAX) / 3) return false;
+    if (image_pixels > (1 << 22)) //if snapshot image is larger than 2K by 2K
     {
-        if(!LLMemory::tryToAlloc(NULL, image_width * image_height * 3))
+        if (!LLMemory::tryToAlloc(NULL, static_cast<U32>(image_pixels * 3)))
         {
             LL_WARNS() << "No enough memory to take the snapshot with size (w : h): " << image_width << " : " << image_height << LL_ENDL ;
             return false ; //there is no enough memory for taking this snapshot.
         }
     }
+
+    // Restore the live viewport and renderer on success and every early exit.
+    const bool previous_no_post = gSnapshotNoPost;
+    const bool previous_swap = gDisplaySwapBuffers;
+    const bool previous_ui = gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+    const bool previous_huds = LLPipeline::sShowHUDAttachments;
+    const LLRect previous_world = mWorldViewRectRaw;
+    const LLRect previous_world_scaled = mWorldViewRectScaled;
+    const F32 previous_aspect = LLViewerCamera::getInstance()->getAspect();
+    const S32 previous_view_height = LLViewerCamera::getInstance()->getViewHeightInPixels();
+    const F32 previous_zoom = LLViewerCamera::getInstance()->getZoomFactor();
+    const S16 previous_subregion = LLViewerCamera::getInstance()->getZoomSubRegion();
+    const auto previous_cursor = mWindow->getCursor();
+    LLView* balance = gStatusBar ? gStatusBar->findChild<LLView>("balance") : nullptr;
+    const bool previous_balance = balance && balance->getVisible();
+    S32 original_width = 0, original_height = 0;
+    bool reset_deferred = false;
+    LLRenderTarget scratch_space;
+    struct SnapshotCleanup
+    {
+        std::function<void()> restore;
+        ~SnapshotCleanup() { restore(); }
+    } cleanup{[&]()
+    {
+        if (reset_deferred)
+        {
+            scratch_space.flush(); scratch_space.release();
+            gPipeline.allocateScreenBuffer(original_width, original_height);
+        }
+        if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI) != previous_ui)
+            LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+        LLPipeline::sShowHUDAttachments = previous_huds;
+        gSnapshotNoPost = previous_no_post; gDisplaySwapBuffers = previous_swap;
+        const LLRect capture_world_scaled = mWorldViewRectScaled;
+        if (mWorldViewRectRaw != previous_world) gResizeScreenTexture = true;
+        mWorldViewRectRaw = previous_world; mWorldViewRectScaled = previous_world_scaled;
+        if (capture_world_scaled != previous_world_scaled)
+            mOnWorldViewRectUpdated(capture_world_scaled, previous_world_scaled);
+        LLViewerCamera::getInstance()->setViewHeightInPixels(previous_view_height);
+        LLViewerCamera::getInstance()->setAspect(previous_aspect);
+        LLViewerCamera::getInstance()->setZoomParameters(previous_zoom, previous_subregion);
+        setup3DViewport(); setCursor(previous_cursor);
+        if (balance) balance->setVisible(previous_balance);
+    }};
 
     // PRE SNAPSHOT
     gSnapshotNoPost = no_post;
@@ -6292,12 +6339,25 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // the full window.
     const bool use_full_window = !viewport_only && !show_ui;
     updateWorldViewRect(use_full_window);
+    if (use_full_window && mWorldViewRectRaw != getWindowRectRaw())
+    {
+        // The live mouselook policy may retain its inset. An explicit full
+        // snapshot must still use the entire source, without saving settings.
+        const LLRect old_scaled = mWorldViewRectScaled;
+        mWorldViewRectRaw = getWindowRectRaw();
+        mWorldViewRectScaled = calcScaledRect(mWorldViewRectRaw, mDisplayScale);
+        gResizeScreenTexture = true;
+        LLViewerCamera::getInstance()->setViewHeightInPixels(mWorldViewRectRaw.getHeight());
+        LLViewerCamera::getInstance()->setAspect(getWorldViewAspectRatio());
+        mOnWorldViewRectUpdated(old_scaled, mWorldViewRectScaled);
+    }
 
     // Copy screen to a buffer
     // crop sides or top and bottom, if taking a snapshot of different aspect ratio
     // from window
     LLRect window_rect = (show_ui && !viewport_only) ? getWindowRectRaw() : getWorldViewRectRaw();
 
+    if (window_rect.getWidth() <= 0 || window_rect.getHeight() <= 0) return false;
     S32 snapshot_width  = window_rect.getWidth();
     S32 snapshot_height = window_rect.getHeight();
     // SNAPSHOT
@@ -6313,12 +6373,6 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
         setBalanceVisible(show_balance);
     }
-
-    S32 original_width = 0;
-    S32 original_height = 0;
-    bool reset_deferred = false;
-
-    LLRenderTarget scratch_space;
 
     F32 scale_factor = 1.0f ;
     if (!keep_window_aspect || (image_width > window_width) || (image_height > window_height))
@@ -6413,6 +6467,10 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         LLHUDObject::reshapeAll();*/
     }
 
+    // Offscreen scratch targets begin at zero; the live framebuffer source
+    // retains the custom viewport's nonzero origin for both color and depth.
+    const S32 read_origin_x = reset_deferred ? 0 : window_rect.mLeft;
+    const S32 read_origin_y = reset_deferred ? 0 : window_rect.mBottom;
     S32 output_buffer_offset_y = 0;
 
     F32 depth_conversion_factor_1 = (LLViewerCamera::getInstance()->getFar() + LLViewerCamera::getInstance()->getNear()) / (2.f * LLViewerCamera::getInstance()->getFar() * LLViewerCamera::getInstance()->getNear());
@@ -6473,7 +6531,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                         if (type == LLSnapshotModel::SNAPSHOT_TYPE_COLOR)
                         {
                             glReadPixels(
-                                     subimage_x_offset, out_y + subimage_y_offset,
+                                     read_origin_x + subimage_x_offset, read_origin_y + out_y + subimage_y_offset,
                                      read_width, 1,
                                      GL_RGB, GL_UNSIGNED_BYTE,
                                      raw->getData() + output_buffer_offset
@@ -6484,7 +6542,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                         {
                             LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GLfloat)); // need to store floating point values
                             glReadPixels(
-                                         subimage_x_offset, out_y + subimage_y_offset,
+                                         read_origin_x + subimage_x_offset, read_origin_y + out_y + subimage_y_offset,
                                          read_width, 1,
                                          GL_DEPTH_COMPONENT, GL_FLOAT,
                                          depth_line_buffer->getData()// current output pixel is beginning of buffer...
@@ -6518,7 +6576,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                             LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GLfloat)); // need to store floating point values
                             // </FS>
                             glReadPixels(
-                                         subimage_x_offset, out_y + subimage_y_offset,
+                                         read_origin_x + subimage_x_offset, read_origin_y + out_y + subimage_y_offset,
                                          read_width, 1,
                                          GL_DEPTH_COMPONENT, GL_FLOAT,
                                          depth_line_buffer->getData()// current output pixel is beginning of buffer...
@@ -6594,16 +6652,6 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         gPipeline.resetDrawOrders();
     }
 
-    if (reset_deferred)
-    {
-        mWorldViewRectRaw = window_rect;
-        LLViewerCamera::getInstance()->setViewHeightInPixels( mWorldViewRectRaw.getHeight() );
-        LLViewerCamera::getInstance()->setAspect( getWorldViewAspectRatio() );
-        scratch_space.flush();
-        scratch_space.release();
-        gPipeline.allocateScreenBuffer(original_width, original_height);
-
-    }
 
     if (high_res)
     {

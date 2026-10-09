@@ -8592,7 +8592,9 @@ bool LLPipeline::renderSnapshotFrame(LLRenderTarget* src, LLRenderTarget* dst)
     S32 snapshot_width;
     S32 snapshot_height;
     previewView->getSize(snapshot_width, snapshot_height);
-    F32 screen_aspect = float(gViewerWindow->getWindowWidthRaw()) / float(gViewerWindow->getWindowHeightRaw());
+    const auto source = LLSnapshotLivePreview::sourceRectRaw();
+    if (source.getHeight() <= 0 || snapshot_width <= 0 || snapshot_height <= 0) return false;
+    F32 screen_aspect = static_cast<F32>(source.getWidth()) / static_cast<F32>(source.getHeight());
     F32 snapshot_aspect = float(snapshot_width) / float(snapshot_height);
 
     if (keep_aspect || (std::fabs(screen_aspect - snapshot_aspect) < 1e-6f) )

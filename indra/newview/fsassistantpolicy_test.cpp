@@ -54,6 +54,12 @@ int main()
     {
         check(fs_assistant::snapshot_classes("thumbnail") == std::vector<std::string>({"camera", "edit"}), "thumbnail class set");
         check(fs_assistant::snapshot_classes("texture") == std::vector<std::string>({"camera", "create", "edit"}), "texture class set");
+        check(fs_assistant::workspace_classes(false, false) == std::vector<std::string>({"workspace"}), "layout needs only Workspace");
+        check(fs_assistant::workspace_classes(true, false) == std::vector<std::string>({"workspace", "camera"}), "camera adds Camera permission");
+        check(fs_assistant::workspace_classes(false, true) == std::vector<std::string>({"workspace", "wear"}), "HUDs add Wear permission");
+        check(fs_assistant::workspace_classes(true, true) == std::vector<std::string>({"workspace", "camera", "wear"}), "compound workspace permissions");
+        check(fs_assistant::decide({"allow", "deny", "allow"}) == Decision::Deny, "Camera Deny blocks Workspace Allow");
+        check(fs_assistant::decide({"allow", "allow", "deny"}) == Decision::Deny, "Wear Deny blocks Workspace Allow");
         const std::vector<std::string> levels{"allow", "ask", "deny"};
         for (int count : {2, 3})
         {

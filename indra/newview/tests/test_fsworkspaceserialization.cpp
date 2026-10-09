@@ -18,6 +18,7 @@
  */
 #include "../fsworkspacelayout.h"
 #include "llsd.h"
+#include "llsdutil.h"
 #include "lluuid.h"
 #include <iostream>
 #include <limits>
@@ -235,7 +236,7 @@ int main()
     {
         data = valid; data["chrome"]["bottom_dock"].erase(field); rejected(data, "Missing span field rejected");
     }
-    data = valid; data["schema"] = 2; rejected(data, "Future workspace schema rejected");
+    data = valid; data["schema"] = SCHEMA_VERSION + 1; rejected(data, "Future workspace schema rejected");
     data = valid; data["chrome"]["schema"] = 2; rejected(data, "Future nested chrome schema rejected");
     data = valid; data["schema"] = "1"; rejected(data, "Schema string not coerced");
     data = valid; data["world_view_in_mouselook"] = 1; rejected(data, "Boolean integer not coerced");
@@ -273,6 +274,69 @@ int main()
     data = valid;
     for (int i = 0; i < 4; ++i) data["windows"]["unknown" + std::to_string(i)] = LLSD::emptyMap();
     rejected(data, "Role record count bounded including unknown roles");
+
+    data = valid; data["schema"] = 1;
+    expect(fromLLSD(data, parsed, error), "Version-one workspace remains compatible");
+    Workspace context = fixture(); context.components |= Graphics | Camera | HUDs;
+    context.context.graphics.mode = FSWorkspaceContext::Mode::Current;
+    context.context.graphics.values["RenderFarClip"] = {128.};
+    context.context.camera.mode = FSWorkspaceContext::Mode::Preset; context.context.camera.preset = "Driving";
+    context.context.huds.push_back({"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Driving HUD", 31});
+    const auto context_data = toLLSD(context);
+    expect(fromLLSD(context_data, parsed, error) && parsed.context.huds.size() == 1 && parsed.context.camera.preset == "Driving", "Context groups round trip");
+    data = context_data; data["schema"] = 1; rejected(data, "Old schema cannot silently accept new groups");
+    data = context_data; data["graphics"]["values"]["FullScreen"] = true; rejected(data, "Display-mode injection rejected");
+    data = context_data; data["graphics"]["values"]["RenderFarClip"] = "128"; rejected(data, "Graphics numeric strings rejected");
+    data = context_data; data["graphics"]["values"]["RenderFarClip"] = std::numeric_limits<double>::infinity(); rejected(data, "Nonfinite context rejected");
+    data = context_data; data["huds"][0]["point"] = 1; rejected(data, "Non-HUD points rejected");
+    data = context_data; data["huds"].append(data["huds"][0]); rejected(data, "Duplicate HUD references rejected");
+    data = context_data; data["huds"][0]["item"] = "not-a-uuid"; rejected(data, "Malformed HUD reference rejected");
+    data = context_data; data.erase("camera"); rejected(data, "Selected group requires its definition");
+
+    // A one-shot load must not leak omitted Inventory lifecycle/folder state,
+    // toolbar commands or HUD attachments into a graphics/camera-only load.
+    Workspace mixed = context;
+    mixed.remember_inventory_folders = true;
+    mixed.windows[Role::InventoryPrimary].inventory_folder.present = true;
+    mixed.windows[Role::InventoryPrimary].inventory_folder.has_expanded_folders = true;
+    mixed.windows[Role::InventoryPrimary].inventory_folder.expanded_folders = {"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"};
+    mixed.extra_inventory.push_back(mixed.windows[Role::InventoryPrimary]);
+    mixed.remember_toolbars = true;
+    mixed.toolbars = toolbar_only.toolbars;
+    const LLSD mixed_data = toLLSD(mixed);
+    expect(fromLLSD(mixed_data, parsed, error), "Mixed group fixture is a validated save");
+    Workspace selected;
+    for (int group : {Graphics, Camera})
+    {
+        expect(selectGroups(mixed, group, false, selected) && selected.components == group &&
+               selected.windows.empty() && selected.extra_inventory.empty() && !selected.has_inbox &&
+               !selected.remember_inventory_folders && !selected.remember_toolbars && selected.toolbars.empty() &&
+               selected.context.huds.empty(), "Settings-only load excludes all window, folder, toolbar and HUD effects");
+        expect((group == Camera ? selected.context.graphics : selected.context.camera).mode == FSWorkspaceContext::Mode::Off,
+               "One settings group never carries the other");
+        expect(fromLLSD(toLLSD(selected), parsed, error), "Selected settings-only subset remains valid");
+    }
+    expect(selectGroups(mixed, All, true, selected) && selected.windows.size() == mixed.windows.size() &&
+           selected.extra_inventory.size() == 1 && selected.has_inbox && selected.remember_inventory_folders &&
+           selected.remember_toolbars && selected.context.huds.empty() &&
+           selected.context.camera.mode == FSWorkspaceContext::Mode::Off && selected.context.graphics.mode == FSWorkspaceContext::Mode::Off,
+           "Window arrangement includes captured folders and toolbar sets but excludes camera, graphics and HUDs");
+    expect(fromLLSD(toLLSD(selected), parsed, error), "Window arrangement subset remains valid");
+    expect(selectGroups(mixed, Maps, false, selected) && selected.windows.size() == 1 &&
+           selected.windows.count(Role::MiniMap) && !selected.has_inbox && selected.extra_inventory.empty(),
+           "Map-only load cannot close Inventory or move chat");
+    expect(selectGroups(mixed, HUDs, false, selected) && selected.windows.empty() &&
+           selected.context.huds.size() == 1 && !selected.remember_toolbars, "HUD-only load retains native review input alone");
+    expect(selectGroups(mixed, 0, true, selected) && selected.components == 0 && selected.toolbars.size() == 3 &&
+           selected.windows.empty() && selected.context.huds.empty(), "Toolbar-only load never applies viewport placement or other groups");
+    expect(fromLLSD(toLLSD(selected), parsed, error), "Toolbar-only subset remains valid");
+    const LLSD before_failure = toLLSD(selected);
+    expect(!selectGroups(mixed, 0, false, selected) && !selectGroups(mixed, 128, true, selected) &&
+           !selectGroups(mixed, -1, false, selected) && toLLSD(selected) == before_failure,
+           "Empty and unknown selections fail without mutating output");
+    expect(!selectGroups(fixture(), Camera, false, selected), "An absent group does not apply invented defaults");
+    expect(selectGroups(mixed, AllComponents, true, selected) && toLLSD(selected) == mixed_data && toLLSD(mixed) == mixed_data,
+           "Full switching and saved capture choices are unchanged after all partial selections");
 
     LLSD profiles = LLSD::emptyMap();
     expect(canSaveProfile(profiles, "New", error), "Empty map permits first save");

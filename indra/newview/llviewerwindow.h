@@ -405,7 +405,7 @@ public:
     // special implementation of simpleSnapshot for reflection maps
     bool            reflectionSnapshot(LLImageRaw* raw, S32 image_width, S32 image_height, const int num_render_passes);
 
-    bool            thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 preview_height, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, LLSnapshotModel::ESnapshotLayerType type);
+    bool            thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 preview_height, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, LLSnapshotModel::ESnapshotLayerType type, bool viewport_only = false);
     bool            isSnapshotLocSet() const;
     void            resetSnapshotLoc() const;
 

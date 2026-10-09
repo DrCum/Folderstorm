@@ -30,6 +30,7 @@ folderstorm_check(inventory_bulk
   ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)
 folderstorm_check(workspace_layout
   ../test_fsworkspacelayout.cpp ../../fsworkspacelayout.cpp)
+folderstorm_check(snapshot_geometry ../test_fssnapshotgeometry.cpp)
 folderstorm_check(workspace_usability
   ../test_fsworkspaceusability.cpp)
 

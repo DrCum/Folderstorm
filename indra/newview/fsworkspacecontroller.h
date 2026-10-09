@@ -25,6 +25,7 @@
 #include "lluuid.h"
 #include "lltimer.h"
 #include <map>
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -45,17 +46,21 @@ public:
     bool preview(const std::string& id);
     bool canQuickSwitch() const;
     bool quickSwitchWorkspace(const std::string& id);
+    bool quickSwitchWorkspaceGroups(const std::string& id, int components, bool toolbars = false);
     bool quickSwitchLayout(const std::string& id);
     using Utility = std::pair<LLHandle<LLFloater>, std::string>;
     std::vector<Utility> utilityWindows() const;
     bool arrange(const std::vector<LLHandle<LLFloater>>& selection, int operation);
     static bool snap(LLFloater* floater, S32& edge, LLView::ESnapEdge snap_edge);
+    bool recoverWindows(bool automatic = false);
     void scheduleStartupRestore();
     void saveLastArrangement();
     bool hasPrevious() const;
     bool returnPrevious();
-    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
-    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false);
+    bool previousWorkspace(FSWorkspaceLayout::Workspace& workspace) const;
+    void acceptAssistantSwitch(std::function<bool()> allowed);
+    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
+    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
     bool remembersInventoryFolders(const std::string& name) const;
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
@@ -112,7 +117,24 @@ private:
         FSWorkspaceLayout::Window window;
         std::string subject;
     };
-    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false) const;
+    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {}) const;
+    void applyContext(const FSWorkspaceLayout::Workspace& workspace);
+    void acceptHUDs();
+    void pollHUDs();
+    bool mHUDReviewed = false, mHUDPreviewPending = false;
+    std::function<bool()> mHUDAllowed;
+    void pollDisplays();
+    std::vector<FSWorkspaceContext::HUD> mPendingHUDs;
+    LLUUID mHUDAccount, mHUDSession;
+    unsigned long mHUDReport = 0;
+    LLTimer mHUDTimer, mDisplayTimer, mDisplayPollTimer;
+    std::string mDisplaySignature;
+    bool mDisplayPending = false;
+    LLUUID mDisplayAccount, mDisplaySession;
+    std::vector<std::pair<LLHandle<LLFloater>, FSWorkspaceLayout::Window>> mRecoveryWindows;
+    FSWorkspaceLayout::Workspace mRecoverySnapshot;
+    std::map<std::string, ControlBaseline> mContextControls;
+    bool mContextTouched = false, mCameraTouched = false;
     void applyToolbars(const FSWorkspaceLayout::Workspace& workspace);
     void beginReport(const std::string& name);
     void report(const std::string& subject, const std::string& reason, int count = 1);
@@ -130,7 +152,7 @@ private:
     void rememberExtraInventoryControls(const std::string& registry, const LLSD& key = LLSD());
     void restoreExtraInventories();
     bool placeWindow(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
-                     bool primary_inventory, std::vector<LLRect>& placed);
+                     bool primary_inventory, std::vector<LLRect>& placed, const FSWorkspaceLayout::Rect* recovery_frame = nullptr);
     void placePending(unsigned long generation, const LLUUID& account, const LLUUID& session);
     void abandon();
     void finishPlacement();
@@ -139,7 +161,7 @@ private:
     bool sameSession() const;
 
     static void lifecycleIdle(void*);
-    bool rememberPrevious();
+    bool rememberPrevious(const FSWorkspaceContext::Options& context = {});
     LLTimer mLifecycleTimer, mStartupTimer;
     bool mStartupScheduled = false;
     unsigned long mStartupGeneration = 0;

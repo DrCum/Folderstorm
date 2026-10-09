@@ -354,7 +354,7 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
         // <FS:Ansariel> Store settings at logout; Set in the particular panel classes
         //if (width_ctrl->getValue().asInteger() == 0)
         //{
-        //  S32 w = gViewerWindow->getWindowWidthRaw();
+        //  S32 w = LLSnapshotLivePreview::sourceRectRaw().getWidth();
         //  LL_DEBUGS() << "Initializing width spinner (" << width_ctrl->getName() << "): " << w << LL_ENDL;
         //  width_ctrl->setValue(w);
         //  if(getActiveSnapshotType(floater) == LLSnapshotModel::SNAPSHOT_TEXTURE)
@@ -364,7 +364,7 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
         //}
         //if (height_ctrl->getValue().asInteger() == 0)
         //{
-        //  S32 h = gViewerWindow->getWindowHeightRaw();
+        //  S32 h = LLSnapshotLivePreview::sourceRectRaw().getHeight();
         //  LL_DEBUGS() << "Initializing height spinner (" << height_ctrl->getName() << "): " << h << LL_ENDL;
         //  height_ctrl->setValue(h);
         //  if(getActiveSnapshotType(floater) == LLSnapshotModel::SNAPSHOT_TEXTURE)
@@ -385,8 +385,8 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
         if (is_custom_resolution && (gSavedSettings.getBOOL("RenderUIInSnapshot") || gSavedSettings.getBOOL("RenderHUDInSnapshot")))
         // </FS:Ansariel>
         {
-            S32 width = gViewerWindow->getWindowWidthRaw();
-            S32 height = gViewerWindow->getWindowHeightRaw();
+            S32 width = LLSnapshotLivePreview::sourceRectRaw().getWidth();
+            S32 height = LLSnapshotLivePreview::sourceRectRaw().getHeight();
 
             width_ctrl->setMaxValue((F32)width);
 
@@ -816,15 +816,15 @@ void LLFloaterSnapshot::Impl::updateResolution(LLUICtrl* ctrl, void* data, bool 
 
         if (gSavedSettings.getBOOL("RenderUIInSnapshot") || gSavedSettings.getBOOL("RenderHUDInSnapshot"))
         { //clamp snapshot resolution to window size when showing UI or HUD in snapshot
-            width = llmin(width, gViewerWindow->getWindowWidthRaw());
-            height = llmin(height, gViewerWindow->getWindowHeightRaw());
+            width = llmin(width, LLSnapshotLivePreview::sourceRectRaw().getWidth());
+            height = llmin(height, LLSnapshotLivePreview::sourceRectRaw().getHeight());
         }
 
         if (width == 0 || height == 0)
         {
             // take resolution from current window size
-            LL_DEBUGS() << "Setting preview res from window: " << gViewerWindow->getWindowWidthRaw() << "x" << gViewerWindow->getWindowHeightRaw() << LL_ENDL;
-            previewp->setSize(gViewerWindow->getWindowWidthRaw(), gViewerWindow->getWindowHeightRaw());
+            LL_DEBUGS() << "Setting preview res from window: " << LLSnapshotLivePreview::sourceRectRaw().getWidth() << "x" << LLSnapshotLivePreview::sourceRectRaw().getHeight() << LL_ENDL;
+            previewp->setSize(LLSnapshotLivePreview::sourceRectRaw().getWidth(), LLSnapshotLivePreview::sourceRectRaw().getHeight());
         }
         else if (width == -1 || height == -1)
         {
@@ -847,9 +847,9 @@ void LLFloaterSnapshot::Impl::updateResolution(LLUICtrl* ctrl, void* data, bool 
             else
             {
                 LL_DEBUGS() << "No custom res chosen, setting preview res from window: "
-                    << gViewerWindow->getWindowWidthRaw() << "x" << gViewerWindow->getWindowHeightRaw() << LL_ENDL;
-                new_width = gViewerWindow->getWindowWidthRaw();
-                new_height = gViewerWindow->getWindowHeightRaw();
+                    << LLSnapshotLivePreview::sourceRectRaw().getWidth() << "x" << LLSnapshotLivePreview::sourceRectRaw().getHeight() << LL_ENDL;
+                new_width = LLSnapshotLivePreview::sourceRectRaw().getWidth();
+                new_height = LLSnapshotLivePreview::sourceRectRaw().getHeight();
             }
 
             llassert(new_width > 0 && new_height > 0);
@@ -966,13 +966,13 @@ bool LLFloaterSnapshot::Impl::checkImageSize(LLSnapshotLivePreview* previewp, S3
 
     if(previewp && previewp->mKeepAspectRatio)
     {
-        if(gViewerWindow->getWindowWidthRaw() < 1 || gViewerWindow->getWindowHeightRaw() < 1)
+        if(LLSnapshotLivePreview::sourceRectRaw().getWidth() < 1 || LLSnapshotLivePreview::sourceRectRaw().getHeight() < 1)
         {
             return false ;
         }
 
         //aspect ratio of the current window
-        F32 aspect_ratio = (F32)gViewerWindow->getWindowWidthRaw() / gViewerWindow->getWindowHeightRaw() ;
+        F32 aspect_ratio = (F32)LLSnapshotLivePreview::sourceRectRaw().getWidth() / LLSnapshotLivePreview::sourceRectRaw().getHeight() ;
 
         //change another value proportionally
         if(isWidthChanged)
@@ -1123,6 +1123,11 @@ bool LLFloaterSnapshot::postBuild()
     childSetCommitCallback("ui_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("balance_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("hud_check", ImplBase::onClickDisplaySetting, this);
+    if (auto* source = findChild<LLUICtrl>("full_window_check"))
+        source->setCommitCallback([this](LLUICtrl*, const LLSD&) {
+            impl->updateControls(this);
+            if (auto* preview = getPreviewView()) preview->updateSnapshot(true, true);
+        });
 
     // <FS:Ansariel> FIRE-15853: HUDs, interface or L$ balance checkbox don't update actual screenshot image
     childSetCommitCallback("currency_check", ImplBase::onClickCurrencyCheck, this);

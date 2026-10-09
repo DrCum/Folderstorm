@@ -49,6 +49,8 @@
 #include "llnotificationsutil.h"
 #include "llslurl.h"
 #include "llsnapshotlivepreview.h"
+#include "llfloatersnapshot.h"
+#include "fsworldviewgeometry.h"
 #include "lltoolfocus.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"   // upload_new_resource()
@@ -111,10 +113,10 @@ LLSnapshotLivePreview::LLSnapshotLivePreview (const LLSnapshotLivePreview::Param
     //  gIdleCallbacks.addFunction( &LLSnapshotLivePreview::onIdle, (void*)this );
     sList.insert(this);
     setFollowsAll();
-    mWidth[0] = gViewerWindow->getWindowWidthRaw();
-    mWidth[1] = gViewerWindow->getWindowWidthRaw();
-    mHeight[0] = gViewerWindow->getWindowHeightRaw();
-    mHeight[1] = gViewerWindow->getWindowHeightRaw();
+    mWidth[0] = sourceRectRaw().getWidth();
+    mWidth[1] = sourceRectRaw().getWidth();
+    mHeight[0] = sourceRectRaw().getHeight();
+    mHeight[1] = sourceRectRaw().getHeight();
     mImageScaled[0] = false;
     mImageScaled[1] = false;
 
@@ -125,6 +127,19 @@ LLSnapshotLivePreview::LLSnapshotLivePreview (const LLSnapshotLivePreview::Param
     mBigThumbnailUpToDate = false ;
 
     mForceUpdateSnapshot = false;
+}
+
+bool LLSnapshotLivePreview::viewportOnly()
+{
+    return gSavedSettings.getBOOL("FSWorldViewEnabled") && !gSavedSettings.getBOOL("FSSnapshotFullWindow");
+}
+LLRect LLSnapshotLivePreview::sourceRectRaw()
+{
+    return viewportOnly() ? gViewerWindow->getWorldViewRectRaw() : gViewerWindow->getWindowRectRaw();
+}
+LLRect LLSnapshotLivePreview::sourceRectScaled()
+{
+    return viewportOnly() ? gViewerWindow->getWorldViewRectScaled() : gViewerWindow->getWindowRectScaled();
 }
 
 LLSnapshotLivePreview::~LLSnapshotLivePreview()
@@ -156,7 +171,7 @@ F32 LLSnapshotLivePreview::getImageAspect()
         return 0.f;
     }
     // mKeepAspectRatio) == gSavedSettings.getBOOL("KeepAspectForSnapshot"))
-    return (mKeepAspectRatio ? ((F32)getRect().getWidth()) / ((F32)getRect().getHeight()) : ((F32)getWidth()) / ((F32)getHeight()));
+    return (F32)getWidth() / llmax(1.f, (F32)getHeight());
 }
 
 void LLSnapshotLivePreview::updateSnapshot(bool new_snapshot, bool new_thumbnail, F32 delay)
@@ -175,30 +190,9 @@ void LLSnapshotLivePreview::updateSnapshot(bool new_snapshot, bool new_thumbnail
         }
         mSnapshotUpToDate = false;
 
-        // Update snapshot source rect depending on whether we keep the aspect ratio.
-        LLRect& rect = mImageRect[mCurImageIndex];
-        rect.set(0, getRect().getHeight(), getRect().getWidth(), 0);
-
-        F32 image_aspect_ratio = ((F32)getWidth()) / ((F32)getHeight());
-        F32 window_aspect_ratio = ((F32)getRect().getWidth()) / ((F32)getRect().getHeight());
-
-        if (mKeepAspectRatio)//gSavedSettings.getBOOL("KeepAspectForSnapshot"))
-        {
-            if (image_aspect_ratio > window_aspect_ratio)
-            {
-                // trim off top and bottom
-                S32 new_height = ll_round((F32)getRect().getWidth() / image_aspect_ratio);
-                rect.mBottom += (getRect().getHeight() - new_height) / 2;
-                rect.mTop -= (getRect().getHeight() - new_height) / 2;
-            }
-            else if (image_aspect_ratio < window_aspect_ratio)
-            {
-                // trim off left and right
-                S32 new_width = ll_round((F32)getRect().getHeight() * image_aspect_ratio);
-                rect.mLeft += (getRect().getWidth() - new_width) / 2;
-                rect.mRight -= (getRect().getWidth() - new_width) / 2;
-            }
-        }
+        const auto source = sourceRectScaled();
+        const auto fitted = FSWorldViewGeometry::fitImage({source.mLeft, source.mBottom, source.mRight, source.mTop}, getWidth(), getHeight());
+        mImageRect[mCurImageIndex].set(fitted.left, fitted.top, fitted.right, fitted.bottom);
 
         // Stop shining animation.
         mShineAnimTimer.stop();
@@ -482,8 +476,8 @@ bool LLSnapshotLivePreview::setThumbnailImageSize()
     {
         return false ;
     }
-    S32 width  = (mThumbnailSubsampled ? mPreviewImage->getWidth()  : gViewerWindow->getWindowWidthRaw());
-    S32 height = (mThumbnailSubsampled ? mPreviewImage->getHeight() : gViewerWindow->getWindowHeightRaw()) ;
+    S32 width = getWidth();
+    S32 height = getHeight();
 
     F32 aspect_ratio = ((F32)width) / ((F32)height);
 
@@ -528,24 +522,6 @@ bool LLSnapshotLivePreview::setThumbnailImageSize()
     // </FS:Ansariel>
 
     S32 left = 0 , top = mThumbnailHeight, right = mThumbnailWidth, bottom = 0 ;
-    if (!mKeepAspectRatio)
-    {
-        F32 ratio_x = (F32)getWidth()  / width ;
-        F32 ratio_y = (F32)getHeight() / height ;
-
-        if (ratio_x > ratio_y)
-        {
-            top = (S32)(top * ratio_y / ratio_x) ;
-        }
-        else
-        {
-            right = (S32)(right * ratio_x / ratio_y) ;
-        }
-        left = (S32)((mThumbnailWidth - right) * 0.5f) ;
-        bottom = (S32)((mThumbnailHeight - top) * 0.5f) ;
-        top += bottom ;
-        right += left ;
-    }
     mPreviewRect.set(left - 1, top + 1, right + 1, bottom - 1) ;
 
     return true ;
@@ -621,7 +597,7 @@ void LLSnapshotLivePreview::generateThumbnailImage(bool force_update)
                                          gSavedSettings.getBOOL("RenderHUDInSnapshot"),
                                          false,
                                          gSavedSettings.getBOOL("RenderSnapshotNoPost"),
-                                         mSnapshotBufferType) )
+                                         mSnapshotBufferType, viewportOnly()) )
         {
             raw = NULL ;
         }
@@ -707,6 +683,15 @@ LLViewerTexture* LLSnapshotLivePreview::getBigThumbnailImage()
 bool LLSnapshotLivePreview::onIdle( void* snapshot_preview )
 {
     LLSnapshotLivePreview* previewp = (LLSnapshotLivePreview*)snapshot_preview;
+    const LLRect source = sourceRectRaw();
+    if (source != previewp->mSourceRect || viewportOnly() != previewp->mSourceViewport)
+    {
+        previewp->mSourceRect = source;
+        previewp->mSourceViewport = viewportOnly();
+        if (auto* floater = LLFloaterReg::findTypedInstance<LLFloaterSnapshot>("snapshot"))
+            if (floater->impl->getPreviewView() == previewp) floater->impl->updateControls(floater);
+        previewp->updateSnapshot(true, true, AUTO_SNAPSHOT_TIME_DELAY);
+    }
     if (previewp->getWidth() == 0 || previewp->getHeight() == 0)
     {
         LL_WARNS("Snapshot") << "Incorrect dimensions: " << previewp->getWidth() << "x" << previewp->getHeight() << LL_ENDL;
@@ -791,7 +776,7 @@ bool LLSnapshotLivePreview::onIdle( void* snapshot_preview )
                 render_no_post,
                 render_balance,
                 previewp->mSnapshotBufferType,
-                previewp->getMaxImageSize()))
+                previewp->getMaxImageSize(), viewportOnly()))
         {
             // Invalidate/delete any existing encoded image
             previewp->mPreviewImageEncoded = NULL;

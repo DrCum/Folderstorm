@@ -18,6 +18,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fspanelpreferenceworkspaces.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacecontextui.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
 #include "llagent.h"
@@ -35,6 +36,10 @@ int captureComponents(LLView* view)
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_chat")->get()) mask |= FSWorkspaceLayout::Chat;
+    const auto context = FSWorkspaceContextUI::options(view);
+    if (context.graphics.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Graphics;
+    if (context.camera.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Camera;
+    if (!context.huds.empty()) mask |= FSWorkspaceLayout::HUDs;
     return mask;
 }
 }
@@ -42,6 +47,8 @@ static LLPanelInjector<FSPanelPreferenceWorkspaces> t_workspace_panel("panel_pre
 
 bool FSPanelPreferenceWorkspaces::postBuild()
 {
+    FSWorkspaceContextUI::initialize(this);
+    getChild<LLButton>("recover_windows")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().recoverWindows(); });
     const char* actions[] = {"preview", "save", "rename", "delete", "add_inventory"};
     for (const char* name : actions)
         getChild<LLButton>(std::string("workspace_") + name)->setCommitCallback(
@@ -115,9 +122,12 @@ void FSPanelPreferenceWorkspaces::refresh()
         getChild<LLCheckBoxCtrl>("workspace_capture_chat")->set((mask & FSWorkspaceLayout::Chat) != 0);
 
         getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->set(saved.remember_toolbars);
+        FSWorkspaceContextUI::setOptions(this, saved.context);
         mFolderOptionWorkspace = selected();
         mFolderOptionAccount = gAgent.getID(); mFolderOptionSession = gAgent.getSessionID();
     }
+    getChild<LLView>("workspace_context")->setEnabled(ready);
+    getChild<LLButton>("recover_windows")->setEnabled(ready);
     remember->setEnabled(ready && getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get());
     for (const char* name : {"workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat", "workspace_capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
     getChild<LLComboBox>("workspace_startup_mode")->setEnabled(ready);
@@ -148,7 +158,7 @@ void FSPanelPreferenceWorkspaces::action(const std::string& name)
     else if (name == "save")
     {
         const auto label = enteredName();
-        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get()) && controller.status() == "exists") confirm("overwrite", label);
+        if (!controller.saveCurrent(label, false, getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get(), FSWorkspaceContextUI::options(this)) && controller.status() == "exists") confirm("overwrite", label);
     }
     else if (name == "rename") controller.rename(selected(), enteredName());
     else if (name == "delete") confirm("delete", selected());
@@ -163,17 +173,18 @@ void FSPanelPreferenceWorkspaces::confirm(const std::string& action, const std::
     const bool remember_folders = getChild<LLCheckBoxCtrl>("workspace_remember_folders")->get();
     const int components = captureComponents(this);
     const bool toolbars = getChild<LLCheckBoxCtrl>("workspace_capture_toolbars")->get();
+    const auto context = FSWorkspaceContextUI::options(this);
     const auto handle = getDerivedHandle<FSPanelPreferenceWorkspaces>();
     LLSD args;
     args["NAME"] = name;
     LLNotificationsUtil::add(action == "overwrite" ? "ConfirmWorkspaceOverwrite" : "ConfirmWorkspaceDelete",
-        args, LLSD(), [handle, revision, action, name, remember_folders, components, toolbars](const LLSD& notification, const LLSD& response)
+        args, LLSD(), [handle, revision, action, name, remember_folders, components, toolbars, context](const LLSD& notification, const LLSD& response)
         {
             auto* panel = handle.get();
             auto& controller = FSWorkspaceController::instance();
             if (!panel || !controller.available() || controller.revision() != revision ||
                 LLNotificationsUtil::getSelectedOption(notification, response) != 0) return;
-            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders, components, toolbars);
+            if (action == "overwrite") controller.saveCurrent(name, true, remember_folders, components, toolbars, context);
             else controller.remove(name);
             panel->refresh();
         });

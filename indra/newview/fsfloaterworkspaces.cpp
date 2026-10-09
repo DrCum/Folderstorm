@@ -17,16 +17,19 @@
 #include "fsfloaterworkspaces.h"
 #include "fschromelayoutcontroller.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacecontextui.h"
 #include "fsworkspacequickaccess.h"
 #include "fsworkspacepreview.h"
 #include "fsquietui.h"
 #include "llagent.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
+#include "llcombobox.h"
 #include "llfloaterpreference.h"
 #include "llfloaterreg.h"
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
+#include "llscrollcontainer.h"
 #include "lltextbox.h"
 #include "lltexteditor.h"
 #include "llinventorymodel.h"
@@ -52,12 +55,22 @@ int captureComponents(LLView* view)
     if (view->getChild<LLCheckBoxCtrl>("capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
     if (view->getChild<LLCheckBoxCtrl>("capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
     if (view->getChild<LLCheckBoxCtrl>("capture_chat")->get()) mask |= FSWorkspaceLayout::Chat;
+    const auto context = FSWorkspaceContextUI::options(view);
+    if (context.graphics.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Graphics;
+    if (context.camera.mode != FSWorkspaceContext::Mode::Off) mask |= FSWorkspaceLayout::Camera;
+    if (!context.huds.empty()) mask |= FSWorkspaceLayout::HUDs;
     return mask;
 }
 }
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    FSWorkspaceContextUI::initialize(this);
+    mSaveSectionHeight = getChild<LLView>("save_controls")->getRect().mTop - getChild<LLView>("workspace_utilities")->getRect().mTop;
+    getChild<LLButton>("save_toggle")->setCommitCallback([this](LLUICtrl*, const LLSD&) { setSaveExpanded(!mSaveExpanded); });
+    getChild<LLComboBox>("apply_group")->setCommitCallback([this](LLUICtrl*, const LLSD&) { updateButtons(); });
+    getChild<LLButton>("apply_selected_group")->setCommitCallback([this](LLUICtrl*, const LLSD&) { applySelectedGroup(); });
+    getChild<LLButton>("recover_windows")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().recoverWindows(); });
     getChild<LLCheckBoxCtrl>("quiet_ui")->setCommitCallback([this](LLUICtrl*, const LLSD&) { FSQuietUI::setEnabled(getChild<LLCheckBoxCtrl>("quiet_ui")->get()); });
     getChild<LLButton>("restore_report")->setCommitCallback([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_report"); });
     getChild<LLButton>("diagram_preview")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_preview", selected()); });
@@ -84,12 +97,16 @@ bool FSFloaterWorkspaces::postBuild()
             if (preview->LLView::getVisible()) preview->select(selected());
     });
     list->setDoubleClickCallback([this]() { switchSelected(); });
+    setSaveExpanded(false);
     refresh(true);
     return LLFloater::postBuild();
 }
 void FSFloaterWorkspaces::onOpen(const LLSD& key)
 {
     mActionStatus.clear();
+    setSaveExpanded(false);
+    mGroupKey.clear();
+    FSWorkspaceContextUI::setOptions(this, {});
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
     for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->set(true);
@@ -141,6 +158,8 @@ void FSFloaterWorkspaces::refresh(bool force)
         const bool same_account = gAgent.getID() == mAccount && gAgent.getSessionID() == mSession;
         if (!same_account)
         {
+            mGroupKey.clear(); mGroupDefinition = LLSD();
+            FSWorkspaceContextUI::setOptions(this, {});
             getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
             getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
             mActionStatus.clear(); mSavedName.clear();
@@ -189,6 +208,11 @@ void FSFloaterWorkspaces::updateButtons()
     const bool ready = controller.available();
     const bool can_switch = controller.canQuickSwitch();
     const bool has_selection = !selected().empty();
+    refreshGroups();
+    const auto group = getChild<LLComboBox>("apply_group")->getValue().asString();
+    getChild<LLComboBox>("apply_group")->setEnabled(can_switch && getChild<LLComboBox>("apply_group")->getItemCount() > 1);
+    getChild<LLButton>("apply_selected_group")->setEnabled(can_switch && !group.empty());
+    getChild<LLButton>("save_toggle")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("quiet_ui")->set(FSQuietUI::active());
     getChild<LLCheckBoxCtrl>("quiet_ui")->setEnabled(ready);
     getChild<LLButton>("previous")->setEnabled(controller.hasPrevious());
@@ -206,16 +230,81 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("favorite_down")->setEnabled(can_switch && favorite != ordered.end() && favorite + 1 != ordered.end());
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
+    getChild<LLCheckBoxCtrl>("display_recovery")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch && getChild<LLCheckBoxCtrl>("capture_inventory")->get());
     for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
     getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("capture_toolbars")->get()));
+    getChild<LLView>("workspace_context")->setEnabled(can_switch);
+    getChild<LLButton>("recover_windows")->setEnabled(can_switch);
     getChild<LLLineEditor>("workspace_name")->setEnabled(can_switch);
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
     LLStringUtil::format_map_t args;
     args["[NAME]"] = mSavedName;
     getChild<LLTextBox>("status")->setText(getString(!ready ? "unavailable" : !can_switch ? "preferences_open" : mActionStatus.empty() ? "ready" : mActionStatus, args));
+}
+void FSFloaterWorkspaces::setSaveExpanded(bool expanded)
+{
+    if (expanded == mSaveExpanded) return;
+    mSaveExpanded = expanded;
+    getChild<LLView>("save_controls")->setVisible(expanded);
+    getChild<LLButton>("save_toggle")->setLabel(getString(expanded ? "hide_save" : "show_save"));
+    auto* content = getChild<LLView>("workspace_content");
+    content->reshape(content->getRect().getWidth(), content->getRect().getHeight() + (expanded ? mSaveSectionHeight : -mSaveSectionHeight));
+    // Recompute the scroll range immediately; collapsing never leaves an
+    // empty document below the list. Top- and bottom-following panels reflow.
+    auto* scroll = getChild<LLScrollContainer>("workspace_scroll");
+    scroll->reshape(scroll->getRect().getWidth(), scroll->getRect().getHeight());
+    if (!expanded) scroll->goToTop();
+    else scroll->scrollToShowRect(getChild<LLView>("save_controls")->getRect());
+}
+void FSFloaterWorkspaces::refreshGroups()
+{
+    const auto key = selected();
+    // Definitions may change while this floater is open. Build the menu from
+    // the current validated save, independently of the quick-save controls.
+    auto* groups = getChild<LLComboBox>("apply_group");
+    const LLSD profiles = mReady ? gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles") : LLSD();
+    const LLSD definition = key.compare(0, 10, WORKSPACE_PREFIX) == 0 ? profiles[key.substr(10)] : LLSD();
+    if (groups->getItemCount() && key == mGroupKey && definition == mGroupDefinition) return;
+    const auto prior = key == mGroupKey ? groups->getValue() : LLSD("");
+    groups->removeall();
+    groups->add(getString("choose_group"), LLSD(""));
+    FSWorkspaceLayout::Workspace workspace;
+    if (!isLayout(key) && key.compare(0, 10, WORKSPACE_PREFIX) == 0 && FSWorkspaceController::instance().readProfile(key.substr(10), workspace))
+    {
+        if ((workspace.components & FSWorkspaceLayout::All) || workspace.remember_toolbars)
+            groups->add(getString("group_windows"), LLSD("windows"));
+        for (const auto& group : std::vector<std::pair<int, std::string>>{
+             {FSWorkspaceLayout::Camera, "camera"}, {FSWorkspaceLayout::Graphics, "graphics"},
+             {FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"},
+             {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}, {FSWorkspaceLayout::HUDs, "huds"}})
+            if (workspace.components & group.first) groups->add(getString("group_" + group.second), LLSD(group.second));
+        if (workspace.remember_toolbars) groups->add(getString("group_toolbars"), LLSD("toolbars"));
+    }
+    if (!groups->setSelectedByValue(prior, true)) groups->setValue(LLSD(""));
+    mGroupKey = key;
+    mGroupDefinition = definition;
+}
+void FSFloaterWorkspaces::applySelectedGroup()
+{
+    auto& controller = FSWorkspaceController::instance();
+    const auto key = selected();
+    if (!controller.canQuickSwitch() || key.compare(0, 10, WORKSPACE_PREFIX) != 0 || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
+    const auto group = getChild<LLComboBox>("apply_group")->getValue().asString();
+    int components = 0;
+    if (group == "windows") components = FSWorkspaceLayout::All;
+    else if (group == "camera") components = FSWorkspaceLayout::Camera;
+    else if (group == "graphics") components = FSWorkspaceLayout::Graphics;
+    else if (group == "chrome") components = FSWorkspaceLayout::Chrome;
+    else if (group == "inventory") components = FSWorkspaceLayout::Inventory;
+    else if (group == "maps") components = FSWorkspaceLayout::Maps;
+    else if (group == "chat") components = FSWorkspaceLayout::Chat;
+    else if (group == "huds") components = FSWorkspaceLayout::HUDs;
+    else if (group != "toolbars") return;
+    if (controller.quickSwitchWorkspaceGroups(key.substr(10), components, group == "windows" || group == "toolbars")) closeFloater(false);
+    else { mActionStatus = "switch_failed"; updateButtons(); }
 }
 void FSFloaterWorkspaces::switchSelected()
 {
@@ -244,7 +333,7 @@ void FSFloaterWorkspaces::saveCurrent()
     if (!controller.canQuickSwitch() || gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
-    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get()))
+    if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get(), FSWorkspaceContextUI::options(this)))
     {
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");

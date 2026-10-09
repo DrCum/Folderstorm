@@ -17,6 +17,10 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacecontextadapter.h"
+#include "llpresetsmanager.h"
+#include "llfeaturemanager.h"
+#include "llfloaterpreference.h"
 #include "fschromelayoutcontroller.h"
 #include "llagent.h"
 #include "llappviewer.h"
@@ -38,6 +42,9 @@
 #include "llcommandmanager.h"
 #include "lluictrlfactory.h"
 #include "llxmlnode.h"
+#include "llwindow.h"
+#include "fsworldviewgeometry.h"
+#include "llvoavatarself.h"
 
 #include <algorithm>
 #include <cmath>
@@ -193,16 +200,26 @@ void FSWorkspaceController::abandon()
     mRestoreLayout = false; mPreserveCoordinates = false;
     mQuickSwitch = false;
     mTransaction = false;
+    mHUDReviewed = mHUDPreviewPending = false; mHUDAllowed = {};
+    mContextControls.clear(); mContextTouched = mCameraTouched = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
     mExtraControls.clear(); mExtraRuntime.clear(); mPendingExtraInventory.clear();
     mFocus.markDead();
     mProfiles = LLSD(); mActive.clear(); mRenamed.clear();
     mInboxTouched = mInboxBaselineValid = false; mToolbarTouched = false;
 }
-FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folders, int components, bool remember_toolbars) const
+FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folders, int components, bool remember_toolbars, const FSWorkspaceContext::Options& context) const
 {
     FSWorkspaceLayout::Workspace result;
     result.components = components;
+    result.context = context;
+    for (bool camera : {false, true})
+    {
+        auto& group = camera ? result.context.camera : result.context.graphics;
+        if (group.mode == FSWorkspaceContext::Mode::Current) group = FSWorkspaceContext::captureGroup(camera);
+        if (group.mode != FSWorkspaceContext::Mode::Off) result.components |= camera ? FSWorkspaceLayout::Camera : FSWorkspaceLayout::Graphics;
+    }
+    if (!context.huds.empty()) result.components |= FSWorkspaceLayout::HUDs;
     result.remember_toolbars = remember_toolbars;
     if (remember_toolbars && gToolBarView)
         for (int i = LLToolBarEnums::TOOLBAR_FIRST; i <= LLToolBarEnums::TOOLBAR_LAST; ++i)
@@ -326,7 +343,24 @@ void FSWorkspaceController::beginPreferencesSession()
     mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
     mProfiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     mActive = gSavedPerAccountSettings.getString("FSActiveWorkspace");
-    mBaseline = capture(false, FSWorkspaceLayout::All, true);
+    mBaseline = capture(false, FSWorkspaceLayout::All, true, FSWorkspaceContext::liveOptions());
+    // Capture the saved/effective stacks at Preferences open, before another
+    // panel or a camera setting callback can change them during a preview.
+    auto remember_context = [&](const std::string& name)
+    {
+        if (LLControlVariable* control = gSavedSettings.getControl(name))
+        {
+            ControlBaseline baseline;
+            baseline.existed = true; baseline.unsaved = control->hasUnsavedValue();
+            baseline.saved = control->getSaveValue(); baseline.effective = control->getValue();
+            mContextControls[name] = baseline;
+        }
+    };
+    for (bool camera : {false, true})
+    {
+        remember_context(camera ? "PresetCameraActive" : "PresetGraphicActive");
+        for (const auto& control : FSWorkspaceContext::controls(camera)) remember_context(control.name);
+    }
     for (Role role : ROLES) rememberRole(role);
     for (LLFloater* floater : extraInventoryFloaters()) rememberExtraInventory(floater);
     mTransaction = true;
@@ -364,17 +398,43 @@ bool FSWorkspaceController::canQuickSwitch() const
 }
 bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
 {
-    if (!canQuickSwitch()) return false;
+    return quickSwitchWorkspaceGroups(id, FSWorkspaceLayout::AllComponents, true);
+}
+bool FSWorkspaceController::quickSwitchWorkspaceGroups(const std::string& id, int components, bool toolbars)
+{
+    if (!canQuickSwitch() || !FSWorkspaceLayout::isSafeProfileName(id)) return false;
     if (mQuickSwitch) finishQuickSwitch();
     FSWorkspaceLayout::Workspace parsed;
     std::string error;
     const LLSD profiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     if (!profiles.has(id) || !FSWorkspaceLayout::fromLLSD(profiles[id], parsed, error)) return false;
-    if (!rememberPrevious()) return false;
+    FSWorkspaceLayout::Workspace selected;
+    if (!FSWorkspaceLayout::selectGroups(parsed, components, toolbars, selected)) return false;
+    const bool complete = selected.components == parsed.components && selected.remember_toolbars == parsed.remember_toolbars;
+    if (!rememberPrevious(selected.context)) return false;
     // Discard any baseline captured during construction of a hidden panel.
     // This does not write profile definitions or unrelated preferences.
     abandon();
-    if (!preview(id)) { abandon(); return false; }
+    beginPreferencesSession();
+    // A partial load is an unsaved combination, not a clean instance of the
+    // full named profile. Keep its source name in the report, not active state.
+    if (!mTransaction || !sameSession() || !startPreview(selected, complete ? id : "")) { abandon(); return false; }
+    if (!complete)
+    {
+        mExpectedId.clear(); mExpectedDefinition = LLSD(); mComparisonDirty = true;
+        mReport.name = id;
+        for (const auto& group : std::vector<std::pair<int, std::string>>{
+             {FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"},
+             {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"},
+             {FSWorkspaceLayout::Graphics, "graphics"}, {FSWorkspaceLayout::Camera, "camera"}, {FSWorkspaceLayout::HUDs, "huds"}})
+            if ((parsed.components & group.first) && !(selected.components & group.first))
+            {
+                mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [&](const ReportLine& line)
+                    { return line.subject == group.second && line.reason == "omitted"; }), mReport.lines.end());
+                report(group.second, "not_selected");
+            }
+        if (parsed.remember_toolbars && !selected.remember_toolbars) report("toolbars", "not_selected");
+    }
     mQuickSwitch = true;
     // The quick-switch list closes after selection. Its controls stay alive,
     // so the deferred placement must not restore focus to that hidden window.
@@ -398,9 +458,10 @@ void FSWorkspaceController::finishQuickSwitch()
     if (!mQuickSwitch) return;
     if (!sameSession() || !available()) { abandon(); return; }
     finishPlacement();
+    acceptHUDs();
     if (!mRestoreLayout && !mActive.empty() && mProfiles.has(mActive))
     {
-        const auto live = capture(mPending.remember_inventory_folders, mPending.components, mPending.remember_toolbars);
+        const auto live = capture(mPending.remember_inventory_folders, mPending.components & FSWorkspaceLayout::All, mPending.remember_toolbars, mPending.context);
         mExpected = mPending;
         if (mPending.components & FSWorkspaceLayout::Chrome)
         { mExpected.chrome = live.chrome; mExpected.world_view_in_mouselook = live.world_view_in_mouselook; }
@@ -436,9 +497,12 @@ void FSWorkspaceController::finishQuickSwitch()
     mReportPreview = false;
     abandon();
 }
-bool FSWorkspaceController::rememberPrevious()
+bool FSWorkspaceController::rememberPrevious(const FSWorkspaceContext::Options& context)
 {
-    const auto current = capture(true, FSWorkspaceLayout::All, true);
+    FSWorkspaceContext::Options options;
+    if (context.graphics.mode != FSWorkspaceContext::Mode::Off) options.graphics.mode = FSWorkspaceContext::Mode::Current;
+    if (context.camera.mode != FSWorkspaceContext::Mode::Off) options.camera.mode = FSWorkspaceContext::Mode::Current;
+    const auto current = capture(true, FSWorkspaceLayout::All, true, options);
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (!FSWorkspaceLayout::fromLLSD(FSWorkspaceLayout::toLLSD(current), validated, error))
     { mStatus = current.extra_inventory.size() > FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS ? "too_many_inventory_windows" : "invalid_data"; return false; }
@@ -460,7 +524,7 @@ bool FSWorkspaceController::returnPrevious()
     if (mQuickSwitch) finishQuickSwitch();
     const auto target = mPrevious;
     const auto workspace = mPreviousWorkspace, layout = mPreviousLayout;
-    if (!rememberPrevious()) return false; // Swap, including unsaved positions; never change named definitions.
+    if (!rememberPrevious(target.context)) return false; // Swap, including unsaved positions; never change named definitions.
     abandon();
     beginPreferencesSession();
     if (!startPreview(target, workspace)) return false;
@@ -468,21 +532,21 @@ bool FSWorkspaceController::returnPrevious()
     mFocus.markDead();
     return true;
 }
-bool FSWorkspaceController::saveCurrentNow(const std::string& name, bool remember_folders, int components, bool remember_toolbars)
+bool FSWorkspaceController::saveCurrentNow(const std::string& name, bool remember_folders, int components, bool remember_toolbars, const FSWorkspaceContext::Options& context)
 {
     if (!canQuickSwitch()) return false;
     if (mQuickSwitch) finishQuickSwitch();
     abandon();
     // Reuse strict capture/validation, allowing only creation from this UI.
     // Pending Preferences edits are excluded by the guard above.
-    if (!saveCurrent(name, false, remember_folders, components, remember_toolbars)) { abandon(); return false; }
+    if (!saveCurrent(name, false, remember_folders, components, remember_toolbars, context)) { abandon(); return false; }
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     mStatus = "saved_immediately";
     abandon();
     return true;
 }
-bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite, bool remember_folders, int components, bool remember_toolbars)
+bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite, bool remember_folders, int components, bool remember_toolbars, const FSWorkspaceContext::Options& context)
 {
     beginPreferencesSession();
     if (!available() || !mTransaction) { mStatus = "unavailable"; return false; }
@@ -492,7 +556,7 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite,
     std::string error;
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
     if (mProfiles.has(name) && !overwrite) { mStatus = "exists"; return false; }
-    const auto current = capture(remember_folders, components, remember_toolbars);
+    const auto current = capture(remember_folders, components & FSWorkspaceLayout::All, remember_toolbars, context);
     const auto too_many_branches = [](const FSWorkspaceLayout::Window& window)
     { return window.inventory_folder.expanded_folders.size() > FSWorkspaceLayout::MAX_EXPANDED_INVENTORY_FOLDERS; };
     if (std::any_of(current.windows.begin(), current.windows.end(), [&](const std::pair<const Role, FSWorkspaceLayout::Window>& entry) { return too_many_branches(entry.second); }) ||
@@ -568,7 +632,9 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     for (const auto& group : std::vector<std::pair<int, std::string>>{{FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"}, {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}})
         if (!(workspace.components & group.first)) report(group.second, "omitted");
     if (workspace.ignored_details) report("arrangement", "unknown_details", workspace.ignored_details);
+    mHUDPreviewPending = !workspace.context.huds.empty();
     mPending = workspace; mFolderSkipped = mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
+    applyContext(workspace);
     mFocus.markDead();
     if (auto* focus = dynamic_cast<LLView*>(gFocusMgr.getKeyboardFocus())) mFocus = focus->getDerivedHandle<LLView>();
     if (workspace.components & FSWorkspaceLayout::Chrome)
@@ -658,13 +724,13 @@ void FSWorkspaceController::placePending(unsigned long generation, const LLUUID&
     if (mQuickSwitch) finishQuickSwitch();
 }
 bool FSWorkspaceController::placeWindow(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
-    bool primary_inventory, std::vector<LLRect>& placed)
+    bool primary_inventory, std::vector<LLRect>& placed, const FSWorkspaceLayout::Rect* recovery_frame)
 {
     if (!saved.has_geometry) return true;
     S32 min_width, min_height; floater->getResizeLimits(&min_width, &min_height);
     std::vector<FSWorkspaceLayout::Rect> prior;
     if (!mPreserveCoordinates) for (const auto& value : placed) prior.push_back(rect(value));
-    const auto placement = FSWorkspaceLayout::fitWithNeighbors(saved, frame(), static_cast<F32>(min_width), static_cast<F32>(min_height), prior);
+    const auto placement = FSWorkspaceLayout::fitWithNeighbors(saved, recovery_frame ? *recovery_frame : frame(), static_cast<F32>(min_width), static_cast<F32>(min_height), prior);
     const LLRect target(ll_round(placement.rect.left), ll_round(placement.rect.top),
                         ll_round(placement.rect.right), ll_round(placement.rect.bottom));
     // The shared fitter already respects minima and title reachability. The
@@ -806,6 +872,7 @@ void FSWorkspaceController::commitPendingSettings()
     if (!sameSession() || !available()) { abandon(); return; }
     // Explicit OK settles its one pending placement before refreshing baseline.
     finishPlacement(); mReportPreview = false;
+    acceptHUDs();
     ++mGeneration;
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
@@ -867,6 +934,34 @@ void FSWorkspaceController::cancelPreferencesSession()
         mReport.complete = true;
     }
     if (!sameSession() || !available()) { abandon(); return; }
+    if (mContextTouched)
+    {
+        auto restore_context = [&]()
+        {
+            auto restore = [&](const std::string& name, const ControlBaseline& baseline)
+            {
+                if (LLControlVariable* control = gSavedSettings.getControl(name))
+                { control->setValue(baseline.saved, true); if (baseline.unsaved) control->setValue(baseline.effective, false); }
+            };
+            for (const auto& entry : mContextControls)
+                if (entry.first != "PresetCameraActive" && entry.first != "PresetGraphicActive") restore(entry.first, entry.second);
+            // Setting signals can clear the metadata; restore it last.
+            for (const char* name : {"PresetCameraActive", "PresetGraphicActive"})
+                if (mContextControls.count(name)) restore(name, mContextControls.at(name));
+        };
+        restore_context();
+        if (mCameraTouched && FSWorkspaceContext::cameraAllowed())
+        {
+            gAgentCamera.switchCameraPreset(static_cast<ECameraPreset>(gSavedSettings.getU32("CameraPresetType")));
+            const auto zoom = mBaseline.context.camera.values.find("CameraZoomFraction");
+            if (zoom != mBaseline.context.camera.values.end()) gAgentCamera.setWorkspaceCameraZoom(static_cast<F32>(zoom->second[0]));
+        }
+        // switchCameraPreset persists its mode and settings callbacks clear
+        // preset metadata. Restore the original value stacks after these APIs.
+        restore_context();
+        LLFloaterPreference::refreshEnabledGraphics();
+        LLPresetsManager::instance().triggerChangeSignal(); LLPresetsManager::instance().triggerChangeCameraSignal();
+    }
     if (mToolbarTouched) applyToolbars(mBaseline);
     FSChromeLayoutController::instance().applySnapshot(mBaseline.chrome);
     gSavedSettings.setBOOL("FSWorldViewInMouselook", mBaseline.world_view_in_mouselook);
@@ -993,7 +1088,7 @@ bool FSWorkspaceController::modified() const
         const auto extras = extraInventoryFloaters();
         for (size_t i = 0; i < saved.extra_inventory.size(); ++i) fit_saved(saved.extra_inventory[i], i < extras.size() ? extras[i] : nullptr);
     }
-    const auto current = capture(saved.remember_inventory_folders, saved.components, saved.remember_toolbars);
+    const auto current = capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::All, saved.remember_toolbars, saved.context);
     bool changed = (saved.components & FSWorkspaceLayout::Chrome) && (FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
         saved.world_view_in_mouselook != current.world_view_in_mouselook);
     for (const auto& entry : saved.windows)
@@ -1007,6 +1102,32 @@ bool FSWorkspaceController::modified() const
         if (!equalWindow(saved.extra_inventory[i], current.extra_inventory[i], false)) changed = true;
     if (saved.has_inbox && (!current.has_inbox || saved.inbox_expanded != current.inbox_expanded ||
         std::fabs(saved.inbox_height - current.inbox_height) > 1.f)) changed = true;
+    for (bool camera : {false, true})
+    {
+        const auto& group = camera ? saved.context.camera : saved.context.graphics;
+        FSWorkspaceContext::Values expected; std::string error;
+        if (group.mode != FSWorkspaceContext::Mode::Off)
+        {
+            if (!FSWorkspaceContext::resolveGroup(group, camera, expected, error, false)) changed = true;
+            else
+            {
+                const auto live = FSWorkspaceContext::captureGroup(camera).values;
+                for (const auto& entry : expected)
+                {
+                    auto found = live.find(entry.first);
+                    if (found == live.end() || found->second.size() != entry.second.size()) { changed = true; continue; }
+                    for (size_t index = 0; index < entry.second.size(); ++index)
+                        if (std::fabs(found->second[index] - entry.second[index]) > .001) changed = true;
+                }
+            }
+        }
+    }
+    if (!saved.context.huds.empty())
+    {
+        const auto worn = FSWorkspaceContext::attachedHUDs();
+        for (const auto& hud : saved.context.huds)
+            if (std::none_of(worn.begin(), worn.end(), [&](const FSWorkspaceContext::HUD& item) { return item.item == hud.item && item.point == hud.point; })) changed = true;
+    }
     return mModifiedCache = changed;
 }
 void FSWorkspaceController::requestUpdateCurrent()
@@ -1016,7 +1137,7 @@ void FSWorkspaceController::requestUpdateCurrent()
     const auto name = activeId();
     FSWorkspaceLayout::Workspace saved;
     if (!readProfile(name, saved) || saved.ignored_details != 0 || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
-    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components, saved.remember_toolbars));
+    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::All, saved.remember_toolbars, saved.context));
     const auto originals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (!FSWorkspaceLayout::fromLLSD(reviewed, validated, error)) return;
@@ -1155,6 +1276,8 @@ void FSWorkspaceController::lifecycleIdle(void* userdata)
     auto& controller = *static_cast<FSWorkspaceController*>(userdata);
     if (controller.mLifecycleTimer.getElapsedTimeF32() < .5f) return;
     controller.mLifecycleTimer.reset();
+    controller.pollHUDs();
+    controller.pollDisplays();
     if (!controller.mReport.lines.empty() && (!controller.available() || controller.mReportAccount != gAgent.getID() || controller.mReportSession != gAgent.getSessionID()))
     { controller.mReport = RestoreReport{}; controller.mReportPreview = false; ++controller.mReportRevision; ++controller.mReportGeneration; }
     if (controller.mHasPrevious && (!controller.available() || controller.mPreviousAccount != gAgent.getID() ||
@@ -1206,7 +1329,7 @@ void FSWorkspaceController::saveLastArrangement()
     if (!canQuickSwitch() || !gInventory.isInventoryUsable() || gDisconnected ||
         gSavedPerAccountSettings.getString("FSWorkspaceStartupMode") != "last") return;
     if (mQuickSwitch) finishQuickSwitch();
-    const auto data = FSWorkspaceLayout::toLLSD(capture(true, FSWorkspaceLayout::All, true));
+    const auto data = FSWorkspaceLayout::toLLSD(capture(true, FSWorkspaceLayout::All, true, FSWorkspaceContext::liveOptions()));
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (FSWorkspaceLayout::fromLLSD(data, validated, error))
         gSavedPerAccountSettings.setLLSD("FSWorkspaceLastArrangement", data);
@@ -1306,4 +1429,266 @@ void FSWorkspaceController::noteLayoutRename(const std::string& old_name, const 
 {
     beginPreferencesSession();
     if (mTransaction && sameSession()) mRenamed.emplace_back("layout:" + old_name, new_name.empty() ? "" : "layout:" + new_name);
+}
+
+void FSWorkspaceController::applyContext(const FSWorkspaceLayout::Workspace& workspace)
+{
+    for (bool camera : {false, true})
+    {
+        const auto& group = camera ? workspace.context.camera : workspace.context.graphics;
+        if (group.mode == FSWorkspaceContext::Mode::Off) continue;
+        const std::string subject = camera ? "camera" : "graphics";
+        FSWorkspaceContext::Values values; std::string error;
+        if ((camera && !FSWorkspaceContext::cameraAllowed()) || !FSWorkspaceContext::resolveGroup(group, camera, values, error))
+        { ++mSkipped; report(subject, camera && error.empty() ? "camera_blocked" : error); continue; }
+        auto remember = [&](const std::string& name)
+        {
+            if (!mContextControls.count(name))
+                if (LLControlVariable* control = gSavedSettings.getControl(name))
+                { ControlBaseline baseline; baseline.existed = true; baseline.unsaved = control->hasUnsavedValue(); baseline.saved = control->getSaveValue(); baseline.effective = control->getValue(); mContextControls[name] = baseline; }
+        };
+        remember(camera ? "PresetCameraActive" : "PresetGraphicActive");
+        for (const auto& definition : FSWorkspaceContext::controls(camera))
+        {
+            auto found = values.find(definition.name); if (found == values.end()) continue;
+            if (!camera && !LLFeatureManager::instance().isFeatureAvailable(definition.name) &&
+                (std::string(definition.name) == "RenderShadowDetail" || std::string(definition.name) == "RenderDeferredSSAO"))
+            { report(subject, "graphics_limited"); ++mSkipped; continue; }
+            if (LLControlVariable* control = gSavedSettings.getControl(definition.name))
+            { remember(definition.name); control->setValue(FSWorkspaceContext::controlValue(definition, found->second), true); mContextTouched = true; }
+        }
+        gSavedSettings.setString(camera ? "PresetCameraActive" : "PresetGraphicActive", ""); mContextTouched = true;
+        if (camera)
+        {
+            mCameraTouched = true;
+            gAgentCamera.switchCameraPreset(static_cast<ECameraPreset>(gSavedSettings.getU32("CameraPresetType")));
+            auto zoom = values.find("CameraZoomFraction");
+            if (zoom != values.end()) gAgentCamera.setWorkspaceCameraZoom(static_cast<F32>(zoom->second[0]));
+            LLPresetsManager::instance().triggerChangeCameraSignal();
+        }
+        else { LLFloaterPreference::refreshEnabledGraphics(); LLPresetsManager::instance().triggerChangeSignal(); }
+        report(subject, "restored");
+    }
+    if (!workspace.context.huds.empty()) report("huds", "hud_review");
+}
+
+void FSWorkspaceController::acceptHUDs()
+{
+    if (!mHUDPreviewPending) return;
+    mHUDPreviewPending = false; // A later Preferences OK must not replay an accepted/declined switch.
+    std::vector<FSWorkspaceContext::HUD> missing;
+    for (const auto& hud : mPending.context.huds)
+    {
+        if (FSWorkspaceContext::hudWorn(hud)) { report(hud.name, "restored"); continue; }
+        std::string error;
+        if (!FSWorkspaceContext::hudAvailable(hud, error)) { ++mSkipped; report(hud.name, error); continue; }
+        missing.push_back(hud);
+    }
+    mReport.skipped = mSkipped; ++mReportRevision;
+    if (missing.empty())
+    {
+        mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [](const ReportLine& line)
+            { return line.reason == "hud_review"; }), mReport.lines.end());
+        if (mSkipped) offerRestoreReport();
+        return;
+    }
+    mReport.complete = false;
+    const auto account = gAgent.getID(), session = gAgent.getSessionID(); const auto generation = mReportGeneration;
+    LLSD args; std::string names;
+    for (const auto& hud : missing) names += hud.name + "\n";
+    args["HUDS"] = names;
+    const auto permission_check = mHUDAllowed;
+    auto apply = [this, account, session, generation, missing, permission_check](bool accepted)
+        {
+            if (account != gAgent.getID() || session != gAgent.getSessionID() || generation != mReportGeneration) return false;
+            mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [](const ReportLine& line)
+                { return line.reason == "hud_review"; }), mReport.lines.end());
+            if ((permission_check && !permission_check()) || !canQuickSwitch())
+            { report("huds", "hud_switch_blocked"); mSkipped += static_cast<int>(missing.size()); mReport.skipped = mSkipped; mReport.complete = true; ++mReportRevision; offerRestoreReport(); return false; }
+            if (!accepted)
+            { report("huds", "hud_declined"); mReport.complete = true; ++mReportRevision; return false; }
+            mPendingHUDs.clear(); mHUDAccount = account; mHUDSession = session; mHUDReport = generation; mHUDTimer.reset();
+            for (const auto& hud : missing)
+            {
+                if (permission_check && !permission_check()) { report(hud.name, "restricted"); continue; }
+                std::string error;
+                if (!FSWorkspaceContext::hudAvailable(hud, error)) { report(hud.name, error); ++mSkipped; continue; }
+                if (FSWorkspaceContext::hudWorn(hud)) continue;
+                if (!gAgentAvatarp->canAttachMoreObjects(static_cast<U32>(mPendingHUDs.size() + 1))) { report(hud.name, "hud_limit"); ++mSkipped; continue; }
+                FSWorkspaceContext::attachHUD(hud); mPendingHUDs.push_back(hud); report(hud.name, "hud_pending");
+            }
+            mReport.complete = mPendingHUDs.empty(); mReport.skipped = mSkipped; ++mReportRevision;
+            return false;
+        };
+    if (mHUDReviewed) apply(true);
+    else LLNotificationsUtil::add("ConfirmWorkspaceHUDs", args, LLSD(), [apply](const LLSD& notification, const LLSD& response) { return apply(LLNotificationsUtil::getSelectedOption(notification, response) == 0); });
+}
+void FSWorkspaceController::pollHUDs()
+{
+    if (mPendingHUDs.empty()) return;
+    if (!available() || mHUDAccount != gAgent.getID() || mHUDSession != gAgent.getSessionID() || mHUDReport != mReportGeneration)
+    { mPendingHUDs.clear(); return; }
+    for (auto it = mPendingHUDs.begin(); it != mPendingHUDs.end();)
+    {
+        std::string error;
+        const bool worn = FSWorkspaceContext::hudWorn(*it), timeout = mHUDTimer.getElapsedTimeF32() > 30.f;
+        if (!worn && !timeout && FSWorkspaceContext::hudAvailable(*it, error)) { ++it; continue; }
+        mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [&](const ReportLine& line)
+            { return line.subject == it->name && line.reason == "hud_pending"; }), mReport.lines.end());
+        report(it->name, worn ? "restored" : timeout ? "hud_timeout" : error);
+        if (!worn) ++mSkipped;
+        it = mPendingHUDs.erase(it);
+    }
+    mReport.complete = mPendingHUDs.empty() && !mPendingPlacement; mReport.skipped = mSkipped; ++mReportRevision;
+    if (mReport.complete && mSkipped) offerRestoreReport();
+}
+void FSWorkspaceController::pollDisplays()
+{
+    if (!available() || !gViewerWindow) { mDisplaySignature.clear(); mRecoveryWindows.clear(); mDisplayPending = false; return; }
+    if (!gSavedSettings.getBOOL("FSWorkspaceDisplayRecovery")) { mDisplaySignature.clear(); mRecoveryWindows.clear(); mDisplayPending = false; return; }
+    if (mDisplayPollTimer.getElapsedTimeF32() < 2.f) return;
+    mDisplayPollTimer.reset();
+    std::vector<LLWindow::MonitorRect> monitors;
+    const bool supported = gViewerWindow->getWindow()->getMonitorRectsInClient(monitors) && !monitors.empty();
+    std::sort(monitors.begin(), monitors.end(), [](const LLWindow::MonitorRect& a, const LLWindow::MonitorRect& b) { return a.id < b.id; });
+    std::string signature = supported ? "monitors" : "unavailable";
+    const auto scale = gViewerWindow->getDisplayScale();
+    signature += ":" + std::to_string(scale.mV[VX]) + ":" + std::to_string(scale.mV[VY]);
+    if (supported)
+    {
+        const auto anchor = monitors.front().rect;
+        for (const auto& monitor : monitors)
+            signature += ":" + monitor.id + ":" + std::to_string(monitor.rect.mLeft - anchor.mLeft) + ":" +
+                std::to_string(monitor.rect.mBottom - anchor.mBottom) + ":" + std::to_string(monitor.rect.getWidth()) + ":" + std::to_string(monitor.rect.getHeight());
+    }
+    if (mDisplayAccount != gAgent.getID() || mDisplaySession != gAgent.getSessionID())
+    { mDisplaySignature.clear(); mRecoveryWindows.clear(); mDisplayPending = false; mDisplayAccount = gAgent.getID(); mDisplaySession = gAgent.getSessionID(); }
+    if (signature != mDisplaySignature)
+    {
+        if (!mDisplaySignature.empty() && gSavedSettings.getBOOL("FSWorkspaceDisplayRecovery")) { mDisplayPending = true; mDisplayTimer.reset(); }
+        mDisplaySignature = signature;
+    }
+    if (mDisplayPending)
+    {
+        if (mDisplayTimer.getElapsedTimeF32() < 1.5f || !canQuickSwitch() || mQuickSwitch) return;
+        mDisplayPending = false; recoverWindows(true);
+    }
+    if (!canQuickSwitch() || mQuickSwitch) return;
+    mRecoverySnapshot = capture(); mRecoveryWindows.clear();
+    for (const auto& entry : utilityWindows()) if (auto* floater = entry.first.get()) mRecoveryWindows.push_back({entry.first, window(floater)});
+}
+bool FSWorkspaceController::recoverWindows(bool automatic)
+{
+    if (!available() || !gViewerWindow) return false;
+    const bool preferences_preview = !canQuickSwitch();
+    if (preferences_preview)
+    {
+        beginPreferencesSession(); finishPlacement();
+        mHUDPreviewPending = false;
+        mPending = capture(); // Recovery only; accepting it never adds HUDs or reloads context.
+    }
+    else
+    {
+        if (mQuickSwitch) finishQuickSwitch();
+        if (!rememberPrevious()) return false;
+    }
+    if (automatic && mDisplayAccount == gAgent.getID() && mDisplaySession == gAgent.getSessionID() && !mRecoveryWindows.empty())
+    { mPrevious = mRecoverySnapshot; mPreviousWorkspace = activeId(); }
+    beginReport("Display recovery"); mReportPreview = preferences_preview; mApplied = mAdjusted = mSkipped = 0;
+    std::vector<FSWorkspaceLayout::Rect> visible_frames;
+    std::vector<LLWindow::MonitorRect> monitors;
+    const auto scale = gViewerWindow->getDisplayScale();
+    S32 floater_left = 0, floater_bottom = 0;
+    gFloaterView->localPointToScreen(0, 0, &floater_left, &floater_bottom);
+    if (gViewerWindow->getWindow()->getMonitorRectsInClient(monitors))
+        for (const auto& monitor : monitors)
+        {
+            const auto& raw = monitor.rect;
+            const auto bounds = frame();
+            FSWorkspaceLayout::Rect visible{std::max(bounds.left, static_cast<F32>(raw.mLeft) / scale.mV[VX] - static_cast<F32>(floater_left)),
+                std::max(bounds.bottom, static_cast<F32>(raw.mBottom) / scale.mV[VY] - static_cast<F32>(floater_bottom)),
+                std::min(bounds.right, static_cast<F32>(raw.mRight) / scale.mV[VX] - static_cast<F32>(floater_left)),
+                std::min(bounds.top, static_cast<F32>(raw.mTop) / scale.mV[VY] - static_cast<F32>(floater_bottom))};
+            if (visible.width() > 0.f && visible.height() > 0.f) visible_frames.push_back(visible);
+        }
+    if (visible_frames.empty()) { visible_frames.push_back(frame()); report("arrangement", "display_unavailable"); }
+    // Keep the live world view reachable even when an unmaximized viewer still spans a disconnected screen.
+    const auto base = gViewerWindow->getWorldViewBaseRectRaw(false);
+    const auto world = gViewerWindow->getWorldViewRectRaw();
+    LLRect reachable; S64 best_area = 0;
+    for (const auto& monitor : monitors)
+    {
+        LLRect candidate; candidate.set(std::max(world.mLeft, monitor.rect.mLeft), std::min(world.mTop, monitor.rect.mTop),
+            std::min(world.mRight, monitor.rect.mRight), std::max(world.mBottom, monitor.rect.mBottom));
+        const S64 area = static_cast<S64>(std::max(0, candidate.getWidth())) * std::max(0, candidate.getHeight());
+        if (area > best_area) { best_area = area; reachable = candidate; }
+    }
+    if (visible_frames.size() == 1 && !monitors.empty())
+    {
+        if (best_area == 0)
+        {
+            const auto& visible = visible_frames.front();
+            reachable.set(ll_round((visible.left + static_cast<F32>(floater_left)) * scale.mV[VX]), ll_round((visible.top + static_cast<F32>(floater_bottom)) * scale.mV[VY]),
+                ll_round((visible.right + static_cast<F32>(floater_left)) * scale.mV[VX]), ll_round((visible.bottom + static_cast<F32>(floater_bottom)) * scale.mV[VY]));
+        }
+        reachable.set(std::max(base.mLeft, reachable.mLeft), std::min(base.mTop, reachable.mTop),
+            std::min(base.mRight, reachable.mRight), std::max(base.mBottom, reachable.mBottom));
+        if (reachable != world && reachable.getWidth() > 0 && reachable.getHeight() > 0 && base.getWidth() > 0 && base.getHeight() > 0)
+        {
+            gSavedSettings.setBOOL("FSWorldViewEnabled", true);
+            gSavedSettings.setF32("FSWorldViewInsetLeft", 100.f * static_cast<F32>(reachable.mLeft - base.mLeft) / static_cast<F32>(base.getWidth()));
+            gSavedSettings.setF32("FSWorldViewInsetRight", 100.f * static_cast<F32>(base.mRight - reachable.mRight) / static_cast<F32>(base.getWidth()));
+            gSavedSettings.setF32("FSWorldViewInsetBottom", 100.f * static_cast<F32>(reachable.mBottom - base.mBottom) / static_cast<F32>(base.getHeight()));
+            gSavedSettings.setF32("FSWorldViewInsetTop", 100.f * static_cast<F32>(base.mTop - reachable.mTop) / static_cast<F32>(base.getHeight()));
+            report("chrome", "display_recovered");
+        }
+    }
+    std::vector<LLRect> placed;
+    for (const auto& entry : utilityWindows())
+        if (auto* floater = entry.first.get())
+        {
+            if (preferences_preview)
+            {
+                bool registered = false;
+                for (Role role : ROLES) if (find(role) == floater)
+                {
+                    if (!mRuntime[role].existed && !mCreated.count(role)) rememberRole(role);
+                    mTouched.insert(role); registered = true; break;
+                }
+                if (!registered)
+                {
+                    rememberExtraInventory(floater);
+                    for (auto& baseline : mExtraRuntime) if (baseline.state.handle.get() == floater) baseline.touched = true;
+                }
+            }
+            auto saved = window(floater);
+            if (automatic) for (const auto& prior : mRecoveryWindows) if (prior.first.get() == floater) { saved = prior.second; break; }
+            saved.visible = true; saved.minimized = false;
+            const auto desired = FSWorkspaceLayout::fit(saved, frame(), 1.f, 1.f).rect;
+            const auto center_x = (desired.left + desired.right) * .5f, center_y = (desired.bottom + desired.top) * .5f;
+            const auto selected = std::min_element(visible_frames.begin(), visible_frames.end(), [&](const FSWorkspaceLayout::Rect& a, const FSWorkspaceLayout::Rect& b)
+            {
+                auto distance = [&](const FSWorkspaceLayout::Rect& bounds)
+                { const auto dx = center_x - std::clamp(center_x, bounds.left, bounds.right), dy = center_y - std::clamp(center_y, bounds.bottom, bounds.top); return dx * dx + dy * dy; };
+                return distance(a) < distance(b);
+            });
+            saved = FSWorkspaceLayout::capture(desired, *selected, true, false);
+            if (placeWindow(floater, saved, floater == find(Role::InventoryPrimary), placed, &*selected)) report(entry.second, "restored");
+        }
+    if (gViewerWindow) gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
+    FSChromeLayoutController::instance().apply();
+    mReport.complete = true; mReport.applied = mApplied; mReport.adjusted = mAdjusted; mReport.skipped = mSkipped;
+    report("arrangement", "display_recovered"); ++mReportRevision; ++mRevision; mComparisonDirty = true;
+    return true;
+}
+
+bool FSWorkspaceController::previousWorkspace(FSWorkspaceLayout::Workspace& workspace) const
+{
+    if (!hasPrevious()) return false;
+    workspace = mPrevious; return true;
+}
+void FSWorkspaceController::acceptAssistantSwitch(std::function<bool()> allowed)
+{
+    mHUDReviewed = true; mHUDAllowed = std::move(allowed);
+    if (mQuickSwitch) finishQuickSwitch();
 }

@@ -31,6 +31,7 @@
 #include "fsassistantpolicy.h"
 #include "fslinkreplacement.h"
 #include "fsinventorybulk.h"
+#include "fsworkspacelistener.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -192,11 +193,14 @@ bool is_read_op(const std::string& api, const std::string& op)
     {
         return op == "getOutfitsList" || op == "getOutfitItems" || op == "worn";
     }
+    if (api == "LLWorkspace") return op == "list" || op == "status" || op == "preview";
     return api == "LLCamera" && op == "get";
 }
 
 ActionClass classify(const std::string& api, const std::string& op)
 {
+    if (api == "LLWorkspace")
+        return is_read_op(api, op) ? ActionClass::Read : (op == "apply" || op == "previous") ? ActionClass::Workspace : ActionClass::Unknown;
     if (api == "LLInventory")
     {
         if (op == "purge" || op == "emptyTrash")
@@ -311,7 +315,7 @@ std::string to_json(const LLSD& value)
 
 bool bridge_api_allowed(const std::string& api)
 {
-    return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera";
+    return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera" || api == "LLWorkspace";
 }
 
 void fail_response(LLHTTPNode::ResponsePtr response, S32 code, const std::string& error, const LLSD& extra = LLSD())
@@ -335,6 +339,7 @@ public:
               [this](const LLSD& reply) { return onReply(reply); })),
           mEnabled(true)
     {
+        fs_initialize_workspace_api();
     }
 
     bool authorize(const LLSD& context) const
@@ -381,12 +386,12 @@ public:
         {
             mLastDiagnosticAt = now_seconds();
             LLSD apis = LLSD::emptyMap();
-            for (const char* name : {"LLInventory", "LLAppearance", "LLCamera"})
+            for (const char* name : {"LLInventory", "LLAppearance", "LLCamera", "LLWorkspace"})
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
             response->extendedResult(HTTP_OK,
                 to_json(llsd::map("bridge_ready", mEnabled, "api_version", 1,
                     "policy_generation", gPolicyGeneration, "apis_ready", apis,
-                    "capabilities", llsd::map("bulk_inventory_review", 1))), json_headers());
+                    "capabilities", llsd::map("bulk_inventory_review", 1, "workspace_tools", 1))), json_headers());
             return;
         }
         mLastExternalRequestAt = now_seconds();
@@ -428,6 +433,16 @@ public:
             else postEvent(input, response, api, op, false, &prepared);
             return;
         }
+        if (api == "LLWorkspace" && (op == "apply" || op == "previous"))
+        {
+            FSAssistantPreparedOperation prepared; std::string error;
+            if (!prepareOperation(input, {}, prepared, error)) { fail_response(response, HTTP_BAD_REQUEST, error); return; }
+            const auto decision = fs_assistant::decide(effective_levels(prepared.requiredClasses));
+            if (decision == fs_assistant::Decision::Deny) fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, policy_error_details(op, prepared.requiredClasses));
+            else if (decision == fs_assistant::Decision::Ask) enqueueAsk(std::move(prepared), response, api, op);
+            else postEvent(prepared.request, response, api, op, false, &prepared);
+            return;
+        }
         const ActionClass kind = classify(api, op);
         if (kind == ActionClass::Unknown || kind == ActionClass::Permanent)
         {
@@ -443,7 +458,7 @@ public:
             {
                 extra["permissions"] = effective_permissions();
                 extra["policy_generation"] = gPolicyGeneration;
-                extra["capabilities"] = llsd::map("bulk_inventory_review", 1);
+                extra["capabilities"] = llsd::map("bulk_inventory_review", 1, "workspace_tools", 1);
             }
             fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, extra);
             return;
@@ -618,6 +633,7 @@ private:
     {
         prepared.request = input;
         prepared.requiredClasses = classes;
+        if (input["api"].asString() == "LLWorkspace") return fs_prepare_workspace(prepared, error);
         const std::string op = input["op"].asString();
         if (op == "executeBulkPlan" || op == "rename" || op == "move" || op == "batchRename" || op == "batchMove")
         {
@@ -704,6 +720,7 @@ private:
 
     bool validateOperation(const FSAssistantPreparedOperation& prepared, std::string& error)
     {
+        if (prepared.request["api"].asString() == "LLWorkspace") return fs_validate_workspace(prepared, error);
         const std::string op = prepared.request["op"].asString();
         if (prepared.validation.has("bulk_plan_id")) return FSInventoryBulk::validate(prepared.validation["bulk_plan_id"].asString(), error);
         if (op == "confirmCopy" || op == "replaceLinks")
@@ -762,7 +779,7 @@ private:
             }
             return;
         }
-        if (prepared && (prepared->validation.has("bulk_plan_id") || op == "replaceLinks" || op == "snapshotUpload"))
+        if (prepared && (api == "LLWorkspace" || prepared->validation.has("bulk_plan_id") || op == "replaceLinks" || op == "snapshotUpload"))
         {
             const auto classes = prepared->requiredClasses;
             const auto generation = mSessionGeneration;
@@ -779,6 +796,12 @@ private:
                 return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation &&
                     fs_assistant::decide(effective_levels(classes)) != fs_assistant::Decision::Deny;
             };
+            if (api == "LLWorkspace")
+            {
+                std::string error; LLSD reply = fs_execute_workspace(*prepared, context, error);
+                if (!error.empty()) { fail_response(response, HTTP_FORBIDDEN, error); mPending.erase(request_id); return; }
+                reply["reqid"] = request_id; onReply(reply); return;
+            }
             if (prepared->validation.has("bulk_plan_id"))
             {
                 const std::string plan_id = prepared->validation["bulk_plan_id"].asString();
@@ -1011,7 +1034,7 @@ private:
         {
             body["permissions"] = effective_permissions();
             body["policy_generation"] = gPolicyGeneration;
-            body["capabilities"] = llsd::map("bulk_inventory_review", 1);
+            body["capabilities"] = llsd::map("bulk_inventory_review", 1, "workspace_tools", 1);
         }
         found->second.response->extendedResult(HTTP_OK, to_json(body), json_headers());
         mPending.erase(found);

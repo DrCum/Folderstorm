@@ -11,6 +11,14 @@ import (
 
 func classForOp(apiName, op string) string {
 	switch apiName {
+	case viewerapi.WorkspaceAPI:
+		if op == "list" || op == "status" || op == "preview" {
+			return viewerapi.ClassRead
+		}
+		if op == "apply" || op == "previous" {
+			return viewerapi.ClassWorkspace
+		}
+		return ""
 	case viewerapi.AppearanceAPI:
 		switch op {
 		case "getOutfitsList", "getOutfitItems", "worn":
@@ -93,7 +101,7 @@ func (s *Server) rememberIfGenerationChanged(pid int, policy viewerapi.StatusPol
 	s.mu.Lock()
 	prev, had := s.policies[pid]
 	s.mu.Unlock()
-	if had && prev.Present == policy.Present && prev.Generation == policy.Generation && prev.BulkInventoryReview == policy.BulkInventoryReview {
+	if had && prev.Present == policy.Present && prev.Generation == policy.Generation && prev.BulkInventoryReview == policy.BulkInventoryReview && prev.WorkspaceTools == policy.WorkspaceTools {
 		return
 	}
 	s.rememberPolicy(pid, policy)
