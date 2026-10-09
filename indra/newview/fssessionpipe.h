@@ -19,6 +19,7 @@ namespace fs_session
 // Liveness hint on a PID-validated worker window. Authentication stays on the
 // inherited pipe; this lets rollback wait for a lost peer's input revocation.
 constexpr const wchar_t* InputLeaseProperty = L"FolderstormSessionPrototypeInputOwner";
+constexpr const wchar_t* FocusLeaseProperty = L"FolderstormSessionFocusLease";
 // One read and one write in flight; owned buffers outlive overlapped operations.
 // No blocking I/O, worker threads or unbounded message queues in either UI loop.
 class Pipe

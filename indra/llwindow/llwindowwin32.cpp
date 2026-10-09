@@ -4327,6 +4327,21 @@ void LLWindowWin32::focusClient()
         });
 }
 
+void LLWindowWin32::focusClientGuarded(HWND foreground)
+{
+    const HWND surface = mWindowHandle;
+    const HANDLE lease = GetPropW(surface, L"FolderstormSessionFocusLease");
+    mWindowThread->post([surface, foreground, lease]()
+    {
+        if (!lease || GetPropW(surface, L"FolderstormSessionFocusLease") != lease ||
+            !IsWindow(surface) || !IsWindowEnabled(surface) || !IsWindowVisible(surface) ||
+            IsIconic(surface) || GetForegroundWindow() != foreground) return;
+        // Both are top-level windows. Native activation restores real keyboard,
+        // IME and foreground callbacks; no cross-thread input attachment.
+        if (SetForegroundWindow(surface)) SetFocus(surface);
+    });
+}
+
 void LLWindowWin32::allowLanguageTextInput(LLPreeditor *preeditor, bool b)
 {
     if (b == sLanguageTextInputAllowed || !LLWinImm::isAvailable())

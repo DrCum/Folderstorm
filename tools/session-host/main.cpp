@@ -37,6 +37,7 @@ constexpr int Launch1 = 101, Launch2 = 102, Switch1 = 103, Switch2 = 104, HostSu
 constexpr int Standby1 = 107, Standby2 = 108;
 constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
 constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
+constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr UINT_PTR Timer = 1;
 struct Handle
 {
@@ -164,6 +165,10 @@ struct Host
     HWND window = nullptr, viewport = nullptr, status[2]{}, notice = nullptr, embedControl = nullptr;
     HWND launchButton[2]{}, switchButton[2]{};
     HWND standbyControl[2]{};
+    HWND characterControl = nullptr, showChatControl = nullptr, detachControl = nullptr;
+    bool showChat = true;
+    UINT dpi = 96;
+    HFONT font = nullptr;
     HWND chatAccount = nullptr, chatConversation = nullptr, chatHistory = nullptr, chatCompose = nullptr;
     HWND chatSend = nullptr, chatReview = nullptr, chatRead = nullptr, voiceControl = nullptr, muteControl = nullptr, chatLabel = nullptr;
     int chatIndex = 0;
@@ -176,6 +181,36 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
+    ~Host() { if (font) DeleteObject(font); }
+
+    int scaled(int value) const { return MulDiv(value, static_cast<int>(dpi), 96); }
+    void updateDpi(UINT value)
+    {
+        dpi = (std::max)(96u, value);
+        HFONT replacement = CreateFontW(-scaled(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (replacement)
+        {
+            EnumChildWindows(window, [](HWND child, LPARAM data) -> BOOL
+            { SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(data), TRUE); return TRUE; }, reinterpret_cast<LPARAM>(replacement));
+            if (font) DeleteObject(font);
+            font = replacement;
+        }
+    }
+    void refreshCharacters()
+    {
+        const auto selected = SendMessageW(characterControl, CB_GETCURSEL, 0, 0);
+        for (int i = 0; i < 2; ++i)
+        {
+            std::wstring text = std::to_wstring(i + 1) + L": ";
+            text += slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"not logged in";
+            if (i == active) text += L" · active";
+            if (SendMessageW(characterControl, CB_GETCOUNT, 0, 0) > i) SendMessageW(characterControl, CB_DELETESTRING, static_cast<WPARAM>(i), 0);
+            SendMessageW(characterControl, CB_INSERTSTRING, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(text.c_str()));
+        }
+        SendMessageW(characterControl, CB_SETCURSEL, static_cast<WPARAM>(active >= 0 ? active : selected >= 0 ? selected : 0), 0);
+        EnableWindow(characterControl, !busy());
+    }
 
     void message(const std::wstring& text) { SetWindowTextW(notice, text.c_str()); }
     bool send(int index, Kind kind, Mode mode = Mode::Warm, std::uint64_t surface = 0, const Message* bound = nullptr)
@@ -198,6 +233,8 @@ struct Host
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
         if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
+        if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
+            AllowSetForegroundWindow(slot.pid);
         if (kind == Kind::PermitLogin || kind == Kind::DenyLogin) { request.grid = slot.snapshot.grid; request.name = slot.snapshot.name; }
         if (!slot.pipe.send(request)) return false;
         slot.request = request; slot.waiting = true; slot.sentAt = GetTickCount64();
@@ -559,7 +596,8 @@ struct Host
                         message(L"Waiting for the disconnected controller link to release its old input owner…");
                         if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
                     }
-                    else send(index, Kind::SetMode, handoff.mode());
+                    else send(index, Kind::SetMode, handoff.mode(), embedding && handoff.mode() == Mode::Active ?
+                        static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(viewport)) : 0);
                 }
                 else if (slot.snapshot.flags & LoginPending)
                 {
@@ -572,7 +610,8 @@ struct Host
                     }
                 }
                 else if (index == active && slot.snapshot.state == State::Ready &&
-                    embedding != ((slot.snapshot.flags & Embedded) != 0))
+                    (embedding != ((slot.snapshot.flags & Embedded) != 0) ||
+                        (!embedding && (slot.snapshot.flags & HostedStyle))))
                 {
                     send(index, embedding ? Kind::Embed : Kind::Unembed, Mode::Active,
                         static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(viewport)));
@@ -580,7 +619,8 @@ struct Host
                 else if (index == active && embedding && focusRequested &&
                     slot.snapshot.state == State::Ready && (slot.snapshot.flags & Embedded) &&
                     GetForegroundWindow() == window && !IsIconic(window) &&
-                    (GetFocus() == window || GetFocus() == viewport || GetFocus() == nullptr))
+                    (GetFocus() == window || GetFocus() == viewport || GetFocus() == nullptr ||
+                        GetFocus() == characterControl || GetFocus() == embedControl))
                 {
                     if (send(index, Kind::Focus)) focusRequested = false;
                 }
@@ -610,6 +650,7 @@ struct Host
             EnableWindow(switchButton[index], slot.running() && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && !busy());
         }
         refreshChat();
+        refreshCharacters();
         if (!busy() && active < 0 && selectFirst)
             for (int i = 0; i < 2; ++i) if (slots[i] && slots[i]->pipe.alive() && !slots[i]->detached && slots[i]->snapshot.state == State::Ready) { switchTo(i); selectFirst = false; break; }
         if (detaching)
@@ -637,25 +678,33 @@ struct Host
     void layout()
     {
         RECT rect{}; GetClientRect(window, &rect);
-        const int width = static_cast<int>((std::max)(760L, rect.right));
+        const int width = static_cast<int>(rect.right);
+        const int height = static_cast<int>(rect.bottom);
+        auto move = [this](HWND child, int x, int y, int w, int h) { MoveWindow(child, scaled(x), scaled(y), scaled(w), scaled(h), TRUE); };
+        move(characterControl, 10, 10, 170, 200);
+        move(launchButton[0], 190, 10, 75, 28); move(launchButton[1], 270, 10, 75, 28);
+        move(embedControl, 355, 10, 200, 28); move(detachControl, 560, 10, 125, 28);
+        move(showChatControl, 695, 10, 90, 28);
         for (int i = 0; i < 2; ++i)
         {
-            MoveWindow(status[i], 10, 48 + i * 24, width - 215, 20, TRUE);
-            MoveWindow(standbyControl[i], width - 200, 46 + i * 24, 190, 130, TRUE);
+            MoveWindow(status[i], scaled(10), scaled(48 + i * 24), width - scaled(215), scaled(20), TRUE);
+            MoveWindow(standbyControl[i], width - scaled(200), scaled(46 + i * 24), scaled(190), scaled(130), TRUE);
         }
-        const int chatTop = static_cast<int>((std::max)(220L, rect.bottom - 240));
-        MoveWindow(viewport, 0, 99, width, chatTop - 105, TRUE);
-        MoveWindow(chatAccount, 10, chatTop, 180, 150, TRUE);
-        MoveWindow(chatConversation, 200, chatTop, width - 460, 200, TRUE);
-        MoveWindow(chatReview, width - 250, chatTop, 140, 24, TRUE);
-        MoveWindow(chatRead, width - 100, chatTop, 90, 24, TRUE);
-        MoveWindow(chatLabel, 10, chatTop + 29, width - 20, 20, TRUE);
-        MoveWindow(chatHistory, 10, chatTop + 52, width - 20, 88, TRUE);
-        MoveWindow(chatCompose, 10, chatTop + 145, width - 105, 35, TRUE);
-        MoveWindow(chatSend, width - 85, chatTop + 145, 75, 35, TRUE);
-        MoveWindow(voiceControl, 10, chatTop + 185, 255, 24, TRUE);
-        MoveWindow(muteControl, 280, chatTop + 185, 280, 24, TRUE);
-        MoveWindow(notice, 10, (std::max)(102L, rect.bottom - 23), width - 20, 20, TRUE);
+        const int chatTop = showChat ? (std::max)(scaled(220), height - scaled(240)) : height - scaled(26);
+        MoveWindow(viewport, 0, scaled(99), width, (std::max)(1, chatTop - scaled(105)), TRUE);
+        MoveWindow(chatAccount, scaled(10), chatTop, scaled(180), scaled(150), TRUE);
+        MoveWindow(chatConversation, scaled(200), chatTop, width - scaled(460), scaled(200), TRUE);
+        MoveWindow(chatReview, width - scaled(250), chatTop, scaled(140), scaled(24), TRUE);
+        MoveWindow(chatRead, width - scaled(100), chatTop, scaled(90), scaled(24), TRUE);
+        MoveWindow(chatLabel, scaled(10), chatTop + scaled(29), width - scaled(20), scaled(20), TRUE);
+        MoveWindow(chatHistory, scaled(10), chatTop + scaled(52), width - scaled(20), scaled(88), TRUE);
+        MoveWindow(chatCompose, scaled(10), chatTop + scaled(145), width - scaled(105), scaled(35), TRUE);
+        MoveWindow(chatSend, width - scaled(85), chatTop + scaled(145), scaled(75), scaled(35), TRUE);
+        MoveWindow(voiceControl, scaled(10), chatTop + scaled(185), scaled(255), scaled(24), TRUE);
+        MoveWindow(muteControl, scaled(280), chatTop + scaled(185), scaled(280), scaled(24), TRUE);
+        for (HWND child : {chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl})
+            ShowWindow(child, showChat ? SW_SHOWNOACTIVATE : SW_HIDE);
+        MoveWindow(notice, scaled(10), height - scaled(23), width - scaled(20), scaled(20), TRUE);
     }
 };
 Host* host = nullptr;
@@ -677,8 +726,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->switchButton[0] = control(window, L"BUTTON", L"Switch to 1", BS_PUSHBUTTON, 95, 10, 90, 28, Switch1);
         host->launchButton[1] = control(window, L"BUTTON", L"Launch 2", BS_PUSHBUTTON, 195, 10, 80, 28, Launch2);
         host->switchButton[1] = control(window, L"BUTTON", L"Switch to 2", BS_PUSHBUTTON, 280, 10, 90, 28, Switch2);
-        host->embedControl = control(window, L"BUTTON", L"Host active viewer (experimental)", BS_AUTOCHECKBOX, 383, 10, 235, 28, HostSurface);
-        control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON, 630, 10, 125, 28, DetachAll);
+        ShowWindow(host->switchButton[0], SW_HIDE); ShowWindow(host->switchButton[1], SW_HIDE);
+        host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
+        host->showChatControl = control(window, L"BUTTON", L"Chat panel", BS_AUTOCHECKBOX | WS_TABSTOP, 695, 10, 90, 28, ShowChat);
+        SendMessageW(host->showChatControl, BM_SETCHECK, BST_CHECKED, 0);
+        host->embedControl = control(window, L"BUTTON", L"Host active viewer", BS_AUTOCHECKBOX | WS_TABSTOP, 383, 10, 235, 28, HostSurface);
+        host->detachControl = control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON | WS_TABSTOP, 630, 10, 125, 28, DetachAll);
         host->status[0] = control(window, L"STATIC", L"Character 1: not launched", SS_LEFT, 10, 48, 850, 20);
         host->status[1] = control(window, L"STATIC", L"Character 2: not launched", SS_LEFT, 10, 70, 850, 20);
         for (int i = 0; i < 2; ++i)
@@ -703,6 +756,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->muteControl = control(window, L"BUTTON", L"Mute background world/UI/media sound", BS_AUTOCHECKBOX | WS_TABSTOP, 280, 585, 280, 24, BackgroundMute);
         SendMessageW(host->muteControl, BM_SETCHECK, BST_CHECKED, 0);
         host->refreshChat(true);
+        host->refreshCharacters(); host->updateDpi(96); host->layout();
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
@@ -713,8 +767,15 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if (host->embedding && LOWORD(wparam) != WA_INACTIVE && !HIWORD(wparam)) host->focusRequested = true;
         return DefWindowProcW(window, message, wparam, lparam);
     case WM_SIZE: if (host->viewport) host->layout(); return 0;
+    case WM_DPICHANGED:
+    {
+        host->updateDpi(LOWORD(wparam));
+        const auto* next = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window, nullptr, next->left, next->top, next->right - next->left, next->bottom - next->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        host->layout(); return 0;
+    }
     case WM_GETMINMAXINFO:
-        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {790, 540}; return 0;
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {host->scaled(805), host->scaled(host->showChat ? 540 : 350)}; return 0;
     case WM_COMMAND:
         switch (LOWORD(wparam))
         {
@@ -722,6 +783,13 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case Launch2: host->launch(1); break;
         case Switch1: host->switchTo(0); break;
         case Switch2: host->switchTo(1); break;
+        case ActiveCharacter:
+            if (HIWORD(wparam) == CBN_SELCHANGE)
+                host->switchTo(SendMessageW(host->characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0);
+            break;
+        case ShowChat:
+            host->saveDraft(true); host->showChat = SendMessageW(host->showChatControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            host->layout(); break;
         case ChatAccount:
             if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
             {
@@ -762,7 +830,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case HostSurface:
             host->embedding = SendMessageW(host->embedControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
             host->focusRequested = host->embedding;
-            host->message(host->embedding ? L"Window-hosting experiment enabled. Use Separate windows if focus or rendering misbehaves." : L"Using separate viewer windows; warm standby remains enabled.");
+            host->message(host->embedding ? L"Active viewer fitted to this host. Use Separate windows for fullscreen or recovery." : L"Using separate viewer windows; chosen standby modes remain enabled.");
             break;
         case DetachAll: host->detach(false); break;
         }
@@ -780,6 +848,11 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {
+    // Resolve at runtime for older Windows SDK/runtime compatibility.
+    using DpiContext = BOOL(WINAPI*)(HANDLE);
+    const auto dpiContext = reinterpret_cast<DpiContext>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"));
+    if (dpiContext) dpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // PER_MONITOR_AWARE_V2
+    else SetProcessDPIAware();
     Host state;
     std::vector<wchar_t> executable(32768);
     const DWORD size = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
@@ -808,9 +881,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     klass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
     if (!RegisterClassW(&klass)) return 1;
-    HWND window = CreateWindowExW(0, klass.lpszClassName, L"Folderstorm character sessions — prototype",
+    HWND window = CreateWindowExW(0, klass.lpszClassName, L"Folderstorm character sessions",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 980, 700, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;
+    using WindowDpi = UINT(WINAPI*)(HWND);
+    const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+    if (windowDpi) { state.updateDpi(windowDpi(window)); state.layout(); }
     ShowWindow(window, show); UpdateWindow(window);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)

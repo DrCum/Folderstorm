@@ -533,7 +533,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     // Don't draw if the window is hidden or minimized.
     // In fact, must explicitly check the minimized state before drawing.
     // Attempting to draw into a minimized window causes a GL error. JC
-    if (   !gViewerWindow->getActive()
+    if (   (!gViewerWindow->getActive() && !FSSessionWorker::hostForeground())
         || !gViewerWindow->getWindow()->getVisible()
         || gViewerWindow->getWindow()->getMinimized()
         || !FSSessionWorker::renderAllowed()

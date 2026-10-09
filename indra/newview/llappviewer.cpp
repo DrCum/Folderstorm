@@ -1871,7 +1871,7 @@ bool LLAppViewer::doFrame()
             // and when not quiting (causes trouble at mac's cleanup stage)
             if (!LLApp::isExiting()
                 && ((gViewerWindow && !gViewerWindow->getWindow()->getVisible())
-                    || !gFocusMgr.getAppHasFocus()))
+                    || (!gFocusMgr.getAppHasFocus() && !FSSessionWorker::hostForeground())))
             {
                 // Sleep if we're not rendering, or the window is minimized.
                 static LLCachedControl<S32> s_background_yield_time(gSavedSettings, "BackgroundYieldTime", 40);
