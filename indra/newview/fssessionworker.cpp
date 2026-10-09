@@ -24,6 +24,7 @@
 #include "rlvhandler.h"
 #include "llappviewer.h"
 #include "llfocusmgr.h"
+#include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
@@ -34,6 +35,7 @@
 #include "llviewerwindow.h"
 #include "llvoiceclient.h"
 #include "llwindow.h"
+#include "llwindowwin32.h"
 #include "pipeline.h"
 #include <cstdlib>
 #include <memory>
@@ -56,6 +58,7 @@ struct Worker
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false;
+    bool hostedStyle = false;
     bool permitVoice = false, muteBackground = true, chatBlocked = false;
     EventBuffer events;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -71,6 +74,12 @@ struct Worker
 
     bool ready() const { return LLStartUp::getStartupState() == STATE_STARTED && !gDisconnected; }
     bool embedded() const { return parent != nullptr; }
+    bool hostForeground() const
+    {
+        if (!parent || !IsWindow(parent)) return false;
+        const HWND root = GetAncestor(parent, GA_ROOT);
+        return root && GetForegroundWindow() == root && IsWindowVisible(root) && !IsIconic(root);
+    }
     bool sharingAllowed() const
     {
         // Native history can contain pre-restriction names/locations. Never
@@ -226,61 +235,84 @@ struct Worker
         applyVoice();
         return true;
     }
-    bool unembed()
+    bool unembed(bool restore = true)
     {
-        if (!embedded()) return true;
-        SetLastError(0);
-        if (!SetParent(window, nullptr) && GetLastError()) return false;
+        // Revoke only the host anchor for standby. Keep client geometry and
+        // borderless style while hidden, avoiding two reshape/clamp cycles on
+        // every character switch and preserving unsaved floater positions.
+        if (!restore) { parent = nullptr; return true; }
+        if (!hostedStyle) { parent = nullptr; return true; }
         SetWindowLongPtrW(window, GWL_STYLE, style);
         SetWindowLongPtrW(window, GWL_EXSTYLE, exStyle);
         SetWindowPlacement(window, &placement);
         SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         parent = nullptr;
+        hostedStyle = false;
         return true;
     }
     void fitSurface()
     {
-        if (!embedded() || !IsWindow(parent)) return;
-        RECT target{}, current{};
-        GetClientRect(parent, &target); GetClientRect(window, &current);
-        if (current.right != target.right || current.bottom != target.bottom)
-            SetWindowPos(window, nullptr, 0, 0, (std::max)(1L, target.right), (std::max)(1L, target.bottom), SWP_NOZORDER | SWP_NOACTIVATE);
+        if (!embedded() || mode != Mode::Active) return;
+        const HWND root = IsWindow(parent) ? GetAncestor(parent, GA_ROOT) : nullptr;
+        if (!root) return;
+        const HWND foreground = GetForegroundWindow();
+        DWORD owner = 0; GetWindowThreadProcessId(foreground, &owner);
+        // Hide with the controller when minimized or another application is
+        // foreground. Native owned dialogs keep their worker visible.
+        const bool visible = IsWindowVisible(root) && !IsIconic(root) && (foreground == root || owner == GetCurrentProcessId());
+        if (!visible) { if (IsWindowVisible(window)) ShowWindow(window, SW_HIDE); return; }
+        RECT target{}, current{}; POINT origin{};
+        GetClientRect(parent, &target); ClientToScreen(parent, &origin); GetWindowRect(window, &current);
+        if (!IsWindowVisible(window)) ShowWindow(window, SW_SHOWNOACTIVATE);
+        const bool changed = current.left != origin.x || current.top != origin.y ||
+            current.right - current.left != target.right || current.bottom - current.top != target.bottom;
+        if (changed || foreground == root)
+            SetWindowPos(window, foreground == root ? HWND_TOP : nullptr, origin.x, origin.y,
+                (std::max)(1L, target.right), (std::max)(1L, target.bottom),
+                SWP_NOACTIVATE | (foreground == root ? 0 : SWP_NOZORDER));
     }
     void focusHostedClient() const
     {
         if (!ready() || detached || !embedded() || mode != Mode::Active ||
-            !inputGranted || promoting || !window || GetParent(window) != parent ||
+            !inputGranted || promoting || !window ||
             !gViewerWindow || !gViewerWindow->getWindow()) return;
         const HWND root = GetAncestor(parent, GA_ROOT);
         DWORD owner = 0;
+        const HWND foreground = GetForegroundWindow();
         if (!root || !GetWindowThreadProcessId(root, &owner) || owner != host ||
-            root != GetForegroundWindow() || !IsWindowVisible(root) || IsIconic(root)) return;
+            (root != foreground && window != foreground) || !IsWindowVisible(root) || IsIconic(root)) return;
         // The viewer owns a separate native window thread. Its existing API
         // posts SetFocus there, delivering normal focus/IME/timer callbacks.
         // Never synthesize keystrokes or force the application's focus flag.
-        gViewerWindow->getWindow()->focusClient();
+        static_cast<LLWindowWin32*>(gViewerWindow->getWindow())->focusClientGuarded(foreground);
     }
     bool embed(std::uint64_t value)
     {
         HWND target = reinterpret_cast<HWND>(static_cast<std::uintptr_t>(value));
         DWORD owner = 0;
-        if (!window || !IsWindow(target) || !GetWindowThreadProcessId(target, &owner) || owner != host || !ready() || mode != Mode::Active) return false;
+        if (!window || !IsWindow(target) || !GetWindowThreadProcessId(target, &owner) || owner != host || !ready() || mode != Mode::Active ||
+            gViewerWindow->getWindow()->getFullscreen()) return false;
         if (parent == target) return true;
-        if (!unembed()) return false;
-        placement.length = sizeof(placement);
-        if (!GetWindowPlacement(window, &placement)) return false;
-        style = GetWindowLongPtrW(window, GWL_STYLE); exStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
-        SetWindowLongPtrW(window, GWL_STYLE, (style & ~(WS_OVERLAPPEDWINDOW | WS_POPUP)) | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
-        SetWindowLongPtrW(window, GWL_EXSTYLE, exStyle & ~WS_EX_APPWINDOW);
+        if (embedded() && !unembed()) return false;
+        if (!hostedStyle)
+        {
+            placement.length = sizeof(placement);
+            if (!GetWindowPlacement(window, &placement)) return false;
+            style = GetWindowLongPtrW(window, GWL_STYLE); exStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        }
+        // Keep the surface an unowned top-level window in its own process.
+        // No foreign parent/owner that can destroy it if the host exits.
+        SetWindowLongPtrW(window, GWL_STYLE, (style & ~(WS_OVERLAPPEDWINDOW | WS_CHILD)) | WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+        SetWindowLongPtrW(window, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW);
         SetLastError(0);
-        const HWND previous = SetParent(window, target);
-        if (!previous && GetLastError())
+        if (!SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED))
         {
             SetWindowLongPtrW(window, GWL_STYLE, style); SetWindowLongPtrW(window, GWL_EXSTYLE, exStyle);
             SetWindowPlacement(window, &placement);
             return false;
         }
         parent = target;
+        hostedStyle = true;
         SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         fitSurface();
         focusHostedClient();
@@ -332,6 +364,7 @@ struct Worker
         if (promoting) reply.flags |= Promoting;
         if (inputGranted && gFocusMgr.getAppHasFocus()) reply.flags |= ClientFocused;
         if (economyTrimmed) reply.flags |= EconomyTrimmed;
+        if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
@@ -353,15 +386,17 @@ struct Worker
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
-            if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked())
-            { reply(request, "Close the modal dialog or wait for login before switching."); break; }
+            const HWND popup = window ? GetLastActivePopup(window) : nullptr;
+            if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
+                (popup && popup != window && IsWindowVisible(popup)) || LLFloaterReg::instanceVisible("preferences"))
+            { reply(request, "Close Preferences or the modal dialog, or wait for login before switching."); break; }
             const bool previousGrant = inputGranted;
             releaseInput();
             const Mode previousMode = mode;
             mode = request.mode;
             if (mode != Mode::Active)
             {
-                if (!unembed())
+                if (!unembed(false))
                 {
                     mode = previousMode;
                     if (previousGrant) grantInput();
@@ -372,6 +407,12 @@ struct Worker
             }
             else
             {
+                // Fit the target before preparing first frames. This also lets
+                // rendering recognize host chat/selector focus as app activity.
+                if (request.surface && !embed(request.surface))
+                {
+                    mode = previousMode; reply(request, "Hosted preparation failed. Disable hosting and try the separate window."); break;
+                }
                 promoting = true; pendingPromotion = request; promotionStart = frames;
                 if (gKeyboard)
                     for (std::size_t key = 0; key < heldKeys.size(); ++key)
@@ -519,6 +560,7 @@ void FSSessionWorker::tick()
         if (value.mode != Mode::Active && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
     }
     value.fitSurface();
+    if (value.embedded() && (!IsWindow(value.parent) || gViewerWindow->getWindow()->getFullscreen())) value.unembed();
     if (value.ready())
     {
         value.connectChat();
@@ -537,6 +579,10 @@ void FSSessionWorker::tick()
 bool FSSessionWorker::renderAllowed()
 {
     return !managed() || !worker->readyApplied || worker->mode == Mode::Active;
+}
+bool FSSessionWorker::hostForeground()
+{
+    return managed() && worker->readyApplied && worker->mode == Mode::Active && worker->hostForeground();
 }
 void FSSessionWorker::prepareDisplay()
 {
@@ -646,6 +692,7 @@ void FSSessionWorker::configure() {}
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
+bool FSSessionWorker::hostForeground() { return false; }
 void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
