@@ -18,6 +18,7 @@
 #include <psapi.h>
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
+#include "fssessionhostoptions.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -38,6 +39,7 @@ constexpr int Standby1 = 107, Standby2 = 108;
 constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
 constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
+constexpr int SessionOptions = 119;
 constexpr UINT_PTR Timer = 1;
 struct Handle
 {
@@ -139,6 +141,12 @@ struct Slot
 {
     ChatView chat;
     Message pendingSend, pendingTyping;
+    Message pendingAction;
+    Message closingAction;
+    bool hasPendingAction = false;
+    std::string workspace;
+    bool workspaceModified = false, preferencesOpen = false;
+    ULONGLONG workspaceAt = 0;
     bool hasPendingSend = false, hasPendingTyping = false;
     std::uint32_t audioPolicy = 2, catalogIndex = 0;
     ULONGLONG eventsAt = 0, catalogAt = 0, typingAt = 0;
@@ -166,6 +174,9 @@ struct Host
     HWND launchButton[2]{}, switchButton[2]{};
     HWND standbyControl[2]{};
     HWND characterControl = nullptr, showChatControl = nullptr, detachControl = nullptr;
+    HWND optionsControl = nullptr;
+    Handle optionsLease;
+    bool logoutOnClose = false;
     bool showChat = true;
     UINT dpi = 96;
     HFONT font = nullptr;
@@ -220,7 +231,7 @@ struct Host
         Message request;
         if (bound)
         {
-            if (!slot.chat.identity.owns(*bound) || !slot.chat.identity.owns(slot.snapshot) || slot.snapshot.state != State::Ready)
+            if (!slot.chat.identity.owns(*bound) || !slot.chat.identity.owns(slot.snapshot) || (slot.snapshot.state != State::Ready && kind != Kind::Quit))
             { message(L"The selected sending session changed. Text was not sent."); return false; }
             request = *bound;
         }
@@ -232,6 +243,7 @@ struct Host
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
+        if (kind == Kind::WorkspaceInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
         if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
         if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
             AllowSetForegroundWindow(slot.pid);
@@ -239,6 +251,62 @@ struct Host
         if (!slot.pipe.send(request)) return false;
         slot.request = request; slot.waiting = true; slot.sentAt = GetTickCount64();
         return true;
+    }
+    HostOptions options() const
+    {
+        HostOptions result; result.standby[0] = standby[0]; result.standby[1] = standby[1];
+        result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
+        return result;
+    }
+    void saveOptions()
+    {
+        const auto temporary = profiles / L"host-options.tmp";
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        const auto data = options().encode(); output.write(data.data(), static_cast<std::streamsize>(data.size())); output.close();
+        if (!output || !MoveFileExW(temporary.c_str(), (profiles / L"host-options.txt").c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        { message(L"Host choices could not be saved. Current session choices remain active."); return; }
+        message(L"Host choices saved. Character credentials, chats and workspace contents are not in this file.");
+    }
+    void sessionMenu()
+    {
+        const int index = SendMessageW(characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0;
+        auto* slot = slots[index].get();
+        Message action;
+        if (slot)
+        {
+            action.worker = slot->chat.identity.worker; action.generation = slot->chat.identity.generation;
+            action.account = slot->chat.identity.account; action.grid = slot->chat.identity.grid;
+        }
+        HMENU menu = CreatePopupMenu();
+        if (!menu) return;
+        const std::wstring name = slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : index == 0 ? L"Character 1" : L"Character 2";
+        AppendMenuW(menu, MF_STRING | (index == active && !busy() ? 0 : MF_GRAYED), 201, (L"Manage workspaces: " + name).c_str());
+        AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
+        AppendMenuW(menu, MF_STRING, 203, L"Open selected profile folder");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
+        AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
+        AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
+        POINT point{}; GetCursorPos(&point);
+        const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, window, nullptr);
+        DestroyMenu(menu);
+        if (choice == 201 || choice == 202)
+        {
+            // Timer replies may have changed login while the popup was open.
+            if (!slots[index] || slots[index].get() != slot || !slot->chat.identity.owns(action) || slot->hasPendingAction)
+            { message(L"Character changed or has a pending action. Select it again."); return; }
+            action.kind = choice == 201 ? Kind::WorkspaceMenu : Kind::Quit;
+            slot->pendingAction = action; slot->hasPendingAction = true;
+            message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
+        }
+        else if (choice == 203)
+        {
+            const auto path = profiles / (index == 0 ? L"Character1" : L"Character2");
+            ShellExecuteW(window, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
+        else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
+        else if (choice == 206) saveOptions();
     }
     std::string editText() const
     {
@@ -446,9 +514,15 @@ struct Host
         if (changedSession)
         {
             slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            slot.hasPendingAction = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             if (chatIndex == index) { conversation.clear(); refreshChat(true); }
         }
         slot.snapshot = response;
+        if (request.kind == Kind::WorkspaceInfo && !(response.flags & Error))
+        {
+            slot.workspace = response.title; slot.workspaceModified = (response.unread & 1) != 0;
+            slot.preferencesOpen = (response.unread & 2) != 0; slot.workspaceAt = GetTickCount64();
+        }
         if (response.flags & ChatRestricted)
         {
             slot.chat.lines.clear(); slot.chat.conversations.clear(); slot.chat.cursor = 0;
@@ -495,14 +569,14 @@ struct Host
         }
         slot.sample = response; slot.sampleAt = slot.pollAt;
         if ((response.state == State::Login && !(response.flags & LoginPending)) || response.state == State::Disconnected) slot.reservation.clear();
-        if (request.kind == Kind::Detach && !(response.flags & (Error | Embedded)))
+        if ((request.kind == Kind::Detach || request.kind == Kind::Quit) && !(response.flags & (Error | Embedded)))
         {
             slot.detached = true; slot.pipe.close();
             if (active == index) active = -1;
         }
         if (response.flags & Error)
         {
-            if (request.kind == Kind::Detach) { detaching = closing = false; }
+            if (request.kind == Kind::Detach || request.kind == Kind::Quit) { detaching = closing = logoutOnClose = false; }
             if (request.kind == Kind::Embed) { embedding = false; SendMessageW(embedControl, BM_SETCHECK, BST_UNCHECKED, 0); }
             if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle) failHandoff(index, wide(response.detail));
             else
@@ -550,6 +624,8 @@ struct Host
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
         if (slot.snapshot.flags & EconomyTrimmed) text << L" · render targets released";
         if (slot.snapshot.flags & VoiceOwner) text << L" · voice owner";
+        if (!slot.workspace.empty()) text << L" · workspace " << wide(slot.workspace) << (slot.workspaceModified ? L" *" : L"");
+        if (slot.preferencesOpen) text << L" · Preferences open";
         std::uint64_t unread = 0; for (const auto& entry : slot.chat.conversations) unread += entry.second.unread;
         if (unread) text << L" · " << unread << L" unread";
         if (slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
@@ -573,6 +649,7 @@ struct Host
                 if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat))
                     message(L"Chat connection lost: delivery is uncertain. Text was not retried; check the owning character's native chat before sending again.");
                 slot.hasPendingSend = slot.hasPendingTyping = false;
+                slot.hasPendingAction = false;
                 slot.waiting = false;
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"Character connection lost. Other connected characters can still be selected.");
                 if (active == index) active = -1;
@@ -587,7 +664,16 @@ struct Host
             }
             if (!slot.waiting && slot.pipe.alive() && !slot.detached)
             {
-                if (detaching) send(index, Kind::Detach);
+                if (detaching)
+                {
+                    if (logoutOnClose)
+                    {
+                        if (!slot.chat.identity.owns(slot.closingAction))
+                        { detaching = closing = logoutOnClose = false; message(L"A login changed before logout. No action was retried on the new session."); }
+                        else send(index, Kind::Quit, Mode::Warm, 0, &slot.closingAction);
+                    }
+                    else send(index, Kind::Detach);
+                }
                 else if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index)
                 {
                     if (handoff.generation() != slot.snapshot.generation) failHandoff(index, L"Login changed while switching.");
@@ -628,6 +714,11 @@ struct Host
                     send(index, Kind::SetMode, standby[index]);
                 else if (slot.snapshot.state == State::Ready && slot.audioPolicy != ((voice ? 1u : 0u) | (muteBackground ? 2u : 0u)))
                     send(index, Kind::AudioPolicy);
+                else if (slot.hasPendingAction)
+                {
+                    const auto action = slot.pendingAction; slot.hasPendingAction = false;
+                    send(index, action.kind, Mode::Warm, 0, &action);
+                }
                 else if (slot.hasPendingSend)
                 {
                     const auto pending = slot.pendingSend; slot.hasPendingSend = false;
@@ -643,6 +734,8 @@ struct Host
                     send(index, Kind::Events);
                 else if (slot.snapshot.state == State::Ready && !(slot.snapshot.flags & ChatRestricted) && GetTickCount64() - slot.catalogAt >= 20000)
                     send(index, Kind::Conversations);
+                else if (slot.snapshot.state == State::Ready && GetTickCount64() - slot.workspaceAt >= 2000)
+                    send(index, Kind::WorkspaceInfo);
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
@@ -659,6 +752,7 @@ struct Host
             for (const auto& slot : slots) if (slot)
             {
                 if (slot->pipe.alive() && !slot->detached) complete = false;
+                if (logoutOnClose && slot->running()) complete = false;
                 // Never destroy a live foreign child on normal controller close.
                 if (auto surface = slot->surface()) if (IsChild(window, surface)) complete = false;
             }
@@ -670,10 +764,18 @@ struct Host
             }
         }
     }
-    void detach(bool close)
+    void detach(bool close, bool logout = false)
     {
-        handoff.cancel(); detaching = true; closing = close; focusRequested = false;
-        message(L"Returning characters to separate windows before closing their controller connection…");
+        handoff.cancel(); detaching = true; closing = close; logoutOnClose = logout; focusRequested = false;
+        if (logout)
+            for (auto& slot : slots) if (slot)
+            {
+                slot->closingAction = {};
+                slot->closingAction.worker = slot->chat.identity.worker; slot->closingAction.generation = slot->chat.identity.generation;
+                slot->closingAction.account = slot->chat.identity.account; slot->closingAction.grid = slot->chat.identity.grid;
+            }
+        message(logout ? L"Confirm logout in each native viewer. Close this host again to keep any remaining separate viewers logged in." :
+            L"Returning characters to separate windows before closing their controller connection…");
     }
     void layout()
     {
@@ -682,9 +784,9 @@ struct Host
         const int height = static_cast<int>(rect.bottom);
         auto move = [this](HWND child, int x, int y, int w, int h) { MoveWindow(child, scaled(x), scaled(y), scaled(w), scaled(h), TRUE); };
         move(characterControl, 10, 10, 170, 200);
-        move(launchButton[0], 190, 10, 75, 28); move(launchButton[1], 270, 10, 75, 28);
-        move(embedControl, 355, 10, 200, 28); move(detachControl, 560, 10, 125, 28);
-        move(showChatControl, 695, 10, 90, 28);
+        move(launchButton[0], 190, 10, 45, 28); move(launchButton[1], 240, 10, 45, 28);
+        move(embedControl, 295, 10, 180, 28); move(detachControl, 485, 10, 110, 28);
+        move(showChatControl, 605, 10, 90, 28); move(optionsControl, 705, 10, 80, 28);
         for (int i = 0; i < 2; ++i)
         {
             MoveWindow(status[i], scaled(10), scaled(48 + i * 24), width - scaled(215), scaled(20), TRUE);
@@ -722,16 +824,18 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     {
     case WM_CREATE:
         host->window = window;
-        host->launchButton[0] = control(window, L"BUTTON", L"Launch 1", BS_PUSHBUTTON, 10, 10, 80, 28, Launch1);
+        host->launchButton[0] = control(window, L"BUTTON", L"+ 1", BS_PUSHBUTTON | WS_TABSTOP, 10, 10, 80, 28, Launch1);
         host->switchButton[0] = control(window, L"BUTTON", L"Switch to 1", BS_PUSHBUTTON, 95, 10, 90, 28, Switch1);
-        host->launchButton[1] = control(window, L"BUTTON", L"Launch 2", BS_PUSHBUTTON, 195, 10, 80, 28, Launch2);
+        host->launchButton[1] = control(window, L"BUTTON", L"+ 2", BS_PUSHBUTTON | WS_TABSTOP, 195, 10, 80, 28, Launch2);
         host->switchButton[1] = control(window, L"BUTTON", L"Switch to 2", BS_PUSHBUTTON, 280, 10, 90, 28, Switch2);
         ShowWindow(host->switchButton[0], SW_HIDE); ShowWindow(host->switchButton[1], SW_HIDE);
         host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
         host->showChatControl = control(window, L"BUTTON", L"Chat panel", BS_AUTOCHECKBOX | WS_TABSTOP, 695, 10, 90, 28, ShowChat);
-        SendMessageW(host->showChatControl, BM_SETCHECK, BST_CHECKED, 0);
+        SendMessageW(host->showChatControl, BM_SETCHECK, host->showChat ? BST_CHECKED : BST_UNCHECKED, 0);
         host->embedControl = control(window, L"BUTTON", L"Host active viewer", BS_AUTOCHECKBOX | WS_TABSTOP, 383, 10, 235, 28, HostSurface);
         host->detachControl = control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON | WS_TABSTOP, 630, 10, 125, 28, DetachAll);
+        host->optionsControl = control(window, L"BUTTON", L"Session…", BS_PUSHBUTTON | WS_TABSTOP, 705, 10, 80, 28, SessionOptions);
+        SendMessageW(host->embedControl, BM_SETCHECK, host->embedding ? BST_CHECKED : BST_UNCHECKED, 0);
         host->status[0] = control(window, L"STATIC", L"Character 1: not launched", SS_LEFT, 10, 48, 850, 20);
         host->status[1] = control(window, L"STATIC", L"Character 2: not launched", SS_LEFT, 10, 70, 850, 20);
         for (int i = 0; i < 2; ++i)
@@ -739,7 +843,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, i == 0 ? Standby1 : Standby2);
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Background: Warm"));
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Economy (experimental)"));
-            SendMessageW(host->standbyControl[i], CB_SETCURSEL, 0, 0);
+            SendMessageW(host->standbyControl[i], CB_SETCURSEL, host->standby[i] == Mode::Economy ? 1 : 0, 0);
         }
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | WS_CLIPCHILDREN, 0, 99, 880, 490);
         host->notice = control(window, L"STATIC", L"Prototype: warm standby, separate profiles. Voice and MCP are off.", SS_LEFT, 10, 600, 850, 20);
@@ -754,7 +858,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->chatLabel = control(window, L"STATIC", L"Send as: not logged in", SS_LEFT, 10, 429, 850, 20);
         host->voiceControl = control(window, L"BUTTON", L"Voice follows active character", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 585, 255, 24, VoicePolicy);
         host->muteControl = control(window, L"BUTTON", L"Mute background world/UI/media sound", BS_AUTOCHECKBOX | WS_TABSTOP, 280, 585, 280, 24, BackgroundMute);
-        SendMessageW(host->muteControl, BM_SETCHECK, BST_CHECKED, 0);
+        SendMessageW(host->voiceControl, BM_SETCHECK, host->voice ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendMessageW(host->muteControl, BM_SETCHECK, host->muteBackground ? BST_CHECKED : BST_UNCHECKED, 0);
         host->refreshChat(true);
         host->refreshCharacters(); host->updateDpi(96); host->layout();
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
@@ -783,6 +888,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case Launch2: host->launch(1); break;
         case Switch1: host->switchTo(0); break;
         case Switch2: host->switchTo(1); break;
+        case SessionOptions: host->sessionMenu(); break;
         case ActiveCharacter:
             if (HIWORD(wparam) == CBN_SELCHANGE)
                 host->switchTo(SendMessageW(host->characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0);
@@ -836,9 +942,18 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         }
         return 0;
     case WM_CLOSE:
-        if (host->closing) return 0;
-        if (MessageBoxW(window, L"Close the controller and return the characters to ordinary viewer windows? They will stay logged in.",
-            L"Folderstorm character sessions", MB_YESNO | MB_ICONQUESTION) == IDYES) host->detach(true);
+        if (host->closing)
+        {
+            if (host->logoutOnClose && MessageBoxW(window, L"Close the host and leave remaining separate viewers logged in?",
+                L"Folderstorm character sessions", MB_YESNO | MB_ICONQUESTION) == IDYES) host->logoutOnClose = false;
+            return 0;
+        }
+        switch (MessageBoxW(window, L"Yes: log out the characters and close this host.\nNo: close this host and keep characters logged in in separate windows.\nCancel: keep working.",
+            L"Folderstorm character sessions", MB_YESNOCANCEL | MB_ICONQUESTION))
+        {
+        case IDYES: host->detach(true, true); break;
+        case IDNO: host->detach(true); break;
+        }
         return 0;
     case WM_DESTROY: KillTimer(window, Timer); PostQuitMessage(0); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
@@ -876,6 +991,22 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local)) || !local) return 1;
     state.profiles = std::filesystem::path(local) / L"FolderstormSessions" / L"Prototype-v1";
     CoTaskMemFree(local);
+    std::error_code profileError; std::filesystem::create_directories(state.profiles, profileError);
+    if (profileError) return 1;
+    state.optionsLease.value = CreateFileW((state.profiles / L"host.lock").c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+    if (state.optionsLease.value == INVALID_HANDLE_VALUE)
+    { MessageBoxW(nullptr, L"A character controller is already using these profiles. Use that controller or close it first.", L"Folderstorm", MB_OK); return 1; }
+    std::ifstream savedOptions(state.profiles / L"host-options.txt", std::ios::binary);
+    if (savedOptions)
+    {
+        char data[513]{}; savedOptions.read(data, sizeof(data)); HostOptions choices;
+        if (HostOptions::decode(std::string(data, static_cast<std::size_t>(savedOptions.gcount())), choices))
+        {
+            state.standby[0] = choices.standby[0]; state.standby[1] = choices.standby[1];
+            state.voice = choices.voice; state.muteBackground = choices.muteBackground; state.embedding = choices.hosted; state.showChat = choices.chat;
+        }
+    }
     host = &state;
     WNDCLASSW klass{}; klass.lpfnWndProc = windowProc; klass.hInstance = instance;
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);

@@ -9,12 +9,12 @@ Checkpoint 2 adds a background-mode dropdown beside each character: **Warm** ret
 ## Try the prototype
 
 1. Open `folderstorm-session-host.exe` from the new Windows build/installation. Leave **Host active viewer** unchecked initially.
-2. Choose **Launch 1**, then log in through the ordinary viewer login screen. The first ready character becomes active automatically.
-3. Choose **Launch 2** and log in a different character. Its login/loading UI remains visible until it is ready, then it enters warm standby.
+2. Choose **+ 1**, then log in through the ordinary viewer login screen. The first ready character becomes active automatically.
+3. Choose **+ 2** and log in a different character. Its login/loading UI remains visible until it is ready, then it enters warm standby.
 4. Use the character dropdown. Switching releases old input, hides its view and prepares the target. The target grants input after two normal buffer swaps; its account/session must still match the request.
 5. Send an IM to the background character, switch to it and check the message arrived. Test in the same region first, then different regions and a teleport that completes while backgrounded.
 6. After separate-window switching works, enable **Host active viewer**. Its borderless native window follows the controller's viewport bounds, while remaining an unowned top-level window in its own worker process. Its own menus, toolbars, floaters and skin remain intact. Click a chat field and test typing, switch characters, then Alt-Tab away and return. The active status reports **keyboard focused/unfocused** from the viewer's normal focus callbacks; polling can lag briefly. Disable the checkbox to return to separate windows while retaining management/standby.
-7. **Separate windows** detaches both workers from management, returns their ordinary windows and leaves them logged in. Closing the controller asks to do the same; it waits for detachment and never deliberately destroys a live hosted viewer window. Close a detached viewer before relaunching its slot.
+7. **Separate windows** detaches both workers from management, returns their ordinary windows and leaves them logged in. Closing the controller offers either native logout confirmation or returning to separate windows; it waits for detachment and never deliberately destroys a live hosted viewer window. Close a detached viewer before relaunching its slot.
 
 An initialized worker keeps its render context. Warm standby uses the existing viewer hidden-window path for teleport progress, texture/material cleanup, pick cancellation and other maintenance, while suppressing world drawing, reflection/snapshot side work and foreground input. Normal networking, event/callback processing and Inventory observers continue. This deliberately reuses the native minimized/hidden-viewer behavior instead of treating `HeadlessClient` as a reversible runtime mode.
 
@@ -39,7 +39,7 @@ Native credential IDs are reserved before authentication to catch duplicate mana
 
 The host tracks worker process health, ordinary rendered swaps per second, main-loop iterations per second, keyboard-focus state and working-set MiB. These are diagnostics, not claimed CPU/GPU/VRAM savings. Compare with two ordinary viewers, including an ordinary minimized second viewer, because the viewer already reduces drawing when hidden/minimized. Measure aggregate processes using native tools.
 
-Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 5, and mixed versions are deliberately rejected.
+Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 6, and mixed versions are deliberately rejected.
 
 ## Recovery and current native risks
 
@@ -62,3 +62,13 @@ g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I indra/newview \
 ```
 
 Actual checks and pending native acceptance are in [prototype validation](../../doc/plans/multi-character-validation.md). No viewer/build/packaging/GitHub builds or unrelated Go tests were run during implementation.
+
+## Workspace and lifecycle controls
+
+**Session…** refers to the character selected in the world selector and names it in its actions. **Manage workspaces** opens that active character's existing workspace switcher; its native save/load/HUD review and Preferences rules still apply. Status reports the account-local workspace name, a `*` when modified, and an open Preferences transaction. World switching preserves live camera/HUD/Inventory/board state and does not auto-apply a named workspace. Configure per-character startup restore through that worker's existing Preferences; native UI/Inventory/account/session readiness gates are reused.
+
+**Close character** returns it to its ordinary window for the normal viewer logout confirmation. Cancelling that native confirmation leaves it logged in as a separate viewer; close it before relaunching the slot. Host close offers logout, leave connected in separate windows, or Cancel. Logout waits for native process exit; closing the host again can leave remaining native windows logged in. Failed/stale logout requests are not replayed on a new login.
+
+**Save host choices** explicitly saves only background modes, voice/background-mute, hosting and Chat panel choices in a bounded controller-options file. It never saves credentials, chat text, Inventory contents or named workspace data. Defaults remain voice/hosting Off, background mute On. One controller reserves these two profile slots/settings; detached viewers continue holding their own profile lease until native cleanup finishes.
+
+Managed workers always use their private default texture/object/sound cache directories, even when copied settings name a shared custom cache. Managed startup skips migration/purging of that external custom path. Saved custom choices stay intact for ordinary launches; detaching keeps the already-open private runtime cache. **Open selected profile folder** exposes the selected slot's files without adopting another running viewer.

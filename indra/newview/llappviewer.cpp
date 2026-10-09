@@ -5317,6 +5317,11 @@ U32 LLAppViewer::getObjectCacheVersion()
 bool LLAppViewer::initCache()
 {
     LL_PROFILE_ZONE_SCOPED;
+    // Separate marker files permit separate cache writers. Managed workers
+    // must therefore use their private default directory even if a user copied
+    // settings containing a shared custom path. Do not migrate/purge that path.
+    const bool managed_cache = FSSessionWorker::managed();
+    if (managed_cache) { gDirUtilp->setCacheDir(""); gDirUtilp->setSoundCacheDir(""); }
     mPurgeCache = false;
     bool read_only = mSecondInstance;
     LLAppViewer::getTextureCache()->setReadOnly(read_only) ;
@@ -5389,12 +5394,12 @@ bool LLAppViewer::initCache()
         // </FS>
 
         // We have moved the location of the cache directory over time.
-        migrateCacheDirectory();
+        if (!managed_cache) migrateCacheDirectory();
 
         // Setup and verify the cache location
         std::string cache_location = gSavedSettings.getString("CacheLocation");
         std::string new_cache_location = gSavedSettings.getString("NewCacheLocation");
-        if (new_cache_location != cache_location)
+        if (!managed_cache && new_cache_location != cache_location)
         {
             LL_INFOS("AppCache") << "Cache location changed, cache needs purging" << LL_ENDL;
             gDirUtilp->setCacheDir(gSavedSettings.getString("CacheLocation"));
@@ -5405,7 +5410,7 @@ bool LLAppViewer::initCache()
         }
     }
 
-    if (!gDirUtilp->setCacheDir(gSavedSettings.getString("CacheLocation")))
+    if (!gDirUtilp->setCacheDir(managed_cache ? "" : gSavedSettings.getString("CacheLocation")))
     {
         LL_WARNS("AppCache") << "Unable to set cache location" << LL_ENDL;
         gSavedSettings.setString("CacheLocation", "");
@@ -5415,7 +5420,7 @@ bool LLAppViewer::initCache()
     }
 
     // <FS:Ansariel> Sound cache
-    if (!gDirUtilp->setSoundCacheDir(gSavedSettings.getString("FSSoundCacheLocation")))
+    if (!gDirUtilp->setSoundCacheDir(managed_cache ? "" : gSavedSettings.getString("FSSoundCacheLocation")))
     {
         LL_WARNS("AppCache") << "Unable to set sound cache location" << LL_ENDL;
         gSavedSettings.setString("FSSoundCacheLocation", "");
