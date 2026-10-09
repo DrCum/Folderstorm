@@ -18,18 +18,18 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 512;
-constexpr std::uint32_t Version = 1;
+constexpr std::uint32_t Version = 2;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
-    Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed,
+    Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Status = 16
 };
 enum class Mode : std::uint32_t { Active, Warm };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused;
 
 struct Message
 {
@@ -45,7 +45,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return (kind >= Kind::Poll && kind <= Kind::Unembed) || kind == Kind::Status;
+    return (kind >= Kind::Poll && kind <= Kind::Focus) || kind == Kind::Status;
 }
 inline bool validUtf8(const std::string& text)
 {

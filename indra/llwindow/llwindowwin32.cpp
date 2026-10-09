@@ -4310,8 +4310,19 @@ void LLWindowWin32::bringToFront()
 // set (OS) window focus back to the client
 void LLWindowWin32::focusClient()
 {
+    const HWND hosted_root = (GetWindowLongPtrW(mWindowHandle, GWL_STYLE) & WS_CHILD) ?
+        GetAncestor(mWindowHandle, GA_ROOT) : nullptr;
     mWindowThread->post([=]()
         {
+            // A hosted viewer is a child of another process's top-level window.
+            // Recheck on this thread: an earlier request may have been queued
+            // before Alt-Tab, a native dialog or a switch to warm standby.
+            if (hosted_root || (GetWindowLongPtrW(mWindowHandle, GWL_STYLE) & WS_CHILD))
+            {
+                const HWND root = GetAncestor(mWindowHandle, GA_ROOT);
+                if ((hosted_root && root != hosted_root) || root != GetForegroundWindow() || !IsWindowEnabled(mWindowHandle) ||
+                    !IsWindowVisible(mWindowHandle) || IsIconic(root)) return;
+            }
             SetFocus(mWindowHandle);
         });
 }

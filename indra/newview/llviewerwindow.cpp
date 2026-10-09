@@ -1108,6 +1108,9 @@ void LLViewerWindow::handlePieMenu(S32 x, S32 y, MASK mask)
 
 bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down, bool& is_toolmgr_action)
 {
+    // Custom-drawn controls change UI focus, but a hosted Windows child also
+    // needs keyboard focus on its native window thread after a viewer click.
+    if (down) FSSessionWorker::focusHostedClient();
     const char* buttonname = "";
     const char* buttonstatestr = "";
     S32 x = pos.mX;

@@ -95,6 +95,20 @@ struct Worker
         if (current.right != target.right || current.bottom != target.bottom)
             SetWindowPos(window, nullptr, 0, 0, (std::max)(1L, target.right), (std::max)(1L, target.bottom), SWP_NOZORDER | SWP_NOACTIVATE);
     }
+    void focusHostedClient() const
+    {
+        if (!ready() || detached || !embedded() || mode != Mode::Active ||
+            !inputGranted || promoting || !window || GetParent(window) != parent ||
+            !gViewerWindow || !gViewerWindow->getWindow()) return;
+        const HWND root = GetAncestor(parent, GA_ROOT);
+        DWORD owner = 0;
+        if (!root || !GetWindowThreadProcessId(root, &owner) || owner != host ||
+            root != GetForegroundWindow() || !IsWindowVisible(root) || IsIconic(root)) return;
+        // The viewer owns a separate native window thread. Its existing API
+        // posts SetFocus there, delivering normal focus/IME/timer callbacks.
+        // Never synthesize keystrokes or force the application's focus flag.
+        gViewerWindow->getWindow()->focusClient();
+    }
     bool embed(std::uint64_t value)
     {
         HWND target = reinterpret_cast<HWND>(static_cast<std::uintptr_t>(value));
@@ -118,6 +132,7 @@ struct Worker
         parent = target;
         SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         fitSurface();
+        focusHostedClient();
         return true;
     }
     bool detach()
@@ -163,6 +178,7 @@ struct Worker
         if (loginRequested && gate == FSSessionWorker::LoginGate::Wait) reply.flags |= LoginPending;
         if (embedded()) reply.flags |= Embedded;
         if (promoting) reply.flags |= Promoting;
+        if (inputGranted && gFocusMgr.getAppHasFocus()) reply.flags |= ClientFocused;
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
         return reply;
     }
@@ -222,6 +238,7 @@ struct Worker
         case Kind::Embed:
             reply(request, embed(request.surface) ? "" : "Window hosting is unavailable; use the separate viewer window."); break;
         case Kind::Unembed: reply(request, unembed() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
+        case Kind::Focus: focusHostedClient(); reply(request); break;
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
@@ -366,6 +383,10 @@ bool FSSessionWorker::textAllowed()
 {
     return inputAllowed() && (!managed() || std::none_of(worker->heldKeys.begin(), worker->heldKeys.end(), [](bool held) { return held; }));
 }
+void FSSessionWorker::focusHostedClient()
+{
+    if (managed()) worker->focusHostedClient();
+}
 int FSSessionWorker::backgroundYield(int normal)
 {
     // Standby services the main loop frequently, never at a preview frame rate.
@@ -421,6 +442,7 @@ bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
 void FSSessionWorker::keyReleased(unsigned int) {}
 bool FSSessionWorker::textAllowed() { return true; }
+void FSSessionWorker::focusHostedClient() {}
 int FSSessionWorker::backgroundYield(int normal) { return normal; }
 void FSSessionWorker::framePresented() {}
 FSSessionWorker::LoginGate FSSessionWorker::loginGate(const std::string&, const std::string&) { return LoginGate::Allow; }

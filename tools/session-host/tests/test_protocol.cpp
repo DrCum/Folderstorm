@@ -27,6 +27,7 @@ int main()
     assert(output.surface == original.surface && output.name == original.name && output.account == original.account);
     auto corrupt = frame;
     corrupt[4] = 99; assert(!decode(corrupt, output));
+    corrupt = frame; put(corrupt, 4, Version - 1, 4); assert(!decode(corrupt, output));
     corrupt = frame; corrupt[12] = 128; assert(!decode(corrupt, output));
     corrupt = frame; corrupt[8] = 255; assert(!decode(corrupt, output));
     corrupt = frame; corrupt[92] = 1; assert(!decode(corrupt, output));
@@ -41,6 +42,10 @@ int main()
     invalid = original; invalid.worker.fill(0); assert(!encode(invalid, frame));
     invalid = original; invalid.sequence = 0; assert(!encode(invalid, frame));
     invalid = original; invalid.account = "not-an-account"; assert(!encode(invalid, frame));
+    auto focused = original; focused.flags = ClientFocused | Embedded;
+    assert(encode(focused, frame) && decode(frame, output) && output.flags == focused.flags);
+    auto focus_request = original; focus_request.kind = Kind::Focus; focus_request.flags = 0;
+    assert(encode(focus_request, frame) && decode(frame, output) && output.kind == Kind::Focus);
     assert(!validUtf8("\xed\xa0\x80") && !validUtf8("\xf4\x90\x80\x80") && !validUtf8("\xe2\x82"));
     std::string filename;
     assert(viewerFilename("Folderstorm-Release.exe\r\n", filename) && filename == "Folderstorm-Release.exe");

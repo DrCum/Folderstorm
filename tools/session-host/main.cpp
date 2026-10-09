@@ -157,7 +157,7 @@ struct Host
     std::unique_ptr<Slot> slots[2];
     Handoff handoff;
     int active = -1;
-    bool embedding = false, detaching = false, closing = false, selectFirst = true;
+    bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
 
     void message(const std::wstring& text) { SetWindowTextW(notice, text.c_str()); }
@@ -228,7 +228,12 @@ struct Host
     {
         if (busy() || !slots[index] || slots[index]->detached || !slots[index]->pipe.alive()) return;
         if (slots[index]->snapshot.state != State::Ready) { message(L"Finish login before switching this character."); return; }
-        if (index == active) { if (auto surface = slots[index]->surface()) SetForegroundWindow(surface); return; }
+        if (index == active)
+        {
+            if (embedding) { SetForegroundWindow(window); focusRequested = true; }
+            else if (auto surface = slots[index]->surface()) SetForegroundWindow(surface);
+            return;
+        }
         const auto oldGeneration = active >= 0 && slots[active] ? slots[active]->snapshot.generation : 0;
         if (handoff.begin(active, index, oldGeneration, slots[index]->snapshot.generation)) message(L"Switching character; waiting for the viewer's ready frame…");
     }
@@ -281,7 +286,15 @@ struct Host
             {
                 active = step == Handoff::Step::Rollback ? handoff.original() : handoff.target();
                 message(step == Handoff::Step::Rollback ? L"Returned to the previous character." : L"Character ready. Other connected characters use warm standby.");
-                if (!embedding) { if (auto surface = slots[active]->surface()) SetForegroundWindow(surface); }
+                if (embedding)
+                {
+                    // Promotion may have restored the standalone target first.
+                    // Return its focus to the host without taking another app's.
+                    const HWND foreground = GetForegroundWindow();
+                    if (foreground == window || foreground == slots[active]->surface()) SetForegroundWindow(window);
+                    focusRequested = true;
+                }
+                else if (auto surface = slots[active]->surface()) SetForegroundWindow(surface);
             }
             else active = -1; // Old input owner has explicitly acknowledged revoke.
         }
@@ -294,6 +307,8 @@ struct Host
         text << (index == 0 ? L"1: " : L"2: ") << (slot.snapshot.name.empty() ? L"Login" : wide(slot.snapshot.name));
         text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" : L" · active");
+        if (slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
+            text << ((slot.snapshot.flags & ClientFocused) ? L" · keyboard focused" : L" · keyboard unfocused");
         PROCESS_MEMORY_COUNTERS memory{}; memory.cb = sizeof(memory);
         if (slot.running() && GetProcessMemoryInfo(slot.process.value, &memory, sizeof(memory)))
             text << L" · " << memory.WorkingSetSize / (1024 * 1024) << L" MiB";
@@ -349,6 +364,12 @@ struct Host
                     send(index, embedding ? Kind::Embed : Kind::Unembed, Mode::Active,
                         static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(viewport)));
                 }
+                else if (index == active && embedding && focusRequested &&
+                    slot.snapshot.state == State::Ready && (slot.snapshot.flags & Embedded) &&
+                    GetForegroundWindow() == window && !IsIconic(window))
+                {
+                    if (send(index, Kind::Focus)) focusRequested = false;
+                }
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
@@ -376,7 +397,7 @@ struct Host
     }
     void detach(bool close)
     {
-        handoff.cancel(); detaching = true; closing = close;
+        handoff.cancel(); detaching = true; closing = close; focusRequested = false;
         message(L"Returning characters to separate windows before closing their controller connection…");
     }
     void layout()
@@ -416,6 +437,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
+    case WM_SETFOCUS:
+        if (host->embedding) host->focusRequested = true;
+        return 0;
+    case WM_ACTIVATE:
+        if (host->embedding && LOWORD(wparam) != WA_INACTIVE && !HIWORD(wparam)) host->focusRequested = true;
+        return DefWindowProcW(window, message, wparam, lparam);
     case WM_SIZE: if (host->viewport) host->layout(); return 0;
     case WM_GETMINMAXINFO:
         reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {790, 400}; return 0;
@@ -428,6 +455,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case Switch2: host->switchTo(1); break;
         case HostSurface:
             host->embedding = SendMessageW(host->embedControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            host->focusRequested = host->embedding;
             host->message(host->embedding ? L"Window-hosting experiment enabled. Use Separate windows if focus or rendering misbehaves." : L"Using separate viewer windows; warm standby remains enabled.");
             break;
         case DetachAll: host->detach(false); break;
