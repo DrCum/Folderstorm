@@ -965,7 +965,13 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         RECT client{}; GetClientRect(window, &client);
         // Only the labelled footer promotes a character. Image clicks do nothing.
         if (static_cast<short>(HIWORD(lparam)) >= client.bottom - host->scaled(28))
-        { SetForegroundWindow(host->window); host->switchTo(host->monitorIndex); }
+        {
+            const auto* slot = host->slots[host->monitorIndex].get();
+            if (!host->monitorEnabled || !slot || !slot->running() || slot->detached ||
+                !slot->pipe.alive() || slot->snapshot.state != State::Ready || !host->monitorKey.owns(slot->snapshot))
+                host->message(L"The monitored session changed. Choose its monitor again before switching.");
+            else { SetForegroundWindow(host->window); host->switchTo(host->monitorIndex); }
+        }
         return 0;
     }
     case WM_PAINT:
@@ -988,6 +994,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         }
         RECT footer{0, height, client.right, client.bottom};
         FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+        SetTextColor(dc, GetSysColor(host->monitorEnabled ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
         SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         EndPaint(window, &paint); return 0;
     }
