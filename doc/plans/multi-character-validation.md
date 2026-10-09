@@ -77,3 +77,19 @@ Checkpoint 1 needs native feasibility evidence. Checkpoints 2–6 remain: proven
 Actual checks: portable protocol tests passed, including Economy wire round-trip, invalid mode rejection, chosen-policy acknowledgment, stale identities and rollback to Active. Source review traced GL-context placement, deferred resize, normal buffer reconstruction and unchanged saved graphics settings. `git diff --check` passed. Protocol version 3 requires matching controller/viewer builds. No native/viewer/build/packaging tests were run.
 
 Windows checkpoint: compare Warm and Economy VRAM in the same scene; switch back repeatedly, check shadows/reflections, resize/change graphics while inactive, test a background teleport and normal detachment. Confirm chat/loop counters continue, graphics choices persist and no black first frame/stuck input appears. Hosted focus remains a pending PR #10 native test. These checks do not stop the authorized next source checkpoint.
+
+## Checkpoint 3: source-bound shared chat, attention and audio
+
+- [x] Character/conversation selectors, bounded read-only live history, source-labelled compose box and per-conversation drafts independent of viewport switching.
+- [x] Receive native Nearby/IM/group/conference messages; enumerate existing native conversations without opening floaters or reading transcript files.
+- [x] Native public-channel/initialized IM send, explicit accepted-versus-delivered status, native restriction checks and account/grid/generation binding captured before queuing. One pending send; no uncertain replay.
+- [x] Source-bound P2P typing/stop with native support-account restrictions; native IM Mark read, shell-only Nearby/attention badges.
+- [x] Generic notification attention and Review in viewer; native offers/approvals stay inside the owning viewer.
+- [x] Bounded 256-event worker ring, 512-line/64-conversation host view, deduplication and gap reporting; session changes clear prior data.
+- [x] Restriction changes prevent raw cached names/locations entering shared chat; receiver restrictions are rechecked before export.
+- [x] Optional voice follows the acknowledged active owner (Off default), old PTT/tuning revocation, backend/volume/tuning/mic gates, and optional temporary background sound/media muting (On default).
+- [x] Host chat controls keep their keyboard focus; automatic hosted-focus requests do not steal focus from the compose box.
+
+Checks actually run: strict portable C++17 protocol/handoff and chat-model tests passed. They cover multiline UTF-8 bounds, reserved bytes, unsupported topics, source/grid/account/generation binding, retained-window gaps, event deduplication, bounded history, draft persistence across world mode changes and invalidation at a new login. Source review traced LLIMModel/FSNearbyChat restrictions and native echo, P2P typing checks, notification signal types, voice gates, audio gains and UI request ownership. `git diff --check` passed. No native/viewer/build/packaging/GitHub tests were run. Protocol version 4 requires matching binaries.
+
+Windows testing: reply as the inactive character without switching world view; test Nearby, P2P, groups and conferences, separate drafts and unread/Mark read; switch while composing/queued send and verify sender/recipient; reconnect with an unsent draft and ensure it cannot send to the new login; check restrictions and transport-loss uncertain-send wording. Confirm host compose focus survives updates and viewport clicks return native typing. Test voice Off, then On with distinct accounts, PTT/toggle/tuning during switching (including open-mic preference), background silence and gain restoration after detach. Verify notification Review switches to its account and never accepts the offer. Shared history begins after worker readiness; open earlier history through native chat. Renderer/host crash/DPI/skin checks remain pending.

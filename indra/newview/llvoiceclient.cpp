@@ -358,6 +358,7 @@ void LLVoiceClient::updateSettings()
 
 void LLVoiceClient::tuningStart()
 {
+    if (!FSSessionWorker::voiceAllowed()) return;
     LLWebRTCVoiceClient::getInstance()->tuningStart();
     LLVivoxVoiceClient::getInstance()->tuningStart();
 }
@@ -621,8 +622,7 @@ bool LLVoiceClient::onVoiceEffectsNotSupported(const LLSD &notification, const L
 bool LLVoiceClient::voiceEnabled(bool no_cache)
 // </FS:Ansariel>
 {
-    // The prototype has no microphone broker yet. Never open two microphones.
-    if (FSSessionWorker::managed()) return false;
+    if (!FSSessionWorker::voiceAllowed()) return false;
     if (no_cache)
     {
         return gSavedSettings.getBOOL("EnableVoiceChat") && !gSavedSettings.getBOOL("CmdLineDisableVoice") && !gNonInteractive;
@@ -645,7 +645,7 @@ bool LLVoiceClient::voiceEnabled(bool no_cache)
 
 void LLVoiceClient::setVoiceEnabled(bool enabled)
 {
-    if (FSSessionWorker::managed()) enabled = false;
+    if (!FSSessionWorker::voiceAllowed()) enabled = false;
     if (LLWebRTCVoiceClient::instanceExists())
     {
         LLWebRTCVoiceClient::getInstance()->setVoiceEnabled(enabled);
@@ -676,7 +676,7 @@ void LLVoiceClient::updateMicMuteLogic()
         new_mic_mute = !mUserPTTState;
     }
 
-    if(mMuteMic || mDisableMic)
+    if(mMuteMic || mDisableMic || !FSSessionWorker::voiceAllowed())
     {
         // Either of these always overrides any other PTT setting.
         new_mic_mute = true;
@@ -701,6 +701,7 @@ void LLVoiceClient::setMuteMic(bool muted)
 
 void LLVoiceClient::setUserPTTState(bool ptt)
 {
+    if (!FSSessionWorker::voiceAllowed()) ptt = false;
     if (ptt)
     {
         // Nearby chat is muted by moderator, don't toggle PTT

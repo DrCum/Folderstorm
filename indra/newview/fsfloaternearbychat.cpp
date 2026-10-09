@@ -29,6 +29,7 @@
 // Original file: LLFloaterNearbyChat.cpp
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 
 #include "fsfloaternearbychat.h"
 
@@ -279,6 +280,7 @@ static std::string appendTime()
 
 void FSFloaterNearbyChat::addMessage(const LLChat& chat,bool archive,const LLSD &args)
 {
+    if (archive) FSSessionWorker::nearbyMessage(chat);
     LLChat& tmp_chat = const_cast<LLChat&>(chat);
     bool use_plain_text_chat_history = gSavedSettings.getBOOL("PlainTextChatHistory");
     bool show_timestamps_nearby_chat = gSavedSettings.getBOOL("FSShowTimestampsNearbyChat");

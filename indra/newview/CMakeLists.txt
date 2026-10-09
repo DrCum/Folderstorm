@@ -1435,6 +1435,7 @@ set(viewer_HEADER_FILES
     fseventapibridge.h
     fssessionworker.h
     fssessionprotocol.h
+    fssessionchatmodel.h
     fssessionpipe.h
     llinventorybridge.h
     llinventorycopypolicy.h

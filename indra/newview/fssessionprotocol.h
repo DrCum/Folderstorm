@@ -17,19 +17,22 @@
 
 namespace fs_session
 {
-constexpr std::size_t FrameSize = 512;
-constexpr std::uint32_t Version = 3;
+constexpr std::size_t FrameSize = 4096;
+constexpr std::uint32_t Version = 4;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
+    Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
     Status = 16
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed;
+enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
+enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap };
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted;
 
 struct Message
 {
@@ -41,18 +44,23 @@ struct Message
     std::uint32_t flags = 0, pid = 0, width = 0, height = 0;
     std::uint64_t surface = 0, frames = 0, maintenance = 0;
     std::string account, grid, name, detail;
+    std::uint64_t event = 0, cursor = 0;
+    Topic topic = Topic::Nearby;
+    EventType eventType = EventType::None;
+    std::uint32_t unread = 0;
+    std::string conversation, sender, title, text, recipient;
 };
 
 inline bool validKind(Kind kind)
 {
-    return (kind >= Kind::Poll && kind <= Kind::Focus) || kind == Kind::Status;
+    return (kind >= Kind::Poll && kind <= Kind::Typing) || kind == Kind::Status;
 }
-inline bool validUtf8(const std::string& text)
+inline bool validUtf8(const std::string& text, bool multiline = false)
 {
     for (std::size_t i = 0; i < text.size();)
     {
         const auto c = static_cast<unsigned char>(text[i++]);
-        if (c < 0x80) { if (c < 0x20 || c == 0x7f) return false; continue; }
+        if (c < 0x80) { if ((c < 0x20 && !(multiline && (c == '\n' || c == '\r' || c == '\t'))) || c == 0x7f) return false; continue; }
         int count = 0;
         std::uint32_t value = 0, minimum = 0;
         if (c >= 0xc2 && c <= 0xdf) { count = 1; value = c & 31; minimum = 0x80; }
@@ -102,24 +110,26 @@ inline std::uint64_t get(const Frame& frame, std::size_t offset, std::size_t siz
     for (std::size_t n = 0; n < size; ++n) value |= static_cast<std::uint64_t>(frame[offset + n]) << (n * 8);
     return value;
 }
-inline bool putText(Frame& frame, std::size_t offset, std::size_t size, const std::string& text)
+inline bool putText(Frame& frame, std::size_t offset, std::size_t size, const std::string& text, bool multiline = false)
 {
-    if (text.size() >= size || !validUtf8(text)) return false;
+    if (text.size() >= size || !validUtf8(text, multiline)) return false;
     std::copy(text.begin(), text.end(), frame.begin() + offset);
     return true;
 }
-inline bool getText(const Frame& frame, std::size_t offset, std::size_t size, std::string& text)
+inline bool getText(const Frame& frame, std::size_t offset, std::size_t size, std::string& text, bool multiline = false)
 {
     const auto first = frame.begin() + offset, last = first + size;
     const auto end = std::find(first, last, 0);
     if (end == last || std::any_of(end, last, [](std::uint8_t c) { return c != 0; })) return false;
     text.assign(first, end);
-    return validUtf8(text);
+    return validUtf8(text, multiline);
 }
 inline bool valid(const Message& message)
 {
     return validKind(message.kind) && message.generation && message.sequence &&
         message.mode <= Mode::Economy && message.state <= State::Disconnected &&
+        message.topic <= Topic::Notice && message.eventType <= EventType::Gap &&
+        validAccount(message.conversation) && validAccount(message.recipient) &&
         !(message.flags & ~KnownFlags) && validAccount(message.account) &&
         std::any_of(message.worker.begin(), message.worker.end(), [](std::uint8_t c) { return c != 0; });
 }
@@ -142,12 +152,19 @@ inline bool encode(const Message& message, Frame& frame)
     put(frame, 80, message.pid, 4);
     put(frame, 84, message.width, 4);
     put(frame, 88, message.height, 4);
+    put(frame, 512, message.event, 8); put(frame, 520, message.cursor, 8);
+    put(frame, 528, static_cast<std::uint32_t>(message.topic), 4);
+    put(frame, 532, message.unread, 4); put(frame, 536, static_cast<std::uint32_t>(message.eventType), 4);
     return putText(frame, 96, 40, message.account) && putText(frame, 136, 128, message.grid) &&
-        putText(frame, 264, 128, message.name) && putText(frame, 392, 120, message.detail);
+        putText(frame, 264, 128, message.name) && putText(frame, 392, 120, message.detail) &&
+        putText(frame, 544, 40, message.conversation) && putText(frame, 584, 128, message.sender) &&
+        putText(frame, 712, 256, message.title) && putText(frame, 968, 3072, message.text, true) &&
+        putText(frame, 4040, 40, message.recipient);
 }
 inline bool decode(const Frame& frame, Message& output)
 {
-    if (get(frame, 0, 4) != 0x31535346 || get(frame, 4, 4) != Version || get(frame, 92, 4)) return false;
+    if (get(frame, 0, 4) != 0x31535346 || get(frame, 4, 4) != Version || get(frame, 92, 4) ||
+        get(frame, 540, 4) || get(frame, 4080, 8) || get(frame, 4088, 8)) return false;
     Message message;
     message.kind = static_cast<Kind>(get(frame, 8, 4));
     message.flags = static_cast<std::uint32_t>(get(frame, 12, 4));
@@ -157,8 +174,15 @@ inline bool decode(const Frame& frame, Message& output)
     message.surface = get(frame, 56, 8); message.frames = get(frame, 64, 8); message.maintenance = get(frame, 72, 8);
     message.pid = static_cast<std::uint32_t>(get(frame, 80, 4));
     message.width = static_cast<std::uint32_t>(get(frame, 84, 4)); message.height = static_cast<std::uint32_t>(get(frame, 88, 4));
+    message.event = get(frame, 512, 8); message.cursor = get(frame, 520, 8);
+    message.topic = static_cast<Topic>(get(frame, 528, 4));
+    message.unread = static_cast<std::uint32_t>(get(frame, 532, 4));
+    message.eventType = static_cast<EventType>(get(frame, 536, 4));
     if (!getText(frame, 96, 40, message.account) || !getText(frame, 136, 128, message.grid) ||
-        !getText(frame, 264, 128, message.name) || !getText(frame, 392, 120, message.detail) || !valid(message)) return false;
+        !getText(frame, 264, 128, message.name) || !getText(frame, 392, 120, message.detail) ||
+        !getText(frame, 544, 40, message.conversation) || !getText(frame, 584, 128, message.sender) ||
+        !getText(frame, 712, 256, message.title) || !getText(frame, 968, 3072, message.text, true) ||
+        !getText(frame, 4040, 40, message.recipient) || !valid(message)) return false;
     output = std::move(message);
     return true;
 }

@@ -28,7 +28,7 @@ int main()
     auto corrupt = frame;
     corrupt[4] = 99; assert(!decode(corrupt, output));
     corrupt = frame; put(corrupt, 4, Version - 1, 4); assert(!decode(corrupt, output));
-    corrupt = frame; corrupt[12] = 128; assert(!decode(corrupt, output));
+    corrupt = frame; corrupt[15] = 128; assert(!decode(corrupt, output));
     corrupt = frame; corrupt[8] = 255; assert(!decode(corrupt, output));
     corrupt = frame; corrupt[92] = 1; assert(!decode(corrupt, output));
     corrupt = frame; std::fill(corrupt.begin() + 264, corrupt.begin() + 392, 'a'); assert(!decode(corrupt, output));
@@ -42,6 +42,16 @@ int main()
     invalid = original; invalid.worker.fill(0); assert(!encode(invalid, frame));
     invalid = original; invalid.sequence = 0; assert(!encode(invalid, frame));
     invalid = original; invalid.account = "not-an-account"; assert(!encode(invalid, frame));
+    auto chat = original; chat.kind = Kind::SendChat; chat.conversation = original.account;
+    chat.topic = Topic::Private; chat.text = "hello\nUnicode \xc3\xa9";
+    assert(encode(chat, frame) && decode(frame, output) && output.text == chat.text && output.conversation == chat.conversation);
+    chat.text.assign(3071, 'x'); assert(encode(chat, frame));
+    chat.text.push_back('x'); assert(!encode(chat, frame));
+    chat.text = "bad\x01text"; assert(!encode(chat, frame));
+    chat.text = "hello"; chat.topic = static_cast<Topic>(5); assert(!encode(chat, frame));
+    assert(encode(original, frame));
+    corrupt = frame; corrupt[4088] = 1; assert(!decode(corrupt, output));
+    assert(decode(frame, output));
     auto focused = original; focused.flags = ClientFocused | Embedded;
     assert(encode(focused, frame) && decode(frame, output) && output.flags == focused.flags);
     auto focus_request = original; focus_request.kind = Kind::Focus; focus_request.flags = 0;
