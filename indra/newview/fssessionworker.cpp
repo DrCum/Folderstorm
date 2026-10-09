@@ -9,9 +9,19 @@
 
 #if LL_WINDOWS
 #include "fssessionpipe.h"
+#include "fssessionchatmodel.h"
 #include "fseventapibridge.h"
 #include "llagent.h"
 #include "llagentdata.h"
+#include "llagentui.h"
+#include "llchat.h"
+#include "llimview.h"
+#include "llnotifications.h"
+#include "llspeakers.h"
+#include "fsnearbychathub.h"
+#include "fsdata.h"
+#include "rlvactions.h"
+#include "rlvhandler.h"
 #include "llappviewer.h"
 #include "llfocusmgr.h"
 #include "llkeyboard.h"
@@ -46,6 +56,9 @@ struct Worker
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false;
+    bool permitVoice = false, muteBackground = true, chatBlocked = false;
+    EventBuffer events;
+    boost::signals2::scoped_connection chatConnection, notificationConnection;
     Message pendingPromotion;
     HWND window = nullptr, parent = nullptr;
     LONG_PTR style = 0, exStyle = 0;
@@ -58,6 +71,139 @@ struct Worker
 
     bool ready() const { return LLStartUp::getStartupState() == STATE_STARTED && !gDisconnected; }
     bool embedded() const { return parent != nullptr; }
+    bool sharingAllowed() const
+    {
+        // Native history can contain pre-restriction names/locations. Never
+        // expose that raw cache in the cross-account shell while masked.
+        return !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES) && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC);
+    }
+    bool voiceAllowed() const { return permitVoice && ready() && inputGranted && mode == Mode::Active && !promoting; }
+    void applyVoice()
+    {
+        if (!LLVoiceClient::instanceExists()) return;
+        if (!voiceAllowed())
+        {
+            LLVoiceClient::instance().tuningStop();
+            LLVoiceClient::instance().setUserPTTState(false);
+            LLVoiceClient::instance().setMuteMic(true);
+        }
+        LLVoiceClient::setVoiceEnabled(LLVoiceClient::instance().voiceEnabled(true));
+    }
+    static Topic topicFor(const LLIMModel::LLIMSession& session)
+    {
+        return session.isGroupSessionType() ? Topic::Group : session.isAdHocSessionType() ? Topic::Conference : Topic::Private;
+    }
+    void connectChat()
+    {
+        if (!chatConnection.connected())
+            chatConnection = LLIMModel::instance().addNewMsgCallback([this](const LLSD& data)
+            {
+                if (detached || !ready() || !sharingAllowed()) return;
+                auto* session = LLIMModel::instance().findIMSession(data["session_id"].asUUID());
+                const LLUUID sender = data["from_id"].asUUID();
+                if (!session || (!sender.isNull() && sender != gAgentID && !RlvActions::canReceiveIM(sender))) return;
+                Message message; message.eventType = EventType::Chat; message.topic = topicFor(*session);
+                message.conversation = session->mSessionID.asString(); message.title = session->mName;
+                message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
+                message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
+                events.push(std::move(message));
+            });
+        if (!notificationConnection.connected())
+            if (auto channel = LLNotifications::instance().getChannel("Visible"))
+                notificationConnection = channel->connectChanged([this](const LLSD& data)
+                {
+                    if (!detached && ready() && data["sigtype"].asString() == "add")
+                    {
+                        // Source-bound attention only. All offer/payment/permission
+                        // responses still require their native owning viewer.
+                        Message message; message.eventType = EventType::Notice; message.topic = Topic::Notice;
+                        message.conversation = "00000000-0000-0000-0000-000000000000"; message.title = "Viewer notifications";
+                        message.text = "Review this notification in this character's viewer."; message.unread = 1;
+                        events.push(std::move(message));
+                    }
+                    return false;
+                });
+    }
+    bool imAllowed(const LLIMModel::LLIMSession& session) const
+    {
+        if (session.isP2PSessionType()) return RlvActions::canSendIM(session.mOtherParticipantID);
+        if (session.isGroupSessionType()) return RlvActions::canSendIM(session.mSessionID);
+        if (!session.isAdHocSessionType() || !session.mSpeakers) return false;
+        LLSpeakerMgr::speaker_list_t speakers; session.mSpeakers->getSpeakerList(&speakers, true);
+        for (const auto& speaker : speakers)
+            if (speaker->mID != gAgentID && !RlvActions::canSendIM(speaker->mID)) return false;
+        return true;
+    }
+    void chatCommand(const Message& request)
+    {
+        if (!ready() || request.account != gAgentID.asString() || request.grid != loginGrid)
+        { reply(request, "The sending character is unavailable or changed login."); return; }
+        if (!sharingAllowed()) { reply(request, "Shared chat is unavailable while names or locations are restricted."); return; }
+        Message payload;
+        if (request.kind == Kind::Events)
+        {
+            payload = events.after(request.cursor);
+            if (!payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
+            { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; }
+            auto response = status(request);
+            response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
+            response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
+            response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
+            if (!pipe.send(response)) { detach(); pipe.close(); }
+            return;
+        }
+        if (request.kind == Kind::Conversations)
+        {
+            if (request.cursor < ChatView::MaxConversations - 1)
+            {
+                auto& sessions = LLIMModel::instance().mId2SessionMap;
+                auto it = sessions.begin();
+                const auto offset = (std::min)(request.cursor, static_cast<std::uint64_t>(sessions.size()));
+                std::advance(it, static_cast<std::ptrdiff_t>(offset));
+                if (it != sessions.end())
+                {
+                    const auto& session = *it->second;
+                    payload.eventType = EventType::Conversation; payload.topic = topicFor(session);
+                    payload.conversation = session.mSessionID.asString(); payload.title = boundedText(session.mName, 255);
+                    payload.unread = static_cast<std::uint32_t>((std::max)(0, session.mNumUnread));
+                }
+            }
+            auto response = status(request); response.eventType = payload.eventType; response.topic = payload.topic;
+            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread;
+            if (!pipe.send(response)) { detach(); pipe.close(); }
+            return;
+        }
+        if (request.kind == Kind::MarkRead && request.topic == Topic::Notice)
+        { reply(request); return; } // Host badge only; never accept a native offer.
+        auto* session = request.conversation.empty() ? nullptr : LLIMModel::instance().findIMSession(LLUUID(request.conversation));
+        if (!request.conversation.empty() && (!session || topicFor(*session) != request.topic))
+        { reply(request, "This conversation is no longer available. Open it in the character's viewer."); return; }
+        if (request.kind == Kind::MarkRead)
+        {
+            if (session) LLIMModel::instance().sendNoUnreadMessages(session->mSessionID);
+            reply(request); return;
+        }
+        if (session && (!session->mSessionInitialized || !session->mTextIMPossible || !imAllowed(*session)))
+        { reply(request, "Conversation is not ready or sending is blocked by restrictions."); return; }
+        if (request.kind == Kind::Typing)
+        {
+            if (session && session->mType == IM_NOTHING_SPECIAL &&
+                !(FSData::instance().isSupport(session->mOtherParticipantID) && FSData::instance().isAgentFlag(gAgentID, FSData::NO_SUPPORT)))
+                LLIMModel::sendTypingState(session->mSessionID, session->mOtherParticipantID, request.unread != 0);
+            reply(request); return;
+        }
+        if (request.text.empty() || request.text.size() > 1023)
+        { reply(request, "Use a message of 1 to 1023 UTF-8 bytes."); return; }
+        if (!session)
+        {
+            if (request.topic != Topic::Nearby) { reply(request, "Select a native conversation first."); return; }
+            const auto text = utf8str_to_wstring(request.text);
+            FSNearbyChat::sendChatFromViewer(text, text, CHAT_TYPE_NORMAL, false, 0);
+        }
+        else LLIMModel::sendMessage(request.text, session->mSessionID, session->mOtherParticipantID, session->mType);
+        // Accepted by native transport, not proof of remote delivery. Never retry.
+        reply(request);
+    }
     void releaseInput()
     {
         inputGranted = false;
@@ -71,11 +217,13 @@ struct Worker
             LLVoiceClient::instance().setUserPTTState(false);
             LLVoiceClient::instance().setMuteMic(true);
         }
+        applyVoice();
     }
     bool grantInput()
     {
         if (!window || !SetPropW(window, InputLeaseProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(host)))) return false;
         inputGranted = true;
+        applyVoice();
         return true;
     }
     bool unembed()
@@ -145,6 +293,7 @@ struct Worker
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         promoting = false; mode = Mode::Active;
         detached = true;
+        chatConnection.disconnect(); notificationConnection.disconnect(); events.reset();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
         // Restore only our temporary overrides. Saved values were never changed.
         for (const auto& control : controls)
@@ -183,6 +332,8 @@ struct Worker
         if (promoting) reply.flags |= Promoting;
         if (inputGranted && gFocusMgr.getAppHasFocus()) reply.flags |= ClientFocused;
         if (economyTrimmed) reply.flags |= EconomyTrimmed;
+        if (voiceAllowed()) reply.flags |= VoiceOwner;
+        if (!sharingAllowed()) reply.flags |= ChatRestricted;
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
         return reply;
     }
@@ -243,6 +394,15 @@ struct Worker
             reply(request, embed(request.surface) ? "" : "Window hosting is unavailable; use the separate viewer window."); break;
         case Kind::Unembed: reply(request, unembed() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Focus: focusHostedClient(); reply(request); break;
+        case Kind::Events:
+        case Kind::SendChat:
+        case Kind::MarkRead:
+        case Kind::Conversations:
+        case Kind::Typing: chatCommand(request); break;
+        case Kind::AudioPolicy:
+            if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
+            permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
+            applyVoice(); reply(request); break;
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
@@ -326,6 +486,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
+        value.events.reset();
         value.promoting = false; value.mode = Mode::Warm; value.readyApplied = false;
         if (wasPromoting) value.reply(value.pendingPromotion, "Session changed before the character was ready.");
     }
@@ -358,6 +519,12 @@ void FSSessionWorker::tick()
         if (value.mode != Mode::Active && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
     }
     value.fitSurface();
+    if (value.ready())
+    {
+        value.connectChat();
+        const bool blocked = !value.sharingAllowed();
+        if (blocked != value.chatBlocked) { value.events.reset(); value.chatBlocked = blocked; }
+    }
     Message request;
     // A pending promotion owns its response slot until first frame/timeout.
     if (!value.promoting && !value.pipe.writing() && value.pipe.receive(request)) value.command(request);
@@ -397,6 +564,20 @@ void FSSessionWorker::prepareDisplay()
 bool FSSessionWorker::inputAllowed()
 {
     return !managed() || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting);
+}
+bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed(); }
+bool FSSessionWorker::backgroundAudioMuted()
+{
+    return managed() && worker->readyApplied && worker->mode != Mode::Active && worker->muteBackground;
+}
+void FSSessionWorker::nearbyMessage(const LLChat& chat)
+{
+    if (!managed() || !worker->ready() || !worker->sharingAllowed() || chat.mMuted ||
+        chat.mChatType == CHAT_TYPE_IM || chat.mChatType == CHAT_TYPE_IM_GROUP ||
+        chat.mChatStyle == CHAT_STYLE_HISTORY || chat.mChatStyle == CHAT_STYLE_SERVER_HISTORY) return;
+    Message message; message.eventType = EventType::Chat; message.topic = Topic::Nearby;
+    message.title = "Nearby chat"; message.sender = chat.mFromName; message.text = chat.mText;
+    worker->events.push(std::move(message));
 }
 bool FSSessionWorker::keyAllowed(unsigned int key)
 {
@@ -467,6 +648,9 @@ void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
 void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::inputAllowed() { return true; }
+bool FSSessionWorker::voiceAllowed() { return true; }
+bool FSSessionWorker::backgroundAudioMuted() { return false; }
+void FSSessionWorker::nearbyMessage(const LLChat&) {}
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
 void FSSessionWorker::keyReleased(unsigned int) {}
 bool FSSessionWorker::textAllowed() { return true; }

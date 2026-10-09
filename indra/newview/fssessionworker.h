@@ -19,6 +19,9 @@ public:
     static bool renderAllowed();
     static void prepareDisplay(); // Current GL context only; reversible economy buffers.
     static bool inputAllowed();
+    static bool voiceAllowed();
+    static bool backgroundAudioMuted();
+    static void nearbyMessage(const class LLChat& message);
     static bool keyAllowed(unsigned int key);
     static void keyReleased(unsigned int key);
     static bool textAllowed();

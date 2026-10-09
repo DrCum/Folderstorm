@@ -17,6 +17,7 @@
 #include <shlobj.h>
 #include <psapi.h>
 #include "fssessionpipe.h"
+#include "fssessionchatmodel.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -34,6 +35,8 @@ namespace
 using namespace fs_session;
 constexpr int Launch1 = 101, Launch2 = 102, Switch1 = 103, Switch2 = 104, HostSurface = 105, DetachAll = 106;
 constexpr int Standby1 = 107, Standby2 = 108;
+constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
+constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr UINT_PTR Timer = 1;
 struct Handle
 {
@@ -133,6 +136,11 @@ public:
 };
 struct Slot
 {
+    ChatView chat;
+    Message pendingSend, pendingTyping;
+    bool hasPendingSend = false, hasPendingTyping = false;
+    std::uint32_t audioPolicy = 2, catalogIndex = 0;
+    ULONGLONG eventsAt = 0, catalogAt = 0, typingAt = 0;
     Pipe pipe;
     Handle process;
     WorkerId id{};
@@ -156,6 +164,12 @@ struct Host
     HWND window = nullptr, viewport = nullptr, status[2]{}, notice = nullptr, embedControl = nullptr;
     HWND launchButton[2]{}, switchButton[2]{};
     HWND standbyControl[2]{};
+    HWND chatAccount = nullptr, chatConversation = nullptr, chatHistory = nullptr, chatCompose = nullptr;
+    HWND chatSend = nullptr, chatReview = nullptr, chatRead = nullptr, voiceControl = nullptr, muteControl = nullptr, chatLabel = nullptr;
+    int chatIndex = 0;
+    std::string conversation;
+    std::vector<std::string> conversationIds;
+    bool updatingChat = false, voice = false, muteBackground = true;
     Mode standby[2]{Mode::Warm, Mode::Warm};
     std::unique_ptr<Slot> slots[2];
     Handoff handoff;
@@ -164,17 +178,149 @@ struct Host
     std::filesystem::path viewer, profiles;
 
     void message(const std::wstring& text) { SetWindowTextW(notice, text.c_str()); }
-    bool send(int index, Kind kind, Mode mode = Mode::Warm, std::uint64_t surface = 0)
+    bool send(int index, Kind kind, Mode mode = Mode::Warm, std::uint64_t surface = 0, const Message* bound = nullptr)
     {
         auto& slot = *slots[index];
         if (slot.waiting || !slot.pipe.alive() || slot.pipe.writing()) return false;
         Message request;
+        if (bound)
+        {
+            if (!slot.chat.identity.owns(*bound) || !slot.chat.identity.owns(slot.snapshot) || slot.snapshot.state != State::Ready)
+            { message(L"The selected sending session changed. Text was not sent."); return false; }
+            request = *bound;
+        }
         request.worker = slot.id; request.kind = kind; request.mode = mode; request.surface = surface;
-        request.generation = slot.snapshot.generation; request.sequence = ++slot.nextSequence;
+        if (!bound) request.generation = slot.snapshot.generation;
+        request.sequence = ++slot.nextSequence;
+        if (kind == Kind::Events || kind == Kind::Conversations)
+        {
+            request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
+            request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
+        }
+        if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
         if (kind == Kind::PermitLogin || kind == Kind::DenyLogin) { request.grid = slot.snapshot.grid; request.name = slot.snapshot.name; }
         if (!slot.pipe.send(request)) return false;
         slot.request = request; slot.waiting = true; slot.sentAt = GetTickCount64();
         return true;
+    }
+    std::string editText() const
+    {
+        const int length = (std::min)(1023, GetWindowTextLengthW(chatCompose));
+        std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
+        GetWindowTextW(chatCompose, value.data(), length + 1);
+        value.resize(static_cast<std::size_t>(length));
+        const int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, nullptr, 0, nullptr, nullptr);
+        if (count <= 0) return {};
+        std::string result(static_cast<std::size_t>(count), '\0');
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, result.data(), count, nullptr, nullptr);
+        return result;
+    }
+    Message boundChat(Kind kind) const
+    {
+        Message request;
+        if (!slots[chatIndex]) return request;
+        const auto& view = slots[chatIndex]->chat;
+        request.worker = view.identity.worker; request.generation = view.identity.generation;
+        request.account = view.identity.account; request.grid = view.identity.grid; request.conversation = conversation;
+        const auto found = view.conversations.find(conversation);
+        if (found != view.conversations.end()) request.topic = found->second.topic;
+        request.kind = kind;
+        return request;
+    }
+    void saveDraft(bool stopTyping)
+    {
+        if (!slots[chatIndex]) return;
+        auto& slot = *slots[chatIndex];
+        auto found = slot.chat.conversations.find(conversation);
+        if (found != slot.chat.conversations.end()) found->second.draft = editText();
+        if (stopTyping && !conversation.empty())
+        {
+            slot.pendingTyping = boundChat(Kind::Typing); slot.pendingTyping.unread = 0;
+            slot.hasPendingTyping = true;
+        }
+    }
+    void refreshChat(bool loadDraft = false)
+    {
+        if (!chatAccount) return;
+        updatingChat = true;
+        for (int i = 0; i < 2; ++i)
+        {
+            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : i == 0 ? L"Character 1" : L"Character 2";
+            if (SendMessageW(chatAccount, CB_GETCOUNT, 0, 0) > i) SendMessageW(chatAccount, CB_DELETESTRING, static_cast<WPARAM>(i), 0);
+            SendMessageW(chatAccount, CB_INSERTSTRING, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(name.c_str()));
+        }
+        SendMessageW(chatAccount, CB_SETCURSEL, static_cast<WPARAM>(chatIndex), 0);
+        auto* slot = slots[chatIndex].get();
+        const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
+        const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
+        std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"not logged in");
+        if (!ready) label += L" · unavailable";
+        else if (restricted) label += L" · shared chat restricted; use native viewer";
+        else if (slot->chat.gap) label += L" · history gap; native history has more detail";
+        SetWindowTextW(chatLabel, label.c_str());
+        if (loadDraft)
+        {
+            SendMessageW(chatConversation, CB_RESETCONTENT, 0, 0); conversationIds.clear();
+            if (slot) for (const auto& entry : slot->chat.conversations)
+            {
+                conversationIds.push_back(entry.first);
+                std::wstring name = wide(entry.second.title);
+                if (entry.second.unread) name += L" · " + std::to_wstring(entry.second.unread) + L" unread";
+                SendMessageW(chatConversation, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
+            }
+            const auto found = std::find(conversationIds.begin(), conversationIds.end(), conversation);
+            const auto selection = found == conversationIds.end() ? 0 : static_cast<int>(found - conversationIds.begin());
+            SendMessageW(chatConversation, CB_SETCURSEL, static_cast<WPARAM>(selection), 0);
+            if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
+            const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
+            const std::string wanted = slot && draft != slot->chat.conversations.end() ? draft->second.draft : "";
+            if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
+        }
+        std::wstring history;
+        if (slot && !restricted) for (const auto& line : slot->chat.lines)
+            if (line.conversation == conversation)
+            { history += wide(line.sender) + (line.sender.empty() ? L"" : L": ") + wide(line.text) + L"\r\n"; }
+        std::vector<wchar_t> existing(static_cast<std::size_t>(GetWindowTextLengthW(chatHistory)) + 1, L'\0');
+        GetWindowTextW(chatHistory, existing.data(), static_cast<int>(existing.size()));
+        if (history != existing.data())
+        {
+            SetWindowTextW(chatHistory, history.c_str());
+            SendMessageW(chatHistory, EM_SETSEL, static_cast<WPARAM>(-1), static_cast<LPARAM>(-1));
+            SendMessageW(chatHistory, EM_SCROLLCARET, 0, 0);
+        }
+        const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
+        const auto selected = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
+        const bool isNotice = slot && selected != slot->chat.conversations.end() && selected->second.topic == Topic::Notice;
+        EnableWindow(chatCompose, ready && !restricted && !sending && !isNotice);
+        EnableWindow(chatSend, ready && !restricted && !sending && !isNotice);
+        EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted);
+        updatingChat = false;
+    }
+    void composeChanged()
+    {
+        if (updatingChat || !slots[chatIndex]) return;
+        saveDraft(false);
+        if (!conversation.empty())
+        {
+            auto& slot = *slots[chatIndex];
+            // Do not replace a pending stop with typing in another conversation.
+            if (!slot.hasPendingTyping || slot.pendingTyping.unread != 0 || slot.pendingTyping.conversation == conversation)
+            {
+                slot.pendingTyping = boundChat(Kind::Typing); slot.pendingTyping.unread = editText().empty() ? 0u : 1u;
+                slot.hasPendingTyping = true;
+            }
+        }
+    }
+    void sendChat()
+    {
+        if (!slots[chatIndex]) return;
+        auto& slot = *slots[chatIndex];
+        if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat)) return;
+        Message request = boundChat(Kind::SendChat); request.text = editText();
+        if (request.text.empty() || request.text.size() > 1023 || !validUtf8(request.text, true))
+        { message(L"Use a message of 1 to 1023 UTF-8 bytes."); return; }
+        slot.pendingSend = std::move(request); slot.hasPendingSend = true;
+        message(L"Sending through the selected character's native chat…"); refreshChat();
     }
     void launch(int index)
     {
@@ -258,7 +404,50 @@ struct Host
         { slot.pipe.close(); message(L"Worker identity or reply sequence changed; returning it to a separate viewer."); return; }
         const auto request = slot.request;
         slot.waiting = false; slot.pollAt = GetTickCount64();
+        const bool changedSession = !slot.chat.identity.owns(response);
+        slot.chat.bind(response);
+        if (changedSession)
+        {
+            slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            if (chatIndex == index) { conversation.clear(); refreshChat(true); }
+        }
         slot.snapshot = response;
+        if (response.flags & ChatRestricted)
+        {
+            slot.chat.lines.clear(); slot.chat.conversations.clear(); slot.chat.cursor = 0;
+            slot.chat.conversations.emplace("", Conversation{"", "Nearby chat", "", Topic::Nearby, 0});
+            if (chatIndex == index) { conversation.clear(); refreshChat(true); }
+        }
+        if (!(response.flags & Error) && (request.kind == Kind::Events || request.kind == Kind::Conversations))
+        {
+            slot.chat.accept(response);
+            if (request.kind == Kind::Events) slot.eventsAt = GetTickCount64();
+            else if (response.eventType == EventType::None) { slot.catalogIndex = 0; slot.catalogAt = GetTickCount64(); }
+            else ++slot.catalogIndex;
+            if (index == chatIndex)
+            {
+                saveDraft(false);
+                const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice;
+                refreshChat(catalogChanged);
+            }
+        }
+        if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
+        if (request.kind == Kind::MarkRead && !(response.flags & Error))
+        {
+            const auto found = slot.chat.conversations.find(request.conversation);
+            if (found != slot.chat.conversations.end()) found->second.unread = 0;
+        }
+        if (request.kind == Kind::SendChat)
+        {
+            if (response.flags & Error) message(L"Send as " + wide(request.name.empty() ? slot.snapshot.name : request.name) + L": " + wide(response.detail));
+            else
+            {
+                const auto found = slot.chat.conversations.find(request.conversation);
+                if (found != slot.chat.conversations.end() && found->second.draft == request.text) found->second.draft.clear();
+                if (index == chatIndex && request.conversation == conversation) { updatingChat = true; SetWindowTextW(chatCompose, L""); updatingChat = false; }
+                message(L"Message handed to the selected character's native transport; remote delivery is not confirmed.");
+            }
+        }
         if (handoff.step() == Handoff::Step::Idle && active == index &&
             (response.state != State::Ready || response.mode != Mode::Active)) active = -1;
         if (slot.sampleAt && slot.pollAt > slot.sampleAt && response.generation == slot.sample.generation)
@@ -323,6 +512,9 @@ struct Host
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
         if (slot.snapshot.flags & EconomyTrimmed) text << L" · render targets released";
+        if (slot.snapshot.flags & VoiceOwner) text << L" · voice owner";
+        std::uint64_t unread = 0; for (const auto& entry : slot.chat.conversations) unread += entry.second.unread;
+        if (unread) text << L" · " << unread << L" unread";
         if (slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
             text << ((slot.snapshot.flags & ClientFocused) ? L" · keyboard focused" : L" · keyboard unfocused");
         PROCESS_MEMORY_COUNTERS memory{}; memory.cb = sizeof(memory);
@@ -341,6 +533,9 @@ struct Host
             if (slot.pipe.receive(response)) reply(index, response);
             if (!slot.running() || !slot.pipe.alive())
             {
+                if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat))
+                    message(L"Chat connection lost: delivery is uncertain. Text was not retried; check the owning character's native chat before sending again.");
+                slot.hasPendingSend = slot.hasPendingTyping = false;
                 slot.waiting = false;
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"Character connection lost. Other connected characters can still be selected.");
                 if (active == index) active = -1;
@@ -348,6 +543,8 @@ struct Host
             if (slot.waiting && GetTickCount64() - slot.sentAt > (slot.snapshot.state == State::Ready ? 12000ULL : 60000ULL))
             {
                 slot.pipe.close(); slot.waiting = false; slot.detached = true;
+                if (slot.request.kind == Kind::SendChat)
+                    message(L"Chat send timed out: delivery is uncertain and will not be retried. Check the native conversation.");
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"The viewer did not respond; returning it to an ordinary window.");
                 else message(L"The viewer did not respond; its local watchdog will return it to an ordinary window.");
             }
@@ -382,18 +579,37 @@ struct Host
                 }
                 else if (index == active && embedding && focusRequested &&
                     slot.snapshot.state == State::Ready && (slot.snapshot.flags & Embedded) &&
-                    GetForegroundWindow() == window && !IsIconic(window))
+                    GetForegroundWindow() == window && !IsIconic(window) &&
+                    (GetFocus() == window || GetFocus() == viewport || GetFocus() == nullptr))
                 {
                     if (send(index, Kind::Focus)) focusRequested = false;
                 }
                 else if (!busy() && index != active && slot.snapshot.state == State::Ready && slot.snapshot.mode != standby[index])
                     send(index, Kind::SetMode, standby[index]);
+                else if (slot.snapshot.state == State::Ready && slot.audioPolicy != ((voice ? 1u : 0u) | (muteBackground ? 2u : 0u)))
+                    send(index, Kind::AudioPolicy);
+                else if (slot.hasPendingSend)
+                {
+                    const auto pending = slot.pendingSend; slot.hasPendingSend = false;
+                    if (!send(index, Kind::SendChat, Mode::Warm, 0, &pending))
+                        message(L"Send was not acknowledged. Text remains in its original draft and was not retried.");
+                }
+                else if (slot.hasPendingTyping && (slot.pendingTyping.unread == 0 || GetTickCount64() - slot.typingAt >= 1000))
+                {
+                    const auto pending = slot.pendingTyping; slot.hasPendingTyping = false;
+                    if (send(index, Kind::Typing, Mode::Warm, 0, &pending)) slot.typingAt = GetTickCount64();
+                }
+                else if (slot.snapshot.state == State::Ready && !(slot.snapshot.flags & ChatRestricted) && GetTickCount64() - slot.eventsAt >= 100)
+                    send(index, Kind::Events);
+                else if (slot.snapshot.state == State::Ready && !(slot.snapshot.flags & ChatRestricted) && GetTickCount64() - slot.catalogAt >= 20000)
+                    send(index, Kind::Conversations);
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
             EnableWindow(launchButton[index], !slot.running() && !busy());
             EnableWindow(switchButton[index], slot.running() && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && !busy());
         }
+        refreshChat();
         if (!busy() && active < 0 && selectFirst)
             for (int i = 0; i < 2; ++i) if (slots[i] && slots[i]->pipe.alive() && !slots[i]->detached && slots[i]->snapshot.state == State::Ready) { switchTo(i); selectFirst = false; break; }
         if (detaching)
@@ -427,7 +643,18 @@ struct Host
             MoveWindow(status[i], 10, 48 + i * 24, width - 215, 20, TRUE);
             MoveWindow(standbyControl[i], width - 200, 46 + i * 24, 190, 130, TRUE);
         }
-        MoveWindow(viewport, 0, 99, width, (std::max)(1L, rect.bottom - 126), TRUE);
+        const int chatTop = static_cast<int>((std::max)(220L, rect.bottom - 240));
+        MoveWindow(viewport, 0, 99, width, chatTop - 105, TRUE);
+        MoveWindow(chatAccount, 10, chatTop, 180, 150, TRUE);
+        MoveWindow(chatConversation, 200, chatTop, width - 460, 200, TRUE);
+        MoveWindow(chatReview, width - 250, chatTop, 140, 24, TRUE);
+        MoveWindow(chatRead, width - 100, chatTop, 90, 24, TRUE);
+        MoveWindow(chatLabel, 10, chatTop + 29, width - 20, 20, TRUE);
+        MoveWindow(chatHistory, 10, chatTop + 52, width - 20, 88, TRUE);
+        MoveWindow(chatCompose, 10, chatTop + 145, width - 105, 35, TRUE);
+        MoveWindow(chatSend, width - 85, chatTop + 145, 75, 35, TRUE);
+        MoveWindow(voiceControl, 10, chatTop + 185, 255, 24, TRUE);
+        MoveWindow(muteControl, 280, chatTop + 185, 280, 24, TRUE);
         MoveWindow(notice, 10, (std::max)(102L, rect.bottom - 23), width - 20, 20, TRUE);
     }
 };
@@ -463,6 +690,19 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         }
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | WS_CLIPCHILDREN, 0, 99, 880, 490);
         host->notice = control(window, L"STATIC", L"Prototype: warm standby, separate profiles. Voice and MCP are off.", SS_LEFT, 10, 600, 850, 20);
+        host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
+        host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
+        host->chatHistory = control(window, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 10, 452, 850, 88);
+        host->chatCompose = control(window, L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_TABSTOP, 10, 545, 800, 35, ChatCompose);
+        SendMessageW(host->chatCompose, EM_SETLIMITTEXT, 1023, 0);
+        host->chatSend = control(window, L"BUTTON", L"Send", BS_PUSHBUTTON | WS_TABSTOP, 820, 545, 75, 35, ChatSend);
+        host->chatReview = control(window, L"BUTTON", L"Review in viewer", BS_PUSHBUTTON | WS_TABSTOP, 620, 400, 140, 24, ChatReview);
+        host->chatRead = control(window, L"BUTTON", L"Mark read", BS_PUSHBUTTON | WS_TABSTOP, 770, 400, 90, 24, ChatRead);
+        host->chatLabel = control(window, L"STATIC", L"Send as: not logged in", SS_LEFT, 10, 429, 850, 20);
+        host->voiceControl = control(window, L"BUTTON", L"Voice follows active character", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 585, 255, 24, VoicePolicy);
+        host->muteControl = control(window, L"BUTTON", L"Mute background world/UI/media sound", BS_AUTOCHECKBOX | WS_TABSTOP, 280, 585, 280, 24, BackgroundMute);
+        SendMessageW(host->muteControl, BM_SETCHECK, BST_CHECKED, 0);
+        host->refreshChat(true);
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
@@ -474,7 +714,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         return DefWindowProcW(window, message, wparam, lparam);
     case WM_SIZE: if (host->viewport) host->layout(); return 0;
     case WM_GETMINMAXINFO:
-        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {790, 400}; return 0;
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {790, 540}; return 0;
     case WM_COMMAND:
         switch (LOWORD(wparam))
         {
@@ -482,6 +722,34 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case Launch2: host->launch(1); break;
         case Switch1: host->switchTo(0); break;
         case Switch2: host->switchTo(1); break;
+        case ChatAccount:
+            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            {
+                host->saveDraft(true); host->chatIndex = SendMessageW(host->chatAccount, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0;
+                host->conversation.clear(); host->refreshChat(true);
+            }
+            break;
+        case ChatConversation:
+            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            {
+                const auto selected = SendMessageW(host->chatConversation, CB_GETCURSEL, 0, 0);
+                host->saveDraft(true);
+                if (selected >= 0 && static_cast<std::size_t>(selected) < host->conversationIds.size()) host->conversation = host->conversationIds[static_cast<std::size_t>(selected)];
+                host->refreshChat(true);
+            }
+            break;
+        case ChatCompose: if (HIWORD(wparam) == EN_CHANGE) host->composeChanged(); break;
+        case ChatSend: host->saveDraft(true); host->sendChat(); break;
+        case ChatReview: host->switchTo(host->chatIndex); break;
+        case ChatRead:
+            if (host->slots[host->chatIndex])
+            {
+                const auto request = host->boundChat(Kind::MarkRead);
+                if (!host->send(host->chatIndex, Kind::MarkRead, Mode::Warm, 0, &request)) host->message(L"Viewer is busy; try Mark read again.");
+            }
+            break;
+        case VoicePolicy: host->voice = SendMessageW(host->voiceControl, BM_GETCHECK, 0, 0) == BST_CHECKED; break;
+        case BackgroundMute: host->muteBackground = SendMessageW(host->muteControl, BM_GETCHECK, 0, 0) == BST_CHECKED; break;
         case Standby1:
         case Standby2:
             if (HIWORD(wparam) == CBN_SELCHANGE)
@@ -545,7 +813,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if (!window) return 1;
     ShowWindow(window, show); UpdateWindow(window);
     MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0) { TranslateMessage(&message); DispatchMessageW(&message); }
+    while (GetMessageW(&message, nullptr, 0, 0) > 0)
+        if (!IsDialogMessageW(window, &message)) { TranslateMessage(&message); DispatchMessageW(&message); }
     host = nullptr;
     return static_cast<int>(message.wParam);
 }

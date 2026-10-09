@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 
 #include "llaudioengine.h"
 #include "llagent.h"
@@ -458,7 +459,7 @@ void audio_update_volume(bool force_update)
     static LLCachedControl<F32> master_volume(gSavedSettings, "AudioLevelMaster");
     static LLCachedControl<bool> mute_audio_setting(gSavedSettings, "MuteAudio");
     static LLCachedControl<bool> mute_when_minimized(gSavedSettings, "MuteWhenMinimized");
-    bool mute_audio = mute_audio_setting();
+    bool mute_audio = mute_audio_setting() || FSSessionWorker::backgroundAudioMuted();
 
     if (!gViewerWindow->getActive() && mute_when_minimized())
     {
@@ -546,7 +547,7 @@ void audio_update_volume(bool force_update)
         voice_inst->setVoiceVolume(voice_mute() ? 0.f : voice_volume);
         voice_inst->setMicGain(voice_mute() ? 0.f : voice_mic_setting());
 
-        if (!gViewerWindow->getActive() && mute_when_minimized())
+        if (!FSSessionWorker::voiceAllowed() || (!gViewerWindow->getActive() && mute_when_minimized()))
         {
             voice_inst->setMuteMic(true);
         }
