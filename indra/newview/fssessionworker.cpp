@@ -59,6 +59,7 @@ struct Worker
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false;
     bool hostedStyle = false;
+    std::uintptr_t focusLease = 0;
     bool permitVoice = false, muteBackground = true, chatBlocked = false;
     EventBuffer events;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -217,6 +218,7 @@ struct Worker
     {
         inputGranted = false;
         if (window) RemovePropW(window, InputLeaseProperty);
+        if (window) RemovePropW(window, FocusLeaseProperty);
         gViewerInput.releaseHeldInputs();
         gFocusMgr.setMouseCapture(nullptr);
         gAgent.resetControlFlags(); // Preserves Away, Fly and Mouselook.
@@ -231,6 +233,9 @@ struct Worker
     bool grantInput()
     {
         if (!window || !SetPropW(window, InputLeaseProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(host)))) return false;
+        if (++focusLease == 0) ++focusLease;
+        if (!SetPropW(window, FocusLeaseProperty, reinterpret_cast<HANDLE>(focusLease)))
+        { RemovePropW(window, InputLeaseProperty); return false; }
         inputGranted = true;
         applyVoice();
         return true;
@@ -680,6 +685,7 @@ void FSSessionWorker::shutdown()
     {
         worker->inputGranted = false;
         if (worker->window) RemovePropW(worker->window, InputLeaseProperty);
+        if (worker->window) RemovePropW(worker->window, FocusLeaseProperty);
         worker->pipe.close(); worker->detached = true;
     }
     // Keep the inherited profile lease until process/static teardown, after

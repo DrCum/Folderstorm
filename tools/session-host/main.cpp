@@ -233,6 +233,8 @@ struct Host
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
         if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
+        if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
+            AllowSetForegroundWindow(slot.pid);
         if (kind == Kind::PermitLogin || kind == Kind::DenyLogin) { request.grid = slot.snapshot.grid; request.name = slot.snapshot.name; }
         if (!slot.pipe.send(request)) return false;
         slot.request = request; slot.waiting = true; slot.sentAt = GetTickCount64();
