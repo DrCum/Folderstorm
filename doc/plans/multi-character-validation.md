@@ -64,3 +64,16 @@ The controller reports the viewer's actual callback-derived keyboard-focus state
 ## Remaining roadmap
 
 Checkpoint 1 needs native feasibility evidence. Checkpoints 2–6 remain: proven warm/economy resource policies, source-bound shared chat/events and microphone ownership, production one-interface switching, complete workspace/lifecycle integration, and the optional genuinely low-resolution 1 FPS monitor. Keep the hosting mechanism decision and economy performance claims gated on native measurements.
+
+## Checkpoint 2: background policy (follow-up branch)
+
+- [x] Independent Warm/Economy selection for each managed character; active rendering uses ordinary configured quality.
+- [x] Serialized handoff acknowledges the selected standby mode; rollback still prepares the old character as Active.
+- [x] Economy releases disposable screen/shadow targets on the current-context display path, including targets recreated by settings callbacks; rebuild uses the ordinary configured allocator. Scene/texture/session state and required maintenance remain live.
+- [x] Defer hidden-window resize/shadow allocation until rendering resumes; both standby modes retain frequent main-loop servicing.
+- [x] Status identifies experimental Economy and released targets; no measured saving is claimed.
+- [x] A refused standby policy change resets the dropdown rather than endlessly retrying a blocked modal action.
+
+Actual checks: portable protocol tests passed, including Economy wire round-trip, invalid mode rejection, chosen-policy acknowledgment, stale identities and rollback to Active. Source review traced GL-context placement, deferred resize, normal buffer reconstruction and unchanged saved graphics settings. `git diff --check` passed. Protocol version 3 requires matching controller/viewer builds. No native/viewer/build/packaging tests were run.
+
+Windows checkpoint: compare Warm and Economy VRAM in the same scene; switch back repeatedly, check shadows/reflections, resize/change graphics while inactive, test a background teleport and normal detachment. Confirm chat/loop counters continue, graphics choices persist and no black first frame/stuck input appears. Hosted focus remains a pending PR #10 native test. These checks do not stop the authorized next source checkpoint.

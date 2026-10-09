@@ -81,6 +81,19 @@ int main()
     assert(handoff.begin(-1, 1, 0, 9)); handoff.fail(); assert(handoff.step() == Handoff::Step::Idle);
     assert(handoff.begin(0, 1, 7, 9)); handoff.fail(); assert(handoff.step() == Handoff::Step::Idle);
     assert(!handoff.begin(0, 0, 7, 7));
+    assert(!handoff.begin(0, 1, 7, 9, Mode::Active));
+    assert(!handoff.begin(0, 1, 7, 9, static_cast<Mode>(99)));
+    assert(handoff.begin(0, 1, 7, 9, Mode::Economy));
+    reply = original; reply.mode = Mode::Warm;
+    assert(!handoff.accept(0, reply)); // Chosen standby policy must be acknowledged.
+    reply.mode = Mode::Economy; reply.flags = EconomyTrimmed;
+    assert(encode(reply, frame) && decode(frame, output) && output.mode == Mode::Economy);
+    assert(handoff.accept(0, reply));
+    handoff.fail();
+    assert(handoff.step() == Handoff::Step::Rollback && handoff.mode() == Mode::Active);
+    reply.mode = Mode::Active; reply.flags = 0;
+    assert(handoff.accept(0, reply));
+    invalid = original; invalid.mode = static_cast<Mode>(3); assert(!encode(invalid, frame));
 
     auto candidate = original, other = original;
     candidate.account.clear();

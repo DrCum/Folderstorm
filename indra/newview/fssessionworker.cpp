@@ -17,12 +17,14 @@
 #include "llkeyboard.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
+#include "llviewerdisplay.h"
 #include "llviewerinput.h"
 #include "llviewerjoystick.h"
 #include "llviewernetwork.h"
 #include "llviewerwindow.h"
 #include "llvoiceclient.h"
 #include "llwindow.h"
+#include "pipeline.h"
 #include <cstdlib>
 #include <memory>
 #include <map>
@@ -43,6 +45,7 @@ struct Worker
     std::string loginGrid, loginName;
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
+    bool economyTrimmed = false;
     Message pendingPromotion;
     HWND window = nullptr, parent = nullptr;
     LONG_PTR style = 0, exStyle = 0;
@@ -179,6 +182,7 @@ struct Worker
         if (embedded()) reply.flags |= Embedded;
         if (promoting) reply.flags |= Promoting;
         if (inputGranted && gFocusMgr.getAppHasFocus()) reply.flags |= ClientFocused;
+        if (economyTrimmed) reply.flags |= EconomyTrimmed;
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
         return reply;
     }
@@ -204,7 +208,7 @@ struct Worker
             releaseInput();
             const Mode previousMode = mode;
             mode = request.mode;
-            if (mode == Mode::Warm)
+            if (mode != Mode::Active)
             {
                 if (!unembed())
                 {
@@ -351,7 +355,7 @@ void FSSessionWorker::tick()
     {
         value.readyApplied = true;
         value.releaseInput();
-        if (value.mode == Mode::Warm && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
+        if (value.mode != Mode::Active && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
     }
     value.fitSurface();
     Message request;
@@ -366,6 +370,29 @@ void FSSessionWorker::tick()
 bool FSSessionWorker::renderAllowed()
 {
     return !managed() || !worker->readyApplied || worker->mode == Mode::Active;
+}
+void FSSessionWorker::prepareDisplay()
+{
+    if (!worker || !gPipeline.isInit()) return;
+    auto& value = *worker;
+    if (managed() && value.readyApplied && value.mode == Mode::Economy && !value.promoting)
+    {
+        // Only disposable screen/shadow targets. Scene objects, textures,
+        // shader programs, avatar state and live network work remain intact.
+        // Recheck each display: graphics/DPI callbacks may allocate new targets.
+        gPipeline.releaseScreenBuffers();
+        gPipeline.releaseShadowBuffers();
+        gResizeScreenTexture = true;
+        gResizeShadowTexture = true;
+        value.economyTrimmed = true;
+    }
+    else if (value.economyTrimmed)
+    {
+        // The ordinary allocator honors the worker's current graphics choices,
+        // including settings changed in standby. Never save a quality downgrade.
+        gPipeline.resizeScreenTexture();
+        value.economyTrimmed = false;
+    }
 }
 bool FSSessionWorker::inputAllowed()
 {
@@ -390,7 +417,7 @@ void FSSessionWorker::focusHostedClient()
 int FSSessionWorker::backgroundYield(int normal)
 {
     // Standby services the main loop frequently, never at a preview frame rate.
-    return managed() && worker->ready() && worker->mode == Mode::Warm ? (std::max)(1, (std::min)(normal, 40)) : normal;
+    return managed() && worker->ready() && worker->mode != Mode::Active ? (std::max)(1, (std::min)(normal, 40)) : normal;
 }
 void FSSessionWorker::framePresented()
 {
@@ -438,6 +465,7 @@ void FSSessionWorker::configure() {}
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
+void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
 void FSSessionWorker::keyReleased(unsigned int) {}

@@ -4,6 +4,8 @@ This is the first checkpoint of [the multi-character roadmap](../../doc/plans/mu
 
 Normal viewer startup never launches this tool or extra accounts. The Windows viewer target builds `folderstorm-session-host.exe` beside its matching viewer and the Windows manifest copies it into the installation. Launch that executable explicitly when testing. The manifest supplies a bounded installation-local filename for the renamed packaged viewer; build-directory launches fall back to the filename compiled by CMake. The controller never searches PATH for a viewer.
 
+Checkpoint 2 adds a background-mode dropdown beside each character: **Warm** retains initialized buffers; **Economy (experimental)** releases disposable screen/shadow render targets on the GL display path. Both keep normal session/teleport/texture maintenance, with no saved graphics downgrade. Switching back or detaching rebuilds the targets through the normal allocator. The status reports when targets are released; working-set RAM is not a VRAM measurement. Compare GPU memory and switch recovery on Windows before assuming a useful saving. Modes are controller-session choices; normal launches remain unaffected.
+
 ## Try the prototype
 
 1. Open `folderstorm-session-host.exe` from the new Windows build/installation. Leave **Host active viewer (experimental)** unchecked initially.
@@ -37,7 +39,7 @@ Native credential IDs are reserved before authentication to catch duplicate mana
 
 The host tracks worker process health, ordinary rendered swaps per second, main-loop iterations per second, keyboard-focus state and working-set MiB. These are diagnostics, not claimed CPU/GPU/VRAM savings. Compare with two ordinary viewers, including an ordinary minimized second viewer, because the viewer already reduces drawing when hidden/minimized. Measure aggregate processes using native tools.
 
-Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 2, and mixed versions are deliberately rejected.
+Hosted focus requests use the viewer's existing native window-thread API, including on embedding, host reactivation and clicks in the viewer. Requests are bound to the current session/input owner and a foreground controller; the native thread rechecks the hosted root, enabled/visible state and foreground window before applying a queued request. Other applications and native dialogs keep their focus, and no keystrokes or application-focus flags are synthesized. Ordinary focus callbacks control normal foreground/background yielding. Native confirmation of this follow-up remains pending. Rebuild the controller and viewer together: the private protocol is now version 3, and mixed versions are deliberately rejected.
 
 ## Recovery and current native risks
 
@@ -45,7 +47,7 @@ A broken pipe or expired worker heartbeat returns that worker to an ordinary win
 
 Window hosting is an opt-in **feasibility experiment**, not a validated production embedder. Focus, threaded native-window messages, DPI, fullscreen, IME, owned dialogs and GPU/context behavior need Windows testing. Forced host termination with a hosted foreign child may destroy or disrupt that surface before the worker can detach; this is a release-blocking hosting gate. Start failure/recovery tests in separate-window mode. Ordinary host closure takes the detach path, but a frozen worker can delay it; leave the controller running until its hosted window has detached or exited.
 
-Economy trimming, shared chat/event UI, the production character selector/wheel, workspace lifecycle polish and the low-resolution 1 FPS monitor remain later checkpoints. Do not infer their performance or completion from this prototype.
+Shared chat/event UI, the production character selector/wheel, workspace lifecycle polish, the low-resolution 1 FPS monitor and optional bird’s-eye transition remain later checkpoints. Do not infer their performance or completion from this prototype.
 
 ## Focused checks
 
