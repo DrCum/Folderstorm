@@ -371,7 +371,7 @@ void FSFloaterIM::sendMsgFromInputEditor(EChatType type)
         || !mOtherParticipantUUID.isNull())
     {
         // <FS:Techwolf Lupindo> fsdata support
-        if (mDialog == IM_NOTHING_SPECIAL && FSData::instance().isSupport(mOtherParticipantUUID) && FSData::instance().isAgentFlag(gAgentID, FSData::NO_SUPPORT))
+        if (!FSData::instance().canSendToIMContact(mDialog, gAgentID, mOtherParticipantUUID))
         {
             return;
         }
@@ -1751,7 +1751,7 @@ void FSFloaterIM::setTyping(bool typing)
     // much network traffic. Only send in person-to-person IMs.
     // <FS:Techwolf Lupindo> fsdata support
     //if ( mShouldSendTypingState && mDialog == IM_NOTHING_SPECIAL )
-    if ( mShouldSendTypingState && mDialog == IM_NOTHING_SPECIAL && !(FSData::instance().isSupport(mOtherParticipantUUID) && FSData::instance().isAgentFlag(gAgentID, FSData::NO_SUPPORT)))
+    if (mShouldSendTypingState && mDialog == IM_NOTHING_SPECIAL && FSData::instance().canSendToIMContact(mDialog, gAgentID, mOtherParticipantUUID))
     // </FS:Techwolf Lupindo>
     {
         if (mMeTyping)

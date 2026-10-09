@@ -61,6 +61,8 @@ public:
 
     bool isDeveloper(const LLUUID& avatar_id) const;
     bool isSupport(const LLUUID& avatar_id) const;
+    // Support-contact policy only; callers still enforce session and RLV checks.
+    bool canSendToIMContact(EInstantMessage dialog, const LLUUID& sender, const LLUUID& recipient) const;
     bool isQA(const LLUUID& avatar_id) const;
     bool isFirestormGroup(const LLUUID& id) const;
     bool isSupportGroup(const LLUUID& id) const;
