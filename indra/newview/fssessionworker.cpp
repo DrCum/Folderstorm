@@ -10,6 +10,8 @@
 #if LL_WINDOWS
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
+#include "fssessionframepipe.h"
+#include "llimage.h"
 #include "fseventapibridge.h"
 #include "fsworkspacecontroller.h"
 #include "llagent.h"
@@ -48,6 +50,13 @@ using namespace fs_session;
 struct Worker
 {
     Pipe pipe;
+    FrameLane preview;
+    PreviewSize previewCap{};
+    std::uint32_t previewRate = 0;
+    std::uint64_t previewSequence = 0;
+    ULONGLONG previewAt = 0;
+    bool previewPass = false;
+    std::string previewError;
     HANDLE profileLease = INVALID_HANDLE_VALUE;
     WorkerId id{};
     DWORD host = 0;
@@ -80,7 +89,8 @@ struct Worker
     {
         if (!parent || !IsWindow(parent)) return false;
         const HWND root = GetAncestor(parent, GA_ROOT);
-        return root && GetForegroundWindow() == root && IsWindowVisible(root) && !IsIconic(root);
+        const HWND foreground = GetForegroundWindow();
+        return root && (foreground == root || GetAncestor(foreground, GA_ROOTOWNER) == root) && IsWindowVisible(root) && !IsIconic(root);
     }
     bool sharingAllowed() const
     {
@@ -265,7 +275,8 @@ struct Worker
         DWORD owner = 0; GetWindowThreadProcessId(foreground, &owner);
         // Hide with the controller when minimized or another application is
         // foreground. Native owned dialogs keep their worker visible.
-        const bool visible = IsWindowVisible(root) && !IsIconic(root) && (foreground == root || owner == GetCurrentProcessId());
+        const bool visible = IsWindowVisible(root) && !IsIconic(root) &&
+            (foreground == root || GetAncestor(foreground, GA_ROOTOWNER) == root || owner == GetCurrentProcessId());
         if (!visible) { if (IsWindowVisible(window)) ShowWindow(window, SW_HIDE); return; }
         RECT target{}, current{}; POINT origin{};
         GetClientRect(parent, &target); ClientToScreen(parent, &origin); GetWindowRect(window, &current);
@@ -331,6 +342,7 @@ struct Worker
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         promoting = false; mode = Mode::Active;
         detached = true;
+        previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); events.reset();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
         // Restore only our temporary overrides. Saved values were never changed.
@@ -373,6 +385,11 @@ struct Worker
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
+        if (!previewError.empty())
+        {
+            reply.flags |= PreviewUnavailable;
+            if (error.empty()) reply.detail = boundedText(previewError, 119);
+        }
         if (!error.empty()) { reply.flags |= Error; reply.detail = error; }
         return reply;
     }
@@ -472,6 +489,12 @@ struct Worker
             if (!pipe.send(response)) { detach(); pipe.close(); }
             break;
         }
+        case Kind::MonitorPolicy:
+            if (!ready() || request.account != gAgentID.asString() || request.grid != loginGrid ||
+                !previewPolicy(request.width, request.height, request.unread))
+            { reply(request, "Invalid monitor size/rate or changed session."); break; }
+            previewCap = {request.width, request.height}; previewRate = request.unread; previewAt = 0; previewError.clear();
+            preview.publish(status(request), nullptr, 0); reply(request); break;
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
@@ -495,11 +518,15 @@ bool FSSessionWorker::initialize()
     const auto inherited = env(L"FOLDERSTORM_SESSION_PIPE");
     const auto identity = env(L"FOLDERSTORM_SESSION_ID");
     const auto lease = env(L"FOLDERSTORM_SESSION_LOCK");
+    const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
+    const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PIPE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ID", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty()) return true;
-    if (inherited.empty() || identity.size() != 32 || lease.empty()) return false;
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty()) return true;
+    if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
     auto value = std::make_unique<Worker>();
     for (std::size_t i = 0; i < 16; ++i)
     {
@@ -519,6 +546,13 @@ bool FSSessionWorker::initialize()
     if (GetFileType(lockHandle) != FILE_TYPE_DISK || !SetHandleInformation(lockHandle, HANDLE_FLAG_INHERIT, 0)) return false;
     value->profileLease = lockHandle;
     if (!GetNamedPipeServerProcessId(handle, &value->host) || !value->host || !value->pipe.open(handle)) return false;
+    const auto frameHandle = [](const std::wstring& text) -> HANDLE
+    {
+        wchar_t* tail = nullptr; const auto number = _wcstoui64(text.c_str(), &tail, 16);
+        return number && tail && !*tail && number <= (std::numeric_limits<std::uintptr_t>::max)() ?
+            reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(number)) : INVALID_HANDLE_VALUE;
+    };
+    if (!value->preview.open(frameHandle(frames), frameHandle(frameMutex)) || !value->preview.bootstrap(value->id, value->host)) return false;
     value->lastCommand = GetTickCount64();
     worker = std::move(value);
     return true;
@@ -556,6 +590,8 @@ void FSSessionWorker::tick()
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
         value.events.reset();
+        value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
+        value.preview.publish(value.status(Message{}), nullptr, 0);
         value.promoting = false; value.mode = Mode::Warm; value.readyApplied = false;
         if (wasPromoting) value.reply(value.pendingPromotion, "Session changed before the character was ready.");
     }
@@ -594,6 +630,11 @@ void FSSessionWorker::tick()
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
         if (blocked != value.chatBlocked) { value.events.reset(); value.chatBlocked = blocked; }
+        if (blocked && value.previewRate)
+        {
+            value.previewError = "Preview unavailable while names or locations are restricted.";
+            value.preview.publish(value.status(Message{}), nullptr, 0);
+        }
     }
     Message request;
     // A pending promotion owns its response slot until first frame/timeout.
@@ -616,6 +657,7 @@ void FSSessionWorker::prepareDisplay()
 {
     if (!worker || !gPipeline.isInit()) return;
     auto& value = *worker;
+    if (value.previewPass) return;
     if (managed() && value.readyApplied && value.mode == Mode::Economy && !value.promoting)
     {
         // Only disposable screen/shadow targets. Scene objects, textures,
@@ -634,6 +676,43 @@ void FSSessionWorker::prepareDisplay()
         gPipeline.resizeScreenTexture();
         value.economyTrimmed = false;
     }
+}
+bool FSSessionWorker::monitorRendering() { return managed() && worker->previewPass; }
+void FSSessionWorker::renderMonitor()
+{
+    if (!managed()) return;
+    auto& value = *worker;
+    if (!value.previewRate || !value.ready() || value.mode == Mode::Active || value.promoting || gTeleportDisplay || !value.sharingAllowed()) return;
+    const auto now = GetTickCount64();
+    if (value.previewAt && now - value.previewAt < 2000u / value.previewRate) return;
+    value.previewAt = now;
+    const auto size = fittedPreview(static_cast<std::uint32_t>((std::max)(0, gViewerWindow->getWorldViewWidthRaw())),
+        static_cast<std::uint32_t>((std::max)(0, gViewerWindow->getWorldViewHeightRaw())), value.previewCap);
+    if (!previewSize(size) || !gPipeline.isInit()) return;
+    LLPointer<LLImageRaw> image = new LLImageRaw;
+    value.previewPass = true;
+    struct Pass { Worker& worker; ~Pass() { worker.previewPass = false; } } pass{value};
+    const bool success = gViewerWindow->rawSnapshot(image, static_cast<S32>(size.width), static_cast<S32>(size.height),
+        false, false, false, false, false, false, false, LLSnapshotModel::SNAPSHOT_TYPE_COLOR, 640, true, true, value.mode == Mode::Warm);
+    if (!success || image->getComponents() != 3 || !previewSize({static_cast<std::uint32_t>(image->getWidth()), static_cast<std::uint32_t>(image->getHeight())}))
+    {
+        value.previewError = "Low-resolution preview target unavailable in this graphics mode.";
+        value.preview.publish(value.status(Message{}), nullptr, 0); return;
+    }
+    value.previewError.clear();
+    const auto width = static_cast<std::uint32_t>(image->getWidth()), height = static_cast<std::uint32_t>(image->getHeight());
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * height * 4);
+    for (std::uint32_t y = 0; y < height; ++y)
+        for (std::uint32_t x = 0; x < width; ++x)
+        {
+            const auto source = (static_cast<std::size_t>(height - 1 - y) * width + x) * 3;
+            const auto target = (static_cast<std::size_t>(y) * width + x) * 4;
+            pixels[target] = image->getData()[source + 2]; pixels[target + 1] = image->getData()[source + 1];
+            pixels[target + 2] = image->getData()[source]; pixels[target + 3] = 255;
+        }
+    Message frame = value.status(Message{}); frame.width = width; frame.height = height;
+    frame.flags |= PreviewFrame; frame.event = ++value.previewSequence; frame.cursor = now;
+    value.preview.publish(frame, pixels.data(), pixels.size());
 }
 bool FSSessionWorker::inputAllowed()
 {
@@ -676,7 +755,7 @@ int FSSessionWorker::backgroundYield(int normal)
 }
 void FSSessionWorker::framePresented()
 {
-    if (!managed()) return;
+    if (!managed() || worker->previewPass) return;
     ++worker->frames;
     if (worker->promoting && worker->ready() && worker->frames - worker->promotionStart >= 2)
     {
@@ -723,6 +802,8 @@ void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
 bool FSSessionWorker::hostForeground() { return false; }
 void FSSessionWorker::prepareDisplay() {}
+bool FSSessionWorker::monitorRendering() { return false; }
+void FSSessionWorker::renderMonitor() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }

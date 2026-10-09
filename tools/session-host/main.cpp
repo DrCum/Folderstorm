@@ -19,6 +19,7 @@
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
+#include "fssessionframepipe.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -41,6 +42,7 @@ constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr int SessionOptions = 119;
 constexpr UINT_PTR Timer = 1;
+LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 struct Handle
 {
     HANDLE value = INVALID_HANDLE_VALUE;
@@ -71,7 +73,7 @@ std::wstring hexId(const WorkerId& identity)
     return result.str();
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
-std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, const WorkerId& id)
+std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id)
 {
     // Preserve proxy/trust/runtime variables. Read only to form the child block;
     // never log the block or mutate this controller's environment.
@@ -90,6 +92,8 @@ std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pi
     entries[L"FOLDERSTORM_SESSION_PIPE"] = hexHandle(pipe);
     entries[L"FOLDERSTORM_SESSION_LOCK"] = hexHandle(lease);
     entries[L"FOLDERSTORM_SESSION_ID"] = hexId(id);
+    entries[L"FOLDERSTORM_SESSION_FRAMES"] = hexHandle(frames);
+    entries[L"FOLDERSTORM_SESSION_FRAME_MUTEX"] = hexHandle(frameMutex);
     std::vector<wchar_t> result;
     for (const auto& entry : entries)
     {
@@ -139,6 +143,8 @@ public:
 };
 struct Slot
 {
+    FrameLane preview;
+    std::uint32_t previewWidth = 0, previewHeight = 0, previewRate = 0;
     ChatView chat;
     Message pendingSend, pendingTyping;
     Message pendingAction;
@@ -177,6 +183,13 @@ struct Host
     HWND optionsControl = nullptr;
     Handle optionsLease;
     bool logoutOnClose = false;
+    HWND monitor = nullptr;
+    bool monitorEnabled = false;
+    int monitorIndex = 1;
+    unsigned int monitorSize = 0, monitorRate = 1;
+    ChatKey monitorKey;
+    Message monitorFrame;
+    std::vector<std::uint8_t> monitorPixels;
     bool showChat = true;
     UINT dpi = 96;
     HFONT font = nullptr;
@@ -244,6 +257,17 @@ struct Host
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
         if (kind == Kind::WorkspaceInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
+        if (kind == Kind::MonitorPolicy)
+        {
+            request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
+            const bool wanted = monitorEnabled && index == monitorIndex && monitorKey.owns(slot.snapshot) && index != active && !busy() &&
+                monitor && IsWindowVisible(monitor) && !IsIconic(monitor) && !IsIconic(window);
+            if (wanted)
+            {
+                request.width = 320u + monitorSize * 160u; request.height = 180u + monitorSize * 90u;
+                const std::uint32_t rates[] = {1, 2, 4, 10}; request.unread = rates[monitorRate];
+            }
+        }
         if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
         if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
             AllowSetForegroundWindow(slot.pid);
@@ -256,6 +280,7 @@ struct Host
     {
         HostOptions result; result.standby[0] = standby[0]; result.standby[1] = standby[1];
         result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
+        result.previewSize = monitorSize; result.previewRate = monitorRate;
         return result;
     }
     void saveOptions()
@@ -287,6 +312,17 @@ struct Host
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
         AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING, 210, L"Monitor character 1 (read only)");
+        AppendMenuW(menu, MF_STRING, 211, L"Monitor character 2 (read only)");
+        AppendMenuW(menu, MF_STRING | (!monitorEnabled ? MF_CHECKED : 0), 212, L"Stop monitor");
+        for (unsigned int i = 0; i < 3; ++i)
+        {
+            const auto text = std::to_wstring(320u + i * 160u) + L" × " + std::to_wstring(180u + i * 90u);
+            AppendMenuW(menu, MF_STRING | (monitorSize == i ? MF_CHECKED : 0), 220 + i, text.c_str());
+        }
+        const wchar_t* rates[] = {L"Preview target: 0.5 FPS", L"Preview target: 1 FPS", L"Preview target: 2 FPS", L"Preview target: 5 FPS"};
+        for (unsigned int i = 0; i < 4; ++i) AppendMenuW(menu, MF_STRING | (monitorRate == i ? MF_CHECKED : 0), 230 + i, rates[i]);
         POINT point{}; GetCursorPos(&point);
         const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, window, nullptr);
         DestroyMenu(menu);
@@ -307,6 +343,49 @@ struct Host
         else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 206) saveOptions();
+        else if (choice == 210 || choice == 211) openMonitor(choice == 210 ? 0 : 1);
+        else if (choice == 212) { monitorEnabled = false; monitorPixels.clear(); if (monitor) ShowWindow(monitor, SW_HIDE); }
+        else if (choice >= 220 && choice <= 222) { monitorSize = choice - 220; monitorPixels.clear(); }
+        else if (choice >= 230 && choice <= 233) monitorRate = choice - 230;
+    }
+    void openMonitor(int index)
+    {
+        if (!slots[index] || slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready)
+        { message(L"Log in this character before opening its read-only monitor."); return; }
+        monitorIndex = index; monitorKey = slots[index]->chat.identity;
+        monitorFrame = {}; monitorPixels.clear(); monitorEnabled = true;
+        if (!monitor)
+            monitor = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionMonitor", L"Character monitor (read only)",
+                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(380), scaled(270), window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        if (!monitor) { monitorEnabled = false; message(L"Unable to open the monitor window."); return; }
+        ShowWindow(monitor, SW_SHOWNORMAL); updateMonitor();
+    }
+    void updateMonitor()
+    {
+        if (!monitor || !monitorEnabled) return;
+        const auto* slot = slots[monitorIndex].get();
+        std::wstring title = L"Monitor: ";
+        title += slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"unavailable";
+        title += L" · read only";
+        if (!slot || !slot->running() || slot->detached || !slot->pipe.alive() || !monitorKey.owns(slot->snapshot))
+        { monitorPixels.clear(); monitorEnabled = false; title += L" · session ended; choose again"; }
+        else if (slot->snapshot.state != State::Ready) { monitorPixels.clear(); title += L" · disconnected"; }
+        else if (monitorIndex == active || busy()) { monitorPixels.clear(); title += L" · paused while active/switching"; }
+        else if (slot->snapshot.flags & PreviewUnavailable) { monitorPixels.clear(); title += L" · " + wide(slot->snapshot.detail); }
+        else
+        {
+            Message frame;
+            if (slots[monitorIndex]->preview.read(slot->snapshot, monitorFrame.event, frame, monitorPixels)) monitorFrame = std::move(frame);
+            if (monitorPixels.empty()) title += L" · waiting for first frame";
+            else
+            {
+                const auto age = GetTickCount64() >= monitorFrame.cursor ? GetTickCount64() - monitorFrame.cursor : 0;
+                const wchar_t* rates[] = {L"0.5", L"1", L"2", L"5"};
+                title += L" · target " + std::wstring(rates[monitorRate]) + L" FPS · " + std::to_wstring(age / 1000) + L"s old";
+                if (age > 5000) title += L" · stale";
+            }
+        }
+        SetWindowTextW(monitor, title.c_str()); InvalidateRect(monitor, nullptr, FALSE);
     }
     std::string editText() const
     {
@@ -446,14 +525,15 @@ struct Host
         PipePair pair;
         if (!pair.create(slot->id)) { message(L"Unable to create the private worker connection."); return; }
         if (!slot->pipe.open(pair.server.take())) { message(L"Unable to initialize asynchronous worker control."); return; }
-        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->id);
+        if (!slot->preview.create(slot->id, GetCurrentProcessId())) { message(L"Unable to create the bounded preview frame lane."); return; }
+        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id);
         if (childEnvironment.empty()) { message(L"Unable to prepare the worker environment."); return; }
         SIZE_T attributeBytes = 0;
         InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
         std::vector<std::uint8_t> attributes(attributeBytes);
         auto* list = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
         if (!InitializeProcThreadAttributeList(list, 1, 0, &attributeBytes)) { message(L"Unable to restrict inherited handles."); return; }
-        HANDLE inherited[] = {pair.client.value, lease.value};
+        HANDLE inherited[] = {pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex()};
         const bool attributesReady = UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
             inherited, sizeof(inherited), nullptr, nullptr) != FALSE;
         STARTUPINFOEXW startup{}; startup.StartupInfo.cb = sizeof(startup); startup.lpAttributeList = list;
@@ -515,6 +595,7 @@ struct Host
         {
             slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
+            slot.previewWidth = slot.previewHeight = slot.previewRate = 0;
             if (chatIndex == index) { conversation.clear(); refreshChat(true); }
         }
         slot.snapshot = response;
@@ -543,6 +624,8 @@ struct Host
             }
         }
         if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
+        if (request.kind == Kind::MonitorPolicy && !(response.flags & Error))
+        { slot.previewWidth = request.width; slot.previewHeight = request.height; slot.previewRate = request.unread; }
         if (request.kind == Kind::MarkRead && !(response.flags & Error))
         {
             const auto found = slot.chat.conversations.find(request.conversation);
@@ -578,6 +661,7 @@ struct Host
         {
             if (request.kind == Kind::Detach || request.kind == Kind::Quit) { detaching = closing = logoutOnClose = false; }
             if (request.kind == Kind::Embed) { embedding = false; SendMessageW(embedControl, BM_SETCHECK, BST_UNCHECKED, 0); }
+            if (request.kind == Kind::MonitorPolicy) { monitorEnabled = false; monitorPixels.clear(); }
             if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle) failHandoff(index, wide(response.detail));
             else
             {
@@ -736,6 +820,16 @@ struct Host
                     send(index, Kind::Conversations);
                 else if (slot.snapshot.state == State::Ready && GetTickCount64() - slot.workspaceAt >= 2000)
                     send(index, Kind::WorkspaceInfo);
+                else if (slot.snapshot.state == State::Ready)
+                {
+                    const bool wanted = monitorEnabled && index == monitorIndex && monitorKey.owns(slot.snapshot) && index != active && !busy() &&
+                        monitor && IsWindowVisible(monitor) && !IsIconic(monitor) && !IsIconic(window);
+                    const std::uint32_t width = wanted ? 320u + monitorSize * 160u : 0u;
+                    const std::uint32_t height = wanted ? 180u + monitorSize * 90u : 0u;
+                    const std::uint32_t rates[] = {1, 2, 4, 10}; const std::uint32_t rate = wanted ? rates[monitorRate] : 0u;
+                    if (slot.previewWidth != width || slot.previewHeight != height || slot.previewRate != rate) send(index, Kind::MonitorPolicy);
+                    else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
+                }
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
@@ -744,6 +838,7 @@ struct Host
         }
         refreshChat();
         refreshCharacters();
+        updateMonitor();
         if (!busy() && active < 0 && selectFirst)
             for (int i = 0; i < 2; ++i) if (slots[i] && slots[i]->pipe.alive() && !slots[i]->detached && slots[i]->snapshot.state == State::Ready) { switchTo(i); selectFirst = false; break; }
         if (detaching)
@@ -767,6 +862,7 @@ struct Host
     void detach(bool close, bool logout = false)
     {
         handoff.cancel(); detaching = true; closing = close; logoutOnClose = logout; focusRequested = false;
+        monitorEnabled = false; monitorPixels.clear(); if (monitor) ShowWindow(monitor, SW_HIDE);
         if (logout)
             for (auto& slot : slots) if (slot)
             {
@@ -810,6 +906,48 @@ struct Host
     }
 };
 Host* host = nullptr;
+LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+    if (!host) return DefWindowProcW(window, message, wparam, lparam);
+    switch (message)
+    {
+    case WM_CLOSE:
+        host->monitorEnabled = false; host->monitorPixels.clear(); ShowWindow(window, SW_HIDE); return 0;
+    case WM_LBUTTONDOWN:
+    {
+        RECT client{}; GetClientRect(window, &client);
+        // Only the labelled footer promotes a character. Image clicks do nothing.
+        if (static_cast<short>(HIWORD(lparam)) >= client.bottom - host->scaled(28))
+        { SetForegroundWindow(host->window); host->switchTo(host->monitorIndex); }
+        return 0;
+    }
+    case WM_PAINT:
+    {
+        PAINTSTRUCT paint{}; const HDC dc = BeginPaint(window, &paint);
+        RECT client{}; GetClientRect(window, &client);
+        FillRect(dc, &client, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        const int width = client.right, height = (std::max)(0, static_cast<int>(client.bottom) - host->scaled(28));
+        if (!host->monitorPixels.empty())
+        {
+            const auto& frame = host->monitorFrame;
+            const double fit = (std::min)(static_cast<double>(width) / frame.width, static_cast<double>(height) / frame.height);
+            const int w = static_cast<int>(frame.width * fit), h = static_cast<int>(frame.height * fit);
+            BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+            info.bmiHeader.biWidth = static_cast<LONG>(frame.width); info.bmiHeader.biHeight = -static_cast<LONG>(frame.height);
+            info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32; info.bmiHeader.biCompression = BI_RGB;
+            SetStretchBltMode(dc, HALFTONE);
+            StretchDIBits(dc, (width - w) / 2, (height - h) / 2, w, h, 0, 0, static_cast<int>(frame.width), static_cast<int>(frame.height),
+                host->monitorPixels.data(), &info, DIB_RGB_COLORS, SRCCOPY);
+        }
+        RECT footer{0, height, client.right, client.bottom};
+        FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+        SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        EndPaint(window, &paint); return 0;
+    }
+    case WM_SIZE: InvalidateRect(window, nullptr, FALSE); return 0;
+    default: return DefWindowProcW(window, message, wparam, lparam);
+    }
+}
 HWND control(HWND parent, const wchar_t* type, const wchar_t* text, DWORD style, int x, int y, int width, int height, int id = 0)
 {
     HWND result = CreateWindowExW(0, type, text, WS_CHILD | WS_VISIBLE | style, x, y, width, height, parent,
@@ -1005,6 +1143,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         {
             state.standby[0] = choices.standby[0]; state.standby[1] = choices.standby[1];
             state.voice = choices.voice; state.muteBackground = choices.muteBackground; state.embedding = choices.hosted; state.showChat = choices.chat;
+            state.monitorSize = choices.previewSize; state.monitorRate = choices.previewRate;
         }
     }
     host = &state;
@@ -1012,6 +1151,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     klass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
     if (!RegisterClassW(&klass)) return 1;
+    WNDCLASSW monitorClass{}; monitorClass.lpfnWndProc = monitorProc; monitorClass.hInstance = instance;
+    monitorClass.lpszClassName = L"FolderstormSessionMonitor"; monitorClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    if (!RegisterClassW(&monitorClass)) return 1;
     HWND window = CreateWindowExW(0, klass.lpszClassName, L"Folderstorm character sessions",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 980, 700, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;

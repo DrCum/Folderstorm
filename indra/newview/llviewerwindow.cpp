@@ -6257,12 +6257,16 @@ bool LLViewerWindow::thumbnailSnapshot(LLImageRaw *raw, S32 preview_width, S32 p
 // Since the required size might be bigger than the available screen, this method rerenders the scene in parts (called subimages) and copy
 // the results over to the final raw image.
 bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_height,
-    bool keep_window_aspect, bool is_texture, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, bool show_balance, LLSnapshotModel::ESnapshotLayerType type, S32 max_size, bool viewport_only)
+    bool keep_window_aspect, bool is_texture, bool show_ui, bool show_hud, bool do_rebuild, bool no_post, bool show_balance, LLSnapshotModel::ESnapshotLayerType type, S32 max_size, bool viewport_only, bool low_res_target, bool keep_buffers)
 {
     if (!raw || image_width <= 0 || image_height <= 0)
     {
         return false;
     }
+    // Monitor rendering must use an actual bounded offscreen target, never a
+    // full-window fallback followed by shrinking. Ordinary snapshots are unchanged.
+    if (low_res_target && (!LLPipeline::sRenderDeferred || show_ui || is_texture ||
+        image_width > 640 || image_height > 360 || image_width < 4 || image_height < 4)) return false;
 
     //check if there is enough memory for the snapshot image
     const U64 image_pixels = static_cast<U64>(image_width) * static_cast<U64>(image_height);
@@ -6278,6 +6282,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
     // Restore the live viewport and renderer on success and every early exit.
     const bool previous_no_post = gSnapshotNoPost;
+    const bool previous_snapshot = gSnapshot;
     const bool previous_swap = gDisplaySwapBuffers;
     const bool previous_ui = gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI);
     const bool previous_huds = LLPipeline::sShowHUDAttachments;
@@ -6302,12 +6307,15 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         if (reset_deferred)
         {
             scratch_space.flush(); scratch_space.release();
-            gPipeline.allocateScreenBuffer(original_width, original_height);
+            if (keep_buffers) gPipeline.allocateScreenBuffer(original_width, original_height);
+            else { gPipeline.releaseScreenBuffers(); gPipeline.releaseShadowBuffers(); }
         }
         if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI) != previous_ui)
             LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
         LLPipeline::sShowHUDAttachments = previous_huds;
         gSnapshotNoPost = previous_no_post; gDisplaySwapBuffers = previous_swap;
+        if (low_res_target) gSnapshot = previous_snapshot;
+        if (low_res_target) gResizeScreenTexture = true;
         const LLRect capture_world_scaled = mWorldViewRectScaled;
         if (mWorldViewRectRaw != previous_world) gResizeScreenTexture = true;
         mWorldViewRectRaw = previous_world; mWorldViewRectScaled = previous_world_scaled;
@@ -6324,7 +6332,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     gSnapshotNoPost = no_post;
     gDisplaySwapBuffers = false;
 
-    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT); // stencil buffer is deprecated | GL_STENCIL_BUFFER_BIT);
+    if (!low_res_target) glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT); // Offscreen monitors never touch a minimized default framebuffer.
     setCursor(UI_CURSOR_WAIT);
 
     // Hide all the UI widgets first and draw a frame
@@ -6383,10 +6391,10 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     }
 
     F32 scale_factor = 1.0f ;
-    if (!keep_window_aspect || (image_width > window_width) || (image_height > window_height))
+    if (low_res_target || !keep_window_aspect || (image_width > window_width) || (image_height > window_height))
     {
         if ((image_width <= gGLManager.mGLMaxTextureSize && image_height <= gGLManager.mGLMaxTextureSize) &&
-            (image_width > window_width || image_height > window_height) && LLPipeline::sRenderDeferred && !show_ui)
+            (low_res_target || image_width > window_width || image_height > window_height) && LLPipeline::sRenderDeferred && !show_ui)
         {
             // <FS:Ansariel> FIRE-15667: 24bit depth maps
             //U32 color_fmt = type == LLSnapshotModel::SNAPSHOT_TYPE_DEPTH ? GL_DEPTH_COMPONENT : GL_RGBA;
@@ -6394,8 +6402,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
             // </FS:Ansariel>
             if (scratch_space.allocate(image_width, image_height, color_fmt, true))
             {
-                original_width = gPipeline.mRT->deferredScreen.getWidth();
-                original_height = gPipeline.mRT->deferredScreen.getHeight();
+                original_width = low_res_target ? previous_world.getWidth() : gPipeline.mRT->deferredScreen.getWidth();
+                original_height = low_res_target ? previous_world.getHeight() : gPipeline.mRT->deferredScreen.getHeight();
 
                 if (gPipeline.allocateScreenBuffer(image_width, image_height))
                 {
@@ -6404,6 +6412,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                     snapshot_width = image_width;
                     snapshot_height = image_height;
                     reset_deferred = true;
+                    if (low_res_target) { gResizeScreenTexture = false; gResizeShadowTexture = false; }
                     mWorldViewRectRaw.set(0, image_height, image_width, 0);
                     LLViewerCamera::getInstance()->setViewHeightInPixels( mWorldViewRectRaw.getHeight() );
                     LLViewerCamera::getInstance()->setAspect( getWorldViewAspectRatio() );
@@ -6412,10 +6421,13 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                 else
                 {
                     scratch_space.release();
-                    gPipeline.allocateScreenBuffer(original_width, original_height);
+                    if (keep_buffers) gPipeline.allocateScreenBuffer(original_width, original_height);
+                    else { gPipeline.releaseScreenBuffers(); gPipeline.releaseShadowBuffers(); }
                 }
             }
         }
+
+        if (low_res_target && !reset_deferred) return false;
 
         if (!reset_deferred)
         {
