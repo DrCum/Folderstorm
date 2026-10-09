@@ -213,6 +213,7 @@
 #include "fsfloaterpartialinventory.h"
 #include "fsworkspaceinventoryfloater.h"
 #include "fsfloaterworkspaces.h"
+#include "fsfloatergestureboard.h"
 #include "fsworkspacepreview.h"
 #include "fsfloaterworkspacetools.h"
 #include "fsfloaterplacedetails.h"
@@ -499,6 +500,9 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("inventory_bulk_review", "floater_inventory_bulk.xml", &LLFloaterReg::build<FSFloaterInventoryBulk>);
     LLFloaterReg::add("workspace_tools", "floater_workspace_tools.xml", &LLFloaterReg::build<FSFloaterWorkspaceTools>);
     LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
+    LLFloaterReg::add("gesture_board", "floater_gesture_board.xml", &LLFloaterReg::build<FSFloaterGestureBoard>);
+    LLFloaterReg::add("gesture_board_picker", "floater_gesture_board_picker.xml", &LLFloaterReg::build<FSFloaterGesturePicker>);
+    LLFloaterReg::add("gesture_board_editor", "floater_gesture_board_editor.xml", &LLFloaterReg::build<FSFloaterGestureTileEditor>);
     LLFloaterReg::add("workspace_switch", "floater_workspaces.xml", &LLFloaterReg::build<FSFloaterWorkspaces>);
     LLFloaterReg::add("workspace_report", "floater_workspace_report.xml", &LLFloaterReg::build<FSFloaterWorkspaceReport>);
     LLInspectAvatarUtil::registerFloater();

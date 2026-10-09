@@ -20,6 +20,7 @@
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextui.h"
 #include "llbutton.h"
+#include "llfloaterreg.h"
 #include "llcheckboxctrl.h"
 #include "llagent.h"
 #include "llcombobox.h"
@@ -48,6 +49,7 @@ static LLPanelInjector<FSPanelPreferenceWorkspaces> t_workspace_panel("panel_pre
 bool FSPanelPreferenceWorkspaces::postBuild()
 {
     FSWorkspaceContextUI::initialize(this);
+    getChild<LLButton>("gesture_board_launcher")->setCommitCallback([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("gesture_board"); });
     getChild<LLButton>("recover_windows")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().recoverWindows(); });
     const char* actions[] = {"preview", "save", "rename", "delete", "add_inventory"};
     for (const char* name : actions)

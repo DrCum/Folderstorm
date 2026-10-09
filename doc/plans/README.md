@@ -55,3 +55,7 @@ All selected items have concrete scope, implementation stages, code touchpoints,
 ## Workspace context and snapshot follow-up
 
 [Workspace context, monitor recovery and snapshot plan](workspace-context-and-snapshot.md) covers the implemented follow-up to PR #6: optional graphics/camera settings, selected HUDs, display recovery, viewport snapshots and versioned MCP switching. [Validation and Windows acceptance](workspace-context-validation.md) separates actual focused checks from the remaining native checks.
+
+## Gesture board
+
+[Gesture board implementation plan](gesture-board.md) covers Inventory selection and drag/drop, direct native gesture playback, saved/reorderable boards, and editable tile text/colors. Keyboard shortcuts are excluded. Workspace associations are a separate optional follow-up. Implemented on `feat/gesture-board`, stacked on PR #8. [Focused checks and native acceptance](gesture-board-validation.md) record completed scope and remaining Windows/skin checks.

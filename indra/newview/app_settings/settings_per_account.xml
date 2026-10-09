@@ -1,5 +1,12 @@
 <llsd>
     <map>
+    <key>FSGestureBoards</key>
+    <map>
+      <key>Comment</key><string>Versioned account-local gesture board references, ordered tile labels and colors.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><map />
+    </map>
     <key>FSWorkspaceProfiles</key>
     <map>
       <key>Comment</key><string>Named account-local viewport and allowlisted utility-window workspaces.</string>

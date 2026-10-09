@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="gesture_board" title="Gesture board" width="280" height="190" min_width="220" min_height="120"
+ can_resize="true" save_rect="true" reuse_instance="true" single_instance="true" layout="topleft">
+ <string name="ready">Click a tile to play; click a playing tile to stop. Right-click to customize it.</string>
+ <string name="logged_out">Gesture boards are available after login.</string>
+ <string name="invalid_data">Saved board data could not be read. It was kept unchanged.</string>
+ <string name="inventory_not_ready">Wait for Inventory to finish loading.</string>
+ <string name="missing">The gesture or its Inventory link is unavailable. Replace it through the tile menu.</string>
+ <string name="blocked">Gestures are disabled or blocked by current restrictions.</string>
+ <string name="loading">Loading the selected gesture… Clicks will not queue more plays.</string>
+ <string name="playing">Gesture started through the normal viewer engine.</string>
+ <string name="stopped">Pending board plays cancelled; board-started gestures stopped. Already emitted sound/chat cannot be recalled.</string>
+ <string name="cancelled">Pending board playback cancelled.</string>
+ <string name="load_failed">The gesture could not be loaded. Try again or replace its tile.</string>
+ <string name="timeout">The gesture did not load within 30 seconds. No delayed play is queued.</string>
+ <string name="changed">The board, gesture or login changed. Reopen the editor/picker and try again.</string>
+ <string name="full">Maximum: 16 boards and 64 tiles per board. Your saved setup was kept.</string>
+ <string name="exists">That board name is already used. Choose another name.</string>
+ <string name="invalid_name">Use 1–64 characters for board names and up to 64 for tile text; avoid control characters.</string>
+ <string name="saved">Board configuration saved. Inventory gestures were unchanged.</string>
+ <string name="duplicate_tile">That gesture already has a tile on this board.</string>
+ <string name="missing_tile">Unavailable gesture</string>
+ <string name="default_board">My gestures</string>
+ <string name="tile_ready"></string><string name="tile_playing">Playing — click to stop</string>
+ <string name="tile_loading">Loading…</string><string name="tile_missing">Unavailable</string>
+ <string name="tile_inventory_not_ready">Inventory loading…</string><string name="tile_blocked">Disabled / restricted</string>
+ <string name="action_edit">Edit tile…</string><string name="action_replace">Replace gesture…</string>
+ <string name="action_up">Move earlier</string><string name="action_down">Move later</string><string name="action_remove">Remove tile</string>
+ <string name="board_new">New board…</string><string name="board_rename">Rename…</string>
+ <string name="board_duplicate">Duplicate…</string><string name="board_delete">Delete…</string>
+ <string name="compact">Compact tiles</string>
+ <string name="page_count">[CURRENT] / [TOTAL]</string>
+ <combo_box name="boards" left="8" top="30" right="-100" height="22" follows="left|right|top" tool_tip="Select gesture board"/>
+ <text name="status" right="-88" top="32" width="10" height="18" follows="right|top" mouse_opaque="true">!</text>
+ <button name="add_gestures" label="" image_overlay="AddItem_Off" right="-62" top="30" width="24" height="22" follows="right|top" tool_tip="Add gestures from Inventory"/>
+ <button name="stop" label="" image_overlay="Stop_Off" right="-36" top="30" width="24" height="22" follows="right|top" tool_tip="Stop board gestures and cancel pending plays"/>
+ <button name="options" label="" image_overlay="OptionsMenu_Off" right="-8" top="30" width="24" height="22" follows="right|top" tool_tip="Board options and compact tiles. Right-click a tile to edit its text, color or size. Drag tiles to reorder."/>
+ <panel name="grid" left="8" top="58" right="-8" bottom="-6" follows="all"/>
+ <text name="empty" left="12" top="64" right="-12" height="24" follows="left|right|top" use_ellipses="true">No gestures</text>
+ <panel name="pagination" left="8" right="-8" bottom="-6" height="22" follows="left|right|bottom" layout="topleft" visible="false">
+  <button name="previous_page" label="&lt;" left="0" top="0" width="24" height="22" follows="left|top" tool_tip="Previous page"/>
+  <text name="page_number" left="30" right="-30" top="2" height="18" halign="center" follows="left|right|top"/>
+  <button name="next_page" label="&gt;" right="-1" top="0" width="24" height="22" follows="right|top" tool_tip="Next page"/>
+ </panel>
+</floater>
