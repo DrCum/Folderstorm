@@ -32,6 +32,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 
 #include "llfloaterpreference.h"
 #include "fspanelpreferencelocalassistant.h"
@@ -1094,6 +1095,7 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
     }
     FSWorkspaceController::instance().cancelPreferencesSession();
     cancelViewportSettings(settings_to_skip);
+    FSSessionWorker::configure(); // Restore the worker's unsaved launch policy.
     // hide joystick pref floater
     LLFloaterReg::hideInstance("pref_joystick");
 
@@ -3938,7 +3940,10 @@ void LLPanelPreference::saveSettings()
                 LLControlVariable* control = ctrl->getControlVariable();
                 if (control)
                 {
-                    mSavedValues[control] = control->getValue();
+                    // Worker launch policy is unsaved; Cancel must preserve its
+                    // saved layer instead of persisting the forced UI value.
+                    mSavedValues[control] = FSSessionWorker::temporaryControl(control->getName()) &&
+                        gSavedSettings.getControl(control->getName()) == control ? control->getSaveValue() : control->getValue();
                 }
             }
         }

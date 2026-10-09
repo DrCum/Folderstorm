@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 #include "fsquietui.h"
 #include "llviewerwindow.h"
 
@@ -1680,6 +1681,7 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
 
 bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 {
+    if (!FSSessionWorker::keyAllowed(key)) return true;
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyDown(key, mask);
@@ -1712,6 +1714,8 @@ bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 
 bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 {
+    FSSessionWorker::keyReleased(key);
+    if (!FSSessionWorker::inputAllowed()) return true;
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyUp(key, mask);
@@ -3612,6 +3616,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
+    if (!FSSessionWorker::textAllowed()) return true;
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC

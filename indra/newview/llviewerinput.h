@@ -132,6 +132,7 @@ public:
     // handleMouse() records state, scanMouse() goes through states, scanMouse(click) processes individual saved states after UI is done with them
     bool            handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down);
     void            scanMouse();
+    void            releaseHeldInputs(); // Session handoff: transient input only.
 
     bool            isMouseBindUsed(const EMouseClickType mouse, const MASK mask, const S32 mode) const;
     bool            isLMouseHandlingDefault(const S32 mode) const { return mLMouseDefaultHandling[mode]; }

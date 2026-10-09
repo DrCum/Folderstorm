@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssessionworker.h"
 #include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
@@ -1744,6 +1745,18 @@ bool idle_startup()
 
     if(STATE_LOGIN_AUTH_INIT == LLStartUp::getStartupState())
     {
+        // Reserve identity before authentication; never send the credential.
+        std::string session_name = LLPanelLogin::getUserName(gUserCredential);
+        LLStringUtil::toLower(session_name);
+        LLStringUtil::trim(session_name);
+        const auto gate = FSSessionWorker::loginGate(LLGridManager::instance().getGrid(), session_name);
+        if (gate == FSSessionWorker::LoginGate::Wait) return false;
+        if (gate == FSSessionWorker::LoginGate::Deny)
+        {
+            reset_login();
+            OSMessageBox("This character is already reserved by another managed session, or its login identity cannot be used by the prototype. Choose a different character.", "Folderstorm", OSMB_OK);
+            return false;
+        }
         gDebugInfo["GridName"] = LLGridManager::getInstance()->getGridId();
 
         // Update progress status and the display loop.

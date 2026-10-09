@@ -118,6 +118,15 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         return self.stage_go_tool(
             "fs-mcp-launcher-maintenance", ("tools", "windows-mcp-launcher"), (".",))
 
+    def stage_session_host(self):
+        """Return the separately built, explicitly launched Windows prototype."""
+        config = self.args.get("configuration") or ""
+        for directory in ([config, ""] if config and config != "." else [""]):
+            candidate = os.path.join(self.get_build_prefix(), directory, "folderstorm-session-host.exe")
+            if os.path.isfile(candidate):
+                return candidate
+        raise ManifestError("folderstorm-session-host.exe was not built. Rebuild the matching Windows viewer target.")
+
     def construct(self):
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
@@ -913,6 +922,11 @@ class Windows_x86_64_Manifest(ViewerManifest):
         self.path(self.stage_fs_mcp(), "fs-mcp.exe")
         # Run only during uninstall, before its installation's sidecar disappears.
         self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
+        self.path(self.stage_session_host(), "folderstorm-session-host.exe")
+        # Packaging renames firestorm-bin.exe. The controller uses only this
+        # installation-local basename; it never searches PATH for a viewer.
+        self.put_in_file((self.final_exe() if self.is_packaging_viewer() else "firestorm-bin.exe") + "\n",
+                         "folderstorm-session-viewer.txt")
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"

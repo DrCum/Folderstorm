@@ -527,6 +527,7 @@ set(viewer_SOURCE_FILES
     llinspecttexture.cpp
     llinspecttoast.cpp
     fseventapibridge.cpp
+    fssessionworker.cpp
     llinventorybridge.cpp
     llinventoryfilter.cpp
     llinventoryfunctions.cpp
@@ -1432,6 +1433,9 @@ set(viewer_HEADER_FILES
     llinspecttexture.h
     llinspecttoast.h
     fseventapibridge.h
+    fssessionworker.h
+    fssessionprotocol.h
+    fssessionpipe.h
     llinventorybridge.h
     llinventorycopypolicy.h
     llinventoryfilter.h
@@ -2357,6 +2361,24 @@ add_executable(${VIEWER_BINARY_NAME}
     MACOSX_BUNDLE
     ${viewer_SOURCE_FILES}
     )
+
+# Explicitly launched Windows feasibility tool. Normal viewer login never starts
+# a controller or background workers. Keep the binary beside the matching viewer.
+if (WINDOWS)
+  add_executable(folderstorm-session-host WIN32
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp")
+  target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
+  target_include_directories(folderstorm-session-host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  target_compile_definitions(folderstorm-session-host PRIVATE
+      UNICODE _UNICODE "FS_SESSION_VIEWER_FILENAME=\"${VIEWER_BINARY_NAME}.exe\"")
+  target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 advapi32 bcrypt shell32 ole32 uuid psapi)
+  set_target_properties(folderstorm-session-host PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  if (MSVC)
+    target_compile_options(folderstorm-session-host PRIVATE /utf-8)
+  endif()
+  add_dependencies(${VIEWER_BINARY_NAME} folderstorm-session-host)
+endif()
 
 # add package files
 file(GLOB EVENT_HOST_SCRIPT_GLOB_LIST
@@ -3332,7 +3354,7 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
-  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance)
+  add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance folderstorm-session-host)
 endif()
 if(TARGET copy_l_viewer_manifest)
   add_dependencies(copy_l_viewer_manifest migrate-settings fs-mcp)

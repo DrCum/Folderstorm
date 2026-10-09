@@ -25,6 +25,7 @@
  */
 
 #include "llvoiceclient.h"
+#include "fssessionworker.h"
 #include "llvoicevivox.h"
 #include "llvoicewebrtc.h"
 #include "llviewernetwork.h"
@@ -620,6 +621,8 @@ bool LLVoiceClient::onVoiceEffectsNotSupported(const LLSD &notification, const L
 bool LLVoiceClient::voiceEnabled(bool no_cache)
 // </FS:Ansariel>
 {
+    // The prototype has no microphone broker yet. Never open two microphones.
+    if (FSSessionWorker::managed()) return false;
     if (no_cache)
     {
         return gSavedSettings.getBOOL("EnableVoiceChat") && !gSavedSettings.getBOOL("CmdLineDisableVoice") && !gNonInteractive;
@@ -642,6 +645,7 @@ bool LLVoiceClient::voiceEnabled(bool no_cache)
 
 void LLVoiceClient::setVoiceEnabled(bool enabled)
 {
+    if (FSSessionWorker::managed()) enabled = false;
     if (LLWebRTCVoiceClient::instanceExists())
     {
         LLWebRTCVoiceClient::getInstance()->setVoiceEnabled(enabled);

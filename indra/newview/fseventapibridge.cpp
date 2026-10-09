@@ -25,6 +25,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fseventapibridge.h"
+#include "fssessionworker.h"
 #include "fsassistantpermissions.h"
 #include "fsassistantapproval.h"
 #include "fsassistantoperation.h"
@@ -1148,6 +1149,11 @@ bool FSEventAPIBridge::start(LLPumpIO& pump)
 
 bool FSEventAPIBridge::applyEnabled(bool enabled)
 {
+    if (enabled && FSSessionWorker::managed())
+    {
+        mLastError = "The local assistant is unavailable in managed character prototype sessions";
+        return false;
+    }
     if (!mPump)
     {
         return false;
