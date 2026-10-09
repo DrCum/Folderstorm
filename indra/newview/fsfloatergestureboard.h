@@ -81,5 +81,6 @@ private:
     LLSD mKey, mExpected;
     LLUUID mAccount, mSession, mToken;
     FSGestureBoard::Tile mTile;
+    bool mUpdatingPreview = false;
 };
 #endif

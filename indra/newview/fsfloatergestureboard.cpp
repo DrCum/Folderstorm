@@ -28,8 +28,10 @@
 #include "llsdutil.h"
 #include "lltextbox.h"
 #include "lltooldraganddrop.h"
+#include "lluiimage.h"
 #include "llviewercontrol.h"
 #include "llviewermenu.h"
+#include "llviewertexture.h"
 #include "lluictrlfactory.h"
 #include <algorithm>
 #include <cmath>
@@ -38,25 +40,56 @@ namespace
 using namespace FSGestureBoard;
 LLColor4 color(const Tile& tile) { return LLColor4(tile.color[0], tile.color[1], tile.color[2], 1.f); }
 LLColor4 foregroundColor(const Tile& tile) { const float c = foreground(tile.color); return LLColor4(c, c, c, 1.f); }
-void style(LLButton* button, const Tile& tile)
+class FSGestureBoardButton : public LLButton
 {
-    if (!tile.custom_color) return; // Fresh buttons use the current skin.
-    button->setImageColor(color(tile)); button->setDisabledImageColor(color(tile));
-    button->setUnselectedLabelColor(foregroundColor(tile)); button->setSelectedLabelColor(foregroundColor(tile));
-}
+public:
+    FSGestureBoardButton(const Params& p, const Tile& tile)
+        : LLButton(p), mCustomColor(tile.custom_color), mOutline(foregroundColor(tile))
+    {
+        initFromParams(p);
+        if (!mCustomColor) return; // Theme tiles retain every native skin state.
+        // Multiplying by a colored/dark skin texture cannot reproduce picked
+        // RGB. Use the viewer's neutral white texture for every custom state.
+        LLUIImagePtr fill = new LLUIImage("gesture_board_fill", LLViewerFetchedTexture::sWhiteImagep.get());
+        for (auto* image : {&mImageUnselected, &mImageSelected, &mImageHoverSelected, &mImageHoverUnselected,
+                           &mImageDisabled, &mImageDisabledSelected, &mImagePressed, &mImagePressedSelected, &mImageFlash})
+            *image = fill;
+        mImageOverlay = nullptr;
+        setScaleImage(true);
+        setImageColor(color(tile)); setDisabledImageColor(color(tile));
+        setUnselectedLabelColor(mOutline); setSelectedLabelColor(mOutline);
+        setDisabledLabelColor(mOutline); setDisabledSelectedLabelColor(mOutline);
+        setUseFontColor(false);
+        mHoverGlowStrength = 0.f;
+        mDropShadowedText = false;
+    }
+    void draw() override
+    {
+        LLButton::draw();
+        if (mCustomColor && (getToggleState() || mNeedsHighlight || hasMouseCapture()))
+        {
+            const F32 alpha = mUseDrawContextAlpha ? getDrawContext().mAlpha : getCurrentTransparency();
+            // Outline feedback preserves the fill instead of tinting it.
+            gl_rect_2d(1, getRect().getHeight() - 1, getRect().getWidth() - 1, 1, mOutline % alpha, false);
+            if (getToggleState())
+                gl_rect_2d(2, getRect().getHeight() - 2, getRect().getWidth() - 2, 2, mOutline % alpha, false);
+        }
+    }
+private:
+    bool mCustomColor;
+    LLColor4 mOutline;
+};
 LLSD pickerKey(const std::string& board, const LLSD& expected)
 { LLSD key; key["board"] = board; key["expected"] = expected; return key; }
 bool sameSession(const LLUUID& account, const LLUUID& session)
 { return account == gAgent.getID() && session == gAgent.getSessionID() && FSGestureBoardController::instance().available(); }
 }
-class FSGestureBoardTile final : public LLButton
+class FSGestureBoardTile final : public FSGestureBoardButton
 {
 public:
     FSGestureBoardTile(const Params& p, FSFloaterGestureBoard* board_owner, const Tile& tile)
-        : LLButton(p), mOwner(board_owner->getHandle()), mID(tile.id)
+        : FSGestureBoardButton(p, tile), mOwner(board_owner->getHandle()), mID(tile.id)
     {
-        initFromParams(p);
-        style(this, tile);
         setUseEllipses(true);
         setCommitCallback([this](LLUICtrl*, const LLSD&) { if (auto* board = this->owner()) board->playTile(mID); });
     }
@@ -516,9 +549,16 @@ bool FSFloaterGestureTileEditor::replaceGesture(const LLUUID& reference, const L
 }
 void FSFloaterGestureTileEditor::updatePreview()
 {
+    if (mUpdatingPreview) return;
+    mUpdatingPreview = true;
+    struct ResetPreviewFlag { bool& value; ~ResetPreviewFlag() { value = false; } } reset{mUpdatingPreview};
     mTile.label = getChild<LLLineEditor>("label")->getText(); mTile.custom_color = getChild<LLCheckBoxCtrl>("custom_color")->get();
-    const auto& picked = getChild<LLColorSwatchCtrl>("color")->get(); for (int i = 0; i < 3; ++i) mTile.color[i] = picked.mV[i];
-    getChild<LLColorSwatchCtrl>("color")->setEnabled(mTile.custom_color);
+    auto* swatch = getChild<LLColorSwatchCtrl>("color");
+    if (!mTile.custom_color) swatch->closeFloaterColorPicker();
+    // setEnabled(false) cancels a retained picker, which can synchronously
+    // re-enter this callback. Detach first, retaining the chosen swatch RGB.
+    const auto& picked = swatch->get(); for (int i = 0; i < 3; ++i) mTile.color[i] = picked.mV[i];
+    swatch->setEnabled(mTile.custom_color);
     const bool board_size = getChild<LLCheckBoxCtrl>("board_size")->get();
     getChild<LLSpinCtrl>("tile_width")->setEnabled(!board_size); getChild<LLSpinCtrl>("tile_height")->setEnabled(!board_size);
     mTile.width = board_size ? 0 : getChild<LLSpinCtrl>("tile_width")->getValue().asInteger();
@@ -537,7 +577,7 @@ void FSFloaterGestureTileEditor::updatePreview()
     p.label = mTile.label.empty() ? name : mTile.label; p.use_ellipses = true; p.auto_resize = false;
     const S32 top = sample->getRect().getHeight();
     p.rect = LLRect(0, top, width, top - height); p.tab_stop = false;
-    auto* button = LLUICtrlFactory::create<LLButton>(p, sample); style(button, mTile);
+    auto* button = new FSGestureBoardButton(p, mTile); sample->addChild(button);
 }
 void FSFloaterGestureTileEditor::save()
 {
