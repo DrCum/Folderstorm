@@ -1,8 +1,8 @@
 # Multi-character sessions implementation plan
 
-Status: planning only, requested on 2026-10-09. The user chose **one interface with isolated session workers**, warm and economy background modes, shared access to each character's chat, and a later optional low-resolution monitor for an inactive character. This document does not implement any of them.
+Status: checkpoint 1 source implemented on `feat/multi-character-prototype` after the user authorized starting on 2026-10-09. Native Windows feasibility remains pending. The user chose **one interface with isolated session workers**, warm and economy background modes, shared access to each character's chat, and a later optional low-resolution monitor for an inactive character. Checkpoints 2–6 remain gated follow-ups. See [prototype usage](../../tools/session-host/README.md) and [actual checks/native acceptance](multi-character-validation.md).
 
-Planning baseline: PR #9 (`feat/gesture-board`, `54092832ed`), containing the recent workspace/context and gesture-board work. PR #9 is still open, based on `feat/workspace-context`; GitHub `main` is `33e371fb3f`. This plan lives in the separate `docs/multi-character-sessions` worktree so it does not change either feature PR. At implementation time, verify merge states again, carry this document onto an isolated branch from the appropriate current baseline, and preserve existing edits and published history. The unmerged feature branch is a planning reference, not a claim that its features are in main.
+Verified implementation baseline: PR #9 (`feat/gesture-board`, `54092832ed`), containing the recent workspace/context and gesture-board work. PR #9 is still open, based on `feat/workspace-context`; GitHub `main` is `33e371fb3f`. The original plan-only commit `c8e20429b9` remains on the separate `docs/multi-character-sessions` worktree and is carried into the isolated prototype branch. The follow-up PR is stacked on PR #9; existing feature branches and user edits are preserved. Recheck merge states before later checkpoints, and do not assume unmerged features are in main.
 
 ## Outcome and initial boundaries
 
@@ -199,7 +199,7 @@ Gate: chat/network health continues between frames. Aspect/identity remain corre
 
 ## Verification and measurements
 
-This planning task uses documentation/source inspection only. No implementation or native behavior has been verified by it.
+The initial planning task used documentation/source inspection only. The subsequent checkpoint 1 implementation has focused portable checks, with actual evidence and remaining native acceptance recorded separately in [prototype validation](multi-character-validation.md). No native behavior or performance saving has been verified in the managed Linux workspace.
 
 During implementation, use focused checks for changed contracts: stale generations, bounded payloads/queues, single input/microphone ownership, promotion rollback, sender binding, uncertain sends and frame identity. Fake workers are appropriate when testing these real contracts. Parse changed XML, inspect native API/types and run `git diff --check`. No unrelated Go tests, viewer/build/packaging/GitHub builds or broad suites. Native feasibility/acceptance needs the user's Windows build/test cycle and must be reported separately.
 
