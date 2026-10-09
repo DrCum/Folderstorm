@@ -1438,6 +1438,7 @@ set(viewer_HEADER_FILES
     fssessionchatmodel.h
     fssessionhostoptions.h
     fssessionpreview.h
+    fssessiontransition.h
     fssessionframepipe.h
     fssessionpipe.h
     llinventorybridge.h

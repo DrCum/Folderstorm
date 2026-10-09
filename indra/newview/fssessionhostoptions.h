@@ -9,14 +9,14 @@ namespace fs_session
 struct HostOptions
 {
     Mode standby[2]{Mode::Warm, Mode::Warm};
-    bool voice = false, muteBackground = true, hosted = false, chat = true;
+    bool voice = false, muteBackground = true, hosted = false, chat = true, cinematic = false;
     unsigned int previewSize = 0, previewRate = 1; // Off until explicitly opened for a ready session.
     std::string encode() const
     {
         std::ostringstream out;
         out << "FSH1\nbackground1=" << static_cast<unsigned int>(standby[0]) << "\nbackground2=" << static_cast<unsigned int>(standby[1])
             << "\nvoice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat
-            << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << '\n';
+            << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << "\ncinematic=" << cinematic << '\n';
         return out.str();
     }
     static bool decode(const std::string& text, HostOptions& output)
@@ -43,6 +43,7 @@ struct HostOptions
                 else if (key == "mute") result.muteBackground = value != 0;
                 else if (key == "host") result.hosted = value != 0;
                 else if (key == "chat") result.chat = value != 0;
+                else if (key == "cinematic") result.cinematic = value != 0;
                 else return false;
             }
         }

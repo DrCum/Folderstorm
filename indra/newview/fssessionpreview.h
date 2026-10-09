@@ -32,7 +32,8 @@ inline bool previewIdentity(const Message& frame, const Message& session)
     return frame.kind == Kind::Status && frame.worker == session.worker && frame.pid == session.pid &&
         frame.generation == session.generation && !frame.account.empty() && frame.account == session.account && frame.grid == session.grid &&
         frame.state == State::Ready && session.state == State::Ready && frame.mode != Mode::Active && session.mode != Mode::Active &&
-        (frame.flags & PreviewFrame) && !(frame.flags & (Error | PreviewUnavailable)) && frame.event &&
+        (frame.flags & PreviewFrame) && !(frame.flags & (Error | PreviewUnavailable | Promoting | Transitioning | ChatRestricted)) &&
+        !(session.flags & (Error | PreviewUnavailable | Promoting | Transitioning | ChatRestricted)) && frame.event &&
         previewSize({frame.width, frame.height});
 }
 }
