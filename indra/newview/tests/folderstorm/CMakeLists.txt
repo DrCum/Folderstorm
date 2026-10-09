@@ -30,6 +30,8 @@ folderstorm_check(inventory_bulk
   ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)
 folderstorm_check(workspace_layout
   ../test_fsworkspacelayout.cpp ../../fsworkspacelayout.cpp)
+folderstorm_check(workspace_usability
+  ../test_fsworkspaceusability.cpp)
 
 # Coroutine provenance uses the viewer's Boost fibers. Ordinary portable CI
 # without Boost still runs the inventory model/executor suite above.

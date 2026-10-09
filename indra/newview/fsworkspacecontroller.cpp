@@ -123,7 +123,8 @@ bool equalWindow(const FSWorkspaceLayout::Window& a, const FSWorkspaceLayout::Wi
     const auto& af = a.inventory_folder;
     const auto& bf = b.inventory_folder;
     const bool equal_folder = !af.present || (bf.present && af.single_folder == bf.single_folder &&
-        af.view_mode == bf.view_mode && af.folder_id == bf.folder_id);
+        af.view_mode == bf.view_mode && af.folder_id == bf.folder_id &&
+        (!af.has_expanded_folders || (bf.has_expanded_folders && af.expanded_folders == bf.expanded_folders)));
     return equal_folder && (host || (a.visible == b.visible && a.minimized == b.minimized)) &&
         (!a.has_geometry || (b.has_geometry &&
         (std::fabs(a.center_x - b.center_x) < .002f && std::fabs(a.center_y - b.center_y) < .002f &&
@@ -148,6 +149,41 @@ bool FSWorkspaceController::available() const
 bool FSWorkspaceController::sameSession() const
 {
     return mAccount == gAgent.getID() && mSession == gAgent.getSessionID();
+}
+FSWorkspaceController::RestoreReport FSWorkspaceController::restoreReport() const
+{
+    return available() && mReportAccount == gAgent.getID() && mReportSession == gAgent.getSessionID() ? mReport : RestoreReport{};
+}
+void FSWorkspaceController::beginReport(const std::string& name)
+{
+    mReport = RestoreReport{}; mReport.name = name; mReportPreview = false; mReportNoticeShown = false;
+    mReportAccount = gAgent.getID(); mReportSession = gAgent.getSessionID();
+    ++mReportGeneration; ++mReportRevision;
+}
+void FSWorkspaceController::report(const std::string& subject, const std::string& reason, int count)
+{
+    if (mReportAccount != gAgent.getID() || mReportSession != gAgent.getSessionID()) return;
+    for (auto& line : mReport.lines)
+        if (line.subject == subject && line.reason == reason) { line.count += count; ++mReportRevision; return; }
+    if (mReport.lines.size() < 128) mReport.lines.push_back({subject, reason, count});
+    else if (mReport.lines.back().reason == "report_limit") mReport.lines.back().count += count;
+    else mReport.lines.push_back({"arrangement", "report_limit", count});
+    ++mReportRevision;
+}
+void FSWorkspaceController::offerRestoreReport()
+{
+    if (mReportNoticeShown || !mReport.complete || (mReportPreview && !mQuickSwitch) ||
+        mReportAccount != gAgent.getID() || mReportSession != gAgent.getSessionID()) return;
+    mReportNoticeShown = true;
+    const auto generation = mReportGeneration;
+    const auto account = mReportAccount, session = mReportSession;
+    LLNotificationsUtil::add("WorkspaceRestoreIssues", LLSD(), LLSD(),
+        [this, generation, account, session](const LLSD& notification, const LLSD& response)
+        {
+            if (LLNotificationsUtil::getSelectedOption(notification, response) == 0 && generation == mReportGeneration &&
+                account == gAgent.getID() && session == gAgent.getSessionID() && available()) LLFloaterReg::showInstance("workspace_report");
+            return false;
+        });
 }
 void FSWorkspaceController::abandon()
 {
@@ -353,6 +389,7 @@ bool FSWorkspaceController::quickSwitchLayout(const std::string& id)
     if (std::find(ids.begin(), ids.end(), id) == ids.end() || !rememberPrevious()) return false;
     abandon();
     if (!FSChromeLayoutController::instance().applyProfile(id)) return false;
+    beginReport(id); report("chrome", "restored"); mReport.complete = true;
     gSavedPerAccountSettings.setString("FSActiveWorkspace", "");
     return true;
 }
@@ -373,15 +410,19 @@ void FSWorkspaceController::finishQuickSwitch()
             if (current == live.windows.end() || (!mPendingHandles.count(it->first) && it->second.visible))
             { it = mExpected.windows.erase(it); continue; }
             const bool geometry = it->second.has_geometry, folder = it->second.inventory_folder.present;
+            const bool expanded = it->second.inventory_folder.has_expanded_folders;
             it->second = current->second;
             if (!geometry) it->second.has_geometry = false;
             if (!folder) it->second.inventory_folder = FSWorkspaceLayout::InventoryFolder{};
+            else if (!expanded) { it->second.inventory_folder.has_expanded_folders = false; it->second.inventory_folder.expanded_folders.clear(); }
             ++it;
         }
         mExpected.extra_inventory = live.extra_inventory;
         for (size_t i = 0; i < mExpected.extra_inventory.size(); ++i)
             if (i >= mPending.extra_inventory.size() || !mPending.extra_inventory[i].inventory_folder.present)
                 mExpected.extra_inventory[i].inventory_folder = FSWorkspaceLayout::InventoryFolder{};
+            else if (!mPending.extra_inventory[i].inventory_folder.has_expanded_folders)
+            { mExpected.extra_inventory[i].inventory_folder.has_expanded_folders = false; mExpected.extra_inventory[i].inventory_folder.expanded_folders.clear(); }
         if (mExpected.has_inbox)
         { mExpected.has_inbox = live.has_inbox; mExpected.inbox_expanded = live.inbox_expanded; mExpected.inbox_height = live.inbox_height; }
         if (mExpected.remember_toolbars) mExpected.toolbars = live.toolbars;
@@ -392,6 +433,7 @@ void FSWorkspaceController::finishQuickSwitch()
     // Save only the chosen identifier. Definitions remain unchanged.
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
     if (mRestoreLayout) gSavedSettings.setString("FSChromeActiveProfile", mRestoredLayout);
+    mReportPreview = false;
     abandon();
 }
 bool FSWorkspaceController::rememberPrevious()
@@ -451,6 +493,11 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite,
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
     if (mProfiles.has(name) && !overwrite) { mStatus = "exists"; return false; }
     const auto current = capture(remember_folders, components, remember_toolbars);
+    const auto too_many_branches = [](const FSWorkspaceLayout::Window& window)
+    { return window.inventory_folder.expanded_folders.size() > FSWorkspaceLayout::MAX_EXPANDED_INVENTORY_FOLDERS; };
+    if (std::any_of(current.windows.begin(), current.windows.end(), [&](const std::pair<const Role, FSWorkspaceLayout::Window>& entry) { return too_many_branches(entry.second); }) ||
+        std::any_of(current.extra_inventory.begin(), current.extra_inventory.end(), too_many_branches))
+    { mStatus = "too_many_expanded_folders"; return false; }
     if (current.extra_inventory.size() > static_cast<size_t>(FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS))
     { mStatus = "too_many_inventory_windows"; return false; }
     FSWorkspaceLayout::Workspace validated;
@@ -517,6 +564,10 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     ++mGeneration; ++mRevision;
     mPendingPlacement = false; mPendingHandles.clear();
     mPendingExtraInventory.clear();
+    beginReport(id); mReportPreview = true;
+    for (const auto& group : std::vector<std::pair<int, std::string>>{{FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"}, {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}})
+        if (!(workspace.components & group.first)) report(group.second, "omitted");
+    if (workspace.ignored_details) report("arrangement", "unknown_details", workspace.ignored_details);
     mPending = workspace; mFolderSkipped = mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
     mFocus.markDead();
     if (auto* focus = dynamic_cast<LLView*>(gFocusMgr.getKeyboardFocus())) mFocus = focus->getDerivedHandle<LLView>();
@@ -527,26 +578,28 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     gSavedSettings.setString("FSChromeActiveProfile", "");
     if (gViewerWindow) gViewerWindow->updateWorldViewRect(gAgentCamera.cameraMouselook());
     FSChromeLayoutController::instance().apply();
+    report("chrome", "restored");
     }
     for (const auto& entry : workspace.windows)
     {
         const Role role = entry.first;
+        const std::string subject = FSWorkspaceLayout::roleId(role);
         LLFloater* floater = find(role);
         if ((role == Role::NearbyChat && (!chatCompatible(floater) ||
              !find(Role::ConversationsGeometry))) ||
             (role == Role::ConversationsGeometry && (!standalone(floater) || floater->isMinimized())) ||
             (floater && !standalone(floater)))
-        { ++mSkipped; if (role == Role::NearbyChat) mChatSkipped = true; continue; }
+        { ++mSkipped; report(subject, role == Role::NearbyChat || role == Role::ConversationsGeometry ? "chat_incompatible" : "hosted"); if (role == Role::NearbyChat) mChatSkipped = true; continue; }
         // Moving/minimizing/closing utility parents would propagate to
         // untracked Filters/other windows. Keep those arrangements intact.
         if (floater && (floater->hasWorkspaceDependents() || floater->isDependent()))
-        { ++mSkipped; mDependentSkipped = true; continue; }
+        { ++mSkipped; report(subject, "dependents"); mDependentSkipped = true; continue; }
         // Adopt a newly opened allowed utility's current state as its rollback
         // baseline. Additional Inventory instances have their own baseline below.
         if (!mRuntime[role].existed && floater && !mCreated.count(role)) rememberRole(role);
         const bool needs_open = role != Role::ConversationsGeometry && entry.second.visible &&
             (!floater || !floater->LLView::getVisible());
-        if (needs_open && !LLFloaterReg::canShowInstance(registryName(role))) { ++mSkipped; continue; }
+        if (needs_open && !LLFloaterReg::canShowInstance(registryName(role))) { ++mSkipped; report(subject, "restricted"); continue; }
         if (needs_open)
         {
             const bool created = !floater;
@@ -554,8 +607,8 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
             floater = LLFloaterReg::showInstance(registryName(role), LLSD(), false);
             if (created && floater) mCreated.insert(role);
         }
-        if (!floater) continue; // hidden saved windows never construct anything
-        if (!standalone(floater) || (role == Role::NearbyChat && !chatCompatible(floater))) { ++mSkipped; continue; }
+        if (!floater) { if (entry.second.visible) ++mSkipped; report(subject, entry.second.visible ? "unavailable" : "already_closed"); continue; } // hidden windows never construct anything
+        if (!standalone(floater) || (role == Role::NearbyChat && !chatCompatible(floater))) { ++mSkipped; report(subject, role == Role::NearbyChat ? "chat_incompatible" : "hosted"); continue; }
         mTouched.insert(role);
         mPendingHandles[role] = floater->getDerivedHandle<LLFloater>();
     }
@@ -565,25 +618,26 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     const size_t count = (workspace.components & FSWorkspaceLayout::Inventory) ? std::max(extras.size(), workspace.extra_inventory.size()) : 0;
     for (size_t i = 0; i < count; ++i)
     {
+        const auto subject = "extra_inventory:" + std::to_string(i + 1);
         const auto saved = i < workspace.extra_inventory.size() ? workspace.extra_inventory[i] : FSWorkspaceLayout::Window{};
         LLFloater* floater = i < extras.size() ? extras[i] : nullptr;
         if (floater && (floater->hasWorkspaceDependents() || floater->isDependent()))
-        { ++mSkipped; mDependentSkipped = true; continue; }
+        { ++mSkipped; report(subject, "dependents"); mDependentSkipped = true; continue; }
         if (saved.visible && !LLFloaterReg::canShowInstance(floater ? floater->getInstanceName() : "inventory",
                                                          floater ? floater->getKey() : LLSD()))
-        { ++mSkipped; continue; }
+        { ++mSkipped; report(subject, "restricted"); continue; }
         const bool created = !floater;
         if (!floater && saved.visible)
         {
             rememberExtraInventoryControls("inventory");
             floater = LLPanelMainInventory::newWindow();
-            if (!floater) { ++mSkipped; continue; }
+            if (!floater) { ++mSkipped; report(subject, "unavailable"); continue; }
         }
         if (!floater) continue;
         rememberExtraInventory(floater, created);
         for (auto& baseline : mExtraRuntime)
             if (baseline.state.handle.get() == floater) { baseline.touched = true; break; }
-        mPendingExtraInventory.push_back({floater->getDerivedHandle<LLFloater>(), saved});
+        mPendingExtraInventory.push_back({floater->getDerivedHandle<LLFloater>(), saved, subject});
     }
     if (workspace.remember_toolbars) { applyToolbars(workspace); mToolbarTouched = true; }
     mActive = id;
@@ -621,16 +675,53 @@ bool FSWorkspaceController::placeWindow(LLFloater* floater, const FSWorkspaceLay
     return true;
 }
 void FSWorkspaceController::applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved,
-    RuntimeBaseline& baseline)
+    RuntimeBaseline& baseline, const std::string& subject)
 {
-    if (!saved.visible || !saved.inventory_folder.present) return;
     auto* panel = inventoryPanel(floater);
-    if (!panel || !panel->applyWorkspaceFolder(saved.inventory_folder))
+    // A later switch must cancel expansions queued by the earlier workspace,
+    // including when the destination omits folder capture or hides this window.
+    if (panel && panel->getAllItemsPanel()) panel->getAllItemsPanel()->cancelWorkspaceExpandedFolders();
+    if (!saved.visible || !saved.inventory_folder.present) return;
+    const auto generation = mReportGeneration;
+    std::string failure = "unavailable";
+    const auto expansion = [this, generation, subject](const LLUUID& id, const std::string& reason)
+    {
+        if (generation != mReportGeneration || mReportAccount != gAgent.getID() || mReportSession != gAgent.getSessionID()) return;
+        if (reason == "branches_finished")
+        {
+            mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [&](const ReportLine& line)
+            { return line.subject == subject && line.reason == "branches_pending"; }), mReport.lines.end());
+            ++mReportRevision; return;
+        }
+        report(reason == "branch_restored" ? subject : "folder:" + id.asString(), reason);
+        if (reason != "branch_restored")
+        {
+            // A branch skipped by this restore is not a later user edit. Keep
+            // only the accepted transient comparison; never rewrite the save.
+            if (mExpectedId == mReport.name && mExpectedAccount == mReportAccount && mExpectedSession == mReportSession)
+            {
+                const auto omit = [&id](FSWorkspaceLayout::Window& window)
+                {
+                    auto& ids = window.inventory_folder.expanded_folders;
+                    ids.erase(std::remove(ids.begin(), ids.end(), id.asString()), ids.end());
+                };
+                for (auto& entry : mExpected.windows)
+                    if (subject == FSWorkspaceLayout::roleId(entry.first)) omit(entry.second);
+                for (size_t i = 0; i < mExpected.extra_inventory.size(); ++i)
+                    if (subject == "extra_inventory:" + std::to_string(i + 1)) omit(mExpected.extra_inventory[i]);
+                mComparisonDirty = true;
+            }
+            offerRestoreReport();
+        }
+    };
+    if (saved.inventory_folder.has_expanded_folders && !saved.inventory_folder.expanded_folders.empty()) report(subject, "branches_pending");
+    if (!panel || !panel->applyWorkspaceFolder(saved.inventory_folder, &failure, expansion))
     {
         ++mSkipped;
-        mFolderSkipped = true;
+        mFolderSkipped = true; report(subject, failure);
+        mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [&](const ReportLine& line) { return line.subject == subject && line.reason == "branches_pending"; }), mReport.lines.end());
     }
-    else baseline.folder_touched = true;
+    else { baseline.folder_touched = true; report(subject, "folder_restored"); }
 }
 void FSWorkspaceController::finishPlacement()
 {
@@ -640,20 +731,23 @@ void FSWorkspaceController::finishPlacement()
     for (const auto& entry : mPendingHandles)
     {
         Role role = entry.first;
+        const std::string subject = FSWorkspaceLayout::roleId(role);
         LLFloater* floater = entry.second.get();
         const auto& saved = mPending.windows.at(role);
         if (!standalone(floater) || (role == Role::NearbyChat && !chatCompatible(floater)) ||
-            (role == Role::ConversationsGeometry && floater->isMinimized())) { ++mSkipped; continue; }
+            (role == Role::ConversationsGeometry && floater->isMinimized())) { ++mSkipped; report(subject, "unavailable"); continue; }
         if (floater->hasWorkspaceDependents() || floater->isDependent())
-        { ++mSkipped; mDependentSkipped = true; continue; }
+        { ++mSkipped; report(subject, "dependents"); mDependentSkipped = true; continue; }
         const bool host = role == Role::ConversationsGeometry;
         // Restrictions may change between opening the window and this idle pass.
         if (!host && saved.visible && !LLFloaterReg::canShowInstance(registryName(role)))
-        { ++mSkipped; continue; }
+        { ++mSkipped; report(subject, "restricted"); continue; }
         if (!host) floater->setMinimized(false);
         if (role == Role::InventoryPrimary || role == Role::InventoryExtra1)
-            applyInventoryFolder(floater, saved, mRuntime[role]);
-        if (!placeWindow(floater, saved, role == Role::InventoryPrimary, placed)) { ++mSkipped; continue; }
+            applyInventoryFolder(floater, saved, mRuntime[role], subject);
+        const int adjusted_before = mAdjusted;
+        if (!placeWindow(floater, saved, role == Role::InventoryPrimary, placed)) { ++mSkipped; report(subject, "placement_failed"); continue; }
+        report(subject, adjusted_before != mAdjusted ? "adjusted" : "restored");
         if (!host)
         {
             if (!saved.visible) floater->closeFloater(false);
@@ -663,21 +757,24 @@ void FSWorkspaceController::finishPlacement()
     }
     for (const auto& entry : mPendingExtraInventory)
     {
+        const auto& subject = entry.subject;
         LLFloater* floater = entry.handle.get();
-        if (!standalone(floater)) { ++mSkipped; continue; }
+        if (!standalone(floater)) { ++mSkipped; report(subject, "unavailable"); continue; }
         if (floater->hasWorkspaceDependents() || floater->isDependent())
-        { ++mSkipped; mDependentSkipped = true; continue; }
+        { ++mSkipped; report(subject, "dependents"); mDependentSkipped = true; continue; }
         const auto& saved = entry.window;
         if (saved.visible && !LLFloaterReg::canShowInstance(floater->getInstanceName(), floater->getKey()))
-        { ++mSkipped; continue; }
+        { ++mSkipped; report(subject, "restricted"); continue; }
         floater->setMinimized(false);
         for (auto& baseline : mExtraRuntime)
             if (baseline.state.handle.get() == floater)
             {
-                applyInventoryFolder(floater, saved, baseline.state);
+                applyInventoryFolder(floater, saved, baseline.state, subject);
                 break;
             }
-        if (!placeWindow(floater, saved, false, placed)) { ++mSkipped; continue; }
+        const int adjusted_before = mAdjusted;
+        if (!placeWindow(floater, saved, false, placed)) { ++mSkipped; report(subject, "placement_failed"); continue; }
+        report(subject, adjusted_before != mAdjusted ? "adjusted" : "restored");
         // closeFloater destroys ordinary extra Inventory instances. Hiding
         // preserves their views for reuse and exact Preferences Cancel rollback.
         floater->setVisible(saved.visible);
@@ -695,19 +792,20 @@ void FSWorkspaceController::finishPlacement()
         auto* panel = inbox(primary);
         if (!mInboxBaselineValid && panel)
             mInboxBaselineValid = panel->captureWorkspaceInbox(mInboxBaselineExpanded, mInboxBaselineHeight);
-        if (!panel || !panel->applyWorkspaceInbox(mPending.inbox_expanded, ll_round(mPending.inbox_height))) ++mSkipped;
-        else mInboxTouched = true;
+        if (!panel || !panel->applyWorkspaceInbox(mPending.inbox_expanded, ll_round(mPending.inbox_height))) { ++mSkipped; report("inbox", "unavailable"); }
+        else { mInboxTouched = true; report("inbox", "restored"); }
     }
     if (auto* focus = dynamic_cast<LLFocusableElement*>(mFocus.get())) gFocusMgr.setKeyboardFocus(focus);
     mStatus = mFolderSkipped ? "applied_folders_skipped" : mDependentSkipped ? "applied_dependents_skipped" : mChatSkipped ? "applied_chat_skipped" : "applied";
-    if (mFolderSkipped && mQuickSwitch) LLNotificationsUtil::add("WorkspaceInventoryFolderSkipped");
+    mReport.complete = true; mReport.applied = mApplied; mReport.adjusted = mAdjusted; mReport.skipped = mSkipped; ++mReportRevision;
+    if (mSkipped) offerRestoreReport();
 }
 void FSWorkspaceController::commitPendingSettings()
 {
     if (!mTransaction) return;
     if (!sameSession() || !available()) { abandon(); return; }
     // Explicit OK settles its one pending placement before refreshing baseline.
-    finishPlacement();
+    finishPlacement(); mReportPreview = false;
     ++mGeneration;
     gSavedPerAccountSettings.setLLSD("FSWorkspaceProfiles", mProfiles);
     gSavedPerAccountSettings.setString("FSActiveWorkspace", mActive);
@@ -762,6 +860,12 @@ void FSWorkspaceController::cancelPreferencesSession()
 {
     if (!mTransaction) return;
     ++mGeneration; mPendingPlacement = false;
+    if (mReportPreview && sameSession())
+    {
+        ++mReportGeneration; report("arrangement", "cancelled"); mReportPreview = false;
+        mReport.lines.erase(std::remove_if(mReport.lines.begin(), mReport.lines.end(), [](const ReportLine& line) { return line.reason == "branches_pending"; }), mReport.lines.end());
+        mReport.complete = true;
+    }
     if (!sameSession() || !available()) { abandon(); return; }
     if (mToolbarTouched) applyToolbars(mBaseline);
     FSChromeLayoutController::instance().applySnapshot(mBaseline.chrome);
@@ -1051,6 +1155,8 @@ void FSWorkspaceController::lifecycleIdle(void* userdata)
     auto& controller = *static_cast<FSWorkspaceController*>(userdata);
     if (controller.mLifecycleTimer.getElapsedTimeF32() < .5f) return;
     controller.mLifecycleTimer.reset();
+    if (!controller.mReport.lines.empty() && (!controller.available() || controller.mReportAccount != gAgent.getID() || controller.mReportSession != gAgent.getSessionID()))
+    { controller.mReport = RestoreReport{}; controller.mReportPreview = false; ++controller.mReportRevision; ++controller.mReportGeneration; }
     if (controller.mHasPrevious && (!controller.available() || controller.mPreviousAccount != gAgent.getID() ||
         controller.mPreviousSession != gAgent.getSessionID()))
     {
@@ -1114,11 +1220,12 @@ void FSWorkspaceController::applyToolbars(const FSWorkspaceLayout::Workspace& wo
     {
         const auto location = static_cast<LLToolBarEnums::EToolBarLocation>(bar.location);
         auto* toolbar = gToolBarView->getToolbar(location);
-        if (!toolbar) { ++mSkipped; continue; }
+        if (!toolbar) { ++mSkipped; report("toolbars", "unavailable"); continue; }
         toolbar->setButtonType(static_cast<LLToolBarEnums::ButtonType>(bar.display_mode));
         for (const auto& name : bar.commands)
             if (LLCommandManager::instance().getCommand(name)) gToolBarView->addCommand(LLCommandId(name), location);
-            else ++mSkipped;
+            else { ++mSkipped; report("toolbar:" + name, "toolbar_unavailable"); }
+        report("toolbars", "restored");
     }
 }
 

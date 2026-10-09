@@ -11,6 +11,7 @@
  <string name="invalid_name_or_data">Use a unique name of up to 64 letters, numbers, spaces, dashes, underscores or periods. Maximum: 32 workspaces.</string>
  <string name="inventory_not_ready">Wait for Inventory to load before saving its folders. Your existing workspaces were kept.</string>
  <string name="too_many_inventory_windows">Close some extra Inventory windows before saving. Maximum: 16 additional windows.</string>
+ <string name="too_many_expanded_folders">Collapse some Inventory branches before saving. Maximum: 256 expanded folders per window. Your saved workspace was kept.</string>
  <string name="exists">A workspace with that name already exists.</string>
  <string name="saved">Workspace saved. Click OK to keep it; Cancel restores your previous arrangement.</string>
  <string name="saved_immediately">Workspace saved from the switcher.</string>
@@ -32,7 +33,7 @@
  <line_editor follows="left|top|right" height="24" layout="topleft" left="16" top="180" right="-16" name="workspace_name" max_length="64"/>
  <check_box follows="left|top|right" height="22" layout="topleft" left="16" top="214" right="-16"
   name="workspace_remember_folders" label="Remember Inventory folders"
-  tool_tip="For this save: restore single-folder roots and view modes, or a selected folder in All Items. Search filters and item selections are not saved."/>
+  tool_tip="For this save: restore single-folder roots and view modes, or a selected folder and expanded branches in All Items (up to 256). Search filters and item selections are not saved."/>
  <check_box name="workspace_capture_chrome" label="Restore viewport and bar placement" initial_value="true" left="16" top="242" right="-16" height="22" follows="left|right|top"/>
  <check_box name="workspace_capture_inventory" label="Restore Inventory windows and Received Items" initial_value="true" left="16" top="268" right="-16" height="22" follows="left|right|top"/>
  <check_box name="workspace_capture_maps" label="Restore maps" initial_value="true" left="16" top="294" right="-16" height="22" follows="left|right|top"/>

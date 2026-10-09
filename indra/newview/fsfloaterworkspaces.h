@@ -35,6 +35,7 @@ private:
     void updateButtons();
     void switchSelected();
     void toggleFavorite();
+    void moveFavorite(bool forward);
     void manageSelected();
     void saveCurrent();
     std::string selected() const;
@@ -48,5 +49,14 @@ private:
     unsigned long mRevision = 0;
     bool mReady = false;
     std::string mActionStatus, mSavedName;
+};
+class FSFloaterWorkspaceReport final : public LLFloater
+{
+public:
+    explicit FSFloaterWorkspaceReport(const LLSD& key) : LLFloater(key) {}
+    void draw() override;
+private:
+    unsigned long mRevision = ~0UL;
+    LLUUID mAccount, mSession;
 };
 #endif

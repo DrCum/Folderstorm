@@ -1,5 +1,7 @@
 # Workspace enhancement checkpoints
 
+These are the original PR #4 checks. The separate strip/labels are superseded by PR #5’s shared landmark row; expanded branches, ordering, restore reports and Quiet UI are covered in [the PR #6 native pass](workspace-usability-validation.md).
+
 ## Favorite workspace/layout strip
 
 This checkpoint has XML/binding and diff checks only. No viewer build, native UI run or broad tests were performed.

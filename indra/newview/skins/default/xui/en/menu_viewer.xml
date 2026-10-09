@@ -1031,6 +1031,11 @@
         <menu_item_call label="Workspaces &amp; Layouts…" name="Workspace Quick Switch">
             <menu_item_call.on_click function="Floater.Toggle" parameter="workspace_switch" />
         </menu_item_call>
+        <menu_item_check label="Quiet UI (this session)" name="Workspace Quiet UI">
+            <menu_item_check.on_click function="Workspace.ToggleQuietUI"/>
+            <menu_item_check.on_check function="Workspace.QuietUIEnabled"/>
+            <menu_item_check.on_enable function="Workspace.CanToggleQuietUI"/>
+        </menu_item_check>
         <menu_item_separator/>
         <menu_item_call
          label="Resync Animations"

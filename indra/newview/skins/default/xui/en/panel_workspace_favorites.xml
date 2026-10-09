@@ -7,6 +7,7 @@
  <string name="overflow_hint">Workspace &amp; layout favorites →</string>
  <string name="preferences_open">Finish Preferences with OK or Cancel before switching.</string>
  <string name="switch_failed">This entry could not be applied. Check it in Preferences.</string>
+ <string name="restore_report">Last restore report…</string>
  <string name="manage">Workspaces &amp; layouts…</string>
  <string name="hide">Hide workspace favorites</string>
  <string name="more_hint">More workspace/layout favorites, Previous arrangement and workspace management</string>

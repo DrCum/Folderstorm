@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsquietui.h"
 
 #include "llviewercontrol.h"
 
@@ -1020,8 +1021,8 @@ void handleStaticEyesChanged()
 // <FS:Ansariel> Notification not showing if hiding the UI
 void handleNavbarSettingsChanged()
 {
-    gSavedSettings.setBOOL("FSInternalShowNavbarNavigationPanel", gSavedSettings.getBOOL("ShowNavbarNavigationPanel"));
-    gSavedSettings.setBOOL("FSInternalShowNavbarFavoritesPanel", gSavedSettings.getBOOL("ShowNavbarFavoritesPanel"));
+    gSavedSettings.setBOOL("FSInternalShowNavbarNavigationPanel", !FSQuietUI::active() && gSavedSettings.getBOOL("ShowNavbarNavigationPanel"));
+    gSavedSettings.setBOOL("FSInternalShowNavbarFavoritesPanel", !FSQuietUI::active() && gSavedSettings.getBOOL("ShowNavbarFavoritesPanel"));
 }
 // </FS:Ansariel>
 
@@ -1629,4 +1630,3 @@ void test_cached_control()
 //There's no LLSD comparsion for LLCC yet. TEST_LLCC(LLSD, test_llsd);
 }
 #endif // TEST_CACHED_CONTROL
-

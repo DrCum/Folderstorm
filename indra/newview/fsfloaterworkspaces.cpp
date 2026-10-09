@@ -19,6 +19,7 @@
 #include "fsworkspacecontroller.h"
 #include "fsworkspacequickaccess.h"
 #include "fsworkspacepreview.h"
+#include "fsquietui.h"
 #include "llagent.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -27,6 +28,8 @@
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
 #include "lltextbox.h"
+#include "lltexteditor.h"
+#include "llinventorymodel.h"
 #include "llviewercontrol.h"
 
 #include <algorithm>
@@ -55,6 +58,8 @@ int captureComponents(LLView* view)
 FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
+    getChild<LLCheckBoxCtrl>("quiet_ui")->setCommitCallback([this](LLUICtrl*, const LLSD&) { FSQuietUI::setEnabled(getChild<LLCheckBoxCtrl>("quiet_ui")->get()); });
+    getChild<LLButton>("restore_report")->setCommitCallback([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_report"); });
     getChild<LLButton>("diagram_preview")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_preview", selected()); });
     getChild<LLButton>("update")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().requestUpdateCurrent(); });
     getChild<LLButton>("tools")->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("workspace_tools", selected()); });
@@ -66,6 +71,8 @@ bool FSFloaterWorkspaces::postBuild()
     });
     getChild<LLButton>("switch")->setCommitCallback([this](LLUICtrl*, const LLSD&) { switchSelected(); });
     getChild<LLButton>("favorite")->setCommitCallback([this](LLUICtrl*, const LLSD&) { toggleFavorite(); });
+    getChild<LLButton>("favorite_up")->setCommitCallback([this](LLUICtrl*, const LLSD&) { moveFavorite(false); });
+    getChild<LLButton>("favorite_down")->setCommitCallback([this](LLUICtrl*, const LLSD&) { moveFavorite(true); });
     getChild<LLButton>("manage")->setCommitCallback([this](LLUICtrl*, const LLSD&) { manageSelected(); });
     getChild<LLButton>("save")->setCommitCallback([this](LLUICtrl*, const LLSD&) { saveCurrent(); });
     getChild<LLLineEditor>("workspace_name")->setKeystrokeCallback([](LLLineEditor*, void* userdata)
@@ -147,12 +154,11 @@ void FSFloaterWorkspaces::refresh(bool force)
         if (ready)
         {
             bool heading = false;
-            for (const auto& entry : entries)
-                if (mFavorites.count(entry.key))
-                {
-                    if (!heading) { addHeading(getString("favorites_heading")); heading = true; }
-                    addEntry(entry.key, entry.label, entry.layout);
-                }
+            for (const auto& entry : FSWorkspaceQuickAccess::orderedFavorites(entries))
+            {
+                if (!heading) { addHeading(getString("favorites_heading")); heading = true; }
+                addEntry(entry.key, entry.label, entry.layout);
+            }
             for (bool layout : {false, true})
             {
                 heading = false;
@@ -183,6 +189,8 @@ void FSFloaterWorkspaces::updateButtons()
     const bool ready = controller.available();
     const bool can_switch = controller.canQuickSwitch();
     const bool has_selection = !selected().empty();
+    getChild<LLCheckBoxCtrl>("quiet_ui")->set(FSQuietUI::active());
+    getChild<LLCheckBoxCtrl>("quiet_ui")->setEnabled(ready);
     getChild<LLButton>("previous")->setEnabled(controller.hasPrevious());
     getChild<LLButton>("update")->setEnabled(can_switch && controller.isCustom(controller.activeId()));
     const auto active = controller.activeId();
@@ -192,6 +200,10 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("diagram_preview")->setEnabled(ready && has_selection);
     getChild<LLButton>("favorite")->setEnabled(can_switch && has_selection);
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
+    const auto ordered = FSWorkspaceQuickAccess::orderedFavorites(FSWorkspaceQuickAccess::entries());
+    const auto favorite = std::find_if(ordered.begin(), ordered.end(), [this](const FSWorkspaceQuickAccess::Entry& entry) { return entry.key == selected(); });
+    getChild<LLButton>("favorite_up")->setEnabled(can_switch && favorite != ordered.end() && favorite != ordered.begin());
+    getChild<LLButton>("favorite_down")->setEnabled(can_switch && favorite != ordered.end() && favorite + 1 != ordered.end());
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch && getChild<LLCheckBoxCtrl>("capture_inventory")->get());
@@ -216,15 +228,11 @@ void FSFloaterWorkspaces::switchSelected()
 }
 void FSFloaterWorkspaces::toggleFavorite()
 {
-    if (!FSWorkspaceController::instance().canQuickSwitch() || selected().empty() ||
-        gAgent.getID() != mAccount || gAgent.getSessionID() != mSession) return;
-    const auto key = selected();
-    if (mFavorites.count(key)) mFavorites.erase(key);
-    else if (mFavorites.size() < 128) mFavorites.insert(key);
-    LLSD data = LLSD::emptyArray();
-    for (const auto& favorite : mFavorites) data.append(favorite);
-    gSavedPerAccountSettings.setLLSD(FAVORITES_SETTING, data);
-    refresh(true);
+    if (FSWorkspaceQuickAccess::toggleFavorite(selected(), mAccount, mSession)) refresh(true);
+}
+void FSFloaterWorkspaces::moveFavorite(bool forward)
+{
+    if (FSWorkspaceQuickAccess::moveFavorite(selected(), forward, mAccount, mSession)) refresh(true);
 }
 void FSFloaterWorkspaces::manageSelected()
 {
@@ -248,4 +256,42 @@ void FSFloaterWorkspaces::saveCurrent()
     }
     else mActionStatus = controller.status();
     updateButtons();
+}
+
+void FSFloaterWorkspaceReport::draw()
+{
+    const auto& controller = FSWorkspaceController::instance();
+    if (mRevision != controller.reportRevision() || mAccount != gAgent.getID() || mSession != gAgent.getSessionID())
+    {
+        const auto report = controller.restoreReport();
+        std::string text = getString("empty_report");
+        if (!report.lines.empty())
+        {
+            LLStringUtil::format_map_t args;
+            args["[NAME]"] = report.name.empty() ? getString("arrangement") :
+                FSChromeLayout::isBuiltinProfileId(report.name) ? FSChromeLayout::builtinProfileLabel(report.name) : report.name;
+            args["[APPLIED]"] = std::to_string(report.applied); args["[ADJUSTED]"] = std::to_string(report.adjusted);
+            args["[SKIPPED]"] = std::to_string(report.skipped);
+            text = getString(report.complete ? "summary" : "placing", args) + "\n\n";
+            for (const auto& line : report.lines)
+            {
+                std::string subject = line.subject;
+                if (subject.compare(0, 16, "extra_inventory:") == 0) subject = getString("extra_inventory") + " " + subject.substr(16);
+                else if (subject.compare(0, 7, "folder:") == 0)
+                {
+                    const auto id = subject.substr(7);
+                    const auto* folder = gInventory.getCategory(LLUUID(id));
+                    subject = getString("folder") + " " + (folder ? folder->getName() : id);
+                }
+                else if (subject.compare(0, 8, "toolbar:") == 0) subject = getString("toolbars") + " / " + subject.substr(8);
+                else if (hasString(subject)) subject = getString(subject);
+                text += subject + ": " + getString(line.reason);
+                if (line.count > 1) text += " (" + std::to_string(line.count) + ")";
+                text += "\n";
+            }
+        }
+        getChild<LLTextEditor>("report")->setText(LLStringExplicit(text));
+        mRevision = controller.reportRevision(); mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
+    }
+    LLFloater::draw();
 }

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="workspace_report" title="Workspace restore report" width="560" height="420"
+ min_width="360" min_height="240" can_resize="true" save_rect="true" reuse_instance="true" layout="topleft">
+ <string name="empty_report">No workspace or layout has been restored in this login session.</string>
+ <string name="summary">[NAME] — window placement complete.
+Windows placed: [APPLIED]; adjusted to fit: [ADJUSTED]; skipped windows/fields: [SKIPPED].
+Folder expansion may still be loading. Details below update as views become ready.</string>
+ <string name="placing">[NAME] — restoring the arrangement…</string>
+ <string name="arrangement">Arrangement</string>
+ <string name="chrome">Viewport and bar placement</string>
+ <string name="inventory">Inventory windows</string>
+ <string name="inventory_primary">Main Inventory</string>
+ <string name="inventory_extra_1">Workspace Inventory</string>
+ <string name="extra_inventory">Additional Inventory</string>
+ <string name="mini_map">Mini-map</string>
+ <string name="world_map">World map</string>
+ <string name="nearby_chat">Nearby Chat</string>
+ <string name="conversations_geometry">Conversations</string>
+ <string name="maps">Maps</string>
+ <string name="chat">Chat</string>
+ <string name="inbox">Received Items</string>
+ <string name="toolbars">Toolbar</string>
+ <string name="folder">Folder</string>
+ <string name="restored">Restored.</string>
+ <string name="adjusted">Restored with size or position adjusted to fit this viewer.</string>
+ <string name="omitted">Not included in this workspace; left unchanged.</string>
+ <string name="already_closed">Already closed; no window needed.</string>
+ <string name="restricted">Window or folder restoration blocked by current restrictions.</string>
+ <string name="dependents">Skipped to protect attached or dependent utility windows.</string>
+ <string name="hosted">Skipped: this window is hosted or docked rather than standalone.</string>
+ <string name="chat_incompatible">Skipped: this chat presentation is not compatible, or its host is unavailable/minimized.</string>
+ <string name="unavailable">Window or panel unavailable.</string>
+ <string name="placement_failed">Window could not accept its saved position.</string>
+ <string name="folder_restored">Folder location and view mode applied.</string>
+ <string name="folder_unavailable">Folder unavailable; its location or branch was left unchanged/closed.</string>
+ <string name="folder_filtered">Folder hidden by the current filter; the filter was kept.</string>
+ <string name="folder_invalid">Unsupported folder presentation.</string>
+ <string name="inventory_not_ready">Inventory was not ready for folder restoration.</string>
+ <string name="branches_pending">Expanded branches are waiting for Inventory to be shown and its views to load (up to 30 seconds once shown).</string>
+ <string name="branch_restored">Expanded branch restored.</string>
+ <string name="folder_timeout">Folder view was not ready within 30 seconds; branch left closed.</string>
+ <string name="toolbar_unavailable">Toolbar command unavailable; omitted.</string>
+ <string name="unknown_details">Unsupported saved fields were ignored.</string>
+ <string name="cancelled">Preferences preview was cancelled; the previous arrangement was restored.</string>
+ <string name="report_limit">Additional details omitted because this session report reached its size limit.</string>
+ <text_editor name="report" left="12" top="30" right="-12" bottom="-12" follows="all"
+  read_only="true" max_length="65536" word_wrap="true" parse_urls="false"/>
+</floater>

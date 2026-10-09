@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsquietui.h"
 
 #ifdef INCLUDE_VLD
 #define VLD_FORCE_ENABLE 1
@@ -13465,6 +13466,10 @@ void initialize_menus()
     commit.add("ToggleSettingsDebug", boost::bind(&toggleSettingsDebug));
     // <FS:Ansariel> Toggle teleport history panel directly
     commit.add("ToggleTeleportHistory", boost::bind(&toggleTeleportHistory));
+    // Session-only quiet presentation; World remains available to turn it off.
+    commit.add("Workspace.ToggleQuietUI", [](LLUICtrl*, const LLSD&) { FSQuietUI::setEnabled(!FSQuietUI::active()); });
+    enable.add("Workspace.QuietUIEnabled", [](LLUICtrl*, const LLSD&) { return FSQuietUI::active(); });
+    enable.add("Workspace.CanToggleQuietUI", [](LLUICtrl*, const LLSD&) { return LLStartUp::getStartupState() == STATE_STARTED; });
     // <FS:Ansariel> FIRE-7758: Save/load camera position
     commit.add("Camera.StoreView", boost::bind(&LLAgentCamera::storeCameraPosition, &gAgentCamera));
     commit.add("Camera.LoadView", boost::bind(&LLAgentCamera::loadCameraPosition, &gAgentCamera));

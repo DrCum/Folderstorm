@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llinventorypanel.h"
+#include "fsworkspacelayout.h"
 
 #include <utility> // for std::pair<>
 
@@ -1768,6 +1769,43 @@ void LLInventoryPanel::clearSelection()
     mFocusSelection = false;
 }
 
+std::vector<LLUUID> LLInventoryPanel::captureWorkspaceExpandedFolders(bool bounded) const
+{
+    std::set<LLUUID> ids(mWorkspaceExpandedFolders.begin(), mWorkspaceExpandedFolders.end());
+    if (mWorkspaceExpansionReset) return {ids.begin(), ids.end()};
+    std::vector<LLFolderViewFolder*> pending;
+    if (mFolderRoot.get()) pending.push_back(mFolderRoot.get());
+    while (!pending.empty() && (!bounded || ids.size() <= FSWorkspaceLayout::MAX_EXPANDED_INVENTORY_FOLDERS))
+    {
+        auto* parent = pending.back(); pending.pop_back();
+        for (auto it = parent->getFoldersBegin(); it != parent->getFoldersEnd(); ++it)
+            if ((*it)->isOpen())
+            {
+                if (auto* model = dynamic_cast<LLFolderViewModelItemInventory*>((*it)->getViewModelItem()))
+                    if (gInventory.getCategory(model->getUUID())) ids.insert(model->getUUID());
+                if (bounded && ids.size() > FSWorkspaceLayout::MAX_EXPANDED_INVENTORY_FOLDERS) break;
+                pending.push_back(*it);
+            }
+    }
+    return {ids.begin(), ids.end()};
+}
+
+void LLInventoryPanel::cancelWorkspaceExpandedFolders()
+{
+    mWorkspaceExpandedFolders.clear(); mWorkspaceExpansionReset = false;
+    mWorkspaceExpansionStarted = false;
+    mWorkspaceExpansionCallback = {};
+}
+void LLInventoryPanel::restoreWorkspaceExpandedFolders(const std::vector<LLUUID>& folders, WorkspaceExpansionCallback callback)
+{
+    cancelWorkspaceExpandedFolders();
+    mWorkspaceExpandedFolders = folders;
+    mWorkspaceExpansionCallback = std::move(callback);
+    mWorkspaceExpansionReset = true;
+    mWorkspaceExpansionAccount = gAgent.getID(); mWorkspaceExpansionSession = gAgent.getSessionID();
+    mWorkspaceExpansionTimer.reset();
+}
+
 LLSD LLInventoryPanel::captureWorkspaceSelection() const
 {
     LLSD state;
@@ -2516,6 +2554,64 @@ void LLInventoryPanel::setSelectionByID( const LLUUID& obj_id, bool    take_keyb
 
 void LLInventoryPanel::updateSelection()
 {
+    // Folder views are built incrementally. Wait for their initial build, then
+    // apply expansion once; retries only open branches whose views were absent.
+    // Do not retain work across sessions or keep overriding a user's clicks.
+    if (mWorkspaceExpansionAccount != gAgent.getID() || mWorkspaceExpansionSession != gAgent.getSessionID())
+        cancelWorkspaceExpandedFolders();
+    else if (mWorkspaceExpansionStarted && mWorkspaceExpansionTimer.getElapsedTimeF32() > 30.f)
+    {
+        if (mWorkspaceExpansionCallback)
+            for (const auto& id : mWorkspaceExpandedFolders) mWorkspaceExpansionCallback(id, "folder_timeout");
+        if (mWorkspaceExpansionCallback) mWorkspaceExpansionCallback(LLUUID::null, "branches_finished");
+        cancelWorkspaceExpandedFolders();
+    }
+    if (mWorkspaceExpansionReset && !mWorkspaceExpansionStarted)
+    { mWorkspaceExpansionStarted = true; mWorkspaceExpansionTimer.reset(); }
+    if ((mWorkspaceExpansionReset || !mWorkspaceExpandedFolders.empty()) && gFloaterView)
+        if (auto* floater = gFloaterView->getParentFloater(this))
+            if (!LLFloaterReg::canShowInstance(floater->getInstanceName(), floater->getKey()))
+            {
+                if (mWorkspaceExpansionCallback)
+                    for (const auto& id : mWorkspaceExpandedFolders) mWorkspaceExpansionCallback(id, "restricted");
+                if (mWorkspaceExpansionCallback) mWorkspaceExpansionCallback(LLUUID::null, "branches_finished");
+                cancelWorkspaceExpandedFolders();
+            }
+    if (mViewsInitialized == VIEWS_INITIALIZED && mFolderRoot.get())
+    {
+        if (mWorkspaceExpansionReset)
+        {
+            mFolderRoot.get()->closeAllFolders();
+            mWorkspaceExpansionReset = false;
+        }
+        auto pending_folders = std::move(mWorkspaceExpandedFolders);
+        mWorkspaceExpandedFolders.clear();
+        for (const auto& id : pending_folders)
+        {
+            if (!gInventory.getCategory(id))
+            {
+                if (mWorkspaceExpansionCallback) mWorkspaceExpansionCallback(id, "folder_unavailable");
+                continue;
+            }
+            if (auto* folder = getFolderByID(id))
+            {
+                if (folder->passedFilter())
+                {
+                    folder->setOpenArrangeRecursively(true, LLFolderViewFolder::RECURSE_UP);
+                    if (mWorkspaceExpansionCallback) mWorkspaceExpansionCallback(id, "branch_restored");
+                }
+                else if (folder->getViewModelItem() && folder->getViewModelItem()->getLastFilterGeneration() < getFilter().getFirstSuccessGeneration())
+                    mWorkspaceExpandedFolders.push_back(id);
+                else if (mWorkspaceExpansionCallback) mWorkspaceExpansionCallback(id, "folder_filtered");
+            }
+            else mWorkspaceExpandedFolders.push_back(id);
+        }
+        if (!mWorkspaceExpansionReset && mWorkspaceExpandedFolders.empty() && mWorkspaceExpansionCallback)
+        {
+            mWorkspaceExpansionCallback(LLUUID::null, "branches_finished");
+            mWorkspaceExpansionCallback = {};
+        }
+    }
     // Root changes rebuild their children asynchronously. Restore live rollback
     // selections when their views arrive; a user selection cancels this queue.
     auto pending = mWorkspaceSelection;

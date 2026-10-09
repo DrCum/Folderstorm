@@ -68,6 +68,16 @@ public:
     int appliedCount() const { return mApplied; }
     int adjustedCount() const { return mAdjusted; }
     int skippedCount() const { return mSkipped; }
+    struct ReportLine { std::string subject, reason; int count = 1; };
+    struct RestoreReport
+    {
+        std::string name;
+        std::vector<ReportLine> lines;
+        bool complete = false;
+        int applied = 0, adjusted = 0, skipped = 0;
+    };
+    RestoreReport restoreReport() const;
+    unsigned long reportRevision() const { return mReportRevision; }
     bool modified() const;
     struct DiagramWindow { FSWorkspaceLayout::Rect rect; std::string label; bool minimized = false; };
     struct Diagram { FSWorkspaceLayout::Rect frame; FSChromeLayout::Snapshot chrome; std::vector<DiagramWindow> windows; int components = 0, adjusted = 0, skipped = 0, missing_folders = 0; bool toolbars = false; };
@@ -100,11 +110,20 @@ private:
     {
         LLHandle<LLFloater> handle;
         FSWorkspaceLayout::Window window;
+        std::string subject;
     };
     FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false) const;
     void applyToolbars(const FSWorkspaceLayout::Workspace& workspace);
+    void beginReport(const std::string& name);
+    void report(const std::string& subject, const std::string& reason, int count = 1);
+    void offerRestoreReport();
+    RestoreReport mReport;
+    LLUUID mReportAccount, mReportSession;
+    unsigned long mReportRevision = 0, mReportGeneration = 0;
+    bool mReportPreview = false;
+    bool mReportNoticeShown = false;
     bool mToolbarTouched = false;
-    void applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved, RuntimeBaseline& baseline);
+    void applyInventoryFolder(LLFloater* floater, const FSWorkspaceLayout::Window& saved, RuntimeBaseline& baseline, const std::string& subject);
     void rememberRole(Role role);
     void rememberControls(Role role);
     void rememberExtraInventory(LLFloater* floater, bool created = false);
