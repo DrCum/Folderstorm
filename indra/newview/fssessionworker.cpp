@@ -215,12 +215,14 @@ struct Worker
         if (request.kind == Kind::Events)
         {
             payload = events.after(request.cursor);
-            if (!payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
+            if (payload.topic != Topic::Nearby && payload.topic != Topic::Notice &&
+                !payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
             { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; }
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
+            response.recipient = payload.recipient;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -257,10 +259,11 @@ struct Worker
         }
         if (session && (!session->mSessionInitialized || !session->mTextIMPossible || !imAllowed(*session)))
         { reply(request, "Conversation is not ready or sending is blocked by restrictions."); return; }
+        if (session && !FSData::instance().canSendToIMContact(session->mType, gAgentID, session->mOtherParticipantID))
+        { reply(request, "This account is not permitted to contact this support user."); return; }
         if (request.kind == Kind::Typing)
         {
-            if (session && session->mType == IM_NOTHING_SPECIAL &&
-                !(FSData::instance().isSupport(session->mOtherParticipantID) && FSData::instance().isAgentFlag(gAgentID, FSData::NO_SUPPORT)))
+            if (session && session->mType == IM_NOTHING_SPECIAL)
                 LLIMModel::sendTypingState(session->mSessionID, session->mOtherParticipantID, request.unread != 0);
             reply(request); return;
         }
@@ -394,7 +397,7 @@ struct Worker
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
         detached = true;
         previewCap = {}; previewRate = 0;
-        chatConnection.disconnect(); notificationConnection.disconnect(); events.reset();
+        chatConnection.disconnect(); notificationConnection.disconnect(); events.clear();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
         // Restore only our temporary overrides. Saved values were never changed.
         for (const auto& control : controls)
@@ -655,7 +658,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
-        value.events.reset();
+        value.events.resetSession();
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
@@ -712,7 +715,7 @@ void FSSessionWorker::tick()
     {
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
-        if (blocked != value.chatBlocked) { value.events.reset(); value.chatBlocked = blocked; }
+        if (blocked != value.chatBlocked) { value.events.clear(); value.chatBlocked = blocked; }
         if (blocked && value.previewRate)
         {
             value.previewError = "Preview unavailable while names or locations are restricted.";
@@ -860,6 +863,7 @@ void FSSessionWorker::nearbyMessage(const LLChat& chat)
         chat.mChatStyle == CHAT_STYLE_HISTORY || chat.mChatStyle == CHAT_STYLE_SERVER_HISTORY) return;
     Message message; message.eventType = EventType::Chat; message.topic = Topic::Nearby;
     message.title = "Nearby chat"; message.sender = chat.mFromName; message.text = chat.mText;
+    message.recipient = chat.mFromID.isNull() ? "" : chat.mFromID.asString(); // Sender UUID; exclude own echoes from unread.
     worker->events.push(std::move(message));
 }
 bool FSSessionWorker::keyAllowed(unsigned int key)

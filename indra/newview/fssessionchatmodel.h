@@ -4,6 +4,7 @@
 #include "fssessionprotocol.h"
 #include <deque>
 #include <map>
+#include <limits>
 
 namespace fs_session
 {
@@ -20,7 +21,8 @@ class EventBuffer
 {
 public:
     static constexpr std::size_t Capacity = 256;
-    void reset() { mEvents.clear(); mLast = 0; }
+    void resetSession() { clear(); mLast = 0; } // Only at a new login generation.
+    void clear() { mEvents.clear(); } // Privacy flushes keep session-local IDs monotonic.
     void push(Message message)
     {
         message.event = ++mLast;
@@ -33,9 +35,10 @@ public:
     Message after(std::uint64_t cursor) const
     {
         Message result; result.cursor = mLast;
-        if (!mEvents.empty() && cursor < mEvents.front().event - 1)
+        const auto discarded = mEvents.empty() ? mLast : mEvents.front().event - 1;
+        if (cursor < discarded)
         {
-            result.eventType = EventType::Gap; result.event = mEvents.front().event - 1;
+            result.eventType = EventType::Gap; result.event = discarded;
             result.text = "Earlier messages are outside the shared view's retained window. Check this character's native chat history.";
         }
         else for (const auto& event : mEvents) if (event.event > cursor) { result = event; result.cursor = mLast; break; }
@@ -71,6 +74,13 @@ public:
     std::deque<Message> lines;
     std::uint64_t cursor = 0;
     bool gap = false;
+    bool markRead(const Message& request)
+    {
+        if (request.kind != Kind::MarkRead || !identity.owns(request)) return false;
+        const auto found = conversations.find(request.conversation);
+        if (found == conversations.end() || found->second.topic != request.topic) return false;
+        found->second.unread = 0; return true;
+    }
     void bind(const Message& status)
     {
         if (identity.owns(status)) return;
@@ -93,7 +103,19 @@ public:
         }
         found->second.title = event.title;
         found->second.topic = event.topic;
-        found->second.unread = event.unread;
+        if (event.topic == Topic::Nearby)
+        {
+            // Only accepted incoming events count: replayed IDs, our own echo
+            // and catalog refreshes cannot manufacture or reset shell badges.
+            if (event.eventType == EventType::Chat && event.recipient != identity.account &&
+                found->second.unread < (std::numeric_limits<std::uint32_t>::max)()) ++found->second.unread;
+        }
+        else if (event.topic == Topic::Notice)
+        {
+            // Attention is a boolean, never an offer count/acceptance action.
+            if (event.eventType == EventType::Notice) found->second.unread = 1;
+        }
+        else found->second.unread = event.unread; // Native absolute IM counts.
         if (event.eventType == EventType::Chat || event.eventType == EventType::Notice)
         {
             lines.push_back(event);

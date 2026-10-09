@@ -15,6 +15,7 @@
 #include <bcrypt.h>
 #include <sddl.h>
 #include <shlobj.h>
+#include <shellapi.h>
 #include <psapi.h>
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
@@ -657,8 +658,8 @@ struct Host
         { slot.previewWidth = request.width; slot.previewHeight = request.height; slot.previewRate = request.unread; }
         if (request.kind == Kind::MarkRead && !(response.flags & Error))
         {
-            const auto found = slot.chat.conversations.find(request.conversation);
-            if (found != slot.chat.conversations.end()) found->second.unread = 0;
+            if (slot.chat.markRead(request) && index == chatIndex)
+            { saveDraft(false); refreshChat(true); }
         }
         if (request.kind == Kind::SendChat)
         {

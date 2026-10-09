@@ -1040,6 +1040,7 @@ set(viewer_HEADER_FILES
     fsconsoleutils.h
     fscontactsfriendsmenu.h
     fsdata.h
+    fsimcontactpolicy.h
     fsdroptarget.h
     fsexportperms.h
     fsfloateraddtocontactset.h

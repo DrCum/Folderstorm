@@ -31,6 +31,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsdata.h"
+#include "fsimcontactpolicy.h"
 #include "fscommon.h"
 #include "fscorehttputil.h"
 #include "fsassetblacklist.h"
@@ -775,6 +776,11 @@ bool FSData::isSupport(const LLUUID& avatar_id) const
 {
     S32 flags = getAgentFlags(avatar_id);
     return (flags != -1 && (flags & SUPPORT));
+}
+
+bool FSData::canSendToIMContact(EInstantMessage dialog, const LLUUID& sender, const LLUUID& recipient) const
+{
+    return FSIMContactPolicy::canSend(dialog == IM_NOTHING_SPECIAL, isSupport(recipient), isAgentFlag(sender, NO_SUPPORT));
 }
 
 bool FSData::isDeveloper(const LLUUID& avatar_id) const
