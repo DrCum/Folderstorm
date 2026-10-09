@@ -15,6 +15,7 @@
 #include <bcrypt.h>
 #include <sddl.h>
 #include <shlobj.h>
+#include <shellapi.h>
 #include <psapi.h>
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
