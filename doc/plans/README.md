@@ -59,3 +59,7 @@ All selected items have concrete scope, implementation stages, code touchpoints,
 ## Gesture board
 
 [Gesture board implementation plan](gesture-board.md) covers Inventory selection and drag/drop, direct native gesture playback, saved/reorderable boards, and editable tile text/colors. Keyboard shortcuts are excluded. Workspace associations are a separate optional follow-up. Implemented on `feat/gesture-board`, stacked on PR #8. [Focused checks and native acceptance](gesture-board-validation.md) record completed scope and remaining Windows/skin checks.
+
+## Multi-character sessions
+
+[Multi-character sessions plan](multi-character-sessions.md) is planning only. It describes one interface with isolated viewer workers, warm/economy standby, account-bound shared chat, safe foreground/microphone handoff, workspace/lifecycle integration and a later optional low-resolution 1 FPS monitor. Six gated checkpoints start with two-character render suspension and a native-surface hosting feasibility test. The document is isolated on `docs/multi-character-sessions`; it does not change PR #9 or authorize an implementation/build in this planning task.
