@@ -263,7 +263,9 @@ void FSFloaterGestureBoard::rebuild()
     getChild<LLView>("pagination")->setVisible(multiple);
     getChild<LLButton>("previous_page")->setEnabled(mPage > 0);
     getChild<LLButton>("next_page")->setEnabled(mPage + 1 < static_cast<S32>(pages.size()));
-    LLSD args; args["CURRENT"] = mPage + 1; args["TOTAL"] = static_cast<S32>(pages.size());
+    LLStringUtil::format_map_t args;
+    args["CURRENT"] = std::to_string(mPage + 1);
+    args["TOTAL"] = std::to_string(pages.size());
     getChild<LLTextBox>("page_number")->setText(getString("page_count", args));
     if (board)
     {
