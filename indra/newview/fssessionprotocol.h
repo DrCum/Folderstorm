@@ -18,21 +18,21 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-constexpr std::uint32_t Version = 6;
+constexpr std::uint32_t Version = 7;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
-    Status = 16, WorkspaceInfo, WorkspaceMenu
+    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
 enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
 enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable;
 
 struct Message
 {
@@ -53,7 +53,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return kind >= Kind::Poll && kind <= Kind::WorkspaceMenu;
+    return kind >= Kind::Poll && kind <= Kind::MonitorPolicy;
 }
 inline bool validUtf8(const std::string& text, bool multiline = false)
 {

@@ -494,7 +494,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
     FSSessionWorker::prepareDisplay();
 
-    if (gWindowResized && FSSessionWorker::renderAllowed())
+    if (gWindowResized && FSSessionWorker::renderAllowed() && !FSSessionWorker::monitorRendering())
     { //skip render on frames where window has been resized
         LL_DEBUGS("Window") << "Resizing window" << LL_ENDL;
         LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Resize Window");
@@ -508,7 +508,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         return;
     }
 
-    if (gResizeShadowTexture && FSSessionWorker::renderAllowed())
+    if (gResizeShadowTexture && FSSessionWorker::renderAllowed() && !FSSessionWorker::monitorRendering())
     { //skip render on frames where window has been resized
         gPipeline.resizeShadowTexture();
         // gResizeShadowTexture = false; // <FS:Beq/> This prevents the deferred resize from working properly.
@@ -533,11 +533,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     // Don't draw if the window is hidden or minimized.
     // In fact, must explicitly check the minimized state before drawing.
     // Attempting to draw into a minimized window causes a GL error. JC
-    if (   (!gViewerWindow->getActive() && !FSSessionWorker::hostForeground())
+    if (!FSSessionWorker::monitorRendering() && (   (!gViewerWindow->getActive() && !FSSessionWorker::hostForeground())
         || !gViewerWindow->getWindow()->getVisible()
         || gViewerWindow->getWindow()->getMinimized()
         || !FSSessionWorker::renderAllowed()
-        || gNonInteractive)
+        || gNonInteractive))
     {
         // Clean up memory the pools may have allocated
         if (rebuild)
@@ -924,7 +924,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("display - 2")
-            if (gResizeScreenTexture)
+            if (gResizeScreenTexture && !FSSessionWorker::monitorRendering())
             {
                 gPipeline.resizeScreenTexture();
                 gResizeScreenTexture = false;
@@ -1727,7 +1727,7 @@ void swap()
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_SWAP ); // render time capture - Swap buffer time - can signify excessive data transfer to/from GPU
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Swap");
     LL_PROFILE_GPU_ZONE("swap");
-    if (gDisplaySwapBuffers)
+    if (gDisplaySwapBuffers && !FSSessionWorker::monitorRendering())
     {
         gViewerWindow->getWindow()->swapBuffers();
         FSSessionWorker::framePresented();

@@ -10,11 +10,18 @@ int main()
     options.standby[1] = Mode::Economy; options.voice = options.hosted = true; options.chat = false;
     assert(HostOptions::decode(options.encode(), decoded));
     assert(decoded.standby[1] == Mode::Economy && decoded.hosted && decoded.voice && !decoded.chat);
+    assert(decoded.previewSize == 0 && decoded.previewRate == 1);
+    options.previewSize = 2; options.previewRate = 3;
+    assert(HostOptions::decode(options.encode(), decoded) && decoded.previewSize == 2 && decoded.previewRate == 3);
     const auto before = decoded.encode();
     assert(!HostOptions::decode(options.encode() + "voice=0\n", decoded));
     assert(!HostOptions::decode("FSH1\nbackground1=0\n", decoded));
     assert(!HostOptions::decode(options.encode() + "password=1\n", decoded));
     assert(!HostOptions::decode(std::string(513, 'x'), decoded));
     assert(decoded.encode() == before); // Failed parsing cannot partly enable voice/hosting.
+    auto invalid = options.encode(); invalid.replace(invalid.find("preview_size=2"), 14, "preview_size=3");
+    assert(!HostOptions::decode(invalid, decoded) && decoded.encode() == before);
+    assert(HostOptions::decode("FSH1\nbackground1=1\nbackground2=2\nvoice=0\nmute=1\nhost=0\nchat=1\n", decoded));
+    assert(decoded.previewSize == 0 && decoded.previewRate == 1); // Prior saved choices stay compatible.
     std::cout << "Bounded host-choice parsing, defaults, duplicate/unknown refusal and transactional decoding passed.\n";
 }

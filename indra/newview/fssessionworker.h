@@ -19,6 +19,8 @@ public:
     static bool renderAllowed();
     static bool hostForeground(); // Scheduling only; never fabricates keyboard focus.
     static void prepareDisplay(); // Current GL context only; reversible economy buffers.
+    static bool monitorRendering();
+    static void renderMonitor(); // Current GL context, after ordinary display maintenance.
     static bool inputAllowed();
     static bool voiceAllowed();
     static bool backgroundAudioMuted();

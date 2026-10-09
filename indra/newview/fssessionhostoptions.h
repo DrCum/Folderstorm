@@ -10,11 +10,13 @@ struct HostOptions
 {
     Mode standby[2]{Mode::Warm, Mode::Warm};
     bool voice = false, muteBackground = true, hosted = false, chat = true;
+    unsigned int previewSize = 0, previewRate = 1; // Off until explicitly opened for a ready session.
     std::string encode() const
     {
         std::ostringstream out;
         out << "FSH1\nbackground1=" << static_cast<unsigned int>(standby[0]) << "\nbackground2=" << static_cast<unsigned int>(standby[1])
-            << "\nvoice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat << '\n';
+            << "\nvoice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat
+            << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << '\n';
         return out.str();
     }
     static bool decode(const std::string& text, HostOptions& output)
@@ -24,7 +26,7 @@ struct HostOptions
         while (std::getline(in, line))
         {
             const auto equal = line.find('=');
-            if (equal == std::string::npos || line.size() != equal + 2 || line.back() < '0' || line.back() > '2') return false;
+            if (equal == std::string::npos || line.size() != equal + 2 || line.back() < '0' || line.back() > '3') return false;
             const auto key = line.substr(0, equal); const int value = line.back() - '0';
             if (!seen.insert(key).second) return false;
             if (key == "background1" || key == "background2")
@@ -32,6 +34,8 @@ struct HostOptions
                 if (value != 1 && value != 2) return false;
                 result.standby[key == "background1" ? 0 : 1] = static_cast<Mode>(value);
             }
+            else if (key == "preview_size") { if (value > 2) return false; result.previewSize = static_cast<unsigned int>(value); }
+            else if (key == "preview_rate") result.previewRate = static_cast<unsigned int>(value);
             else
             {
                 if (value > 1) return false;
@@ -42,7 +46,8 @@ struct HostOptions
                 else return false;
             }
         }
-        if (seen.size() != 6) return false;
+        for (const char* required : {"background1", "background2", "voice", "mute", "host", "chat"})
+            if (!seen.count(required)) return false;
         output = result; return true;
     }
 };
