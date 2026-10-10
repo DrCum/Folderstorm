@@ -137,3 +137,20 @@ At the largest cap, five latest-frame mappings use about 4.4 MiB and four retain
 The world selector also selects the character for Session actions. An unavailable/disconnected/separate character stays selected for Restart/Cancel, even while another character owns the world; the actual active character is marked in the list. A successful handoff or rollback synchronizes the selection to its acknowledged owner. Polling does not replace an unavailable management target.
 
 Disconnected native recovery UI may redraw without reacquiring managed simulator input/microphone ownership. Full Stop managing and host-close detachment cancel queued/pending relaunches; a native Quit already accepted can still finish, but cannot cause another viewer to launch afterward. Only a new explicit launch/restart resumes management. Detached Chat/character panels route Tab and Shift+Tab through their own control hierarchy, with normal dispatch for unrelated windows. Native UI validation remains pending.
+
+
+## Character colors, pins and attention (PR #27)
+
+Use **Session → Character appearance and alerts** for the selected character's friendly name, RGB accent and optional background alerts. The color follows the account across selectors, shared Chat and monitors; **Send as** remains tied to the selected chat account rather than the active world. **Save host choices** keeps those metadata choices and fitted host/pop-out/monitor positions. Apply/Cancel edits affect only the current controller session until explicitly saved.
+
+**Pins…** adds/removes/reorders chat pins, including unavailable entries. Six compact tiles show the first pins; the menu lists overflow and tooltips give the full character/conversation. Nearby and known peer/group destinations can be saved; conferences remain session-only and restored IM pins wait for an existing native conversation. Named profiles never contain messages or drafts.
+
+**Session → Attention inbox** lists unread chats and supported offers/requests with account colors. Review activates the correct viewer and opens native chat/notification controls. It never accepts an offer or permission. Dismiss hides a reminder locally; it does not change native read or offer state. Expired/restricted/session-ended actions are refused. A retention gap means native notifications may contain additional items.
+
+Optional alert sounds default Off per character. Enable them in Character appearance, adjust **Session → Notification alert volume**, and retain background world/media mute. Eligible fresh background events produce one short local tone; active accounts use their existing native alerts. Native quiet/mute/contact and IM sound choices are respected. Voice ownership is unaffected.
+
+**Session → Transition style, duration and height** selects Instant, Bird's-eye or a world-only Fade. Defaults are Instant, 1100 ms per leg and 64 m (camera-fitted); duration is 250–2000 ms and height 16–96 m. Escape skips animation while completing switching. Reduced-motion/camera restrictions use instant fallback.
+
+**Session → Character shortcuts** enables optional host chords; the character submenu displays their assignments. Host shortcuts work in the shell/pop-outs, outside editors, IME and menus. For the focused native world, assign the seven Character actions in **Preferences → Controls** using its normal conflict checking; no viewer defaults are imposed. Both use the host's enable policy, skip unavailable cycle targets and drop keys during a handoff. World switching preserves Chat's selected sender and drafts.
+
+The matching private protocol is **10**; do not mix the host/viewer from earlier checkpoints. New presentation metadata is a bounded atomic `host-presentation.dat` file beside existing host options, without credentials or conversation contents. See [the completed usability roadmap and native checklist](../../doc/plans/multi-character-usability.md).
