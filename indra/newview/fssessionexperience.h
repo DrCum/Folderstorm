@@ -41,7 +41,14 @@ inline const std::vector<ShellCommandInfo>& shellCommands()
         {274,L"Attention",L"Open the attention inbox",L"!"},
         {206,L"Save choices",L"Persist host appearance and presentation choices",L"✓"},
         {270,L"Pop-out Chat",L"Dock or detach shared Chat",L"↗"},
-        {271,L"Pop-out controls",L"Dock or detach character controls",L"↗"}};
+        {271,L"Pop-out controls",L"Dock or detach character controls",L"↗"},
+        {RecoverShell,L"Recover windows",L"Bring misplaced panels into reachable work areas and clear pins",L"▣"},
+        {SelectedActions,L"Characters",L"Open commands for the selected management target",L"…"},
+        {ViewActions,L"View",L"Open presentation, docking, monitor and recovery commands",L"▤"},
+        {SettingsActions,L"Settings",L"Open host settings and customization commands",L"⚙"},
+        {SetActions,L"Session sets",L"Save, open or manage a named session set",L"▦"},
+        {AppearanceSettings,L"Appearance",L"Edit host appearance, audio and switching settings",L"◐"},
+        {QuickSettings,L"Quick actions",L"Customize the order of the optional quick buttons",L"≡"}};
     return commands;
 }
 inline const ShellCommandInfo* shellCommand(unsigned int id)
