@@ -6,6 +6,8 @@ Planning baseline: PR #26, `fix/session-host-review`, head `127ea2eb872a3c03a277
 
 Related plans: [sessions](multi-character-sessions.md), [host refinements](multi-character-host-refinements.md), and [validation](multi-character-validation.md). Managed-workspace mirror: `/workspace/plans/folderstorm-multi-character-usability.md`.
 
+Next planned follow-up: [host experience, recovery and session tools](session-host-experience.md). That roadmap is planning-only and includes an Astra High review; it does not change the implementation status of PR #27.
+
 ## Delivery order
 
 | Checkpoint | Feature | Result for the user |
