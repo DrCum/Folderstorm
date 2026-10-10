@@ -1250,6 +1250,8 @@ struct Host
     }
     void sessionMenu(unsigned int group=0,UINT direct=0,int target=-1)
     {
+        if(direct==SelectedActions || direct==ViewActions || direct==SettingsActions)
+        {sessionMenu(direct==SelectedActions?1u:direct==ViewActions?2u:3u,0,target);return;}
         focusRequested=false;RemovePropW(window,L"FolderstormViewportFocusIntent");
         const int index = validSlot(target)?target:selectedSlot(characterControl);
         auto* slot = slots[index].get();
@@ -1274,6 +1276,7 @@ struct Host
         add(characters,203,L"Open selected profile folder");add(characters,277,L"Copy main settings and open login…",!busy() && (!slot || !slot->running()));
         add(characters,SetActions,L"Session sets…");
         HMENU switches=CreatePopupMenu();for(int i=0;i<MaxCharacters;++i)add(switches,440+static_cast<UINT>(i),characterName(i),slots[i] && slots[i]->snapshot.state==State::Ready && !busy(),i==active);
+        add(switches,285,L"Next ready character",presentation.shortcuts && !busy());add(switches,286,L"Previous ready character",presentation.shortcuts && !busy());
         AppendMenuW(characters,MF_POPUP,reinterpret_cast<UINT_PTR>(switches),L"Switch character");
         AppendMenuW(characters,MF_SEPARATOR,0,nullptr);add(characters,209,L"Stop managing; leave viewers running separately…");add(characters,434,L"Close host…");
         add(login,LaunchNext,L"Open next available login",!busy());
@@ -1283,6 +1286,7 @@ struct Host
         add(view,270,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");add(view,271,controlsDetached?L"Dock character controls":L"Pop out character controls");add(view,272,L"Show shared Chat",true,showChat);
         add(view,435,L"Host active viewer",true,embedding);add(view,436,L"Show active viewer separately");AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(mon),L"Monitors");
         add(view,Details,L"Show diagnostics",true,experience.diagnostics);add(view,RestoreShell,L"Restore host controls");add(view,RecoverShell,L"Recover window positions");
+        add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);
         add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,206,L"Save host choices");
         if(group==1){AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(characters),L"Selected character actions");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
         else if(group==2)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(view),L"View");
@@ -2711,7 +2715,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     if (id < 0) return DefWindowProcW(window, message, wparam, lparam);
     if(message==WM_SYSCOMMAND){const auto command=wparam&0xfff0u;if(command==0xA140 || command==0xA150){host->recover(command==0xA150);return 0;}if(command==0xA160){host->pinWindow(window);return 0;}}
     const auto& binding = host->monitorSet.bindings[id];
-    auto scale = [monitor](int value) { return host->theme.scale(value,monitor->dpi); };
+    auto scale = [monitor,context=host](int value) { return context->theme.scale(value,monitor->dpi); };
     switch (message)
     {
     case WM_COMMAND:

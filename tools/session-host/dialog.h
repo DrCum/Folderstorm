@@ -61,6 +61,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         {
             HWND tabs=CreateWindowExW(0,WC_TABCONTROLW,L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP,scale(12),scale(8),scale(494),scale(28),dialog,reinterpret_cast<HMENU>(static_cast<INT_PTR>(90)),instance,nullptr);
             SendMessageW(tabs,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
+            SetWindowSubclass(tabs,editorFieldProc,3,0);
             for(std::size_t i=0;i<editor->pages.size();++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=editor->pages[i].data();TabCtrl_InsertItem(tabs,static_cast<int>(i),&item);}
             y=48;
         }
