@@ -35,6 +35,7 @@
 #include "fssessionprofileseed.h"
 #include "fssessionframepipe.h"
 #include "fssessionrestart.h"
+#include "fssessionrecovery.h"
 #include "fssessionlifecycle.h"
 #include <filesystem>
 #include <fstream>
@@ -58,6 +59,8 @@ constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr int SessionOptions = 119, ViewportFocus = 120;
 constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList = 130, AttentionReview = 131, AttentionDismiss = 132;
+constexpr int RestoreControls = 140, RecoverWindows = 141;
+constexpr UINT TrayMessage = WM_APP + 20;
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -286,7 +289,9 @@ struct Host
     HWND launchButton = nullptr;
     HWND standbyControl[MaxCharacters]{};
     HWND characterControl = nullptr, showChatControl = nullptr, detachControl = nullptr;
-    HWND optionsControl = nullptr, compactInfo = nullptr;
+    HWND optionsControl = nullptr, compactInfo = nullptr, revealControl = nullptr;
+    UINT taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    bool trayPresent = false;
     unsigned int chrome = 0;
     HWND chatWindow = nullptr, controlsWindow = nullptr, tooltips = nullptr;
     bool chatDetached = false, controlsDetached = false;
@@ -784,6 +789,59 @@ struct Host
         lastNotice = text; SetWindowTextW(notice, text.c_str());
         if (chrome != 0) SetWindowTextW(window, (L"Folderstorm · " + text).c_str());
     }
+    void tray(bool add)
+    {
+        NOTIFYICONDATAW icon{}; icon.cbSize = sizeof(icon); icon.hWnd = window; icon.uID = 1;
+        icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP; icon.uCallbackMessage = TrayMessage;
+        icon.hIcon = static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(IDI_SESSION_HOST),IMAGE_ICON,16,16,LR_SHARED));
+        wcscpy_s(icon.szTip,L"Folderstorm character sessions — restore controls");
+        trayPresent = Shell_NotifyIconW(add ? NIM_ADD : NIM_DELETE,&icon) != FALSE && add;
+    }
+    void fitOpenWindow(HWND panel, UINT localDpi, bool nearHost)
+    {
+        if (!panel) return;
+        RECT rect{}; GetWindowRect(panel,&rect);
+        if (IsIconic(panel))
+        {
+            WINDOWPLACEMENT placement{}; placement.length = sizeof(placement);
+            if (GetWindowPlacement(panel,&placement)) rect = placement.rcNormalPosition;
+        }
+        MONITORINFO info{}; info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(MonitorFromWindow(nearHost ? window : panel,MONITOR_DEFAULTTONEAREST),&info)) return;
+        const auto& work = info.rcWork;
+        ShellRect current{static_cast<int>(rect.left),static_cast<int>(rect.top),static_cast<int>(rect.right-rect.left),static_cast<int>(rect.bottom-rect.top),localDpi};
+        if (nearHost) { current.x = static_cast<int>(work.left)+20; current.y = static_cast<int>(work.top)+20; }
+        const auto fit = reachableRect(current,{static_cast<int>(work.left),static_cast<int>(work.top),static_cast<int>(work.right-work.left),static_cast<int>(work.bottom-work.top),96},localDpi);
+        if (fit.valid()) SetWindowPos(panel,nullptr,fit.x,fit.y,fit.width,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
+    }
+    void recover(bool positions = false)
+    {
+        if (IsIconic(window)) ShowWindow(window,SW_RESTORE);
+        setChrome(recoveredChrome(chrome)); fitOpenWindow(window,dpi,false);
+        if (positions)
+        {
+            for (HWND panel : {chatWindow,controlsWindow,attentionWindow}) if (panel)
+            { SetWindowPos(panel,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE); fitOpenWindow(panel,panel == chatWindow ? chatDpi : panel == controlsWindow ? controlsDpi : attentionDpi,true); }
+            for (auto& monitor : monitors) if (monitor.window)
+            { SetWindowPos(monitor.window,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE); fitOpenWindow(monitor.window,monitor.dpi,true); }
+        }
+        ShowWindow(window,SW_SHOW); SetForegroundWindow(window); layout();
+        message(positions ? L"Controls and window positions recovered. Window pins were cleared for this session." : L"Host controls restored.");
+    }
+    void refitWindows()
+    {
+        fitOpenWindow(window,dpi,false);
+        for (HWND panel : {chatWindow,controlsWindow,attentionWindow}) if (panel) fitOpenWindow(panel,panel == chatWindow ? chatDpi : panel == controlsWindow ? controlsDpi : attentionDpi,false);
+        for (auto& monitor : monitors) if (monitor.window) fitOpenWindow(monitor.window,monitor.dpi,false);
+        layout();
+    }
+    void recoveryMenu(HWND panel)
+    {
+        auto menu = GetSystemMenu(panel,FALSE);
+        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
+        AppendMenuW(menu,MF_STRING,0xA140,L"Restore host controls");
+        AppendMenuW(menu,MF_STRING,0xA150,L"Recover window positions");
+    }
     void setChrome(unsigned int mode)
     {
         if (mode > 2) return;
@@ -921,7 +979,7 @@ struct Host
         const wchar_t* rates[] = {L"Preview target: 0.5 FPS", L"Preview target: 1 FPS", L"Preview target: 2 FPS", L"Preview target: 5 FPS"};
         for (unsigned int i = 0; i < 4; ++i) AppendMenuW(menu, MF_STRING | (previewRate == i ? MF_CHECKED : 0), 230 + i, rates[i]);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        const wchar_t* modes[] = {L"Normal host controls", L"Condensed: one-line controls", L"Collapsed: title bar only"};
+        const wchar_t* modes[] = {L"Normal host controls", L"Condensed: one-line controls", L"Minimal: Show controls strip"};
         for (unsigned int i = 0; i < 3; ++i)
             AppendMenuW(menu, MF_STRING | (chrome == i ? MF_CHECKED : 0), 250 + i, modes[i]);
         for (int i = 0; i < MaxCharacters; ++i) if (!descriptions[i].empty())
@@ -1083,7 +1141,7 @@ struct Host
         using WindowDpi = UINT(WINAPI*)(HWND);
         const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
-        if (newMonitor) restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi);
+        if (newMonitor) { recoveryMenu(monitor.window); restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi); }
         createMonitorChat(id); layoutMonitorChat(id);
         ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
     }
@@ -2096,7 +2154,7 @@ struct Host
             panelFont(panel, windowDpi ? windowDpi(panel) : dpi);
         }
         else for (HWND child : children) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-        if (newPanel) restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi);
+        if (newPanel) { recoveryMenu(panel); restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi); }
         layout();
         if (detached && show) ShowWindow(panel, SW_SHOWNORMAL);
         if (chat) SendMessageW(chatCompose, EM_SETSEL, selectionStart, selectionEnd);
@@ -2170,7 +2228,9 @@ struct Host
         const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
         const bool collapsed = chrome == 2, condensed = chrome == 1;
         layoutCharacters(controlsDetached ? controlsWindow : window, controlsDetached ? chrome != 0 : condensed, controlsDetached || !collapsed);
-        const int top = controlsDetached || collapsed ? 0 : scaled(condensed ? 28 : 51 + MaxCharacters * 24);
+        const int top = collapsed ? scaled(revealHeight(chrome)) : controlsDetached ? 0 : scaled(condensed ? 28 : 51 + MaxCharacters * 24);
+        ShowWindow(revealControl,collapsed ? SW_SHOWNOACTIVATE : SW_HIDE);
+        MoveWindow(revealControl,0,0,width,scaled(revealHeight(chrome)),TRUE);
         const bool dockChat = showChat && !chatDetached && !collapsed;
         const int footerHeight = chrome == 0 ? scaled(26) : 0;
         const int chatTop = dockChat ? (std::max)(top + scaled(100), height - scaled(pins.entries.empty() ? 240 : 268)) : height - footerHeight;
@@ -2200,6 +2260,8 @@ Host* host = nullptr;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     if (!host) return DefWindowProcW(window, message, wparam, lparam);
+    if (message == WM_SYSCOMMAND && ((wparam & 0xfff0u) == 0xA140 || (wparam & 0xfff0u) == 0xA150))
+    { host->recover((wparam & 0xfff0u) == 0xA150); return 0; }
     const bool chat = window == host->chatWindow;
     if (window == host->attentionWindow)
     {
@@ -2244,7 +2306,7 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
             host->saveDraft(true); host->showChat = false;
             SendMessageW(host->showChatControl, BM_SETCHECK, BST_UNCHECKED, 0); host->layout();
         }
-        else host->setPanelDetached(false, false);
+        else { host->setPanelDetached(false, false); host->setChrome(recoveredChrome(host->chrome,true)); }
         ShowWindow(window, SW_HIDE); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
@@ -2348,7 +2410,10 @@ HWND control(HWND parent, const wchar_t* type, const wchar_t* text, DWORD style,
 }
 LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
+    if (host && host->taskbarCreated && message == host->taskbarCreated) { host->tray(true); return 0; }
     if (!host) return DefWindowProcW(window, message, wparam, lparam);
+    if (message == WM_SYSCOMMAND && ((wparam & 0xfff0u) == 0xA140 || (wparam & 0xfff0u) == 0xA150))
+    { host->recover((wparam & 0xfff0u) == 0xA150); return 0; }
     switch (message)
     {
     case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight = static_cast<UINT>(host->scaled(22)); return TRUE;
@@ -2363,6 +2428,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SendMessageW(host->showChatControl, BM_SETCHECK, host->showChat ? BST_CHECKED : BST_UNCHECKED, 0);
         host->embedControl = control(window, L"BUTTON", L"Host active viewer", BS_AUTOCHECKBOX | WS_TABSTOP, 383, 10, 235, 28, HostSurface);
         host->detachControl = control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON | WS_TABSTOP, 630, 10, 125, 28, DetachAll);
+        host->revealControl = control(window,L"BUTTON",L"Show controls",BS_PUSHBUTTON|WS_TABSTOP,0,0,200,24,RestoreControls);
         host->optionsControl = control(window, L"BUTTON", L"Session…", BS_PUSHBUTTON | WS_TABSTOP, 705, 10, 80, 28, SessionOptions);
         SendMessageW(host->embedControl, BM_SETCHECK, host->embedding ? BST_CHECKED : BST_UNCHECKED, 0);
         for (int i = 0; i < MaxCharacters; ++i)
@@ -2399,8 +2465,9 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         AppendMenuW(system, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(system, MF_STRING, 0xA100, L"Normal character controls");
         AppendMenuW(system, MF_STRING, 0xA110, L"Condensed character controls");
-        AppendMenuW(system, MF_STRING, 0xA120, L"Title-bar-only controls");
+        AppendMenuW(system, MF_STRING, 0xA120, L"Minimal controls with reveal strip");
         AppendMenuW(system, MF_STRING, 0xA130, L"Character sessions…");
+        host->recoveryMenu(window); host->tray(true);
         const bool chatDetached = host->chatDetached, controlsDetached = host->controlsDetached;
         host->chatDetached = host->controlsDetached = false;
         host->setChrome(host->chrome);
@@ -2416,6 +2483,18 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SetTimer(window, Timer, 100, nullptr); return 0;
     }
     case WM_TIMER: host->tick(); return 0;
+    case WM_DISPLAYCHANGE: host->refitWindows(); return 0;
+    case WM_SETTINGCHANGE: host->refitWindows(); return 0;
+    case TrayMessage:
+        if (lparam == WM_LBUTTONDBLCLK) host->recover();
+        else if (lparam == WM_RBUTTONUP)
+        {
+            HMENU menu = CreatePopupMenu(); AppendMenuW(menu,MF_STRING,RestoreControls,L"Show controls"); AppendMenuW(menu,MF_STRING,RecoverWindows,L"Recover windows"); AppendMenuW(menu,MF_STRING,142,L"Exit host…");
+            POINT point{}; GetCursorPos(&point); SetForegroundWindow(window);
+            const auto choice = TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr); DestroyMenu(menu);
+            if (choice == RestoreControls) host->recover(); else if (choice == RecoverWindows) host->recover(true); else if (choice == 142) SendMessageW(window,WM_CLOSE,0,0);
+            PostMessageW(window,WM_NULL,0,0);
+        } return 0;
     case WM_EXITMENULOOP: host->menuOpen = false; return 0;
     case WM_ENTERMENULOOP: host->menuOpen = true; host->focusRequested = false; RemovePropW(window,L"FolderstormViewportFocusIntent"); return 0;
     case WM_LBUTTONDOWN:
@@ -2443,6 +2522,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         const auto command = static_cast<unsigned int>(wparam & 0xfff0u);
         if (command >= 0xA100 && command <= 0xA120) { host->setChrome((command - 0xA100) / 0x10); return 0; }
         if (command == 0xA130) { host->sessionMenu(); return 0; }
+        if (command == 0xA140 || command == 0xA150) { host->recover(command == 0xA150); return 0; }
         return DefWindowProcW(window, message, wparam, lparam);
     }
     case WM_COMMAND:
@@ -2469,6 +2549,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             }
             break;
         case LaunchNext: host->launchNext(); break;
+        case RestoreControls: host->recover(); break;
+        case RecoverWindows: host->recover(true); break;
         case SessionOptions: host->sessionMenu(); break;
         case ActiveCharacter:
             if (HIWORD(wparam) == CBN_SELENDOK ||
@@ -2536,7 +2618,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case IDNO: host->detach(true); break;
         }
         return 0;
-    case WM_DESTROY: KillTimer(window, Timer); PostQuitMessage(0); return 0;
+    case WM_DESTROY: host->tray(false); KillTimer(window, Timer); PostQuitMessage(0); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
     return DefWindowProcW(window,message,wparam,lparam);

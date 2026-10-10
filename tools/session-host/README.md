@@ -187,3 +187,7 @@ Queued group messages recheck both group and sender receive permission immediate
 Dismissing an unread reminder updates the existing source-bound watermark each time. A later incoming message restores it, including when a native unread count is unchanged. Dismissal still affects only the shell reminder, not native unread state or offers.
 
 The reported Windows scope/constness fixes are upstream. Profile destination paths now use the viewer's explicit UTF-8-to-wide conversion once and reuse that native path, avoiding C++20 `u8path` deprecation under `/WX`. Pin binding also avoids its reported shadowed local without weakening strict warnings.
+
+
+### Host recovery checkpoint
+Minimal chrome now reserves a Show controls strip outside the fitted viewer. Restore controls and Recover positions are available in the host/pop-out/monitor system menus and the notification-area icon (including Explorer restart registration). Display changes re-fit existing windows. Closing detached character controls in minimal mode reveals Condensed controls. Recovery does not change accounts, ownership, drafts or saved preferences; manual position recovery clears native topmost flags for the session. Focused portable recovery checks pass; native hosting/DPI/tray/close paths require Windows acceptance.
