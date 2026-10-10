@@ -1439,6 +1439,7 @@ set(viewer_HEADER_FILES
     fssessionchatmodel.h
     fssessionrestart.h
     fssessionhostoptions.h
+    fssessionregistry.h
     fssessionpreview.h
     fssessiontransition.h
     fssessionframepipe.h

@@ -38,8 +38,8 @@
 namespace
 {
 using namespace fs_session;
-constexpr int Launch1 = 101, Launch2 = 102, Switch1 = 103, Switch2 = 104, HostSurface = 105, DetachAll = 106;
-constexpr int Standby1 = 107, Standby2 = 108;
+constexpr int LaunchNext = 121, LaunchBase = 400, MonitorBase = 410, StandbyBase = 500;
+constexpr int HostSurface = 105, DetachAll = 106;
 constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
 constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
@@ -202,6 +202,7 @@ public:
 struct Slot
 {
     Restart restart;
+    PeriodicPoller periodic;
     FrameLane preview;
     std::uint32_t previewWidth = 0, previewHeight = 0, previewRate = 0;
     ChatView chat;
@@ -237,9 +238,9 @@ struct Slot
 };
 struct Host
 {
-    HWND window = nullptr, viewport = nullptr, status[2]{}, notice = nullptr, embedControl = nullptr;
-    HWND launchButton[2]{}, switchButton[2]{};
-    HWND standbyControl[2]{};
+    HWND window = nullptr, viewport = nullptr, status[MaxCharacters]{}, notice = nullptr, embedControl = nullptr;
+    HWND launchButton = nullptr;
+    HWND standbyControl[MaxCharacters]{};
     HWND characterControl = nullptr, showChatControl = nullptr, detachControl = nullptr;
     HWND optionsControl = nullptr, compactInfo = nullptr;
     unsigned int chrome = 0;
@@ -247,7 +248,7 @@ struct Host
     bool chatDetached = false, controlsDetached = false;
     UINT chatDpi = 96, controlsDpi = 96;
     HFONT chatFont = nullptr, controlsFont = nullptr;
-    std::wstring descriptions[2], lastNotice;
+    std::wstring descriptions[MaxCharacters], lastNotice;
     Handle optionsLease;
     bool logoutOnClose = false;
     std::uintptr_t focusIntent = 0;
@@ -269,8 +270,8 @@ struct Host
     std::string conversation;
     std::vector<std::string> conversationIds;
     bool updatingChat = false, voice = false, muteBackground = true;
-    Mode standby[2]{Mode::Warm, Mode::Warm};
-    std::unique_ptr<Slot> slots[2];
+    std::array<Mode, MaxCharacters> standby = warmModes();
+    std::unique_ptr<Slot> slots[MaxCharacters];
     Handoff handoff;
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
@@ -291,11 +292,21 @@ struct Host
             font = replacement;
         }
     }
+    int selectedSlot(HWND choices) const
+    {
+        const auto selected = SendMessageW(choices, CB_GETCURSEL, 0, 0);
+        return selected >= 0 && selected < MaxCharacters ? static_cast<int>(selected) : 0;
+    }
+    void launchNext()
+    {
+        for (int i = 0; i < MaxCharacters; ++i) if (!slots[i] || !slots[i]->running()) { launch(i); return; }
+        message(L"All character slots are occupied. Use Session to restart or close a selected character.");
+    }
     void refreshCharacters()
     {
         const auto selected = SendMessageW(characterControl, CB_GETCURSEL, 0, 0);
         std::vector<std::wstring> choices;
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < MaxCharacters; ++i)
         {
             std::wstring text = std::to_wstring(i + 1) + L": ";
             text += slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"not logged in";
@@ -317,11 +328,12 @@ struct Host
         chrome = mode;
         for (unsigned int i = 0; i < 3; ++i)
             CheckMenuItem(GetSystemMenu(window, FALSE), 0xA100u + i * 0x10u, MF_BYCOMMAND | (chrome == i ? MF_CHECKED : MF_UNCHECKED));
-        SetWindowTextW(window, L"Folderstorm character sessions");
+        SetWindowTextW(window, (L"Folderstorm · " + std::to_wstring(MaxCharacters) + L" character slots").c_str());
         layout();
     }
     bool send(int index, Kind kind, Mode mode = Mode::Warm, std::uint64_t surface = 0, const Message* bound = nullptr)
     {
+        if (!validSlot(index) || !slots[index]) return false;
         auto& slot = *slots[index];
         if (slot.waiting || !slot.pipe.alive() || slot.pipe.writing()) return false;
         Message request;
@@ -366,7 +378,7 @@ struct Host
     }
     HostOptions options() const
     {
-        HostOptions result; result.standby[0] = standby[0]; result.standby[1] = standby[1];
+        HostOptions result; result.standby = standby;
         result.chrome = chrome; result.chatDetached = chatDetached; result.controlsDetached = controlsDetached;
         result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
         result.previewSize = monitorSize; result.previewRate = monitorRate;
@@ -384,7 +396,7 @@ struct Host
     }
     void sessionMenu()
     {
-        const int index = SendMessageW(characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0;
+        const int index = selectedSlot(characterControl);
         auto* slot = slots[index].get();
         Message action;
         if (slot)
@@ -394,7 +406,7 @@ struct Host
         }
         HMENU menu = CreatePopupMenu();
         if (!menu) return;
-        const std::wstring name = slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : index == 0 ? L"Character 1" : L"Character 2";
+        const std::wstring name = slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"Character " + std::to_wstring(index + 1);
         AppendMenuW(menu, MF_STRING | (index == active && !busy() ? 0 : MF_GRAYED), 201, (L"Manage workspaces: " + name).c_str());
         AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
         AppendMenuW(menu, MF_STRING | (!busy() ? 0 : MF_GRAYED), 240, (L"Restart character: " + name + L"…").c_str());
@@ -408,8 +420,12 @@ struct Host
         AppendMenuW(menu, MF_STRING | (cinematic ? MF_CHECKED : 0), 207, L"Bird's-eye transitions (Escape skips)");
         AppendMenuW(menu, MF_STRING | (handoff.step() != Handoff::Step::Idle ? 0 : MF_GRAYED), 208, L"Switch instantly (skip this animation)");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, 210, L"Monitor character 1 (read only)");
-        AppendMenuW(menu, MF_STRING, 211, L"Monitor character 2 (read only)");
+        for (int i = 0; i < MaxCharacters; ++i)
+        {
+            const auto label = L"Character " + std::to_wstring(i + 1);
+            AppendMenuW(menu, MF_STRING | (!busy() && (!slots[i] || !slots[i]->running()) ? 0 : MF_GRAYED), LaunchBase + i, (L"Open " + label + L" login").c_str());
+            AppendMenuW(menu, MF_STRING, MonitorBase + i, (L"Monitor " + label + L" (read only)").c_str());
+        }
         AppendMenuW(menu, MF_STRING | (!monitorEnabled ? MF_CHECKED : 0), 212, L"Stop monitor");
         for (unsigned int i = 0; i < 3; ++i)
         {
@@ -422,7 +438,7 @@ struct Host
         const wchar_t* modes[] = {L"Normal host controls", L"Condensed: one-line controls", L"Collapsed: title bar only"};
         for (unsigned int i = 0; i < 3; ++i)
             AppendMenuW(menu, MF_STRING | (chrome == i ? MF_CHECKED : 0), 250 + i, modes[i]);
-        for (int i = 0; i < 2; ++i) if (!descriptions[i].empty())
+        for (int i = 0; i < MaxCharacters; ++i) if (!descriptions[i].empty())
             AppendMenuW(menu, MF_STRING | MF_GRAYED, 260 + i, descriptions[i].c_str());
         if (!lastNotice.empty()) AppendMenuW(menu, MF_STRING | MF_GRAYED, 265, lastNotice.c_str());
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -450,7 +466,7 @@ struct Host
         else if (choice == 241 && slots[index]) { slots[index]->restart.cancel(); message(L"Restart cancelled; no new viewer will launch."); }
         else if (choice == 203)
         {
-            const auto path = profiles / (index == 0 ? L"Character1" : L"Character2");
+            const auto path = profiles / (L"Character" + std::to_wstring(index + 1));
             ShellExecuteW(window, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
         else if (choice == 209) detach(false);
@@ -459,7 +475,8 @@ struct Host
         else if (choice == 206) saveOptions();
         else if (choice == 207) cinematic = !cinematic;
         else if (choice == 208) skipTransition();
-        else if (choice == 210 || choice == 211) openMonitor(choice == 210 ? 0 : 1);
+        else if (choice >= LaunchBase && choice < LaunchBase + MaxCharacters) launch(static_cast<int>(choice) - LaunchBase);
+        else if (choice >= MonitorBase && choice < MonitorBase + MaxCharacters) openMonitor(static_cast<int>(choice) - MonitorBase);
         else if (choice == 212) { monitorEnabled = false; clearMonitor(); if (monitor) ShowWindow(monitor, SW_HIDE); }
         else if (choice >= 220 && choice <= 222) { monitorSize = choice - 220; }
         else if (choice >= 230 && choice <= 233) monitorRate = choice - 230;
@@ -557,9 +574,9 @@ struct Host
         if (!chatAccount) return;
         updatingChat = true;
         std::vector<std::wstring> accounts;
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < MaxCharacters; ++i)
         {
-            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : i == 0 ? L"Character 1" : L"Character 2";
+            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"Character " + std::to_wstring(i + 1);
             accounts.push_back(name);
         }
         syncChoices(chatAccount, accounts, chatIndex);
@@ -640,6 +657,7 @@ struct Host
     }
     void restartCharacter(int index)
     {
+        if (!validSlot(index)) return;
         if (busy()) { message(L"Finish the current switch or close action before restarting."); return; }
         if (!slots[index] || !slots[index]->running()) { launch(index); return; }
         auto& slot = *slots[index];
@@ -653,13 +671,14 @@ struct Host
     }
     void launch(int index)
     {
+        if (!validSlot(index) || busy()) { message(L"Finish the current switch or close action before launching."); return; }
         if (slots[index] && slots[index]->running()) { message(L"This slot still has a viewer open. Close that viewer before relaunching."); return; }
         std::error_code error;
         if (!std::filesystem::is_regular_file(viewer, error) || error) { message(L"Viewer executable missing. Keep this controller beside the matching viewer."); return; }
         auto slot = std::make_unique<Slot>();
         if (BCryptGenRandom(nullptr, slot->id.data(), static_cast<ULONG>(slot->id.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
         { message(L"Unable to create the private session identity."); return; }
-        const auto profile = profiles / (index == 0 ? L"Character1" : L"Character2");
+        const auto profile = profiles / (L"Character" + std::to_wstring(index + 1));
         std::filesystem::create_directories(profile / L"Roaming", error);
         if (!error) std::filesystem::create_directories(profile / L"Local", error);
         if (error) { message(L"Unable to create the separate character profile."); return; }
@@ -703,14 +722,14 @@ struct Host
     }
     bool waitingForLostOwner(int target) const
     {
-        for (int index = 0; index < 2; ++index) if (index != target && slots[index] && !slots[index]->pipe.alive())
+        for (int index = 0; index < MaxCharacters; ++index) if (index != target && slots[index] && !slots[index]->pipe.alive())
             if (auto surface = slots[index]->surface())
                 if (GetPropW(surface, InputLeaseProperty) == reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(GetCurrentProcessId()))) return true;
         return false;
     }
     void switchTo(int index)
     {
-        if (busy() || !slots[index] || slots[index]->detached || !slots[index]->pipe.alive()) return;
+        if (!validSlot(index) || busy() || !slots[index] || slots[index]->detached || !slots[index]->pipe.alive()) return;
         if (slots[index]->snapshot.state != State::Ready) { message(L"Finish login before switching this character."); return; }
         if (index == active)
         {
@@ -732,7 +751,7 @@ struct Host
         handoffAnimated = false;
         if (handoff.step() == Handoff::Step::Idle) return;
         const int index = handoff.worker();
-        if (index < 0 || !slots[index]) return;
+        if (!validSlot(index) || !slots[index]) return;
         auto& slot = *slots[index];
         if (!slot.waiting || slot.request.kind != Kind::SetMode) return;
         slot.pendingSkip = slot.request; slot.pendingSkip.kind = Kind::CancelTransition;
@@ -870,10 +889,10 @@ struct Host
     }
     void describe(int index)
     {
-        if (!slots[index]) { SetWindowTextW(status[index], index == 0 ? L"Character 1: not launched" : L"Character 2: not launched"); return; }
+        if (!slots[index]) { descriptions[index] = L"Character " + std::to_wstring(index + 1) + L": not launched"; SetWindowTextW(status[index], descriptions[index].c_str()); return; }
         const auto& slot = *slots[index];
         std::wostringstream text;
-        text << (index == 0 ? L"1: " : L"2: ") << (slot.snapshot.name.empty() ? L"Login" : wide(slot.snapshot.name));
+        text << (std::to_wstring(index + 1) + L": ") << (slot.snapshot.name.empty() ? L"Login" : wide(slot.snapshot.name));
         text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
@@ -905,7 +924,7 @@ struct Host
         const bool escape = ownForeground && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
         if (escape && !escapeHeld && busy()) skipTransition();
         escapeHeld = escape;
-        for (int index = 0; index < 2; ++index)
+        for (int index = 0; index < MaxCharacters; ++index)
         {
             if (!slots[index]) continue;
             auto& slot = *slots[index];
@@ -982,12 +1001,15 @@ struct Host
                 }
                 else if (slot.snapshot.flags & LoginPending)
                 {
-                    const int other = 1 - index;
-                    const bool collision = slots[other] && slots[other]->running() && loginCollision(slot.snapshot, slots[other]->snapshot, slots[other]->reservation);
+                    const bool collision = loginCollisionAny(slot.snapshot, index, [this](int other)
+                    {
+                        const auto* peer = slots[other].get();
+                        return LoginPeer{peer ? &peer->snapshot : nullptr, peer ? &peer->reservation : nullptr, peer && peer->running()};
+                    });
                     if (send(index, collision ? Kind::DenyLogin : Kind::PermitLogin))
                     {
                         if (!collision) slot.reservation = slot.snapshot.name;
-                        else message(L"That character is already reserved. Use a different character in the second viewer.");
+                        else message(L"That character is already reserved. Use a different character in this viewer.");
                     }
                 }
                 else if (index == active && slot.snapshot.state == State::Ready &&
@@ -1024,34 +1046,39 @@ struct Host
                     const auto pending = slot.pendingTyping; slot.hasPendingTyping = false;
                     if (send(index, Kind::Typing, Mode::Warm, 0, &pending)) slot.typingAt = GetTickCount64();
                 }
-                else if (slot.snapshot.state == State::Ready && !(slot.snapshot.flags & ChatRestricted) && GetTickCount64() - slot.eventsAt >= 100)
-                    send(index, Kind::Events);
-                else if (slot.snapshot.state == State::Ready && !(slot.snapshot.flags & ChatRestricted) && GetTickCount64() - slot.catalogAt >= 20000)
-                    send(index, Kind::Conversations);
-                else if (slot.snapshot.state == State::Ready && GetTickCount64() - slot.workspaceAt >= 2000)
-                    send(index, Kind::WorkspaceInfo);
-                else if (slot.snapshot.state == State::Ready)
+                else
                 {
                     const bool wanted = monitorEnabled && index == monitorIndex && monitorKey.owns(slot.snapshot) && index != active && !busy() &&
                         monitor && IsWindowVisible(monitor) && !IsIconic(monitor) && !IsIconic(window);
                     const std::uint32_t width = wanted ? 320u + monitorSize * 160u : 0u;
                     const std::uint32_t height = wanted ? 180u + monitorSize * 90u : 0u;
                     const std::uint32_t rates[] = {1, 2, 4, 10}; const std::uint32_t rate = wanted ? rates[monitorRate] : 0u;
-                    if (slot.previewWidth != width || slot.previewHeight != height || slot.previewRate != rate) send(index, Kind::MonitorPolicy);
-                    else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
+                    if (slot.snapshot.state == State::Ready && (slot.previewWidth != width || slot.previewHeight != height || slot.previewRate != rate))
+                        send(index, Kind::MonitorPolicy);
+                    else
+                    {
+                        const auto kind = slot.periodic.next(slot.snapshot.state == State::Ready, (slot.snapshot.flags & ChatRestricted) != 0,
+                            GetTickCount64(), slot.eventsAt, slot.catalogAt, slot.workspaceAt, slot.pollAt);
+                        if (kind != Kind::Status) send(index, kind);
+                    }
                 }
-                else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
-            EnableWindow(launchButton[index], !slot.running() && !busy() && slot.restart.phase() == Restart::Phase::Idle);
-            EnableWindow(switchButton[index], slot.running() && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && !busy());
+
         }
+        bool canLaunch = false;
+        for (int i = 0; i < MaxCharacters; ++i)
+        {
+            if (!slots[i]) describe(i);
+            if (!slots[i] || !slots[i]->running()) canLaunch = true;
+        }
+        EnableWindow(launchButton, canLaunch && !busy());
         refreshChat();
         refreshCharacters();
         if (active < 0) SetWindowTextW(compactInfo, L"Choose a character · details in Session");
         updateMonitor();
         if (!busy() && active < 0 && selectFirst)
-            for (int i = 0; i < 2; ++i) if (slots[i] && slots[i]->pipe.alive() && !slots[i]->detached && slots[i]->snapshot.state == State::Ready) { switchTo(i); selectFirst = false; break; }
+            for (int i = 0; i < MaxCharacters; ++i) if (slots[i] && slots[i]->pipe.alive() && !slots[i]->detached && slots[i]->snapshot.state == State::Ready) { switchTo(i); selectFirst = false; break; }
         if (detaching)
         {
             bool complete = true;
@@ -1088,8 +1115,8 @@ struct Host
     { return {chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl}; }
     std::vector<HWND> characterControls() const
     {
-        std::vector<HWND> result{characterControl, embedControl, detachControl, showChatControl, optionsControl, compactInfo};
-        for (int i = 0; i < 2; ++i) { result.push_back(launchButton[i]); result.push_back(status[i]); result.push_back(standbyControl[i]); }
+        std::vector<HWND> result{characterControl, launchButton, embedControl, detachControl, showChatControl, optionsControl, compactInfo};
+        for (int i = 0; i < MaxCharacters; ++i) { result.push_back(status[i]); result.push_back(standbyControl[i]); }
         return result;
     }
     void panelFont(HWND panel, UINT value)
@@ -1113,7 +1140,7 @@ struct Host
         bool& preference = chat ? chatDetached : controlsDetached;
         if (detached && !panel)
             panel = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionPanel", chat ? L"Shared Chat · choose Send as" : L"Character controls",
-                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(chat ? 800 : 840), scaled(chat ? 360 : 180), window, nullptr, GetModuleHandleW(nullptr), nullptr);
+                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(chat ? 800 : 840), scaled(chat ? 360 : 100 + MaxCharacters * 24), window, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (detached && !panel) { message(L"Could not create the panel; its controls remain docked."); return; }
         const HWND target = detached ? panel : window;
         DWORD process = 0;
@@ -1161,22 +1188,23 @@ struct Host
         ShowWindow(compactInfo, visible && condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
         if (condensed)
         {
-            move(characterControl, 3, 3, 180, 200); move(launchButton[0], 189, 3, 30, 22); move(launchButton[1], 223, 3, 30, 22);
+            move(characterControl, 3, 3, 180, 220); move(launchButton, 189, 3, 60, 22);
             move(embedControl, 260, 3, 64, 22); move(detachControl, 329, 3, 80, 22);
             move(showChatControl, 414, 3, 52, 22); move(optionsControl, 471, 3, 58, 22);
             MoveWindow(compactInfo, scale(536), scale(5), (std::max)(1, width - scale(540)), scale(20), TRUE);
         }
         else
         {
-            move(characterControl, 10, 10, 170, 200); move(launchButton[0], 190, 10, 45, 28); move(launchButton[1], 240, 10, 45, 28);
+            move(characterControl, 10, 10, 170, 220); move(launchButton, 190, 10, 95, 28);
             move(embedControl, 295, 10, 180, 28); move(detachControl, 485, 10, 110, 28);
             move(showChatControl, 605, 10, 90, 28); move(optionsControl, 705, 10, 80, 28);
         }
+        SetWindowTextW(launchButton, condensed ? L"+" : L"+ Character");
         SetWindowTextW(embedControl, condensed ? L"Host" : L"Host active viewer");
         SetWindowTextW(detachControl, condensed ? L"Separate" : L"Separate windows");
         SetWindowTextW(showChatControl, condensed ? L"Chat" : L"Chat panel");
         SetWindowTextW(optionsControl, condensed ? L"Session" : L"Session…");
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < MaxCharacters; ++i)
         {
             ShowWindow(status[i], visible && !condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
             ShowWindow(standbyControl[i], visible && !condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
@@ -1208,7 +1236,7 @@ struct Host
         const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
         const bool collapsed = chrome == 2, condensed = chrome == 1;
         layoutCharacters(controlsDetached ? controlsWindow : window, controlsDetached ? chrome != 0 : condensed, controlsDetached || !collapsed);
-        const int top = controlsDetached || collapsed ? 0 : scaled(condensed ? 28 : 99);
+        const int top = controlsDetached || collapsed ? 0 : scaled(condensed ? 28 : 51 + MaxCharacters * 24);
         const bool dockChat = showChat && !chatDetached && !collapsed;
         const int footerHeight = chrome == 0 ? scaled(26) : 0;
         const int chatTop = dockChat ? (std::max)(top + scaled(100), height - scaled(240)) : height - footerHeight;
@@ -1257,7 +1285,7 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
         const UINT dpi = chat ? host->chatDpi : host->controlsDpi;
         reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {
             MulDiv(chat ? 700 : 805, static_cast<int>(dpi), 96),
-            MulDiv(chat ? 260 : host->chrome == 0 ? 140 : 85, static_cast<int>(dpi), 96)}; return 0;
+            MulDiv(chat ? 260 : host->chrome == 0 ? 100 + MaxCharacters * 24 : 85, static_cast<int>(dpi), 96)}; return 0;
     }
     case WM_CLOSE:
         if (chat)
@@ -1336,11 +1364,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     {
     case WM_CREATE:
         host->window = window;
-        host->launchButton[0] = control(window, L"BUTTON", L"+ 1", BS_PUSHBUTTON | WS_TABSTOP, 10, 10, 80, 28, Launch1);
-        host->switchButton[0] = control(window, L"BUTTON", L"Switch to 1", BS_PUSHBUTTON, 95, 10, 90, 28, Switch1);
-        host->launchButton[1] = control(window, L"BUTTON", L"+ 2", BS_PUSHBUTTON | WS_TABSTOP, 195, 10, 80, 28, Launch2);
-        host->switchButton[1] = control(window, L"BUTTON", L"Switch to 2", BS_PUSHBUTTON, 280, 10, 90, 28, Switch2);
-        ShowWindow(host->switchButton[0], SW_HIDE); ShowWindow(host->switchButton[1], SW_HIDE);
+        host->launchButton = control(window, L"BUTTON", L"+ Character", BS_PUSHBUTTON | WS_TABSTOP, 190, 10, 95, 28, LaunchNext);
         host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
         host->showChatControl = control(window, L"BUTTON", L"Chat panel", BS_AUTOCHECKBOX | WS_TABSTOP, 695, 10, 90, 28, ShowChat);
         SendMessageW(host->showChatControl, BM_SETCHECK, host->showChat ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -1348,11 +1372,11 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->detachControl = control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON | WS_TABSTOP, 630, 10, 125, 28, DetachAll);
         host->optionsControl = control(window, L"BUTTON", L"Session…", BS_PUSHBUTTON | WS_TABSTOP, 705, 10, 80, 28, SessionOptions);
         SendMessageW(host->embedControl, BM_SETCHECK, host->embedding ? BST_CHECKED : BST_UNCHECKED, 0);
-        host->status[0] = control(window, L"STATIC", L"Character 1: not launched", SS_LEFT, 10, 48, 850, 20);
-        host->status[1] = control(window, L"STATIC", L"Character 2: not launched", SS_LEFT, 10, 70, 850, 20);
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < MaxCharacters; ++i)
         {
-            host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, i == 0 ? Standby1 : Standby2);
+            const auto label = L"Character " + std::to_wstring(i + 1) + L": not launched";
+            host->status[i] = control(window, L"STATIC", label.c_str(), SS_LEFT, 10, 48 + i * 24, 850, 20);
+            host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, StandbyBase + i);
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Background: Warm"));
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Economy (experimental)"));
             SendMessageW(host->standbyControl[i], CB_SETCURSEL, host->standby[i] == Mode::Economy ? 1 : 0, 0);
@@ -1386,14 +1410,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->setChrome(host->chrome);
         host->tooltips = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, GetModuleHandleW(nullptr), nullptr);
-        host->addTooltip(host->launchButton[0], L"Open character 1 native login");
-        host->addTooltip(host->launchButton[1], L"Open character 2 native login");
+        host->addTooltip(host->launchButton, L"Open the next available character login; Session offers individual slots");
         host->addTooltip(host->embedControl, L"Fit the active viewer to this host; uncheck to return to a separate managed window");
         host->addTooltip(host->detachControl, L"Use separate viewer windows while retaining character management");
         host->addTooltip(host->optionsControl, L"Character actions, monitors, host presentation and docking");
         if (chatDetached) host->setPanelDetached(true, true, false);
         if (controlsDetached) host->setPanelDetached(false, true, false);
-        EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
     case WM_ENTERMENULOOP:
@@ -1427,6 +1449,16 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_COMMAND:
         if (LOWORD(wparam) != ViewportFocus)
         { host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent"); }
+        if (LOWORD(wparam) >= StandbyBase && LOWORD(wparam) < StandbyBase + MaxCharacters)
+        {
+            if (HIWORD(wparam) == CBN_SELCHANGE)
+            {
+                const int index = LOWORD(wparam) - StandbyBase;
+                host->standby[index] = SendMessageW(host->standbyControl[index], CB_GETCURSEL, 0, 0) == 1 ? Mode::Economy : Mode::Warm;
+                host->message(L"Background choice applies to this character when inactive. Economy savings need native measurements.");
+            }
+            return 0;
+        }
         switch (LOWORD(wparam))
         {
         case ViewportFocus:
@@ -1436,15 +1468,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
                 host->focusRequested = SetPropW(window, L"FolderstormViewportFocusIntent", reinterpret_cast<HANDLE>(host->focusIntent)) != FALSE;
             }
             break;
-        case Launch1: host->launch(0); break;
-        case Launch2: host->launch(1); break;
-        case Switch1: host->switchTo(0); break;
-        case Switch2: host->switchTo(1); break;
+        case LaunchNext: host->launchNext(); break;
         case SessionOptions: host->sessionMenu(); break;
         case ActiveCharacter:
             if (HIWORD(wparam) == CBN_SELENDOK ||
                 (HIWORD(wparam) == CBN_SELCHANGE && !SendMessageW(host->characterControl, CB_GETDROPPEDSTATE, 0, 0)))
-                host->switchTo(SendMessageW(host->characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0);
+                host->switchTo(host->selectedSlot(host->characterControl));
             if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshCharacters();
             break;
         case ShowChat:
@@ -1453,7 +1482,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case ChatAccount:
             if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
             {
-                host->saveDraft(true); host->chatIndex = SendMessageW(host->chatAccount, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0;
+                host->saveDraft(true); host->chatIndex = host->selectedSlot(host->chatAccount);
                 host->conversation.clear(); host->refreshChat(true, true);
             }
             if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
@@ -1480,15 +1509,6 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             break;
         case VoicePolicy: host->voice = SendMessageW(host->voiceControl, BM_GETCHECK, 0, 0) == BST_CHECKED; break;
         case BackgroundMute: host->muteBackground = SendMessageW(host->muteControl, BM_GETCHECK, 0, 0) == BST_CHECKED; break;
-        case Standby1:
-        case Standby2:
-            if (HIWORD(wparam) == CBN_SELCHANGE)
-            {
-                const int index = LOWORD(wparam) == Standby1 ? 0 : 1;
-                host->standby[index] = SendMessageW(host->standbyControl[index], CB_GETCURSEL, 0, 0) == 1 ? Mode::Economy : Mode::Warm;
-                host->message(L"Background choice applies to this character when inactive. Economy releases disposable render targets; measure savings on your GPU.");
-            }
-            break;
         case HostSurface:
             host->embedding = SendMessageW(host->embedControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
             host->focusRequested = false;
@@ -1562,7 +1582,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         char data[513]{}; savedOptions.read(data, sizeof(data)); HostOptions choices;
         if (HostOptions::decode(std::string(data, static_cast<std::size_t>(savedOptions.gcount())), choices))
         {
-            state.standby[0] = choices.standby[0]; state.standby[1] = choices.standby[1];
+            state.standby = choices.standby;
             state.voice = choices.voice; state.muteBackground = choices.muteBackground; state.embedding = choices.hosted; state.showChat = choices.chat;
             state.monitorSize = choices.previewSize; state.monitorRate = choices.previewRate;
             state.cinematic = choices.cinematic; state.chrome = choices.chrome;
