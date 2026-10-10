@@ -3,6 +3,8 @@
 #define FS_HOST_THEME_H
 #include <windows.h>
 #include <uxtheme.h>
+#include <commctrl.h>
+#include <algorithm>
 namespace fs_host_ui
 {
 class Theme
@@ -11,11 +13,36 @@ public:
     COLORREF background=0,panel=0,text=0,muted=0,accent=0,border=0,input=0;
     HBRUSH backBrush=nullptr,panelBrush=nullptr,inputBrush=nullptr;
     bool highContrast=false,dark=true;
+    unsigned int textPercent=100;
+    int uiDpi(unsigned int dpi) const {return MulDiv(static_cast<int>(dpi),static_cast<int>(textPercent),100);}
+    int scale(int value,unsigned int dpi) const {return MulDiv(value,uiDpi(dpi),96);}
     Theme(){set(0);} ~Theme(){release();}
     Theme(const Theme&)=delete;Theme& operator=(const Theme&)=delete;
+    static LRESULT CALLBACK hoverProc(HWND child,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR)
+    {
+        if(message==WM_MOUSEMOVE && !GetPropW(child,L"FolderstormHover"))
+        {SetPropW(child,L"FolderstormHover",reinterpret_cast<HANDLE>(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,child,0};TrackMouseEvent(&track);InvalidateRect(child,nullptr,FALSE);}
+        if(message==WM_MOUSELEAVE){RemovePropW(child,L"FolderstormHover");InvalidateRect(child,nullptr,FALSE);}
+        if(message==WM_NCDESTROY){RemovePropW(child,L"FolderstormHover");RemoveWindowSubclass(child,hoverProc,2);}
+        return DefSubclassProc(child,message,wp,lp);
+    }
+    void selection(const DRAWITEMSTRUCT& d) const
+    {
+        const bool selected=(d.itemState&ODS_SELECTED)!=0;
+        FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected?panelBrush:inputBrush);
+        SetTextColor(d.hDC,selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
+    }
+    void selectionFocus(const DRAWITEMSTRUCT& d) const
+    {
+        if(d.itemState&ODS_SELECTED){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}
+        if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
+    }
     void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);backBrush=panelBrush=inputBrush=nullptr;}
     void set(unsigned int choice)
     {
+        DWORD percent=100,bytes=sizeof(percent);
+        RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Accessibility",L"TextScaleFactor",RRF_RT_REG_DWORD,nullptr,&percent,&bytes);
+        textPercent=(std::max)(100u,(std::min)(225u,static_cast<unsigned int>(percent)));
         HIGHCONTRASTW hc{};hc.cbSize=sizeof(hc);highContrast=SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(hc),&hc,0) && (hc.dwFlags&HCF_HIGHCONTRASTON);
         DWORD light=1,size=sizeof(light);if(choice==2)RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
         dark=choice==0 || (choice==2 && light==0);
@@ -37,6 +64,7 @@ public:
             {
                 const auto style=GetWindowLongPtrW(child,GWL_STYLE);const auto kind=style&BS_TYPEMASK;
                 if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON)SetWindowLongPtrW(child,GWL_STYLE,(style&~BS_TYPEMASK)|BS_OWNERDRAW);
+                if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON || kind==BS_OWNERDRAW)SetWindowSubclass(child,hoverProc,2,0);
             }
             InvalidateRect(child,nullptr,TRUE);return TRUE;
         },reinterpret_cast<LPARAM>(this));
@@ -56,10 +84,11 @@ public:
     {
         if(d.CtlType!=ODT_BUTTON)return false;
         const bool selected=(d.itemState&ODS_SELECTED)!=0,disabled=(d.itemState&ODS_DISABLED)!=0;
-        FillRect(d.hDC,&d.rcItem,selected?panelBrush:backBrush);
-        const HBRUSH line=CreateSolidBrush((d.itemState&ODS_FOCUS)?accent:border);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);
+        const bool hovered=GetPropW(d.hwndItem,L"FolderstormHover")!=nullptr;
+        FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected || hovered?panelBrush:backBrush);
+        const HBRUSH line=CreateSolidBrush((d.itemState&ODS_FOCUS) || hovered?accent:border);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);
         wchar_t label[256]{};GetWindowTextW(d.hwndItem,label,256);RECT r=d.rcItem;InflateRect(&r,-5,-2);
-        SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:text);
+        SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
         DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);if(old)SelectObject(d.hDC,old);
         if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}return true;

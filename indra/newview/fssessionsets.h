@@ -14,7 +14,7 @@ struct SetProfile
 struct SetMonitor
 {
     unsigned int slot=0,size=0,rate=1; bool chat=false; AccountKey expected; ShellRect rect;
-    bool valid() const {return slot<MaxCharacters && size<=2 && rate<=3 && expected.valid() && (rect.width==0 || rect.valid());}
+    bool valid() const {return slot<MaxCharacters && size<=2 && rate<=3 && expected.valid() && ((rect.width==0 && rect.height==0 && rect.x==0 && rect.y==0 && rect.dpi==96) || rect.valid());}
 };
 struct SessionSet
 {
@@ -92,6 +92,15 @@ public:
     void cancel(){++token;active=false;}
     std::uint64_t begin(const SessionSet& set,std::uint64_t now){cancel();selected=set;deadline=now+300000;active=true;layoutApplied=false;attempted.fill(false);finished.fill(false);workers={};generations.fill(0);monitorDone.fill(false);skipped.clear();return token;}
     bool owns(std::uint64_t id,std::uint64_t now)const{return active && token==id && now<deadline;}
+    bool sourceChanged(unsigned int slot,const WorkerId& live,std::uint64_t generation,bool available) const
+    {return workers[slot]!=WorkerId{} && (!available || workers[slot]!=live || (generations[slot] && generations[slot]!=generation));}
+    void skip(unsigned int slot,const char* reason)
+    {
+        attempted[slot]=finished[slot]=true;workers[slot]={};generations[slot]=0;
+        skipped.push_back("Character "+std::to_string(slot+1)+": "+reason);
+        for(std::size_t i=0;i<selected.monitors.size();++i)if(selected.monitors[i].slot==slot && !monitorDone[i])
+        {monitorDone[i]=true;skipped.push_back("Monitor: owning profile skipped");}
+    }
     bool accept(const SetProfile& p,const Message& live)const
     {return workers[p.slot]==live.worker && (!generations[p.slot] || generations[p.slot]==live.generation) && (p.expected.account.empty() || p.expected==AccountKey::from(live));}
 };

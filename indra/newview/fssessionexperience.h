@@ -1,10 +1,28 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #ifndef FS_SESSION_EXPERIENCE_H
 #define FS_SESSION_EXPERIENCE_H
+#include <cmath>
 #include "fssessionstorecodec.h"
 #include "fssessionregistry.h"
 namespace fs_session
 {
+inline double colorLuminance(unsigned int rgb)
+{
+    const auto linear=[](unsigned int n){const double c=static_cast<double>(n)/255.;return c<=0.04045?c/12.92:std::pow((c+0.055)/1.055,2.4);};
+    return 0.2126*linear((rgb>>16)&255)+0.7152*linear((rgb>>8)&255)+0.0722*linear(rgb&255);
+}
+inline double colorContrast(unsigned int a,unsigned int b)
+{const double x=colorLuminance(a),y=colorLuminance(b);return ((std::max)(x,y)+0.05)/((std::min)(x,y)+0.05);}
+inline unsigned int visibleAccent(unsigned int stored,unsigned int background,unsigned int foreground)
+{
+    if(colorContrast(stored,background)>=3.)return stored;
+    for(unsigned int step=1;step<=10;++step)
+    {
+        unsigned int rgb=0;for(unsigned int shift:{0u,8u,16u})rgb|=((((stored>>shift)&255)*(10-step)+((foreground>>shift)&255)*step)/10)<<shift;
+        if(colorContrast(rgb,background)>=3.)return rgb;
+    }
+    return foreground;
+}
 enum ShellCommand : unsigned int { RestoreShell=140, RecoverShell=141, MonitorSelected=150, NextAttention=151, PreviousAttention=152, Details=153, AppearanceSettings=154, QuickSettings=155, SelectedActions=156, ViewActions=157, SettingsActions=158, SetActions=159, AttentionSettings=160 };
 struct ShellCommandInfo { unsigned int id; const wchar_t* label; const wchar_t* tip; const wchar_t* icon; };
 inline const std::vector<ShellCommandInfo>& shellCommands()
@@ -46,7 +64,7 @@ struct HostExperience
         seen.clear(); for(auto id:order) if(id>=MaxCharacters || !seen.insert(id).second) return false;
         for(std::size_t i=0;i<keys.size();++i)
         { if(!keys[i].valid()) return false; for(std::size_t j=0;j<i;++j) if(keys[i].key && keys[i]==keys[j]) return false; }
-        return attentionRect.width==0 ? attentionRect.height==0 : attentionRect.valid();
+        return attentionRect.width==0 ? attentionRect.height==0 && attentionRect.x==0 && attentionRect.y==0 && attentionRect.dpi==96 : attentionRect.valid();
     }
     std::string encode() const
     {
