@@ -14,6 +14,12 @@
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
 #include "fssessionusability.h"
+#include "fssessionprofileseed.h"
+#include "llsdserialize.h"
+#include "llxmlnode.h"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include "llimage.h"
 #include "llgl.h"
 #include "llglslshader.h"
@@ -76,6 +82,8 @@ struct Worker
     ULONGLONG previewAt = 0;
     bool previewPass = false;
     std::string previewError;
+    std::wstring settingsSource;
+    std::string settingsNotice;
     TransitionClock transition;
     unsigned int transitionStyle = 0, transitionHeight = 64;
     bool demoting = false, escapeHeld = false;
@@ -496,6 +504,7 @@ struct Worker
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
+        if (!settingsNotice.empty() && error.empty()) reply.detail = boundedText(settingsNotice,119);
         if (!previewError.empty())
         {
             reply.flags |= PreviewUnavailable;
@@ -507,7 +516,9 @@ struct Worker
     }
     void reply(const Message& request, const std::string& error = {})
     {
-        if (!pipe.send(status(request, error))) { detach(); pipe.close(); }
+        const auto response = status(request,error);
+        if (!pipe.send(response)) { detach(); pipe.close(); }
+        else if (response.detail.rfind("Settings import:",0) == 0) settingsNotice.clear();
     }
     void command(const Message& request)
     {
@@ -681,11 +692,11 @@ struct Worker
     }
 };
 std::unique_ptr<Worker> worker;
-std::wstring env(const wchar_t* name)
+std::wstring env(const wchar_t* name, std::size_t limit = 128)
 {
-    wchar_t buffer[128]{};
-    const DWORD size = GetEnvironmentVariableW(name, buffer, static_cast<DWORD>(std::size(buffer)));
-    return size && size < std::size(buffer) ? std::wstring(buffer, size) : std::wstring();
+    std::vector<wchar_t> buffer(limit,0);
+    const DWORD size = GetEnvironmentVariableW(name, buffer.data(), static_cast<DWORD>(buffer.size()));
+    return size && size < buffer.size() ? std::wstring(buffer.data(), size) : std::wstring();
 }
 }
 
@@ -696,12 +707,14 @@ bool FSSessionWorker::initialize()
     const auto lease = env(L"FOLDERSTORM_SESSION_LOCK");
     const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
     const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
+    const auto settingsSource = env(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE",32768);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PIPE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ID", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty()) return true;
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE", nullptr);
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty()) return true;
     if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
     auto value = std::make_unique<Worker>();
     for (std::size_t i = 0; i < 16; ++i)
@@ -729,11 +742,144 @@ bool FSSessionWorker::initialize()
             reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(number)) : INVALID_HANDLE_VALUE;
     };
     if (!value->preview.open(frameHandle(frames), frameHandle(frameMutex)) || !value->preview.bootstrap(value->id, value->host)) return false;
+    value->settingsSource = settingsSource;
     value->lastCommand = GetTickCount64();
     worker = std::move(value);
     return true;
 }
 bool FSSessionWorker::managed() { return worker && !worker->detached; }
+void FSSessionWorker::importProfileSettings()
+{
+    if (!managed() || worker->settingsSource.empty()) return;
+    const auto folder = std::filesystem::path(worker->settingsSource);
+    worker->settingsSource.clear(); // One deliberate attempt; never retry at a new login.
+    const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings.xml");
+    const auto destination = std::filesystem::u8path(targetName).parent_path();
+    const auto plainFile = [](const std::filesystem::path& path)
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));
+    };
+    const auto read = [&plainFile](const std::filesystem::path& path,std::string& bytes)
+    {
+        std::error_code error; if (!plainFile(path)) return false;
+        const auto size = std::filesystem::file_size(path,error);
+        if (error || !size || size > ProfileSettingsLimit) return false;
+        std::ifstream input(path,std::ios::binary); if (!input) return false;
+        bytes.assign(static_cast<std::size_t>(size),'\0'); input.read(bytes.data(),static_cast<std::streamsize>(size));
+        return input.gcount() == static_cast<std::streamsize>(size) && input.peek() == std::char_traits<char>::eof() &&
+            bytes.find("<!DOCTYPE") == std::string::npos && bytes.find("<!ENTITY") == std::string::npos;
+    };
+    std::string bytes;
+    if (!read(folder/L"settings.xml",bytes))
+    { worker->settingsNotice = "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
+    std::error_code error;
+    if (std::filesystem::equivalent(folder/L"settings.xml",std::filesystem::u8path(targetName),error))
+    { worker->settingsNotice = "Settings import: source is this profile; preferences unchanged."; return; }
+    LLSD data; std::istringstream input(bytes);
+    if (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries)
+    { worker->settingsNotice = "Settings import: invalid or oversized preferences; profile unchanged."; return; }
+    const auto validValue = [](const std::string& type,const LLSD& value)
+    {
+        const auto number = [](const LLSD& v) { return (v.isReal() || v.isInteger()) && std::isfinite(v.asReal()); };
+        if (type == "Boolean") return value.isBoolean() || (value.isInteger() && (value.asInteger() == 0 || value.asInteger() == 1));
+        if (type == "S32") return value.isInteger();
+        if (type == "U32") return value.isInteger() && value.asInteger() >= 0;
+        if (type == "F32") return number(value) && std::abs(value.asReal()) <= (std::numeric_limits<F32>::max)();
+        if (type == "String") return value.isString() && value.asString().size() <= 4096 && validUtf8(value.asString(),true);
+        const std::size_t expected = type == "Vector3" || type == "Vector3D" || type == "Color3" ? 3 : 4;
+        if (!value.isArray() || value.size() != expected) return false;
+        for (auto it = value.beginArray(); it != value.endArray(); ++it)
+            if (!number(*it) || ((type == "Rect" || type == "Color4U") && !it->isInteger()) ||
+                (type != "Vector3D" && std::abs(it->asReal()) > (std::numeric_limits<F32>::max)()) ||
+                (type == "Color4U" && (it->asInteger() < 0 || it->asInteger() > 255))) return false;
+        return true;
+    };
+    LLSD changes; std::size_t skipped = 0;
+    for (auto it = data.beginMap(); it != data.endMap(); ++it)
+    {
+        const auto control = gSavedSettings.getControl(it->first); const auto& record = it->second;
+        const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
+        if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
+            !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean()) ||
+            !validValue(type,record["Value"])) { ++skipped; continue; }
+        changes[it->first] = record["Value"];
+    }
+    const auto plainDirectory = [](const std::filesystem::path& path)
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+    };
+    const auto backups = destination/L"settings-import-backups";
+    error.clear();
+    if (!plainDirectory(destination))
+    { worker->settingsNotice = "Settings import: profile settings directory unavailable or redirected; unchanged."; return; }
+    std::filesystem::create_directory(backups,error);
+    if (error || !plainDirectory(backups))
+    { worker->settingsNotice = "Settings import: unable to create preference backup; profile unchanged."; return; }
+    const auto backup = backups/(std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(GetCurrentProcessId()));
+    // An exclusively new directory holds both originals and staging files; an
+    // old or redirected temporary file must never be mistaken for a fresh save.
+    if (!std::filesystem::create_directory(backup,error) || error)
+    { worker->settingsNotice = "Settings import: unable to create unique preference backup; profile unchanged."; return; }
+    const auto backupFile = [&](const std::filesystem::path& file)
+    {
+        const DWORD attributes = GetFileAttributesW(file.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND;
+        if (!plainFile(file)) return false;
+        std::error_code failure;
+        return std::filesystem::copy_file(file,backup/file.filename(),std::filesystem::copy_options::none,failure) && !failure;
+    };
+    if (!backupFile(std::filesystem::u8path(targetName)))
+    { worker->settingsNotice = "Settings import: unable to back up existing preferences; profile unchanged."; return; }
+    LLSD previous, effective;
+    for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
+    {
+        const auto control = gSavedSettings.getControl(it->first);
+        previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
+    }
+    const auto temporary = backup/L"settings-import.tmp", target = std::filesystem::u8path(targetName);
+    gSavedSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
+    LLSD saved;
+    bool complete = read(temporary,bytes);
+    if (complete)
+    {
+        std::istringstream written(bytes);
+        complete = LLSDSerialize::fromXML(saved,written,false) > 0 && saved.isMap();
+    }
+    for (auto it = changes.beginMap(); complete && it != changes.endMap(); ++it)
+    {
+        const auto control = gSavedSettings.getControl(it->first);
+        if (control->shouldSave(true))
+            complete = saved.has(it->first) && saved[it->first]["Value"] == control->getSaveValue();
+    }
+    if (!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    {
+        for (auto it = previous.beginMap(); it != previous.endMap(); ++it)
+        { const auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
+        std::filesystem::remove(temporary,error);
+        worker->settingsNotice = "Settings import: preference write failed; original settings retained."; return;
+    }
+    unsigned int copied = 0;
+    for (const auto* name : seedUiFiles())
+    {
+        const auto source = folder/name;
+        if (!std::filesystem::exists(source,error)) { error.clear(); continue; }
+        LLXMLNodePtr node;
+        if (!read(source,bytes) || !LLXMLNode::parseBuffer(bytes.data(),static_cast<U64>(bytes.size()),node) || !backupFile(destination/name))
+        { ++skipped; continue; }
+        const auto temp = backup/(std::string(name)+".import-tmp");
+        std::ofstream out(temp,std::ios::binary|std::ios::trunc); out.write(bytes.data(),static_cast<std::streamsize>(bytes.size())); out.close();
+        const auto file = destination/name;
+        if (!out || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+        { std::filesystem::remove(temp,error); ++skipped; continue; }
+        if (std::string(name) == "ignorable_dialogs.xml") gWarningSettings.loadFromFile(ll_convert_wide_to_string(file.wstring()));
+        ++copied;
+    }
+    worker->settingsNotice = "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
+        " UI files, "+std::to_string(skipped)+" skipped; previous files backed up.";
+    LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
+}
 void FSSessionWorker::configure()
 {
     if (!managed()) return;
@@ -1074,6 +1220,7 @@ void FSSessionWorker::shutdown()
 bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
 void FSSessionWorker::configure() {}
+void FSSessionWorker::importProfileSettings() {}
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }

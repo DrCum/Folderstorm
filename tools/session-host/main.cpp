@@ -32,6 +32,7 @@
 #include "fssessionhostoptions.h"
 #include "fssessionmonitormodel.h"
 #include "fssessionmonitorchat.h"
+#include "fssessionprofileseed.h"
 #include "fssessionframepipe.h"
 #include "fssessionrestart.h"
 #include "fssessionlifecycle.h"
@@ -60,6 +61,11 @@ constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList =
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+struct ComApartment
+{
+    HRESULT result = CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    ~ComApartment() { if (SUCCEEDED(result)) CoUninitialize(); }
+};
 struct Handle
 {
     HANDLE value = INVALID_HANDLE_VALUE;
@@ -144,7 +150,7 @@ bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int sel
     return true;
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
-std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id)
+std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id, const std::filesystem::path& settingsSource)
 {
     // Preserve proxy/trust/runtime variables. Read only to form the child block;
     // never log the block or mutate this controller's environment.
@@ -165,6 +171,8 @@ std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pi
     entries[L"FOLDERSTORM_SESSION_ID"] = hexId(id);
     entries[L"FOLDERSTORM_SESSION_FRAMES"] = hexHandle(frames);
     entries[L"FOLDERSTORM_SESSION_FRAME_MUTEX"] = hexHandle(frameMutex);
+    entries.erase(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE");
+    if (!settingsSource.empty()) entries[L"FOLDERSTORM_SESSION_SETTINGS_SOURCE"] = settingsSource.wstring();
     std::vector<wchar_t> result;
     for (const auto& entry : entries)
     {
@@ -242,7 +250,7 @@ struct Slot
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
     std::string reservation;
-    bool waiting = false, detached = false;
+    bool waiting = false, detached = false, importReported = false;
     double fps = 0, loops = 0;
     bool running() const { return process.value != INVALID_HANDLE_VALUE && WaitForSingleObject(process.value, 0) == WAIT_TIMEOUT; }
     HWND surface() const
@@ -867,6 +875,8 @@ struct Host
         AppendMenuW(menu, MF_STRING | (slot && slot->restart.phase() != Restart::Phase::Idle ? 0 : MF_GRAYED), 241, L"Cancel pending restart (does not cancel native logout)");
         AppendMenuW(menu, MF_STRING | (slot && slot->snapshot.state == State::Ready ? 0 : MF_GRAYED), 273, L"Character appearance and alerts…");
         AppendMenuW(menu, MF_STRING, 203, L"Open selected profile folder");
+        AppendMenuW(menu, MF_STRING | (!busy() && (!slot || !slot->running()) ? 0 : MF_GRAYED), 277,
+            (L"Copy main settings and open login: Character "+std::to_wstring(index+1)+L"…").c_str());
         AppendMenuW(menu, MF_STRING, 209, L"Stop managing; leave all characters in separate windows");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
@@ -955,6 +965,7 @@ struct Host
             const auto path = profiles / (L"Character" + std::to_wstring(index + 1));
             ShellExecuteW(window, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
+        else if (choice == 277) copyProfileSettings(index);
         else if (choice == 209) detach(false);
         else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
@@ -1476,7 +1487,56 @@ struct Host
         if (const int id = monitorSet.find(index); id >= 0) stopMonitor(id);
         message(L"Restarting " + wide(slot.snapshot.name) + L": confirm native close. Waiting for process/profile release before a fresh login; queued messages are not replayed.");
     }
-    void launch(int index)
+    std::filesystem::path mainSettingsFolder() const
+    {
+        wchar_t* roaming = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData,0,nullptr,&roaming)) || !roaming) return {};
+#if defined(_WIN64)
+        const auto path = std::filesystem::path(roaming)/L"Folderstorm_x64"/L"user_settings";
+#else
+        const auto path = std::filesystem::path(roaming)/L"Folderstorm"/L"user_settings";
+#endif
+        CoTaskMemFree(roaming); return path;
+    }
+    void copyProfileSettings(int index)
+    {
+        if (!validSlot(index) || busy() || (slots[index] && slots[index]->running()))
+        { message(L"Close the selected character's viewer before copying preferences into its profile."); return; }
+        IFileOpenDialog* dialog = nullptr;
+        if (FAILED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog))))
+        { message(L"Unable to open the settings-folder picker."); return; }
+        DWORD options = 0;
+        if (FAILED(dialog->GetOptions(&options)) ||
+            FAILED(dialog->SetOptions(options|FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST|FOS_NOCHANGEDIR)))
+        { dialog->Release(); message(L"Unable to configure the settings-folder picker."); return; }
+        dialog->SetTitle(L"Choose the main viewer's user_settings folder (or a settings backup)");
+        const auto initial = mainSettingsFolder(); IShellItem* start = nullptr;
+        if (!initial.empty() && SUCCEEDED(SHCreateItemFromParsingName(initial.c_str(),nullptr,IID_PPV_ARGS(&start))))
+        { dialog->SetFolder(start); start->Release(); }
+        std::filesystem::path source;
+        if (SUCCEEDED(dialog->Show(window)))
+        {
+            IShellItem* result = nullptr;
+            if (SUCCEEDED(dialog->GetResult(&result)))
+            {
+                wchar_t* path = nullptr;
+                if (SUCCEEDED(result->GetDisplayName(SIGDN_FILESYSPATH,&path))) { source = path; CoTaskMemFree(path); }
+                result->Release();
+            }
+        }
+        dialog->Release(); if (source.empty()) return;
+        std::error_code error;
+        const auto file = source/L"settings.xml";
+        if (!std::filesystem::is_regular_file(file,error) || error || std::filesystem::file_size(file,error) > ProfileSettingsLimit || error)
+        { message(L"Choose a folder containing a saved settings.xml file (up to 4 MiB). Save/close the main viewer first for its latest preferences."); return; }
+        const auto destination = profiles/(L"Character"+std::to_wstring(index+1));
+        const auto text = L"Copy graphics, interface, colors and key bindings from:\n"+source.wstring()+
+            L"\n\nInto:\n"+destination.wstring()+
+            L"\n\nThis opens native login without logging in automatically. Existing preferences receive a backup before replacement. Credentials, account data, chats, caches and local assistant permissions stay separate. Use the main viewer's last saved preferences; close it first for recent changes.";
+        if (MessageBoxW(window,text.c_str(),L"Copy preferences into this character profile?",MB_OKCANCEL|MB_ICONQUESTION) != IDOK) return;
+        launch(index,source);
+    }
+    void launch(int index, const std::filesystem::path& settingsSource = {})
     {
         if (!validSlot(index) || busy()) { message(L"Finish the current switch or close action before launching."); return; }
         if (slots[index] && slots[index]->running()) { message(L"This slot still has a viewer open. Close that viewer before relaunching."); return; }
@@ -1497,7 +1557,7 @@ struct Host
         if (!pair.create(slot->id)) { message(L"Unable to create the private worker connection."); return; }
         if (!slot->pipe.open(pair.server.take())) { message(L"Unable to initialize asynchronous worker control."); return; }
         if (!slot->preview.create(slot->id, GetCurrentProcessId())) { message(L"Unable to create the bounded preview frame lane."); return; }
-        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id);
+        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id, settingsSource);
         if (childEnvironment.empty()) { message(L"Unable to prepare the worker environment."); return; }
         SIZE_T attributeBytes = 0;
         InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
@@ -1586,6 +1646,8 @@ struct Host
         { slot.pipe.close(); message(L"Worker identity or reply sequence changed; returning it to a separate viewer."); return; }
         const auto request = slot.request;
         slot.waiting = false; slot.pollAt = GetTickCount64();
+        if (!slot.importReported && response.detail.rfind("Settings import:",0) == 0)
+        { slot.importReported = true; message(wide(response.detail)); }
         const bool changedSession = !slot.chat.identity.owns(response);
         if (changedSession) attention.forget(slot.chat.identity);
         slot.chat.bind(response);
@@ -2480,6 +2542,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {
+    ComApartment apartment;
     // Resolve at runtime for older Windows SDK/runtime compatibility.
     using DpiContext = BOOL(WINAPI*)(HANDLE);
     const auto dpiContext = reinterpret_cast<DpiContext>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"));
