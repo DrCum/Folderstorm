@@ -754,7 +754,8 @@ void FSSessionWorker::importProfileSettings()
     const auto folder = std::filesystem::path(worker->settingsSource);
     worker->settingsSource.clear(); // One deliberate attempt; never retry at a new login.
     const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings.xml");
-    const auto destination = std::filesystem::u8path(targetName).parent_path();
+    const auto target = std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
+    const auto destination = target.parent_path();
     const auto plainFile = [](const std::filesystem::path& path)
     {
         const DWORD attributes = GetFileAttributesW(path.c_str());
@@ -774,7 +775,7 @@ void FSSessionWorker::importProfileSettings()
     if (!read(folder/L"settings.xml",bytes))
     { worker->settingsNotice = "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
     std::error_code error;
-    if (std::filesystem::equivalent(folder/L"settings.xml",std::filesystem::u8path(targetName),error))
+    if (std::filesystem::equivalent(folder/L"settings.xml",target,error))
     { worker->settingsNotice = "Settings import: source is this profile; preferences unchanged."; return; }
     LLSD data; std::istringstream input(bytes);
     if (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries)
@@ -830,7 +831,7 @@ void FSSessionWorker::importProfileSettings()
         std::error_code failure;
         return std::filesystem::copy_file(file,backup/file.filename(),std::filesystem::copy_options::none,failure) && !failure;
     };
-    if (!backupFile(std::filesystem::u8path(targetName)))
+    if (!backupFile(target))
     { worker->settingsNotice = "Settings import: unable to back up existing preferences; profile unchanged."; return; }
     LLSD previous, effective;
     for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
@@ -838,7 +839,7 @@ void FSSessionWorker::importProfileSettings()
         auto control = gSavedSettings.getControl(it->first);
         previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
     }
-    const auto temporary = backup/L"settings-import.tmp", target = std::filesystem::u8path(targetName);
+    const auto temporary = backup/L"settings-import.tmp";
     gSavedSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
     LLSD saved;
     bool complete = read(temporary,bytes);

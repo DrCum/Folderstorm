@@ -57,7 +57,7 @@ public:
             const auto current = view.conversations.find(pin.conversation);
             if (current != view.conversations.end() && current->second.restricted) { pin.source = {}; pin.title = "Restricted"; continue; }
             if (pin.live(view))
-            { const auto& current = view.conversations.at(pin.conversation); pin.title = current.title; pin.destination = current.destination; continue; }
+            { const auto& liveConversation = view.conversations.at(pin.conversation); pin.title = liveConversation.title; pin.destination = liveConversation.destination; continue; }
             pin.source = {}; pin.title = "Unavailable";
             if (!pin.saved().valid()) { pin.title = "Unavailable"; continue; }
             for (const auto& entry : view.conversations) if (!entry.second.restricted && entry.second.topic == pin.topic && entry.second.destination == pin.destination)
