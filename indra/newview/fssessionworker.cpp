@@ -325,22 +325,22 @@ struct Worker
         if (!embedded() || mode != Mode::Active) return;
         const HWND root = IsWindow(parent) ? GetAncestor(parent, GA_ROOT) : nullptr;
         if (!root) return;
-        const HWND foreground = GetForegroundWindow();
-        DWORD owner = 0; GetWindowThreadProcessId(foreground, &owner);
-        // Hide with the controller when minimized or another application is
-        // foreground. Native owned dialogs keep their worker visible.
-        const bool visible = IsWindowVisible(root) && !IsIconic(root) &&
-            (foreground == root || GetAncestor(foreground, GA_ROOTOWNER) == root || owner == GetCurrentProcessId());
-        if (!visible) { if (IsWindowVisible(window)) ShowWindow(window, SW_HIDE); return; }
+        // Retain the view behind other applications. Stack immediately above
+        // the host, below its popups and anything already above the host.
+        if (!IsWindowVisible(root) || IsIconic(root))
+        { if (IsWindowVisible(window)) ShowWindow(window, SW_HIDE); return; }
         RECT target{}, current{}; POINT origin{};
         GetClientRect(parent, &target); ClientToScreen(parent, &origin); GetWindowRect(window, &current);
         if (!IsWindowVisible(window)) ShowWindow(window, SW_SHOWNOACTIVATE);
         const bool changed = current.left != origin.x || current.top != origin.y ||
             current.right - current.left != target.right || current.bottom - current.top != target.bottom;
-        if (changed || foreground == root)
-            SetWindowPos(window, foreground == root ? HWND_TOP : nullptr, origin.x, origin.y,
+        HWND above = GetWindow(root, GW_HWNDPREV);
+        const bool restack = above != window;
+        if (above && (GetWindowLongPtrW(above, GWL_EXSTYLE) & WS_EX_TOPMOST)) above = HWND_TOP;
+        if (changed || restack)
+            SetWindowPos(window, above ? above : HWND_TOP, origin.x, origin.y,
                 (std::max)(1L, target.right), (std::max)(1L, target.bottom),
-                SWP_NOACTIVATE | (foreground == root ? 0 : SWP_NOZORDER));
+                SWP_NOACTIVATE | (restack ? 0 : SWP_NOZORDER));
     }
     void focusHostedClient() const
     {
@@ -355,7 +355,7 @@ struct Worker
         // The viewer owns a separate native window thread. Its existing API
         // posts SetFocus there, delivering normal focus/IME/timer callbacks.
         // Never synthesize keystrokes or force the application's focus flag.
-        static_cast<LLWindowWin32*>(gViewerWindow->getWindow())->focusClientGuarded(foreground);
+        static_cast<LLWindowWin32*>(gViewerWindow->getWindow())->focusClientGuarded(foreground, root);
     }
     bool embed(std::uint64_t value)
     {
@@ -386,7 +386,6 @@ struct Worker
         hostedStyle = true;
         SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         fitSurface();
-        focusHostedClient();
         return true;
     }
     bool detach()
@@ -511,7 +510,7 @@ struct Worker
                         const auto native = gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
                         heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
                     }
-                EnableWindow(window, FALSE); ShowWindow(window, SW_RESTORE);
+                EnableWindow(window, FALSE); ShowWindow(window, request.surface ? SW_SHOWNOACTIVATE : SW_RESTORE);
                 startTransition(request.unread != 0);
                 // Reply/grant input only after an actual normal buffer swap.
             }
@@ -525,7 +524,11 @@ struct Worker
             reply(request); break;
         case Kind::Embed:
             reply(request, embed(request.surface) ? "" : "Window hosting is unavailable; use the separate viewer window."); break;
-        case Kind::Unembed: reply(request, unembed() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
+        case Kind::Unembed:
+            if (promoting || demoting || gFocusMgr.focusLocked() || LLFloaterReg::instanceVisible("preferences"))
+                reply(request, "Finish the switch or close the modal/Preferences window before disabling hosting.");
+            else reply(request, unembed() ? "" : "Unable to restore the separate window.");
+            break;
         case Kind::Focus: focusHostedClient(); reply(request); break;
         case Kind::Events:
         case Kind::SendChat:

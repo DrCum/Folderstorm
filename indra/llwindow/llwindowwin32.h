@@ -114,7 +114,7 @@ public:
     void *getPlatformWindow() override;
     void bringToFront() override;
     void focusClient() override;
-    void focusClientGuarded(HWND foreground); // Session host; native thread rechecks before activation.
+    void focusClientGuarded(HWND foreground, HWND intentHost); // Session host; native thread rechecks before activation.
 
     void allowLanguageTextInput(LLPreeditor *preeditor, bool b) override;
     void setLanguageTextInput( const LLCoordGL & pos ) override;
