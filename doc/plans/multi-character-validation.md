@@ -244,3 +244,8 @@ Remaining Windows acceptance: MSVC compile/link/resource inclusion and NSIS inst
 ### PR #27 reported MSVC switch-scope build fix
 
 Scoped the host `WM_CREATE` case with braces so later message labels cannot bypass initialization of `system`, `chatDetached` or `controlsDetached` (C2360/C2361). The setup statements, their order and return behavior are unchanged. Verified the source diff is exactly the two scope braces and `git diff --check` passes. This incorporates the user's local build diagnosis; no native rebuild or unrelated tests were run here. Rebuild on Windows to verify the updated branch.
+
+
+### PR #27 reported native profile-import constness fix
+
+Confirmed that `LLControlGroup::getControl` returns an owning `LLPointer<LLControlVariable>` and its const `operator->` returns `const LLControlVariable*`. Unlike standard shared pointers, a const wrapper therefore blocks the existing non-const `type`, `isPersisted`, `isBackupable`, `shouldSave` and `setValue` API calls. Changed all four import lookups from `const auto control` to `auto control`, preserving smart-pointer ownership and the existing eligibility/apply/save-validation/rollback behavior. Inspected the actual pointer/control declarations and verified the source diff changes only those four qualifiers. Diff hygiene passed; no viewer/native build or unrelated model tests were run. Windows compilation remains for the build agent.

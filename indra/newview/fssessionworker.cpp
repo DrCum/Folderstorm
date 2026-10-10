@@ -798,7 +798,7 @@ void FSSessionWorker::importProfileSettings()
     LLSD changes; std::size_t skipped = 0;
     for (auto it = data.beginMap(); it != data.endMap(); ++it)
     {
-        const auto control = gSavedSettings.getControl(it->first); const auto& record = it->second;
+        auto control = gSavedSettings.getControl(it->first); const auto& record = it->second;
         const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
         if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
             !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean()) ||
@@ -835,7 +835,7 @@ void FSSessionWorker::importProfileSettings()
     LLSD previous, effective;
     for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
     {
-        const auto control = gSavedSettings.getControl(it->first);
+        auto control = gSavedSettings.getControl(it->first);
         previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
     }
     const auto temporary = backup/L"settings-import.tmp", target = std::filesystem::u8path(targetName);
@@ -849,14 +849,14 @@ void FSSessionWorker::importProfileSettings()
     }
     for (auto it = changes.beginMap(); complete && it != changes.endMap(); ++it)
     {
-        const auto control = gSavedSettings.getControl(it->first);
+        auto control = gSavedSettings.getControl(it->first);
         if (control->shouldSave(true))
             complete = saved.has(it->first) && saved[it->first]["Value"] == control->getSaveValue();
     }
     if (!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
     {
         for (auto it = previous.beginMap(); it != previous.endMap(); ++it)
-        { const auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
+        { auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
         std::filesystem::remove(temporary,error);
         worker->settingsNotice = "Settings import: preference write failed; original settings retained."; return;
     }
