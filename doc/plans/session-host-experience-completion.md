@@ -1,6 +1,6 @@
 # Session host experience — implemented features and Windows handoff
 
-Source implementation completed 2026-10-10. The recovery checkpoint is [PR #28](https://github.com/DrCum/Folderstorm/pull/28), based on unmerged PR #27. The design/tools checkpoint is `feat/session-host-design`, based on `feat/session-host-recovery`. These are dependent cumulative builds; no PR was merged or earlier published history rewritten. This document records source completion, not native Windows acceptance.
+Source implementation completed 2026-10-10. The recovery checkpoint is [PR #28](https://github.com/DrCum/Folderstorm/pull/28), based on unmerged PR #27. The design/tools checkpoint is [PR #29](https://github.com/DrCum/Folderstorm/pull/29), `feat/session-host-design`, based on `feat/session-host-recovery`. Both PRs are draft and attached to this chat. These are dependent cumulative builds; no PR was merged or earlier published history rewritten. This document records source completion, not native Windows acceptance.
 
 ## Completed features
 

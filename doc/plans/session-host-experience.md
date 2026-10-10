@@ -1,6 +1,6 @@
 # Folderstorm host experience: recovery, presentation and session tools
 
-Status: SOURCE IMPLEMENTED; NATIVE ACCEPTANCE PENDING. Completed 2026-10-10 on `feat/session-host-design`, stacked on the published recovery checkpoint [PR #28](https://github.com/DrCum/Folderstorm/pull/28), which depends on unmerged PR #27. The latest user request authorizes implementation and a Sol 6.1 Max cumulative review. No native Windows acceptance is claimed. See [completion and command map](session-host-experience-completion.md).
+Status: SOURCE IMPLEMENTED; NATIVE ACCEPTANCE PENDING. Completed 2026-10-10 on `feat/session-host-design`, published as [PR #29](https://github.com/DrCum/Folderstorm/pull/29), stacked on the published recovery checkpoint [PR #28](https://github.com/DrCum/Folderstorm/pull/28), which depends on unmerged PR #27. The latest user request authorizes implementation and a Sol 6.1 Max cumulative review. No native Windows acceptance is claimed. See [completion and command map](session-host-experience-completion.md).
 
 Baseline inspected: PR #27, `feat/multi-character-usability`, `bb9ec4a7e4d21e3e9679f1c850643fe9e1fc4714`, based on PR #26. Preserve published history and local build patches; recheck remote heads/merge state before starting implementation. Use an isolated follow-up from the latest applicable cumulative head. Do not assume main contains this stack. Related documents: [usability](multi-character-usability.md), [hosting](multi-character-host-refinements.md), [validation](multi-character-validation.md).
 
@@ -165,7 +165,7 @@ Expose which settings are runtime-only versus saved. Reuse one settings draft/co
 - [x] Named session sets with explicit normal login and guarded optional monitor reopening.
 - [x] Next/Previous attention, filters, stable source binding and explicit native review.
 - [x] Backward-compatible bounded persistence, focused checks, command coverage and recovery matrix.
-- [x] Sol 6.1 Max review findings addressed; recovery checkpoint attached, final checkpoint being published; Windows/voice gaps stated honestly.
+- [x] Sol 6.1 Max review findings addressed; both testing checkpoints published and attached; Windows/voice gaps stated honestly.
 
 Questions are nonblocking: native reproduction details of the lost UI, preferred final light-theme tint and compact target widths can be collected after initial testing. Implementation uses the decisions above meanwhile. No new live voice testing is assumed available. A screenshot or build installation from the user is not a prerequisite for making progress.
 
