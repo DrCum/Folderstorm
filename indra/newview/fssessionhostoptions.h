@@ -9,6 +9,7 @@ namespace fs_session
 struct HostOptions
 {
     Mode standby[2]{Mode::Warm, Mode::Warm};
+    bool chatDetached = false, controlsDetached = false;
     bool voice = false, muteBackground = true, hosted = false, chat = true, cinematic = false;
     unsigned int chrome = 0; // 0 normal, 1 condensed, 2 title-bar-only chrome.
     unsigned int previewSize = 0, previewRate = 1; // Off until explicitly opened for a ready session.
@@ -17,7 +18,7 @@ struct HostOptions
         std::ostringstream out;
         out << "FSH1\nbackground1=" << static_cast<unsigned int>(standby[0]) << "\nbackground2=" << static_cast<unsigned int>(standby[1])
             << "\nvoice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat
-            << "\nchrome=" << chrome << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << "\ncinematic=" << cinematic << '\n';
+            << "\nchat_detached=" << chatDetached << "\ncontrols_detached=" << controlsDetached << "\nchrome=" << chrome << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << "\ncinematic=" << cinematic << '\n';
         return out.str();
     }
     static bool decode(const std::string& text, HostOptions& output)
@@ -41,7 +42,9 @@ struct HostOptions
             else
             {
                 if (value > 1) return false;
-                if (key == "voice") result.voice = value != 0;
+                if (key == "chat_detached") result.chatDetached = value != 0;
+                else if (key == "controls_detached") result.controlsDetached = value != 0;
+                else if (key == "voice") result.voice = value != 0;
                 else if (key == "mute") result.muteBackground = value != 0;
                 else if (key == "host") result.hosted = value != 0;
                 else if (key == "chat") result.chat = value != 0;

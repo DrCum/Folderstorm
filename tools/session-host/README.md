@@ -116,3 +116,6 @@ The monitor retains its last complete valid image between frames and presents ea
 ## Compact host controls
 
 Choose **Session → Normal / Condensed / Collapsed**. Condensed uses a single slim control strip; full character details remain in Session. Collapsed removes host chrome and docked Chat from the world area. Right-click the title bar (or open its system menu) to restore controls or open Character sessions; leaving collapsed restores the prior docked Chat preference. Use Save host choices to persist the mode. Older settings default to normal. Native sizing/DPI/restore acceptance is pending.
+
+### Detached shared panels
+Session offers **Pop out shared Chat** and **Pop out character controls**, independently of host chrome. Dock either from Session. Closing Chat hides it and keeps its source-qualified draft; closing character controls docks them. The host system menu exposes Session even when chrome is collapsed. Panels reuse the existing controls/controller and can resize and move between DPI scales; they do not create another chat transport. Save host choices explicitly to retain docking preferences. Minimizing the host hides its owned panels, and restoring it restores eligible panels.
