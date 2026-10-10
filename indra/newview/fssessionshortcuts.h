@@ -14,6 +14,12 @@ template<typename Ready> int characterShortcutTarget(unsigned int command,int ac
     { const int next = (active+direction*step+MaxCharacters)%MaxCharacters; if (ready(next)) return next; }
     return -1;
 }
+inline bool validShellIntent(const Message& event,const Message& current,int source,int active,std::uint64_t now,bool enabled)
+{
+    return enabled && source==active && validSlot(source) && current.state==State::Ready && current.mode==Mode::Active &&
+        !(current.flags&(ChatRestricted|Error|Promoting)) && event.eventType==EventType::SwitchIntent && event.unread>=7 && event.unread<=9 &&
+        ChatKey{current.worker,current.generation,current.account,current.grid,{}}.owns(event) && event.eventAt && now>=event.eventAt && now-event.eventAt<=3000;
+}
 inline bool validSwitchIntent(const Message& event,const Message& current,int source,int active,std::uint64_t now,bool enabled,bool busy)
 {
     return enabled && !busy && source == active && validSlot(source) && current.state == State::Ready && current.mode == Mode::Active &&

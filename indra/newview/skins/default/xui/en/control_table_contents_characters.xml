@@ -7,4 +7,7 @@
  <rows name="character_5" value="character_5"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 5"/></rows>
  <rows name="character_next" value="character_next"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Next ready character"/></rows>
  <rows name="character_back" value="character_back"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Previous ready character"/></rows>
+ <rows name="session_restore" value="session_restore"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Restore host controls"/></rows>
+ <rows name="attention_next" value="attention_next"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Next character attention"/></rows>
+ <rows name="attention_back" value="attention_back"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Previous character attention"/></rows>
 </contents>

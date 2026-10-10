@@ -18,7 +18,7 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-constexpr std::uint32_t Version = 10;
+constexpr std::uint32_t Version = 11;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
