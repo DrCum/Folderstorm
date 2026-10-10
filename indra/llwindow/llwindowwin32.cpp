@@ -4327,13 +4327,15 @@ void LLWindowWin32::focusClient()
         });
 }
 
-void LLWindowWin32::focusClientGuarded(HWND foreground)
+void LLWindowWin32::focusClientGuarded(HWND foreground, HWND intentHost)
 {
     const HWND surface = mWindowHandle;
     const HANDLE lease = GetPropW(surface, L"FolderstormSessionFocusLease");
-    mWindowThread->post([surface, foreground, lease]()
+    const HANDLE intent = GetPropW(intentHost, L"FolderstormViewportFocusIntent");
+    mWindowThread->post([surface, foreground, lease, intentHost, intent]()
     {
-        if (!lease || GetPropW(surface, L"FolderstormSessionFocusLease") != lease ||
+        if (!intent || GetPropW(intentHost, L"FolderstormViewportFocusIntent") != intent ||
+            !lease || GetPropW(surface, L"FolderstormSessionFocusLease") != lease ||
             !IsWindow(surface) || !IsWindowEnabled(surface) || !IsWindowVisible(surface) ||
             IsIconic(surface) || GetForegroundWindow() != foreground) return;
         // Both are top-level windows. Native activation restores real keyboard,

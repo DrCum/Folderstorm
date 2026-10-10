@@ -41,7 +41,7 @@ constexpr int Standby1 = 107, Standby2 = 108;
 constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
 constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
-constexpr int SessionOptions = 119;
+constexpr int SessionOptions = 119, ViewportFocus = 120;
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 struct Handle
@@ -72,6 +72,31 @@ std::wstring hexId(const WorkerId& identity)
     std::wostringstream result;
     for (auto byte : identity) result << std::hex << std::setw(2) << std::setfill(L'0') << static_cast<unsigned int>(byte);
     return result.str();
+}
+// Refresh only changed choices; an open list owns its selection until close.
+bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int selected, bool force = false)
+{
+    if (!force && SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0)) return false;
+    bool changed = SendMessageW(control, CB_GETCOUNT, 0, 0) != static_cast<LRESULT>(choices.size());
+    for (std::size_t i = 0; !changed && i < choices.size(); ++i)
+    {
+        const auto length = SendMessageW(control, CB_GETLBTEXTLEN, static_cast<WPARAM>(i), 0);
+        if (length == CB_ERR) { changed = true; break; }
+        std::vector<wchar_t> text(static_cast<std::size_t>(length) + 1);
+        SendMessageW(control, CB_GETLBTEXT, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(text.data()));
+        changed = choices[i] != text.data();
+    }
+    if (changed)
+    {
+        if (force) SendMessageW(control, CB_SHOWDROPDOWN, FALSE, 0);
+        SendMessageW(control, WM_SETREDRAW, FALSE, 0);
+        SendMessageW(control, CB_RESETCONTENT, 0, 0);
+        for (const auto& choice : choices) SendMessageW(control, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
+        SendMessageW(control, WM_SETREDRAW, TRUE, 0); InvalidateRect(control, nullptr, FALSE);
+    }
+    if (SendMessageW(control, CB_GETCURSEL, 0, 0) != selected)
+        SendMessageW(control, CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
+    return true;
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
 std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id)
@@ -186,6 +211,7 @@ struct Host
     HWND optionsControl = nullptr;
     Handle optionsLease;
     bool logoutOnClose = false;
+    std::uintptr_t focusIntent = 0;
     HWND monitor = nullptr;
     bool monitorEnabled = false;
     int monitorIndex = 1;
@@ -228,15 +254,15 @@ struct Host
     void refreshCharacters()
     {
         const auto selected = SendMessageW(characterControl, CB_GETCURSEL, 0, 0);
+        std::vector<std::wstring> choices;
         for (int i = 0; i < 2; ++i)
         {
             std::wstring text = std::to_wstring(i + 1) + L": ";
             text += slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"not logged in";
             if (i == active) text += L" · active";
-            if (SendMessageW(characterControl, CB_GETCOUNT, 0, 0) > i) SendMessageW(characterControl, CB_DELETESTRING, static_cast<WPARAM>(i), 0);
-            SendMessageW(characterControl, CB_INSERTSTRING, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(text.c_str()));
+            choices.push_back(std::move(text));
         }
-        SendMessageW(characterControl, CB_SETCURSEL, static_cast<WPARAM>(active >= 0 ? active : selected >= 0 ? selected : 0), 0);
+        syncChoices(characterControl, choices, active >= 0 ? active : selected >= 0 ? static_cast<int>(selected) : 0);
         EnableWindow(characterControl, !busy());
     }
 
@@ -318,6 +344,7 @@ struct Host
         AppendMenuW(menu, MF_STRING | (index == active && !busy() ? 0 : MF_GRAYED), 201, (L"Manage workspaces: " + name).c_str());
         AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
         AppendMenuW(menu, MF_STRING, 203, L"Open selected profile folder");
+        AppendMenuW(menu, MF_STRING, 209, L"Stop managing; leave all characters in separate windows");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
@@ -352,6 +379,7 @@ struct Host
             const auto path = profiles / (index == 0 ? L"Character1" : L"Character2");
             ShellExecuteW(window, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
+        else if (choice == 209) detach(false);
         else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 206) saveOptions();
@@ -437,17 +465,17 @@ struct Host
             slot.hasPendingTyping = true;
         }
     }
-    void refreshChat(bool loadDraft = false)
+    void refreshChat(bool loadDraft = false, bool forceChoices = false)
     {
         if (!chatAccount) return;
         updatingChat = true;
+        std::vector<std::wstring> accounts;
         for (int i = 0; i < 2; ++i)
         {
             const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : i == 0 ? L"Character 1" : L"Character 2";
-            if (SendMessageW(chatAccount, CB_GETCOUNT, 0, 0) > i) SendMessageW(chatAccount, CB_DELETESTRING, static_cast<WPARAM>(i), 0);
-            SendMessageW(chatAccount, CB_INSERTSTRING, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(name.c_str()));
+            accounts.push_back(name);
         }
-        SendMessageW(chatAccount, CB_SETCURSEL, static_cast<WPARAM>(chatIndex), 0);
+        syncChoices(chatAccount, accounts, chatIndex);
         auto* slot = slots[chatIndex].get();
         const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
@@ -458,18 +486,21 @@ struct Host
         SetWindowTextW(chatLabel, label.c_str());
         if (loadDraft)
         {
-            SendMessageW(chatConversation, CB_RESETCONTENT, 0, 0); conversationIds.clear();
+            std::vector<std::string> ids; std::vector<std::wstring> choices;
             if (slot) for (const auto& entry : slot->chat.conversations)
             {
-                conversationIds.push_back(entry.first);
+                ids.push_back(entry.first);
                 std::wstring name = wide(entry.second.title);
                 if (entry.second.unread) name += L" · " + std::to_wstring(entry.second.unread) + L" unread";
-                SendMessageW(chatConversation, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
+                choices.push_back(std::move(name));
             }
-            const auto found = std::find(conversationIds.begin(), conversationIds.end(), conversation);
-            const auto selection = found == conversationIds.end() ? 0 : static_cast<int>(found - conversationIds.begin());
-            SendMessageW(chatConversation, CB_SETCURSEL, static_cast<WPARAM>(selection), 0);
-            if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
+            const auto found = std::find(ids.begin(), ids.end(), conversation);
+            const int selection = found == ids.end() ? 0 : static_cast<int>(found - ids.begin());
+            if (syncChoices(chatConversation, choices, selection, forceChoices || restricted || !ready))
+            {
+                conversationIds = std::move(ids);
+                if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
+            }
             const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
             const std::string wanted = slot && draft != slot->chat.conversations.end() ? draft->second.draft : "";
             if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
@@ -578,7 +609,7 @@ struct Host
         if (slots[index]->snapshot.state != State::Ready) { message(L"Finish login before switching this character."); return; }
         if (index == active)
         {
-            if (embedding) { SetForegroundWindow(window); focusRequested = true; }
+            if (embedding) { SetForegroundWindow(window); focusRequested = false; }
             else if (auto surface = slots[index]->surface()) SetForegroundWindow(surface);
             return;
         }
@@ -626,7 +657,7 @@ struct Host
             slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             slot.previewWidth = slot.previewHeight = slot.previewRate = 0;
-            if (chatIndex == index) { conversation.clear(); refreshChat(true); }
+            if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         slot.snapshot = response;
         if (request.kind == Kind::WorkspaceInfo && !(response.flags & Error))
@@ -638,7 +669,7 @@ struct Host
         {
             slot.chat.lines.clear(); slot.chat.conversations.clear(); slot.chat.cursor = 0;
             slot.chat.conversations.emplace("", Conversation{"", "Nearby chat", "", Topic::Nearby, 0});
-            if (chatIndex == index) { conversation.clear(); refreshChat(true); }
+            if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         if (!(response.flags & Error) && (request.kind == Kind::Events || request.kind == Kind::Conversations))
         {
@@ -690,7 +721,11 @@ struct Host
         if (response.flags & Error)
         {
             if (request.kind == Kind::Detach || request.kind == Kind::Quit) { detaching = closing = logoutOnClose = false; }
-            if (request.kind == Kind::Embed) { embedding = false; SendMessageW(embedControl, BM_SETCHECK, BST_UNCHECKED, 0); }
+            if (request.kind == Kind::Embed || request.kind == Kind::Unembed)
+            {
+                embedding = (response.flags & Embedded) != 0;
+                SendMessageW(embedControl, BM_SETCHECK, embedding ? BST_CHECKED : BST_UNCHECKED, 0);
+            }
             if (request.kind == Kind::MonitorPolicy) { monitorEnabled = false; monitorPixels.clear(); }
             if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle) failHandoff(index, wide(response.detail));
             else
@@ -717,11 +752,8 @@ struct Host
                 if (!response.detail.empty()) message(L"Character ready. " + wide(response.detail));
                 if (embedding)
                 {
-                    // Promotion may have restored the standalone target first.
-                    // Return its focus to the host without taking another app's.
-                    const HWND foreground = GetForegroundWindow();
-                    if (foreground == window || foreground == slots[active]->surface()) SetForegroundWindow(window);
-                    focusRequested = true;
+                    // Keep shell controls focused; world clicks use native focus.
+                    focusRequested = false;
                 }
                 else if (auto surface = slots[active]->surface()) SetForegroundWindow(surface);
             }
@@ -837,8 +869,7 @@ struct Host
                 else if (index == active && embedding && focusRequested &&
                     slot.snapshot.state == State::Ready && (slot.snapshot.flags & Embedded) &&
                     GetForegroundWindow() == window && !IsIconic(window) &&
-                    (GetFocus() == window || GetFocus() == viewport || GetFocus() == nullptr ||
-                        GetFocus() == characterControl || GetFocus() == embedControl))
+                    GetPropW(window, L"FolderstormViewportFocusIntent"))
                 {
                     if (send(index, Kind::Focus)) focusRequested = false;
                 }
@@ -1038,7 +1069,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Economy (experimental)"));
             SendMessageW(host->standbyControl[i], CB_SETCURSEL, host->standby[i] == Mode::Economy ? 1 : 0, 0);
         }
-        host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | WS_CLIPCHILDREN, 0, 99, 880, 490);
+        host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | SS_NOTIFY | WS_CLIPCHILDREN, 0, 99, 880, 490, ViewportFocus);
         host->notice = control(window, L"STATIC", L"Prototype: warm standby, separate profiles. Voice and MCP are off.", SS_LEFT, 10, 600, 850, 20);
         host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
         host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
@@ -1058,11 +1089,14 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
-    case WM_SETFOCUS:
-        if (host->embedding) host->focusRequested = true;
-        return 0;
+    case WM_ENTERMENULOOP:
+    case WM_LBUTTONDOWN:
+    case WM_PARENTNOTIFY:
+        host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent");
+        return DefWindowProcW(window, message, wparam, lparam);
     case WM_ACTIVATE:
-        if (host->embedding && LOWORD(wparam) != WA_INACTIVE && !HIWORD(wparam)) host->focusRequested = true;
+        if (LOWORD(wparam) == WA_INACTIVE)
+        { host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent"); }
         return DefWindowProcW(window, message, wparam, lparam);
     case WM_SIZE: if (host->viewport) host->layout(); return 0;
     case WM_DPICHANGED:
@@ -1075,16 +1109,27 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_GETMINMAXINFO:
         reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {host->scaled(805), host->scaled(host->showChat ? 540 : 350)}; return 0;
     case WM_COMMAND:
+        if (LOWORD(wparam) != ViewportFocus)
+        { host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent"); }
         switch (LOWORD(wparam))
         {
+        case ViewportFocus:
+            if (host->embedding && HIWORD(wparam) == STN_CLICKED)
+            {
+                if (++host->focusIntent == 0) ++host->focusIntent;
+                host->focusRequested = SetPropW(window, L"FolderstormViewportFocusIntent", reinterpret_cast<HANDLE>(host->focusIntent)) != FALSE;
+            }
+            break;
         case Launch1: host->launch(0); break;
         case Launch2: host->launch(1); break;
         case Switch1: host->switchTo(0); break;
         case Switch2: host->switchTo(1); break;
         case SessionOptions: host->sessionMenu(); break;
         case ActiveCharacter:
-            if (HIWORD(wparam) == CBN_SELCHANGE)
+            if (HIWORD(wparam) == CBN_SELENDOK ||
+                (HIWORD(wparam) == CBN_SELCHANGE && !SendMessageW(host->characterControl, CB_GETDROPPEDSTATE, 0, 0)))
                 host->switchTo(SendMessageW(host->characterControl, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0);
+            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshCharacters();
             break;
         case ShowChat:
             host->saveDraft(true); host->showChat = SendMessageW(host->showChatControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -1093,8 +1138,9 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
             {
                 host->saveDraft(true); host->chatIndex = SendMessageW(host->chatAccount, CB_GETCURSEL, 0, 0) == 1 ? 1 : 0;
-                host->conversation.clear(); host->refreshChat(true);
+                host->conversation.clear(); host->refreshChat(true, true);
             }
+            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatConversation:
             if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
@@ -1104,6 +1150,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
                 if (selected >= 0 && static_cast<std::size_t>(selected) < host->conversationIds.size()) host->conversation = host->conversationIds[static_cast<std::size_t>(selected)];
                 host->refreshChat(true);
             }
+            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatCompose: if (HIWORD(wparam) == EN_CHANGE) host->composeChanged(); break;
         case ChatSend: host->saveDraft(true); host->sendChat(); break;
@@ -1128,10 +1175,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             break;
         case HostSurface:
             host->embedding = SendMessageW(host->embedControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
-            host->focusRequested = host->embedding;
+            host->focusRequested = false;
             host->message(host->embedding ? L"Active viewer fitted to this host. Use Separate windows for fullscreen or recovery." : L"Using separate viewer windows; chosen standby modes remain enabled.");
             break;
-        case DetachAll: host->detach(false); break;
+        case DetachAll:
+            host->embedding = false; SendMessageW(host->embedControl, BM_SETCHECK, BST_UNCHECKED, 0);
+            host->message(L"Returning the active viewer to a separate window; character management remains enabled."); break;
         }
         return 0;
     case WM_CLOSE:
