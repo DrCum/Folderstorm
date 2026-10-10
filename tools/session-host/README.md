@@ -32,7 +32,7 @@ Private profiles live below (the first two names remain unchanged):
 %LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character5\
 ```
 
-Each has separate `Roaming` and `Local` roots, used by the worker's native directory initialization. First launch starts with a fresh profile; your normal viewer settings, chat logs, workspaces, boards and saved credentials are not copied or migrated. Choose each worker's skin/settings normally. Profiles persist for subsequent launches, and normal per-account/grid subdirectories continue to separate different logins within a slot. Do not manually configure both profiles to use the same writable cache path.
+Each has separate `Roaming` and `Local` roots, used by the worker's native directory initialization. First launch starts with a fresh profile unless you explicitly choose the preference-copy action below. Chat logs, workspaces, boards, caches and saved credentials are not migrated. Choose each worker's settings normally, or seed eligible UI/graphics preferences from the main viewer. Profiles persist for subsequent launches, and normal per-account/grid subdirectories continue to separate different logins within a slot. Do not manually configure both profiles to use the same writable cache path.
 
 An exclusive file handle is inherited by the worker to reserve its profile. The lease lasts through native viewer cleanup/process exit, including after detachment or controller closure. Another controller cannot reopen that slot while its worker is still running. The controller does not adopt unrelated/existing viewers, silently autologin, or terminate processes.
 
@@ -137,3 +137,53 @@ At the largest cap, five latest-frame mappings use about 4.4 MiB and four retain
 The world selector also selects the character for Session actions. An unavailable/disconnected/separate character stays selected for Restart/Cancel, even while another character owns the world; the actual active character is marked in the list. A successful handoff or rollback synchronizes the selection to its acknowledged owner. Polling does not replace an unavailable management target.
 
 Disconnected native recovery UI may redraw without reacquiring managed simulator input/microphone ownership. Full Stop managing and host-close detachment cancel queued/pending relaunches; a native Quit already accepted can still finish, but cannot cause another viewer to launch afterward. Only a new explicit launch/restart resumes management. Detached Chat/character panels route Tab and Shift+Tab through their own control hierarchy, with normal dispatch for unrelated windows. Native UI validation remains pending.
+
+
+## Character colors, pins and attention (PR #27)
+
+Use **Session → Character appearance and alerts** for the selected character's friendly name, RGB accent and optional background alerts. The color follows the account across selectors, shared Chat and monitors; **Send as** remains tied to the selected chat account rather than the active world. **Save host choices** keeps those metadata choices and fitted host/pop-out/monitor positions. Apply/Cancel edits affect only the current controller session until explicitly saved.
+
+**Pins…** adds/removes/reorders chat pins, including unavailable entries. Six compact tiles show the first pins; the menu lists overflow and tooltips give the full character/conversation. Nearby and known peer/group destinations can be saved; conferences remain session-only and restored IM pins wait for an existing native conversation. Named profiles never contain messages or drafts.
+
+**Session → Attention inbox** lists unread chats and supported offers/requests with account colors. Review activates the correct viewer and opens native chat/notification controls. It never accepts an offer or permission. Dismiss hides a reminder locally; it does not change native read or offer state. Expired/restricted/session-ended actions are refused. A retention gap means native notifications may contain additional items.
+
+Optional alert sounds default Off per character. Enable them in Character appearance, adjust **Session → Notification alert volume**, and retain background world/media mute. Eligible fresh background events produce one short local tone; active accounts use their existing native alerts. Native quiet/mute/contact and IM sound choices are respected. Voice ownership is unaffected.
+
+**Session → Transition style, duration and height** selects Instant, Bird's-eye or a world-only Fade. Defaults are Instant, 1100 ms per leg and 64 m (camera-fitted); duration is 250–2000 ms and height 16–96 m. Escape skips animation while completing switching. Reduced-motion/camera restrictions use instant fallback.
+
+**Session → Character shortcuts** enables optional host chords; the character submenu displays their assignments. Host shortcuts work in the shell/pop-outs, outside editors, IME and menus. For the focused native world, assign the seven Character actions in **Preferences → Controls** using its normal conflict checking; no viewer defaults are imposed. Both use the host's enable policy, skip unavailable cycle targets and drop keys during a handoff. World switching preserves Chat's selected sender and drafts.
+
+The matching private protocol is **10**; do not mix the host/viewer from earlier checkpoints. New presentation metadata is a bounded atomic `host-presentation.dat` file beside existing host options, without credentials or conversation contents. See [the completed usability roadmap and native checklist](../../doc/plans/multi-character-usability.md).
+
+
+### Optional Chat in each monitor
+
+Right-click a monitor's image or footer and check **Show chat**. It is Off by default and remains a session-only choice for that monitor window. The compact panel includes a conversation dropdown, retained shared history, **Send as** with the account's accent color, a message field, Send and Read (Mark read). It supports Nearby and that character's existing private/group/conference chats. The image stays read-only and retains its existing low-resolution/FPS budget; sending does not activate the character or change microphone/audio ownership.
+
+When a successful character switch exchanges a monitor, Chat follows the account now displayed and starts on its Nearby conversation. Drafts remain in their original account/conversation, shared with the main/pop-out Chat panel; they are never copied to the new account. Hiding/closing the panel keeps session-local drafts. Disconnects, ended/replaced sessions and restrictions clear or disable visible controls. Native refusal/uncertain-send behavior still preserves the original draft without retry. Read updates only the selected account/conversation's badge. Tab/Shift+Tab routes through the monitor controls independently of the main host.
+
+Native Windows checks: send distinct Nearby/IM messages from two monitors while a third character stays active; verify actual senders, shared drafts, independent unread/Read behavior, stable dropdowns, failed send/timeout retention, swap/rollback/relogin safety, restriction cleanup, hide/reopen, resizing/DPI, IME and Tab navigation. The monitor's Show chat choice does not start monitors or logins automatically.
+
+
+### Host icon and installer shortcuts
+
+The host EXE and its main, detached-panel and monitor windows use the original winged Folderstorm mascot, embedded at seven Windows icon sizes with transparency. The installer adds **<viewer shortcut name> - Character Sessions** beside the regular viewer's Start menu entry and desktop shortcut. Start menu opt-out also skips this entry, and updater `/marker` installs follow the regular viewer's desktop-shortcut preservation rule. Links target the matching installed `folderstorm-session-host.exe`; uninstall removes them. No extra account is launched by installation or ordinary viewer startup.
+
+### Copy main preferences into a character profile
+
+Save/close the normal viewer so its latest preferences are on disk. In the host, choose a character slot whose viewer is closed, then **Session → Copy main settings and open login: Character N…**. Choose the normal viewer's `user_settings` folder (the picker starts at `%APPDATA%\Folderstorm_x64\user_settings` for 64-bit) or a backup containing `settings.xml`, review the source/destination confirmation, and open fresh native login. Copying is opt-in for each profile and never logs in automatically. The existing profile lease prevents changes while another viewer owns it; ordinary + Character launches remain unchanged.
+
+The worker reads a bounded preference file (4 MiB, at most 8192 records) before UI/login initialization. It accepts recognized, correctly typed, persistent native controls that permit backup and belong to explicit graphics/appearance families or listed UI controls. Credentials, account/grid identity, paths/caches/history, voice, local assistant permissions, browser access policies, automatic acceptance and permission/debit defaults remain separate. UI/graphics preferences include skin/theme, colors and control bindings; available `colors.xml`, `key_bindings.xml` and `quick_preferences.xml` are validated and copied separately. Per-account data, Inventory/chat contents, workspace/HUD references, boards, filters, credentials and caches are excluded. Ignored dialogs and warning choices stay in the destination profile. Copying never enables the managed local assistant.
+
+Existing replaced files go into `user_settings\settings-import-backups\<timestamp>-<pid>` inside the selected private profile. Writes stage in a newly created backup directory, validate the native settings save, then replace the destination atomically; a failed global save restores the prior controls. Individual unavailable/invalid UI files are skipped and counted. The host reports imported/skipped totals; the native log retains the summary. **Open selected profile folder** provides access to backups. To copy into an existing profile, close its viewer first and repeat the same confirmed action.
+
+Windows acceptance pending: build matching host/viewer, check EXE/taskbar/panel icons, desktop/Start menu links with opt-out and updater paths, and uninstall cleanup. Copy from a non-ASCII path into an unused slot and an existing closed slot; compare skin/theme/graphics/bindings, then restart and verify persistence, source files unchanged and backups present. Confirm active profiles are refused, Cancel leaves preferences alone, invalid/oversized files report refusal, and saved main-viewer login/assistant/cache choices are not adopted.
+
+
+### PR #27 restriction and reminder review fixes
+
+Queued group messages recheck both group and sender receive permission immediately before host delivery. Blocked events become a redacted restriction gap with no text, names, destination, unread count or alert eligibility. The shared model purges old conversation lines, remembers restrictions even before the first catalog entry, and rejects subsequent chat without an authoritative unrestricted catalog response. Main/pop-out Chat hides restricted history and disables compose/read; monitor Chat retains its existing restriction guard. Drafts remain session-local and hidden rather than being reassigned or sent.
+
+Dismissing an unread reminder updates the existing source-bound watermark each time. A later incoming message restores it, including when a native unread count is unchanged. Dismissal still affects only the shell reminder, not native unread state or offers.
+
+The reported Windows scope/constness fixes are upstream. Profile destination paths now use the viewer's explicit UTF-8-to-wide conversion once and reuse that native path, avoiding C++20 `u8path` deprecation under `/WX`. Pin binding also avoids its reported shadowed local without weakening strict warnings.

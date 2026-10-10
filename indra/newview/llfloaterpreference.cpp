@@ -4729,6 +4729,8 @@ void LLPanelPreferenceControls::populateControlTable()
     {
         addControlTableSeparator();
         addControlTableRows("control_table_contents_workspaces.xml");
+        addControlTableSeparator();
+        addControlTableRows("control_table_contents_characters.xml");
     }
 
     // explicit update to make sure table is ready for llsearchableui

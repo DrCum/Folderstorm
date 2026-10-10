@@ -17,6 +17,20 @@ inline std::string boundedText(std::string text, std::size_t limit, bool multili
     while (!text.empty() && !validUtf8(text, multiline)) text.pop_back();
     return text;
 }
+// Used on the worker's queue-drain path, after enqueue-time restrictions.
+// A group can become blocked while its individual sender remains permitted.
+template<typename CanReceive>
+inline bool filterChatEvent(Message& event,const std::string& self,CanReceive canReceive)
+{
+    const bool groupBlocked = event.topic == Topic::Group && !canReceive(event.conversation);
+    const bool senderBlocked = event.topic != Topic::Nearby && event.topic != Topic::Notice &&
+        !event.recipient.empty() && event.recipient != self && !canReceive(event.recipient);
+    if (!groupBlocked && !senderBlocked) return true;
+    event.text.clear(); event.sender.clear(); event.recipient.clear(); event.title = "Restricted conversation";
+    event.unread = 0; event.eventAt = 0; event.flags &= ~AlertEligible;
+    event.eventType = EventType::Gap; event.flags |= ConversationRestricted;
+    return false;
+}
 class EventBuffer
 {
 public:
@@ -64,6 +78,12 @@ struct Conversation
     std::string id, title, draft;
     Topic topic = Topic::Nearby;
     std::uint32_t unread = 0;
+    std::string destination;
+    std::uint64_t lastIncomingEvent = 0;
+    bool restricted = false;
+    Conversation() = default;
+    Conversation(std::string idValue,std::string titleValue,std::string draftValue,Topic topicValue,std::uint32_t count) :
+        id(std::move(idValue)),title(std::move(titleValue)),draft(std::move(draftValue)),topic(topicValue),unread(count) {}
 };
 class ChatView
 {
@@ -94,15 +114,36 @@ public:
         if (event.eventType == EventType::None) return true;
         if (event.event && event.event <= cursor) return false;
         if (event.eventType == EventType::Gap)
-        { gap = true; cursor = event.event; return true; }
+        {
+            gap = true; cursor = event.event;
+            if (event.flags & ConversationRestricted)
+            {
+                restrictConversation(event);
+            }
+            return true;
+        }
+        if (event.eventType == EventType::Attention || event.eventType == EventType::AttentionRemoved || event.eventType == EventType::SwitchIntent)
+        { if (event.event) cursor = event.event; return true; }
         auto found = conversations.find(event.conversation);
         if (found == conversations.end())
         {
             if (conversations.size() >= MaxConversations) { gap = true; if (event.event) cursor = event.event; return false; }
             found = conversations.emplace(event.conversation, Conversation{event.conversation, event.title, "", event.topic, 0}).first;
         }
+        if (event.eventType == EventType::Conversation)
+        {
+            found->second.restricted = (event.flags & ConversationRestricted) != 0;
+            if (!found->second.restricted) found->second.destination = event.recipient;
+        }
+        if ((event.flags & ConversationRestricted) || found->second.restricted)
+        {
+            restrictConversation(event);
+            if (event.event) cursor = event.event; // Consume it; never alert or retain its content.
+            return event.eventType == EventType::Conversation;
+        }
         found->second.title = event.title;
         found->second.topic = event.topic;
+        if (event.eventType == EventType::Chat && event.recipient != identity.account) found->second.lastIncomingEvent = event.event;
         if (event.topic == Topic::Nearby)
         {
             // Only accepted incoming events count: replayed IDs, our own echo
@@ -123,6 +164,20 @@ public:
         }
         if (event.event) cursor = event.event;
         return true;
+    }
+private:
+    void restrictConversation(const Message& event)
+    {
+        auto found = conversations.find(event.conversation);
+        if (found == conversations.end() && conversations.size() < MaxConversations)
+            found = conversations.emplace(event.conversation,Conversation{event.conversation,"Restricted conversation","",event.topic,0}).first;
+        if (found != conversations.end())
+        {
+            found->second.restricted = true; found->second.title = "Restricted conversation";
+            found->second.unread = 0; found->second.destination.clear();
+        }
+        lines.erase(std::remove_if(lines.begin(),lines.end(),[&event](const Message& line)
+            { return line.conversation == event.conversation; }),lines.end());
     }
 };
 }

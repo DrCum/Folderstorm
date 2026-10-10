@@ -3308,6 +3308,10 @@ bool LLAppViewer::initConfiguration()
     //Todo, find a cleaner way of doing this via the various set_default arguments.
     loadSettingsFromDirectory("User");
 
+    // A managed profile can explicitly adopt the main viewer's UI/graphics
+    // preferences; native controls validate eligibility before any UI loads.
+    FSSessionWorker::importProfileSettings();
+
     // <FS:Ansariel> Debug setting to disable log throttle
     nd::logging::setThrottleEnabled(gSavedSettings.getBOOL("FSEnableLogThrottle"));
 

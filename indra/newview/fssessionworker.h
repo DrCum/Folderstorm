@@ -14,6 +14,7 @@ public:
     static bool initialize(); // Valid inherited capability or ordinary viewer.
     static bool managed();
     static void configure(); // Temporary settings only, after command line.
+    static void importProfileSettings(); // Explicit host choice; before UI/login, native backup eligibility.
     static bool temporaryControl(const std::string& name);
     static void tick();       // Main-thread protocol/lifecycle; never a render timer.
     static bool renderAllowed();
@@ -22,6 +23,7 @@ public:
     static bool monitorRendering();
     static void renderMonitor(); // Current GL context, after ordinary display maintenance.
     static void beginCameraFrame(); // Temporary renderer pose only, never LLAgentCamera.
+    static void drawTransition(); // World-only fade, before native 2D controls.
     static void endCameraFrame();   // Paired even when display returns early.
     static bool inputAllowed();
     static bool voiceAllowed();
@@ -30,6 +32,7 @@ public:
     static bool keyAllowed(unsigned int key);
     static void keyReleased(unsigned int key);
     static bool textAllowed();
+    static bool requestCharacterSwitch(unsigned int command); // Existing keybindings; source-bound intent only.
     static void focusHostedClient(); // Native window thread; foreground host only.
     static int backgroundYield(int normal);
     static void framePresented();

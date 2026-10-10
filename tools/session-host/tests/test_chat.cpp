@@ -96,5 +96,56 @@ int main()
     live.push(message); assert(waiting.accept(live.after(waiting.cursor)) && waiting.conversations.at(message.conversation).unread == 1);
     message.generation++; waiting.bind(message); live.resetSession();
     live.push(message); assert(waiting.accept(live.after(waiting.cursor)) && waiting.cursor == 1);
-    std::cout << "Bounded event retention/gaps, dedupe, source/session binding and draft isolation passed.\n";
+    // Enqueue while permitted, restrict the GROUP while its sender stays
+    // permitted, then drain through the same filter used by the native worker.
+    EventBuffer groupQueue; ChatView groupView; groupView.bind(message);
+    Message group = message; group.topic = Topic::Group; group.eventType = EventType::Chat;
+    group.conversation = "33333333-3333-3333-3333-333333333333";
+    group.recipient = "44444444-4444-4444-4444-444444444444";
+    group.text = "private group content"; group.sender = "Permitted sender"; group.title = "Private group name";
+    group.unread = 3; group.flags = AlertEligible; group.eventAt = 123;
+    bool groupPermitted = true, senderPermitted = true;
+    const auto canReceive = [&](const std::string& id)
+        { return id == group.conversation ? groupPermitted : id == group.recipient && senderPermitted; };
+    groupQueue.push(group);
+    auto first = groupQueue.after(groupView.cursor);
+    assert(filterChatEvent(first,message.account,canReceive) && groupView.accept(first));
+    groupView.conversations.at(group.conversation).draft = "keep unsent draft";
+    groupQueue.push(group); // Enqueue: both group and sender are allowed.
+    groupPermitted = false;
+    auto blocked = groupQueue.after(groupView.cursor);
+    assert(!filterChatEvent(blocked,message.account,canReceive));
+    assert(blocked.eventType == EventType::Gap && (blocked.flags & ConversationRestricted));
+    assert(blocked.text.empty() && blocked.sender.empty() && blocked.recipient.empty());
+    assert(blocked.title == "Restricted conversation" && blocked.unread == 0 && !(blocked.flags & AlertEligible));
+    assert(groupView.accept(blocked) && groupView.lines.empty());
+    assert(groupView.conversations.at(group.conversation).restricted && groupView.conversations.at(group.conversation).unread == 0);
+    assert(groupView.conversations.at(group.conversation).draft == "keep unsent draft");
+    // A host that already knows the restriction refuses even an unredacted
+    // legacy/queued chat, consumes its cursor, and never restores title/badges.
+    groupQueue.push(group); auto legacy = groupQueue.after(groupView.cursor);
+    assert(!groupView.accept(legacy) && groupView.cursor == legacy.event && groupView.lines.empty());
+    assert(groupView.conversations.at(group.conversation).title == "Restricted conversation");
+    assert(groupView.conversations.at(group.conversation).unread == 0);
+    assert(!groupView.accept(legacy)); // Duplicate remains rejected.
+    // Restriction before the first catalog response also records a bounded
+    // placeholder, so later unredacted events cannot create an allowed chat.
+    ChatView uncatalogued; uncatalogued.bind(message);
+    assert(uncatalogued.accept(blocked));
+    assert(!uncatalogued.accept(legacy) && uncatalogued.lines.empty());
+    // Only a fresh authoritative catalog response re-enables the conversation.
+    Message catalog = group; catalog.event = 0; catalog.eventType = EventType::Conversation; catalog.flags = 0;
+    assert(groupView.accept(catalog) && !groupView.conversations.at(group.conversation).restricted);
+    groupPermitted = true;
+    groupQueue.push(group); auto resumed = groupQueue.after(groupView.cursor);
+    assert(filterChatEvent(resumed,message.account,canReceive) && groupView.accept(resumed));
+    assert(groupView.lines.size() == 1);
+    senderPermitted = false; groupQueue.push(group); auto senderBlocked = groupQueue.after(groupView.cursor);
+    assert(!filterChatEvent(senderBlocked,message.account,canReceive));
+    assert(groupView.accept(senderBlocked) && groupView.lines.empty());
+    Message own = group; own.recipient = message.account;
+    assert(filterChatEvent(own,message.account,canReceive)); // Own sender echo bypass, group still allowed.
+    groupPermitted = false;
+    assert(!filterChatEvent(own,message.account,canReceive)); // Group restriction still applies to own echoes.
+    std::cout << "Bounded chat, source ownership, queued receive restrictions and restricted-history cleanup passed.\n";
 }

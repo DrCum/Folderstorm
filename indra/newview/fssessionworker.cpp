@@ -13,7 +13,18 @@
 #include "fssessionlifecycle.h"
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
+#include "fssessionusability.h"
+#include "fssessionprofileseed.h"
+#include "llsdserialize.h"
+#include "llxmlnode.h"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include "llimage.h"
+#include "llgl.h"
+#include "llglslshader.h"
+#include "llrender.h"
+#include "llrender2dutils.h"
 #include "fseventapibridge.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
@@ -23,13 +34,21 @@
 #include "llchat.h"
 #include "llimview.h"
 #include "llnotifications.h"
+#include "llchannelmanager.h"
+#include "llscreenchannel.h"
+#include "llscriptfloater.h"
 #include "llspeakers.h"
 #include "fsnearbychathub.h"
 #include "fsdata.h"
+#include "fsfloaterim.h"
+#include "llmutelist.h"
+#include "llcallingcard.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
 #include "llappviewer.h"
 #include "llfocusmgr.h"
+#include "lluictrl.h"
+#include <imm.h>
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "llstartup.h"
@@ -63,7 +82,10 @@ struct Worker
     ULONGLONG previewAt = 0;
     bool previewPass = false;
     std::string previewError;
+    std::wstring settingsSource;
+    std::string settingsNotice;
     TransitionClock transition;
+    unsigned int transitionStyle = 0, transitionHeight = 64;
     bool demoting = false, escapeHeld = false;
     Message pendingDemotion;
     LLUUID transitionRegion;
@@ -83,8 +105,9 @@ struct Worker
     bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
-    bool permitVoice = false, muteBackground = true, chatBlocked = false;
+    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false;
     EventBuffer events;
+    std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
     Message pendingPromotion;
     HWND window = nullptr, parent = nullptr;
@@ -113,17 +136,18 @@ struct Worker
             !LLFloaterReg::instanceVisible("preferences") &&
             (!LLViewerJoystick::instanceExists() || !LLViewerJoystick::instance().getOverrideCamera());
     }
-    void startTransition(bool requested)
+    void startTransition(const Message& request)
     {
         transition.cancel(); transitionNotice.clear();
-        if (!requested) return;
+        if (!request.unread) return;
         BOOL animation = TRUE;
         const bool reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animation, 0) && !animation;
         // A hidden standby target is made visible before calling this helper.
         if (reduced || !cameraAllowed() || (GetAsyncKeyState(VK_ESCAPE) & 0x8000))
         { transitionNotice = "Bird's-eye transition skipped: camera, restrictions, focus or reduced-motion setting."; return; }
         transitionRegion = gAgent.getRegion()->getRegionID();
-        escapeHeld = false; transition.begin(GetTickCount64(), generation);
+        transitionStyle = request.unread; transitionHeight = request.height;
+        escapeHeld = false; transition.begin(GetTickCount64(), generation,request.width);
     }
     void finishDemotion()
     {
@@ -166,6 +190,13 @@ struct Worker
     {
         return session.isGroupSessionType() ? Topic::Group : session.isAdHocSessionType() ? Topic::Conference : Topic::Private;
     }
+    bool backgroundAlertAllowed(const LLUUID& sender) const
+    {
+        return ready() && mode != Mode::Active && !promoting && !demoting && muteBackground && sharingAllowed() &&
+            !gAgent.isDoNotDisturb() && !gSavedSettings.getBOOL("MuteAudio") && !gSavedSettings.getBOOL("MuteUI") &&
+            gSavedSettings.getF32("AudioLevelUI") > 0.f && !sender.isNull() && sender != gAgentID &&
+            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat);
+    }
     void connectChat()
     {
         if (!chatConnection.connected())
@@ -174,25 +205,47 @@ struct Worker
                 if (detached || !ready() || !sharingAllowed()) return;
                 auto* session = LLIMModel::instance().findIMSession(data["session_id"].asUUID());
                 const LLUUID sender = data["from_id"].asUUID();
-                if (!session || (!sender.isNull() && sender != gAgentID && !RlvActions::canReceiveIM(sender))) return;
+                if (!session || (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID)) || (!sender.isNull() && sender != gAgentID && !RlvActions::canReceiveIM(sender))) return;
                 Message message; message.eventType = EventType::Chat; message.topic = topicFor(*session);
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
+                const std::string sound = session->isGroupSessionType() ? "PlaySoundGroupChatIM" : session->isAdHocSessionType() ? "PlaySoundConferenceIM" :
+                    LLAvatarTracker::instance().isBuddy(sender) ? "PlaySoundFriendIM" : "PlaySoundNonFriendIM";
+                if (backgroundAlertAllowed(sender) && gSavedSettings.getBOOL(sound) && !data["is_region_msg"].asBoolean())
+                { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
                 events.push(std::move(message));
             });
         if (!notificationConnection.connected())
             if (auto channel = LLNotifications::instance().getChannel("Visible"))
                 notificationConnection = channel->connectChanged([this](const LLSD& data)
                 {
-                    if (!detached && ready() && data["sigtype"].asString() == "add")
+                    if (detached || !ready() || !sharingAllowed()) return false;
+                    const LLUUID id = data["id"].asUUID(); if (id.isNull()) return false;
+                    const auto key = id.asString(); const auto signal = data["sigtype"].asString();
+                    const auto notification = LLNotifications::instance().find(id);
+                    const auto category = notification ? attentionCategory(notification->getName()) : std::string{};
+                    if (signal == "delete" || !notification || !notification->isActive())
                     {
-                        // Source-bound attention only. All offer/payment/permission
-                        // responses still require their native owning viewer.
-                        Message message; message.eventType = EventType::Notice; message.topic = Topic::Notice;
-                        message.conversation = "00000000-0000-0000-0000-000000000000"; message.title = "Viewer notifications";
-                        message.text = "Review this notification in this character's viewer."; message.unread = 1;
-                        events.push(std::move(message));
+                        if (attention.erase(key))
+                        { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = key; events.push(item); }
+                    }
+                    else if (!category.empty() && attention.size() < AttentionBook::Capacity)
+                    {
+                        attention[key] = category;
+                        Message item; item.eventType = EventType::Attention; item.topic = Topic::Notice; item.conversation = key;
+                        item.title = category; item.text = "Review in this character's native viewer.";
+                        LLUUID sender = notification->getPayload()["from_id"].asUUID();
+                        if (sender.isNull()) sender = notification->getPayload()["owner_id"].asUUID();
+                        if (sender.isNull()) sender = notification->getPayload()["task_id"].asUUID();
+                        if (signal == "add" && backgroundAlertAllowed(sender)) { item.flags |= AlertEligible; item.eventAt = GetTickCount64(); }
+                        events.push(item);
+                    }
+                    else if (signal == "add")
+                    {
+                        Message item; item.eventType = EventType::Notice; item.topic = Topic::Notice;
+                        item.conversation = "00000000-0000-0000-0000-000000000000"; item.title = "Viewer notifications";
+                        item.text = "Review this notification in this character's viewer."; item.unread = 1; events.push(item);
                     }
                     return false;
                 });
@@ -215,15 +268,23 @@ struct Worker
         Message payload;
         if (request.kind == Kind::Events)
         {
+            for (auto it = attention.begin(); it != attention.end(); )
+            {
+                const auto notification = LLNotifications::instance().find(LLUUID(it->first));
+                if (!notification || !notification->isActive())
+                { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = it->first; events.push(item); it = attention.erase(it); }
+                else ++it;
+            }
             payload = events.after(request.cursor);
-            if (payload.topic != Topic::Nearby && payload.topic != Topic::Notice &&
-                !payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
-            { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; }
+            // Restrictions may change after the native enqueue callback. Check
+            // the owning group as well as its sender immediately before IPC.
+            filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
+                { return RlvActions::canReceiveIM(LLUUID(id)); });
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
-            response.recipient = payload.recipient;
+            response.recipient = payload.recipient; response.flags |= payload.flags & (AlertEligible|ConversationRestricted); response.eventAt = payload.eventAt;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -241,10 +302,14 @@ struct Worker
                     payload.eventType = EventType::Conversation; payload.topic = topicFor(session);
                     payload.conversation = session.mSessionID.asString(); payload.title = boundedText(session.mName, 255);
                     payload.unread = static_cast<std::uint32_t>((std::max)(0, session.mNumUnread));
+                    if (session.isP2PSessionType()) payload.recipient = session.mOtherParticipantID.asString();
+                    else if (session.isGroupSessionType()) payload.recipient = session.mSessionID.asString();
+                    if (!payload.recipient.empty() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
+                    { payload.title = "Restricted conversation"; payload.recipient.clear(); payload.unread = 0; payload.flags |= ConversationRestricted; }
                 }
             }
             auto response = status(request); response.eventType = payload.eventType; response.topic = payload.topic;
-            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread;
+            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread; response.recipient = payload.recipient; response.flags |= payload.flags & ConversationRestricted;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -440,6 +505,7 @@ struct Worker
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
+        if (!settingsNotice.empty() && error.empty()) reply.detail = boundedText(settingsNotice,119);
         if (!previewError.empty())
         {
             reply.flags |= PreviewUnavailable;
@@ -451,7 +517,9 @@ struct Worker
     }
     void reply(const Message& request, const std::string& error = {})
     {
-        if (!pipe.send(status(request, error))) { detach(); pipe.close(); }
+        const auto response = status(request,error);
+        if (!pipe.send(response)) { detach(); pipe.close(); }
+        else if (response.detail.rfind("Settings import:",0) == 0) settingsNotice.clear();
     }
     void command(const Message& request)
     {
@@ -465,7 +533,7 @@ struct Worker
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
-            if (request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            if (request.unread > 2 || (request.unread && (request.width < 250 || request.width > 2000 || request.height < 16 || request.height > 96)) || request.account != gAgentID.asString() || request.grid != loginGrid)
             { reply(request, "Invalid transition policy or changed account."); break; }
             const HWND popup = window ? GetLastActivePopup(window) : nullptr;
             if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
@@ -476,7 +544,7 @@ struct Worker
             const Mode previousMode = mode;
             if (request.mode != Mode::Active && previousMode == Mode::Active)
             {
-                startTransition(request.unread != 0);
+                startTransition(request);
                 if (transition.active())
                 {
                     pendingDemotion = request; demoting = true;
@@ -512,7 +580,7 @@ struct Worker
                         heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
                     }
                 EnableWindow(window, FALSE); ShowWindow(window, request.surface ? SW_SHOWNOACTIVATE : SW_RESTORE);
-                startTransition(request.unread != 0);
+                startTransition(request);
                 // Reply/grant input only after an actual normal buffer swap.
             }
             break;
@@ -536,10 +604,50 @@ struct Worker
         case Kind::MarkRead:
         case Kind::Conversations:
         case Kind::Typing: chatCommand(request); break;
+        case Kind::ShortcutPolicy:
+            if (!ready() || request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            { reply(request,"Shortcut policy is invalid or its account changed."); break; }
+            shortcuts = request.unread != 0; reply(request); break;
         case Kind::AudioPolicy:
             if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
             applyVoice(); reply(request); break;
+        case Kind::ReviewChat:
+        {
+            if (!ready() || !inputGranted || mode != Mode::Active || request.account != gAgentID.asString() || request.grid != loginGrid || !sharingAllowed())
+            { reply(request,"The owning character is unavailable or restricted."); break; }
+            auto* session = request.conversation.empty() ? nullptr : LLIMModel::instance().findIMSession(LLUUID(request.conversation));
+            if (request.topic != Topic::Nearby && request.topic != Topic::Notice && (!session || topicFor(*session) != request.topic ||
+                (session->isP2PSessionType() && !RlvActions::canReceiveIM(session->mOtherParticipantID)) ||
+                (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID))))
+            { reply(request,"The native conversation ended or is restricted."); break; }
+            if (!appForeground()) { reply(request,"Return to Folderstorm to review this conversation."); break; }
+            SetForegroundWindow(window);
+            if (request.topic == Topic::Nearby) LLFloaterReg::showInstance("fs_nearby_chat",LLSD(),true);
+            else if (request.topic == Topic::Notice) LLFloaterReg::showInstance("notification_well_window",LLSD(),true);
+            else FSFloaterIM::show(session->mSessionID);
+            reply(request); break;
+        }
+        case Kind::ReviewAttention:
+        {
+            if (!ready() || !inputGranted || mode != Mode::Active || request.account != gAgentID.asString() || request.grid != loginGrid || !sharingAllowed())
+            { reply(request,"Switch to this character before reviewing its notification."); break; }
+            const auto notification = LLNotifications::instance().find(LLUUID(request.conversation));
+            if (!notification || !notification->isActive() || attentionCategory(notification->getName()).empty())
+            { reply(request,"Notification expired or is no longer supported. Check native notifications."); break; }
+            // Open only: the native notification UI still owns all response buttons.
+            if (!appForeground()) { reply(request,"Return to Folderstorm to review this notification."); break; }
+            SetForegroundWindow(window);
+            const LLUUID notificationId(request.conversation);
+            auto* channel = dynamic_cast<LLNotificationsUI::LLScreenChannel*>(LLNotificationsUI::LLChannelManager::getInstance()->findChannelByID(LLNotificationsUI::NOTIFICATION_CHANNEL_UUID));
+            if (channel && channel->getToastByNotificationID(notificationId)) LLFloaterReg::showInstance("inspect_toast",LLSD(notificationId),true);
+            else
+            {
+                LLScriptFloaterManager::instance().setFloaterVisible(notificationId,true);
+                LLFloaterReg::showInstance("notification_well_window",LLSD(),true);
+            }
+            reply(request); break;
+        }
         case Kind::WorkspaceInfo:
         case Kind::WorkspaceMenu:
         {
@@ -585,11 +693,11 @@ struct Worker
     }
 };
 std::unique_ptr<Worker> worker;
-std::wstring env(const wchar_t* name)
+std::wstring env(const wchar_t* name, std::size_t limit = 128)
 {
-    wchar_t buffer[128]{};
-    const DWORD size = GetEnvironmentVariableW(name, buffer, static_cast<DWORD>(std::size(buffer)));
-    return size && size < std::size(buffer) ? std::wstring(buffer, size) : std::wstring();
+    std::vector<wchar_t> buffer(limit,0);
+    const DWORD size = GetEnvironmentVariableW(name, buffer.data(), static_cast<DWORD>(buffer.size()));
+    return size && size < buffer.size() ? std::wstring(buffer.data(), size) : std::wstring();
 }
 }
 
@@ -600,12 +708,14 @@ bool FSSessionWorker::initialize()
     const auto lease = env(L"FOLDERSTORM_SESSION_LOCK");
     const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
     const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
+    const auto settingsSource = env(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE",32768);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PIPE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ID", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty()) return true;
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE", nullptr);
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty()) return true;
     if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
     auto value = std::make_unique<Worker>();
     for (std::size_t i = 0; i < 16; ++i)
@@ -633,11 +743,144 @@ bool FSSessionWorker::initialize()
             reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(number)) : INVALID_HANDLE_VALUE;
     };
     if (!value->preview.open(frameHandle(frames), frameHandle(frameMutex)) || !value->preview.bootstrap(value->id, value->host)) return false;
+    value->settingsSource = settingsSource;
     value->lastCommand = GetTickCount64();
     worker = std::move(value);
     return true;
 }
 bool FSSessionWorker::managed() { return worker && !worker->detached; }
+void FSSessionWorker::importProfileSettings()
+{
+    if (!managed() || worker->settingsSource.empty()) return;
+    const auto folder = std::filesystem::path(worker->settingsSource);
+    worker->settingsSource.clear(); // One deliberate attempt; never retry at a new login.
+    const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings.xml");
+    const auto target = std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
+    const auto destination = target.parent_path();
+    const auto plainFile = [](const std::filesystem::path& path)
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));
+    };
+    const auto read = [&plainFile](const std::filesystem::path& path,std::string& bytes)
+    {
+        std::error_code error; if (!plainFile(path)) return false;
+        const auto size = std::filesystem::file_size(path,error);
+        if (error || !size || size > ProfileSettingsLimit) return false;
+        std::ifstream input(path,std::ios::binary); if (!input) return false;
+        bytes.assign(static_cast<std::size_t>(size),'\0'); input.read(bytes.data(),static_cast<std::streamsize>(size));
+        return input.gcount() == static_cast<std::streamsize>(size) && input.peek() == std::char_traits<char>::eof() &&
+            bytes.find("<!DOCTYPE") == std::string::npos && bytes.find("<!ENTITY") == std::string::npos;
+    };
+    std::string bytes;
+    if (!read(folder/L"settings.xml",bytes))
+    { worker->settingsNotice = "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
+    std::error_code error;
+    if (std::filesystem::equivalent(folder/L"settings.xml",target,error))
+    { worker->settingsNotice = "Settings import: source is this profile; preferences unchanged."; return; }
+    LLSD data; std::istringstream input(bytes);
+    if (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries)
+    { worker->settingsNotice = "Settings import: invalid or oversized preferences; profile unchanged."; return; }
+    const auto validValue = [](const std::string& type,const LLSD& value)
+    {
+        const auto number = [](const LLSD& v) { return (v.isReal() || v.isInteger()) && std::isfinite(v.asReal()); };
+        if (type == "Boolean") return value.isBoolean() || (value.isInteger() && (value.asInteger() == 0 || value.asInteger() == 1));
+        if (type == "S32") return value.isInteger();
+        if (type == "U32") return value.isInteger() && value.asInteger() >= 0;
+        if (type == "F32") return number(value) && std::abs(value.asReal()) <= (std::numeric_limits<F32>::max)();
+        if (type == "String") return value.isString() && value.asString().size() <= 4096 && validUtf8(value.asString(),true);
+        const std::size_t expected = type == "Vector3" || type == "Vector3D" || type == "Color3" ? 3 : 4;
+        if (!value.isArray() || value.size() != expected) return false;
+        for (auto it = value.beginArray(); it != value.endArray(); ++it)
+            if (!number(*it) || ((type == "Rect" || type == "Color4U") && !it->isInteger()) ||
+                (type != "Vector3D" && std::abs(it->asReal()) > (std::numeric_limits<F32>::max)()) ||
+                (type == "Color4U" && (it->asInteger() < 0 || it->asInteger() > 255))) return false;
+        return true;
+    };
+    LLSD changes; std::size_t skipped = 0;
+    for (auto it = data.beginMap(); it != data.endMap(); ++it)
+    {
+        auto control = gSavedSettings.getControl(it->first); const auto& record = it->second;
+        const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
+        if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
+            !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean()) ||
+            !validValue(type,record["Value"])) { ++skipped; continue; }
+        changes[it->first] = record["Value"];
+    }
+    const auto plainDirectory = [](const std::filesystem::path& path)
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+    };
+    const auto backups = destination/L"settings-import-backups";
+    error.clear();
+    if (!plainDirectory(destination))
+    { worker->settingsNotice = "Settings import: profile settings directory unavailable or redirected; unchanged."; return; }
+    std::filesystem::create_directory(backups,error);
+    if (error || !plainDirectory(backups))
+    { worker->settingsNotice = "Settings import: unable to create preference backup; profile unchanged."; return; }
+    const auto backup = backups/(std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(GetCurrentProcessId()));
+    // An exclusively new directory holds both originals and staging files; an
+    // old or redirected temporary file must never be mistaken for a fresh save.
+    if (!std::filesystem::create_directory(backup,error) || error)
+    { worker->settingsNotice = "Settings import: unable to create unique preference backup; profile unchanged."; return; }
+    const auto backupFile = [&](const std::filesystem::path& file)
+    {
+        const DWORD attributes = GetFileAttributesW(file.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND;
+        if (!plainFile(file)) return false;
+        std::error_code failure;
+        return std::filesystem::copy_file(file,backup/file.filename(),std::filesystem::copy_options::none,failure) && !failure;
+    };
+    if (!backupFile(target))
+    { worker->settingsNotice = "Settings import: unable to back up existing preferences; profile unchanged."; return; }
+    LLSD previous, effective;
+    for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
+    {
+        auto control = gSavedSettings.getControl(it->first);
+        previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
+    }
+    const auto temporary = backup/L"settings-import.tmp";
+    gSavedSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
+    LLSD saved;
+    bool complete = read(temporary,bytes);
+    if (complete)
+    {
+        std::istringstream written(bytes);
+        complete = LLSDSerialize::fromXML(saved,written,false) > 0 && saved.isMap();
+    }
+    for (auto it = changes.beginMap(); complete && it != changes.endMap(); ++it)
+    {
+        auto control = gSavedSettings.getControl(it->first);
+        if (control->shouldSave(true))
+            complete = saved.has(it->first) && saved[it->first]["Value"] == control->getSaveValue();
+    }
+    if (!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    {
+        for (auto it = previous.beginMap(); it != previous.endMap(); ++it)
+        { auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
+        std::filesystem::remove(temporary,error);
+        worker->settingsNotice = "Settings import: preference write failed; original settings retained."; return;
+    }
+    unsigned int copied = 0;
+    for (const auto* name : seedUiFiles())
+    {
+        const auto source = folder/name;
+        if (!std::filesystem::exists(source,error)) { error.clear(); continue; }
+        LLXMLNodePtr node;
+        if (!read(source,bytes) || !LLXMLNode::parseBuffer(bytes.data(),static_cast<U64>(bytes.size()),node) || !backupFile(destination/name))
+        { ++skipped; continue; }
+        const auto temp = backup/(std::string(name)+".import-tmp");
+        std::ofstream out(temp,std::ios::binary|std::ios::trunc); out.write(bytes.data(),static_cast<std::streamsize>(bytes.size())); out.close();
+        const auto file = destination/name;
+        if (!out || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+        { std::filesystem::remove(temp,error); ++skipped; continue; }
+        ++copied;
+    }
+    worker->settingsNotice = "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
+        " UI files, "+std::to_string(skipped)+" skipped; previous files backed up.";
+    LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
+}
 void FSSessionWorker::configure()
 {
     if (!managed()) return;
@@ -669,7 +912,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
-        value.events.resetSession();
+        value.events.resetSession(); value.attention.clear(); value.shortcuts = false;
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
@@ -727,7 +970,7 @@ void FSSessionWorker::tick()
     {
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
-        if (blocked != value.chatBlocked) { value.events.clear(); value.chatBlocked = blocked; }
+        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.chatBlocked = blocked; }
         if (blocked && value.previewRate)
         {
             value.previewError = "Preview unavailable while names or locations are restricted.";
@@ -830,7 +1073,7 @@ void FSSessionWorker::renderMonitor()
 }
 void FSSessionWorker::beginCameraFrame()
 {
-    if (!managed() || !worker->transition.active() || worker->previewPass || !worker->cameraAllowed()) return;
+    if (!managed() || !worker->transition.active() || worker->transitionStyle != 1 || worker->previewPass || !worker->cameraAllowed()) return;
     auto& value = *worker;
     auto& camera = LLViewerCamera::instance();
     const LLVector3 avatar = gAgent.getPositionAgent();
@@ -838,7 +1081,7 @@ void FSSessionWorker::beginCameraFrame()
     const F32 distance = (camera.getOrigin() - avatar).length();
     if (!camera.isFinite() || !avatar.isFinite() || !std::isfinite(cap) || cap < 16.f || distance > cap)
     { value.transition.cancel(); value.transitionNotice = "Bird's-eye transition skipped: long-range or unavailable camera."; return; }
-    const F32 height = llmin(cap, llmax(64.f, distance * 1.25f));
+    const F32 height = llmin(cap, llmax(static_cast<F32>(value.transitionHeight), distance * 1.25f));
     LLVector3 horizontal = camera.getAtAxis(); horizontal.mV[VZ] = 0.f;
     if (horizontal.normalize() < 0.001f) horizontal.set(1.f, 0.f, 0.f);
     const LLVector3 bird_origin = avatar + LLVector3(0.f, 0.f, height) - horizontal * (height * 0.12f);
@@ -848,6 +1091,19 @@ void FSSessionWorker::beginCameraFrame()
     value.cameraBefore = camera; value.cameraOverridden = true;
     camera.setOrigin(camera.getOrigin() + (bird_origin - camera.getOrigin()) * weight);
     camera.setAxes(slerp(weight, value.cameraBefore.getQuaternion(), bird.getQuaternion()));
+}
+void FSSessionWorker::drawTransition()
+{
+    if (!managed() || !worker->transition.active() || worker->transitionStyle != 2 || worker->previewPass || !worker->cameraAllowed() || !gViewerWindow) return;
+    const F32 fraction = worker->transition.fraction(GetTickCount64());
+    const F32 alpha = worker->demoting ? fraction : 1.f-fraction;
+    const LLRect rect = gViewerWindow->getWorldViewRectRaw();
+    LLGLSUIDefault state;
+    gViewerWindow->setup2DRender();
+    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    gUIProgram.bind();
+    gl_rect_2d(rect,LLColor4(0.f,0.f,0.f,alpha));
+    gGL.flush(); gGL.color4f(1.f,1.f,1.f,1.f); gUIProgram.unbind();
 }
 void FSSessionWorker::endCameraFrame()
 {
@@ -868,6 +1124,22 @@ bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed
 bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
+}
+bool FSSessionWorker::requestCharacterSwitch(unsigned int command)
+{
+    if (!managed() || !worker->ready() || !worker->shortcuts || !worker->inputGranted || worker->mode != Mode::Active ||
+        worker->promoting || worker->demoting || !worker->sharingAllowed() || command > 6 || !gFocusMgr.getAppHasFocus() ||
+        gFocusMgr.focusLocked() || LLFloaterReg::instanceVisible("preferences")) return false;
+    auto* focus = dynamic_cast<LLUICtrl*>(gFocusMgr.getKeyboardFocus());
+    if (focus && focus->acceptsTextInput()) return false;
+    DWORD foreground = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
+    if (foreground != GetCurrentProcessId()) return false;
+    const HIMC context = ImmGetContext(worker->window);
+    const bool composing = context && ImmGetCompositionStringW(context,GCS_COMPSTR,nullptr,0) > 0;
+    if (context) ImmReleaseContext(worker->window,context);
+    if (composing) return false;
+    Message event; event.eventType = EventType::SwitchIntent; event.unread = command; event.eventAt = GetTickCount64();
+    worker->events.push(event); return true;
 }
 void FSSessionWorker::nearbyMessage(const LLChat& chat)
 {
@@ -949,6 +1221,7 @@ void FSSessionWorker::shutdown()
 bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
 void FSSessionWorker::configure() {}
+void FSSessionWorker::importProfileSettings() {}
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
@@ -957,10 +1230,12 @@ void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::monitorRendering() { return false; }
 void FSSessionWorker::renderMonitor() {}
 void FSSessionWorker::beginCameraFrame() {}
+void FSSessionWorker::drawTransition() {}
 void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }
+bool FSSessionWorker::requestCharacterSwitch(unsigned int) { return false; }
 void FSSessionWorker::nearbyMessage(const LLChat&) {}
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
 void FSSessionWorker::keyReleased(unsigned int) {}

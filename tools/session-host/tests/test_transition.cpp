@@ -19,6 +19,10 @@ int main()
     { const auto weight = clock.fraction(t); assert(weight >= previous && weight >= 0.f && weight <= 1.f); previous = weight; }
     clock.cancel(); assert(!clock.active()); clock.begin(0, 7); assert(clock.active());
     clock.begin(100, 0); assert(!clock.active());
+    clock.begin(100,7,2000); assert(!clock.finished(1200,7,true));
+    assert(std::abs(clock.fraction(1100)-0.5f) < 0.0001f); assert(clock.finished(2100,7,true));
+    clock.begin(0,7,249); assert(!clock.active()); clock.begin(0,7,2001); assert(!clock.active());
+    clock.begin(0,7,250); assert(clock.finished(250,7,true) && !clock.finished(249,7,true));
     Message pending; pending.worker[0] = 42; pending.kind = Kind::SetMode; pending.sequence = 9;
     pending.generation = 2; pending.account = "01234567-89ab-cdef-0123-456789abcdef"; pending.grid = "secondlife";
     Message cancel = pending; cancel.kind = Kind::CancelTransition; cancel.cursor = 9; cancel.sequence = 10;

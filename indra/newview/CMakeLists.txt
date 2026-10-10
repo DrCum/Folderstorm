@@ -2376,16 +2376,18 @@ add_executable(${VIEWER_BINARY_NAME}
 # a controller or background workers. Keep the binary beside the matching viewer.
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
-      "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp")
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
-  target_include_directories(folderstorm-session-host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  target_include_directories(folderstorm-session-host PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
   target_compile_definitions(folderstorm-session-host PRIVATE
       UNICODE _UNICODE "FS_SESSION_VIEWER_FILENAME=\"${VIEWER_BINARY_NAME}.exe\"")
-  target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 advapi32 bcrypt shell32 ole32 uuid psapi comctl32)
+  target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 advapi32 bcrypt shell32 ole32 uuid psapi comctl32 comdlg32 winmm imm32)
   set_target_properties(folderstorm-session-host PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   if (MSVC)
-    target_compile_options(folderstorm-session-host PRIVATE /utf-8)
+    target_compile_options(folderstorm-session-host PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
   endif()
   add_dependencies(${VIEWER_BINARY_NAME} folderstorm-session-host)
 endif()

@@ -1059,10 +1059,28 @@ static bool workspace_next(EKeystate state) { return workspace_key(state, 1); }
 static bool workspace_back(EKeystate state) { return workspace_key(state, 2); }
 static bool workspace_previous(EKeystate state) { return workspace_key(state, 3); }
 
+// Character actions use the existing conflict-checked Controls bindings.
+static bool character_key(EKeystate state,unsigned int command)
+{ return state == KEYSTATE_DOWN && FSSessionWorker::requestCharacterSwitch(command); }
+static bool character_1(EKeystate state) { return character_key(state,0); }
+static bool character_2(EKeystate state) { return character_key(state,1); }
+static bool character_3(EKeystate state) { return character_key(state,2); }
+static bool character_4(EKeystate state) { return character_key(state,3); }
+static bool character_5(EKeystate state) { return character_key(state,4); }
+static bool character_next(EKeystate state) { return character_key(state,5); }
+static bool character_back(EKeystate state) { return character_key(state,6); }
+
 // In-world keybindings, like walking or camera
 #define REGISTER_KEYBOARD_ACTION(KEY, ACTION) LLREGISTER_STATIC(LLKeyboardActionRegistry, KEY, LLKeybindFunctionData(ACTION, false));
 // Global keybindings that should work even with floaters focused, like voice
 #define REGISTER_KEYBOARD_GLOBAL_ACTION(KEY, ACTION) LLREGISTER_STATIC(LLKeyboardActionRegistry, KEY, LLKeybindFunctionData(ACTION, true));
+REGISTER_KEYBOARD_ACTION("character_1", character_1);
+REGISTER_KEYBOARD_ACTION("character_2", character_2);
+REGISTER_KEYBOARD_ACTION("character_3", character_3);
+REGISTER_KEYBOARD_ACTION("character_4", character_4);
+REGISTER_KEYBOARD_ACTION("character_5", character_5);
+REGISTER_KEYBOARD_ACTION("character_next", character_next);
+REGISTER_KEYBOARD_ACTION("character_back", character_back);
 REGISTER_KEYBOARD_ACTION("workspace_direct", workspace_direct);
 REGISTER_KEYBOARD_ACTION("workspace_next", workspace_next);
 REGISTER_KEYBOARD_ACTION("workspace_back", workspace_back);
