@@ -239,3 +239,8 @@ Definition of done: two supported characters share one interface, communicate th
 | [#17](https://github.com/DrCum/Folderstorm/pull/17) | Off-default finite bird’s-eye exit/entry, renderer-only camera override/restore, Escape/instant and reduced-motion/restriction guards. | Appearance/timing, unsaved camera recovery, cancel/Alt-Tab/disconnect/slow promotion. |
 
 Build the full chosen branch with matching controller/viewer binaries. Newest private protocol: 8. Do not mix checkpoint binaries. Earlier heads remain frozen for comparison. Portable focused checks cover the changed contracts; production/native acceptance still requires the user's Windows build and measurements. Two distinct same-grid Windows characters remain the initial supported scope. Additional accounts, mixed-grid guarantees, non-Windows hosting, camera wheel polish and automated monitor-image alerts remain future work.
+
+
+## Planned usability follow-up after PR #26
+
+The [usability roadmap](multi-character-usability.md) covers all six newly requested ideas: character aliases/colors and shell placement, pinned Chat tabs, an attention inbox, separate notification alerts, transition controls, and character-switch shortcuts. Its baseline is PR #26 (five characters, four monitors and review fixes); the earlier table above describes the original checkpoints. This new roadmap is planning only while the user tests #26. No additional feature implementation or feature PR has been requested in this planning turn.
