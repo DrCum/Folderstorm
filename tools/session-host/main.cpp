@@ -288,6 +288,7 @@ struct Host
     bool updatingAttention = false;
 
     HWND chatAccent = nullptr;
+    unsigned int handoffStyle = 0, handoffDuration = 1100, handoffHeight = 64;
     bool cinematic = false, handoffAnimated = false, escapeHeld = false;
     UINT dpi = 96;
     HFONT font = nullptr;
@@ -327,6 +328,18 @@ struct Host
             number(44+static_cast<std::size_t>(i)*2,static_cast<std::uint16_t>(sample),2);
         }
         PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+    }
+    void editTransition()
+    {
+        using namespace fs_host_ui;
+        std::vector<Field> fields{{L"Transition style",std::to_wstring(presentation.transition),FieldType::Choice,{L"Instant",L"Bird's-eye",L"Fade"}},
+            {L"Duration per leg (250–2000 ms)",std::to_wstring(presentation.duration),FieldType::Number,{},250,2000},
+            {L"Height above avatar (16–96 m)",std::to_wstring(presentation.height),FieldType::Number,{},16,96},
+            {L"Reset transition defaults",L"0",FieldType::Check}};
+        if (!edit(window,L"Character transition (Save host choices to keep)",fields)) return;
+        if (number(fields[3])) { presentation.transition = 0; presentation.duration = 1100; presentation.height = 64; }
+        else { presentation.transition = number(fields[0]); presentation.duration = number(fields[1]); presentation.height = number(fields[2]); }
+        message(L"Transition choices apply to the next switch. Escape skips the effect and completes switching.");
     }
     void editAlertVolume()
     {
@@ -705,7 +718,8 @@ struct Host
         if (kind == Kind::SetMode)
         {
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
-            request.unread = handoff.step() != Handoff::Step::Idle && handoff.step() != Handoff::Step::Rollback && handoffAnimated ? 1u : 0u;
+            request.unread = handoff.step() != Handoff::Step::Idle && handoff.step() != Handoff::Step::Rollback && handoffAnimated ? handoffStyle : 0u;
+            request.width = handoffDuration; request.height = handoffHeight;
         }
         if (kind == Kind::MonitorPolicy)
         {
@@ -729,7 +743,7 @@ struct Host
         result.chrome = chrome; result.chatDetached = chatDetached; result.controlsDetached = controlsDetached;
         result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
         result.previewSize = monitorSize; result.previewRate = monitorRate;
-        result.cinematic = cinematic;
+        result.cinematic = presentation.transition == 1;
         return result;
     }
     void saveOptions()
@@ -768,7 +782,7 @@ struct Host
         AppendMenuW(menu,MF_STRING,275,L"Notification alert volume…");
         AppendMenuW(menu,MF_STRING,274,L"Attention inbox…");
         AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
-        AppendMenuW(menu, MF_STRING | (cinematic ? MF_CHECKED : 0), 207, L"Bird's-eye transitions (Escape skips)");
+        AppendMenuW(menu,MF_STRING,207,L"Transition style, duration and height… (Escape skips)");
         AppendMenuW(menu, MF_STRING | (handoff.step() != Handoff::Step::Idle ? 0 : MF_GRAYED), 208, L"Switch instantly (skip this animation)");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         for (int i = 0; i < MaxCharacters; ++i)
@@ -836,7 +850,7 @@ struct Host
         else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
         else if (choice == 206) saveOptions();
-        else if (choice == 207) cinematic = !cinematic;
+        else if (choice == 207) editTransition();
         else if (choice == 208) skipTransition();
         else if (choice >= LaunchBase && choice < LaunchBase + MaxCharacters) launch(static_cast<int>(choice) - LaunchBase);
         else if (choice >= MonitorBase && choice < MonitorBase + MaxCharacters) openMonitor(static_cast<int>(choice) - MonitorBase);
@@ -1221,7 +1235,8 @@ struct Host
             monitorSet.beginExchange(active, index, validSlot(active) && slots[active] ? &slots[active]->snapshot : nullptr, slots[index]->snapshot);
             BOOL animation = TRUE;
             const bool reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animation, 0) && !animation;
-            handoffAnimated = cinematic && !reduced; escapeHeld = false;
+            handoffStyle = presentation.transition; handoffDuration = presentation.duration; handoffHeight = presentation.height;
+            handoffAnimated = handoffStyle != 0 && !reduced; escapeHeld = false;
             message(L"Switching to " + wide(slots[index]->snapshot.name) + L"; waiting for its ready frame…");
         }
     }
@@ -2172,6 +2187,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
             state.chatDetached = choices.chatDetached; state.controlsDetached = choices.controlsDetached;
         }
     }
+    state.presentation.transition = state.cinematic ? 1u : 0u;
     std::ifstream appearanceFile(state.profiles / L"host-presentation.dat",std::ios::binary);
     if (appearanceFile)
     {

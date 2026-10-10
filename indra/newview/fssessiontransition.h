@@ -17,20 +17,20 @@ class TransitionClock
 {
 public:
     static constexpr std::uint64_t Duration = 1100;
-    void begin(std::uint64_t now, std::uint64_t generation)
-    { mStart = now; mGeneration = generation; mActive = generation != 0; }
+    void begin(std::uint64_t now, std::uint64_t generation, std::uint64_t duration = Duration)
+    { mStart = now; mGeneration = generation; mDuration = duration >= 250 && duration <= 2000 ? duration : Duration; mActive = generation != 0 && duration >= 250 && duration <= 2000; }
     bool active() const { return mActive; }
     bool finished(std::uint64_t now, std::uint64_t generation, bool allowed) const
-    { return !mActive || !allowed || generation != mGeneration || now < mStart || now - mStart >= Duration; }
+    { return !mActive || !allowed || generation != mGeneration || now < mStart || now - mStart >= mDuration; }
     float fraction(std::uint64_t now) const
     {
         const auto elapsed = now >= mStart ? now - mStart : 0;
-        const float t = static_cast<float>((std::min)(elapsed, Duration)) / static_cast<float>(Duration);
+        const float t = static_cast<float>((std::min)(elapsed, mDuration)) / static_cast<float>(mDuration);
         return t * t * (3.f - 2.f * t);
     }
     void cancel() { mActive = false; }
 private:
-    std::uint64_t mStart = 0, mGeneration = 0;
+    std::uint64_t mStart = 0, mGeneration = 0, mDuration = Duration;
     bool mActive = false;
 };
 }

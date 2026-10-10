@@ -15,6 +15,10 @@
 #include "fssessiontransition.h"
 #include "fssessionusability.h"
 #include "llimage.h"
+#include "llgl.h"
+#include "llglslshader.h"
+#include "llrender.h"
+#include "llrender2dutils.h"
 #include "fseventapibridge.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
@@ -71,6 +75,7 @@ struct Worker
     bool previewPass = false;
     std::string previewError;
     TransitionClock transition;
+    unsigned int transitionStyle = 0, transitionHeight = 64;
     bool demoting = false, escapeHeld = false;
     Message pendingDemotion;
     LLUUID transitionRegion;
@@ -121,17 +126,18 @@ struct Worker
             !LLFloaterReg::instanceVisible("preferences") &&
             (!LLViewerJoystick::instanceExists() || !LLViewerJoystick::instance().getOverrideCamera());
     }
-    void startTransition(bool requested)
+    void startTransition(const Message& request)
     {
         transition.cancel(); transitionNotice.clear();
-        if (!requested) return;
+        if (!request.unread) return;
         BOOL animation = TRUE;
         const bool reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animation, 0) && !animation;
         // A hidden standby target is made visible before calling this helper.
         if (reduced || !cameraAllowed() || (GetAsyncKeyState(VK_ESCAPE) & 0x8000))
         { transitionNotice = "Bird's-eye transition skipped: camera, restrictions, focus or reduced-motion setting."; return; }
         transitionRegion = gAgent.getRegion()->getRegionID();
-        escapeHeld = false; transition.begin(GetTickCount64(), generation);
+        transitionStyle = request.unread; transitionHeight = request.height;
+        escapeHeld = false; transition.begin(GetTickCount64(), generation,request.width);
     }
     void finishDemotion()
     {
@@ -513,7 +519,7 @@ struct Worker
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
-            if (request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            if (request.unread > 2 || (request.unread && (request.width < 250 || request.width > 2000 || request.height < 16 || request.height > 96)) || request.account != gAgentID.asString() || request.grid != loginGrid)
             { reply(request, "Invalid transition policy or changed account."); break; }
             const HWND popup = window ? GetLastActivePopup(window) : nullptr;
             if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
@@ -524,7 +530,7 @@ struct Worker
             const Mode previousMode = mode;
             if (request.mode != Mode::Active && previousMode == Mode::Active)
             {
-                startTransition(request.unread != 0);
+                startTransition(request);
                 if (transition.active())
                 {
                     pendingDemotion = request; demoting = true;
@@ -560,7 +566,7 @@ struct Worker
                         heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
                     }
                 EnableWindow(window, FALSE); ShowWindow(window, request.surface ? SW_SHOWNOACTIVATE : SW_RESTORE);
-                startTransition(request.unread != 0);
+                startTransition(request);
                 // Reply/grant input only after an actual normal buffer swap.
             }
             break;
@@ -914,7 +920,7 @@ void FSSessionWorker::renderMonitor()
 }
 void FSSessionWorker::beginCameraFrame()
 {
-    if (!managed() || !worker->transition.active() || worker->previewPass || !worker->cameraAllowed()) return;
+    if (!managed() || !worker->transition.active() || worker->transitionStyle != 1 || worker->previewPass || !worker->cameraAllowed()) return;
     auto& value = *worker;
     auto& camera = LLViewerCamera::instance();
     const LLVector3 avatar = gAgent.getPositionAgent();
@@ -922,7 +928,7 @@ void FSSessionWorker::beginCameraFrame()
     const F32 distance = (camera.getOrigin() - avatar).length();
     if (!camera.isFinite() || !avatar.isFinite() || !std::isfinite(cap) || cap < 16.f || distance > cap)
     { value.transition.cancel(); value.transitionNotice = "Bird's-eye transition skipped: long-range or unavailable camera."; return; }
-    const F32 height = llmin(cap, llmax(64.f, distance * 1.25f));
+    const F32 height = llmin(cap, llmax(static_cast<F32>(value.transitionHeight), distance * 1.25f));
     LLVector3 horizontal = camera.getAtAxis(); horizontal.mV[VZ] = 0.f;
     if (horizontal.normalize() < 0.001f) horizontal.set(1.f, 0.f, 0.f);
     const LLVector3 bird_origin = avatar + LLVector3(0.f, 0.f, height) - horizontal * (height * 0.12f);
@@ -932,6 +938,19 @@ void FSSessionWorker::beginCameraFrame()
     value.cameraBefore = camera; value.cameraOverridden = true;
     camera.setOrigin(camera.getOrigin() + (bird_origin - camera.getOrigin()) * weight);
     camera.setAxes(slerp(weight, value.cameraBefore.getQuaternion(), bird.getQuaternion()));
+}
+void FSSessionWorker::drawTransition()
+{
+    if (!managed() || !worker->transition.active() || worker->transitionStyle != 2 || worker->previewPass || !worker->cameraAllowed() || !gViewerWindow) return;
+    const F32 fraction = worker->transition.fraction(GetTickCount64());
+    const F32 alpha = worker->demoting ? fraction : 1.f-fraction;
+    const LLRect rect = gViewerWindow->getWorldViewRectRaw();
+    LLGLSUIDefault state;
+    gViewerWindow->setup2DRender();
+    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    gUIProgram.bind();
+    gl_rect_2d(rect,LLColor4(0.f,0.f,0.f,alpha));
+    gGL.flush(); gUIProgram.unbind();
 }
 void FSSessionWorker::endCameraFrame()
 {
@@ -1041,6 +1060,7 @@ void FSSessionWorker::prepareDisplay() {}
 bool FSSessionWorker::monitorRendering() { return false; }
 void FSSessionWorker::renderMonitor() {}
 void FSSessionWorker::beginCameraFrame() {}
+void FSSessionWorker::drawTransition() {}
 void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }

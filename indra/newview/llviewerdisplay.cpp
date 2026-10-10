@@ -1696,6 +1696,7 @@ void render_ui(F32 zoom_factor, int subfield)
             LLHUDObject::renderAllForTimer();
         }
 
+        FSSessionWorker::drawTransition();
         if (render_ui)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_UI("UI 2D"); //LL_RECORD_BLOCK_TIME(FTM_RENDER_UI_2D);

@@ -22,6 +22,7 @@ public:
     static bool monitorRendering();
     static void renderMonitor(); // Current GL context, after ordinary display maintenance.
     static void beginCameraFrame(); // Temporary renderer pose only, never LLAgentCamera.
+    static void drawTransition(); // World-only fade, before native 2D controls.
     static void endCameraFrame();   // Paired even when display returns early.
     static bool inputAllowed();
     static bool voiceAllowed();
