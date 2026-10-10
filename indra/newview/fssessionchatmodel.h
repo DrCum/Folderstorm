@@ -66,6 +66,7 @@ struct Conversation
     std::uint32_t unread = 0;
     std::string destination;
     std::uint64_t lastIncomingEvent = 0;
+    bool restricted = false;
     Conversation() = default;
     Conversation(std::string idValue,std::string titleValue,std::string draftValue,Topic topicValue,std::uint32_t count) :
         id(std::move(idValue)),title(std::move(titleValue)),draft(std::move(draftValue)),topic(topicValue),unread(count) {}
@@ -99,7 +100,16 @@ public:
         if (event.eventType == EventType::None) return true;
         if (event.event && event.event <= cursor) return false;
         if (event.eventType == EventType::Gap)
-        { gap = true; cursor = event.event; return true; }
+        {
+            gap = true; cursor = event.event;
+            if (event.flags & ConversationRestricted)
+            {
+                const auto found = conversations.find(event.conversation);
+                if (found != conversations.end()) { found->second.restricted = true; found->second.title = "Restricted conversation"; found->second.unread = 0; }
+                lines.erase(std::remove_if(lines.begin(),lines.end(),[&event](const Message& line) { return line.conversation == event.conversation; }),lines.end());
+            }
+            return true;
+        }
         if (event.eventType == EventType::Attention || event.eventType == EventType::AttentionRemoved || event.eventType == EventType::SwitchIntent)
         { if (event.event) cursor = event.event; return true; }
         auto found = conversations.find(event.conversation);
@@ -110,7 +120,12 @@ public:
         }
         found->second.title = event.title;
         found->second.topic = event.topic;
-        if (event.eventType == EventType::Conversation) found->second.destination = event.recipient;
+        if (event.eventType == EventType::Conversation)
+        {
+            found->second.restricted = (event.flags & ConversationRestricted) != 0;
+            if (!found->second.restricted) found->second.destination = event.recipient;
+            else lines.erase(std::remove_if(lines.begin(),lines.end(),[&event](const Message& line) { return line.conversation == event.conversation; }),lines.end());
+        }
         if (event.eventType == EventType::Chat && event.recipient != identity.account) found->second.lastIncomingEvent = event.event;
         if (event.topic == Topic::Nearby)
         {

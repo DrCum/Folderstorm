@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstdlib>
 #include <cwchar>
+#include <algorithm>
 namespace fs_host_ui
 {
 enum class FieldType { Text, Number, Choice, Check, Color };
@@ -56,7 +57,15 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         button(L"Apply",276,IDOK); button(L"Cancel",396,IDCANCEL);
         RECT size{0,0,scale(520),scale(y+50)}; AdjustWindowRectEx(&size,static_cast<DWORD>(GetWindowLongPtrW(dialog,GWL_STYLE)),FALSE,0);
         RECT owner{}; GetWindowRect(GetParent(dialog),&owner);
-        SetWindowPos(dialog,nullptr,owner.left+30,owner.top+30,size.right-size.left,size.bottom-size.top,SWP_NOZORDER);
+        MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
+        if (GetMonitorInfoW(MonitorFromWindow(GetParent(dialog),MONITOR_DEFAULTTONEAREST),&monitor))
+        {
+            const int width = size.right-size.left, height = size.bottom-size.top;
+            const int x = (std::max)(static_cast<int>(monitor.rcWork.left),(std::min)(static_cast<int>(owner.left)+30,static_cast<int>(monitor.rcWork.right)-width));
+            const int y = (std::max)(static_cast<int>(monitor.rcWork.top),(std::min)(static_cast<int>(owner.top)+30,static_cast<int>(monitor.rcWork.bottom)-height));
+            SetWindowPos(dialog,nullptr,x,y,width,height,SWP_NOZORDER);
+        }
+        else SetWindowPos(dialog,nullptr,owner.left+30,owner.top+30,size.right-size.left,size.bottom-size.top,SWP_NOZORDER);
         return TRUE;
     }
     if (!editor) return FALSE;

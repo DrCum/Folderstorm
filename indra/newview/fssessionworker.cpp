@@ -197,7 +197,7 @@ struct Worker
                 if (detached || !ready() || !sharingAllowed()) return;
                 auto* session = LLIMModel::instance().findIMSession(data["session_id"].asUUID());
                 const LLUUID sender = data["from_id"].asUUID();
-                if (!session || (!sender.isNull() && sender != gAgentID && !RlvActions::canReceiveIM(sender))) return;
+                if (!session || (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID)) || (!sender.isNull() && sender != gAgentID && !RlvActions::canReceiveIM(sender))) return;
                 Message message; message.eventType = EventType::Chat; message.topic = topicFor(*session);
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
@@ -270,12 +270,12 @@ struct Worker
             payload = events.after(request.cursor);
             if (payload.topic != Topic::Nearby && payload.topic != Topic::Notice &&
                 !payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
-            { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; }
+            { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; payload.flags |= ConversationRestricted; }
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
-            response.recipient = payload.recipient; response.flags |= payload.flags & AlertEligible; response.eventAt = payload.eventAt;
+            response.recipient = payload.recipient; response.flags |= payload.flags & (AlertEligible|ConversationRestricted); response.eventAt = payload.eventAt;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -296,11 +296,11 @@ struct Worker
                     if (session.isP2PSessionType()) payload.recipient = session.mOtherParticipantID.asString();
                     else if (session.isGroupSessionType()) payload.recipient = session.mSessionID.asString();
                     if (!payload.recipient.empty() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
-                    { payload.title = "Restricted conversation"; payload.recipient.clear(); payload.unread = 0; }
+                    { payload.title = "Restricted conversation"; payload.recipient.clear(); payload.unread = 0; payload.flags |= ConversationRestricted; }
                 }
             }
             auto response = status(request); response.eventType = payload.eventType; response.topic = payload.topic;
-            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread; response.recipient = payload.recipient;
+            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread; response.recipient = payload.recipient; response.flags |= payload.flags & ConversationRestricted;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }

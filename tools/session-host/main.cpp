@@ -269,8 +269,8 @@ struct Host
     unsigned int chrome = 0;
     HWND chatWindow = nullptr, controlsWindow = nullptr, tooltips = nullptr;
     bool chatDetached = false, controlsDetached = false;
-    UINT chatDpi = 96, controlsDpi = 96;
-    HFONT chatFont = nullptr, controlsFont = nullptr;
+    UINT chatDpi = 96, controlsDpi = 96, attentionDpi = 96;
+    HFONT chatFont = nullptr, controlsFont = nullptr, attentionFont = nullptr;
     std::wstring descriptions[MaxCharacters], lastNotice;
     Handle optionsLease;
     bool logoutOnClose = false;
@@ -287,10 +287,12 @@ struct Host
     HWND pinMenu = nullptr, pinButtons[6]{}, attentionWindow = nullptr, attentionList = nullptr;
     std::vector<Message> attentionRows;
     std::vector<std::wstring> attentionLabels;
-    std::wstring pinLabels[6];
-    bool updatingAttention = false, menuOpen = false;
+    std::wstring pinLabels[6], pinTips[6];
+    bool menuOpen = false;
 
     HWND chatAccent = nullptr;
+    int accentSlot = -1;
+    COLORREF accentColor = 0;
     unsigned int handoffStyle = 0, handoffDuration = 1100, handoffHeight = 64;
     bool cinematic = false, handoffAnimated = false, escapeHeld = false;
     UINT dpi = 96;
@@ -308,7 +310,7 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
-    ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); }
+    ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); }
 
     void alert(const Message& item,int index)
     {
@@ -465,13 +467,24 @@ struct Host
             if (!pinButtons[i]) continue;
             if (i >= pins.entries.size()) { pinLabels[i].clear(); continue; }
             const auto& pin = pins.entries[i]; const int owner = pinSlot(pin);
-            pinLabels[i] = (owner >= 0 ? characterName(owner) : L"Unavailable") + L" · " + wide(pin.title);
+            const auto ownerAlias = owner >= 0 ? appearance(owner).alias : std::string{};
+            std::wstring label = wide(pin.title) + L" · " + (owner >= 0 ? ownerAlias.empty() ? wide(slots[owner]->snapshot.name) : wide(ownerAlias) : L"Unavailable");
             if (owner >= 0)
             {
                 const auto& current = slots[owner]->chat.conversations.at(pin.conversation);
-                if (current.unread) pinLabels[i] += L" · " + std::to_wstring(current.unread);
+                if (current.unread) label += L" · " + std::to_wstring(current.unread);
             }
-            SetWindowTextW(pinButtons[i],pinLabels[i].c_str()); InvalidateRect(pinButtons[i],nullptr,FALSE);
+            if (label != pinLabels[i])
+            {
+                pinLabels[i] = std::move(label); SetWindowTextW(pinButtons[i],pinLabels[i].c_str()); InvalidateRect(pinButtons[i],nullptr,FALSE);
+                pinTips[i] = (owner >= 0 ? characterName(owner) : L"Unavailable") + L" · " + wide(pin.title);
+                TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.uFlags = TTF_IDISHWND|TTF_SUBCLASS; tool.hwnd = GetParent(pinButtons[i]); tool.uId = reinterpret_cast<UINT_PTR>(pinButtons[i]);
+                if (tooltips)
+                {
+                    const bool exists = SendMessageW(tooltips,TTM_GETTOOLINFOW,0,reinterpret_cast<LPARAM>(&tool)) != 0;
+                    tool.lpszText = pinTips[i].data(); SendMessageW(tooltips,exists ? TTM_UPDATETIPTEXTW : TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
+                }
+            }
         }
     }
     void reviewChat()
@@ -507,15 +520,25 @@ struct Host
         { const int index = sourceSlot(item); if (index >= 0 && !(slots[index]->snapshot.flags & ChatRestricted)) append(item,index,wide(item.title)); }
         if (labels != attentionLabels)
         {
-            updatingAttention = true; SendMessageW(attentionList,WM_SETREDRAW,FALSE,0); SendMessageW(attentionList,LB_RESETCONTENT,0,0);
+            SendMessageW(attentionList,WM_SETREDRAW,FALSE,0); SendMessageW(attentionList,LB_RESETCONTENT,0,0);
             for (const auto& text : labels) SendMessageW(attentionList,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(text.c_str()));
             attentionLabels = std::move(labels); attentionRows = std::move(rows);
             int chosen = attentionRows.empty() ? -1 : 0;
             for (std::size_t i = 0; i < attentionRows.size(); ++i) if (AttentionBook::same(previous,attentionRows[i]) && previous.eventType == attentionRows[i].eventType) chosen = static_cast<int>(i);
-            SendMessageW(attentionList,LB_SETCURSEL,chosen,0); SendMessageW(attentionList,WM_SETREDRAW,TRUE,0); InvalidateRect(attentionList,nullptr,FALSE); updatingAttention = false;
+            SendMessageW(attentionList,LB_SETCURSEL,chosen,0); SendMessageW(attentionList,WM_SETREDRAW,TRUE,0); InvalidateRect(attentionList,nullptr,FALSE);
         }
         else attentionRows = std::move(rows);
         SetWindowTextW(attentionWindow,attention.gap ? L"Attention inbox · check native notifications for earlier items" : L"Attention inbox · Review opens the owning viewer");
+    }
+    void layoutAttention()
+    {
+        if (!attentionWindow || !attentionList) return;
+        RECT r{}; GetClientRect(attentionWindow,&r);
+        const auto scale = [this](int n) { return MulDiv(n,static_cast<int>(attentionDpi),96); };
+        MoveWindow(attentionList,scale(8),scale(8),(std::max)(1,static_cast<int>(r.right)-scale(16)),(std::max)(1,static_cast<int>(r.bottom)-scale(54)),TRUE);
+        MoveWindow(GetDlgItem(attentionWindow,AttentionReview),scale(8),r.bottom-scale(38),scale(180),scale(28),TRUE);
+        MoveWindow(GetDlgItem(attentionWindow,AttentionDismiss),scale(200),r.bottom-scale(38),scale(180),scale(28),TRUE);
+        SendMessageW(attentionList,LB_SETITEMHEIGHT,0,scale(24));
     }
     void openAttention()
     {
@@ -530,6 +553,7 @@ struct Host
             CreateWindowExW(0,L"BUTTON",L"Review in viewer",WS_CHILD|WS_VISIBLE|WS_TABSTOP,8,280,180,28,attentionWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(AttentionReview)),GetModuleHandleW(nullptr),nullptr);
             CreateWindowExW(0,L"BUTTON",L"Dismiss reminder",WS_CHILD|WS_VISIBLE|WS_TABSTOP,200,280,180,28,attentionWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(AttentionDismiss)),GetModuleHandleW(nullptr),nullptr);
         }
+        panelFont(attentionWindow,dpi); layoutAttention();
         ShowWindow(attentionWindow,SW_SHOWNORMAL); refreshAttention(); SetForegroundWindow(attentionWindow);
     }
     void attentionAction(bool dismiss)
@@ -543,6 +567,8 @@ struct Host
             attention.dismiss(item);
             refreshAttention(); return;
         }
+        if (busy()) { message(L"Finish the current switch before reviewing attention."); return; }
+        if (slots[index]->hasPendingReview) { message(L"This character already has a pending Review action."); return; }
         if (slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready || (slots[index]->snapshot.flags & ChatRestricted))
         { message(L"This character's attention is unavailable. Review its native viewer."); return; }
         if (item.eventType == EventType::Attention)
@@ -578,7 +604,7 @@ struct Host
         const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); const auto current = presentation.appearance(key);
         using namespace fs_host_ui;
         std::vector<Field> fields{{L"Friendly name",wide(current.alias)}, {L"Character color",std::to_wstring(current.color),FieldType::Color},
-            {L"Notification alerts",std::to_wstring(current.alerts),FieldType::Choice,{L"Off",L"IM alerts",L"IM and attention alerts"}},
+            {L"Background alert sounds",std::to_wstring(current.alerts),FieldType::Choice,{L"Off",L"IM alerts",L"IM and supported attention alerts"}},
             {L"Reset name and color",L"0",FieldType::Check}};
         if (!edit(window,L"Character appearance (Save host choices to keep)",fields)) return;
         if (!slots[index] || !slots[index]->chat.identity.owns(identity)) { message(L"Login changed; appearance edits were discarded."); return; }
@@ -591,7 +617,9 @@ struct Host
         if (number(fields[3])) { next.alias.clear(); next.color = defaultAccountColor(key); }
         if (!presentation.set(key,next)) { message(L"Character appearance could not be applied; profile capacity or text is invalid."); return; }
         for (auto& monitor : monitors) monitor.dirty = true;
-        refreshCharacters(); refreshChat(); updateMonitors(); InvalidateRect(window,nullptr,FALSE);
+        for (auto button : pinButtons) InvalidateRect(button,nullptr,FALSE);
+        InvalidateRect(characterControl,nullptr,FALSE); InvalidateRect(chatAccount,nullptr,FALSE); InvalidateRect(status[index],nullptr,FALSE);
+        refreshCharacters(); refreshChat(); refreshAttention(); if (attentionList) InvalidateRect(attentionList,nullptr,FALSE); updateMonitors(); InvalidateRect(window,nullptr,FALSE);
         if (chatWindow) InvalidateRect(chatWindow,nullptr,FALSE); if (controlsWindow) InvalidateRect(controlsWindow,nullptr,FALSE);
     }
     void capturePlacement(HWND panel, unsigned int id, UINT localDpi)
@@ -819,7 +847,7 @@ struct Host
         }
         HMENU menu = CreatePopupMenu();
         if (!menu) return;
-        const std::wstring name = slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"Character " + std::to_wstring(index + 1);
+        const std::wstring name = slot && !slot->snapshot.name.empty() ? characterName(index) : L"Character " + std::to_wstring(index + 1);
         AppendMenuW(menu, MF_STRING | (index == active && !busy() ? 0 : MF_GRAYED), 201, (L"Manage workspaces: " + name).c_str());
         AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
         AppendMenuW(menu, MF_STRING | (!busy() ? 0 : MF_GRAYED), 240, (L"Restart character: " + name + L"…").c_str());
@@ -830,6 +858,20 @@ struct Host
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
+        HMENU shortcuts = CreatePopupMenu();
+        for (unsigned int i = 0; i < 7; ++i)
+        {
+            const auto& chord = presentation.bindings[i]; std::wstring key;
+            if (chord.key)
+            {
+                if (chord.modifiers & 2) key += L"Ctrl+"; if (chord.modifiers & 1) key += L"Alt+"; if (chord.modifiers & 4) key += L"Shift+";
+                key += chord.key >= 112 ? L"F"+std::to_wstring(chord.key-111) : chord.key == 39 ? L"Right" : chord.key == 37 ? L"Left" : std::wstring(1,static_cast<wchar_t>(chord.key));
+            }
+            else key = L"unassigned";
+            const auto label = (i < 5 ? characterName(static_cast<int>(i)) : i == 5 ? L"Next ready character" : L"Previous ready character")+L"\t"+key;
+            AppendMenuW(shortcuts,MF_STRING | (presentation.shortcuts && !busy() ? 0 : MF_GRAYED),280+i,label.c_str());
+        }
+        AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(shortcuts),L"Switch character (host keys)");
         AppendMenuW(menu,MF_STRING | (presentation.shortcuts ? MF_CHECKED : 0),276,L"Character shortcuts… (viewer: Preferences > Controls)");
         AppendMenuW(menu,MF_STRING,275,L"Notification alert volume…");
         AppendMenuW(menu,MF_STRING,274,L"Attention inbox…");
@@ -878,6 +920,7 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice >= 280 && choice <= 286) dispatchShortcut(choice-280);
         else if (choice == 276) editShortcuts();
         else if (choice == 275) editAlertVolume();
         else if (choice == 274) openAttention();
@@ -1003,14 +1046,15 @@ struct Host
         if (id < 0) { message(L"All inactive-monitor slots are occupied, or this session changed. Close a monitor before opening another."); return; }
         auto& monitor = monitors[id];
         monitor.frame = {}; clearMonitor(id); monitor.dirty = true;
-        if (!monitor.window)
+        const bool newMonitor = !monitor.window;
+        if (newMonitor)
             monitor.window = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionMonitor", L"Character monitor (read only)",
                 WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(380), scaled(270), window, nullptr, GetModuleHandleW(nullptr), &monitor);
         if (!monitor.window) { stopMonitor(id); message(L"Unable to open the monitor window."); return; }
         using WindowDpi = UINT(WINAPI*)(HWND);
         const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
-        restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi);
+        if (newMonitor) restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi);
         ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
     }
     void finishMonitorExchange(bool success)
@@ -1105,7 +1149,7 @@ struct Host
         if (!slots[chatIndex]) return;
         auto& slot = *slots[chatIndex];
         auto found = slot.chat.conversations.find(conversation);
-        if (found != slot.chat.conversations.end()) found->second.draft = editText();
+        if (found != slot.chat.conversations.end() && !found->second.restricted) found->second.draft = editText();
         if (stopTyping && !conversation.empty())
         {
             slot.pendingTyping = boundChat(Kind::Typing); slot.pendingTyping.unread = 0;
@@ -1126,11 +1170,17 @@ struct Host
         auto* slot = slots[chatIndex].get();
         const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
+        const auto selectedChat = slot ? slot->chat.conversations.find(conversation) : std::map<std::string,Conversation>::iterator{};
+        const bool conversationBlocked = slot && selectedChat != slot->chat.conversations.end() && selectedChat->second.restricted;
         std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? characterName(chatIndex) : L"not logged in");
         if (!ready) label += L" · unavailable";
         else if (restricted) label += L" · shared chat restricted; use native viewer";
+        else if (conversationBlocked) label += L" · conversation restricted; use native viewer";
         else if (slot->chat.gap) label += L" · history gap; native history has more detail";
         SetWindowTextW(chatLabel, label.c_str());
+        const auto color = accountColor(chatIndex);
+        if (accentSlot != chatIndex || accentColor != color)
+        { accentSlot = chatIndex; accentColor = color; InvalidateRect(chatAccent,nullptr,FALSE); }
         if (loadDraft)
         {
             std::vector<std::string> ids; std::vector<std::wstring> choices;
@@ -1149,7 +1199,7 @@ struct Host
                 if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
             }
             const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
-            const std::string wanted = slot && draft != slot->chat.conversations.end() ? draft->second.draft : "";
+            const std::string wanted = slot && !conversationBlocked && draft != slot->chat.conversations.end() ? draft->second.draft : "";
             if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
         }
         std::wstring history;
@@ -1167,8 +1217,8 @@ struct Host
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
         const auto selected = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
         const bool isNotice = slot && selected != slot->chat.conversations.end() && selected->second.topic == Topic::Notice;
-        EnableWindow(chatCompose, ready && !restricted && !sending && !isNotice);
-        EnableWindow(chatSend, ready && !restricted && !sending && !isNotice);
+        EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !sending && !isNotice);
+        EnableWindow(chatSend, ready && !restricted && !conversationBlocked && !sending && !isNotice);
         EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted);
         updatingChat = false;
     }
@@ -1375,7 +1425,7 @@ struct Host
             if (index == chatIndex)
             {
                 saveDraft(false);
-                const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice;
+                const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice || response.eventType == EventType::Gap;
                 refreshChat(catalogChanged);
             }
         }
@@ -1481,7 +1531,8 @@ struct Host
         if (slot.running() && GetProcessMemoryInfo(slot.process.value, &memory, sizeof(memory)))
             text << L" · " << memory.WorkingSetSize / (1024 * 1024) << L" MiB";
         text << std::fixed << std::setprecision(1) << L" · " << slot.fps << L" draws/s · " << slot.loops << L" loops/s";
-        descriptions[index] = text.str(); SetWindowTextW(status[index], descriptions[index].c_str());
+        const auto description = text.str();
+        if (descriptions[index] != description) { descriptions[index] = description; SetWindowTextW(status[index],descriptions[index].c_str()); }
         if (index == active)
         {
             std::wstring summary = std::to_wstring(unread) + L" unread · " +
@@ -1523,10 +1574,11 @@ struct Host
             }
             if (!slot.running() || !slot.pipe.alive())
             {
+                attention.forget(slot.chat.identity);
                 if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat))
                     message(L"Chat connection lost: delivery is uncertain. Text was not retried; check the owning character's native chat before sending again.");
                 slot.hasPendingSend = slot.hasPendingTyping = false;
-                slot.hasPendingAction = false;
+                slot.hasPendingAction = false; slot.hasPendingReview = false;
                 slot.waiting = false;
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"Character connection lost. Other connected characters can still be selected.");
                 if (active == index) active = -1;
@@ -1676,6 +1728,7 @@ struct Host
     }
     void detach(bool close, bool logout = false)
     {
+        for (auto& slot : slots) if (slot) slot->hasPendingReview = false;
         lifecycle.stopManaging(slots);
         handoff.cancel(); detaching = true; closing = close; logoutOnClose = logout; focusRequested = false;
         stopMonitors();
@@ -1703,8 +1756,8 @@ struct Host
     void panelFont(HWND panel, UINT value)
     {
         const bool chat = panel == chatWindow;
-        UINT& panelDpi = chat ? chatDpi : controlsDpi;
-        HFONT& previous = chat ? chatFont : controlsFont;
+        UINT& panelDpi = panel == attentionWindow ? attentionDpi : chat ? chatDpi : controlsDpi;
+        HFONT& previous = panel == attentionWindow ? attentionFont : chat ? chatFont : controlsFont;
         panelDpi = (std::max)(96u, value);
         HFONT next = CreateFontW(-MulDiv(12, static_cast<int>(panelDpi), 96), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
@@ -1724,6 +1777,7 @@ struct Host
             SendMessageW(chatCompose, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
         }
         HWND& panel = chat ? chatWindow : controlsWindow;
+        const bool newPanel = detached && !panel;
         bool& preference = chat ? chatDetached : controlsDetached;
         if (detached && !panel)
             panel = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionPanel", chat ? L"Shared Chat · choose Send as" : L"Character controls",
@@ -1766,7 +1820,7 @@ struct Host
             panelFont(panel, windowDpi ? windowDpi(panel) : dpi);
         }
         else for (HWND child : children) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-        if (detached) restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi);
+        if (newPanel) restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi);
         layout();
         if (detached && show) ShowWindow(panel, SW_SHOWNORMAL);
         if (chat) SendMessageW(chatCompose, EM_SETSEL, selectionStart, selectionEnd);
@@ -1825,7 +1879,7 @@ struct Host
         MoveWindow(chatRead, width - scale(190), top, scale(90), scale(24), TRUE);
         MoveWindow(pinMenu,width-scale(90),top,scale(80),scale(24),TRUE);
         MoveWindow(chatAccent,scale(10),top + scale(29),scale(5),scale(20),TRUE);
-        MoveWindow(chatLabel, scale(22), top + scale(29), (std::max)(1, width - scale(20)), scale(20), TRUE);
+        MoveWindow(chatLabel, scale(22), top + scale(29), (std::max)(1, width - scale(32)), scale(20), TRUE);
         MoveWindow(chatHistory, scale(10), top + scale(52), (std::max)(1, width - scale(20)), (std::max)(1, input - top - scale(58)), TRUE);
         MoveWindow(chatCompose, scale(10), input, (std::max)(1, width - scale(105)), scale(35), TRUE);
         MoveWindow(chatSend, width - scale(85), input, scale(75), scale(35), TRUE);
@@ -1875,11 +1929,15 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
     {
         if (message == WM_SIZE)
         {
-            RECT r{}; GetClientRect(window,&r); MoveWindow(host->attentionList,8,8,(std::max)(1,static_cast<int>(r.right)-16),(std::max)(1,static_cast<int>(r.bottom)-54),TRUE);
-            MoveWindow(GetDlgItem(window,AttentionReview),8,r.bottom-38,180,28,TRUE); MoveWindow(GetDlgItem(window,AttentionDismiss),200,r.bottom-38,180,28,TRUE); return 0;
+            host->layoutAttention(); return 0;
         }
         if (message == WM_CLOSE) { ShowWindow(window,SW_HIDE); return 0; }
-        if (message == WM_GETMINMAXINFO) { reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {450,220}; return 0; }
+        if (message == WM_DPICHANGED)
+        {
+            host->panelFont(window,LOWORD(wparam)); const auto* r = reinterpret_cast<const RECT*>(lparam);
+            SetWindowPos(window,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE); host->layoutAttention(); return 0;
+        }
+        if (message == WM_GETMINMAXINFO) { reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {MulDiv(450,static_cast<int>(host->attentionDpi),96),MulDiv(220,static_cast<int>(host->attentionDpi),96)}; return 0; }
     }
     switch (message)
     {
@@ -2069,6 +2127,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->addTooltip(host->optionsControl, L"Character actions, monitors, host presentation and docking");
         if (chatDetached) host->setPanelDetached(true, true, false);
         if (controlsDetached) host->setPanelDetached(false, true, false);
+        if (!host->lastNotice.empty()) host->message(host->lastNotice);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
     case WM_EXITMENULOOP: host->menuOpen = false; return 0;

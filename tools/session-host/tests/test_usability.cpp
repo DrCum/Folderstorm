@@ -13,6 +13,11 @@ int main()
     event.title = "A friend"; assert(view.accept(event)); assert(pins.add(view,event.conversation));
     view.conversations[event.conversation].draft = "unsent";
     assert(pins.move(1,-1) && pins.find(view,event.conversation) == 0);
+    const auto draftBefore = view.conversations[event.conversation].draft;
+    event.flags = ConversationRestricted; event.title = "Restricted conversation";
+    assert(view.accept(event)); pins.bind(view,false); assert(pins.find(view,event.conversation) < 0);
+    assert(view.conversations[event.conversation].draft == draftBefore);
+    event.flags = 0; event.title = "A friend"; assert(view.accept(event)); pins.bind(view,false); assert(pins.find(view,event.conversation) == 0);
     const auto saved = pins.saved(); assert(saved.size() == 2 && saved[0].destination == event.recipient);
     pins.bind(view,true); assert(pins.find(view,event.conversation) < 0);
     pins.bind(view,false); assert(pins.find(view,event.conversation) == 0);
@@ -29,6 +34,8 @@ int main()
     auto another = event; ++another.worker[0]; attention.accept(another); assert(attention.entries.size() == 2);
     attention.forget(view.identity); assert(attention.entries.size() == 1 && attention.entries[0].worker == another.worker);
     another.eventType = EventType::Gap; attention.accept(another); assert(attention.entries.empty() && attention.gap);
+    Message unread = status; unread.eventType = EventType::Conversation; unread.unread = 1; unread.cursor = 10;
+    attention.dismiss(unread); assert(attention.hiddenUnread(unread)); ++unread.cursor; assert(!attention.hiddenUnread(unread));
     assert(attentionCategory("ScriptQuestion") == "Permission request" && attentionCategory("TeleportOffered") == "Teleport offer");
     assert(attentionCategory("UntrustedUnknown").empty());
     Frame frame; Message decoded; event.worker[0] = 1; event.kind = Kind::ReviewAttention;

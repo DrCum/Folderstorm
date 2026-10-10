@@ -31,8 +31,8 @@ enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
 enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
 enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap, Attention, AttentionRemoved, SwitchIntent };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096, ConversationRestricted = 8192 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible | ConversationRestricted;
 
 struct Message
 {
