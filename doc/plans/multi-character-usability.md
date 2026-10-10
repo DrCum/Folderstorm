@@ -1,6 +1,6 @@
 # Multi-character usability follow-up
 
-Status: IMPLEMENTED_SOURCE_NATIVE_PENDING. The user subsequently authorized all six features in one new PR #27. They are implemented in separate reviewable commits on `feat/multi-character-usability`, based on PR #26. The source/model checks below passed; native Windows behavior is still pending the user's build. No feature is claimed to have passed native acceptance.
+Status: IMPLEMENTED_SOURCE_NATIVE_PENDING. The user subsequently authorized all six features in one new PR #27. Those six features and the subsequently requested optional monitor Chat are implemented in separate reviewable commits on `feat/multi-character-usability`, based on PR #26. The source/model checks below passed; native Windows behavior is still pending the user's build. No feature is claimed to have passed native acceptance.
 
 Planning baseline: PR #26, `fix/session-host-review`, head `127ea2eb872a3c03a27710eb8e9ae3b198b5f899`. The plan-only branch is `docs/multi-character-usability`. Implementation reverified main at `56bfe960fb25ec9951f3ca6e39724e56638259cd` and PR #26 open/unmerged at its recorded head. PR #27 is stacked on `fix/session-host-review`; no published history was rewritten.
 
@@ -181,3 +181,14 @@ XML parsing and source checks verified the seven new Controls rows against regis
 6. Enable a background alert, leave world/media muted, verify one short tone and normal badges. Test own echoes, bursts, native quiet/mute/contact settings, each policy/volume and Warm/Economy. Live voice remains separately untested because it is unavailable to the user.
 7. Test all transition styles with hosting On/Off, duration/height bounds, UI scale, Escape, region/restriction changes and failed handoffs. Verify world-only fade, native UI usability, unchanged avatar position and camera restoration.
 8. Enable host shortcuts and assign native Controls actions; test direct/cycle commands with three/five characters, unavailable slots, editors/IME/menus/Preferences and repeated keys during a handoff. Confirm existing controls and source-bound drafts are unaffected.
+
+
+## Additional authorized PR #27 feature: monitor Chat
+
+- [x] **Optional per-monitor Chat:** right-click the image/footer → Show chat, Off by default and session-only per monitor window. Conversation selector, shared retained history, source-colored Send as, composer, Send and Mark read are fitted below the read-only image. Nearby and existing private/group/conference conversations use the same source-bound Chat model and serial native send path as shared Chat; no new protocol or simulator transport is introduced. Sending does not promote a character, affect microphone ownership or increase preview capture resolution/rate.
+
+A successful monitor exchange rebinds Chat to the displayed account and selects Nearby; the old account/conversation's draft remains in its canonical session model. Both views synchronize actual edits, and only an exact source/conversation/text acknowledgement clears a sent draft. Restrictions, disconnects, replacement sessions and stopped assignments disable or clear visible Chat. Uncertain sends are not retried. Hiding the panel preserves the session draft, and no draft/history/selection is added to persistence. Monitor windows join existing dialog-navigation routing and have independent DPI fonts and minimum sizing; only the labelled image footer switches the world.
+
+Focused follow-up checks: new `monitor_chat` test passed with strict C++17/Release assertions, covering source/generation/grid/worker rejection, actual successful/failed monitor exchanges, shared draft preservation, restricted and notice conversations, independent Mark read and exact/late acknowledgement behavior. Affected `chat`, `monitors` and extended `controller` checks recompiled and passed. The regression registration now includes 15 portable targets; this follow-up reran only these four affected checks. Diff and registration/source wiring checks passed. No native build or unrelated tests.
+
+Remaining Windows acceptance: two simultaneous monitor composers while a third character owns the world; actual sender/recipient, drafts synchronized with docked/pop-out Chat, independent unread/Mark read, swap/rollback/relogin, restrictions, refused/uncertain send, hide/reopen, selector stability, Tab/Shift+Tab, IME, resizing and mixed DPI. Confirm the image's low-resolution capture/FPS budget is unchanged. Protocol remains 10, with matching PR #27 host/viewer.

@@ -30,6 +30,7 @@
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
 #include "fssessionmonitormodel.h"
+#include "fssessionmonitorchat.h"
 #include "fssessionframepipe.h"
 #include "fssessionrestart.h"
 #include "fssessionlifecycle.h"
@@ -258,6 +259,17 @@ struct MonitorWindow
     std::wstring title;
     Message frame;
     std::vector<std::uint8_t> pixels;
+    bool showChat = false, updatingChat = false;
+    MonitorChat chat;
+    HWND label = nullptr, choices = nullptr, history = nullptr, compose = nullptr, send = nullptr, read = nullptr;
+    HFONT font = nullptr;
+    std::vector<std::string> conversationIds;
+    std::wstring chatStatus;
+    std::string historyConversation;
+    std::uint64_t historyCursor = 0;
+    std::size_t historyLines = 0;
+    bool historyVisible = false;
+    COLORREF color = 0;
 };
 struct Host
 {
@@ -310,7 +322,7 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
-    ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); }
+    ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); for (auto& monitor : monitors) if (monitor.font) DeleteObject(monitor.font); }
 
     void alert(const Message& item,int index)
     {
@@ -971,6 +983,7 @@ struct Host
     {
         if (id < 0 || id >= MaxMonitors) return;
         monitorSet.stop(id); clearMonitor(id); monitors[id].dirty = true;
+        refreshMonitorChat(id);
         if (hide && monitors[id].window) ShowWindow(monitors[id].window, SW_HIDE);
     }
     void stopMonitors()
@@ -1025,9 +1038,12 @@ struct Host
         for (unsigned int i = 0; i < 4; ++i) AppendMenuW(popup, MF_STRING | (captured.rate == i ? MF_CHECKED : 0), i + 11, rates[i]);
         AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(popup, MF_STRING | MF_GRAYED, 19, L"All monitors share a 10 FPS budget; image is read only");
+        AppendMenuW(popup, MF_STRING | (monitors[id].showChat ? MF_CHECKED : 0), 21, L"Show chat");
         AppendMenuW(popup, MF_STRING, 20, L"Close this monitor");
         POINT point{}; GetCursorPos(&point);
+        menuOpen = true;
         const auto choice = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, monitors[id].window, nullptr);
+        menuOpen = false;
         DestroyMenu(popup);
         const auto& current = monitorSet.bindings[id];
         if (!current.enabled || current.slot != captured.slot || !validSlot(current.slot) || !slots[current.slot] ||
@@ -1036,6 +1052,7 @@ struct Host
         if (choice >= 1 && choice <= 3) monitorSet.bindings[id].size = static_cast<unsigned int>(choice - 1);
         else if (choice >= 11 && choice <= 14) monitorSet.bindings[id].rate = static_cast<unsigned int>(choice - 11);
         else if (choice == 20) stopMonitor(id, true);
+        else if (choice == 21) setMonitorChat(id,!monitors[id].showChat);
     }
     void openMonitor(int index)
     {
@@ -1049,12 +1066,13 @@ struct Host
         const bool newMonitor = !monitor.window;
         if (newMonitor)
             monitor.window = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionMonitor", L"Character monitor (read only)",
-                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(380), scaled(270), window, nullptr, GetModuleHandleW(nullptr), &monitor);
+                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, scaled(380), scaled(270), window, nullptr, GetModuleHandleW(nullptr), &monitor);
         if (!monitor.window) { stopMonitor(id); message(L"Unable to open the monitor window."); return; }
         using WindowDpi = UINT(WINAPI*)(HWND);
         const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
         if (newMonitor) restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi);
+        createMonitorChat(id); layoutMonitorChat(id);
         ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
     }
     void finishMonitorExchange(bool success)
@@ -1072,12 +1090,197 @@ struct Host
             updateMonitors();
         }
     }
+    std::array<HWND,6> monitorChatControls(int id) const
+    {
+        const auto& m = monitors[id]; return {m.label,m.choices,m.history,m.compose,m.send,m.read};
+    }
+    Slot* monitorChatSlot(int id) const
+    {
+        const auto& binding = monitorSet.bindings[id];
+        auto* slot = validSlot(binding.slot) ? slots[binding.slot].get() : nullptr;
+        return binding.enabled && slot && slot->running() && !slot->detached && slot->pipe.alive() &&
+            binding.key.owns(slot->snapshot) && slot->snapshot.state == State::Ready ? slot : nullptr;
+    }
+    int monitorImageHeight(int id) const
+    {
+        const auto& m = monitors[id]; RECT r{}; GetClientRect(m.window,&r);
+        return (std::max)(0,static_cast<int>(r.bottom)-MulDiv(m.showChat ? 206 : 28,static_cast<int>(m.dpi),96));
+    }
+    void monitorFont(int id)
+    {
+        auto& m = monitors[id];
+        const HFONT next = CreateFontW(-MulDiv(12,static_cast<int>(m.dpi),96),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
+            DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        if (!next) return;
+        for (auto item : monitorChatControls(id)) if (item) SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
+        if (m.font) DeleteObject(m.font); m.font = next;
+    }
+    void createMonitorChat(int id)
+    {
+        auto& m = monitors[id]; if (m.label) return;
+        const auto make = [&m](const wchar_t* type,const wchar_t* text,DWORD style,int command)
+        {
+            return CreateWindowExW(0,type,text,WS_CHILD|style,0,0,1,1,m.window,
+                reinterpret_cast<HMENU>(static_cast<INT_PTR>(command)),GetModuleHandleW(nullptr),nullptr);
+        };
+        m.updatingChat = true;
+        m.label = make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
+        m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,ChatConversation);
+        m.read = make(L"BUTTON",L"Read",BS_PUSHBUTTON|WS_TABSTOP,ChatRead);
+        m.history = make(L"EDIT",L"",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER|WS_TABSTOP,0);
+        m.compose = make(L"EDIT",L"",ES_AUTOHSCROLL|WS_BORDER|WS_TABSTOP,ChatCompose);
+        m.send = make(L"BUTTON",L"Send",BS_PUSHBUTTON|WS_TABSTOP,ChatSend);
+        const auto items = monitorChatControls(id);
+        if (std::any_of(items.begin(),items.end(),[](HWND item) { return !item; }))
+        {
+            for (auto item : items) if (item) DestroyWindow(item);
+            m.label = m.choices = m.history = m.compose = m.send = m.read = nullptr;
+            m.showChat = m.updatingChat = false;
+            message(L"Unable to create monitor Chat controls. The read-only image remains available."); return;
+        }
+        if (m.compose) SendMessageW(m.compose,EM_SETLIMITTEXT,1023,0);
+        m.updatingChat = false; monitorFont(id);
+        addTooltip(m.read,L"Mark this character's selected conversation read");
+        addTooltip(m.send,L"Send as the character shown above; the active world does not change");
+        addTooltip(m.choices,L"Nearby chat and this character's existing conversations");
+    }
+    void layoutMonitorChat(int id)
+    {
+        auto& m = monitors[id]; if (!m.label) return;
+        const auto scale = [&m](int v) { return MulDiv(v,static_cast<int>(m.dpi),96); };
+        RECT r{}; GetClientRect(m.window,&r);
+        const int width = (std::max)(1,static_cast<int>(r.right)-scale(12));
+        const int top = monitorImageHeight(id)+scale(28);
+        for (auto item : monitorChatControls(id)) if (item) ShowWindow(item,m.showChat ? SW_SHOWNOACTIVATE : SW_HIDE);
+        if (m.showChat)
+        {
+            MoveWindow(m.label,scale(10),top+scale(4),width-scale(4),scale(20),TRUE);
+            MoveWindow(m.choices,scale(6),top+scale(26),(std::max)(1,width-scale(62)),scale(180),TRUE);
+            MoveWindow(m.read,static_cast<int>(r.right)-scale(62),top+scale(26),scale(56),scale(24),TRUE);
+            MoveWindow(m.history,scale(6),top+scale(54),width,scale(82),TRUE);
+            MoveWindow(m.compose,scale(6),top+scale(142),(std::max)(1,width-scale(62)),scale(28),TRUE);
+            MoveWindow(m.send,static_cast<int>(r.right)-scale(62),top+scale(142),scale(56),scale(28),TRUE);
+        }
+        InvalidateRect(m.window,nullptr,FALSE);
+    }
+    void setMonitorChat(int id,bool enabled)
+    {
+        auto& m = monitors[id]; createMonitorChat(id); if (!m.label) return;
+        m.showChat = enabled;
+        if (enabled)
+        {
+            RECT r{}; GetWindowRect(m.window,&r);
+            const int width = (std::max)(static_cast<int>(r.right-r.left),MulDiv(320,static_cast<int>(m.dpi),96));
+            const int height = (std::max)(static_cast<int>(r.bottom-r.top),MulDiv(360,static_cast<int>(m.dpi),96));
+            SetWindowPos(m.window,nullptr,0,0,width,height,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+        }
+        else if (IsChild(m.window,GetFocus())) SetFocus(m.window);
+        refreshMonitorChat(id); layoutMonitorChat(id);
+    }
+    void refreshMonitorChat(int id)
+    {
+        auto& m = monitors[id]; if (!m.label) return;
+        auto* slot = monitorChatSlot(id);
+        m.updatingChat = true;
+        const auto& binding = monitorSet.bindings[id];
+        const bool changed = m.chat.bind(binding,slot ? &slot->snapshot : nullptr,slot ? &slot->chat : nullptr);
+        const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
+        const bool live = m.showChat && slot && !restricted;
+        std::vector<std::string> ids; std::vector<std::wstring> choices;
+        if (live) for (const auto& entry : slot->chat.conversations)
+        {
+            ids.push_back(entry.first);
+            auto title = wide(entry.second.title);
+            if (entry.second.unread) title += L" · "+std::to_wstring(entry.second.unread)+L" unread";
+            choices.push_back(std::move(title));
+        }
+        auto found = std::find(ids.begin(),ids.end(),m.chat.identity.conversation);
+        const int selection = found == ids.end() ? 0 : static_cast<int>(found-ids.begin());
+        const auto previous = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
+        const bool privacyChanged = live && previous != slot->chat.conversations.end() && previous->second.restricted;
+        if (syncChoices(m.choices,choices,selection,changed || !live || privacyChanged))
+        {
+            m.conversationIds = std::move(ids);
+            if (live && !m.conversationIds.empty()) m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selection)]);
+        }
+        const auto send = live ? m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
+        const auto read = live ? m.chat.request(Kind::MarkRead,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
+        const auto current = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
+        const bool blocked = live && current != slot->chat.conversations.end() && current->second.restricted;
+        std::wstring label = L"Send as: "+(slot ? characterName(binding.slot) : L"unavailable");
+        if (restricted || blocked) label += L" · restricted; use native viewer";
+        else if (slot && slot->chat.gap) label += L" · history gap";
+        if (label != m.chatStatus) { m.chatStatus = label; SetWindowTextW(m.label,label.c_str()); }
+        const auto color = slot ? accountColor(binding.slot) : GetSysColor(COLOR_GRAYTEXT);
+        if (color != m.color) { m.color = color; InvalidateRect(m.window,nullptr,FALSE); }
+        const bool historyVisible = live && !blocked;
+        // The render/status timer must not rebuild four transcripts while no
+        // chat changed. Privacy/source changes still clear them immediately.
+        if (changed || m.historyVisible != historyVisible || (historyVisible &&
+            (m.historyCursor != slot->chat.cursor || m.historyLines != slot->chat.lines.size() || m.historyConversation != m.chat.identity.conversation)))
+        {
+            std::wstring history;
+            if (historyVisible) for (const auto& line : slot->chat.lines) if (line.conversation == m.chat.identity.conversation)
+                history += wide(line.sender)+(line.sender.empty() ? L"" : L": ")+wide(line.text)+L"\r\n";
+            std::vector<wchar_t> existing(static_cast<std::size_t>(GetWindowTextLengthW(m.history))+1,L'\0');
+            GetWindowTextW(m.history,existing.data(),static_cast<int>(existing.size()));
+            if (history != existing.data())
+            {
+                SetWindowTextW(m.history,history.c_str());
+                SendMessageW(m.history,EM_SETSEL,static_cast<WPARAM>(-1),static_cast<LPARAM>(-1)); SendMessageW(m.history,EM_SCROLLCARET,0,0);
+            }
+            m.historyVisible = historyVisible;
+            m.historyCursor = slot ? slot->chat.cursor : 0; m.historyLines = slot ? slot->chat.lines.size() : 0;
+            m.historyConversation = m.chat.identity.conversation;
+        }
+        const auto draft = send ? slot->chat.conversations.at(m.chat.identity.conversation).draft : std::string{};
+        if (editText(m.compose) != draft) SetWindowTextW(m.compose,wide(draft).c_str());
+        const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
+        EnableWindow(m.choices,live); EnableWindow(m.compose,send.has_value() && !sending);
+        EnableWindow(m.send,send.has_value() && !sending); EnableWindow(m.read,read.has_value());
+        m.updatingChat = false;
+    }
+    void monitorChatCommand(int id,WORD command,WORD notification)
+    {
+        auto& m = monitors[id]; if (!m.label || !m.showChat || m.updatingChat) return;
+        auto* slot = monitorChatSlot(id); if (!slot) { refreshMonitorChat(id); return; }
+        const auto& binding = monitorSet.bindings[id];
+        if (!m.chat.owns(binding,slot->snapshot,slot->chat)) { refreshMonitorChat(id); return; }
+        if (command == ChatConversation && notification == CBN_SELCHANGE)
+        {
+            const auto selected = SendMessageW(m.choices,CB_GETCURSEL,0,0);
+            if (selected >= 0 && static_cast<std::size_t>(selected) < m.conversationIds.size())
+                m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selected)]);
+            refreshMonitorChat(id);
+        }
+        else if (command == ChatConversation && notification == CBN_CLOSEUP) refreshMonitorChat(id);
+        else if (command == ChatCompose && notification == EN_CHANGE)
+        {
+            if (m.chat.draft(binding,slot->snapshot,slot->chat,editText(m.compose)))
+            {
+                if (chatIndex == binding.slot && conversation == m.chat.identity.conversation) refreshChat(true);
+                // Other visible editors share the same canonical conversation draft.
+                for (int other = 0; other < MaxMonitors; ++other) if (other != id) refreshMonitorChat(other);
+            }
+        }
+        else if (command == ChatSend && notification == BN_CLICKED)
+        {
+            auto request = m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat);
+            if (request) { request->text = editText(m.compose); queueChat(binding.slot,std::move(*request)); }
+        }
+        else if (command == ChatRead && notification == BN_CLICKED)
+        {
+            const auto request = m.chat.request(Kind::MarkRead,binding,slot->snapshot,slot->chat);
+            if (request && !send(binding.slot,Kind::MarkRead,Mode::Warm,0,&*request)) message(L"Viewer is busy; try Mark read again.");
+        }
+    }
     void updateMonitors()
     {
         for (int id = 0; id < MaxMonitors; ++id)
         {
             auto& monitor = monitors[id]; auto& binding = monitorSet.bindings[id];
             if (!monitor.window) continue;
+            refreshMonitorChat(id);
             if (!binding.enabled)
             {
                 clearMonitor(id);
@@ -1091,7 +1294,7 @@ struct Host
             const auto* slot = validSlot(binding.slot) ? slots[binding.slot].get() : nullptr;
             std::wstring title = L"Monitor: ";
             title += slot && !(slot->snapshot.flags & ChatRestricted) && binding.key.owns(slot->snapshot) && !slot->snapshot.name.empty() ? characterName(binding.slot) : L"unavailable";
-            title += L" · read only";
+            title += monitor.showChat ? L" · read-only image + chat" : L" · read only";
             if (!slot || !slot->running() || slot->detached || !slot->pipe.alive() || !binding.key.owns(slot->snapshot))
             { stopMonitor(id); title += L" · session ended; choose again"; }
             else if (slot->snapshot.state != State::Ready) { stopMonitor(id); title += L" · disconnected"; }
@@ -1120,11 +1323,12 @@ struct Host
             if (monitor.dirty) { InvalidateRect(monitor.window, nullptr, FALSE); monitor.dirty = false; }
         }
     }
-    std::string editText() const
+    std::string editText(HWND editor = nullptr) const
     {
-        const int length = (std::min)(1023, GetWindowTextLengthW(chatCompose));
+        if (!editor) editor = chatCompose;
+        const int length = (std::min)(1023, GetWindowTextLengthW(editor));
         std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
-        GetWindowTextW(chatCompose, value.data(), length + 1);
+        GetWindowTextW(editor, value.data(), length + 1);
         value.resize(static_cast<std::size_t>(length));
         const int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), length, nullptr, 0, nullptr, nullptr);
         if (count <= 0) return {};
@@ -1149,7 +1353,7 @@ struct Host
         if (!slots[chatIndex]) return;
         auto& slot = *slots[chatIndex];
         auto found = slot.chat.conversations.find(conversation);
-        if (found != slot.chat.conversations.end() && !found->second.restricted) found->second.draft = editText();
+        if (found != slot.chat.conversations.end() && !found->second.restricted && !(slot.snapshot.flags & ChatRestricted)) found->second.draft = editText();
         if (stopTyping && !conversation.empty())
         {
             slot.pendingTyping = boundChat(Kind::Typing); slot.pendingTyping.unread = 0;
@@ -1199,7 +1403,7 @@ struct Host
                 if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
             }
             const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
-            const std::string wanted = slot && !conversationBlocked && draft != slot->chat.conversations.end() ? draft->second.draft : "";
+            const std::string wanted = slot && ready && !restricted && !conversationBlocked && draft != slot->chat.conversations.end() ? draft->second.draft : "";
             if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
         }
         std::wstring history;
@@ -1236,17 +1440,25 @@ struct Host
                 slot.hasPendingTyping = true;
             }
         }
+        for (int id = 0; id < MaxMonitors; ++id) refreshMonitorChat(id);
     }
-    void sendChat()
+    void queueChat(int index, Message request)
     {
-        if (!slots[chatIndex]) return;
-        auto& slot = *slots[chatIndex];
+        if (!validSlot(index) || !slots[index]) return;
+        auto& slot = *slots[index];
+        if (request.kind != Kind::SendChat || !slot.running() || slot.detached || !slot.pipe.alive() || !chatRequestAllowed(slot.chat,slot.snapshot,request))
+        { message(L"The chat account/session is unavailable or restricted. The draft was not sent."); return; }
         if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat)) return;
-        Message request = boundChat(Kind::SendChat); request.text = editText();
         if (request.text.empty() || request.text.size() > 1023 || !validUtf8(request.text, true))
         { message(L"Use a message of 1 to 1023 UTF-8 bytes."); return; }
         slot.pendingSend = std::move(request); slot.hasPendingSend = true;
-        message(L"Sending through the selected character's native chat…"); refreshChat();
+        message(L"Sending as " + characterName(index) + L" through this character's native chat…");
+        refreshChat(); updateMonitors();
+    }
+    void sendChat()
+    {
+        Message request = boundChat(Kind::SendChat); request.text = editText();
+        queueChat(chatIndex,std::move(request));
     }
     void restartCharacter(int index)
     {
@@ -1424,7 +1636,6 @@ struct Host
             else ++slot.catalogIndex;
             if (index == chatIndex)
             {
-                saveDraft(false);
                 const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice || response.eventType == EventType::Gap;
                 refreshChat(catalogChanged);
             }
@@ -1436,16 +1647,15 @@ struct Host
         if (request.kind == Kind::MarkRead && !(response.flags & Error))
         {
             if (slot.chat.markRead(request) && index == chatIndex)
-            { saveDraft(false); refreshChat(true); }
+            { refreshChat(true); }
         }
         if (request.kind == Kind::SendChat)
         {
             if (response.flags & Error) message(L"Send as " + wide(request.name.empty() ? slot.snapshot.name : request.name) + L": " + wide(response.detail));
             else
             {
-                const auto found = slot.chat.conversations.find(request.conversation);
-                if (found != slot.chat.conversations.end() && found->second.draft == request.text) found->second.draft.clear();
-                if (index == chatIndex && request.conversation == conversation) { updatingChat = true; SetWindowTextW(chatCompose, L""); updatingChat = false; }
+                if (acknowledgeChatDraft(slot.chat,request) && index == chatIndex && request.conversation == conversation)
+                { updatingChat = true; SetWindowTextW(chatCompose,L""); updatingChat = false; }
                 message(L"Message handed to the selected character's native transport; remote delivery is not confirmed.");
             }
         }
@@ -1670,7 +1880,9 @@ struct Host
                 else if (slot.hasPendingSend)
                 {
                     const auto pending = slot.pendingSend; slot.hasPendingSend = false;
-                    if (!send(index, Kind::SendChat, Mode::Warm, 0, &pending))
+                    if (!chatRequestAllowed(slot.chat,slot.snapshot,pending))
+                        message(L"Chat eligibility changed before sending. The original draft was not sent or retried.");
+                    else if (!send(index, Kind::SendChat, Mode::Warm, 0, &pending))
                         message(L"Send was not acknowledged. Text remains in its original draft and was not retried.");
                 }
                 else if (slot.hasPendingTyping && (slot.pendingTyping.unread == 0 || GetTickCount64() - slot.typingAt >= 1000))
@@ -1989,14 +2201,15 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     auto scale = [monitor](int value) { return MulDiv(value, static_cast<int>(monitor->dpi), 96); };
     switch (message)
     {
+    case WM_COMMAND: host->monitorChatCommand(id,LOWORD(wparam),HIWORD(wparam)); return 0;
     case WM_CONTEXTMENU: host->monitorMenu(id); return 0;
     case WM_CLOSE:
         host->stopMonitor(id, true); return 0;
     case WM_LBUTTONDOWN:
     {
-        RECT client{}; GetClientRect(window, &client);
-        // Only the labelled footer promotes a character. Image clicks do nothing.
-        if (static_cast<short>(HIWORD(lparam)) >= client.bottom - scale(28))
+        // Only the labelled footer promotes a character. Image/chat clicks do not.
+        const int y = static_cast<short>(HIWORD(lparam)), footer = host->monitorImageHeight(id);
+        if (y >= footer && y < footer+scale(28))
         {
             const auto* slot = validSlot(binding.slot) ? host->slots[binding.slot].get() : nullptr;
             if (!binding.enabled || !slot || !slot->running() || slot->detached ||
@@ -2014,7 +2227,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         PaintBuffer buffer(destination, static_cast<int>(client.right), static_cast<int>(client.bottom));
         const HDC dc = buffer.dc();
         FillRect(dc, &client, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
-        const int width = client.right, height = (std::max)(0, static_cast<int>(client.bottom) - scale(28));
+        const int width = client.right, height = host->monitorImageHeight(id);
         const auto* source = validSlot(binding.slot) ? host->slots[binding.slot].get() : nullptr;
         if (!binding.enabled || !source || !source->running() || source->detached || !source->pipe.alive() ||
             !binding.key.owns(source->snapshot) || source->snapshot.state != State::Ready ||
@@ -2031,7 +2244,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
             StretchDIBits(dc, (width - w) / 2, (height - h) / 2, w, h, 0, 0, static_cast<int>(frame.width), static_cast<int>(frame.height),
                 monitor->pixels.data(), &info, DIB_RGB_COLORS, SRCCOPY);
         }
-        RECT footer{0, height, client.right, client.bottom};
+        RECT footer{0,height,client.right,height+scale(28)};
         FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
         if (binding.enabled)
         {
@@ -2040,18 +2253,25 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         }
         SetTextColor(dc, GetSysColor(binding.enabled ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
         SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (monitor->showChat)
+        {
+            RECT chat{0,height+scale(28),client.right,client.bottom};
+            FillRect(dc,&chat,reinterpret_cast<HBRUSH>(COLOR_BTNFACE+1));
+            RECT accent = chat; accent.right = scale(5); accent.bottom = accent.top+scale(25);
+            const HBRUSH brush = CreateSolidBrush(monitor->color); FillRect(dc,&accent,brush); DeleteObject(brush);
+        }
         buffer.present(); EndPaint(window, &paint); return 0;
     }
     case WM_DPICHANGED:
     {
-        monitor->dpi = (std::max)(96u, static_cast<UINT>(LOWORD(wparam)));
+        monitor->dpi = (std::max)(96u, static_cast<UINT>(LOWORD(wparam))); host->monitorFont(id);
         const auto* rect = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
-        InvalidateRect(window, nullptr, FALSE); return 0;
+        host->layoutMonitorChat(id); return 0;
     }
     case WM_GETMINMAXINFO:
-        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {scale(160), scale(120)}; return 0;
-    case WM_SIZE: InvalidateRect(window, nullptr, FALSE); return 0;
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {scale(monitor->showChat ? 320 : 160),scale(monitor->showChat ? 360 : 120)}; return 0;
+    case WM_SIZE: host->layoutMonitorChat(id); InvalidateRect(window,nullptr,FALSE); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
 }
@@ -2342,7 +2562,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         if (state.hostShortcut(message)) continue;
         if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
         { state.skipTransition(); continue; }
-        const std::array<HWND, 4> panels{window, state.chatWindow, state.controlsWindow, state.attentionWindow};
+        std::array<HWND,4+MaxMonitors> panels{window,state.chatWindow,state.controlsWindow,state.attentionWindow};
+        for (int i = 0; i < MaxMonitors; ++i) panels[static_cast<std::size_t>(i)+4] = state.monitors[i].window;
         const bool handled = routePanelDialog(message.hwnd, panels,
             [](HWND panel, HWND target)
             { return IsWindow(panel) && IsWindowVisible(panel) && (panel == target || IsChild(panel, target)); },

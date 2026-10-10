@@ -78,7 +78,7 @@ int main()
         assert(sessionRenderAllowed(false, true, mode) == (mode == Mode::Active));
     }
     // Exercise the real routing helper with controls migrating between panels.
-    const std::array<int, 3> panels{1, 2, 3};
+    const std::array<int, 4> panels{1, 2, 3, 4};
     std::array<int, 4> owner{1, 1, 1, 1}; // Account, conversation, compose, Send.
     int focus = 10, called = 0;
     auto navigate = [&](bool reverse)
@@ -102,6 +102,9 @@ int main()
     assert(navigate(true) && focus == 11 && called == 1);
     owner.fill(3); // Character panel routing is independent too.
     assert(navigate(false) && called == 3);
+    owner.fill(4); // Optional monitor Chat has the same dialog traversal.
+    assert(navigate(false) && called == 4);
+    assert(navigate(true) && called == 4);
     int calls = 0;
     assert(!routePanelDialog(99, panels, [](int, int) { return false; }, [&](int) { ++calls; return true; }));
     assert(calls == 0); // Unrelated windows are normally dispatched.
