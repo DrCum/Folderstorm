@@ -18,6 +18,8 @@
 #include <shellapi.h>
 #include <psapi.h>
 #include <commctrl.h>
+#include "dialog.h"
+#include "fssessionpresentation.h"
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
@@ -46,6 +48,7 @@ constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, Chat
 constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr int SessionOptions = 119, ViewportFocus = 120;
+constexpr int ChatAccent = 122;
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -267,6 +270,8 @@ struct Host
     std::array<MonitorWindow, MaxMonitors> monitors{};
     unsigned int monitorSize = 0, monitorRate = 1; // Saved defaults, not assignments.
     bool showChat = true;
+    PresentationStore presentation;
+    HWND chatAccent = nullptr;
     bool cinematic = false, handoffAnimated = false, escapeHeld = false;
     UINT dpi = 96;
     HFONT font = nullptr;
@@ -284,6 +289,115 @@ struct Host
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
     ~Host() { if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); }
+
+    CharacterAppearance appearance(int index) const
+    { return validSlot(index) && slots[index] ? presentation.appearance(AccountKey::from(slots[index]->snapshot)) : CharacterAppearance{}; }
+    std::wstring characterName(int index) const
+    {
+        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.name.empty()) return L"Character " + std::to_wstring(index + 1);
+        const auto alias = appearance(index).alias;
+        return alias.empty() ? wide(slots[index]->snapshot.name) : wide(alias) + L" (" + wide(slots[index]->snapshot.name) + L")";
+    }
+    COLORREF accountColor(int index) const
+    {
+        HIGHCONTRASTW contrast{}; contrast.cbSize = sizeof(contrast);
+        if (SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(contrast),&contrast,0) && (contrast.dwFlags & HCF_HIGHCONTRASTON)) return GetSysColor(COLOR_HIGHLIGHT);
+        const auto c = appearance(index).color; return RGB((c >> 16) & 255, (c >> 8) & 255, c & 255);
+    }
+    void editAppearance(int index)
+    {
+        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.state != State::Ready) { message(L"Log in before editing character appearance."); return; }
+        const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); const auto current = presentation.appearance(key);
+        using namespace fs_host_ui;
+        std::vector<Field> fields{{L"Friendly name",wide(current.alias)}, {L"Character color",std::to_wstring(current.color),FieldType::Color},
+            {L"Notification alerts",std::to_wstring(current.alerts),FieldType::Choice,{L"Off",L"IM alerts",L"IM and attention alerts"}},
+            {L"Reset name and color",L"0",FieldType::Check}};
+        if (!edit(window,L"Character appearance (Save host choices to keep)",fields)) return;
+        if (!slots[index] || !slots[index]->chat.identity.owns(identity)) { message(L"Login changed; appearance edits were discarded."); return; }
+        const auto& text = fields[0].value;
+        const int size = WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),nullptr,0,nullptr,nullptr);
+        if ((!text.empty() && size == 0) || size > 64) { message(L"Friendly name must fit in 64 UTF-8 bytes."); return; }
+        std::string alias(static_cast<std::size_t>(size),'\0');
+        if (size) WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),alias.data(),size,nullptr,nullptr);
+        CharacterAppearance next{alias,number(fields[1]),number(fields[2])};
+        if (number(fields[3])) { next.alias.clear(); next.color = defaultAccountColor(key); }
+        if (!presentation.set(key,next)) { message(L"Character appearance could not be applied; profile capacity or text is invalid."); return; }
+        for (auto& monitor : monitors) monitor.dirty = true;
+        refreshCharacters(); refreshChat(); updateMonitors(); InvalidateRect(window,nullptr,FALSE);
+        if (chatWindow) InvalidateRect(chatWindow,nullptr,FALSE); if (controlsWindow) InvalidateRect(controlsWindow,nullptr,FALSE);
+    }
+    void capturePlacement(HWND panel, unsigned int id, UINT localDpi)
+    {
+        if (!panel) return;
+        WINDOWPLACEMENT placement{}; placement.length = sizeof(placement);
+        if (!GetWindowPlacement(panel,&placement)) return;
+        auto r = placement.rcNormalPosition;
+        if (!(GetWindowLongPtrW(panel,GWL_EXSTYLE) & WS_EX_TOOLWINDOW))
+        {
+            MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
+            if (GetMonitorInfoW(MonitorFromWindow(panel,MONITOR_DEFAULTTONEAREST),&monitor))
+                OffsetRect(&r,monitor.rcWork.left-monitor.rcMonitor.left,monitor.rcWork.top-monitor.rcMonitor.top);
+        }
+        ShellRect rect{static_cast<int>(r.left),static_cast<int>(r.top),static_cast<int>(r.right-r.left),static_cast<int>(r.bottom-r.top),localDpi};
+        if (rect.valid()) presentation.rectangles[id] = rect;
+    }
+    void restorePlacement(HWND panel, unsigned int id, UINT localDpi)
+    {
+        const auto found = presentation.rectangles.find(id); if (!panel || found == presentation.rectangles.end()) return;
+        const auto& r = found->second; RECT target{r.x,r.y,r.x+r.width,r.y+r.height};
+        MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
+        if (!GetMonitorInfoW(MonitorFromRect(&target,MONITOR_DEFAULTTONEAREST),&monitor)) return;
+        const auto& w = monitor.rcWork;
+        const auto fit = fitShellRect(r,{static_cast<int>(w.left),static_cast<int>(w.top),static_cast<int>(w.right-w.left),static_cast<int>(w.bottom-w.top),96},localDpi);
+        if (fit.valid()) SetWindowPos(panel,nullptr,fit.x,fit.y,fit.width,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
+    }
+    bool savePresentation()
+    {
+        capturePlacement(window,0,dpi); capturePlacement(chatWindow,1,chatDpi); capturePlacement(controlsWindow,2,controlsDpi);
+        for (unsigned int i = 0; i < MaxMonitors; ++i) capturePlacement(monitors[i].window,i+3,monitors[i].dpi);
+        const auto data = presentation.encode();
+        if (data.empty()) { message(L"Host appearance choices failed validation."); return false; }
+        const auto temp = profiles / L"host-presentation.tmp";
+        std::ofstream out(temp,std::ios::binary|std::ios::trunc); out.write(data.data(),static_cast<std::streamsize>(data.size())); out.close();
+        if (!out || !MoveFileExW(temp.c_str(),(profiles / L"host-presentation.dat").c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+        { message(L"Host appearance choices could not be saved; session choices remain active."); return false; }
+        return true;
+    }
+    LRESULT identityColor(UINT event, WPARAM dcValue, LPARAM childValue)
+    {
+        const HWND child = reinterpret_cast<HWND>(childValue); const HDC dc = reinterpret_cast<HDC>(dcValue);
+        int index = -1;
+        if (child == chatLabel) index = chatIndex;
+        for (int i = 0; i < MaxCharacters; ++i) if (child == status[i]) index = i;
+        if (index < 0 || event != WM_CTLCOLORSTATIC) return 0;
+        // Accent stays separate from text contrast; the sender stripe uses the custom color.
+        SetTextColor(dc,GetSysColor(COLOR_BTNTEXT)); SetBkColor(dc,GetSysColor(COLOR_BTNFACE));
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_BTNFACE));
+    }
+    bool drawIdentity(const DRAWITEMSTRUCT& draw)
+    {
+        if (draw.CtlID == ChatAccent)
+        { const HBRUSH brush = CreateSolidBrush(accountColor(chatIndex)); FillRect(draw.hDC,&draw.rcItem,brush); DeleteObject(brush); return true; }
+        for (int i = 0; i < MaxCharacters; ++i) if (draw.hwndItem == status[i])
+        {
+            FillRect(draw.hDC,&draw.rcItem,GetSysColorBrush(COLOR_BTNFACE)); RECT accent = draw.rcItem; accent.right = accent.left + scaled(5);
+            const HBRUSH brush = CreateSolidBrush(accountColor(i)); FillRect(draw.hDC,&accent,brush); DeleteObject(brush);
+            RECT text = draw.rcItem; text.left += scaled(10); SetTextColor(draw.hDC,GetSysColor(COLOR_BTNTEXT)); SetBkMode(draw.hDC,TRANSPARENT);
+            DrawTextW(draw.hDC,descriptions[i].c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS); return true;
+        }
+        if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return false;
+        const int index = draw.itemID == static_cast<UINT>(-1) ? (draw.CtlID == ActiveCharacter ? lifecycle.selection() : chatIndex) : static_cast<int>(draw.itemID);
+        const bool selected = (draw.itemState & ODS_SELECTED) != 0;
+        FillRect(draw.hDC,&draw.rcItem,GetSysColorBrush(selected ? COLOR_HIGHLIGHT : COLOR_WINDOW));
+        RECT accent = draw.rcItem; accent.right = accent.left + scaled(5);
+        const HBRUSH brush = CreateSolidBrush(accountColor(index)); FillRect(draw.hDC,&accent,brush); DeleteObject(brush);
+        RECT text = draw.rcItem; text.left += scaled(10);
+        SetTextColor(draw.hDC,GetSysColor(selected ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)); SetBkMode(draw.hDC,TRANSPARENT);
+        std::wstring name = characterName(index);
+        if (draw.CtlID == ActiveCharacter) name = std::to_wstring(index+1) + L": " + name + (index == active ? L" · active" : L"");
+        DrawTextW(draw.hDC,name.c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+        if (draw.itemState & ODS_FOCUS) DrawFocusRect(draw.hDC,&draw.rcItem); return true;
+    }
 
     int scaled(int value) const { return MulDiv(value, static_cast<int>(dpi), 96); }
     void updateDpi(UINT value)
@@ -317,7 +431,7 @@ struct Host
         for (int i = 0; i < MaxCharacters; ++i)
         {
             std::wstring text = std::to_wstring(i + 1) + L": ";
-            text += slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"not logged in";
+            text += slots[i] && !slots[i]->snapshot.name.empty() ? characterName(i) : L"not logged in";
             if (i == active) text += L" · active";
             choices.push_back(std::move(text));
         }
@@ -396,6 +510,7 @@ struct Host
         const auto data = options().encode(); output.write(data.data(), static_cast<std::streamsize>(data.size())); output.close();
         if (!output || !MoveFileExW(temporary.c_str(), (profiles / L"host-options.txt").c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         { message(L"Host choices could not be saved. Current session choices remain active."); return; }
+        if (!savePresentation()) return;
         message(L"Host choices saved. Character credentials, chats and workspace contents are not in this file.");
     }
     void sessionMenu()
@@ -415,6 +530,7 @@ struct Host
         AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
         AppendMenuW(menu, MF_STRING | (!busy() ? 0 : MF_GRAYED), 240, (L"Restart character: " + name + L"…").c_str());
         AppendMenuW(menu, MF_STRING | (slot && slot->restart.phase() != Restart::Phase::Idle ? 0 : MF_GRAYED), 241, L"Cancel pending restart (does not cancel native logout)");
+        AppendMenuW(menu, MF_STRING | (slot && slot->snapshot.state == State::Ready ? 0 : MF_GRAYED), 273, L"Character appearance and alerts…");
         AppendMenuW(menu, MF_STRING, 203, L"Open selected profile folder");
         AppendMenuW(menu, MF_STRING, 209, L"Stop managing; leave all characters in separate windows");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -465,6 +581,7 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice == 273) editAppearance(index);
         else if (choice == 270) setPanelDetached(true, !chatDetached);
         else if (choice == 271) setPanelDetached(false, !controlsDetached);
         else if (choice == 272)
@@ -593,6 +710,7 @@ struct Host
         using WindowDpi = UINT(WINAPI*)(HWND);
         const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
+        restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi);
         ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
     }
     void finishMonitorExchange(bool success)
@@ -628,7 +746,7 @@ struct Host
             }
             const auto* slot = validSlot(binding.slot) ? slots[binding.slot].get() : nullptr;
             std::wstring title = L"Monitor: ";
-            title += slot && !(slot->snapshot.flags & ChatRestricted) && binding.key.owns(slot->snapshot) && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"unavailable";
+            title += slot && !(slot->snapshot.flags & ChatRestricted) && binding.key.owns(slot->snapshot) && !slot->snapshot.name.empty() ? characterName(binding.slot) : L"unavailable";
             title += L" · read only";
             if (!slot || !slot->running() || slot->detached || !slot->pipe.alive() || !binding.key.owns(slot->snapshot))
             { stopMonitor(id); title += L" · session ended; choose again"; }
@@ -701,14 +819,14 @@ struct Host
         std::vector<std::wstring> accounts;
         for (int i = 0; i < MaxCharacters; ++i)
         {
-            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? wide(slots[i]->snapshot.name) : L"Character " + std::to_wstring(i + 1);
+            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? characterName(i) : L"Character " + std::to_wstring(i + 1);
             accounts.push_back(name);
         }
         syncChoices(chatAccount, accounts, chatIndex);
         auto* slot = slots[chatIndex].get();
         const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
-        std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"not logged in");
+        std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? characterName(chatIndex) : L"not logged in");
         if (!ready) label += L" · unavailable";
         else if (restricted) label += L" · shared chat restricted; use native viewer";
         else if (slot->chat.gap) label += L" · history gap; native history has more detail";
@@ -915,6 +1033,19 @@ struct Host
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         slot.snapshot = response;
+        const auto profileKey = AccountKey::from(response);
+        if (response.state == State::Ready && profileKey.valid() && !presentation.accounts.count(profileKey))
+        {
+            auto value = presentation.appearance(profileKey);
+            const std::uint32_t palette[] = {0x247ac0,0xa543a6,0x17845c,0xb36016,0x635dc0};
+            for (const auto color : palette)
+            {
+                bool used = false;
+                for (int peer = 0; peer < MaxCharacters; ++peer) if (peer != index && slots[peer] && AccountKey::from(slots[peer]->snapshot).valid() && appearance(peer).color == color) used = true;
+                if (!used) { value.color = color; break; }
+            }
+            presentation.set(profileKey,value);
+        }
         if (request.kind == Kind::WorkspaceInfo && !(response.flags & Error))
         {
             slot.workspace = response.title; slot.workspaceModified = (response.unread & 1) != 0;
@@ -1024,7 +1155,7 @@ struct Host
         if (!slots[index]) { descriptions[index] = L"Character " + std::to_wstring(index + 1) + L": not launched"; SetWindowTextW(status[index], descriptions[index].c_str()); return; }
         const auto& slot = *slots[index];
         std::wostringstream text;
-        text << (std::to_wstring(index + 1) + L": ") << (slot.snapshot.name.empty() ? L"Login" : wide(slot.snapshot.name));
+        text << (std::to_wstring(index + 1) + L": ") << (slot.snapshot.name.empty() ? L"Login" : characterName(index));
         text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
@@ -1241,7 +1372,7 @@ struct Host
             L"Returning characters to separate windows before closing their controller connection…");
     }
     std::vector<HWND> chatControls() const
-    { return {chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl}; }
+    { return {chatAccent, chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl}; }
     std::vector<HWND> characterControls() const
     {
         std::vector<HWND> result{characterControl, launchButton, embedControl, detachControl, showChatControl, optionsControl, compactInfo};
@@ -1314,6 +1445,7 @@ struct Host
             panelFont(panel, windowDpi ? windowDpi(panel) : dpi);
         }
         else for (HWND child : children) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        if (detached) restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi);
         layout();
         if (detached && show) ShowWindow(panel, SW_SHOWNORMAL);
         if (chat) SendMessageW(chatCompose, EM_SETSEL, selectionStart, selectionEnd);
@@ -1365,7 +1497,8 @@ struct Host
         MoveWindow(chatConversation, scale(200), top, (std::max)(1, width - scale(460)), scale(200), TRUE);
         MoveWindow(chatReview, width - scale(250), top, scale(140), scale(24), TRUE);
         MoveWindow(chatRead, width - scale(100), top, scale(90), scale(24), TRUE);
-        MoveWindow(chatLabel, scale(10), top + scale(29), (std::max)(1, width - scale(20)), scale(20), TRUE);
+        MoveWindow(chatAccent,scale(10),top + scale(29),scale(5),scale(20),TRUE);
+        MoveWindow(chatLabel, scale(22), top + scale(29), (std::max)(1, width - scale(20)), scale(20), TRUE);
         MoveWindow(chatHistory, scale(10), top + scale(52), (std::max)(1, width - scale(20)), (std::max)(1, input - top - scale(58)), TRUE);
         MoveWindow(chatCompose, scale(10), input, (std::max)(1, width - scale(105)), scale(35), TRUE);
         MoveWindow(chatSend, width - scale(85), input, scale(75), scale(35), TRUE);
@@ -1412,6 +1545,8 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
     const bool chat = window == host->chatWindow;
     switch (message)
     {
+    case WM_DRAWITEM: return SendMessageW(host->window,message,wparam,lparam);
+    case WM_CTLCOLORSTATIC: return SendMessageW(host->window,message,wparam,lparam);
     case WM_COMMAND: return SendMessageW(host->window, message, wparam, lparam);
     case WM_SIZE:
         if (window == host->chatWindow || window == host->controlsWindow) host->layout();
@@ -1501,6 +1636,11 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         }
         RECT footer{0, height, client.right, client.bottom};
         FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+        if (binding.enabled)
+        {
+            RECT accent = footer; accent.right = accent.left + scale(6);
+            const HBRUSH brush = CreateSolidBrush(host->accountColor(binding.slot)); FillRect(dc,&accent,brush); DeleteObject(brush);
+        }
         SetTextColor(dc, GetSysColor(binding.enabled ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
         SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         buffer.present(); EndPaint(window, &paint); return 0;
@@ -1530,10 +1670,13 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     if (!host) return DefWindowProcW(window, message, wparam, lparam);
     switch (message)
     {
+    case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight = static_cast<UINT>(host->scaled(22)); return TRUE;
+    case WM_DRAWITEM: if (host->drawIdentity(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam))) return TRUE; break;
+    case WM_CTLCOLORSTATIC: if (const auto result = host->identityColor(message,wparam,lparam)) return result; break;
     case WM_CREATE:
         host->window = window;
         host->launchButton = control(window, L"BUTTON", L"+ Character", BS_PUSHBUTTON | WS_TABSTOP, 190, 10, 95, 28, LaunchNext);
-        host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
+        host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
         host->showChatControl = control(window, L"BUTTON", L"Chat panel", BS_AUTOCHECKBOX | WS_TABSTOP, 695, 10, 90, 28, ShowChat);
         SendMessageW(host->showChatControl, BM_SETCHECK, host->showChat ? BST_CHECKED : BST_UNCHECKED, 0);
         host->embedControl = control(window, L"BUTTON", L"Host active viewer", BS_AUTOCHECKBOX | WS_TABSTOP, 383, 10, 235, 28, HostSurface);
@@ -1543,7 +1686,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         for (int i = 0; i < MaxCharacters; ++i)
         {
             const auto label = L"Character " + std::to_wstring(i + 1) + L": not launched";
-            host->status[i] = control(window, L"STATIC", label.c_str(), SS_LEFT, 10, 48 + i * 24, 850, 20);
+            host->status[i] = control(window, L"STATIC", label.c_str(), SS_OWNERDRAW, 10, 48 + i * 24, 850, 20);
             host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, StandbyBase + i);
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Background: Warm"));
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Economy (experimental)"));
@@ -1552,7 +1695,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->compactInfo = control(window, L"STATIC", L"Character status in Session menu", SS_LEFT, 536, 5, 250, 20);
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | SS_NOTIFY | WS_CLIPCHILDREN, 0, 99, 880, 490, ViewportFocus);
         host->notice = control(window, L"STATIC", L"Prototype: warm standby, separate profiles. Voice and MCP are off.", SS_LEFT, 10, 600, 850, 20);
-        host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
+        host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
         host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
         host->chatHistory = control(window, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 10, 452, 850, 88);
         host->chatCompose = control(window, L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_TABSTOP, 10, 545, 800, 35, ChatCompose);
@@ -1560,6 +1703,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->chatSend = control(window, L"BUTTON", L"Send", BS_PUSHBUTTON | WS_TABSTOP, 820, 545, 75, 35, ChatSend);
         host->chatReview = control(window, L"BUTTON", L"Review in viewer", BS_PUSHBUTTON | WS_TABSTOP, 620, 400, 140, 24, ChatReview);
         host->chatRead = control(window, L"BUTTON", L"Mark read", BS_PUSHBUTTON | WS_TABSTOP, 770, 400, 90, 24, ChatRead);
+        host->chatAccent = control(window,L"STATIC",L"",SS_OWNERDRAW,10,429,5,20,ChatAccent);
         host->chatLabel = control(window, L"STATIC", L"Send as: not logged in", SS_LEFT, 10, 429, 850, 20);
         host->voiceControl = control(window, L"BUTTON", L"Voice follows active character", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 585, 255, 24, VoicePolicy);
         host->muteControl = control(window, L"BUTTON", L"Mute background world/UI/media sound", BS_AUTOCHECKBOX | WS_TABSTOP, 280, 585, 280, 24, BackgroundMute);
@@ -1704,6 +1848,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_DESTROY: KillTimer(window, Timer); PostQuitMessage(0); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
+    return DefWindowProcW(window,message,wparam,lparam);
 }
 }
 
@@ -1757,6 +1902,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
             state.chatDetached = choices.chatDetached; state.controlsDetached = choices.controlsDetached;
         }
     }
+    std::ifstream appearanceFile(state.profiles / L"host-presentation.dat",std::ios::binary);
+    if (appearanceFile)
+    {
+        std::string data(PresentationStore::MaxBytes + 1,'\0'); appearanceFile.read(data.data(),static_cast<std::streamsize>(data.size()));
+        data.resize(static_cast<std::size_t>(appearanceFile.gcount()));
+        if (!PresentationStore::decode(data,state.presentation)) state.lastNotice = L"Saved host appearance data is invalid; using defaults.";
+    }
     host = &state;
     WNDCLASSW klass{}; klass.lpfnWndProc = windowProc; klass.hInstance = instance;
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
@@ -1775,6 +1927,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     using WindowDpi = UINT(WINAPI*)(HWND);
     const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
     if (windowDpi) { state.updateDpi(windowDpi(window)); state.layout(); }
+    state.restorePlacement(window,0,state.dpi);
     ShowWindow(window, show); UpdateWindow(window);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
