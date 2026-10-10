@@ -18,6 +18,9 @@
 #include <shellapi.h>
 #include <psapi.h>
 #include <commctrl.h>
+#include <mmsystem.h>
+#include <cmath>
+#include "fssessionalerts.h"
 #include "dialog.h"
 #include "fssessionpresentation.h"
 #include "fssessionusability.h"
@@ -276,6 +279,8 @@ struct Host
     PresentationStore presentation;
     PinBook pins;
     AttentionBook attention;
+    AlertGate alertGate;
+    std::vector<std::uint8_t> alertTone;
     HWND pinMenu = nullptr, pinButtons[6]{}, attentionWindow = nullptr, attentionList = nullptr;
     std::vector<Message> attentionRows;
     std::vector<std::wstring> attentionLabels;
@@ -299,7 +304,36 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
-    ~Host() { if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); }
+    ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); }
+
+    void alert(const Message& item,int index)
+    {
+        if (!presentation.volume || !slots[index]) return;
+        const bool eligible = slots[index]->snapshot.state == State::Ready && !slots[index]->detached && slots[index]->snapshot.mode != Mode::Active &&
+            muteBackground && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
+        if (!alertGate.admit(item,appearance(index).alerts,GetTickCount64(),eligible)) return;
+        constexpr std::uint32_t samples = 3528, rate = 22050;
+        PlaySoundW(nullptr,nullptr,0); // End any owned playback before replacing its backing buffer.
+        alertTone.assign(44+samples*2,0);
+        const auto number = [this](std::size_t offset,std::uint32_t value,unsigned int size)
+        { for (unsigned int i = 0; i < size; ++i) alertTone[offset+i] = static_cast<std::uint8_t>((value>>(8*i))&255); };
+        const auto text = [this](std::size_t offset,const char* value) { for (int i = 0; i < 4; ++i) alertTone[offset+static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(value[i]); };
+        text(0,"RIFF"); number(4,36+samples*2,4); text(8,"WAVE"); text(12,"fmt "); number(16,16,4); number(20,1,2); number(22,1,2);
+        number(24,rate,4); number(28,rate*2,4); number(32,2,2); number(34,16,2); text(36,"data"); number(40,samples*2,4);
+        for (std::uint32_t i = 0; i < samples; ++i)
+        {
+            const double envelope = std::sin(3.141592653589793*static_cast<double>(i)/samples);
+            const auto sample = static_cast<std::int16_t>(std::sin(6.283185307179586*880.0*static_cast<double>(i)/rate)*envelope*6000.0*presentation.volume/100.0);
+            number(44+static_cast<std::size_t>(i)*2,static_cast<std::uint16_t>(sample),2);
+        }
+        PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+    }
+    void editAlertVolume()
+    {
+        using namespace fs_host_ui;
+        std::vector<Field> fields{{L"Alert volume (0–100)",std::to_wstring(presentation.volume),FieldType::Number,{},0,100}};
+        if (edit(window,L"Host alert volume (Save host choices to keep)",fields)) presentation.volume = number(fields[0]);
+    }
 
     int sourceSlot(const Message& item) const
     {
@@ -731,6 +765,7 @@ struct Host
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
+        AppendMenuW(menu,MF_STRING,275,L"Notification alert volume…");
         AppendMenuW(menu,MF_STRING,274,L"Attention inbox…");
         AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
         AppendMenuW(menu, MF_STRING | (cinematic ? MF_CHECKED : 0), 207, L"Bird's-eye transitions (Escape skips)");
@@ -777,6 +812,7 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice == 275) editAlertVolume();
         else if (choice == 274) openAttention();
         else if (choice == 273) editAppearance(index);
         else if (choice == 270) setPanelDetached(true, !chatDetached);
@@ -1260,7 +1296,7 @@ struct Host
         if (!(response.flags & Error) && (request.kind == Kind::Events || request.kind == Kind::Conversations))
         {
             const bool accepted = slot.chat.accept(response);
-            if (accepted) attention.accept(response);
+            if (accepted) { attention.accept(response); alert(response,index); }
             if (request.kind == Kind::Events) slot.eventsAt = GetTickCount64();
             else if (response.eventType == EventType::None) { slot.catalogIndex = 0; slot.catalogAt = GetTickCount64(); }
             else ++slot.catalogIndex;

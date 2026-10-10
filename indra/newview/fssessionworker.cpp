@@ -31,6 +31,8 @@
 #include "fsnearbychathub.h"
 #include "fsdata.h"
 #include "fsfloaterim.h"
+#include "llmutelist.h"
+#include "llcallingcard.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
 #include "llappviewer.h"
@@ -172,6 +174,13 @@ struct Worker
     {
         return session.isGroupSessionType() ? Topic::Group : session.isAdHocSessionType() ? Topic::Conference : Topic::Private;
     }
+    bool backgroundAlertAllowed(const LLUUID& sender) const
+    {
+        return ready() && mode != Mode::Active && !promoting && !demoting && muteBackground && sharingAllowed() &&
+            !gAgent.isDoNotDisturb() && !gSavedSettings.getBOOL("MuteAudio") && !gSavedSettings.getBOOL("MuteUI") &&
+            gSavedSettings.getF32("AudioLevelUI") > 0.f && !sender.isNull() && sender != gAgentID &&
+            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat);
+    }
     void connectChat()
     {
         if (!chatConnection.connected())
@@ -185,6 +194,10 @@ struct Worker
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
+                const std::string sound = session->isGroupSessionType() ? "PlaySoundGroupChatIM" : session->isAdHocSessionType() ? "PlaySoundConferenceIM" :
+                    LLAvatarTracker::instance().isBuddy(sender) ? "PlaySoundFriendIM" : "PlaySoundNonFriendIM";
+                if (backgroundAlertAllowed(sender) && gSavedSettings.getBOOL(sound) && !data["is_region_msg"].asBoolean())
+                { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
                 events.push(std::move(message));
             });
         if (!notificationConnection.connected())
@@ -205,7 +218,12 @@ struct Worker
                     {
                         attention[key] = category;
                         Message item; item.eventType = EventType::Attention; item.topic = Topic::Notice; item.conversation = key;
-                        item.title = category; item.text = "Review in this character's native viewer."; events.push(item);
+                        item.title = category; item.text = "Review in this character's native viewer.";
+                        LLUUID sender = notification->getPayload()["from_id"].asUUID();
+                        if (sender.isNull()) sender = notification->getPayload()["owner_id"].asUUID();
+                        if (sender.isNull()) sender = notification->getPayload()["task_id"].asUUID();
+                        if (signal == "add" && backgroundAlertAllowed(sender)) { item.flags |= AlertEligible; item.eventAt = GetTickCount64(); }
+                        events.push(item);
                     }
                     else if (signal == "add")
                     {
@@ -249,7 +267,7 @@ struct Worker
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
-            response.recipient = payload.recipient;
+            response.recipient = payload.recipient; response.flags |= payload.flags & AlertEligible; response.eventAt = payload.eventAt;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }

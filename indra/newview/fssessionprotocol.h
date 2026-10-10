@@ -31,8 +31,8 @@ enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
 enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
 enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap, Attention, AttentionRemoved, SwitchIntent };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible;
 
 struct Message
 {
@@ -44,7 +44,7 @@ struct Message
     std::uint32_t flags = 0, pid = 0, width = 0, height = 0;
     std::uint64_t surface = 0, frames = 0, maintenance = 0;
     std::string account, grid, name, detail;
-    std::uint64_t event = 0, cursor = 0;
+    std::uint64_t event = 0, cursor = 0, eventAt = 0;
     Topic topic = Topic::Nearby;
     EventType eventType = EventType::None;
     std::uint32_t unread = 0;
@@ -155,6 +155,7 @@ inline bool encode(const Message& message, Frame& frame)
     put(frame, 512, message.event, 8); put(frame, 520, message.cursor, 8);
     put(frame, 528, static_cast<std::uint32_t>(message.topic), 4);
     put(frame, 532, message.unread, 4); put(frame, 536, static_cast<std::uint32_t>(message.eventType), 4);
+    put(frame,4080,message.eventAt,8);
     return putText(frame, 96, 40, message.account) && putText(frame, 136, 128, message.grid) &&
         putText(frame, 264, 128, message.name) && putText(frame, 392, 120, message.detail) &&
         putText(frame, 544, 40, message.conversation) && putText(frame, 584, 128, message.sender) &&
@@ -164,7 +165,7 @@ inline bool encode(const Message& message, Frame& frame)
 inline bool decode(const Frame& frame, Message& output)
 {
     if (get(frame, 0, 4) != 0x31535346 || get(frame, 4, 4) != Version || get(frame, 92, 4) ||
-        get(frame, 540, 4) || get(frame, 4080, 8) || get(frame, 4088, 8)) return false;
+        get(frame, 540, 4) || get(frame, 4088, 8)) return false;
     Message message;
     message.kind = static_cast<Kind>(get(frame, 8, 4));
     message.flags = static_cast<std::uint32_t>(get(frame, 12, 4));
@@ -174,6 +175,7 @@ inline bool decode(const Frame& frame, Message& output)
     message.surface = get(frame, 56, 8); message.frames = get(frame, 64, 8); message.maintenance = get(frame, 72, 8);
     message.pid = static_cast<std::uint32_t>(get(frame, 80, 4));
     message.width = static_cast<std::uint32_t>(get(frame, 84, 4)); message.height = static_cast<std::uint32_t>(get(frame, 88, 4));
+    message.eventAt = get(frame,4080,8);
     message.event = get(frame, 512, 8); message.cursor = get(frame, 520, 8);
     message.topic = static_cast<Topic>(get(frame, 528, 4));
     message.unread = static_cast<std::uint32_t>(get(frame, 532, 4));
