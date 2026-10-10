@@ -64,6 +64,11 @@ struct Conversation
     std::string id, title, draft;
     Topic topic = Topic::Nearby;
     std::uint32_t unread = 0;
+    std::string destination;
+    std::uint64_t lastIncomingEvent = 0;
+    Conversation() = default;
+    Conversation(std::string idValue,std::string titleValue,std::string draftValue,Topic topicValue,std::uint32_t count) :
+        id(std::move(idValue)),title(std::move(titleValue)),draft(std::move(draftValue)),topic(topicValue),unread(count) {}
 };
 class ChatView
 {
@@ -95,6 +100,8 @@ public:
         if (event.event && event.event <= cursor) return false;
         if (event.eventType == EventType::Gap)
         { gap = true; cursor = event.event; return true; }
+        if (event.eventType == EventType::Attention || event.eventType == EventType::AttentionRemoved || event.eventType == EventType::SwitchIntent)
+        { if (event.event) cursor = event.event; return true; }
         auto found = conversations.find(event.conversation);
         if (found == conversations.end())
         {
@@ -103,6 +110,8 @@ public:
         }
         found->second.title = event.title;
         found->second.topic = event.topic;
+        if (event.eventType == EventType::Conversation) found->second.destination = event.recipient;
+        if (event.eventType == EventType::Chat && event.recipient != identity.account) found->second.lastIncomingEvent = event.event;
         if (event.topic == Topic::Nearby)
         {
             // Only accepted incoming events count: replayed IDs, our own echo

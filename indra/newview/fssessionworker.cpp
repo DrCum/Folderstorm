@@ -13,6 +13,7 @@
 #include "fssessionlifecycle.h"
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
+#include "fssessionusability.h"
 #include "llimage.h"
 #include "fseventapibridge.h"
 #include "fsworkspacecontroller.h"
@@ -23,9 +24,13 @@
 #include "llchat.h"
 #include "llimview.h"
 #include "llnotifications.h"
+#include "llchannelmanager.h"
+#include "llscreenchannel.h"
+#include "llscriptfloater.h"
 #include "llspeakers.h"
 #include "fsnearbychathub.h"
 #include "fsdata.h"
+#include "fsfloaterim.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
 #include "llappviewer.h"
@@ -85,6 +90,7 @@ struct Worker
     std::uintptr_t focusLease = 0, restartTag = 0;
     bool permitVoice = false, muteBackground = true, chatBlocked = false;
     EventBuffer events;
+    std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
     Message pendingPromotion;
     HWND window = nullptr, parent = nullptr;
@@ -185,14 +191,27 @@ struct Worker
             if (auto channel = LLNotifications::instance().getChannel("Visible"))
                 notificationConnection = channel->connectChanged([this](const LLSD& data)
                 {
-                    if (!detached && ready() && data["sigtype"].asString() == "add")
+                    if (detached || !ready() || !sharingAllowed()) return false;
+                    const LLUUID id = data["id"].asUUID(); if (id.isNull()) return false;
+                    const auto key = id.asString(); const auto signal = data["sigtype"].asString();
+                    const auto notification = LLNotifications::instance().find(id);
+                    const auto category = notification ? attentionCategory(notification->getName()) : std::string{};
+                    if (signal == "delete" || !notification || !notification->isActive())
                     {
-                        // Source-bound attention only. All offer/payment/permission
-                        // responses still require their native owning viewer.
-                        Message message; message.eventType = EventType::Notice; message.topic = Topic::Notice;
-                        message.conversation = "00000000-0000-0000-0000-000000000000"; message.title = "Viewer notifications";
-                        message.text = "Review this notification in this character's viewer."; message.unread = 1;
-                        events.push(std::move(message));
+                        if (attention.erase(key))
+                        { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = key; events.push(item); }
+                    }
+                    else if (!category.empty() && attention.size() < AttentionBook::Capacity)
+                    {
+                        attention[key] = category;
+                        Message item; item.eventType = EventType::Attention; item.topic = Topic::Notice; item.conversation = key;
+                        item.title = category; item.text = "Review in this character's native viewer."; events.push(item);
+                    }
+                    else if (signal == "add")
+                    {
+                        Message item; item.eventType = EventType::Notice; item.topic = Topic::Notice;
+                        item.conversation = "00000000-0000-0000-0000-000000000000"; item.title = "Viewer notifications";
+                        item.text = "Review this notification in this character's viewer."; item.unread = 1; events.push(item);
                     }
                     return false;
                 });
@@ -215,6 +234,13 @@ struct Worker
         Message payload;
         if (request.kind == Kind::Events)
         {
+            for (auto it = attention.begin(); it != attention.end(); )
+            {
+                const auto notification = LLNotifications::instance().find(LLUUID(it->first));
+                if (!notification || !notification->isActive())
+                { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = it->first; events.push(item); it = attention.erase(it); }
+                else ++it;
+            }
             payload = events.after(request.cursor);
             if (payload.topic != Topic::Nearby && payload.topic != Topic::Notice &&
                 !payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
@@ -241,10 +267,14 @@ struct Worker
                     payload.eventType = EventType::Conversation; payload.topic = topicFor(session);
                     payload.conversation = session.mSessionID.asString(); payload.title = boundedText(session.mName, 255);
                     payload.unread = static_cast<std::uint32_t>((std::max)(0, session.mNumUnread));
+                    if (session.isP2PSessionType()) payload.recipient = session.mOtherParticipantID.asString();
+                    else if (session.isGroupSessionType()) payload.recipient = session.mSessionID.asString();
+                    if (!payload.recipient.empty() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
+                    { payload.title = "Restricted conversation"; payload.recipient.clear(); payload.unread = 0; }
                 }
             }
             auto response = status(request); response.eventType = payload.eventType; response.topic = payload.topic;
-            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread;
+            response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread; response.recipient = payload.recipient;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -540,6 +570,42 @@ struct Worker
             if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
             applyVoice(); reply(request); break;
+        case Kind::ReviewChat:
+        {
+            if (!ready() || !inputGranted || mode != Mode::Active || request.account != gAgentID.asString() || request.grid != loginGrid || !sharingAllowed())
+            { reply(request,"The owning character is unavailable or restricted."); break; }
+            auto* session = request.conversation.empty() ? nullptr : LLIMModel::instance().findIMSession(LLUUID(request.conversation));
+            if (request.topic != Topic::Nearby && request.topic != Topic::Notice && (!session || topicFor(*session) != request.topic ||
+                (session->isP2PSessionType() && !RlvActions::canReceiveIM(session->mOtherParticipantID)) ||
+                (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID))))
+            { reply(request,"The native conversation ended or is restricted."); break; }
+            if (!appForeground()) { reply(request,"Return to Folderstorm to review this conversation."); break; }
+            SetForegroundWindow(window);
+            if (request.topic == Topic::Nearby) LLFloaterReg::showInstance("fs_nearby_chat",LLSD(),true);
+            else if (request.topic == Topic::Notice) LLFloaterReg::showInstance("notification_well_window",LLSD(),true);
+            else FSFloaterIM::show(session->mSessionID);
+            reply(request); break;
+        }
+        case Kind::ReviewAttention:
+        {
+            if (!ready() || !inputGranted || mode != Mode::Active || request.account != gAgentID.asString() || request.grid != loginGrid || !sharingAllowed())
+            { reply(request,"Switch to this character before reviewing its notification."); break; }
+            const auto notification = LLNotifications::instance().find(LLUUID(request.conversation));
+            if (!notification || !notification->isActive() || attentionCategory(notification->getName()).empty())
+            { reply(request,"Notification expired or is no longer supported. Check native notifications."); break; }
+            // Open only: the native notification UI still owns all response buttons.
+            if (!appForeground()) { reply(request,"Return to Folderstorm to review this notification."); break; }
+            SetForegroundWindow(window);
+            const LLUUID notificationId(request.conversation);
+            auto* channel = dynamic_cast<LLNotificationsUI::LLScreenChannel*>(LLNotificationsUI::LLChannelManager::getInstance()->findChannelByID(LLNotificationsUI::NOTIFICATION_CHANNEL_UUID));
+            if (channel && channel->getToastByNotificationID(notificationId)) LLFloaterReg::showInstance("inspect_toast",LLSD(notificationId),true);
+            else
+            {
+                LLScriptFloaterManager::instance().setFloaterVisible(notificationId,true);
+                LLFloaterReg::showInstance("notification_well_window",LLSD(),true);
+            }
+            reply(request); break;
+        }
         case Kind::WorkspaceInfo:
         case Kind::WorkspaceMenu:
         {
@@ -669,7 +735,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
-        value.events.resetSession();
+        value.events.resetSession(); value.attention.clear();
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
@@ -727,7 +793,7 @@ void FSSessionWorker::tick()
     {
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
-        if (blocked != value.chatBlocked) { value.events.clear(); value.chatBlocked = blocked; }
+        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.chatBlocked = blocked; }
         if (blocked && value.previewRate)
         {
             value.previewError = "Preview unavailable while names or locations are restricted.";
