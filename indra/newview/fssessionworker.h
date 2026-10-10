@@ -34,6 +34,7 @@ public:
     static int backgroundYield(int normal);
     static void framePresented();
     static LoginGate loginGate(const std::string& grid, const std::string& name);
+    static void quitCancelled(); // Cancellation hint only; never authorizes an action.
     static void shutdown();
 };
 #endif
