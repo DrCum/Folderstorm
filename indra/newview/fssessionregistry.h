@@ -5,7 +5,7 @@
 #include <array>
 namespace fs_session
 {
-constexpr int MaxCharacters = 3;
+constexpr int MaxCharacters = 5;
 inline bool validSlot(int index) { return index >= 0 && index < MaxCharacters; }
 inline std::array<Mode, MaxCharacters> warmModes()
 { std::array<Mode, MaxCharacters> modes{}; modes.fill(Mode::Warm); return modes; }

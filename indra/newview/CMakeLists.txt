@@ -1440,6 +1440,7 @@ set(viewer_HEADER_FILES
     fssessionrestart.h
     fssessionhostoptions.h
     fssessionregistry.h
+    fssessionmonitormodel.h
     fssessionpreview.h
     fssessiontransition.h
     fssessionframepipe.h

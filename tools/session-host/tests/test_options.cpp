@@ -7,11 +7,11 @@ int main()
 {
     HostOptions options, decoded;
     assert(!options.voice && !options.hosted && options.muteBackground && !options.cinematic);
-    options.standby[MaxCharacters - 1] = Mode::Economy;
+    for (auto& mode : options.standby) mode = Mode::Economy;
     options.standby[1] = Mode::Economy; options.voice = options.hosted = true; options.chat = false;
     assert(HostOptions::decode(options.encode(), decoded));
     assert(decoded.standby[1] == Mode::Economy && decoded.hosted && decoded.voice && !decoded.chat);
-    assert(decoded.standby[MaxCharacters - 1] == Mode::Economy);
+    for (const auto mode : decoded.standby) assert(mode == Mode::Economy);
     assert(decoded.previewSize == 0 && decoded.previewRate == 1);
     options.previewSize = 2; options.previewRate = 3; options.cinematic = true;
     assert(HostOptions::decode(options.encode(), decoded) && decoded.previewSize == 2 && decoded.previewRate == 3 && decoded.cinematic);

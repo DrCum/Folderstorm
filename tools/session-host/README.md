@@ -1,6 +1,6 @@
-# Character sessions feasibility prototype (Windows)
+# Character sessions (experimental, Windows)
 
-This is the first checkpoint of [the multi-character roadmap](../../doc/plans/multi-character-sessions.md), in [PR #10](https://github.com/DrCum/Folderstorm/pull/10) against main after PR #9 merged. It launches two isolated viewer workers and tests reversible warm standby plus optional native window hosting. It is not the completed shared-chat/economy/monitor interface.
+The current stack supports **five isolated character workers**, one active world/input owner, source-bound shared Chat, Warm/Economy background policies, optional fitted hosting, account-local workspaces, safe restart, four low-resolution inactive monitors and optional bird’s-eye transitions. Host controls can be normal, condensed or title-bar-only; shared Chat and character controls can pop out independently. Native Windows acceptance remains pending for the latest refinements and additional-character count. Earlier PR/build heads are preserved for comparison. See [host refinement plan](../../doc/plans/multi-character-host-refinements.md) and [actual checks/native acceptance](../../doc/plans/multi-character-validation.md).
 
 Normal viewer startup never launches this tool or extra accounts. The Windows viewer target builds `folderstorm-session-host.exe` beside its matching viewer and the Windows manifest copies it into the installation. Launch that executable explicitly when testing. The manifest supplies a bounded installation-local filename for the renamed packaged viewer; build-directory launches fall back to the filename compiled by CMake. The controller never searches PATH for a viewer.
 
@@ -9,12 +9,12 @@ Checkpoint 2 adds a background-mode dropdown beside each character: **Warm** ret
 ## Try the prototype
 
 1. Open `folderstorm-session-host.exe` from the new Windows build/installation. Leave **Host active viewer** unchecked initially.
-2. Choose **+ 1**, then log in through the ordinary viewer login screen. The first ready character becomes active automatically.
-3. Choose **+ 2** and log in a different character. Its login/loading UI remains visible until it is ready, then it enters warm standby.
+2. Choose **+ Character**, then log in through the ordinary viewer login screen. The first ready character becomes active automatically.
+3. Choose **+ Character** again and log in a different character. Repeat explicitly for up to five slots; Session also offers individual slot logins. Its login/loading UI remains visible until it is ready, then it enters warm standby.
 4. Use the character dropdown. Switching releases old input, hides its view and prepares the target. The target grants input after two normal buffer swaps; its account/session must still match the request.
 5. Send an IM to the background character, switch to it and check the message arrived. Test in the same region first, then different regions and a teleport that completes while backgrounded.
 6. After separate-window switching works, enable **Host active viewer**. Its borderless native window follows the controller's viewport bounds, while remaining an unowned top-level window in its own worker process. Its own menus, toolbars, floaters and skin remain intact. Click a chat field and test typing, switch characters, then Alt-Tab away and return. The active status reports **keyboard focused/unfocused** from the viewer's normal focus callbacks; polling can lag briefly. Disable the checkbox to return to separate windows while retaining management/standby.
-7. **Separate windows** detaches both workers from management, returns their ordinary windows and leaves them logged in. Closing the controller offers either native logout confirmation or returning to separate windows; it waits for detachment and never deliberately destroys a live hosted viewer window. Close a detached viewer before relaunching its slot.
+7. **Separate windows** reversibly unhosts while retaining management/standby. **Session → Stop managing** detaches all workers and leaves them logged in. Closing the controller offers native logout confirmation or leaving separate windows; it waits for detachment and never deliberately destroys a live hosted viewer window. Close a detached viewer before relaunching its slot.
 
 An initialized worker keeps its render context. Warm standby uses the existing viewer hidden-window path for teleport progress, texture/material cleanup, pick cancellation and other maintenance, while suppressing world drawing, reflection/snapshot side work and foreground input. Normal networking, event/callback processing and Inventory observers continue. This deliberately reuses the native minimized/hidden-viewer behavior instead of treating `HeadlessClient` as a reversible runtime mode.
 
@@ -22,11 +22,14 @@ The local assistant/MCP listener remains unavailable while managed, regardless o
 
 ## Separate data and ownership
 
-The two test profiles live below:
+Private profiles live below (the first two names remain unchanged):
 
 ```text
 %LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character1\
 %LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character2\
+%LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character3\
+%LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character4\
+%LOCALAPPDATA%\FolderstormSessions\Prototype-v1\Character5\
 ```
 
 Each has separate `Roaming` and `Local` roots, used by the worker's native directory initialization. First launch starts with a fresh profile; your normal viewer settings, chat logs, workspaces, boards and saved credentials are not copied or migrated. Choose each worker's skin/settings normally. Profiles persist for subsequent launches, and normal per-account/grid subdirectories continue to separate different logins within a slot. Do not manually configure both profiles to use the same writable cache path.
@@ -35,7 +38,7 @@ An exclusive file handle is inherited by the worker to reserve its profile. The 
 
 Workers receive only their connected pipe, profile-lease and bounded preview mapping/mutex handles through an explicit Windows inheritance list. The pipe has a current-user ACL and rejects remote clients; managed control opens no network listener. Bootstrap identity/handle variables are removed before ordinary child processes launch, and handles lose their inherit flag. Commands are fixed-size, versioned, account/session-generation bound and sequenced. Credentials are neither pipe payloads nor command-line arguments. Child environment formation preserves inherited runtime/proxy/trust variables without printing them or changing the controller's environment. Detachment reapplies ordinary voice/assistant choices; normal multiple-viewer port conflicts can still appear in assistant diagnostics.
 
-Native credential IDs are reserved before authentication to catch duplicate managed logins. The null-safe native startup API supplies `first_last` for agent credentials (including `Resident`) or `account_name` for account credentials; normalization and grid qualification remain in place. These keys are not display names or passwords. This cannot discover arbitrary external viewer sessions or every possible server-side alias. Use two genuinely distinct accounts when testing. Account UUIDs in ready status remain qualified by grid; a disconnected reservation is released.
+Native credential IDs are reserved before authentication to catch duplicate managed logins. The null-safe native startup API supplies `first_last` for agent credentials (including `Resident`) or `account_name` for account credentials; normalization and grid qualification remain in place. These keys are not display names or passwords. This cannot discover arbitrary external viewer sessions or every possible server-side alias. Use distinct accounts in each managed slot. Account UUIDs in ready status remain qualified by grid; a disconnected reservation is released.
 
 The host tracks worker process health, ordinary rendered swaps per second, main-loop iterations per second, keyboard-focus state and working-set MiB. These are diagnostics, not claimed CPU/GPU/VRAM savings. Compare with two ordinary viewers, including an ordinary minimized second viewer, because the viewer already reduces drawing when hidden/minimized. Measure aggregate processes using native tools.
 
@@ -75,11 +78,11 @@ Managed workers always use their private default texture/object/sound cache dire
 
 ## Optional read-only character monitor
 
-Choose **Session… → Monitor character 1/2** after that character logs in. The monitor is Off by default, displays only an inactive character and never forwards image clicks as viewer input. Its labelled footer switches to that character. Opening the active character pauses until it goes inactive. Closing/minimizing the monitor, minimizing the controller, switching or ending that session pauses capture. A new login must be explicitly selected again.
+Choose **Session… → Monitor character N** after that inactive character logs in. The monitor is Off by default, displays only an inactive character and never forwards image clicks as viewer input. Its labelled footer switches to that character. Opening the active character is refused; choose an inactive account. Closing/minimizing the monitor, minimizing the controller, switching or ending that session pauses capture. A new login must be explicitly selected again.
 
 Default target: **320 × 180 at 1 FPS**; optional caps 480 × 270 / 640 × 360 and target rates 0.5 / 2 / 5 FPS. Geometry fits the character's current world viewport without stretching. Rates limit preview rendering/readback, not simulator servicing. Capture uses a bounded offscreen PBR target, never a full-window render shrunk afterward. Unsupported target/graphics modes show unavailable status instead of that fallback. Economy releases disposable buffers after each capture; Warm rebuilds its retained buffers. Native post-effects and allocator work can still cost GPU/CPU time; no performance benefit is claimed without measurements.
 
-Only one latest BGRA frame is retained in a bounded inherited local mapping. A nonblocking mutex prevents partial frames; busy samples are dropped. Worker/account/grid/generation, dimensions and sequence are checked before display. UI/HUD and snapshot files/animations/sounds are excluded; native snapshot cleanup restores the live viewport/projection/debug options. The monitor shows frame age, stale/waiting/paused/unavailable state and never stores images. Save host choices retains only size/rate, never monitor enablement, an account or image.
+Each worker retains one latest BGRA frame in its bounded inherited local mapping. A nonblocking mutex prevents partial frames; busy samples are dropped. Worker/account/grid/generation, dimensions and sequence are checked before display. UI/HUD and snapshot files/animations/sounds are excluded; native snapshot cleanup restores the live viewport/projection/debug options. The monitor shows frame age, stale/waiting/paused/unavailable state and never stores images. Save host choices retains only size/rate, never monitor enablement, an account or image.
 
 ## Optional bird’s-eye switching
 
@@ -122,3 +125,10 @@ Session offers **Pop out shared Chat** and **Pop out character controls**, indep
 
 ### Three-character native checkpoint
 The registry currently supports three independently launched logins. **+ Character** opens the next free slot; Session offers individual slot login/monitor actions. Character1/Character2 profiles and old host choices are preserved; Character3 uses its own profile/cache/lease and defaults to Warm. All ready characters can send source-bound shared chat, switch, restart and use account-local workspaces. One active input/voice owner remains. Periodic events/catalog/workspace/poll requests rotate per worker so a busy chat cannot starve other updates. No extra login starts automatically. This checkpoint retains one monitor; simultaneous monitors and the final five-character cap follow separately.
+
+### Five characters and four independent monitors
+The final capacity is five logins and four inactive-monitor windows. Each additional character has a private profile, caches and process lease; no login starts implicitly. Slots share the serial acknowledged handoff and source-bound lifecycle/chat/workspace rules. A successful switch to a monitored character (from its footer or the selector) exchanges that particular monitor to the previously active character; it clears old pixels and rebinds the exact account/grid/worker/generation before reading. Failure/rollback retains the assignment. If the old session ended, that monitor stops rather than adopting another login. Other monitor assignments stay unchanged.
+
+Right-click a monitor for its own size/FPS target or close action. Targets are 0.5/1/2/5 FPS, caps 320×180/480×270/640×360. Visible monitors share **10 FPS aggregate**, rounded down to supported equal-share rates: three/four 5 FPS targets get 2 FPS each, shown as a budget limit in their titles. Lowering policies must acknowledge before a new/increasing lane can consume reserved capacity, including in-flight requests; lost but live workers conservatively retain their rate reservation. Closing/minimizing pauses only that monitor. Host minimize/transition pauses all. Enablement, assignments, imagery and per-monitor choices are session-only; Save host choices stores only defaults.
+
+At the largest cap, five latest-frame mappings use about 4.4 MiB and four retained display frames about 3.5 MiB (excluding metadata, native GL and bounded paint buffers). Simulator state and capture/readback still cost resources; CPU/GPU/RAM/VRAM improvements require native measurements. The capture path remains genuinely offscreen at the small resolution, and image clicks never forward input.

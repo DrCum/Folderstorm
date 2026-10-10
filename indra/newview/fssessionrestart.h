@@ -30,13 +30,13 @@ public:
         mSequence = sequence; mPhase = Phase::Waiting; return true;
     }
     void cancel() { mPhase = Phase::Idle; }
-    Result poll(bool processAlive, bool cancelled, std::uint64_t now)
+    Result poll(bool processAlive, bool cancelled, std::uint64_t now, bool allowLaunch = true)
     {
         if (mPhase == Phase::Idle) return Result::None;
         // Cancellation wins even if process exit is observed in the same tick.
         if (cancelled) { cancel(); return Result::Cancelled; }
         if (now >= mDeadline) { cancel(); return Result::TimedOut; }
-        if (!processAlive) { cancel(); return Result::Launch; }
+        if (!processAlive && allowLaunch) { cancel(); return Result::Launch; }
         return Result::None;
     }
 private:
