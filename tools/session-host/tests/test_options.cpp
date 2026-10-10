@@ -13,8 +13,9 @@ int main()
     assert(decoded.previewSize == 0 && decoded.previewRate == 1);
     options.previewSize = 2; options.previewRate = 3; options.cinematic = true;
     assert(HostOptions::decode(options.encode(), decoded) && decoded.previewSize == 2 && decoded.previewRate == 3 && decoded.cinematic);
+    options.chatDetached = options.controlsDetached = true;
     options.chrome = 2;
-    assert(HostOptions::decode(options.encode(), decoded) && decoded.chrome == 2);
+    assert(HostOptions::decode(options.encode(), decoded) && decoded.chrome == 2 && decoded.chatDetached && decoded.controlsDetached);
     auto badChrome = options.encode(); badChrome.replace(badChrome.find("chrome=2"), 8, "chrome=3");
     assert(!HostOptions::decode(badChrome, decoded));
     const auto before = decoded.encode();
@@ -26,6 +27,6 @@ int main()
     auto invalid = options.encode(); invalid.replace(invalid.find("preview_size=2"), 14, "preview_size=3");
     assert(!HostOptions::decode(invalid, decoded) && decoded.encode() == before);
     assert(HostOptions::decode("FSH1\nbackground1=1\nbackground2=2\nvoice=0\nmute=1\nhost=0\nchat=1\n", decoded));
-    assert(decoded.previewSize == 0 && decoded.previewRate == 1 && !decoded.cinematic && decoded.chrome == 0); // Prior saved choices stay compatible.
+    assert(decoded.previewSize == 0 && decoded.previewRate == 1 && !decoded.cinematic && decoded.chrome == 0 && !decoded.chatDetached && !decoded.controlsDetached); // Prior saved choices stay compatible.
     std::cout << "Bounded host-choice parsing, defaults, duplicate/unknown refusal and transactional decoding passed.\n";
 }

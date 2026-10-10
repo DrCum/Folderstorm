@@ -17,6 +17,7 @@
 #include <shlobj.h>
 #include <shellapi.h>
 #include <psapi.h>
+#include <commctrl.h>
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
@@ -44,6 +45,7 @@ constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr int SessionOptions = 119, ViewportFocus = 120;
 constexpr UINT_PTR Timer = 1;
+LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 struct Handle
 {
@@ -241,6 +243,10 @@ struct Host
     HWND characterControl = nullptr, showChatControl = nullptr, detachControl = nullptr;
     HWND optionsControl = nullptr, compactInfo = nullptr;
     unsigned int chrome = 0;
+    HWND chatWindow = nullptr, controlsWindow = nullptr, tooltips = nullptr;
+    bool chatDetached = false, controlsDetached = false;
+    UINT chatDpi = 96, controlsDpi = 96;
+    HFONT chatFont = nullptr, controlsFont = nullptr;
     std::wstring descriptions[2], lastNotice;
     Handle optionsLease;
     bool logoutOnClose = false;
@@ -269,7 +275,7 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
-    ~Host() { if (font) DeleteObject(font); }
+    ~Host() { if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); }
 
     int scaled(int value) const { return MulDiv(value, static_cast<int>(dpi), 96); }
     void updateDpi(UINT value)
@@ -303,7 +309,7 @@ struct Host
     void message(const std::wstring& text)
     {
         lastNotice = text; SetWindowTextW(notice, text.c_str());
-        if (chrome == 2) SetWindowTextW(window, (L"Folderstorm · " + text).c_str());
+        if (chrome != 0) SetWindowTextW(window, (L"Folderstorm · " + text).c_str());
     }
     void setChrome(unsigned int mode)
     {
@@ -361,7 +367,7 @@ struct Host
     HostOptions options() const
     {
         HostOptions result; result.standby[0] = standby[0]; result.standby[1] = standby[1];
-        result.chrome = chrome;
+        result.chrome = chrome; result.chatDetached = chatDetached; result.controlsDetached = controlsDetached;
         result.voice = voice; result.muteBackground = muteBackground; result.hosted = embedding; result.chat = showChat;
         result.previewSize = monitorSize; result.previewRate = monitorRate;
         result.cinematic = cinematic;
@@ -419,6 +425,10 @@ struct Host
         for (int i = 0; i < 2; ++i) if (!descriptions[i].empty())
             AppendMenuW(menu, MF_STRING | MF_GRAYED, 260 + i, descriptions[i].c_str());
         if (!lastNotice.empty()) AppendMenuW(menu, MF_STRING | MF_GRAYED, 265, lastNotice.c_str());
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING | (chatDetached ? MF_CHECKED : 0), 270, chatDetached ? L"Dock shared Chat" : L"Pop out shared Chat");
+        AppendMenuW(menu, MF_STRING | (controlsDetached ? MF_CHECKED : 0), 271, controlsDetached ? L"Dock character controls" : L"Pop out character controls");
+        AppendMenuW(menu, MF_STRING | (showChat ? MF_CHECKED : 0), 272, L"Show shared Chat");
         POINT point{}; GetCursorPos(&point);
         const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, window, nullptr);
         DestroyMenu(menu);
@@ -431,6 +441,10 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice == 270) setPanelDetached(true, !chatDetached);
+        else if (choice == 271) setPanelDetached(false, !controlsDetached);
+        else if (choice == 272)
+        { saveDraft(true); showChat = !showChat; SendMessageW(showChatControl, BM_SETCHECK, showChat ? BST_CHECKED : BST_UNCHECKED, 0); layout(); }
         else if (choice >= 250 && choice <= 252) setChrome(choice - 250);
         else if (choice == 240) restartCharacter(index);
         else if (choice == 241 && slots[index]) { slots[index]->restart.cancel(); message(L"Restart cancelled; no new viewer will launch."); }
@@ -1070,22 +1084,87 @@ struct Host
         message(logout ? L"Confirm logout in each native viewer. Close this host again to keep any remaining separate viewers logged in." :
             L"Returning characters to separate windows before closing their controller connection…");
     }
-    void layout()
+    std::vector<HWND> chatControls() const
+    { return {chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl}; }
+    std::vector<HWND> characterControls() const
     {
-        RECT rect{}; GetClientRect(window, &rect);
-        const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
-        auto move = [this](HWND child, int x, int y, int w, int h)
-        { MoveWindow(child, scaled(x), scaled(y), (std::max)(1, scaled(w)), (std::max)(1, scaled(h)), TRUE); };
-        const bool collapsed = chrome == 2, condensed = chrome == 1;
-        for (HWND child : {characterControl, launchButton[0], launchButton[1], embedControl, detachControl, showChatControl, optionsControl})
-            ShowWindow(child, collapsed ? SW_HIDE : SW_SHOWNOACTIVATE);
-        ShowWindow(compactInfo, condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
+        std::vector<HWND> result{characterControl, embedControl, detachControl, showChatControl, optionsControl, compactInfo};
+        for (int i = 0; i < 2; ++i) { result.push_back(launchButton[i]); result.push_back(status[i]); result.push_back(standbyControl[i]); }
+        return result;
+    }
+    void panelFont(HWND panel, UINT value)
+    {
+        const bool chat = panel == chatWindow;
+        UINT& panelDpi = chat ? chatDpi : controlsDpi;
+        HFONT& previous = chat ? chatFont : controlsFont;
+        panelDpi = (std::max)(96u, value);
+        HFONT next = CreateFontW(-MulDiv(12, static_cast<int>(panelDpi), 96), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!next) return;
+        EnumChildWindows(panel, [](HWND child, LPARAM data) -> BOOL
+        { SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(data), TRUE); return TRUE; }, reinterpret_cast<LPARAM>(next));
+        if (previous) DeleteObject(previous);
+        previous = next;
+    }
+    void setPanelDetached(bool chat, bool detached, bool show = true)
+    {
+        if (chat) saveDraft(true);
+        HWND& panel = chat ? chatWindow : controlsWindow;
+        bool& preference = chat ? chatDetached : controlsDetached;
+        if (detached && !panel)
+            panel = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionPanel", chat ? L"Shared Chat · choose Send as" : L"Character controls",
+                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(chat ? 800 : 840), scaled(chat ? 360 : 180), window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        if (detached && !panel) { message(L"Could not create the panel; its controls remain docked."); return; }
+        const HWND target = detached ? panel : window;
+        DWORD process = 0;
+        if (!GetWindowThreadProcessId(target, &process) || process != GetCurrentProcessId()) return;
+        auto children = chat ? chatControls() : characterControls();
+        std::vector<std::pair<HWND, HWND>> moved;
+        for (HWND child : children)
+        {
+            const HWND old = GetParent(child);
+            if (old != target)
+            {
+                if (!SetParent(child, target))
+                {
+                    for (const auto& entry : moved) SetParent(entry.first, entry.second);
+                    message(L"Could not move the panel controls; docking was retained."); return;
+                }
+                moved.emplace_back(child, old);
+            }
+        }
+        for (const auto& entry : moved)
+        {
+            TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.hwnd = entry.second;
+            tool.uId = reinterpret_cast<UINT_PTR>(entry.first);
+            if (tooltips && SendMessageW(tooltips, TTM_GETTOOLINFOW, 0, reinterpret_cast<LPARAM>(&tool)))
+            {
+                SendMessageW(tooltips, TTM_DELTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+                tool.hwnd = target; SendMessageW(tooltips, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+            }
+        }
+        preference = detached;
+        if (chat && show) { showChat = true; SendMessageW(showChatControl, BM_SETCHECK, BST_CHECKED, 0); }
+        if (detached) panelFont(panel, dpi);
+        else for (HWND child : children) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        layout();
+        if (detached && show) ShowWindow(panel, SW_SHOWNORMAL);
+    }
+    void layoutCharacters(HWND parent, bool condensed, bool visible)
+    {
+        RECT rect{}; GetClientRect(parent, &rect); const int width = static_cast<int>(rect.right);
+        const UINT localDpi = parent == window ? dpi : controlsDpi;
+        auto scale = [localDpi](int value) { return MulDiv(value, static_cast<int>(localDpi), 96); };
+        auto move = [scale](HWND child, int x, int y, int w, int h)
+        { MoveWindow(child, scale(x), scale(y), (std::max)(1, scale(w)), (std::max)(1, scale(h)), TRUE); };
+        for (HWND child : characterControls()) ShowWindow(child, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        ShowWindow(compactInfo, visible && condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
         if (condensed)
         {
             move(characterControl, 3, 3, 180, 200); move(launchButton[0], 189, 3, 30, 22); move(launchButton[1], 223, 3, 30, 22);
             move(embedControl, 260, 3, 64, 22); move(detachControl, 329, 3, 80, 22);
             move(showChatControl, 414, 3, 52, 22); move(optionsControl, 471, 3, 58, 22);
-            MoveWindow(compactInfo, scaled(536), scaled(5), (std::max)(1, width - scaled(540)), scaled(20), TRUE);
+            MoveWindow(compactInfo, scale(536), scale(5), (std::max)(1, width - scale(540)), scale(20), TRUE);
         }
         else
         {
@@ -1099,33 +1178,98 @@ struct Host
         SetWindowTextW(optionsControl, condensed ? L"Session" : L"Session…");
         for (int i = 0; i < 2; ++i)
         {
-            ShowWindow(status[i], chrome == 0 ? SW_SHOWNOACTIVATE : SW_HIDE);
-            ShowWindow(standbyControl[i], chrome == 0 ? SW_SHOWNOACTIVATE : SW_HIDE);
-            MoveWindow(status[i], scaled(10), scaled(48 + i * 24), (std::max)(1, width - scaled(215)), scaled(20), TRUE);
-            MoveWindow(standbyControl[i], width - scaled(200), scaled(46 + i * 24), scaled(190), scaled(130), TRUE);
+            ShowWindow(status[i], visible && !condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
+            ShowWindow(standbyControl[i], visible && !condensed ? SW_SHOWNOACTIVATE : SW_HIDE);
+            MoveWindow(status[i], scale(10), scale(48 + i * 24), (std::max)(1, width - scale(215)), scale(20), TRUE);
+            MoveWindow(standbyControl[i], width - scale(200), scale(46 + i * 24), scale(190), scale(130), TRUE);
         }
-        const int top = collapsed ? 0 : scaled(condensed ? 28 : 99);
-        const bool dockChat = showChat && !collapsed;
+    }
+    void layoutChat(HWND parent, int top, bool visible)
+    {
+        RECT rect{}; GetClientRect(parent, &rect); const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
+        const UINT localDpi = parent == window ? dpi : chatDpi;
+        auto scale = [localDpi](int value) { return MulDiv(value, static_cast<int>(localDpi), 96); };
+        const int input = (std::max)(top + scale(95), height - scale(85));
+        MoveWindow(chatAccount, scale(10), top, scale(180), scale(150), TRUE);
+        MoveWindow(chatConversation, scale(200), top, (std::max)(1, width - scale(460)), scale(200), TRUE);
+        MoveWindow(chatReview, width - scale(250), top, scale(140), scale(24), TRUE);
+        MoveWindow(chatRead, width - scale(100), top, scale(90), scale(24), TRUE);
+        MoveWindow(chatLabel, scale(10), top + scale(29), (std::max)(1, width - scale(20)), scale(20), TRUE);
+        MoveWindow(chatHistory, scale(10), top + scale(52), (std::max)(1, width - scale(20)), (std::max)(1, input - top - scale(58)), TRUE);
+        MoveWindow(chatCompose, scale(10), input, (std::max)(1, width - scale(105)), scale(35), TRUE);
+        MoveWindow(chatSend, width - scale(85), input, scale(75), scale(35), TRUE);
+        MoveWindow(voiceControl, scale(10), input + scale(41), scale(255), scale(24), TRUE);
+        MoveWindow(muteControl, scale(280), input + scale(41), scale(280), scale(24), TRUE);
+        for (HWND child : chatControls()) ShowWindow(child, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+    }
+    void layout()
+    {
+        RECT rect{}; GetClientRect(window, &rect);
+        const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
+        const bool collapsed = chrome == 2, condensed = chrome == 1;
+        layoutCharacters(controlsDetached ? controlsWindow : window, controlsDetached ? chrome != 0 : condensed, controlsDetached || !collapsed);
+        const int top = controlsDetached || collapsed ? 0 : scaled(condensed ? 28 : 99);
+        const bool dockChat = showChat && !chatDetached && !collapsed;
         const int footerHeight = chrome == 0 ? scaled(26) : 0;
         const int chatTop = dockChat ? (std::max)(top + scaled(100), height - scaled(240)) : height - footerHeight;
         MoveWindow(viewport, 0, top, width, (std::max)(1, chatTop - top), TRUE);
-        MoveWindow(chatAccount, scaled(10), chatTop, scaled(180), scaled(150), TRUE);
-        MoveWindow(chatConversation, scaled(200), chatTop, (std::max)(1, width - scaled(460)), scaled(200), TRUE);
-        MoveWindow(chatReview, width - scaled(250), chatTop, scaled(140), scaled(24), TRUE);
-        MoveWindow(chatRead, width - scaled(100), chatTop, scaled(90), scaled(24), TRUE);
-        MoveWindow(chatLabel, scaled(10), chatTop + scaled(29), (std::max)(1, width - scaled(20)), scaled(20), TRUE);
-        MoveWindow(chatHistory, scaled(10), chatTop + scaled(52), (std::max)(1, width - scaled(20)), scaled(88), TRUE);
-        MoveWindow(chatCompose, scaled(10), chatTop + scaled(145), (std::max)(1, width - scaled(105)), scaled(35), TRUE);
-        MoveWindow(chatSend, width - scaled(85), chatTop + scaled(145), scaled(75), scaled(35), TRUE);
-        MoveWindow(voiceControl, scaled(10), chatTop + scaled(185), scaled(255), scaled(24), TRUE);
-        MoveWindow(muteControl, scaled(280), chatTop + scaled(185), scaled(280), scaled(24), TRUE);
-        for (HWND child : {chatAccount, chatConversation, chatReview, chatRead, chatLabel, chatHistory, chatCompose, chatSend, voiceControl, muteControl})
-            ShowWindow(child, dockChat ? SW_SHOWNOACTIVATE : SW_HIDE);
+        layoutChat(chatDetached ? chatWindow : window, chatDetached ? MulDiv(8, static_cast<int>(chatDpi), 96) : chatTop, showChat && (chatDetached || !collapsed));
+        auto showPanel = [](HWND panel, bool visible)
+        {
+            if (!panel) return;
+            // Do not undo a user's independent panel minimization during layout.
+            if (!visible) ShowWindow(panel, SW_HIDE);
+            else if (!IsWindowVisible(panel)) ShowWindow(panel, SW_SHOWNOACTIVATE);
+        };
+        showPanel(controlsWindow, controlsDetached && !IsIconic(window));
+        showPanel(chatWindow, chatDetached && showChat && !IsIconic(window));
         ShowWindow(notice, chrome == 0 ? SW_SHOWNOACTIVATE : SW_HIDE);
         MoveWindow(notice, scaled(10), height - scaled(23), (std::max)(1, width - scaled(20)), scaled(20), TRUE);
     }
+    void addTooltip(HWND child, const wchar_t* text)
+    {
+        if (!tooltips) return;
+        TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+        tool.hwnd = GetParent(child); tool.uId = reinterpret_cast<UINT_PTR>(child); tool.lpszText = const_cast<wchar_t*>(text);
+        SendMessageW(tooltips, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+    }
 };
 Host* host = nullptr;
+LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+    if (!host) return DefWindowProcW(window, message, wparam, lparam);
+    const bool chat = window == host->chatWindow;
+    switch (message)
+    {
+    case WM_COMMAND: return SendMessageW(host->window, message, wparam, lparam);
+    case WM_SIZE:
+        if (window == host->chatWindow || window == host->controlsWindow) host->layout();
+        return 0;
+    case WM_DPICHANGED:
+    {
+        host->panelFont(window, LOWORD(wparam));
+        const auto* rect = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        host->layout(); return 0;
+    }
+    case WM_GETMINMAXINFO:
+    {
+        const UINT dpi = chat ? host->chatDpi : host->controlsDpi;
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {
+            MulDiv(chat ? 700 : 805, static_cast<int>(dpi), 96),
+            MulDiv(chat ? 260 : host->chrome == 0 ? 140 : 85, static_cast<int>(dpi), 96)}; return 0;
+    }
+    case WM_CLOSE:
+        if (chat)
+        {
+            host->saveDraft(true); host->showChat = false;
+            SendMessageW(host->showChatControl, BM_SETCHECK, BST_UNCHECKED, 0); host->layout();
+        }
+        else host->setPanelDetached(false, false);
+        ShowWindow(window, SW_HIDE); return 0;
+    default: return DefWindowProcW(window, message, wparam, lparam);
+    }
+}
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     if (!host) return DefWindowProcW(window, message, wparam, lparam);
@@ -1237,7 +1381,18 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         AppendMenuW(system, MF_STRING, 0xA110, L"Condensed character controls");
         AppendMenuW(system, MF_STRING, 0xA120, L"Title-bar-only controls");
         AppendMenuW(system, MF_STRING, 0xA130, L"Character sessions…");
+        const bool chatDetached = host->chatDetached, controlsDetached = host->controlsDetached;
+        host->chatDetached = host->controlsDetached = false;
         host->setChrome(host->chrome);
+        host->tooltips = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        host->addTooltip(host->launchButton[0], L"Open character 1 native login");
+        host->addTooltip(host->launchButton[1], L"Open character 2 native login");
+        host->addTooltip(host->embedControl, L"Fit the active viewer to this host; uncheck to return to a separate managed window");
+        host->addTooltip(host->detachControl, L"Use separate viewer windows while retaining character management");
+        host->addTooltip(host->optionsControl, L"Character actions, monitors, host presentation and docking");
+        if (chatDetached) host->setPanelDetached(true, true, false);
+        if (controlsDetached) host->setPanelDetached(false, true, false);
         EnableWindow(host->switchButton[0], FALSE); EnableWindow(host->switchButton[1], FALSE);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
@@ -1260,8 +1415,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     }
     case WM_GETMINMAXINFO:
         reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {
-            host->scaled(host->chrome == 2 ? 400 : host->chrome == 1 ? 720 : 805),
-            host->scaled(host->showChat && host->chrome != 2 ? 540 : 250)}; return 0;
+            host->scaled(host->chrome == 2 || host->controlsDetached ? (host->showChat && !host->chatDetached ? 700 : 400) : host->chrome == 1 ? 720 : 805),
+            host->scaled(host->showChat && !host->chatDetached && host->chrome != 2 ? 540 : 250)}; return 0;
     case WM_SYSCOMMAND:
     {
         const auto command = static_cast<unsigned int>(wparam & 0xfff0u);
@@ -1371,6 +1526,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     const auto dpiContext = reinterpret_cast<DpiContext>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"));
     if (dpiContext) dpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // PER_MONITOR_AWARE_V2
     else SetProcessDPIAware();
+    INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES}; InitCommonControlsEx(&common);
     Host state;
     std::vector<wchar_t> executable(32768);
     const DWORD size = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
@@ -1410,6 +1566,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
             state.voice = choices.voice; state.muteBackground = choices.muteBackground; state.embedding = choices.hosted; state.showChat = choices.chat;
             state.monitorSize = choices.previewSize; state.monitorRate = choices.previewRate;
             state.cinematic = choices.cinematic; state.chrome = choices.chrome;
+            state.chatDetached = choices.chatDetached; state.controlsDetached = choices.controlsDetached;
         }
     }
     host = &state;
@@ -1417,6 +1574,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     klass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
     if (!RegisterClassW(&klass)) return 1;
+    WNDCLASSW panelClass{}; panelClass.lpfnWndProc = panelProc; panelClass.hInstance = instance;
+    panelClass.lpszClassName = L"FolderstormSessionPanel"; panelClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    panelClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+    if (!RegisterClassW(&panelClass)) return 1;
     WNDCLASSW monitorClass{}; monitorClass.lpfnWndProc = monitorProc; monitorClass.hInstance = instance;
     monitorClass.lpszClassName = L"FolderstormSessionMonitor"; monitorClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     if (!RegisterClassW(&monitorClass)) return 1;
