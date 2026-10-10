@@ -18,6 +18,17 @@ int main()
     assert(seedPreference("UIScaleFactor","F32",true,true,true));
     assert(seedPreference("ShowFPS","Boolean",true,true,true));
     assert(seedPreference("ChatFontSize","String",true,true,true));
+    assert(seedPreference("FSChromeLeftToolbarPlacement","S32",true,true,true));
+    assert(seedPreference("FSWorldViewInsetLeft","F32",true,true,true));
+    assert(seedPreference("FSMenuBackgroundAlpha","F32",true,true,true));
+    // The real native controls below are backupable, but never portable
+    // appearance choices. Future unrelated controls also fail closed.
+    for (const auto* policy : {"BrowserFileAccessFromFileUrls","BrowserIgnoreSSLCertErrors",
+        "BrowserWebSecurityDisabled","BrowserJavascriptEnabled","AutoAcceptNewInventory",
+        "FSPermissionDebitDefaultDeny","PermissionsCautionEnabled","AutomaticallyAcceptPermissions",
+        "ParcelMediaAutoPlayEnable","FutureAutomaticAction","UIAutoAcceptDebit","LastGPUString","LastFeatureVersion"})
+        assert(!seedPreference(policy,"Boolean",true,true,true));
+    assert(!seedPreference("NewNonAppearanceSetting","String",true,true,true));
     const char* isolated[] = {"UserLoginInfo","AutoLogin","RememberPassword","FirstName","LastName",
         "CurrentGrid","LastConnectedGrid","CacheLocation","ClientSettingsFile","InstantMessageLogPath",
         "FSAssistantReviewBulkOperations","EnableLocalEventAPIBridge","EnableVoiceChat","FSWorkspaceStartup",
@@ -34,7 +45,7 @@ int main()
     const std::set<std::string> files(seedUiFiles().begin(),seedUiFiles().end());
     assert(files.count("colors.xml") && files.count("key_bindings.xml") && files.count("quick_preferences.xml"));
     for (const auto* forbidden : {"bin_conf.dat","settings_per_account.xml","grids.user.xml","workspaces.xml",
-        "gesture_boards.xml","inventory.cache","chat.txt","settings_crash_behavior.xml"}) assert(!files.count(forbidden));
+        "gesture_boards.xml","inventory.cache","chat.txt","settings_crash_behavior.xml","ignorable_dialogs.xml"}) assert(!files.count(forbidden));
     assert(ProfileSettingsLimit == 4u*1024u*1024u && ProfileSettingsEntries <= 8192);
     std::cout << "Profile settings portability, native backup eligibility and isolated-data exclusions passed.\n";
 }

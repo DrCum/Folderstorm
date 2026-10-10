@@ -1387,7 +1387,7 @@ struct Host
         const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const auto selectedChat = slot ? slot->chat.conversations.find(conversation) : std::map<std::string,Conversation>::iterator{};
-        const bool conversationBlocked = slot && selectedChat != slot->chat.conversations.end() && selectedChat->second.restricted;
+        bool conversationBlocked = slot && selectedChat != slot->chat.conversations.end() && selectedChat->second.restricted;
         std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? characterName(chatIndex) : L"not logged in");
         if (!ready) label += L" · unavailable";
         else if (restricted) label += L" · shared chat restricted; use native viewer";
@@ -1415,11 +1415,12 @@ struct Host
                 if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
             }
             const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
+            conversationBlocked = slot && draft != slot->chat.conversations.end() && draft->second.restricted;
             const std::string wanted = slot && ready && !restricted && !conversationBlocked && draft != slot->chat.conversations.end() ? draft->second.draft : "";
             if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
         }
         std::wstring history;
-        if (slot && !restricted) for (const auto& line : slot->chat.lines)
+        if (slot && !restricted && !conversationBlocked) for (const auto& line : slot->chat.lines)
             if (line.conversation == conversation)
             { history += wide(line.sender) + (line.sender.empty() ? L"" : L": ") + wide(line.text) + L"\r\n"; }
         std::vector<wchar_t> existing(static_cast<std::size_t>(GetWindowTextLengthW(chatHistory)) + 1, L'\0');
@@ -1435,7 +1436,7 @@ struct Host
         const bool isNotice = slot && selected != slot->chat.conversations.end() && selected->second.topic == Topic::Notice;
         EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !sending && !isNotice);
         EnableWindow(chatSend, ready && !restricted && !conversationBlocked && !sending && !isNotice);
-        EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted);
+        EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted && !conversationBlocked);
         updatingChat = false;
     }
     void composeChanged()

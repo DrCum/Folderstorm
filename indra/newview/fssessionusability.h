@@ -108,8 +108,13 @@ public:
     {
         const auto match = [&selected](const Message& item) { return same(item,selected); };
         entries.erase(std::remove_if(entries.begin(),entries.end(),match),entries.end());
-        if (!std::any_of(dismissed.begin(),dismissed.end(),match))
-        { if (dismissed.size() >= Capacity) dismissed.erase(dismissed.begin()); Message key; key.worker = selected.worker; key.generation = selected.generation; key.account = selected.account; key.grid = selected.grid; key.conversation = selected.conversation; key.eventType = selected.eventType; key.cursor = selected.cursor; key.unread = selected.unread; dismissed.push_back(key); }
+        const auto old = std::find_if(dismissed.begin(),dismissed.end(),match);
+        if (old != dismissed.end()) { old->cursor = selected.cursor; old->unread = selected.unread; return; }
+        if (dismissed.size() >= Capacity) dismissed.erase(dismissed.begin());
+        Message key; key.worker = selected.worker; key.generation = selected.generation;
+        key.account = selected.account; key.grid = selected.grid; key.conversation = selected.conversation;
+        key.eventType = selected.eventType; key.cursor = selected.cursor; key.unread = selected.unread;
+        dismissed.push_back(key);
     }
 };
 }

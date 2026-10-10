@@ -276,9 +276,10 @@ struct Worker
                 else ++it;
             }
             payload = events.after(request.cursor);
-            if (payload.topic != Topic::Nearby && payload.topic != Topic::Notice &&
-                !payload.recipient.empty() && payload.recipient != gAgentID.asString() && !RlvActions::canReceiveIM(LLUUID(payload.recipient)))
-            { payload.text.clear(); payload.sender.clear(); payload.eventType = EventType::Gap; payload.flags |= ConversationRestricted; }
+            // Restrictions may change after the native enqueue callback. Check
+            // the owning group as well as its sender immediately before IPC.
+            filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
+                { return RlvActions::canReceiveIM(LLUUID(id)); });
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
@@ -874,7 +875,6 @@ void FSSessionWorker::importProfileSettings()
         const auto file = destination/name;
         if (!out || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
         { std::filesystem::remove(temp,error); ++skipped; continue; }
-        if (std::string(name) == "ignorable_dialogs.xml") gWarningSettings.loadFromFile(ll_convert_wide_to_string(file.wstring()));
         ++copied;
     }
     worker->settingsNotice = "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+

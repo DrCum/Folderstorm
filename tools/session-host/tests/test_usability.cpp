@@ -35,7 +35,15 @@ int main()
     attention.forget(view.identity); assert(attention.entries.size() == 1 && attention.entries[0].worker == another.worker);
     another.eventType = EventType::Gap; attention.accept(another); assert(attention.entries.empty() && attention.gap);
     Message unread = status; unread.eventType = EventType::Conversation; unread.unread = 1; unread.cursor = 10;
-    attention.dismiss(unread); assert(attention.hiddenUnread(unread)); ++unread.cursor; assert(!attention.hiddenUnread(unread));
+    attention.dismiss(unread); assert(attention.hiddenUnread(unread));
+    ++unread.cursor; ++unread.unread; assert(!attention.hiddenUnread(unread));
+    attention.dismiss(unread); assert(attention.hiddenUnread(unread)); // A second dismissal advances the watermark.
+    assert(attention.dismissed.size() == 1);
+    ++unread.cursor; ++unread.unread; assert(!attention.hiddenUnread(unread)); // A third message still restores it.
+    attention.dismiss(unread); assert(attention.hiddenUnread(unread));
+    ++unread.cursor; assert(!attention.hiddenUnread(unread)); // Same native count, newer incoming event.
+    attention.dismiss(unread); assert(attention.hiddenUnread(unread) && attention.dismissed.size() == 1);
+    auto unrelatedUnread = unread; ++unrelatedUnread.worker[0]; assert(!attention.hiddenUnread(unrelatedUnread));
     assert(attentionCategory("ScriptQuestion") == "Permission request" && attentionCategory("TeleportOffered") == "Teleport offer");
     assert(attentionCategory("UntrustedUnknown").empty());
     Frame frame; Message decoded; event.worker[0] = 1; event.kind = Kind::ReviewAttention;
