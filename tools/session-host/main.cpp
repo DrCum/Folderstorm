@@ -55,6 +55,35 @@ struct Handle
     Handle& operator=(const Handle&) = delete;
     HANDLE take() { const HANDLE result = value; value = INVALID_HANDLE_VALUE; return result; }
 };
+// One bounded offscreen paint, including image/letterbox/footer, then present.
+class PaintBuffer
+{
+public:
+    PaintBuffer(HDC destination, int width, int height) : mDestination(destination), mWidth(width), mHeight(height)
+    {
+        if (width <= 0 || height <= 0 || width > 8192 || height > 8192 ||
+            static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height) > 16u * 1024u * 1024u) return;
+        mMemory = CreateCompatibleDC(destination);
+        if (mMemory) mBitmap = CreateCompatibleBitmap(destination, width, height);
+        if (mBitmap) mOriginal = SelectObject(mMemory, mBitmap);
+    }
+    ~PaintBuffer()
+    {
+        if (mOriginal && mOriginal != HGDI_ERROR) SelectObject(mMemory, mOriginal);
+        if (mBitmap) DeleteObject(mBitmap);
+        if (mMemory) DeleteDC(mMemory);
+    }
+    PaintBuffer(const PaintBuffer&) = delete;
+    PaintBuffer& operator=(const PaintBuffer&) = delete;
+    HDC dc() const { return valid() ? mMemory : mDestination; }
+    void present() const { if (valid()) BitBlt(mDestination, 0, 0, mWidth, mHeight, mMemory, 0, 0, SRCCOPY); }
+private:
+    bool valid() const { return mMemory && mBitmap && mOriginal && mOriginal != HGDI_ERROR; }
+    HDC mDestination = nullptr, mMemory = nullptr;
+    HBITMAP mBitmap = nullptr;
+    HGDIOBJ mOriginal = nullptr;
+    int mWidth = 0, mHeight = 0;
+};
 std::wstring wide(const std::string& text)
 {
     if (text.empty()) return {};
@@ -215,7 +244,8 @@ struct Host
     bool logoutOnClose = false;
     std::uintptr_t focusIntent = 0;
     HWND monitor = nullptr;
-    bool monitorEnabled = false;
+    bool monitorEnabled = false, monitorDirty = true;
+    std::wstring monitorTitle;
     int monitorIndex = 1;
     unsigned int monitorSize = 0, monitorRate = 1;
     ChatKey monitorKey;
@@ -392,16 +422,20 @@ struct Host
         else if (choice == 207) cinematic = !cinematic;
         else if (choice == 208) skipTransition();
         else if (choice == 210 || choice == 211) openMonitor(choice == 210 ? 0 : 1);
-        else if (choice == 212) { monitorEnabled = false; monitorPixels.clear(); if (monitor) ShowWindow(monitor, SW_HIDE); }
-        else if (choice >= 220 && choice <= 222) { monitorSize = choice - 220; monitorPixels.clear(); }
+        else if (choice == 212) { monitorEnabled = false; clearMonitor(); if (monitor) ShowWindow(monitor, SW_HIDE); }
+        else if (choice >= 220 && choice <= 222) { monitorSize = choice - 220; }
         else if (choice >= 230 && choice <= 233) monitorRate = choice - 230;
+    }
+    void clearMonitor()
+    {
+        if (!monitorPixels.empty()) { monitorPixels.clear(); monitorDirty = true; }
     }
     void openMonitor(int index)
     {
         if (!slots[index] || slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready)
         { message(L"Log in this character before opening its read-only monitor."); return; }
         monitorIndex = index; monitorKey = slots[index]->chat.identity;
-        monitorFrame = {}; monitorPixels.clear(); monitorEnabled = true;
+        monitorFrame = {}; clearMonitor(); monitorEnabled = true; monitorDirty = true;
         if (!monitor)
             monitor = CreateWindowExW(WS_EX_TOOLWINDOW, L"FolderstormSessionMonitor", L"Character monitor (read only)",
                 WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, scaled(380), scaled(270), window, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -410,20 +444,27 @@ struct Host
     }
     void updateMonitor()
     {
-        if (!monitor || !monitorEnabled) return;
+        if (!monitor) return;
+        if (!monitorEnabled)
+        {
+            if (monitorDirty) { InvalidateRect(monitor, nullptr, FALSE); monitorDirty = false; }
+            return;
+        }
+        const bool wasEnabled = monitorEnabled;
         const auto* slot = slots[monitorIndex].get();
         std::wstring title = L"Monitor: ";
         title += slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : L"unavailable";
         title += L" · read only";
         if (!slot || !slot->running() || slot->detached || !slot->pipe.alive() || !monitorKey.owns(slot->snapshot))
-        { monitorPixels.clear(); monitorEnabled = false; title += L" · session ended; choose again"; }
-        else if (slot->snapshot.state != State::Ready) { monitorPixels.clear(); title += L" · disconnected"; }
-        else if (monitorIndex == active || busy()) { monitorPixels.clear(); title += L" · paused while active/switching"; }
-        else if (slot->snapshot.flags & PreviewUnavailable) { monitorPixels.clear(); title += L" · " + wide(slot->snapshot.detail); }
+        { clearMonitor(); monitorEnabled = false; title += L" · session ended; choose again"; }
+        else if (slot->snapshot.state != State::Ready) { clearMonitor(); title += L" · disconnected"; }
+        else if (monitorIndex == active || busy()) { clearMonitor(); title += L" · paused while active/switching"; }
+        else if (slot->snapshot.flags & (PreviewUnavailable | ChatRestricted)) { clearMonitor(); title += (slot->snapshot.flags & ChatRestricted) ? L" · restricted" : L" · " + wide(slot->snapshot.detail); }
         else
         {
             Message frame;
-            if (slots[monitorIndex]->preview.read(slot->snapshot, monitorFrame.event, frame, monitorPixels)) monitorFrame = std::move(frame);
+            if (slots[monitorIndex]->preview.read(slot->snapshot, monitorFrame.event, frame, monitorPixels))
+            { monitorFrame = std::move(frame); monitorDirty = true; }
             if (monitorPixels.empty()) title += L" · waiting for first frame";
             else
             {
@@ -433,7 +474,9 @@ struct Host
                 if (age > 5000) title += L" · stale";
             }
         }
-        SetWindowTextW(monitor, title.c_str()); InvalidateRect(monitor, nullptr, FALSE);
+        if (monitorTitle != title) { monitorTitle = title; SetWindowTextW(monitor, title.c_str()); }
+        if (wasEnabled != monitorEnabled) monitorDirty = true;
+        if (monitorDirty) { InvalidateRect(monitor, nullptr, FALSE); monitorDirty = false; }
     }
     std::string editText() const
     {
@@ -567,7 +610,7 @@ struct Host
         if (!slot.restart.begin(slot.snapshot, GetTickCount64()))
         { message(L"Character is changing login or already restarting; finish its native window first."); return; }
         slot.hasPendingSend = slot.hasPendingTyping = slot.hasPendingAction = false;
-        if (monitorIndex == index) { monitorEnabled = false; monitorPixels.clear(); }
+        if (monitorIndex == index) { monitorEnabled = false; clearMonitor(); }
         message(L"Restarting " + wide(slot.snapshot.name) + L": confirm native close. Waiting for process/profile release before a fresh login; queued messages are not replayed.");
     }
     void launch(int index)
@@ -753,7 +796,7 @@ struct Host
                 embedding = (response.flags & Embedded) != 0;
                 SendMessageW(embedControl, BM_SETCHECK, embedding ? BST_CHECKED : BST_UNCHECKED, 0);
             }
-            if (request.kind == Kind::MonitorPolicy) { monitorEnabled = false; monitorPixels.clear(); }
+            if (request.kind == Kind::MonitorPolicy) { monitorEnabled = false; clearMonitor(); }
             if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle) failHandoff(index, wide(response.detail));
             else
             {
@@ -985,7 +1028,7 @@ struct Host
     void detach(bool close, bool logout = false)
     {
         handoff.cancel(); detaching = true; closing = close; logoutOnClose = logout; focusRequested = false;
-        monitorEnabled = false; monitorPixels.clear(); if (monitor) ShowWindow(monitor, SW_HIDE);
+        monitorEnabled = false; clearMonitor(); if (monitor) ShowWindow(monitor, SW_HIDE);
         if (logout)
             for (auto& slot : slots) if (slot)
             {
@@ -1035,7 +1078,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     switch (message)
     {
     case WM_CLOSE:
-        host->monitorEnabled = false; host->monitorPixels.clear(); ShowWindow(window, SW_HIDE); return 0;
+        host->monitorEnabled = false; host->clearMonitor(); ShowWindow(window, SW_HIDE); return 0;
     case WM_LBUTTONDOWN:
     {
         RECT client{}; GetClientRect(window, &client);
@@ -1050,10 +1093,13 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         }
         return 0;
     }
+    case WM_ERASEBKGND: return 1;
     case WM_PAINT:
     {
-        PAINTSTRUCT paint{}; const HDC dc = BeginPaint(window, &paint);
+        PAINTSTRUCT paint{}; const HDC destination = BeginPaint(window, &paint);
         RECT client{}; GetClientRect(window, &client);
+        PaintBuffer buffer(destination, static_cast<int>(client.right), static_cast<int>(client.bottom));
+        const HDC dc = buffer.dc();
         FillRect(dc, &client, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
         const int width = client.right, height = (std::max)(0, static_cast<int>(client.bottom) - host->scaled(28));
         if (!host->monitorPixels.empty())
@@ -1072,7 +1118,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         FillRect(dc, &footer, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
         SetTextColor(dc, GetSysColor(host->monitorEnabled ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
         SetBkMode(dc, TRANSPARENT); DrawTextW(dc, L"Switch to this character", -1, &footer, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        EndPaint(window, &paint); return 0;
+        buffer.present(); EndPaint(window, &paint); return 0;
     }
     case WM_SIZE: InvalidateRect(window, nullptr, FALSE); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
