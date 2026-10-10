@@ -1065,7 +1065,7 @@ struct Host
         if (replacement)
         {
             EnumChildWindows(window, [](HWND child, LPARAM data) -> BOOL
-            { SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(data), TRUE); return TRUE; }, reinterpret_cast<LPARAM>(replacement));
+            { fs_host_ui::setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE; }, reinterpret_cast<LPARAM>(replacement));
             if (font) DeleteObject(font);
             font = replacement;
         }
@@ -2455,7 +2455,7 @@ struct Host
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         if (!next) return;
         EnumChildWindows(panel, [](HWND child, LPARAM data) -> BOOL
-        { SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(data), TRUE); return TRUE; }, reinterpret_cast<LPARAM>(next));
+        { fs_host_ui::setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE; }, reinterpret_cast<LPARAM>(next));
         if (previous) DeleteObject(previous);
         previous = next;
     }

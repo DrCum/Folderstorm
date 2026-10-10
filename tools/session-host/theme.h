@@ -7,6 +7,15 @@
 #include <algorithm>
 namespace fs_host_ui
 {
+inline void setNativeFont(HWND child,HFONT font)
+{
+    SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
+    wchar_t klass[32]{};GetClassNameW(child,klass,32);
+    if(_wcsicmp(klass,L"COMBOBOX") || !(GetWindowLongPtrW(child,GWL_STYLE)&CBS_OWNERDRAWFIXED))return;
+    const HDC dc=GetDC(child);if(!dc)return;const auto previous=SelectObject(dc,font);TEXTMETRICW metrics{};
+    if(GetTextMetricsW(dc,&metrics)){const int height=static_cast<int>(metrics.tmHeight)+6;SendMessageW(child,CB_SETITEMHEIGHT,0,height);SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),height);}
+    if(previous)SelectObject(dc,previous);ReleaseDC(child,dc);
+}
 class Theme
 {
 public:
