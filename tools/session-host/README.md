@@ -106,3 +106,8 @@ Host selectors keep their choices stable while open; ordinary status polling no 
 ## Restart a character
 
 Choose its name, then **Session → Restart character**. Confirm the ordinary native close if requested. The host waits up to one minute for the old process/profile to release, then opens fresh native login in that slot; the other character stays connected. Native Cancel or **Cancel pending restart** stops relaunch. The latter does not cancel a native logout already accepted. For an already detached or lost-control viewer, close its ordinary window and use + after exit. Queued messages/actions are not replayed at the new login. Requires matching protocol 9 binaries; native recovery acceptance is pending.
+
+
+## Monitor presentation
+
+The monitor retains its last complete valid image between frames and presents each paint through a bounded back buffer. It no longer clears/redraws unchanged images at the host's 10 Hz polling rate. Source/restriction invalidation still clears the image immediately. Compare 1/5 FPS and Warm/Economy on Windows to verify the reported flicker is resolved; capture-path flicker is not ruled out by source checks.
