@@ -41,6 +41,8 @@
 #include "rlvhandler.h"
 #include "llappviewer.h"
 #include "llfocusmgr.h"
+#include "lluictrl.h"
+#include <imm.h>
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "llstartup.h"
@@ -95,7 +97,7 @@ struct Worker
     bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
-    bool permitVoice = false, muteBackground = true, chatBlocked = false;
+    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false;
     EventBuffer events;
     std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -590,6 +592,10 @@ struct Worker
         case Kind::MarkRead:
         case Kind::Conversations:
         case Kind::Typing: chatCommand(request); break;
+        case Kind::ShortcutPolicy:
+            if (!ready() || request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            { reply(request,"Shortcut policy is invalid or its account changed."); break; }
+            shortcuts = request.unread != 0; reply(request); break;
         case Kind::AudioPolicy:
             if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
@@ -759,7 +765,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
-        value.events.resetSession(); value.attention.clear();
+        value.events.resetSession(); value.attention.clear(); value.shortcuts = false;
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
@@ -972,6 +978,22 @@ bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
 }
+bool FSSessionWorker::requestCharacterSwitch(unsigned int command)
+{
+    if (!managed() || !worker->ready() || !worker->shortcuts || !worker->inputGranted || worker->mode != Mode::Active ||
+        worker->promoting || worker->demoting || !worker->sharingAllowed() || command > 6 || !gFocusMgr.getAppHasFocus() ||
+        gFocusMgr.focusLocked() || LLFloaterReg::instanceVisible("preferences")) return false;
+    auto* focus = dynamic_cast<LLUICtrl*>(gFocusMgr.getKeyboardFocus());
+    if (focus && focus->acceptsTextInput()) return false;
+    DWORD foreground = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
+    if (foreground != GetCurrentProcessId()) return false;
+    const HIMC context = ImmGetContext(worker->window);
+    const bool composing = context && ImmGetCompositionStringW(context,GCS_COMPSTR,nullptr,0) > 0;
+    if (context) ImmReleaseContext(worker->window,context);
+    if (composing) return false;
+    Message event; event.eventType = EventType::SwitchIntent; event.unread = command; event.eventAt = GetTickCount64();
+    worker->events.push(event); return true;
+}
 void FSSessionWorker::nearbyMessage(const LLChat& chat)
 {
     if (!managed() || !worker->ready() || !worker->sharingAllowed() || chat.mMuted ||
@@ -1065,6 +1087,7 @@ void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }
+bool FSSessionWorker::requestCharacterSwitch(unsigned int) { return false; }
 void FSSessionWorker::nearbyMessage(const LLChat&) {}
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
 void FSSessionWorker::keyReleased(unsigned int) {}

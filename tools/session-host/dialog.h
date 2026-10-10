@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <cwchar>
 namespace fs_host_ui
 {
 enum class FieldType { Text, Number, Choice, Check, Color };

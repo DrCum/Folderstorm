@@ -59,7 +59,8 @@ struct ShortcutChord
 {
     unsigned int key = 0, modifiers = 0; // Win32 virtual key; 1 Alt, 2 Ctrl, 4 Shift.
     bool operator==(const ShortcutChord& other) const { return key == other.key && modifiers == other.modifiers; }
-    bool valid() const { return key <= 255 && modifiers <= 7 && (key == 0 || (modifiers & 3) != 0); }
+    bool valid() const { return key == 0 ? modifiers <= 7 : ((key >= 49 && key <= 53) || key == 37 || key == 39 || (key >= 112 && key <= 123)) &&
+        (modifiers == 3 || modifiers == 5 || modifiers == 6 || modifiers == 7); }
 };
 // Strings are length-prefixed UTF-8. No credentials, conversation text or drafts.
 class PresentationStore

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<contents>
+ <rows name="character_1" value="character_1"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 1"/></rows>
+ <rows name="character_2" value="character_2"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 2"/></rows>
+ <rows name="character_3" value="character_3"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 3"/></rows>
+ <rows name="character_4" value="character_4"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 4"/></rows>
+ <rows name="character_5" value="character_5"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Switch to character 5"/></rows>
+ <rows name="character_next" value="character_next"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Next ready character"/></rows>
+ <rows name="character_back" value="character_back"><columns column="lst_action" name="lst_action" font="SansSerif" halign="left" value="Previous ready character"/></rows>
+</contents>

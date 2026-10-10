@@ -21,6 +21,8 @@
 #include <mmsystem.h>
 #include <cmath>
 #include "fssessionalerts.h"
+#include "fssessionshortcuts.h"
+#include <imm.h>
 #include "dialog.h"
 #include "fssessionpresentation.h"
 #include "fssessionusability.h"
@@ -228,6 +230,7 @@ struct Slot
     ULONGLONG workspaceAt = 0;
     bool hasPendingSend = false, hasPendingTyping = false;
     std::uint32_t audioPolicy = 2, catalogIndex = 0;
+    int shortcutPolicy = -1;
     ULONGLONG eventsAt = 0, catalogAt = 0, typingAt = 0;
     Pipe pipe;
     Handle process;
@@ -285,7 +288,7 @@ struct Host
     std::vector<Message> attentionRows;
     std::vector<std::wstring> attentionLabels;
     std::wstring pinLabels[6];
-    bool updatingAttention = false;
+    bool updatingAttention = false, menuOpen = false;
 
     HWND chatAccent = nullptr;
     unsigned int handoffStyle = 0, handoffDuration = 1100, handoffHeight = 64;
@@ -329,6 +332,53 @@ struct Host
         }
         PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
     }
+    void dispatchShortcut(unsigned int command)
+    {
+        if (!presentation.shortcuts || busy()) return; // Drop during handoff; never replay a queued key.
+        const int target = characterShortcutTarget(command,active,[this](int i)
+        { return validSlot(i) && slots[i] && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state == State::Ready; });
+        if (target < 0) { message(L"That character shortcut has no ready target."); return; }
+        switchTo(target);
+    }
+    bool hostShortcut(const MSG& event)
+    {
+        if (!presentation.shortcuts || menuOpen || (event.message != WM_KEYDOWN && event.message != WM_SYSKEYDOWN) || (event.lParam & (1LL<<30))) return false;
+        const HWND focus = GetFocus(); if (!focus) return false;
+        const HWND root = GetAncestor(focus,GA_ROOT);
+        if (root != window && root != chatWindow && root != controlsWindow && root != attentionWindow) return false;
+        wchar_t klass[32]{}; GetClassNameW(focus,klass,32);
+        if (_wcsicmp(klass,L"EDIT") == 0 || (_wcsicmp(klass,L"COMBOBOX") == 0 && SendMessageW(focus,CB_GETDROPPEDSTATE,0,0))) return false;
+        const HIMC context = ImmGetContext(focus);
+        const bool composing = context && ImmGetCompositionStringW(context,GCS_COMPSTR,nullptr,0) > 0;
+        if (context) ImmReleaseContext(focus,context); if (composing) return false;
+        const unsigned int modifiers = ((GetKeyState(VK_MENU)&0x8000) ? 1u : 0u) | ((GetKeyState(VK_CONTROL)&0x8000) ? 2u : 0u) | ((GetKeyState(VK_SHIFT)&0x8000) ? 4u : 0u);
+        for (std::size_t i = 0; i < presentation.bindings.size(); ++i) if (presentation.bindings[i].key == event.wParam && presentation.bindings[i].modifiers == modifiers)
+        { dispatchShortcut(static_cast<unsigned int>(i)); return true; }
+        return false;
+    }
+    void editShortcuts()
+    {
+        using namespace fs_host_ui;
+        const unsigned int modifiers[] = {5,6,3,7};
+        const std::vector<unsigned int> keys{0,49,50,51,52,53,39,37,112,113,114,115,116,117,118,119,120,121,122,123};
+        const std::vector<std::wstring> labels{L"Disabled",L"1",L"2",L"3",L"4",L"5",L"Right",L"Left",L"F1",L"F2",L"F3",L"F4",L"F5",L"F6",L"F7",L"F8",L"F9",L"F10",L"F11",L"F12"};
+        unsigned int modifier = 0; for (unsigned int i = 0; i < 4; ++i) if (presentation.bindings[0].modifiers == modifiers[i]) modifier = i;
+        std::vector<Field> fields{{L"Enable character shortcuts",presentation.shortcuts ? L"1" : L"0",FieldType::Check},
+            {L"Host modifier",std::to_wstring(modifier),FieldType::Choice,{L"Alt + Shift",L"Ctrl + Shift",L"Ctrl + Alt",L"Ctrl + Alt + Shift"}}};
+        for (unsigned int i = 0; i < 7; ++i)
+        {
+            const auto found = std::find(keys.begin(),keys.end(),presentation.bindings[i].key);
+            const auto selected = found == keys.end() ? 0 : static_cast<unsigned int>(found-keys.begin());
+            fields.push_back({i < 5 ? L"Host: character "+std::to_wstring(i+1) : i == 5 ? L"Host: next ready" : L"Host: previous ready",std::to_wstring(selected),FieldType::Choice,labels});
+        }
+        if (!edit(window,L"Host keys; viewer keys: Preferences → Controls",fields)) return;
+        auto draft = presentation; draft.shortcuts = number(fields[0]);
+        for (unsigned int i = 0; i < 7; ++i) draft.bindings[i] = {keys[number(fields[i+2])],modifiers[number(fields[1])]};
+        if (!draft.valid()) { message(L"Two character actions use the same host shortcut; choices were not applied."); return; }
+        presentation = std::move(draft);
+        message(L"Host shortcuts applied. Assign viewer Character actions through Preferences > Controls; typing is excluded. Save host choices to keep.");
+    }
+
     void editTransition()
     {
         using namespace fs_host_ui;
@@ -727,6 +777,7 @@ struct Host
             const auto policy = monitorPolicy(index);
             request.width = policy.width; request.height = policy.height; request.unread = policy.unread;
         }
+        if (kind == Kind::ShortcutPolicy) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; request.unread = presentation.shortcuts ? 1u : 0u; }
         if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
         if ((kind == Kind::ReviewChat || kind == Kind::ReviewAttention) && foregroundPid == GetCurrentProcessId()) AllowSetForegroundWindow(slot.pid);
@@ -779,6 +830,7 @@ struct Host
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (voice ? MF_CHECKED : 0), 204, L"Voice follows active character");
         AppendMenuW(menu, MF_STRING | (muteBackground ? MF_CHECKED : 0), 205, L"Mute background sound/media");
+        AppendMenuW(menu,MF_STRING | (presentation.shortcuts ? MF_CHECKED : 0),276,L"Character shortcuts… (viewer: Preferences > Controls)");
         AppendMenuW(menu,MF_STRING,275,L"Notification alert volume…");
         AppendMenuW(menu,MF_STRING,274,L"Attention inbox…");
         AppendMenuW(menu, MF_STRING, 206, L"Save host choices");
@@ -826,6 +878,7 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice == 276) editShortcuts();
         else if (choice == 275) editAlertVolume();
         else if (choice == 274) openAttention();
         else if (choice == 273) editAppearance(index);
@@ -1279,7 +1332,7 @@ struct Host
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
-            slot.previewWidth = slot.previewHeight = slot.previewRate = 0;
+            slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         slot.snapshot = response;
@@ -1311,7 +1364,11 @@ struct Host
         if (!(response.flags & Error) && (request.kind == Kind::Events || request.kind == Kind::Conversations))
         {
             const bool accepted = slot.chat.accept(response);
-            if (accepted) { attention.accept(response); alert(response,index); }
+            if (accepted)
+            {
+                attention.accept(response); alert(response,index);
+                if (validSwitchIntent(response,slot.snapshot,index,active,GetTickCount64(),presentation.shortcuts,busy())) dispatchShortcut(response.unread);
+            }
             if (request.kind == Kind::Events) slot.eventsAt = GetTickCount64();
             else if (response.eventType == EventType::None) { slot.catalogIndex = 0; slot.catalogAt = GetTickCount64(); }
             else ++slot.catalogIndex;
@@ -1322,6 +1379,7 @@ struct Host
                 refreshChat(catalogChanged);
             }
         }
+        if (request.kind == Kind::ShortcutPolicy && !(response.flags & Error)) slot.shortcutPolicy = static_cast<int>(request.unread);
         if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
         if (request.kind == Kind::MonitorPolicy && !(response.flags & Error))
         { slot.previewWidth = request.width; slot.previewHeight = request.height; slot.previewRate = request.unread; }
@@ -1545,6 +1603,8 @@ struct Host
                     send(index, Kind::SetMode, standby[index]);
                 else if (slot.snapshot.state == State::Ready && slot.audioPolicy != ((voice ? 1u : 0u) | (muteBackground ? 2u : 0u)))
                     send(index, Kind::AudioPolicy);
+                else if (slot.snapshot.state == State::Ready && slot.shortcutPolicy != static_cast<int>(presentation.shortcuts))
+                    send(index,Kind::ShortcutPolicy);
                 else if (slot.hasPendingReview && index == active && !busy())
                 {
                     const auto action = slot.pendingReview; slot.hasPendingReview = false;
@@ -2011,7 +2071,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if (controlsDetached) host->setPanelDetached(false, true, false);
         SetTimer(window, Timer, 100, nullptr); return 0;
     case WM_TIMER: host->tick(); return 0;
-    case WM_ENTERMENULOOP:
+    case WM_EXITMENULOOP: host->menuOpen = false; return 0;
+    case WM_ENTERMENULOOP: host->menuOpen = true; host->focusRequested = false; RemovePropW(window,L"FolderstormViewportFocusIntent"); return 0;
     case WM_LBUTTONDOWN:
     case WM_PARENTNOTIFY:
         host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent");
@@ -2219,6 +2280,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
+        if (state.hostShortcut(message)) continue;
         if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
         { state.skipTransition(); continue; }
         const std::array<HWND, 4> panels{window, state.chatWindow, state.controlsWindow, state.attentionWindow};

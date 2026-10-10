@@ -31,6 +31,7 @@ public:
     static bool keyAllowed(unsigned int key);
     static void keyReleased(unsigned int key);
     static bool textAllowed();
+    static bool requestCharacterSwitch(unsigned int command); // Existing keybindings; source-bound intent only.
     static void focusHostedClient(); // Native window thread; foreground host only.
     static int backgroundYield(int normal);
     static void framePresented();
