@@ -642,6 +642,10 @@ CreateDirectory	"$SMPROGRAMS\$INSTSHORTCUT"
 SetOutPath "$INSTDIR"
 CreateShortCut	"$SMPROGRAMS\$INSTSHORTCUT\$INSTSHORTCUT.lnk" \
 				"$INSTDIR\$VIEWER_EXE" "$SHORTCUT_LANG_PARAM"
+IfFileExists "$INSTDIR\folderstorm-session-host.exe" 0 session_startmenu_done
+  CreateShortCut "$SMPROGRAMS\$INSTSHORTCUT\$INSTSHORTCUT - Character Sessions.lnk" \
+        "$INSTDIR\folderstorm-session-host.exe" "" "$INSTDIR\folderstorm-session-host.exe" 0
+session_startmenu_done:
 				# <FS:Ansariel> Remove VMP
 				#"$INSTDIR\$VIEWER_EXE" "$SHORTCUT_LANG_PARAM" "$INSTDIR\$VIEWER_EXE"
 
@@ -673,6 +677,10 @@ IfErrors 0 DESKTOP_SHORTCUT_DONE
   # "/marker" is set by updater, do not recreate desktop shortcut
   CreateShortCut "$DESKTOP\$INSTSHORTCUT.lnk" \
         "$INSTDIR\$VIEWER_EXE" "$SHORTCUT_LANG_PARAM"
+  IfFileExists "$INSTDIR\folderstorm-session-host.exe" 0 session_desktop_done
+    CreateShortCut "$DESKTOP\$INSTSHORTCUT - Character Sessions.lnk" \
+          "$INSTDIR\folderstorm-session-host.exe" "" "$INSTDIR\folderstorm-session-host.exe" 0
+session_desktop_done:
         # <FS:Ansariel> Remove VMP
         #"$INSTDIR\$VIEWER_EXE" "$SHORTCUT_LANG_PARAM" "$INSTDIR\$VIEWER_EXE"
 
@@ -821,6 +829,7 @@ Delete "$SMPROGRAMS\$INSTSHORTCUT\*.*"
 RMDir  "$SMPROGRAMS\$INSTSHORTCUT"
 
 Delete "$DESKTOP\$INSTSHORTCUT.lnk"
+Delete "$DESKTOP\$INSTSHORTCUT - Character Sessions.lnk"
 Delete "$INSTDIR\$INSTSHORTCUT.lnk"
 Delete "$INSTDIR\Uninstall $INSTSHORTCUT.lnk"
 

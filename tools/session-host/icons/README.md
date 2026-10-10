@@ -1,0 +1,1 @@
+The winged Folderstorm mascot was supplied by the repository owner for the character-session host. `folderstorm-session-host.png` is the original PNG, unchanged. The ICO contains 16, 24, 32, 48, 64, 128 and 256 pixel images resized directly from that PNG, preserving its transparency and full canvas.

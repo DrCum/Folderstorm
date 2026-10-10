@@ -24,6 +24,7 @@
 #include "fssessionshortcuts.h"
 #include <imm.h>
 #include "dialog.h"
+#include "resource.h"
 #include "fssessionpresentation.h"
 #include "fssessionusability.h"
 #include "fssessionpipe.h"
@@ -2537,17 +2538,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     }
     state.pins.restore(state.presentation.pins);
     host = &state;
-    WNDCLASSW klass{}; klass.lpfnWndProc = windowProc; klass.hInstance = instance;
+    const auto icon = static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_SESSION_HOST),IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED));
+    const auto smallIcon = static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_SESSION_HOST),IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED));
+    WNDCLASSEXW klass{}; klass.cbSize = sizeof(klass); klass.hIcon = icon; klass.hIconSm = smallIcon; klass.lpfnWndProc = windowProc; klass.hInstance = instance;
     klass.lpszClassName = L"FolderstormSessionPrototype"; klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     klass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-    if (!RegisterClassW(&klass)) return 1;
-    WNDCLASSW panelClass{}; panelClass.lpfnWndProc = panelProc; panelClass.hInstance = instance;
+    if (!RegisterClassExW(&klass)) return 1;
+    WNDCLASSEXW panelClass{}; panelClass.cbSize = sizeof(panelClass); panelClass.hIcon = icon; panelClass.hIconSm = smallIcon; panelClass.lpfnWndProc = panelProc; panelClass.hInstance = instance;
     panelClass.lpszClassName = L"FolderstormSessionPanel"; panelClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     panelClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-    if (!RegisterClassW(&panelClass)) return 1;
-    WNDCLASSW monitorClass{}; monitorClass.lpfnWndProc = monitorProc; monitorClass.hInstance = instance;
+    if (!RegisterClassExW(&panelClass)) return 1;
+    WNDCLASSEXW monitorClass{}; monitorClass.cbSize = sizeof(monitorClass); monitorClass.hIcon = icon; monitorClass.hIconSm = smallIcon; monitorClass.lpfnWndProc = monitorProc; monitorClass.hInstance = instance;
     monitorClass.lpszClassName = L"FolderstormSessionMonitor"; monitorClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    if (!RegisterClassW(&monitorClass)) return 1;
+    if (!RegisterClassExW(&monitorClass)) return 1;
     HWND window = CreateWindowExW(0, klass.lpszClassName, L"Folderstorm character sessions",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 980, 700, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;
