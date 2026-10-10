@@ -7,9 +7,11 @@ int main()
 {
     HostOptions options, decoded;
     assert(!options.voice && !options.hosted && options.muteBackground && !options.cinematic);
+    options.standby[MaxCharacters - 1] = Mode::Economy;
     options.standby[1] = Mode::Economy; options.voice = options.hosted = true; options.chat = false;
     assert(HostOptions::decode(options.encode(), decoded));
     assert(decoded.standby[1] == Mode::Economy && decoded.hosted && decoded.voice && !decoded.chat);
+    assert(decoded.standby[MaxCharacters - 1] == Mode::Economy);
     assert(decoded.previewSize == 0 && decoded.previewRate == 1);
     options.previewSize = 2; options.previewRate = 3; options.cinematic = true;
     assert(HostOptions::decode(options.encode(), decoded) && decoded.previewSize == 2 && decoded.previewRate == 3 && decoded.cinematic);
@@ -28,5 +30,7 @@ int main()
     assert(!HostOptions::decode(invalid, decoded) && decoded.encode() == before);
     assert(HostOptions::decode("FSH1\nbackground1=1\nbackground2=2\nvoice=0\nmute=1\nhost=0\nchat=1\n", decoded));
     assert(decoded.previewSize == 0 && decoded.previewRate == 1 && !decoded.cinematic && decoded.chrome == 0 && !decoded.chatDetached && !decoded.controlsDetached); // Prior saved choices stay compatible.
+    for (int i = 2; i < MaxCharacters; ++i) assert(decoded.standby[i] == Mode::Warm);
+    assert(!HostOptions::decode(options.encode() + "background9=1\n", decoded));
     std::cout << "Bounded host-choice parsing, defaults, duplicate/unknown refusal and transactional decoding passed.\n";
 }

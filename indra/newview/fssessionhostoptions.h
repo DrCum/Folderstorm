@@ -1,14 +1,14 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #ifndef FS_SESSION_HOST_OPTIONS_H
 #define FS_SESSION_HOST_OPTIONS_H
-#include "fssessionprotocol.h"
+#include "fssessionregistry.h"
 #include <sstream>
 #include <set>
 namespace fs_session
 {
 struct HostOptions
 {
-    Mode standby[2]{Mode::Warm, Mode::Warm};
+    std::array<Mode, MaxCharacters> standby = warmModes();
     bool chatDetached = false, controlsDetached = false;
     bool voice = false, muteBackground = true, hosted = false, chat = true, cinematic = false;
     unsigned int chrome = 0; // 0 normal, 1 condensed, 2 title-bar-only chrome.
@@ -16,8 +16,9 @@ struct HostOptions
     std::string encode() const
     {
         std::ostringstream out;
-        out << "FSH1\nbackground1=" << static_cast<unsigned int>(standby[0]) << "\nbackground2=" << static_cast<unsigned int>(standby[1])
-            << "\nvoice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat
+        out << "FSH1\n";
+        for (int i = 0; i < MaxCharacters; ++i) out << "background" << i + 1 << "=" << static_cast<unsigned int>(standby[i]) << '\n';
+        out << "voice=" << voice << "\nmute=" << muteBackground << "\nhost=" << hosted << "\nchat=" << chat
             << "\nchat_detached=" << chatDetached << "\ncontrols_detached=" << controlsDetached << "\nchrome=" << chrome << "\npreview_size=" << previewSize << "\npreview_rate=" << previewRate << "\ncinematic=" << cinematic << '\n';
         return out.str();
     }
@@ -31,10 +32,10 @@ struct HostOptions
             if (equal == std::string::npos || line.size() != equal + 2 || line.back() < '0' || line.back() > '3') return false;
             const auto key = line.substr(0, equal); const int value = line.back() - '0';
             if (!seen.insert(key).second) return false;
-            if (key == "background1" || key == "background2")
+            if (key.size() == 11 && key.compare(0, 10, "background") == 0 && key.back() >= '1' && key.back() <= '0' + MaxCharacters)
             {
                 if (value != 1 && value != 2) return false;
-                result.standby[key == "background1" ? 0 : 1] = static_cast<Mode>(value);
+                result.standby[static_cast<std::size_t>(key.back() - '1')] = static_cast<Mode>(value);
             }
             else if (key == "chrome") { if (value > 2) return false; result.chrome = static_cast<unsigned int>(value); }
             else if (key == "preview_size") { if (value > 2) return false; result.previewSize = static_cast<unsigned int>(value); }
