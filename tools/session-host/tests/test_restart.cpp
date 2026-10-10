@@ -28,5 +28,12 @@ int main()
     assert(restart.begin(source, 64000)); restart.cancel();
     assert(restart.poll(false, false, 64001) == Restart::Result::None);
     source.pid = 0; assert(!restart.begin(source, 65000));
+    source.pid = 123;
+    Restart deferred;
+    assert(deferred.begin(source, 1000));
+    assert(deferred.sent(91));
+    assert(deferred.poll(false, false, 2000, false) == Restart::Result::None);
+    assert(deferred.phase() == Restart::Phase::Waiting);
+    assert(deferred.poll(false, false, 3000, true) == Restart::Result::Launch);
     std::cout << "Source-bound restart, delayed exit, cancellation, timeout and one-shot launch passed.\n";
 }
