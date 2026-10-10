@@ -2387,7 +2387,7 @@ if (WINDOWS)
   set_target_properties(folderstorm-session-host PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   if (MSVC)
-    target_compile_options(folderstorm-session-host PRIVATE /utf-8)
+    target_compile_options(folderstorm-session-host PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
   endif()
   add_dependencies(${VIEWER_BINARY_NAME} folderstorm-session-host)
 endif()
