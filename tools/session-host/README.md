@@ -111,3 +111,8 @@ Choose its name, then **Session → Restart character**. Confirm the ordinary na
 ## Monitor presentation
 
 The monitor retains its last complete valid image between frames and presents each paint through a bounded back buffer. It no longer clears/redraws unchanged images at the host's 10 Hz polling rate. Source/restriction invalidation still clears the image immediately. Compare 1/5 FPS and Warm/Economy on Windows to verify the reported flicker is resolved; capture-path flicker is not ruled out by source checks.
+
+
+## Compact host controls
+
+Choose **Session → Normal / Condensed / Collapsed**. Condensed uses a single slim control strip; full character details remain in Session. Collapsed removes host chrome and docked Chat from the world area. Right-click the title bar (or open its system menu) to restore controls or open Character sessions; leaving collapsed restores the prior docked Chat preference. Use Save host choices to persist the mode. Older settings default to normal. Native sizing/DPI/restore acceptance is pending.
