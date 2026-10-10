@@ -1069,6 +1069,9 @@ static bool character_4(EKeystate state) { return character_key(state,3); }
 static bool character_5(EKeystate state) { return character_key(state,4); }
 static bool character_next(EKeystate state) { return character_key(state,5); }
 static bool character_back(EKeystate state) { return character_key(state,6); }
+static bool session_restore(EKeystate state) { return character_key(state,7); }
+static bool attention_next(EKeystate state) { return character_key(state,8); }
+static bool attention_back(EKeystate state) { return character_key(state,9); }
 
 // In-world keybindings, like walking or camera
 #define REGISTER_KEYBOARD_ACTION(KEY, ACTION) LLREGISTER_STATIC(LLKeyboardActionRegistry, KEY, LLKeybindFunctionData(ACTION, false));
@@ -1081,6 +1084,9 @@ REGISTER_KEYBOARD_ACTION("character_4", character_4);
 REGISTER_KEYBOARD_ACTION("character_5", character_5);
 REGISTER_KEYBOARD_ACTION("character_next", character_next);
 REGISTER_KEYBOARD_ACTION("character_back", character_back);
+REGISTER_KEYBOARD_ACTION("session_restore", session_restore);
+REGISTER_KEYBOARD_ACTION("attention_next", attention_next);
+REGISTER_KEYBOARD_ACTION("attention_back", attention_back);
 REGISTER_KEYBOARD_ACTION("workspace_direct", workspace_direct);
 REGISTER_KEYBOARD_ACTION("workspace_next", workspace_next);
 REGISTER_KEYBOARD_ACTION("workspace_back", workspace_back);

@@ -15,6 +15,12 @@ int main()
     assert(validSwitchIntent(event,current,0,0,1200,true,false));
     assert(!validSwitchIntent(event,current,0,0,1200,false,false) && !validSwitchIntent(event,current,0,0,1200,true,true));
     assert(!validSwitchIntent(event,current,1,0,1200,true,false) && !validSwitchIntent(event,current,0,0,4001,true,false));
+    auto shell=event;shell.unread=7;
+    assert(validShellIntent(shell,current,0,0,1200,true));
+    assert(!validSwitchIntent(shell,current,0,0,1200,true,false));
+    assert(!validShellIntent(shell,current,1,0,1200,true) && !validShellIntent(shell,current,0,0,1200,false));
+    shell.unread=10;assert(!validShellIntent(shell,current,0,0,1200,true));
+    shell.unread=8;shell.generation++;assert(!validShellIntent(shell,current,0,0,1200,true));
     ++event.generation; assert(!validSwitchIntent(event,current,0,0,1200,true,false));
     std::cout << "Ready-only shortcut cycling and fresh source/owner-bound intent guards passed.\n";
 }

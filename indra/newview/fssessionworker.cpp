@@ -105,7 +105,7 @@ struct Worker
     bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
-    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false;
+    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false, shellShortcuts = false;
     EventBuffer events;
     std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -605,9 +605,9 @@ struct Worker
         case Kind::Conversations:
         case Kind::Typing: chatCommand(request); break;
         case Kind::ShortcutPolicy:
-            if (!ready() || request.unread > 1 || request.account != gAgentID.asString() || request.grid != loginGrid)
+            if (!ready() || request.unread > 3 || request.account != gAgentID.asString() || request.grid != loginGrid)
             { reply(request,"Shortcut policy is invalid or its account changed."); break; }
-            shortcuts = request.unread != 0; reply(request); break;
+            shortcuts = (request.unread&1)!=0; shellShortcuts = (request.unread&2)!=0; reply(request); break;
         case Kind::AudioPolicy:
             if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
@@ -679,7 +679,7 @@ struct Worker
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
-            if (request.unread > 1 || request.account != status(request).account || request.grid != loginGrid)
+            if (request.unread > 3 || request.account != status(request).account || request.grid != loginGrid)
             { reply(request, "Close target changed; the new session was not closed."); break; }
             if (request.unread == 1)
             {
@@ -912,7 +912,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
-        value.events.resetSession(); value.attention.clear(); value.shortcuts = false;
+        value.events.resetSession(); value.attention.clear(); value.shortcuts = value.shellShortcuts = false;
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
@@ -1127,8 +1127,8 @@ bool FSSessionWorker::backgroundAudioMuted()
 }
 bool FSSessionWorker::requestCharacterSwitch(unsigned int command)
 {
-    if (!managed() || !worker->ready() || !worker->shortcuts || !worker->inputGranted || worker->mode != Mode::Active ||
-        worker->promoting || worker->demoting || !worker->sharingAllowed() || command > 6 || !gFocusMgr.getAppHasFocus() ||
+    if (!managed() || !worker->ready() || (command<=6 ? !worker->shortcuts : !worker->shellShortcuts) || !worker->inputGranted || worker->mode != Mode::Active ||
+        worker->promoting || worker->demoting || !worker->sharingAllowed() || command > 9 || !gFocusMgr.getAppHasFocus() ||
         gFocusMgr.focusLocked() || LLFloaterReg::instanceVisible("preferences")) return false;
     auto* focus = dynamic_cast<LLUICtrl*>(gFocusMgr.getKeyboardFocus());
     if (focus && focus->acceptsTextInput()) return false;
