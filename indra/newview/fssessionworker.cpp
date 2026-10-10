@@ -79,9 +79,9 @@ struct Worker
     std::string loginGrid, loginName;
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
-    bool economyTrimmed = false;
+    bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
-    std::uintptr_t focusLease = 0;
+    std::uintptr_t focusLease = 0, restartTag = 0;
     bool permitVoice = false, muteBackground = true, chatBlocked = false;
     EventBuffer events;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -429,7 +429,7 @@ struct Worker
         reply.state = gDisconnected ? State::Disconnected : ready() ? State::Ready :
             startup >= STATE_LOGIN_AUTH_INIT ? State::Connecting : State::Login;
         reply.grid = loginGrid; reply.name = loginName;
-        if (ready() && !gAgentID.isNull()) reply.account = gAgentID.asString();
+        if ((ready() || gDisconnected) && !gAgentID.isNull()) reply.account = gAgentID.asString();
         if (loginRequested && gate == FSSessionWorker::LoginGate::Wait) reply.flags |= LoginPending;
         if (embedded()) reply.flags |= Embedded;
         if (promoting || demoting) reply.flags |= Promoting;
@@ -570,6 +570,13 @@ struct Worker
         case Kind::Detach:
             reply(request, detach() ? "" : "Unable to detach this window. Close the viewer before its controller."); break;
         case Kind::Quit:
+            if (request.unread > 1 || request.account != status(request).account || request.grid != loginGrid)
+            { reply(request, "Close target changed; the new session was not closed."); break; }
+            if (request.unread == 1)
+            {
+                restartTag = static_cast<std::uintptr_t>(request.sequence); if (!restartTag) restartTag = 1;
+                RemovePropW(window, L"FolderstormRestartCancelled");
+            }
             if (!detach()) { reply(request, "Unable to detach this window before logout."); break; }
             reply(request); LLAppViewer::instance()->userQuit(); break;
         default: detach(); pipe.close(); break;
@@ -665,15 +672,16 @@ void FSSessionWorker::tick()
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
         value.transition.cancel(); value.transitionNotice.clear(); value.demoting = false;
-        value.promoting = false; value.mode = Mode::Warm; value.readyApplied = false;
+        value.promoting = false; value.mode = Mode::Warm; value.readyApplied = false; value.recoveryShown = false;
         if (wasPromoting) value.reply(value.pendingPromotion, "Session changed before the character was ready.");
         else if (wasDemoting) value.reply(value.pendingDemotion, "Session changed before switching completed.");
     }
-    if (gDisconnected && value.readyApplied && value.mode == Mode::Active)
+    if (gDisconnected && !value.recoveryShown)
     {
+        value.recoveryShown = true;
         value.transition.cancel();
         value.releaseInput(); value.unembed(); value.mode = Mode::Warm;
-        if (value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
+        if (value.window) { EnableWindow(value.window, TRUE); ShowWindow(value.window, SW_SHOWNOACTIVATE); }
         if (value.promoting)
         {
             value.promoting = false;
@@ -852,7 +860,8 @@ void FSSessionWorker::endCameraFrame()
 }
 bool FSSessionWorker::inputAllowed()
 {
-    return !managed() || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting && !worker->demoting);
+    // Disconnected native close/recovery UI has no live simulator input owner.
+    return !managed() || gDisconnected || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting && !worker->demoting);
 }
 bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed(); }
 bool FSSessionWorker::backgroundAudioMuted()
@@ -918,6 +927,11 @@ FSSessionWorker::LoginGate FSSessionWorker::loginGate(const std::string& grid, c
     }
     return worker->gate;
 }
+void FSSessionWorker::quitCancelled()
+{
+    if (worker && worker->window && worker->restartTag)
+        SetPropW(worker->window, L"FolderstormRestartCancelled", reinterpret_cast<HANDLE>(worker->restartTag));
+}
 void FSSessionWorker::shutdown()
 {
     if (worker)
@@ -954,5 +968,6 @@ void FSSessionWorker::focusHostedClient() {}
 int FSSessionWorker::backgroundYield(int normal) { return normal; }
 void FSSessionWorker::framePresented() {}
 FSSessionWorker::LoginGate FSSessionWorker::loginGate(const std::string&, const std::string&) { return LoginGate::Allow; }
+void FSSessionWorker::quitCancelled() {}
 void FSSessionWorker::shutdown() {}
 #endif

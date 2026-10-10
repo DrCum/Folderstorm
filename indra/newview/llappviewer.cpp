@@ -5169,6 +5169,7 @@ static bool finish_quit(const LLSD& notification, const LLSD& response)
     {
         LLAppViewer::instance()->requestQuit();
     }
+    else FSSessionWorker::quitCancelled();
     return false;
 }
 static LLNotificationFunctorRegistration finish_quit_reg("ConfirmQuit", finish_quit);
@@ -5212,6 +5213,7 @@ void LLAppViewer::earlyExitNoNotify()
 
 void LLAppViewer::abortQuit()
 {
+    FSSessionWorker::quitCancelled();
     LL_INFOS() << "abortQuit()" << LL_ENDL;
     mQuitRequested = false;
     mClosingFloaters = false;

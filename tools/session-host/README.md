@@ -101,3 +101,8 @@ Native compose, shared compose and typing use the same live FSData support-conta
 ## Hosted control follow-up
 
 Host selectors keep their choices stable while open; ordinary status polling no longer reconstructs the lists. Clicking host controls does not transfer keyboard focus into the world. Click the world for normal native input. The hosted surface stays visible behind other apps and hides when the host is minimized. **Separate windows** reversibly disables hosting and preserves management/background policies; **Session → Stop managing** explicitly detaches the workers. Close Preferences/modal interactions before changing hosting. Native Windows z-order, dropdown/IME, hosting reversal and hosted animation checks remain pending.
+
+
+## Restart a character
+
+Choose its name, then **Session → Restart character**. Confirm the ordinary native close if requested. The host waits up to one minute for the old process/profile to release, then opens fresh native login in that slot; the other character stays connected. Native Cancel or **Cancel pending restart** stops relaunch. The latter does not cancel a native logout already accepted. For an already detached or lost-control viewer, close its ordinary window and use + after exit. Queued messages/actions are not replayed at the new login. Requires matching protocol 9 binaries; native recovery acceptance is pending.

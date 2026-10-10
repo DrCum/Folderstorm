@@ -21,6 +21,7 @@
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
 #include "fssessionframepipe.h"
+#include "fssessionrestart.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -169,6 +170,7 @@ public:
 };
 struct Slot
 {
+    Restart restart;
     FrameLane preview;
     std::uint32_t previewWidth = 0, previewHeight = 0, previewRate = 0;
     ChatView chat;
@@ -343,6 +345,8 @@ struct Host
         const std::wstring name = slot && !slot->snapshot.name.empty() ? wide(slot->snapshot.name) : index == 0 ? L"Character 1" : L"Character 2";
         AppendMenuW(menu, MF_STRING | (index == active && !busy() ? 0 : MF_GRAYED), 201, (L"Manage workspaces: " + name).c_str());
         AppendMenuW(menu, MF_STRING | (slot && slot->pipe.alive() && !slot->detached && !busy() ? 0 : MF_GRAYED), 202, (L"Close character: " + name + L"…").c_str());
+        AppendMenuW(menu, MF_STRING | (!busy() ? 0 : MF_GRAYED), 240, (L"Restart character: " + name + L"…").c_str());
+        AppendMenuW(menu, MF_STRING | (slot && slot->restart.phase() != Restart::Phase::Idle ? 0 : MF_GRAYED), 241, L"Cancel pending restart (does not cancel native logout)");
         AppendMenuW(menu, MF_STRING, 203, L"Open selected profile folder");
         AppendMenuW(menu, MF_STRING, 209, L"Stop managing; leave all characters in separate windows");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -374,6 +378,8 @@ struct Host
             slot->pendingAction = action; slot->hasPendingAction = true;
             message(choice == 201 ? L"Opening this character's workspace controls…" : L"Returning this character to its native window for the normal logout confirmation…");
         }
+        else if (choice == 240) restartCharacter(index);
+        else if (choice == 241 && slots[index]) { slots[index]->restart.cancel(); message(L"Restart cancelled; no new viewer will launch."); }
         else if (choice == 203)
         {
             const auto path = profiles / (index == 0 ? L"Character1" : L"Character2");
@@ -551,6 +557,19 @@ struct Host
         slot.pendingSend = std::move(request); slot.hasPendingSend = true;
         message(L"Sending through the selected character's native chat…"); refreshChat();
     }
+    void restartCharacter(int index)
+    {
+        if (busy()) { message(L"Finish the current switch or close action before restarting."); return; }
+        if (!slots[index] || !slots[index]->running()) { launch(index); return; }
+        auto& slot = *slots[index];
+        if (slot.detached || !slot.pipe.alive())
+        { message(L"Close this character's separate viewer normally, then use + to open a fresh login. Other characters remain connected."); return; }
+        if (!slot.restart.begin(slot.snapshot, GetTickCount64()))
+        { message(L"Character is changing login or already restarting; finish its native window first."); return; }
+        slot.hasPendingSend = slot.hasPendingTyping = slot.hasPendingAction = false;
+        if (monitorIndex == index) { monitorEnabled = false; monitorPixels.clear(); }
+        message(L"Restarting " + wide(slot.snapshot.name) + L": confirm native close. Waiting for process/profile release before a fresh login; queued messages are not replayed.");
+    }
     void launch(int index)
     {
         if (slots[index] && slots[index]->running()) { message(L"This slot still has a viewer open. Close that viewer before relaunching."); return; }
@@ -595,7 +614,12 @@ struct Host
         slots[index] = std::move(slot);
         message(L"Log in a different character in each viewer. The first ready character becomes active.");
     }
-    bool busy() const { return handoff.step() != Handoff::Step::Idle || detaching; }
+    bool busy() const
+    {
+        if (handoff.step() != Handoff::Step::Idle || detaching) return true;
+        for (const auto& slot : slots) if (slot && slot->restart.phase() != Restart::Phase::Idle && !slot->detached && slot->running()) return true;
+        return false;
+    }
     bool waitingForLostOwner(int target) const
     {
         for (int index = 0; index < 2; ++index) if (index != target && slots[index] && !slots[index]->pipe.alive())
@@ -654,6 +678,8 @@ struct Host
         slot.chat.bind(response);
         if (changedSession)
         {
+            if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
+            { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             slot.previewWidth = slot.previewHeight = slot.previewRate = 0;
@@ -720,7 +746,8 @@ struct Host
         }
         if (response.flags & Error)
         {
-            if (request.kind == Kind::Detach || request.kind == Kind::Quit) { detaching = closing = logoutOnClose = false; }
+            if (request.kind == Kind::Detach || request.kind == Kind::Quit)
+            { detaching = closing = logoutOnClose = false; slot.restart.cancel(); }
             if (request.kind == Kind::Embed || request.kind == Kind::Unembed)
             {
                 embedding = (response.flags & Embedded) != 0;
@@ -795,6 +822,13 @@ struct Host
         {
             if (!slots[index]) continue;
             auto& slot = *slots[index];
+            const auto tag = static_cast<std::uintptr_t>(slot.restart.sequence());
+            const bool cancelHint = slot.restart.phase() == Restart::Phase::Waiting && slot.surface() &&
+                GetPropW(slot.surface(), L"FolderstormRestartCancelled") == reinterpret_cast<HANDLE>(tag ? tag : 1);
+            const auto restartResult = slot.restart.poll(slot.running(), cancelHint, GetTickCount64());
+            if (restartResult == Restart::Result::Launch) { launch(index); continue; }
+            if (restartResult == Restart::Result::Cancelled) message(L"Native close cancelled; restart stopped. The old viewer remains available.");
+            if (restartResult == Restart::Result::TimedOut) message(L"Restart stopped waiting. Finish closing the old viewer, then choose +; no forced termination or automatic retry.");
             Message response;
             if (slot.pipe.receive(response)) reply(index, response);
             if (slot.hasPendingSkip)
@@ -837,6 +871,16 @@ struct Host
                         else send(index, Kind::Quit, Mode::Warm, 0, &slot.closingAction);
                     }
                     else send(index, Kind::Detach);
+                }
+                else if (slot.restart.phase() == Restart::Phase::Queued)
+                {
+                    if (!slot.restart.owns(slot.snapshot))
+                    { slot.restart.cancel(); message(L"Character changed; restart cancelled."); }
+                    else
+                    {
+                        auto action = slot.restart.source(); action.kind = Kind::Quit; action.unread = 1;
+                        if (send(index, Kind::Quit, Mode::Warm, 0, &action)) slot.restart.sent(slot.request.sequence);
+                    }
                 }
                 else if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index)
                 {
@@ -912,7 +956,7 @@ struct Host
                 else if (GetTickCount64() - slot.pollAt >= 1000) send(index, Kind::Poll);
             }
             describe(index);
-            EnableWindow(launchButton[index], !slot.running() && !busy());
+            EnableWindow(launchButton[index], !slot.running() && !busy() && slot.restart.phase() == Restart::Phase::Idle);
             EnableWindow(switchButton[index], slot.running() && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && !busy());
         }
         refreshChat();
