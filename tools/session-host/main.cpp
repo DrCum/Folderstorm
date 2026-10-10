@@ -2354,6 +2354,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_DRAWITEM: if (host->drawIdentity(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam))) return TRUE; break;
     case WM_CTLCOLORSTATIC: if (const auto result = host->identityColor(message,wparam,lparam)) return result; break;
     case WM_CREATE:
+    {
         host->window = window;
         host->launchButton = control(window, L"BUTTON", L"+ Character", BS_PUSHBUTTON | WS_TABSTOP, 190, 10, 95, 28, LaunchNext);
         host->characterControl = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP, 10, 10, 170, 200, ActiveCharacter);
@@ -2412,6 +2413,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if (controlsDetached) host->setPanelDetached(false, true, false);
         if (!host->lastNotice.empty()) host->message(host->lastNotice);
         SetTimer(window, Timer, 100, nullptr); return 0;
+    }
     case WM_TIMER: host->tick(); return 0;
     case WM_EXITMENULOOP: host->menuOpen = false; return 0;
     case WM_ENTERMENULOOP: host->menuOpen = true; host->focusRequested = false; RemovePropW(window,L"FolderstormViewportFocusIntent"); return 0;
