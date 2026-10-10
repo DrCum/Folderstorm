@@ -2517,7 +2517,7 @@ struct Host
             const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
             panelFont(panel, windowDpi ? windowDpi(panel) : dpi);
         }
-        else for (HWND child : children) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        else for (HWND child : children) fs_host_ui::setNativeFont(child,font);
         if (newPanel) { installPanelMenu(panel);CreateWindowExW(0,L"BUTTON",L"Pin",WS_CHILD|WS_VISIBLE|WS_TABSTOP,0,0,50,24,panel,reinterpret_cast<HMENU>(static_cast<INT_PTR>(PanelPin)),GetModuleHandleW(nullptr),nullptr); restorePlacement(panel,chat ? 1u : 2u,chat ? chatDpi : controlsDpi); }
         theme.window(target);
         layout();

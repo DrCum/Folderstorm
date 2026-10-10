@@ -1,6 +1,6 @@
 # Folderstorm host experience: recovery, presentation and session tools
 
-Status: PLANNED, NOT IMPLEMENTED. Prepared 2026-10-10 for the next implementation sequence. This document is the complete scope, including choices made so implementation can proceed while the user is unavailable. It does not claim native Windows acceptance or change runtime code.
+Status: SOURCE IMPLEMENTED; NATIVE ACCEPTANCE PENDING. Completed 2026-10-10 on `feat/session-host-design`, stacked on the published recovery checkpoint [PR #28](https://github.com/DrCum/Folderstorm/pull/28), which depends on unmerged PR #27. The latest user request authorizes implementation and a Sol 6.1 Max cumulative review. No native Windows acceptance is claimed. See [completion and command map](session-host-experience-completion.md).
 
 Baseline inspected: PR #27, `feat/multi-character-usability`, `bb9ec4a7e4d21e3e9679f1c850643fe9e1fc4714`, based on PR #26. Preserve published history and local build patches; recheck remote heads/merge state before starting implementation. Use an isolated follow-up from the latest applicable cumulative head. Do not assume main contains this stack. Related documents: [usability](multi-character-usability.md), [hosting](multi-character-host-refinements.md), [validation](multi-character-validation.md).
 
@@ -10,7 +10,7 @@ Make the host a quiet, cohesive Folderstorm interface that remains recoverable i
 
 Implement continuously in the checkpoint order below when coding begins. Do not stop for cosmetic choices or routine questions: use the defaults in this plan, expose the useful alternatives, and record deviations. Publish separate stacked draft PRs at useful native-testing checkpoints and attach them. Do not merge. Native acceptance can remain pending while independent work proceeds. Existing user edits, private profiles, archived builds and published heads must survive.
 
-The user permits compilation for visual inspection if the environment already supports it. No native Windows/Wine preview toolchain was found in the initial environment inspection; do not require the user to install one or treat a Linux mockup as native evidence. Use inexpensive affected-path checks, no packaging/GitHub builds or unrelated Go tests. At completion request an explicitly authorized **gpt-6-astra, high** review of the cumulative work, fix actionable findings, and report the exact reviewed head and native gaps. This is a specific exception to the earlier no-subagent preference; do not add other implementation agents.
+The user permits compilation for visual inspection if the environment already supports it. No native Windows/Wine preview toolchain was found in the initial environment inspection; do not require the user to install one or treat a Linux mockup as native evidence. Use inexpensive affected-path checks, no packaging/GitHub builds or unrelated Go tests. At completion request an explicitly authorized **gpt-6.1-sol, max** review of the cumulative work (the latest user instruction supersedes the earlier implementation-review model), fix actionable findings, and report the exact reviewed head and native gaps. This is a specific exception to the earlier no-subagent preference; do not add other implementation agents.
 
 ## Evidence and boundaries
 
@@ -146,7 +146,7 @@ Next selects an eligible conversation in shared Chat or the corresponding inbox 
 
 Complete command discoverability and empty states: logged out, all five slots full, no monitors, stale monitor, no attention, malformed settings and pending restart. Ensure every action from the old Session popup is retained in the new map or deliberately replaced by an equivalent visible flow; produce an old→new command coverage table in the PR. Verify that the condensed/minimal UI has no unrecoverable path and no identity ambiguity.
 
-Focused checks: deterministic traversal/wrap/removal, identical conversation IDs on different accounts, repeated dismissal/new message, category/account filters, restricted items and stale generation, chat-draft preservation. Run only helpers/controllers affected by the changes. Finish with a read-only Astra High cumulative review, then address confirmed findings and rerun affected checks. Record pending native tests, not fictitious visual acceptance.
+Focused checks: deterministic traversal/wrap/removal, identical conversation IDs on different accounts, repeated dismissal/new message, category/account filters, restricted items and stale generation, chat-draft preservation. Run only helpers/controllers affected by the changes. Finish with a read-only Sol 6.1 Max cumulative review, then address confirmed findings and rerun affected checks. Record pending native tests, not fictitious visual acceptance.
 
 ## Persistence and migration design across checkpoints
 
@@ -156,20 +156,20 @@ Expose which settings are runtime-only versus saved. Reuse one settings draft/co
 
 ## Completion checklist and handoff
 
-- [ ] Recoverable collapsed UI, persistent reveal, tray/system-menu backup and display-change recovery.
-- [ ] New command groups, direct critical actions, descriptive lifecycle choices and customizable quick actions.
-- [ ] Folderstorm Midnight, Daylight and Follow Windows, High Contrast fallback, Compact/Comfortable density.
-- [ ] Cards and dropdown, distinct active/management/chat sender identity and preserved drafts/IME.
-- [ ] Quiet status, discoverable diagnostics and actionable failures.
-- [ ] Polished read-only monitors and per-breakout Always on top, including Attention.
-- [ ] Named session sets with explicit normal login and guarded optional monitor reopening.
-- [ ] Next/Previous attention, filters, stable source binding and explicit native review.
-- [ ] Backward-compatible bounded persistence, focused checks, command coverage and recovery matrix.
-- [ ] Astra High review findings addressed, separate testing PRs attached, Windows/voice gaps stated honestly.
+- [x] Recoverable collapsed UI, persistent reveal, tray/system-menu backup and display-change recovery.
+- [x] New command groups, direct critical actions, descriptive lifecycle choices and customizable quick actions.
+- [x] Folderstorm Midnight, Daylight and Follow Windows, High Contrast fallback, Compact/Comfortable density.
+- [x] Cards and dropdown, distinct active/management/chat sender identity and preserved drafts/IME.
+- [x] Quiet status, discoverable diagnostics and actionable failures.
+- [x] Polished read-only monitors and per-breakout Always on top, including Attention.
+- [x] Named session sets with explicit normal login and guarded optional monitor reopening.
+- [x] Next/Previous attention, filters, stable source binding and explicit native review.
+- [x] Backward-compatible bounded persistence, focused checks, command coverage and recovery matrix.
+- [x] Sol 6.1 Max review findings addressed; recovery checkpoint attached, final checkpoint being published; Windows/voice gaps stated honestly.
 
 Questions are nonblocking: native reproduction details of the lost UI, preferred final light-theme tint and compact target widths can be collected after initial testing. Implementation uses the decisions above meanwhile. No new live voice testing is assumed available. A screenshot or build installation from the user is not a prerequisite for making progress.
 
 
 ## Planning review — Astra High
 
-A read-only `gpt-6-astra` reviewer at high reasoning inspected this plan against PR27 source. Three findings were incorporated before finalizing: cancel all session-set launch/follow-up work on lifecycle exit or a replacement Open using an operation token; explicitly extend the seven-command shortcut model with command-specific eligibility and compatibility; and define switch versus management gestures, including keyboard and unavailable-character behavior. The review confirmed that independent-window pinning, reserved recovery geometry and fitSurface/ownership risks are covered, while the native cause of lost controls remains unproven. This review covers the plan; checkpoint 6 still requires a review of the actual implementation.
+A read-only `gpt-6-astra` reviewer at high reasoning inspected this plan against PR27 source. Three findings were incorporated before finalizing: cancel all session-set launch/follow-up work on lifecycle exit or a replacement Open using an operation token; explicitly extend the seven-command shortcut model with command-specific eligibility and compatibility; and define switch versus management gestures, including keyboard and unavailable-character behavior. The review confirmed that independent-window pinning, reserved recovery geometry and fitSurface/ownership risks are covered, while the native cause of lost controls remains unproven. This historical review covers the plan. The latest user instruction selected Sol 6.1 Max for the actual implementation review, which was performed and its confirmed findings addressed.
