@@ -11,9 +11,9 @@ enable_testing()
 function(folderstorm_check name)
   add_executable(${name} ${ARGN})
   if(MSVC)
-    target_compile_options(${name} PRIVATE /W4 /utf-8)
+    target_compile_options(${name} PRIVATE /W4 /utf-8 /UNDEBUG)
   else()
-    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(${name} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
@@ -33,6 +33,14 @@ folderstorm_check(workspace_layout
 folderstorm_check(snapshot_geometry ../test_fssnapshotgeometry.cpp)
 folderstorm_check(workspace_usability
   ../test_fsworkspaceusability.cpp)
+
+# Session protocol/model/controller checks are portable; they do not build the
+# Win32 host or viewer. Keep assertions enabled even with Release's NDEBUG.
+foreach(check IN ITEMS protocol chat contact_policy options preview transition restart registry monitors controller)
+  folderstorm_check(session_${check}
+    ../../../../tools/session-host/tests/test_${check}.cpp)
+  target_include_directories(session_${check} PRIVATE ../..)
+endforeach()
 
 # Coroutine provenance uses the viewer's Boost fibers. Ordinary portable CI
 # without Boost still runs the inventory model/executor suite above.

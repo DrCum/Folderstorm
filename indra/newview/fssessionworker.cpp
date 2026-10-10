@@ -10,6 +10,7 @@
 #if LL_WINDOWS
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
+#include "fssessionlifecycle.h"
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
 #include "llimage.h"
@@ -759,7 +760,7 @@ void FSSessionWorker::tick()
 }
 bool FSSessionWorker::renderAllowed()
 {
-    return !managed() || !worker->readyApplied || worker->mode == Mode::Active;
+    return !managed() || fs_session::sessionRenderAllowed(gDisconnected, worker->readyApplied, worker->mode);
 }
 bool FSSessionWorker::hostForeground()
 {

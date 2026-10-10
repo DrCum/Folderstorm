@@ -24,6 +24,7 @@
 #include "fssessionmonitormodel.h"
 #include "fssessionframepipe.h"
 #include "fssessionrestart.h"
+#include "fssessionlifecycle.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -278,6 +279,7 @@ struct Host
     std::array<Mode, MaxCharacters> standby = warmModes();
     std::unique_ptr<Slot> slots[MaxCharacters];
     Handoff handoff;
+    HostLifecycle lifecycle;
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
@@ -300,7 +302,8 @@ struct Host
     int selectedSlot(HWND choices) const
     {
         const auto selected = SendMessageW(choices, CB_GETCURSEL, 0, 0);
-        return selected >= 0 && selected < MaxCharacters ? static_cast<int>(selected) : 0;
+        if (selected >= 0 && selected < MaxCharacters) return static_cast<int>(selected);
+        return choices == characterControl ? lifecycle.selection() : chatIndex;
     }
     void launchNext()
     {
@@ -318,7 +321,8 @@ struct Host
             if (i == active) text += L" · active";
             choices.push_back(std::move(text));
         }
-        syncChoices(characterControl, choices, active >= 0 ? active : selected >= 0 ? static_cast<int>(selected) : 0);
+        const int management = lifecycle.observeSelection(selected >= 0 && selected < MaxCharacters ? static_cast<int>(selected) : -1);
+        syncChoices(characterControl, choices, management);
         EnableWindow(characterControl, !busy());
     }
 
@@ -786,6 +790,7 @@ struct Host
         { message(L"Close this character's separate viewer normally, then use + to open a fresh login. Other characters remain connected."); return; }
         if (!slot.restart.begin(slot.snapshot, GetTickCount64()))
         { message(L"Character is changing login or already restarting; finish its native window first."); return; }
+        lifecycle.beginManagement();
         slot.hasPendingSend = slot.hasPendingTyping = slot.hasPendingAction = false;
         if (const int id = monitorSet.find(index); id >= 0) stopMonitor(id);
         message(L"Restarting " + wide(slot.snapshot.name) + L": confirm native close. Waiting for process/profile release before a fresh login; queued messages are not replayed.");
@@ -833,6 +838,7 @@ struct Host
         slot->process.value = process.hProcess; slot->pid = process.dwProcessId;
         slot->snapshot.worker = slot->id;
         slots[index] = std::move(slot);
+        lifecycle.beginManagement();
         message(L"Log in a different character in each viewer. The first ready character becomes active.");
     }
     bool busy() const
@@ -998,6 +1004,8 @@ struct Host
             if (handoff.step() == Handoff::Step::Idle)
             {
                 active = step == Handoff::Step::Rollback ? handoff.original() : handoff.target();
+                lifecycle.completedHandoff(active);
+                SendMessageW(characterControl, CB_SETCURSEL, lifecycle.selection(), 0);
                 finishMonitorExchange(step != Handoff::Step::Rollback);
                 message(step == Handoff::Step::Rollback ? L"Returned to the previous character." : L"Character ready. Other characters use their chosen standby mode.");
                 if (!response.detail.empty()) message(L"Character ready. " + wide(response.detail));
@@ -1055,7 +1063,7 @@ struct Host
             const auto tag = static_cast<std::uintptr_t>(slot.restart.sequence());
             const bool cancelHint = slot.restart.phase() == Restart::Phase::Waiting && slot.surface() &&
                 GetPropW(slot.surface(), L"FolderstormRestartCancelled") == reinterpret_cast<HANDLE>(tag ? tag : 1);
-            const auto restartResult = slot.restart.poll(slot.running(), cancelHint, GetTickCount64(), !busy());
+            const auto restartResult = lifecycle.pollRestart(slot.restart, slot.running(), cancelHint, GetTickCount64(), !busy());
             if (restartResult == Restart::Result::Launch) { launch(index); continue; }
             if (restartResult == Restart::Result::Cancelled) message(L"Native close cancelled; restart stopped. The old viewer remains available.");
             if (restartResult == Restart::Result::TimedOut) message(L"Restart stopped waiting. Finish closing the old viewer, then choose +; no forced termination or automatic retry.");
@@ -1219,6 +1227,7 @@ struct Host
     }
     void detach(bool close, bool logout = false)
     {
+        lifecycle.stopManaging(slots);
         handoff.cancel(); detaching = true; closing = close; logoutOnClose = logout; focusRequested = false;
         stopMonitors();
         if (logout)
@@ -1772,7 +1781,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     {
         if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
         { state.skipTransition(); continue; }
-        if (!IsDialogMessageW(window, &message)) { TranslateMessage(&message); DispatchMessageW(&message); }
+        const std::array<HWND, 3> panels{window, state.chatWindow, state.controlsWindow};
+        const bool handled = routePanelDialog(message.hwnd, panels,
+            [](HWND panel, HWND target)
+            { return IsWindow(panel) && IsWindowVisible(panel) && (panel == target || IsChild(panel, target)); },
+            [&message](HWND panel) { return IsDialogMessageW(panel, &message) != FALSE; });
+        if (!handled) { TranslateMessage(&message); DispatchMessageW(&message); }
     }
     host = nullptr;
     return static_cast<int>(message.wParam);
