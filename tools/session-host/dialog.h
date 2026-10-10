@@ -20,7 +20,7 @@ struct Field
     HWND control = nullptr;
 };
 inline unsigned int number(const Field& field) { return static_cast<unsigned int>(std::wcstoul(field.value.c_str(), nullptr, 10)); }
-struct Editor { const wchar_t* title; std::vector<Field>* fields; };
+struct Editor { const wchar_t* title; std::vector<Field>* fields; HFONT font = nullptr; };
 inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
 {
     auto* editor = reinterpret_cast<Editor*>(GetWindowLongPtrW(dialog, DWLP_USER));
@@ -29,8 +29,11 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         editor = reinterpret_cast<Editor*>(lparam); SetWindowLongPtrW(dialog, DWLP_USER, lparam);
         SetWindowTextW(dialog, editor->title);
         const HINSTANCE instance = GetModuleHandleW(nullptr);
-        const auto font = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        const HDC dc = GetDC(dialog); const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96; if (dc) ReleaseDC(dialog, dc);
+        using WindowDpi = UINT(WINAPI*)(HWND);
+        const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
+        const int dpi = windowDpi ? static_cast<int>(windowDpi(dialog)) : 96;
+        editor->font = CreateFontW(-MulDiv(12,dpi,96),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        const auto font = editor->font ? editor->font : reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
         const auto scale = [dpi](int n) { return MulDiv(n, dpi, 96); };
         int y = 14;
         for (std::size_t i = 0; i < editor->fields->size(); ++i)
@@ -116,8 +119,10 @@ inline bool edit(HWND owner,const wchar_t* title,std::vector<Field>& fields)
     struct Template { DLGTEMPLATE dialog; WORD menu = 0, klass = 0, title = 0; } layout{};
     layout.dialog.style = WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME;
     layout.dialog.cx = 300; layout.dialog.cy = 200;
-    Editor editor{title,&fields};
-    return DialogBoxIndirectParamW(GetModuleHandleW(nullptr),&layout.dialog,owner,editorProc,reinterpret_cast<LPARAM>(&editor)) == IDOK;
+    Editor editor{title,&fields,nullptr};
+    const bool accepted = DialogBoxIndirectParamW(GetModuleHandleW(nullptr),&layout.dialog,owner,editorProc,reinterpret_cast<LPARAM>(&editor)) == IDOK;
+    if (editor.font) DeleteObject(editor.font); // Dialog and its controls are already destroyed.
+    return accepted;
 }
 }
 #endif

@@ -956,7 +956,7 @@ void FSSessionWorker::drawTransition()
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
     gUIProgram.bind();
     gl_rect_2d(rect,LLColor4(0.f,0.f,0.f,alpha));
-    gGL.flush(); gUIProgram.unbind();
+    gGL.flush(); gGL.color4f(1.f,1.f,1.f,1.f); gUIProgram.unbind();
 }
 void FSSessionWorker::endCameraFrame()
 {
