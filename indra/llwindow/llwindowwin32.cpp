@@ -2849,8 +2849,10 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
         case WM_KEYDOWN:
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_KEYDOWN");
+            const HANDLE inputEpoch = GetPropW(h_wnd, L"FolderstormSessionFocusLease");
             window_imp->post([=]()
                 {
+                    if (GetPropW(h_wnd, L"FolderstormSessionFocusLease") != inputEpoch) return;
                     window_imp->mKeyCharCode = 0; // don't know until wm_char comes in next
                     window_imp->mKeyScanCode = (l_param >> 16) & 0xff;
                     window_imp->mKeyVirtualKey = (U32)w_param;
@@ -2939,8 +2941,15 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
         case WM_CHAR:
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_CHAR");
+            const HANDLE inputEpoch = GetPropW(h_wnd, L"FolderstormSessionFocusLease");
+            const UINT scanCode = static_cast<UINT>((l_param >> 16) & 0xff);
+            const UINT extendedScan = scanCode | ((l_param & (1LL << 24)) ? 0xe000u : 0u);
+            const UINT origin = scanCode ? MapVirtualKeyExW(extendedScan, MAPVK_VSC_TO_VK_EX, GetKeyboardLayout(0)) : 0;
             window_imp->post([=]()
                 {
+                    if (GetPropW(h_wnd, L"FolderstormSessionFocusLease") != inputEpoch) return;
+                    window_imp->mKeyScanCode = scanCode;
+                    window_imp->mKeyVirtualKey = origin;
                     window_imp->mKeyCharCode = (U32)w_param;
                     window_imp->mRawMsg = u_msg;
                     window_imp->mRawWParam = (U32)w_param;

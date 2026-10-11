@@ -54,6 +54,7 @@
 #include <imm.h>
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
+#include "fssessioninputguard.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
 #include "llviewercamera.h"
@@ -168,7 +169,8 @@ struct Worker
     WINDOWPLACEMENT placement{sizeof(WINDOWPLACEMENT)};
     struct Override { LLSD effective; bool saved = false; };
     std::map<std::string, Override> controls;
-    std::array<bool, KEY_COUNT> heldKeys{};
+    InputQuarantine inputQuarantine;
+    std::uint64_t lastInputDiagnostic = 0;
 
     ~Worker() { if (profileLease != INVALID_HANDLE_VALUE) CloseHandle(profileLease); }
 
@@ -401,6 +403,7 @@ struct Worker
     void releaseInput()
     {
         inputGranted = false;
+        inputQuarantine.reset();
         if (window) RemovePropW(window, InputLeaseProperty);
         if (window) RemovePropW(window, FocusLeaseProperty);
         gViewerInput.releaseHeldInputs();
@@ -627,12 +630,9 @@ struct Worker
                     mode = previousMode; reply(request, "Hosted preparation failed. Disable hosting and try the separate window."); break;
                 }
                 promoting = true; pendingPromotion = request; promotionStart = frames;
-                if (gKeyboard)
-                    for (std::size_t key = 0; key < heldKeys.size(); ++key)
-                    {
-                        const auto native = gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
-                        heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
-                    }
+                inputQuarantine.capture([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; });
+                LL_DEBUGS("SessionInput") << "Promotion quarantine: " << inputQuarantine.size()
+                    << " physical keys; generation " << generation << LL_ENDL;
                 EnableWindow(window, FALSE); ShowWindow(window, request.surface ? SW_SHOWNOACTIVATE : SW_RESTORE);
                 startTransition(request);
                 // Reply/grant input only after an actual normal buffer swap.
@@ -1055,13 +1055,10 @@ void FSSessionWorker::tick()
         else if (value.demoting)
         { value.demoting = false; value.reply(value.pendingDemotion, "Character disconnected before switching completed."); }
     }
-    if (gKeyboard)
-        for (std::size_t key = 0; key < value.heldKeys.size(); ++key)
-            if (value.heldKeys[key])
-            {
-                const auto native = gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
-                if ((GetAsyncKeyState(static_cast<int>(native)) & 0x8000) == 0 && !gKeyboard->getKeyDown(static_cast<KEY>(key))) value.heldKeys[key] = false;
-            }
+    const auto quarantined = value.inputQuarantine.size();
+    value.inputQuarantine.refresh([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; });
+    if (quarantined != value.inputQuarantine.size())
+        LL_DEBUGS("SessionInput") << "Physical release; remaining " << value.inputQuarantine.size() << LL_ENDL;
     if (LLStartUp::getStartupState() < STATE_LOGIN_AUTH_INIT)
     {
         value.loginRequested = false; value.gate = LoginGate::Wait;
@@ -1274,15 +1271,32 @@ void FSSessionWorker::nearbyMessage(const LLChat& chat)
 }
 bool FSSessionWorker::keyAllowed(unsigned int key)
 {
-    return inputAllowed() && (!managed() || key >= worker->heldKeys.size() || !worker->heldKeys[key]);
+    if (!inputAllowed()) return false;
+    if (!managed()) return true;
+    const auto native = gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger();
+    const auto mapped = native > 0 ? static_cast<unsigned int>(native) : gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
+    return worker->inputQuarantine.allows(mapped);
 }
-void FSSessionWorker::keyReleased(unsigned int key)
+void FSSessionWorker::keyReleased(unsigned int)
 {
-    if (managed() && key < worker->heldKeys.size()) worker->heldKeys[key] = false;
+    if (managed() && gViewerWindow)
+        worker->inputQuarantine.released(static_cast<unsigned int>(gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger()));
 }
 bool FSSessionWorker::textAllowed()
 {
-    return inputAllowed() && (!managed() || std::none_of(worker->heldKeys.begin(), worker->heldKeys.end(), [](bool held) { return held; }));
+    if (!inputAllowed()) return false;
+    if (!managed()) return true;
+    // WM_CHAR records its own scan-derived origin, rather than the preceding
+    // key-down. Unknown-origin IME text is still protected by input ownership.
+    const auto native = static_cast<unsigned int>(gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger());
+    const bool allowed = worker->inputQuarantine.allows(native);
+    if (!allowed && GetTickCount64() - worker->lastInputDiagnostic >= 2000)
+    {
+        worker->lastInputDiagnostic = GetTickCount64();
+        LL_DEBUGS("SessionInput") << "Held-origin text suppressed; generation " << worker->generation
+            << "; quarantined keys " << worker->inputQuarantine.size() << LL_ENDL;
+    }
+    return allowed;
 }
 void FSSessionWorker::focusHostedClient()
 {
