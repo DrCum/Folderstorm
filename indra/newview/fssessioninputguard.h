@@ -14,10 +14,18 @@ public:
         reset();
         for (unsigned int key = 7; key < held.size(); ++key) held[key] = down(key);
     }
-    template<typename PhysicalDown> void refresh(PhysicalDown down)
+    template<typename PhysicalDown,typename Released> void refresh(PhysicalDown down,Released released)
     {
         for (unsigned int key = 7; key < held.size(); ++key)
-            if (held[key] && !down(key)) held[key] = false;
+            if (held[key] && !down(key)) { held[key] = false; released(key); }
+    }
+    template<typename PhysicalDown> void refresh(PhysicalDown down)
+    { refresh(down,[](unsigned int) {}); }
+    template<typename Matches> bool allowsLogical(unsigned int logical,Matches matches) const
+    {
+        for (unsigned int key = 7; key < held.size(); ++key)
+            if (held[key] && matches(key,logical)) return false;
+        return true;
     }
     bool allows(unsigned int nativeKey) const { return nativeKey >= held.size() || !held[nativeKey]; }
     void released(unsigned int nativeKey) { if (nativeKey < held.size()) held[nativeKey] = false; }

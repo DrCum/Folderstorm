@@ -212,7 +212,7 @@ The added versioned stores are bounded `host-experience.dat` and `session-sets.d
 
 ### Chat behavior, reading and character sounds
 
-Build the matching protocol **12** host and viewer for this follow-up. Managed text input uses physical key release and per-origin quarantine rather than a global held-key text veto. Posted input cannot cross a handoff ownership epoch; native four/five-character keyboard/IME acceptance is still required.
+Build the matching protocol **12** host and viewer for this follow-up. Managed text input uses physical key release and per-origin quarantine rather than a global held-key text veto. Missed releases quietly clear only stale logical-key state, preserving fresh physical aliases. Per-frame scans match all forward key mappings instead of the last message's origin. Posted input cannot cross a handoff ownership epoch; native four/five-character keyboard/IME acceptance is still required.
 
 Main, detached and monitor Chat open at the latest message. Scroll back or select text to pause following; Latest resumes it. Enter sends from the focused composer, Shift+Enter adds a newline, and an IME-commit Enter does not send. Draft/account guards and uncertain sends remain unchanged. A pending send leaves the editor focused with temporary read-only backpressure.
 

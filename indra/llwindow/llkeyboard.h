@@ -67,6 +67,7 @@ public:
 
     void            resetKeyDownAndHandle();
     void            resetKeys();
+    void            clearKeyState(KEY key); // Quietly release one stale key; no input callbacks.
 
 
     F32             getCurKeyElapsedTime()  { return getKeyDown(mCurScanKey) ? getKeyElapsedTime( mCurScanKey ) : 0.f; }

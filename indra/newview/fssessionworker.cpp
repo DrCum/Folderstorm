@@ -1069,7 +1069,27 @@ void FSSessionWorker::tick()
         { value.demoting = false; value.reply(value.pendingDemotion, "Character disconnected before switching completed."); }
     }
     const auto quarantined = value.inputQuarantine.size();
-    value.inputQuarantine.refresh([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; });
+    value.inputQuarantine.refresh([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; },
+        [](unsigned int native)
+        {
+            if (!gKeyboard) return;
+            KEY mapped = 0;
+            // Win32 normal and extended key translation both use this map.
+            if (gKeyboard->translateKey(static_cast<U16>(native),&mapped))
+            {
+                // A fresh key on the other keypad/modifier side may share the
+                // same logical key. Clear stale state only after every actual
+                // physical origin for that logical key is up.
+                bool physical = false;
+                for (unsigned int key = 7; key < 256 && !physical; ++key)
+                {
+                    KEY translated = 0;
+                    const bool matches = gKeyboard->translateKey(static_cast<U16>(key),&translated) && translated == mapped;
+                    physical = matches && (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0;
+                }
+                if (!physical) gKeyboard->clearKeyState(mapped);
+            }
+        });
     if (quarantined != value.inputQuarantine.size())
         LL_DEBUGS("SessionInput") << "Physical release; remaining " << value.inputQuarantine.size() << LL_ENDL;
     if (LLStartUp::getStartupState() < STATE_LOGIN_AUTH_INIT)
@@ -1286,9 +1306,15 @@ bool FSSessionWorker::keyAllowed(unsigned int key)
 {
     if (!inputAllowed()) return false;
     if (!managed()) return true;
-    const auto native = gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger();
-    const auto mapped = native > 0 ? static_cast<unsigned int>(native) : gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
-    return worker->inputQuarantine.allows(mapped);
+    // Scan callbacks have no current native event. Match every forward key
+    // mapping instead of using the last message or the lossy inverse map
+    // (regular digits and keypad digits can share a viewer key).
+    if (!gKeyboard) return false;
+    return worker->inputQuarantine.allowsLogical(key,[](unsigned int native,unsigned int logical)
+    {
+        KEY translated = 0;
+        return gKeyboard->translateKey(static_cast<U16>(native),&translated) && translated == logical;
+    });
 }
 void FSSessionWorker::keyReleased(unsigned int)
 {

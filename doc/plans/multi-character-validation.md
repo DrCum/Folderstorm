@@ -286,7 +286,7 @@ Actual focused checks: `profile_seed` passed in C++17 and C++20; `controller` an
 
 ## Session Chat follow-up: protocol 12, source completion
 
-The typing quarantine, history/Enter adapters, guarded visible/active read policies and category/custom-sound choices are source-complete on feat/session-chat-polish above unmerged PR30. Full completed checklist and native acceptance: session-chat-polish.md. Earlier checkpoint history and archives remain unchanged.
+The typing quarantine, history/Enter adapters, guarded visible/active read policies and category/custom-sound choices are source-complete in draft PR31 on feat/session-chat-polish above unmerged PR30. A final input review added all forward key aliases for per-frame scans and selective stale logical-key cleanup after physical release; newly held keys retain their state. The expanded input_guard check passed with the same strict flags. Full completed checklist and native acceptance: session-chat-polish.md. Earlier checkpoint history and archives remain unchanged.
 
 Actual affected portable checks: input_guard, chat_behavior, read_policy, sound, alerts, protocol, chat and monitor_chat passed under strict C++17 warnings with Release assertions enabled. The checks cover missed physical releases/lock keys/new text, Enter repeats/IME commits/message anchors, active read resets/new-conversation grace/late acknowledgements/native event fence, settings parsing/legacy inheritance, WAV/volume limits and category separation/restrictions. Source-reviewed native wiring and diff hygiene. Windows/MSVC/installer/visual/audio/IME acceptance is pending; no host/viewer/build/packaging/GitHub builds, unrelated Go tests, broad suite or subagents were run.
 

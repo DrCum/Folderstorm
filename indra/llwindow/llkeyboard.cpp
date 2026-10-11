@@ -166,6 +166,14 @@ void LLKeyboard::resetKeyDownAndHandle()
     }
 }
 
+void LLKeyboard::clearKeyState(KEY key)
+{
+    mKeyLevel[key] = false;
+    mKeyUp[key] = false;
+    mKeyDown[key] = false;
+    mKeyRepeated[key] = false;
+}
+
 // BUG this has to be called when an OS dialog is shown, otherwise modifier key state
 // is wrong because the keyup event is never received by the main window. JC
 void LLKeyboard::resetKeys()
