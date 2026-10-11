@@ -27,6 +27,7 @@
 #include "chatui.h"
 #include "fssessionchatprefs.h"
 #include "fssessionreadpolicy.h"
+#include "fssessionsound.h"
 #include "resource.h"
 #include "fssessionpresentation.h"
 #include "fssessionusability.h"
@@ -285,7 +286,8 @@ struct Slot
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
     std::string reservation;
-    bool waiting = false, detached = false, importReported = false;
+    bool waiting = false, detached = false, importReported = false, soundPrepared = false;
+    std::string soundAsset;
     double fps = 0, loops = 0;
     bool running() const { return process.value != INVALID_HANDLE_VALUE && WaitForSingleObject(process.value, 0) == WAIT_TIMEOUT; }
     HWND surface() const
@@ -353,6 +355,8 @@ struct Host
     AttentionBook attention;
     AlertGate alertGate;
     std::vector<std::uint8_t> alertTone;
+    std::map<std::string,WavSound> soundCache;
+    std::uint64_t playbackSerial = 0;
     HWND pinMenu = nullptr, pinButtons[6]{}, attentionWindow = nullptr, attentionList = nullptr;
     std::vector<Message> attentionRows;
     std::vector<std::wstring> attentionLabels;
@@ -636,27 +640,123 @@ struct Host
             if(!skipped.empty()){std::wstring details;for(const auto& why:skipped)details+=wide(why)+L"\n";MessageBoxW(window,details.c_str(),L"Session-set restore report",MB_OK|MB_ICONINFORMATION);}
         }
     }
+    CharacterSound characterSound(int index) const
+    { return chatPreferences.sound(AccountKey::from(slots[index]->snapshot),appearance(index).alerts); }
+    bool readSound(const std::filesystem::path& path,WavSound& sound)
+    {
+        std::ifstream input(path,std::ios::binary|std::ios::ate);
+        if (!input) return false;
+        const std::streamoff size = input.tellg();
+        if (size <= 0 || size > static_cast<std::streamoff>(WavSound::MaxBytes)) return false;
+        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size)); input.seekg(0);
+        input.read(reinterpret_cast<char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
+        return input && WavSound::decode(std::move(bytes),sound);
+    }
+    void storeCachedSound(const std::string& asset,WavSound sound)
+    {
+        if (asset.empty() || soundCache.count(asset)) return;
+        std::size_t bytes = sound.bytes.size(); for (const auto& entry : soundCache) bytes += entry.second.bytes.size();
+        constexpr std::size_t budget = 5*WavSound::MaxBytes;
+        for (auto i = soundCache.begin(); bytes > budget && i != soundCache.end();)
+        {
+            bool used = false;
+            for (int slot = 0; slot < MaxCharacters; ++slot) if (slots[slot] && slots[slot]->snapshot.state == State::Ready &&
+                !slots[slot]->detached && characterSound(slot).asset == i->first) used = true;
+            if (used) ++i;
+            else { bytes -= i->second.bytes.size(); i = soundCache.erase(i); }
+        }
+        if (bytes <= budget) soundCache.emplace(asset,std::move(sound));
+    }
+    void cacheSound(const std::string& asset)
+    {
+        if (asset.empty() || soundCache.count(asset)) return;
+        WavSound sound;
+        if (!CharacterSound{0,asset}.valid() || !readSound(profiles/L"sounds"/wide(asset),sound))
+        { message(L"A character sound is unavailable; eligible alerts use the built-in tone. Choose or reset its sound in Settings."); return; }
+        storeCachedSound(asset,std::move(sound));
+    }
+    std::uint64_t playAlert(std::vector<std::uint8_t> bytes)
+    {
+        // SND_MEMORY playback owns its buffer until stopped, including Preview.
+        PlaySoundW(nullptr,nullptr,0); ++playbackSerial; alertTone = std::move(bytes);
+        if (!alertTone.empty()) PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+        return playbackSerial;
+    }
     void alert(const Message& item,int index)
     {
         if (!presentation.volume || !slots[index]) return;
         const bool eligible = slots[index]->snapshot.state == State::Ready && !slots[index]->detached && slots[index]->snapshot.mode != Mode::Active &&
             muteBackground && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
-        if (!alertGate.admit(item,appearance(index).alerts,GetTickCount64(),eligible)) return;
-        constexpr std::uint32_t samples = 3528, rate = 22050;
-        PlaySoundW(nullptr,nullptr,0); // End any owned playback before replacing its backing buffer.
-        alertTone.assign(44+samples*2,0);
-        const auto number = [this](std::size_t offset,std::uint32_t value,unsigned int size)
-        { for (unsigned int i = 0; i < size; ++i) alertTone[offset+i] = static_cast<std::uint8_t>((value>>(8*i))&255); };
-        const auto text = [this](std::size_t offset,const char* value) { for (int i = 0; i < 4; ++i) alertTone[offset+static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(value[i]); };
-        text(0,"RIFF"); number(4,36+samples*2,4); text(8,"WAVE"); text(12,"fmt "); number(16,16,4); number(20,1,2); number(22,1,2);
-        number(24,rate,4); number(28,rate*2,4); number(32,2,2); number(34,16,2); text(36,"data"); number(40,samples*2,4);
-        for (std::uint32_t i = 0; i < samples; ++i)
+        const auto sound = characterSound(index);
+        if (!alertGate.admitCategories(item,sound.categories,GetTickCount64(),eligible)) return;
+        const auto saved = soundCache.find(sound.asset);
+        playAlert(saved == soundCache.end() ? builtinAlertTone(presentation.volume) : saved->second.volume(presentation.volume));
+    }
+    void editCharacterSound(int index)
+    {
+        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.state != State::Ready) return;
+        const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); auto next = characterSound(index);
+        if (!chatPreferences.sounds.count(key) && chatPreferences.sounds.size() >= PresentationStore::MaxProfiles)
+        { message(L"Remembered sound profiles are full; existing profiles can still be edited."); return; }
+        WavSound chosen;
+        if (!next.asset.empty()) readSound(profiles/L"sounds"/wide(next.asset),chosen);
+        bool imported = false; std::uint64_t preview = 0;
+        using namespace fs_host_ui;
+        std::vector<Field> fields{
+            {L"Direct IM alerts",next.categories&SoundPrivate?L"1":L"0",FieldType::Check},
+            {L"Group chat alerts",next.categories&SoundGroup?L"1":L"0",FieldType::Check},
+            {L"Conference alerts",next.categories&SoundConference?L"1":L"0",FieldType::Check},
+            {L"Supported notifications",next.categories&SoundAttention?L"1":L"0",FieldType::Check},
+            {L"Background notification sound",next.asset.empty()?L"Choose WAV…":L"Choose another WAV…",FieldType::Action},
+            {L"Preview at host volume",L"Preview",FieldType::Action},
+            {L"Use the built-in tone",L"Reset sound",FieldType::Action}};
+        fields[4].action = [&](HWND owner)
         {
-            const double envelope = std::sin(3.141592653589793*static_cast<double>(i)/samples);
-            const auto sample = static_cast<std::int16_t>(std::sin(6.283185307179586*880.0*static_cast<double>(i)/rate)*envelope*6000.0*presentation.volume/100.0);
-            number(44+static_cast<std::size_t>(i)*2,static_cast<std::uint16_t>(sample),2);
+            std::vector<wchar_t> filename(32768,L'\0'); OPENFILENAMEW picker{}; picker.lStructSize = sizeof(picker); picker.hwndOwner = owner;
+            picker.lpstrFilter = L"WAV audio (*.wav)\0*.wav\0\0"; picker.lpstrFile = filename.data(); picker.nMaxFile = static_cast<DWORD>(filename.size());
+            picker.lpstrTitle = L"Choose a notification sound (PCM WAV, up to 10 seconds / 4 MiB)";
+            picker.Flags = OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR|OFN_DONTADDTORECENT;
+            if (!GetOpenFileNameW(&picker)) return;
+            WavSound candidate;
+            if (!readSound(std::filesystem::path(filename.data()),candidate))
+            { MessageBoxW(owner,L"Use a valid mono/stereo PCM WAV: 8/16-bit, 8–48 kHz, at most 10 seconds and 4 MiB.",L"Sound not imported",MB_OK|MB_ICONINFORMATION); return; }
+            chosen = std::move(candidate); imported = true;
+            SetWindowTextW(fields[4].control,std::filesystem::path(filename.data()).filename().c_str());
+        };
+        fields[5].action = [&](HWND)
+        {
+            if (!presentation.volume) { message(L"Host alert volume is zero. Raise it in Host settings → Audio to hear Preview."); return; }
+            preview = playAlert(chosen.bytes.empty()?builtinAlertTone(presentation.volume):chosen.volume(presentation.volume));
+        };
+        fields[6].action = [&](HWND)
+        { chosen = {}; next.asset.clear(); imported = false; SetWindowTextW(fields[4].control,L"Choose WAV…"); };
+        const auto title = L"Sounds: "+characterName(index)+L" · "+wide(identity.grid)+L" · Save host choices to keep";
+        const bool accepted = edit(profileDialogOwner(),title.c_str(),fields);
+        if (preview && preview == playbackSerial) playAlert({});
+        if (!accepted) return;
+        if (!slots[index] || slots[index]->detached || slots[index]->snapshot.state != State::Ready || !slots[index]->chat.identity.owns(identity))
+        { message(L"The character login changed; sound choices were not applied."); return; }
+        next.categories = (number(fields[0])?SoundPrivate:0u)|(number(fields[1])?SoundGroup:0u)|
+            (number(fields[2])?SoundConference:0u)|(number(fields[3])?SoundAttention:0u);
+        if (imported)
+        {
+            WorkerId random{};
+            if (BCryptGenRandom(nullptr,random.data(),static_cast<ULONG>(random.size()),BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
+            { message(L"Unable to create a sound asset identifier; choices were not applied."); return; }
+            std::ostringstream name; name<<std::hex<<std::setfill('0'); for (auto randomByte : random) name<<std::setw(2)<<static_cast<unsigned int>(randomByte);
+            next.asset = name.str()+".wav";
+            std::error_code error; const auto directory = profiles/L"sounds"; std::filesystem::create_directories(directory,error);
+            if (error) { message(L"Unable to create the character sound folder; choices were not applied."); return; }
+            const auto destination = directory/wide(next.asset), temporary = directory/wide(next.asset+".tmp");
+            std::ofstream output(temporary,std::ios::binary|std::ios::trunc);
+            output.write(reinterpret_cast<const char*>(chosen.bytes.data()),static_cast<std::streamsize>(chosen.bytes.size())); output.close();
+            if (!output || !MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_WRITE_THROUGH))
+            { std::filesystem::remove(temporary,error); message(L"The sound could not be saved; earlier choices remain active."); return; }
         }
-        PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+        chatPreferences.sounds[key] = next;
+        if (!next.asset.empty() && !chosen.bytes.empty()) storeCachedSound(next.asset,std::move(chosen));
+        slots[index]->soundAsset = next.asset; slots[index]->soundPrepared = true;
+        message(L"Character sound choices applied. Save host choices to keep them after closing.");
     }
     unsigned int shortcutPolicy() const {return (presentation.shortcuts?1u:0u)|(experience.viewerShellKeys?2u:0u);}
     void dispatchShortcut(unsigned int command)
@@ -980,7 +1080,6 @@ struct Host
         const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); const auto current = presentation.appearance(key);
         using namespace fs_host_ui;
         std::vector<Field> fields{{L"Friendly name",wide(current.alias)}, {L"Character color",std::to_wstring(current.color),FieldType::Color},
-            {L"Background alert sounds",std::to_wstring(current.alerts),FieldType::Choice,{L"Off",L"IM alerts",L"IM and supported attention alerts"}},
             {L"Reset name and color",L"0",FieldType::Check}};
         if (!edit(window,L"Character appearance (Save host choices to keep)",fields)) return;
         if (!slots[index] || !slots[index]->chat.identity.owns(identity)) { message(L"Login changed; appearance edits were discarded."); return; }
@@ -989,8 +1088,8 @@ struct Host
         if ((!text.empty() && size == 0) || size > 64) { message(L"Friendly name must fit in 64 UTF-8 bytes."); return; }
         std::string alias(static_cast<std::size_t>(size),'\0');
         if (size) WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),alias.data(),size,nullptr,nullptr);
-        CharacterAppearance next{alias,number(fields[1]),number(fields[2])};
-        if (number(fields[3])) { next.alias.clear(); next.color = defaultAccountColor(key); }
+        CharacterAppearance next{alias,number(fields[1]),current.alerts};
+        if (number(fields[2])) { next.alias.clear(); next.color = defaultAccountColor(key); }
         if (!presentation.set(key,next)) { message(L"Character appearance could not be applied; profile capacity or text is invalid."); return; }
         for (auto& monitor : monitors) monitor.dirty = true;
         for (auto button : pinButtons) InvalidateRect(button,nullptr,FALSE);
@@ -1279,6 +1378,9 @@ struct Host
         if (!savePresentation()) return;
         if(attentionWindow)experience.attentionRect=liveRect(attentionWindow,attentionDpi);
         if(!saveStore(L"host-experience.dat",experience.encode())){message(L"Earlier host choices saved, but appearance/quick actions could not be saved. Session changes remain active.");return;}
+        if (GetFileAttributesW((profiles/L"host-chat.dat").c_str()) != INVALID_FILE_ATTRIBUTES &&
+            !CopyFileW((profiles/L"host-chat.dat").c_str(),(profiles/L"host-chat.dat.bak").c_str(),FALSE))
+        { message(L"Chat/sound choices could not be backed up; earlier choices were retained."); return; }
         if(!saveStore(L"host-chat.dat",chatPreferences.encode())){message(L"Chat/sound choices could not be saved; current session choices remain active.");return;}
         message(L"Host choices saved. Character credentials, chats and workspace contents are not in this file.");
     }
@@ -1302,7 +1404,8 @@ struct Host
         add(characters,201,L"Workspaces: "+name+ (index==active?L"":L" (switch then open)…"),slot && slot->snapshot.state==State::Ready && !busy());
         add(characters,MonitorSelected,L"Monitor: "+name,slot && slot->snapshot.state==State::Ready && index!=active && !busy());
         add(characters,430,L"Background: Warm",slot!=nullptr,standby[index]==Mode::Warm);add(characters,431,L"Background: Economy",slot!=nullptr,standby[index]==Mode::Economy);
-        add(characters,273,L"Name, color and alerts…",slot && slot->snapshot.state==State::Ready);
+        add(characters,273,L"Name and color…",slot && slot->snapshot.state==State::Ready);
+        add(characters,CharacterSoundSettings,L"Sound and notifications…",slot && slot->snapshot.state==State::Ready);
         add(characters,432,L"Move character card earlier");add(characters,433,L"Move character card later");
         AppendMenuW(characters,MF_SEPARATOR,0,nullptr);
         add(characters,240,L"Restart: "+name+L"…",!busy());add(characters,241,L"Cancel pending restart",slot && slot->restart.phase()!=Restart::Phase::Idle);
@@ -1321,7 +1424,7 @@ struct Host
         add(view,435,L"Host active viewer",true,embedding);add(view,436,L"Show active viewer separately");AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(mon),L"Monitors");
         add(view,Details,L"Show diagnostics",true,experience.diagnostics);add(view,RestoreShell,L"Restore host controls");add(view,RecoverShell,L"Recover window positions");
         add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);
-        add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chat and read behavior…");add(settings,206,L"Save host choices");
+        add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chat and read behavior…");add(settings,CharacterSoundSettings,L"Sounds: "+name+L"…",slot && slot->snapshot.state==State::Ready);add(settings,206,L"Save host choices");
         add(settings,277,L"Copy from main profile: "+name+L"…",!busy() && (!slot || !slot->running()));
         if(group==1){AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(characters),L"Selected character actions");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
         else if(group==2)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(view),L"View");
@@ -1352,6 +1455,7 @@ struct Host
         if(choice==NextAttention || choice==PreviousAttention){navigateAttention(choice==NextAttention?1:-1);return;}
         if(choice==AttentionSettings){editAttentionFilters();return;}
         if(choice==ChatSettings){editChatSettings();return;}
+        if(choice==CharacterSoundSettings){editCharacterSound(index);return;}
         if(choice==SetActions){sessionSetsMenu();return;}
         if(choice==Details){experience.diagnostics=!experience.diagnostics;layout();return;}
         if(choice==MonitorSelected){openMonitor(index);return;}
@@ -1699,7 +1803,8 @@ struct Host
         const auto draft = send ? slot->chat.conversations.at(m.chat.identity.conversation).draft : std::string{};
         if (editText(m.compose) != draft) SetWindowTextW(m.compose,wide(draft).c_str());
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
-        EnableWindow(m.choices,live); EnableWindow(m.compose,send.has_value() && !sending);
+        EnableWindow(m.choices,live); EnableWindow(m.compose,send.has_value());
+        SendMessageW(m.compose,EM_SETREADONLY,sending?TRUE:FALSE,0);
         EnableWindow(m.send,send.has_value() && !sending); EnableWindow(m.read,read.has_value());
         m.updatingChat = false;
     }
@@ -1730,7 +1835,7 @@ struct Host
         else if (command == ChatSend && notification == BN_CLICKED)
         {
             auto request = m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat);
-            if (request) { request->text = editText(m.compose); m.transcript.tail(); queueChat(binding.slot,std::move(*request)); }
+            if (request) { request->text = editText(m.compose); if (queueChat(binding.slot,std::move(*request))) m.transcript.tail(); }
         }
         else if (command == ChatRead && notification == BN_CLICKED)
         {
@@ -1888,7 +1993,8 @@ struct Host
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
         const auto selected = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
         const bool isNotice = slot && selected != slot->chat.conversations.end() && selected->second.topic == Topic::Notice;
-        EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !sending && !isNotice);
+        EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !isNotice);
+        SendMessageW(chatCompose,EM_SETREADONLY,sending?TRUE:FALSE,0);
         EnableWindow(chatSend, ready && !restricted && !conversationBlocked && !sending && !isNotice);
         EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted && !conversationBlocked);
         updatingChat = false;
@@ -1953,24 +2059,24 @@ struct Host
         }
         for (int id = 0; id < MaxMonitors; ++id) refreshMonitorChat(id);
     }
-    void queueChat(int index, Message request)
+    bool queueChat(int index, Message request)
     {
-        if (!validSlot(index) || !slots[index]) return;
+        if (!validSlot(index) || !slots[index]) return false;
         auto& slot = *slots[index];
         if (request.kind != Kind::SendChat || !slot.running() || slot.detached || !slot.pipe.alive() || !chatRequestAllowed(slot.chat,slot.snapshot,request))
-        { message(L"The chat account/session is unavailable or restricted. The draft was not sent."); return; }
-        if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat)) return;
+        { message(L"The chat account/session is unavailable or restricted. The draft was not sent."); return false; }
+        if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat)) return false;
         if (request.text.empty() || request.text.size() > 1023 || !validUtf8(request.text, true))
-        { message(L"Use a message of 1 to 1023 UTF-8 bytes."); return; }
+        { message(L"Use a message of 1 to 1023 UTF-8 bytes."); return false; }
         slot.pendingSend = std::move(request); slot.hasPendingSend = true;
         message(L"Sending as " + characterName(index) + L" through this character's native chat…");
         refreshChat(); updateMonitors();
+        return true;
     }
     void sendChat()
     {
         Message request = boundChat(Kind::SendChat); request.text = editText();
-        transcript.tail();
-        queueChat(chatIndex,std::move(request));
+        if (queueChat(chatIndex,std::move(request))) transcript.tail();
     }
     void restartCharacter(int index)
     {
@@ -2297,7 +2403,7 @@ struct Host
         {
             if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
-            slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            slot.soundPrepared = false; slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
@@ -2315,6 +2421,12 @@ struct Host
                 if (!used) { value.color = color; break; }
             }
             presentation.set(profileKey,value);
+        }
+        if (response.state == State::Ready && profileKey.valid())
+        {
+            const auto asset = characterSound(index).asset;
+            if (!slot.soundPrepared || slot.soundAsset != asset)
+            { cacheSound(asset); slot.soundAsset = asset; slot.soundPrepared = true; }
         }
         if (request.kind == Kind::WorkspaceInfo && !(response.flags & Error))
         {

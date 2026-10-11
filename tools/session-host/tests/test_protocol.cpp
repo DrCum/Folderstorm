@@ -56,6 +56,10 @@ int main()
     assert(encode(focused, frame) && decode(frame, output) && output.flags == focused.flags);
     auto focus_request = original; focus_request.kind = Kind::Focus; focus_request.flags = 0;
     assert(encode(focus_request, frame) && decode(frame, output) && output.kind == Kind::Focus);
+    auto automatic = original; automatic.kind = Kind::MarkRead; automatic.flags = AutomaticRead; automatic.event = 42; automatic.cursor = 43;
+    assert(encode(automatic,frame) && decode(frame,output) && output.flags == AutomaticRead && output.event == 42 && output.cursor == 43);
+    automatic.kind = Kind::Status; automatic.flags = ReadDeferred;
+    assert(encode(automatic,frame) && decode(frame,output) && output.flags == ReadDeferred);
     assert(!validUtf8("\xed\xa0\x80") && !validUtf8("\xf4\x90\x80\x80") && !validUtf8("\xe2\x82"));
     std::string filename;
     assert(viewerFilename("Folderstorm-Release.exe\r\n", filename) && filename == "Folderstorm-Release.exe");

@@ -18,6 +18,19 @@ int main()
     ++event.event; event.recipient.clear(); event.flags = 0; assert(!gate.admit(event,1,20000,true));
     ++event.event; event.flags = AlertEligible; event.eventType = EventType::Attention; assert(!gate.admit(event,1,20000,true));
     ++event.event; assert(gate.admit(event,2,20000,true));
-    Frame frame; Message roundtrip; assert(encode(event,frame) && decode(frame,roundtrip) && roundtrip.eventAt == 20000 && (roundtrip.flags & AlertEligible));
+    AlertGate categories; event.eventType = EventType::Chat; event.topic = Topic::Group;
+    ++event.event; event.eventAt = 30000; assert(!categories.admitCategories(event,SoundPrivate,30000,true));
+    event.topic = Topic::Private; ++event.event; assert(categories.admitCategories(event,SoundPrivate,30000,true));
+    event.topic = Topic::Conference; ++event.event; event.eventAt = 33000;
+    assert(!categories.admitCategories(event,SoundPrivate,33000,true));
+    ++event.event; assert(categories.admitCategories(event,SoundConference,33000,true));
+    event.topic = Topic::Group; ++event.event; event.eventAt = 36000;
+    assert(categories.admitCategories(event,SoundGroup,36000,true));
+    event.eventType = EventType::Attention; ++event.event; event.eventAt = 39000;
+    assert(!categories.admitCategories(event,SoundGroup,39000,true));
+    ++event.event; assert(categories.admitCategories(event,SoundAttention,39000,true));
+    ++event.event; event.eventAt = 42000; event.flags |= ConversationRestricted;
+    assert(!categories.admitCategories(event,15,42000,true)); event.flags &= ~ConversationRestricted;
+    Frame frame; Message roundtrip; assert(encode(event,frame) && decode(frame,roundtrip) && roundtrip.eventAt == 42000 && (roundtrip.flags & AlertEligible));
     std::cout << "Eligible background-only alerts, deduplication, freshness and burst suppression passed.\n";
 }

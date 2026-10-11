@@ -65,6 +65,7 @@ struct Transcript
         const bool changed = !bound || source.worker != key.worker || source.generation != key.generation ||
             source.account != key.account || source.grid != key.grid || source.conversation != key.conversation;
         if (changed) { source = key; bound = true; following = true; painted = 0; }
+        if (next.empty()) { following = true; latestVisibility(); }
         if (next == text && !changed)
         { if (watermark != through) { watermark = through; InvalidateRect(edit,nullptr,FALSE); } return; }
         DWORD start = 0, end = 0; SendMessageW(edit,EM_GETSEL,reinterpret_cast<WPARAM>(&start),reinterpret_cast<LPARAM>(&end));

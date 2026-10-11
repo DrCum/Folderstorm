@@ -10,9 +10,10 @@
 #include <cstdlib>
 #include <cwchar>
 #include <algorithm>
+#include <functional>
 namespace fs_host_ui
 {
-enum class FieldType { Text, Number, Choice, Check, Color };
+enum class FieldType { Text, Number, Choice, Check, Color, Action };
 struct Field
 {
     std::wstring label, value;
@@ -21,6 +22,7 @@ struct Field
     unsigned int minimum = 0, maximum = 64;
     HWND control = nullptr;
     unsigned int page = 0; HWND caption = nullptr;
+    std::function<void(HWND)> action;
 };
 inline unsigned int number(const Field& field) { return static_cast<unsigned int>(std::wcstoul(field.value.c_str(), nullptr, 10)); }
 struct Editor { const wchar_t* title; std::vector<Field>* fields; HFONT font = nullptr; std::vector<std::wstring> pages; int x=0,y=0; };
@@ -71,16 +73,16 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
             auto& field = (*editor->fields)[i];
             y=positions[(std::min)(static_cast<std::size_t>(field.page),positions.size()-1)];
             HWND label = field.caption = CreateWindowExW(0,L"STATIC",field.label.c_str(),WS_CHILD|WS_VISIBLE,scale(12),scale(y+4),scale(180),scale(25),dialog,nullptr,instance,nullptr);
-            const bool check = field.type == FieldType::Check, choice = field.type == FieldType::Choice, color = field.type == FieldType::Color;
-            const DWORD style = WS_CHILD|WS_VISIBLE|WS_TABSTOP | (check ? BS_AUTOCHECKBOX : choice ? CBS_DROPDOWNLIST|WS_VSCROLL : color ? BS_PUSHBUTTON : WS_BORDER|ES_AUTOHSCROLL);
-            field.control = CreateWindowExW(0, check || color ? L"BUTTON" : choice ? L"COMBOBOX" : L"EDIT", color ? L"Choose color…" : field.value.c_str(),
+            const bool check = field.type == FieldType::Check, choice = field.type == FieldType::Choice, color = field.type == FieldType::Color, action = field.type == FieldType::Action;
+            const DWORD style = WS_CHILD|WS_VISIBLE|WS_TABSTOP | (check ? BS_AUTOCHECKBOX : choice ? CBS_DROPDOWNLIST|WS_VSCROLL : (color || action) ? BS_PUSHBUTTON : WS_BORDER|ES_AUTOHSCROLL);
+            field.control = CreateWindowExW(0, check || color || action ? L"BUTTON" : choice ? L"COMBOBOX" : L"EDIT", color ? L"Choose color…" : field.value.c_str(),
                 style,scale(196),scale(y),scale(310),scale(choice ? 220 : 25),dialog,reinterpret_cast<HMENU>(static_cast<INT_PTR>(100+i)),instance,nullptr);
             SendMessageW(label,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE); SendMessageW(field.control,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
             SetWindowSubclass(field.control,editorFieldProc,3,0);
             if (check) SendMessageW(field.control,BM_SETCHECK,number(field) ? BST_CHECKED : BST_UNCHECKED,0);
             if (choice)
             { for (const auto& text : field.choices) SendMessageW(field.control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text.c_str())); SendMessageW(field.control,CB_SETCURSEL,number(field),0); }
-            if (!check && !choice && !color) SendMessageW(field.control,EM_SETLIMITTEXT,field.type == FieldType::Number ? 6 : field.maximum,0);
+            if (!check && !choice && !color && !action) SendMessageW(field.control,EM_SETLIMITTEXT,field.type == FieldType::Number ? 6 : field.maximum,0);
             if(field.page){ShowWindow(label,SW_HIDE);ShowWindow(field.control,SW_HIDE);}
             positions[(std::min)(static_cast<std::size_t>(field.page),positions.size()-1)]=y+36;
         }
@@ -141,6 +143,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     if (id >= 100 && id < 100 + editor->fields->size())
     {
         auto& field = (*editor->fields)[id-100];
+        if (field.type == FieldType::Action && HIWORD(wparam) == BN_CLICKED && field.action) field.action(dialog);
         if (field.type == FieldType::Color && HIWORD(wparam) == BN_CLICKED)
         {
             static COLORREF custom[16]{}; const auto rgb = number(field);
@@ -155,7 +158,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     if (id != IDOK) return FALSE;
     for (auto& field : *editor->fields)
     {
-        if (field.type == FieldType::Color) continue;
+        if (field.type == FieldType::Color || field.type == FieldType::Action) continue;
         if (field.type == FieldType::Check) field.value = SendMessageW(field.control,BM_GETCHECK,0,0) == BST_CHECKED ? L"1" : L"0";
         else if (field.type == FieldType::Choice)
         {
