@@ -55,6 +55,7 @@
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "fssessioninputguard.h"
+#include "fssessionreadpolicy.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
 #include "llviewercamera.h"
@@ -335,6 +336,9 @@ struct Worker
             // the owning group as well as its sender immediately before IPC.
             filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
                 { return RlvActions::canReceiveIM(LLUUID(id)); });
+            if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
+                if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
+                    payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
@@ -375,6 +379,15 @@ struct Worker
         { reply(request, "This conversation is no longer available. Open it in the character's viewer."); return; }
         if (request.kind == Kind::MarkRead)
         {
+            if ((request.flags & AutomaticRead) && !readFenceCurrent(request,events.latest()))
+            {
+                auto response = status(request); response.flags |= ReadDeferred;
+                if (!pipe.send(response)) { detach(); pipe.close(); }
+                return;
+            }
+            if (session && ((session->isP2PSessionType() && !RlvActions::canReceiveIM(session->mOtherParticipantID)) ||
+                (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID))))
+            { reply(request,"Conversation is blocked by receive restrictions."); return; }
             if (session) LLIMModel::instance().sendNoUnreadMessages(session->mSessionID);
             reply(request); return;
         }
