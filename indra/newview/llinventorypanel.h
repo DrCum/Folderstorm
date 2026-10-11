@@ -41,6 +41,7 @@
 #include <functional>
 #include <set>
 #include <vector>
+#include <boost/signals2/connection.hpp>
 
 class LLInvFVBridge;
 class LLInventoryFolderViewModelBuilder;
@@ -436,6 +437,7 @@ protected:
 
     bool                        mBuildViewsOnInit;
     EViewsInitializationState   mViewsInitialized; // Whether views have been generated
+    boost::signals2::scoped_connection mLibraryVisibilityConnection;
     F64                         mBuildViewsEndTime; // Stop building views past this timestamp
     std::deque<LLUUID>          mBuildViewsQueue;
     std::deque<LLUUID>          mBuildRootQueue;

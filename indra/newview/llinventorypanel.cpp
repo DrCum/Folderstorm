@@ -290,6 +290,7 @@ void LLInventoryPanel::initFromParams(const LLInventoryPanel::Params& params)
 
 LLInventoryPanel::~LLInventoryPanel()
 {
+    mLibraryVisibilityConnection.disconnect();
     U32 sort_order = getFolderViewModel()->getSorter().getSortOrder();
     if (mSortOrderSetting != INHERIT_SORT_ORDER)
     {
@@ -1120,11 +1121,19 @@ void LLInventoryPanel::initRootContent()
     }
     else
     {
+        // Only full hierarchy panels follow the global Library choice.
+        if (!mLibraryVisibilityConnection.connected())
+        {
+            mLibraryVisibilityConnection = gSavedSettings.getControl("FSShowLibraryFolder")->getSignal()->connect(
+                [this](LLControlVariable*, const LLSD& value, const LLSD&)
+                {
+                    setLibraryFolderVisible(value.asBoolean());
+                });
+        }
         // Default case: always add "My Inventory" root first, "Library" root second
         // If we run out of time, this still should create root folders
         buildNewViews(gInventory.getRootFolderID());        // My Inventory
-        // <FS:TP> [FIRE-34881] Library root is now optional, toggled from the
-        // inventory gear menu, instead of being permanently disabled
+        // <FS:TP> [FIRE-34881] Library root is optional, toggled from the inventory gear menu.
         //   buildNewViews(gInventory.getLibraryRootFolderID()); // Library
         if (gSavedSettings.getBOOL("FSShowLibraryFolder"))
         {
@@ -1140,6 +1149,10 @@ void LLInventoryPanel::initRootContent()
 // outfit lookups, etc.) depend on being able to resolve the Library folder ID.
 void LLInventoryPanel::setLibraryFolderVisible(bool visible)
 {
+    if (!mFolderRoot.get() || getRootFolderID().notNull() || mViewsInitialized < VIEWS_BUILDING)
+    {
+        return;
+    }
     const LLUUID library_id = gInventory.getLibraryRootFolderID();
     if (library_id.isNull())
     {
@@ -1283,6 +1296,12 @@ LLFolderViewItem* LLInventoryPanel::buildViewsTree(const LLUUID& id,
                                                   const EBuildModes &mode,
                                                   S32 depth)
 {
+    // Queued builds and model updates must not recreate a hidden Library root.
+    if (getRootFolderID().isNull() && id == gInventory.getLibraryRootFolderID()
+        && !gSavedSettings.getBOOL("FSShowLibraryFolder"))
+    {
+        return nullptr;
+    }
     depth++;
 
     // Force the creation of an extra root level folder item if required by the inventory panel (default is "false")

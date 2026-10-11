@@ -89,6 +89,18 @@ static constexpr S32 OUTFIT_SORT_FAVORITES_TO_TOP = 0x1;
 static constexpr S32 OUTFIT_SORT_NEWEST_FIRST     = 0x2;
 // </FS:TP>
 
+// Preserve the legacy favorites choice once, including an explicit new alphabetical choice.
+static S32 get_outfit_list_sort_order()
+{
+    S32 mode = gSavedSettings.getS32("FSOutfitListSortOrder");
+    if (mode == -1)
+    {
+        mode = gSavedSettings.getS32("OutfitListSortOrder") != 0 ? OUTFIT_SORT_FAVORITES_TO_TOP : 0;
+        gSavedSettings.setS32("FSOutfitListSortOrder", mode);
+    }
+    return mode;
+}
+
 // <FS:TP> [FIRE-36105] Entirely custom helper. approximates an outfit folders creation date from its contents, with a per-sort cache (sOutfitDateCache) to avoid re-walking items on every comparator call.
 // Returns the creation date of the outfit folder backing this tab, or 0
 // if the folder can't be found for some reason.
@@ -265,7 +277,7 @@ bool LLOutfitsList::postBuild()
 
 void LLOutfitsList::initComparator()
 {
-    S32 mode = gSavedSettings.getS32("FSOutfitListSortOrder");
+    S32 mode = get_outfit_list_sort_order();
     // <FS:TP> [FIRE-36105] FSOutfitListSortOrder is a bitmask so
     // favorites-to-top and newest-first can be combined independently
     // if (mode == 0)
@@ -1028,7 +1040,7 @@ void LLOutfitsList::sortOutfits()
 // tab is added and doesn't need a resort here.
 void LLOutfitsList::onOutfitItemsChanged(const LLUUID& cat_id)
 {
-    S32 mode = gSavedSettings.getS32("FSOutfitListSortOrder");
+    S32 mode = get_outfit_list_sort_order();
     if (mode & OUTFIT_SORT_NEWEST_FIRST)
     {
         sortOutfits();
@@ -1079,7 +1091,7 @@ void LLOutfitsList::onChangeSortOrder(const LLSD& userdata)
         // S32 val = gSavedSettings.getS32("OutfitListSortOrder");
         // gSavedSettings.setS32("OutfitListSortOrder", (val ? 0 : 1));
         // this one's a toggle, independent of the alphabetical/newest-first choice
-        S32 val = gSavedSettings.getS32("FSOutfitListSortOrder");
+        S32 val = get_outfit_list_sort_order();
         gSavedSettings.setS32("FSOutfitListSortOrder", val ^ OUTFIT_SORT_FAVORITES_TO_TOP);
 
         initComparator();
@@ -1087,7 +1099,7 @@ void LLOutfitsList::onChangeSortOrder(const LLSD& userdata)
     else if (sort_data == "alphabetical" || sort_data == "newest_first")
     {
         // these two are mutually exclusive, so set/clear the bit rather than toggling it
-        S32 val = gSavedSettings.getS32("FSOutfitListSortOrder");
+        S32 val = get_outfit_list_sort_order();
         if (sort_data == "newest_first")
         {
             val |= OUTFIT_SORT_NEWEST_FIRST;
@@ -1976,7 +1988,7 @@ bool LLOutfitListSortMenu::onEnable(LLSD::String param)
 {
     // <FS:TP> [FIRE-36105] sort_order moved up so it's shared by the new
     // "newest_first"/"alphabetical" cases below too
-    static LLCachedControl<S32> sort_order(gSavedSettings, "FSOutfitListSortOrder", 0);
+    const S32 sort_order = get_outfit_list_sort_order();
 
     if ("favorites_to_top" == param)
     {

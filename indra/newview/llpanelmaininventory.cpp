@@ -2911,10 +2911,6 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
     {
         bool visibility = !gSavedSettings.getBOOL("FSShowLibraryFolder");
         gSavedSettings.setBOOL("FSShowLibraryFolder", visibility);
-        if (mAllItemsPanel)
-        {
-            mAllItemsPanel->setLibraryFolderVisible(visibility);
-        }
     }
     // </FS:TP>
 }
