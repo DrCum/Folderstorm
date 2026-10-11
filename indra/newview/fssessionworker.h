@@ -15,6 +15,7 @@ public:
     static bool managed();
     static void configure(); // Temporary settings only, after command line.
     static void importProfileSettings(); // Explicit host choice; before UI/login, native backup eligibility.
+    static bool importProfileToolbars(); // Once, after successful login; only the destination account's toolbars.
     static bool temporaryControl(const std::string& name);
     static void tick();       // Main-thread protocol/lifecycle; never a render timer.
     static bool renderAllowed();

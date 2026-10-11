@@ -2540,6 +2540,7 @@ void LLViewerWindow::initWorldUI()
     // Note: we need to load the toolbars only *after* the user is logged in and IW
     if (gToolBarView)
     {
+        FSSessionWorker::importProfileToolbars();
         if (gSavedSettings.getBOOL("ResetToolbarSettings"))
         {
             gToolBarView->loadDefaultToolbars();

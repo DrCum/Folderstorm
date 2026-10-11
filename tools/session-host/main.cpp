@@ -44,6 +44,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -158,7 +159,20 @@ bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int sel
     return true;
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
-std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id, const std::filesystem::path& settingsSource)
+struct ProfileCopyRequest
+{
+    std::filesystem::path settings, toolbars;
+    std::uint32_t groups = 0;
+};
+struct ProfileSetupScope
+{
+    bool& open;
+    explicit ProfileSetupScope(bool& flag) : open(flag) { open = true; }
+    ~ProfileSetupScope() { open = false; }
+    ProfileSetupScope(const ProfileSetupScope&) = delete;
+    ProfileSetupScope& operator=(const ProfileSetupScope&) = delete;
+};
+std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id, const ProfileCopyRequest& copy)
 {
     // Preserve proxy/trust/runtime variables. Read only to form the child block;
     // never log the block or mutate this controller's environment.
@@ -180,7 +194,17 @@ std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pi
     entries[L"FOLDERSTORM_SESSION_FRAMES"] = hexHandle(frames);
     entries[L"FOLDERSTORM_SESSION_FRAME_MUTEX"] = hexHandle(frameMutex);
     entries.erase(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE");
-    if (!settingsSource.empty()) entries[L"FOLDERSTORM_SESSION_SETTINGS_SOURCE"] = settingsSource.wstring();
+    entries.erase(L"FOLDERSTORM_SESSION_PROFILE_SOURCE");
+    entries.erase(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE");
+    entries.erase(L"FOLDERSTORM_SESSION_COPY_GROUPS");
+    if (copy.groups)
+    {
+        // Older workers ignore this selective request instead of interpreting
+        // a toolbar-only selection as their legacy all-preferences import.
+        entries[L"FOLDERSTORM_SESSION_PROFILE_SOURCE"] = copy.settings.wstring();
+        entries[L"FOLDERSTORM_SESSION_COPY_GROUPS"] = std::to_wstring(copy.groups);
+        if (copy.groups & CopyToolbars) entries[L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE"] = copy.toolbars.wstring();
+    }
     std::vector<wchar_t> result;
     for (const auto& entry : entries)
     {
@@ -329,6 +353,8 @@ struct Host
     std::vector<std::wstring> attentionLabels;
     std::wstring pinLabels[6], pinTips[6];
     bool menuOpen = false;
+    bool profileSetupOpen = false;
+    std::uint64_t profileSetupEpoch = 0;
 
     HWND chatAccent = nullptr;
     int accentSlot = -1;
@@ -636,7 +662,7 @@ struct Host
     }
     bool hostShortcut(const MSG& event)
     {
-        if (menuOpen || (event.message != WM_KEYDOWN && event.message != WM_SYSKEYDOWN) || (event.lParam & (1LL<<30))) return false;
+        if (menuOpen || profileSetupOpen || (event.message != WM_KEYDOWN && event.message != WM_SYSKEYDOWN) || (event.lParam & (1LL<<30))) return false;
         const HWND focus = GetFocus(); if (!focus) return false;
         const HWND root = GetAncestor(focus,GA_ROOT);
         if (root != window && root != chatWindow && root != controlsWindow && root != attentionWindow && !isMonitorRoot(root)) return false;
@@ -1273,7 +1299,7 @@ struct Host
         AppendMenuW(characters,MF_SEPARATOR,0,nullptr);
         add(characters,240,L"Restart: "+name+L"…",!busy());add(characters,241,L"Cancel pending restart",slot && slot->restart.phase()!=Restart::Phase::Idle);
         add(characters,202,L"Close: "+name+L"…",slot && slot->pipe.alive() && !slot->detached && !busy());
-        add(characters,203,L"Open selected profile folder");add(characters,277,L"Copy main settings and open login…",!busy() && (!slot || !slot->running()));
+        add(characters,203,L"Open selected profile folder");add(characters,277,L"Copy from main profile…",!busy() && (!slot || !slot->running()));
         add(characters,SetActions,L"Session sets…");
         HMENU switches=CreatePopupMenu();for(int i=0;i<MaxCharacters;++i)add(switches,440+static_cast<UINT>(i),characterName(i),slots[i] && slots[i]->snapshot.state==State::Ready && !busy(),i==active);
         add(switches,285,L"Next ready character",presentation.shortcuts && !busy());add(switches,286,L"Previous ready character",presentation.shortcuts && !busy());
@@ -1288,6 +1314,7 @@ struct Host
         add(view,Details,L"Show diagnostics",true,experience.diagnostics);add(view,RestoreShell,L"Restore host controls");add(view,RecoverShell,L"Recover window positions");
         add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);
         add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,206,L"Save host choices");
+        add(settings,277,L"Copy from main profile: "+name+L"…",!busy() && (!slot || !slot->running()));
         if(group==1){AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(characters),L"Selected character actions");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
         else if(group==2)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(view),L"View");
         else if(group==3)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(settings),L"Settings");
@@ -1913,23 +1940,27 @@ struct Host
 #endif
         CoTaskMemFree(roaming); return path;
     }
-    void copyProfileSettings(int index)
+    HWND profileDialogOwner() const
     {
-        if (!validSlot(index) || busy() || (slots[index] && slots[index]->running()))
-        { message(L"Close the selected character's viewer before copying preferences into its profile."); return; }
+        const HWND panel = GetActiveWindow(); DWORD pid = 0;
+        if (panel) GetWindowThreadProcessId(panel,&pid);
+        return panel && pid == GetCurrentProcessId() ? panel : window;
+    }
+    std::filesystem::path pickSettingsFolder(const std::filesystem::path& initial)
+    {
         IFileOpenDialog* dialog = nullptr;
         if (FAILED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog))))
-        { message(L"Unable to open the settings-folder picker."); return; }
+        { message(L"Unable to open the settings-folder picker."); return {}; }
         DWORD options = 0;
         if (FAILED(dialog->GetOptions(&options)) ||
             FAILED(dialog->SetOptions(options|FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST|FOS_NOCHANGEDIR)))
-        { dialog->Release(); message(L"Unable to configure the settings-folder picker."); return; }
+        { dialog->Release(); message(L"Unable to configure the settings-folder picker."); return {}; }
         dialog->SetTitle(L"Choose the main viewer's user_settings folder (or a settings backup)");
-        const auto initial = mainSettingsFolder(); IShellItem* start = nullptr;
+        IShellItem* start = nullptr;
         if (!initial.empty() && SUCCEEDED(SHCreateItemFromParsingName(initial.c_str(),nullptr,IID_PPV_ARGS(&start))))
         { dialog->SetFolder(start); start->Release(); }
         std::filesystem::path source;
-        if (SUCCEEDED(dialog->Show(window)))
+        if (SUCCEEDED(dialog->Show(profileDialogOwner())))
         {
             IShellItem* result = nullptr;
             if (SUCCEEDED(dialog->GetResult(&result)))
@@ -1939,22 +1970,132 @@ struct Host
                 result->Release();
             }
         }
-        dialog->Release(); if (source.empty()) return;
-        std::error_code error;
-        const auto file = source/L"settings.xml";
-        if (!std::filesystem::is_regular_file(file,error) || error || std::filesystem::file_size(file,error) > ProfileSettingsLimit || error)
-        { message(L"Choose a folder containing a saved settings.xml file (up to 4 MiB). Save/close the main viewer first for its latest preferences."); return; }
-        const auto destination = profiles/(L"Character"+std::to_wstring(index+1));
-        const auto text = L"Copy graphics, interface, colors and key bindings from:\n"+source.wstring()+
-            L"\n\nInto:\n"+destination.wstring()+
-            L"\n\nThis opens native login without logging in automatically. Existing preferences receive a backup before replacement. Credentials, account data, chats, caches and local assistant permissions stay separate. Use the main viewer's last saved preferences; close it first for recent changes.";
-        if (MessageBoxW(window,text.c_str(),L"Copy preferences into this character profile?",MB_OKCANCEL|MB_ICONQUESTION) != IDOK) return;
-        launch(index,source);
+        dialog->Release(); return source;
     }
-    void launch(int index, const std::filesystem::path& settingsSource = {})
+    bool selectProfileCopy(int index, ProfileCopyRequest& result)
     {
-        if (!validSlot(index) || busy()) { message(L"Finish the current switch or close action before launching."); return; }
+        using namespace fs_host_ui;
+        auto source = mainSettingsFolder();
+        std::uint32_t groups = CopyAll;
+        const auto plainDirectory = [](const std::filesystem::path& path)
+        {
+            const DWORD attributes = GetFileAttributesW(path.c_str());
+            return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+        };
+        const auto plainFile = [](const std::filesystem::path& path, std::uintmax_t limit)
+        {
+            const DWORD attributes = GetFileAttributesW(path.c_str());
+            if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))) return false;
+            std::error_code error; const auto size = std::filesystem::file_size(path,error);
+            return !error && size && size <= limit;
+        };
+        if (source.empty() || !plainDirectory(source)) source = pickSettingsFolder(source);
+        if (source.empty()) return false;
+        std::filesystem::path chosenAccount;
+        for (;;)
+        {
+            std::vector<std::filesystem::path> accounts;
+            // Native installations keep account folders beside user_settings;
+            // Backup & Restore puts them inside the selected backup directory.
+            const auto accountRoot = _wcsicmp(source.filename().c_str(),L"user_settings") == 0 ? source.parent_path() : source;
+            std::error_code error;
+            std::filesystem::directory_iterator entry(accountRoot,error), end;
+            unsigned int inspected = 0;
+            while (!error && entry != end && inspected++ < 512)
+            {
+                const auto folder = entry->path();
+                if (plainDirectory(folder) && plainFile(folder/L"toolbars.xml",64u*1024u)) accounts.push_back(folder);
+                entry.increment(error);
+            }
+            std::sort(accounts.begin(),accounts.end());
+            std::vector<std::wstring> choices{accounts.empty()?L"No saved toolbar layouts found":L"Choose the account whose toolbar layout to copy"};
+            unsigned int selected = 0;
+            for (std::size_t i = 0; i < accounts.size(); ++i)
+            {
+                choices.push_back(accounts[i].filename().wstring());
+                if (accounts[i] == chosenAccount) selected = static_cast<unsigned int>(i)+1;
+            }
+            if (!selected && accounts.size() == 1) selected = 1;
+            if (accounts.empty()) groups &= ~CopyToolbars;
+            std::vector<Field> fields{
+                {L"Source settings",L"0",FieldType::Choice,{source.wstring(),L"Browse another installation / backup…"}},
+                {L"Toolbar source account",std::to_wstring(selected),FieldType::Choice,choices}};
+            const std::pair<const wchar_t*,std::uint32_t> options[] = {
+                {L"Graphics preferences",CopyGraphics},{L"Interface / skin",CopyInterface},
+                {L"Custom colors",CopyColors},{L"Keyboard bindings",CopyBindings},
+                {L"Quick preferences",CopyQuickPreferences},{L"Toolbar buttons / layout",CopyToolbars}};
+            for (const auto& option : options) fields.push_back({option.first,(groups&option.second)?L"1":L"0",FieldType::Check});
+            const auto title = L"Copy from main profile → Character "+std::to_wstring(index+1);
+            if (!edit(profileDialogOwner(),title.c_str(),fields)) return false;
+            groups = 0;
+            for (std::size_t i = 0; i < std::size(options); ++i) if (number(fields[i+2])) groups |= options[i].second;
+            if (number(fields[0]))
+            {
+                const auto next = pickSettingsFolder(source);
+                if (next.empty()) return false;
+                source = next; chosenAccount.clear(); continue;
+            }
+            if (!validProfileCopyGroups(groups))
+            { MessageBoxW(profileDialogOwner(),L"Choose at least one group to copy.",L"Copy from main profile",MB_OK|MB_ICONINFORMATION); continue; }
+            if (!plainDirectory(source) || ((groups&(CopyGraphics|CopyInterface)) && !plainFile(source/L"settings.xml",ProfileSettingsLimit)))
+            { message(L"Choose a saved user_settings folder or backup containing settings.xml (up to 4 MiB)."); return false; }
+            const auto account = number(fields[1]);
+            if (account > 0 && account <= accounts.size()) chosenAccount = accounts[account-1];
+            else chosenAccount.clear();
+            if ((groups&CopyToolbars) && chosenAccount.empty())
+            { MessageBoxW(profileDialogOwner(),L"Choose a source account for its toolbar layout, or uncheck Toolbar layout and buttons.",L"Copy toolbar layout",MB_OK|MB_ICONINFORMATION); continue; }
+            break;
+        }
+        const auto destination = profiles/(L"Character"+std::to_wstring(index+1));
+        const auto text = L"Copy the checked settings from:\n"+source.wstring()+
+            ((groups&CopyToolbars)?L"\nToolbar source: "+chosenAccount.wstring():L"")+
+            L"\n\nInto:\n"+destination.wstring()+
+            L"\n\nExisting files are backed up before replacement. Toolbars are applied only to the first account that successfully logs in. Credentials, other account data, chats, caches and security/automatic-action choices stay separate.\n\nSave and close the source viewer first for its latest choices. This opens a normal login; it does not log in automatically.";
+        if (MessageBoxW(profileDialogOwner(),text.c_str(),L"Copy checked settings and open login?",MB_OKCANCEL|MB_ICONQUESTION) != IDOK) return false;
+        result.settings = source; result.toolbars = chosenAccount; result.groups = groups;
+        return true;
+    }
+    void copyProfileSettings(int index)
+    {
+        if (!validSlot(index) || busy() || closing || (slots[index] && slots[index]->running()))
+        { message(L"Close the selected character's viewer before copying preferences into its profile."); return; }
+        ProfileCopyRequest copy;
+        const auto epoch = profileSetupEpoch;
+        {
+            ProfileSetupScope setup(profileSetupOpen);
+            if (!selectProfileCopy(index,copy)) return;
+        }
+        if (epoch != profileSetupEpoch || closing)
+        { message(L"Profile copy cancelled because management ended while setup was open."); return; }
+        launch(index,copy);
+    }
+    int firstProfileChoice(int index)
+    {
+        using TaskDialog=HRESULT(WINAPI*)(const TASKDIALOGCONFIG*,int*,int*,BOOL*);
+        const auto dialog=reinterpret_cast<TaskDialog>(GetProcAddress(GetModuleHandleW(L"comctl32.dll"),"TaskDialogIndirect"));
+        const TASKDIALOG_BUTTON buttons[] = {
+            {3301,L"Copy from main profile…\nChoose graphics, interface, colors, key bindings, quick preferences and toolbar layout."},
+            {3302,L"Keep this profile's settings\nOpen normal login with its existing settings, or defaults for a new profile."}};
+        const auto title = L"Set up Character "+std::to_wstring(index+1);
+        if (dialog)
+        {
+            TASKDIALOGCONFIG options{}; options.cbSize=sizeof(options); options.hwndParent=profileDialogOwner();
+            options.dwFlags=TDF_USE_COMMAND_LINKS|TDF_ALLOW_DIALOG_CANCELLATION; options.dwCommonButtons=TDCBF_CANCEL_BUTTON;
+            options.pszWindowTitle=L"Folderstorm · first profile open"; options.pszMainInstruction=title.c_str();
+            options.pszContent=L"You can copy settings later through Characters or Settings → Copy from main profile. Credentials and account security choices are never copied.";
+            options.pButtons=buttons; options.cButtons=2; options.nDefaultButton=3301;
+            int result=IDCANCEL;
+            if (SUCCEEDED(dialog(&options,&result,nullptr,nullptr))) return result==3301?1:result==3302?2:0;
+        }
+        const int answer=MessageBoxW(profileDialogOwner(),L"Copy settings from your main installation before opening this character's login?\n\nYes: choose settings to copy. No: keep existing settings/defaults. Cancel: do not open login.\n\nThis choice is offered once per profile. You can copy later through Characters or Settings.",title.c_str(),MB_YESNOCANCEL|MB_ICONQUESTION);
+        return answer==IDYES?1:answer==IDNO?2:0;
+    }
+    void launch(int index, const ProfileCopyRequest& requested = {})
+    {
+        if (!validSlot(index) || busy() || closing) { message(L"Finish the current switch or close action before launching."); return; }
         if (slots[index] && slots[index]->running()) { message(L"This slot still has a viewer open. Close that viewer before relaunching."); return; }
+        const auto epoch = profileSetupEpoch;
+        const auto openingToken = setOpen.active ? setOpen.token : 0;
         std::error_code error;
         if (!std::filesystem::is_regular_file(viewer, error) || error) { message(L"Viewer executable missing. Keep this controller beside the matching viewer."); return; }
         auto slot = std::make_unique<Slot>();
@@ -1968,11 +2109,29 @@ struct Host
         Handle lease(CreateFileW((profile / L"profile.lock").c_str(), GENERIC_READ | GENERIC_WRITE, 0, &inheritance,
             OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE, nullptr));
         if (lease.value == INVALID_HANDLE_VALUE) { message(L"This character profile is already open in another controller or viewer."); return; }
+        const auto marker = profile/L"profile-copy-offered-v1.txt";
+        bool offered = false;
+        const DWORD markerAttributes=GetFileAttributesW(marker.c_str());
+        if (markerAttributes != INVALID_FILE_ATTRIBUTES && !(markerAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)))
+        {
+            std::ifstream input(marker,std::ios::binary); char bytes[4]{}; input.read(bytes,4);
+            offered = input.gcount()==4 && input.peek()==std::char_traits<char>::eof() && std::string(bytes,4)==ProfilePromptMarker;
+        }
+        ProfileCopyRequest copy = requested;
+        if (!offered && !copy.groups)
+        {
+            ProfileSetupScope setup(profileSetupOpen);
+            const int choice = firstProfileChoice(index);
+            if (!choice || (choice==1 && !selectProfileCopy(index,copy))) return;
+        }
+        if (busy() || closing || epoch != profileSetupEpoch ||
+            (openingToken && !setOpen.owns(openingToken,GetTickCount64())) || (slots[index] && slots[index]->running()))
+        { message(L"Profile setup cancelled because the host or character state changed."); return; }
         PipePair pair;
         if (!pair.create(slot->id)) { message(L"Unable to create the private worker connection."); return; }
         if (!slot->pipe.open(pair.server.take())) { message(L"Unable to initialize asynchronous worker control."); return; }
         if (!slot->preview.create(slot->id, GetCurrentProcessId())) { message(L"Unable to create the bounded preview frame lane."); return; }
-        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id, settingsSource);
+        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id, copy);
         if (childEnvironment.empty()) { message(L"Unable to prepare the worker environment."); return; }
         SIZE_T attributeBytes = 0;
         InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
@@ -1996,10 +2155,20 @@ struct Host
         slots[index] = std::move(slot);
         lifecycle.beginManagement();
         message(L"Log in a different character in each viewer. The first ready character becomes active.");
+        if (!offered)
+        {
+            const auto temporary=profile/(L"profile-copy-offered-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64())+L".tmp");
+            Handle output(CreateFileW(temporary.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr));
+            DWORD written=0;
+            bool saved=output.value!=INVALID_HANDLE_VALUE && WriteFile(output.value,ProfilePromptMarker,4,&written,nullptr) && written==4 && FlushFileBuffers(output.value);
+            if (output.value!=INVALID_HANDLE_VALUE) CloseHandle(output.take());
+            saved=saved && MoveFileExW(temporary.c_str(),marker.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
+            if (!saved) { DeleteFileW(temporary.c_str()); message(L"Login opened, but the first-open choice could not be saved; the setup prompt may appear again."); }
+        }
     }
     bool busy() const
     {
-        if (handoff.step() != Handoff::Step::Idle || detaching) return true;
+        if (profileSetupOpen || handoff.step() != Handoff::Step::Idle || detaching) return true;
         for (const auto& slot : slots) if (slot && slot->restart.phase() != Restart::Phase::Idle && !slot->detached && slot->running()) return true;
         return false;
     }
@@ -2422,6 +2591,7 @@ struct Host
     }
     void detach(bool close, bool logout = false)
     {
+        ++profileSetupEpoch;
         setOpen.cancel();
         for (auto& slot : slots) if (slot) slot->hasPendingReview = false;
         lifecycle.stopManaging(slots);

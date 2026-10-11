@@ -17,6 +17,9 @@
 #include "fssessionprofileseed.h"
 #include "llsdserialize.h"
 #include "llxmlnode.h"
+#include "lltoolbarview.h"
+#include "llxuiparser.h"
+#include "llcommandmanager.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -67,11 +70,58 @@
 #include <cstdlib>
 #include <memory>
 #include <map>
+#include <set>
 #include <cmath>
 
 namespace
 {
 using namespace fs_session;
+bool profilePlainFile(const std::filesystem::path& path)
+{
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));
+}
+bool profilePlainDirectory(const std::filesystem::path& path)
+{
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+}
+bool readProfileFile(const std::filesystem::path& path, std::string& bytes, std::size_t limit = ProfileSettingsLimit)
+{
+    bytes.clear(); // A rejected read must not leave a queued toolbar payload.
+    std::error_code error;
+    if (!profilePlainFile(path)) return false;
+    const auto size = std::filesystem::file_size(path,error);
+    if (error || !size || size > limit) return false;
+    std::ifstream input(path,std::ios::binary);
+    if (!input) return false;
+    bytes.assign(static_cast<std::size_t>(size),'\0'); input.read(bytes.data(),static_cast<std::streamsize>(size));
+    const bool complete = input.gcount() == static_cast<std::streamsize>(size) && input.peek() == std::char_traits<char>::eof() && validProfileXmlText(bytes);
+    if (!complete) bytes.clear();
+    return complete;
+}
+struct ProfileBackup
+{
+    std::filesystem::path folder;
+    bool create(const std::filesystem::path& destination)
+    {
+        std::error_code error;
+        if (!profilePlainDirectory(destination)) return false;
+        const auto backups = destination/L"settings-import-backups";
+        std::filesystem::create_directory(backups,error);
+        if (error || !profilePlainDirectory(backups)) return false;
+        folder = backups/(std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(GetCurrentProcessId()));
+        return std::filesystem::create_directory(folder,error) && !error;
+    }
+    bool save(const std::filesystem::path& file) const
+    {
+        const DWORD attributes = GetFileAttributesW(file.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND;
+        if (!profilePlainFile(file)) return false;
+        std::error_code error;
+        return std::filesystem::copy_file(file,folder/file.filename(),std::filesystem::copy_options::none,error) && !error;
+    }
+};
 struct Worker
 {
     Pipe pipe;
@@ -83,6 +133,9 @@ struct Worker
     bool previewPass = false;
     std::string previewError;
     std::wstring settingsSource;
+    std::wstring toolbarSource;
+    std::uint32_t copyGroups = CopyLegacy;
+    std::string toolbarImport;
     std::string settingsNotice;
     TransitionClock transition;
     unsigned int transitionStyle = 0, transitionHeight = 64;
@@ -461,6 +514,7 @@ struct Worker
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
         detached = true;
+        toolbarImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); events.clear();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
@@ -709,14 +763,26 @@ bool FSSessionWorker::initialize()
     const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
     const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
     const auto settingsSource = env(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE",32768);
+    const auto profileSource = env(L"FOLDERSTORM_SESSION_PROFILE_SOURCE",32768);
+    const auto toolbarSource = env(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE",32768);
+    const auto copyGroups = env(L"FOLDERSTORM_SESSION_COPY_GROUPS",16);
+    const bool explicitCopy = GetEnvironmentVariableW(L"FOLDERSTORM_SESSION_COPY_GROUPS",nullptr,0) != 0;
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PIPE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ID", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty()) return true;
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PROFILE_SOURCE", nullptr);
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE", nullptr);
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_COPY_GROUPS", nullptr);
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty() && profileSource.empty() && toolbarSource.empty() && copyGroups.empty() && !explicitCopy) return true;
     if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
+    if ((explicitCopy && (copyGroups.empty() || profileSource.empty() || !settingsSource.empty())) ||
+        (!profileSource.empty() && !explicitCopy) ||
+        (!settingsSource.empty() && !std::filesystem::path(settingsSource).is_absolute()) ||
+        (!profileSource.empty() && !std::filesystem::path(profileSource).is_absolute()) ||
+        (!toolbarSource.empty() && !std::filesystem::path(toolbarSource).is_absolute())) return false;
     auto value = std::make_unique<Worker>();
     for (std::size_t i = 0; i < 16; ++i)
     {
@@ -743,7 +809,11 @@ bool FSSessionWorker::initialize()
             reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(number)) : INVALID_HANDLE_VALUE;
     };
     if (!value->preview.open(frameHandle(frames), frameHandle(frameMutex)) || !value->preview.bootstrap(value->id, value->host)) return false;
-    value->settingsSource = settingsSource;
+    value->settingsSource = explicitCopy ? profileSource : settingsSource;
+    value->toolbarSource = toolbarSource;
+    if (explicitCopy && !parseProfileCopyGroups(copyGroups,value->copyGroups)) return false;
+    if ((!toolbarSource.empty() && !(value->copyGroups & CopyToolbars)) ||
+        ((value->copyGroups & CopyToolbars) && toolbarSource.empty())) return false;
     value->lastCommand = GetTickCount64();
     worker = std::move(value);
     return true;
@@ -751,36 +821,33 @@ bool FSSessionWorker::initialize()
 bool FSSessionWorker::managed() { return worker && !worker->detached; }
 void FSSessionWorker::importProfileSettings()
 {
-    if (!managed() || worker->settingsSource.empty()) return;
+    if (!managed()) return;
+    if (worker->copyGroups & CopyToolbars)
+    {
+        // Snapshot the selected source before login. The destination account is
+        // deliberately unknown here; no account files are written until login.
+        if (!readProfileFile(std::filesystem::path(worker->toolbarSource)/L"toolbars.xml",worker->toolbarImport,64u*1024u))
+            worker->settingsNotice = "Settings import: toolbar source unavailable or invalid; destination kept. ";
+        else worker->settingsNotice = "Settings import: toolbar copy queued for the first successful login. ";
+        worker->toolbarSource.clear();
+        worker->copyGroups &= ~CopyToolbars;
+    }
+    if (worker->settingsSource.empty() || !(worker->copyGroups & CopyLegacy)) return;
     const auto folder = std::filesystem::path(worker->settingsSource);
     worker->settingsSource.clear(); // One deliberate attempt; never retry at a new login.
     const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings.xml");
     const auto target = std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
     const auto destination = target.parent_path();
-    const auto plainFile = [](const std::filesystem::path& path)
-    {
-        const DWORD attributes = GetFileAttributesW(path.c_str());
-        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));
-    };
-    const auto read = [&plainFile](const std::filesystem::path& path,std::string& bytes)
-    {
-        std::error_code error; if (!plainFile(path)) return false;
-        const auto size = std::filesystem::file_size(path,error);
-        if (error || !size || size > ProfileSettingsLimit) return false;
-        std::ifstream input(path,std::ios::binary); if (!input) return false;
-        bytes.assign(static_cast<std::size_t>(size),'\0'); input.read(bytes.data(),static_cast<std::streamsize>(size));
-        return input.gcount() == static_cast<std::streamsize>(size) && input.peek() == std::char_traits<char>::eof() &&
-            bytes.find("<!DOCTYPE") == std::string::npos && bytes.find("<!ENTITY") == std::string::npos;
-    };
     std::string bytes;
-    if (!read(folder/L"settings.xml",bytes))
-    { worker->settingsNotice = "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
+    const bool copyPreferences = (worker->copyGroups & (CopyGraphics|CopyInterface)) != 0;
+    if (copyPreferences && !readProfileFile(folder/L"settings.xml",bytes))
+    { worker->settingsNotice += "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
     std::error_code error;
-    if (std::filesystem::equivalent(folder/L"settings.xml",target,error))
-    { worker->settingsNotice = "Settings import: source is this profile; preferences unchanged."; return; }
+    if (copyPreferences && std::filesystem::equivalent(folder/L"settings.xml",target,error))
+    { worker->settingsNotice += "Settings import: source is this profile; preferences unchanged."; return; }
     LLSD data; std::istringstream input(bytes);
-    if (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries)
-    { worker->settingsNotice = "Settings import: invalid or oversized preferences; profile unchanged."; return; }
+    if (copyPreferences && (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries))
+    { worker->settingsNotice += "Settings import: invalid or oversized preferences; profile unchanged."; return; }
     const auto validValue = [](const std::string& type,const LLSD& value)
     {
         const auto number = [](const LLSD& v) { return (v.isReal() || v.isInteger()) && std::isfinite(v.asReal()); };
@@ -798,88 +865,142 @@ void FSSessionWorker::importProfileSettings()
         return true;
     };
     LLSD changes; std::size_t skipped = 0;
+    if (!copyPreferences) data = LLSD::emptyMap();
     for (auto it = data.beginMap(); it != data.endMap(); ++it)
     {
         auto control = gSavedSettings.getControl(it->first); const auto& record = it->second;
         const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
         if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
-            !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean()) ||
+            !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean(),worker->copyGroups) ||
             !validValue(type,record["Value"])) { ++skipped; continue; }
         changes[it->first] = record["Value"];
     }
-    const auto plainDirectory = [](const std::filesystem::path& path)
+    ProfileBackup backup;
+    if (!backup.create(destination) || (changes.size() && !backup.save(target)))
+    { worker->settingsNotice += "Settings import: unable to back up existing preferences; profile unchanged."; return; }
+    if (changes.size())
     {
-        const DWORD attributes = GetFileAttributesW(path.c_str());
-        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
-    };
-    const auto backups = destination/L"settings-import-backups";
-    error.clear();
-    if (!plainDirectory(destination))
-    { worker->settingsNotice = "Settings import: profile settings directory unavailable or redirected; unchanged."; return; }
-    std::filesystem::create_directory(backups,error);
-    if (error || !plainDirectory(backups))
-    { worker->settingsNotice = "Settings import: unable to create preference backup; profile unchanged."; return; }
-    const auto backup = backups/(std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(GetCurrentProcessId()));
-    // An exclusively new directory holds both originals and staging files; an
-    // old or redirected temporary file must never be mistaken for a fresh save.
-    if (!std::filesystem::create_directory(backup,error) || error)
-    { worker->settingsNotice = "Settings import: unable to create unique preference backup; profile unchanged."; return; }
-    const auto backupFile = [&](const std::filesystem::path& file)
-    {
-        const DWORD attributes = GetFileAttributesW(file.c_str());
-        if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND;
-        if (!plainFile(file)) return false;
-        std::error_code failure;
-        return std::filesystem::copy_file(file,backup/file.filename(),std::filesystem::copy_options::none,failure) && !failure;
-    };
-    if (!backupFile(target))
-    { worker->settingsNotice = "Settings import: unable to back up existing preferences; profile unchanged."; return; }
-    LLSD previous, effective;
-    for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
-    {
-        auto control = gSavedSettings.getControl(it->first);
-        previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
-    }
-    const auto temporary = backup/L"settings-import.tmp";
-    gSavedSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
-    LLSD saved;
-    bool complete = read(temporary,bytes);
-    if (complete)
-    {
-        std::istringstream written(bytes);
-        complete = LLSDSerialize::fromXML(saved,written,false) > 0 && saved.isMap();
-    }
-    for (auto it = changes.beginMap(); complete && it != changes.endMap(); ++it)
-    {
-        auto control = gSavedSettings.getControl(it->first);
-        if (control->shouldSave(true))
-            complete = saved.has(it->first) && saved[it->first]["Value"] == control->getSaveValue();
-    }
-    if (!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
-    {
-        for (auto it = previous.beginMap(); it != previous.endMap(); ++it)
-        { auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
-        std::filesystem::remove(temporary,error);
-        worker->settingsNotice = "Settings import: preference write failed; original settings retained."; return;
+        LLSD previous, effective;
+        for (auto it = changes.beginMap(); it != changes.endMap(); ++it)
+        {
+            auto control = gSavedSettings.getControl(it->first);
+            previous[it->first] = control->getSaveValue(); effective[it->first] = control->getValue(); control->setValue(it->second,true);
+        }
+        const auto temporary = backup.folder/L"settings-import.tmp";
+        gSavedSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
+        LLSD saved;
+        bool complete = readProfileFile(temporary,bytes);
+        if (complete)
+        {
+            std::istringstream written(bytes);
+            complete = LLSDSerialize::fromXML(saved,written,false) > 0 && saved.isMap();
+        }
+        for (auto it = changes.beginMap(); complete && it != changes.endMap(); ++it)
+        {
+            auto control = gSavedSettings.getControl(it->first);
+            if (control->shouldSave(true))
+                complete = saved.has(it->first) && saved[it->first]["Value"] == control->getSaveValue();
+        }
+        if (!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+        {
+            for (auto it = previous.beginMap(); it != previous.endMap(); ++it)
+            { auto control = gSavedSettings.getControl(it->first); control->setValue(it->second,true); control->setValue(effective[it->first],false); }
+            std::filesystem::remove(temporary,error);
+            worker->settingsNotice += "Settings import: preference write failed; original settings retained."; return;
+        }
     }
     unsigned int copied = 0;
     for (const auto* name : seedUiFiles())
     {
+        if (!copyUiFile(worker->copyGroups,name)) continue;
         const auto source = folder/name;
-        if (!std::filesystem::exists(source,error)) { error.clear(); continue; }
+        if (!std::filesystem::exists(source,error)) { error.clear(); ++skipped; continue; }
         LLXMLNodePtr node;
-        if (!read(source,bytes) || !LLXMLNode::parseBuffer(bytes.data(),static_cast<U64>(bytes.size()),node) || !backupFile(destination/name))
+        if (!readProfileFile(source,bytes) || !LLXMLNode::parseBuffer(bytes.data(),static_cast<U64>(bytes.size()),node) || !backup.save(destination/name))
         { ++skipped; continue; }
-        const auto temp = backup/(std::string(name)+".import-tmp");
+        const auto temp = backup.folder/(std::string(name)+".import-tmp");
         std::ofstream out(temp,std::ios::binary|std::ios::trunc); out.write(bytes.data(),static_cast<std::streamsize>(bytes.size())); out.close();
         const auto file = destination/name;
         if (!out || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
         { std::filesystem::remove(temp,error); ++skipped; continue; }
         ++copied;
     }
-    worker->settingsNotice = "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
+    worker->settingsNotice += "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
         " UI files, "+std::to_string(skipped)+" skipped; previous files backed up.";
     LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
+}
+bool FSSessionWorker::importProfileToolbars()
+{
+    if (!worker || worker->toolbarImport.empty()) return false;
+    if (!managed()) { worker->toolbarImport.clear(); return false; }
+    if (gAgent.getID().isNull() || gAgent.getSessionID().isNull() || gDisconnected) return false;
+    const auto bytes = std::move(worker->toolbarImport);
+    worker->toolbarImport.clear(); // Never apply to another account/session or retry on a later login.
+    const auto refused = [](const std::string& reason)
+    {
+        worker->settingsNotice = "Settings import: toolbar copy skipped ("+reason+"); original layout kept.";
+        return false;
+    };
+    LLXMLNodePtr root;
+    if (!LLXMLNode::parseBuffer(bytes.data(),static_cast<U64>(bytes.size()),root) || !root->hasName("toolbars"))
+        return refused("invalid toolbar XML");
+    std::set<std::string> bars;
+    for (auto child = root->getFirstChild(); child.notNull(); child = child->getNextSibling())
+    {
+        const std::string name = child->getName()->mString;
+        if ((name != "left_toolbar" && name != "right_toolbar" && name != "bottom_toolbar") || !bars.insert(name).second)
+            return refused("unsupported or duplicate toolbar");
+    }
+    if (bars.empty()) return refused("no toolbar definitions");
+    LLToolBarView::ToolbarSet saved, clean;
+    LLXUIParser parser;
+    parser.readXUI(root,saved,"profile toolbar import");
+    if (!saved.validateBlock()) return refused("invalid toolbar settings");
+    std::set<std::string> commands;
+    unsigned int skipped = 0;
+    const auto copyBar = [&](const LLToolBarView::Toolbar& source, LLToolBarView::Toolbar& destination)
+    {
+        if (source.commands.size() > 128) return false;
+        destination.button_display_mode = source.button_display_mode();
+        if (source.button_alignment.isProvided()) destination.button_alignment = source.button_alignment();
+        if (source.button_layout_style.isProvided()) destination.button_layout_style = source.button_layout_style();
+        for (const LLCommandId::Params& command : source.commands)
+        {
+            const std::string name = command.name();
+            if (name.empty() || name.size() > 128 || !commands.insert(name).second) return false;
+            if (LLCommandManager::instance().getCommand(name)) destination.commands.add(command);
+            else ++skipped;
+        }
+        return true;
+    };
+    if ((saved.left_toolbar.isProvided() && !copyBar(saved.left_toolbar,clean.left_toolbar)) ||
+        (saved.right_toolbar.isProvided() && !copyBar(saved.right_toolbar,clean.right_toolbar)) ||
+        (saved.bottom_toolbar.isProvided() && !copyBar(saved.bottom_toolbar,clean.bottom_toolbar)))
+        return refused("oversized or duplicate command list");
+    if (!clean.validateBlock()) return refused("invalid filtered toolbar settings");
+    LLXMLNodePtr output = new LLXMLNode("toolbars",false);
+    parser.writeXUI(output,clean);
+    std::ostringstream serialized;
+    output->writeToOstream(serialized);
+    const auto document = serialized.str();
+    if (document.empty() || document.size() > 64u*1024u) return refused("oversized toolbar file");
+    const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT,"toolbars.xml");
+    const auto target = std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
+    ProfileBackup backup;
+    if (!backup.create(target.parent_path()) || !backup.save(target)) return refused("backup unavailable");
+    const auto temporary = backup.folder/L"toolbars-import.tmp";
+    std::ofstream out(temporary,std::ios::binary|std::ios::trunc);
+    out.write(document.data(),static_cast<std::streamsize>(document.size())); out.close();
+    if (!out || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    {
+        std::error_code error; std::filesystem::remove(temporary,error);
+        return refused("write failed");
+    }
+    // A destination's first-run reset must not overwrite this explicit choice.
+    gSavedSettings.setBOOL("ResetToolbarSettings",false);
+    worker->settingsNotice = "Settings import: toolbar layout copied; "+std::to_string(skipped)+" unavailable commands skipped; previous file backed up.";
+    LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
+    return true;
 }
 void FSSessionWorker::configure()
 {
@@ -1222,6 +1343,7 @@ bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}
+bool FSSessionWorker::importProfileToolbars() { return false; }
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}
 bool FSSessionWorker::renderAllowed() { return true; }
