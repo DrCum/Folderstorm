@@ -1,6 +1,23 @@
 # Session chat, read handling and character sounds
 
-Status: planned, not implemented. Based on PR #30 (`feat/session-profile-copy`, `9b7aa69403`), with PR #29 and the preceding stack still preserved. This document is on the isolated `docs/session-chat-polish` branch; published runtime branches are unchanged. Create a follow-up implementation branch from the latest validated stack head when coding is authorized, carrying this plan forward.
+Status: implemented in source on `feat/session-chat-polish`, isolated worktree `/workspace/Folderstorm-session-chat-polish`, based on unmerged PR #30 (`feat/session-profile-copy`, `9b7aa69403`). Native Windows acceptance is pending. The plan-only branch and earlier published runtime branches remain preserved. The implementation uses private protocol **12**; build and install matching host/viewer binaries.
+
+## Completed-feature checklist
+
+- [x] Managed typing guard: physical-key quarantine, physical-release recovery, per-origin Unicode suppression, ownership-epoch rejection of posted key/text input and bounded content-free diagnostics. This addresses the leading source cause; the user's exact intermittent Windows trigger is not reproduced here.
+- [x] Latest-message history on main, detached and monitor Chat; incremental appends, message-ID anchors for older reading/selection, hidden/show/DPI refitting and contextual Latest buttons.
+- [x] Enter sends; Shift+Enter inserts a newline; repeat/IME commit guards and shared native composer adapter. Pending sends keep editor focus with temporary read-only backpressure; drafts and uncertain-send behavior remain intact.
+- [x] Displayed-chat automatic reading, default On, only for shown, non-minimized, painted tail views; source-bound coalescing and unseen-arrival protection.
+- [x] Optional active-character automatic reading, default Off, 60-second initial delay, range 5–3600 seconds; new-message grace and foreground/visibility/ownership/session resets.
+- [x] Independent per-character Direct IM, Group, Conference and supported-notification alert categories. Existing combined choices are inherited until explicitly customized.
+- [x] Custom character WAV sounds with picker, Preview and Reset; validated atomic local import, mute/volume behavior, owned async playback and bounded cache.
+- [x] Additive bounded `host-chat.dat` settings, prior-file backup and explicit Save host choices; existing FSP1/FSX1 files retain their own formats and choices.
+
+Actual checks: eight affected portable checks (`input_guard`, `chat_behavior`, `read_policy`, `sound`, `alerts`, `protocol`, `chat`, `monitor_chat`) passed under C++17 with `-Wall -Wextra -Werror -Wshadow -pedantic -DNDEBUG -UNDEBUG`. Source-reviewed native event/caret/dialog/read/audio paths, source/epoch guards, Send/draft backpressure, detached Pin/Latest geometry, account changes, parser/file limits and CMake registration. `git diff --check` passed. No Windows/MSVC compiler is available here; no native host/viewer build, installer, packaging, GitHub builds, broad suite, unrelated Go tests or subagents were run.
+
+Implementation choices: automatic read defers quietly through a `ReadDeferred` reply if the worker has newer queued events than the host consumed. Active native unread counts are refreshed when draining queued IM events. Background custom sounds remain an additional filter on native eligibility; active characters use their native alert producer. Audio assets are at most 4 MiB/10 seconds, with a 20 MiB cache; Preview/alert playback holds its own backing buffer. Read and sound dialogs use Apply/Cancel, with persistence through Save host choices.
+
+Native acceptance: extended four/five-character hosted/separate switching and typing, lock/modifier keys and IME/paste; initial/tail/scrolled-back Chat, Enter/Shift+Enter and pending sends on all surfaces; hidden/minimized/collapsed/older-history read behavior and arrivals during reads; active delay/reset/new-message grace; direct-versus-group alerts, two custom character sounds, Preview/Reset/Cancel, missing/corrupt/non-ASCII sources, saving/restarting and dark/light/DPI layouts. See the detailed sections below for exact scope and constraints.
 
 ## Evidence from testing and source inspection
 
