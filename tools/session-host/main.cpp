@@ -2546,12 +2546,12 @@ struct Host
         for(auto child:characterControls())ShowWindow(child,SW_HIDE);
         if(!visible)return;
         auto move=[&](HWND child,int x,int y,int w){MoveWindow(child,scale(x),scale(y),(std::max)(1,scale(w)),scale(h),TRUE);ShowWindow(child,SW_SHOWNOACTIVATE);};
-        const bool narrow=width<800,small=width<440;commandOverflow=narrow;
-        int x=4;const int selector=small?(std::max)(80,width-174):(std::max)(100,(std::min)(180,width-345));
+        const bool narrow=width<800,compactWidth=width<440;commandOverflow=narrow;
+        int x=4;const int selector=compactWidth?(std::max)(80,width-174):(std::max)(100,(std::min)(180,width-345));
         MoveWindow(characterControl,scale(x),scale(3),scale(selector),scale(220),TRUE);ShowWindow(characterControl,SW_SHOWNOACTIVATE);x+=selector+4;
         move(launchButton,x,3,narrow?28:64);x+=narrow?32:68;
         move(showChatControl,x,3,48);x+=52;
-        if(!small){move(attentionButton,x,3,narrow?82:104);x+=narrow?86:108;move(nextButton,x,3,44);x+=48;}
+        if(!compactWidth){move(attentionButton,x,3,narrow?82:104);x+=narrow?86:108;move(nextButton,x,3,44);x+=48;}
         move(optionsControl,x,3,narrow?58:88);x+=narrow?62:92;
         SetWindowTextW(launchButton,narrow?L"+":L"+ Login");SetWindowTextW(optionsControl,narrow?L"More":L"Characters");
         if(!narrow){move(viewMenu,x,3,52);x+=56;move(settingsMenu,x,3,76);}
