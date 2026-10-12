@@ -59,3 +59,5 @@ if(Boost_FOUND AND TARGET Boost::fiber AND TARGET Boost::context)
   folderstorm_check(inventory_bulk_scope ../test_fsinventorybulkscope.cpp)
   target_link_libraries(inventory_bulk_scope PRIVATE Boost::fiber Boost::context Threads::Threads)
 endif()
+
+folderstorm_check(squirty_policy ../test_fssquirtypolicy.cpp)

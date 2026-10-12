@@ -588,7 +588,13 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     // supposedly curl 7.62.0 can use TTL by default, otherwise default is 60 seconds
     check_curl_easy_setopt(mCurlHandle, CURLOPT_DNS_CACHE_TIMEOUT, dnsCacheTimeout);
 
-    if (gpolicy.mUseLLProxy)
+    if (mReqOptions && mReqOptions->getPrivateLocalRequest())
+    {
+        // An empty proxy also disables libcurl's environment proxy settings.
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_PROXY, "");
+        mTracing = HTTP_TRACE_OFF;
+    }
+    else if (gpolicy.mUseLLProxy)
     {
         // Use the viewer-based thread-safe API which has a
         // fast/safe check for proxy enable.  Would like to

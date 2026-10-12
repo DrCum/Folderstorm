@@ -25,6 +25,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssquirtynotes.h"
 
 #include "llimprocessing.h"
 
@@ -1038,6 +1039,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                 }
                 // </FS:PP>
 
+                if (!is_muted && to_id == gAgent.getID() && notice_name.empty())
+                    FSSquirtyNotes::onIM(from_id, name);
+
                 // add to IM panel, but do not bother the user
                 gIMMgr->addMessage(
                     session_id,
@@ -1207,6 +1211,10 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                         LLTrans::findString(buffer, notice_name, notice_args);
                         real_name = SYSTEM_FROM;
                     }
+
+                    if (offline == IM_ONLINE && !region_message && notice_name.empty() &&
+                        to_id == gAgent.getID() && RlvActions::canReceiveIM(from_id))
+                        FSSquirtyNotes::onIM(from_id, name);
 
                     gIMMgr->addMessage(session_id,
                         from_id,
