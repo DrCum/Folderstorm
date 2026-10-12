@@ -4,6 +4,7 @@
 #include <windows.h>
 #include "theme.h"
 #include "fssessiondialoglayout.h"
+#include "fssessionexperience.h"
 #include <commdlg.h>
 #include <commctrl.h>
 #include <string>
@@ -24,6 +25,8 @@ struct Field
     HWND control = nullptr;
     unsigned int page = 0; HWND caption = nullptr;
     std::function<void(HWND)> action;
+    std::function<void(HWND)> changed;
+    bool enabled=true;
 };
 inline unsigned int number(const Field& field) { return static_cast<unsigned int>(std::wcstoul(field.value.c_str(), nullptr, 10)); }
 struct Editor
@@ -31,6 +34,8 @@ struct Editor
     const wchar_t* title; std::vector<Field>* fields; HFONT font=nullptr; std::vector<std::wstring> pages;
     int x=0,y=0,dpi=96,page=0; HWND body=nullptr,tabs=nullptr,vertical=nullptr,horizontal=nullptr;
     std::vector<int> heights, rows;
+    bool sidebar=false;
+    std::function<bool(HWND)> validate;
     int scale(int value) const { return MulDiv(value,dpi,96); }
 };
 inline LRESULT CALLBACK editorBodyProc(HWND body,UINT message,WPARAM wp,LPARAM lp)
@@ -58,25 +63,27 @@ inline void scrollEditor(HWND dialog,Editor& editor,int x,int y)
 inline void layoutEditor(HWND dialog,Editor& editor)
 {
     RECT client{};GetClientRect(dialog,&client);
-    const int gap=editor.scale(12),head=editor.pages.empty()?0:editor.scale(42),footer=editor.scale(48);
-    const int width=(std::max)(1,static_cast<int>(client.right)-2*gap),height=(std::max)(1,static_cast<int>(client.bottom)-head-footer);
-    const int contentWidth=editor.scale(496),contentHeight=editor.scale(editor.heights[static_cast<std::size_t>(editor.page)]);
+    const int gap=editor.scale(12),head=editor.pages.empty()||editor.sidebar?0:editor.scale(42),footer=editor.scale(48);
+    const int nav=editor.sidebar?editor.scale(172):0;
+    const int width=(std::max)(1,static_cast<int>(client.right)-2*gap-nav),height=(std::max)(1,static_cast<int>(client.bottom)-head-footer);
+    const int contentWidth=editor.scale(380),contentHeight=editor.scale(editor.heights[static_cast<std::size_t>(editor.page)]);
     const int bar=editor.scale(16);
     const auto fit=fs_session::editorScrollLayout(contentWidth,contentHeight,width,height,bar);
-    SetWindowPos(editor.body,nullptr,gap,head,fit.width,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
-    if(editor.tabs)SetWindowPos(editor.tabs,nullptr,gap,editor.scale(6),width,editor.scale(30),SWP_NOZORDER|SWP_NOACTIVATE);
+    SetWindowPos(editor.body,nullptr,gap+nav,head,fit.width,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
+    if(editor.tabs)SetWindowPos(editor.tabs,nullptr,gap,editor.scale(6),editor.sidebar?editor.scale(160):width,editor.sidebar?height-editor.scale(6):editor.scale(30),SWP_NOZORDER|SWP_NOACTIVATE);
     SetWindowPos(GetDlgItem(dialog,IDOK),nullptr,(std::max)(gap,static_cast<int>(client.right)-editor.scale(244)),static_cast<int>(client.bottom)-editor.scale(36),editor.scale(110),editor.scale(28),SWP_NOZORDER|SWP_NOACTIVATE);
     SetWindowPos(GetDlgItem(dialog,IDCANCEL),nullptr,(std::max)(gap,static_cast<int>(client.right)-editor.scale(124)),static_cast<int>(client.bottom)-editor.scale(36),editor.scale(110),editor.scale(28),SWP_NOZORDER|SWP_NOACTIVATE);
     ShowWindow(editor.horizontal,fit.horizontal?SW_SHOW:SW_HIDE);ShowWindow(editor.vertical,fit.vertical?SW_SHOW:SW_HIDE);
-    SetWindowPos(editor.horizontal,nullptr,gap,head+fit.height,fit.width,bar,SWP_NOZORDER|SWP_NOACTIVATE);
-    SetWindowPos(editor.vertical,nullptr,gap+fit.width,head,bar,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
+    SetWindowPos(editor.horizontal,nullptr,gap+nav,head+fit.height,fit.width,bar,SWP_NOZORDER|SWP_NOACTIVATE);
+    SetWindowPos(editor.vertical,nullptr,gap+nav+fit.width,head,bar,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
     SCROLLINFO scroll{};scroll.cbSize=sizeof(scroll);scroll.fMask=SIF_RANGE|SIF_PAGE;scroll.nMax=contentWidth-1;scroll.nPage=static_cast<UINT>(fit.width);SetScrollInfo(editor.horizontal,SB_CTL,&scroll,TRUE);
     scroll.nMax=contentHeight-1;scroll.nPage=static_cast<UINT>(fit.height);SetScrollInfo(editor.vertical,SB_CTL,&scroll,TRUE);
+    const int rowWidth=(std::max)(contentWidth,fit.width);
     for(std::size_t i=0;i<editor.fields->size();++i)
     {
         auto& field=(*editor.fields)[i];const int top=editor.scale(editor.rows[i])-editor.y;
         SetWindowPos(field.caption,nullptr,-editor.x,top+editor.scale(4),editor.scale(180),editor.scale(25),SWP_NOZORDER|SWP_NOACTIVATE);
-        SetWindowPos(field.control,nullptr,(field.type==FieldType::Check?0:editor.scale(184))-editor.x,top,editor.scale(field.type==FieldType::Check?494:310),editor.scale(field.type==FieldType::Choice?220:25),SWP_NOZORDER|SWP_NOACTIVATE);
+        SetWindowPos(field.control,nullptr,(field.type==FieldType::Check?0:editor.scale(184))-editor.x,top,field.type==FieldType::Check?rowWidth-editor.scale(2):rowWidth-editor.scale(184),editor.scale(field.type==FieldType::Choice?220:25),SWP_NOZORDER|SWP_NOACTIVATE);
         ShowWindow(field.caption,field.type!=FieldType::Check && field.page==static_cast<unsigned int>(editor.page)?SW_SHOW:SW_HIDE);
         ShowWindow(field.control,field.page==static_cast<unsigned int>(editor.page)?SW_SHOW:SW_HIDE);
     }
@@ -105,22 +112,22 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         editor->horizontal=CreateWindowExW(0,L"SCROLLBAR",L"",WS_CHILD|SBS_HORZ,0,0,1,1,dialog,nullptr,instance,nullptr);
         if(!editor->pages.empty())
         {
-            editor->tabs=CreateWindowExW(0,WC_TABCONTROLW,L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP,0,0,1,1,dialog,reinterpret_cast<HMENU>(static_cast<INT_PTR>(90)),instance,nullptr);
+            editor->tabs=CreateWindowExW(0,editor->sidebar?L"LISTBOX":WC_TABCONTROLW,L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|(editor->sidebar?LBS_NOTIFY|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS:0),0,0,1,1,dialog,reinterpret_cast<HMENU>(static_cast<INT_PTR>(90)),instance,nullptr);
             SendMessageW(editor->tabs,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
-            for(std::size_t i=0;i<editor->pages.size();++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=editor->pages[i].data();TabCtrl_InsertItem(editor->tabs,static_cast<int>(i),&item);}
+            for(std::size_t i=0;i<editor->pages.size();++i){if(editor->sidebar)SendMessageW(editor->tabs,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(editor->pages[i].c_str()));else{TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=editor->pages[i].data();TabCtrl_InsertItem(editor->tabs,static_cast<int>(i),&item);}}
         }
-        if(editor->tabs)TabCtrl_SetCurSel(editor->tabs,editor->page);
+        if(editor->tabs){if(editor->sidebar)SendMessageW(editor->tabs,LB_SETCURSEL,editor->page,0);else TabCtrl_SetCurSel(editor->tabs,editor->page);}
         editor->heights.assign((std::max)(std::size_t{1},editor->pages.size()),14);editor->rows.clear();
         for(std::size_t i=0;i<editor->fields->size();++i)
         {
             auto& field=(*editor->fields)[i];const auto page=(std::min)(static_cast<std::size_t>(field.page),editor->heights.size()-1);
             field.page=static_cast<unsigned int>(page);editor->rows.push_back(editor->heights[page]);editor->heights[page]+=36;
-            field.caption=CreateWindowExW(0,L"STATIC",field.label.c_str(),WS_CHILD|WS_VISIBLE,0,0,1,1,editor->body,nullptr,instance,nullptr);
+            field.caption=CreateWindowExW(0,L"STATIC",field.label.c_str(),WS_CHILD|WS_VISIBLE|SS_LEFTNOWORDWRAP|SS_ENDELLIPSIS,0,0,1,1,editor->body,nullptr,instance,nullptr);
             const bool check=field.type==FieldType::Check,choice=field.type==FieldType::Choice,color=field.type==FieldType::Color,action=field.type==FieldType::Action;
             const DWORD style=WS_CHILD|WS_VISIBLE|WS_TABSTOP|(check?BS_AUTOCHECKBOX:choice?CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL:(color||action)?BS_PUSHBUTTON:WS_BORDER|ES_AUTOHSCROLL);
             field.control=CreateWindowExW(0,check||color||action?L"BUTTON":choice?L"COMBOBOX":L"EDIT",check?field.label.c_str():color?L"Choose color…":field.value.c_str(),style,0,0,1,1,editor->body,reinterpret_cast<HMENU>(static_cast<INT_PTR>(100+i)),instance,nullptr);
             for(HWND child:{field.caption,field.control})setNativeFont(child,font);
-            SetWindowSubclass(field.control,editorFieldProc,3,0);
+            SetWindowSubclass(field.control,editorFieldProc,3,0);EnableWindow(field.control,field.enabled);EnableWindow(field.caption,field.enabled);
             if(check)SendMessageW(field.control,BM_SETCHECK,number(field)?BST_CHECKED:BST_UNCHECKED,0);
             if(choice){for(const auto& text:field.choices)SendMessageW(field.control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text.c_str()));SendMessageW(field.control,CB_SETCURSEL,number(field),0);}
             if(!check&&!choice&&!color&&!action)SendMessageW(field.control,EM_SETLIMITTEXT,field.type==FieldType::Number?6:field.maximum,0);
@@ -128,7 +135,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         for(const int id:{IDOK,IDCANCEL})
         {const HWND child=CreateWindowExW(0,L"BUTTON",id==IDOK?L"Apply":L"Cancel",WS_CHILD|WS_VISIBLE|WS_TABSTOP|(id==IDOK?BS_DEFPUSHBUTTON:BS_PUSHBUTTON),0,0,1,1,dialog,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);}
         const int contentHeight=*std::max_element(editor->heights.begin(),editor->heights.end());
-        RECT size{0,0,editor->scale(520),editor->scale(contentHeight+48+(editor->pages.empty()?0:42))};AdjustWindowRectEx(&size,static_cast<DWORD>(GetWindowLongPtrW(dialog,GWL_STYLE)),FALSE,0);
+        RECT size{0,0,editor->scale(editor->sidebar?692:520),editor->scale(editor->sidebar?(std::min)(620,(std::max)(320,contentHeight+48)):(contentHeight+48+(editor->pages.empty()?0:42)))};AdjustWindowRectEx(&size,static_cast<DWORD>(GetWindowLongPtrW(dialog,GWL_STYLE)),FALSE,0);
         RECT owner{};GetWindowRect(GetParent(dialog),&owner);MONITORINFO monitor{};monitor.cbSize=sizeof(monitor);
         if(GetMonitorInfoW(MonitorFromWindow(GetParent(dialog),MONITOR_DEFAULTTONEAREST),&monitor))
         {
@@ -143,7 +150,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     }
     if(!editor || !editor->body) return FALSE;
     if(message==WM_GETMINMAXINFO)
-    {auto* size=reinterpret_cast<MINMAXINFO*>(lparam);size->ptMinTrackSize={editor->scale(280),editor->scale(140)};return TRUE;}
+    {auto* size=reinterpret_cast<MINMAXINFO*>(lparam);size->ptMinTrackSize={editor->scale(editor->sidebar?560:280),editor->scale(editor->sidebar?240:140)};return TRUE;}
     if(message==WM_DPICHANGED)
     {
         editor->dpi=dialogTheme?dialogTheme->uiDpi(HIWORD(wparam)):static_cast<int>(HIWORD(wparam));
@@ -171,6 +178,20 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         RECT r{},client{};GetWindowRect(child,&r);MapWindowPoints(nullptr,editor->body,reinterpret_cast<POINT*>(&r),2);GetClientRect(editor->body,&client);
         scrollEditor(dialog,*editor,editor->x+(r.left<0?r.left:r.right>client.right?r.right-client.right:0),editor->y+(r.top<0?r.top:r.bottom>client.bottom?r.bottom-client.bottom:0));return TRUE;
     }
+    if(message==WM_DRAWITEM && editor->sidebar)
+    {
+        const auto& draw=*reinterpret_cast<DRAWITEMSTRUCT*>(lparam);
+        if(draw.CtlID==90)
+        {
+            const bool selected=(draw.itemState&ODS_SELECTED)!=0;
+            const COLORREF background=dialogTheme?(selected?dialogTheme->accent:dialogTheme->background):GetSysColor(selected?COLOR_HIGHLIGHT:COLOR_WINDOW);
+            const auto rgb=[](COLORREF c){return (static_cast<unsigned int>(GetRValue(c))<<16)|(static_cast<unsigned int>(GetGValue(c))<<8)|GetBValue(c);};
+            const COLORREF foreground=dialogTheme?selected&&dialogTheme->highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):selected?(fs_session::colorContrast(rgb(background),0)>fs_session::colorContrast(rgb(background),0xffffff)?RGB(0,0,0):RGB(255,255,255)):dialogTheme->text:GetSysColor(selected?COLOR_HIGHLIGHTTEXT:COLOR_WINDOWTEXT);
+            const auto brush=CreateSolidBrush(background);FillRect(draw.hDC,&draw.rcItem,brush);DeleteObject(brush);
+            if(draw.itemID<editor->pages.size()){RECT r=draw.rcItem;r.left+=editor->scale(8);SetTextColor(draw.hDC,foreground);SetBkMode(draw.hDC,TRANSPARENT);DrawTextW(draw.hDC,editor->pages[draw.itemID].c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);}
+            if(draw.itemState&ODS_FOCUS)DrawFocusRect(draw.hDC,&draw.rcItem);return TRUE;
+        }
+    }
     if(dialogTheme)
     {
         if(message==WM_ERASEBKGND){RECT r{};GetClientRect(dialog,&r);FillRect(reinterpret_cast<HDC>(wparam),&r,dialogTheme->backBrush);return TRUE;}
@@ -186,9 +207,12 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     }
     if (message != WM_COMMAND) return FALSE;
     const unsigned int id = LOWORD(wparam);
+    if(id==90 && editor->sidebar && HIWORD(wparam)==LBN_SELCHANGE)
+    {const auto page=SendMessageW(editor->tabs,LB_GETCURSEL,0,0);if(page>=0){editor->page=static_cast<int>(page);editor->x=editor->y=0;layoutEditor(dialog,*editor);}return TRUE;}
     if (id >= 100 && id < 100 + editor->fields->size())
     {
         auto& field = (*editor->fields)[id-100];
+        if(field.changed && ((field.type==FieldType::Choice && (HIWORD(wparam)==CBN_SELENDOK || (HIWORD(wparam)==CBN_SELCHANGE && !SendMessageW(field.control,CB_GETDROPPEDSTATE,0,0)))) || (field.type==FieldType::Check && HIWORD(wparam)==BN_CLICKED)))field.changed(dialog);
         if (field.type == FieldType::Action && HIWORD(wparam) == BN_CLICKED && field.action) field.action(dialog);
         if (field.type == FieldType::Color && HIWORD(wparam) == BN_CLICKED)
         {
@@ -224,14 +248,15 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
             }
         }
     }
+    if(editor->validate && !editor->validate(dialog))return TRUE;
     EndDialog(dialog,IDOK); return TRUE;
 }
-inline bool edit(HWND owner,const wchar_t* title,std::vector<Field>& fields,std::vector<std::wstring> pages={},unsigned int page=0)
+inline bool edit(HWND owner,const wchar_t* title,std::vector<Field>& fields,std::vector<std::wstring> pages={},unsigned int page=0,bool sidebar=false,std::function<bool(HWND)> validate={})
 {
     struct Template { DLGTEMPLATE dialog; WORD menu = 0, klass = 0, title = 0; } layout{};
     layout.dialog.style = WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|WS_THICKFRAME;
     layout.dialog.cx = 300; layout.dialog.cy = 200;
-    Editor editor{title,&fields,nullptr,std::move(pages)};editor.page=static_cast<int>((std::min)(page,editor.pages.empty()?0u:static_cast<unsigned int>(editor.pages.size()-1)));
+    Editor editor{title,&fields,nullptr,std::move(pages)};editor.sidebar=sidebar;editor.validate=std::move(validate);editor.page=static_cast<int>((std::min)(page,editor.pages.empty()?0u:static_cast<unsigned int>(editor.pages.size()-1)));
     const bool accepted = DialogBoxIndirectParamW(GetModuleHandleW(nullptr),&layout.dialog,owner,editorProc,reinterpret_cast<LPARAM>(&editor)) == IDOK;
     if (editor.font) DeleteObject(editor.font); // Dialog and its controls are already destroyed.
     return accepted;

@@ -39,6 +39,7 @@
 #include "fssessionmonitormodel.h"
 #include "fssessionmonitorchat.h"
 #include "fssessionprofileseed.h"
+#include "fssessionpreferences.h"
 #include "fssessionframepipe.h"
 #include "fssessionrestart.h"
 #include "fssessionrecovery.h"
@@ -226,7 +227,7 @@ std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pi
         // a toolbar-only selection as their legacy all-preferences import.
         entries[L"FOLDERSTORM_SESSION_PROFILE_SOURCE"] = copy.settings.wstring();
         entries[L"FOLDERSTORM_SESSION_COPY_GROUPS"] = std::to_wstring(copy.groups);
-        if (copy.groups & CopyToolbars) entries[L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE"] = copy.toolbars.wstring();
+        if (copy.groups & (CopyToolbars|CopyAccountUI|CopyMovement|CopyAvatar)) entries[L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE"] = copy.toolbars.wstring();
     }
     std::vector<wchar_t> result;
     for (const auto& entry : entries)
@@ -305,7 +306,8 @@ struct Slot
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
     std::string reservation;
-    bool waiting = false, detached = false, importReported = false, soundPrepared = false;
+    bool waiting = false, detached = false, soundPrepared = false;
+    std::string lastImportReport;
     std::string soundAsset;
     double fps = 0, loops = 0;
     bool running() const { return process.value != INVALID_HANDLE_VALUE && WaitForSingleObject(process.value, 0) == WAIT_TIMEOUT; }
@@ -409,6 +411,10 @@ struct Host
     int active = -1;
     bool embedding = false, detaching = false, closing = false, selectFirst = true, focusRequested = false;
     std::filesystem::path viewer, profiles;
+    ChoiceAutosave autosave;
+    std::wstring saveError;
+    bool preferencesOpen=false;
+    std::uint64_t autosaveAt=0;
     ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); for (auto& monitor : monitors) if (monitor.font) DeleteObject(monitor.font); }
 
     bool saveStore(const wchar_t* filename,const std::string& data)
@@ -429,57 +435,205 @@ struct Host
         const auto* c=shellCommand(id);if(!c)return L"";
         return experience.labels==2 ? c->icon : experience.labels==1 ? c->label : std::wstring(c->icon)+L" "+c->label;
     }
-    void editHostSettings(unsigned int page=0)
-    {
-        using namespace fs_host_ui;
-        std::vector<Field> fields{
-            {L"Theme",std::to_wstring(experience.theme),FieldType::Choice,{L"Folderstorm Midnight",L"Folderstorm Daylight",L"Follow Windows"}},
-            {L"Control density",std::to_wstring(experience.density),FieldType::Choice,{L"Compact",L"Comfortable"}},
-            {L"Character cards",experience.cards?L"1":L"0",FieldType::Check},
-            {L"Quick button labels",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text",L"Icon (tooltips)"}},
-            {L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check},
-            {L"Reset appearance",L"0",FieldType::Check},
-            {L"Voice follows active",voice?L"1":L"0",FieldType::Check},
-            {L"Mute background sound",muteBackground?L"1":L"0",FieldType::Check},
-            {L"Alert volume (0–100)",std::to_wstring(presentation.volume),FieldType::Number,{},0,100},
-            {L"Transition",std::to_wstring(presentation.transition),FieldType::Choice,{L"Instant",L"Bird's-eye",L"Fade"}},
-            {L"Duration (250–2000 ms)",std::to_wstring(presentation.duration),FieldType::Number,{},250,2000},
-            {L"Height (16–96 m)",std::to_wstring(presentation.height),FieldType::Number,{},16,96}};
-        for(std::size_t i=6;i<9;++i)fields[i].page=1;for(std::size_t i=9;i<fields.size();++i)fields[i].page=2;
-        (void)page;
-        if(!edit(window,L"Host settings · Apply for this session; Save host choices to keep",fields,{L"Appearance",L"Audio",L"Switching"}))return;
-        auto next=experience;next.theme=number(fields[0]);next.density=number(fields[1]);next.cards=number(fields[2])!=0;next.labels=number(fields[3]);next.diagnostics=number(fields[4])!=0;
-        if(number(fields[5])){next.theme=0;next.density=0;next.cards=true;next.labels=0;next.diagnostics=false;}
-        if(!next.valid())return;
-        experience=std::move(next);voice=number(fields[6])!=0;muteBackground=number(fields[7])!=0;
-        presentation.volume=number(fields[8]);presentation.transition=number(fields[9]);presentation.duration=number(fields[10]);presentation.height=number(fields[11]);
-        SendMessageW(voiceControl,BM_SETCHECK,voice?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(muteControl,BM_SETCHECK,muteBackground?BST_CHECKED:BST_UNCHECKED,0);
-        applyTheme();layout();message(L"Host settings applied for this session. Save host choices to keep them.");
-    }
-    void customizeQuick()
-    {
-        using namespace fs_host_ui;
-        std::vector<std::wstring> labels{L"Unused"};for(const auto& c:shellCommands())labels.push_back(c.label);
-        std::vector<Field> fields;
-        for(std::size_t i=0;i<12;++i)
-        {
-            unsigned int choice=0;if(i<experience.quick.size())for(std::size_t j=0;j<shellCommands().size();++j)if(shellCommands()[j].id==experience.quick[i])choice=static_cast<unsigned int>(j)+1;
-            Field field{L"Position "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,labels};field.page=i<6?0u:1u;fields.push_back(std::move(field));
-        }
-        Field reset{L"Restore default quick actions",L"0",FieldType::Check};reset.page=1;fields.push_back(reset);
-        if(!edit(window,L"Quick actions · choose their order",fields,{L"Positions 1–6",L"Positions 7–12"}))return;
-        auto next=experience;next.quick.clear();
-        for(std::size_t i=0;i<12;++i)if(number(fields[i]))next.quick.push_back(shellCommands()[number(fields[i])-1].id);
-        if(number(fields[12]))next.quick.clear();
-        if(!next.valid()){message(L"Choose each quick action once; changes were not applied.");return;}
-        experience=std::move(next);layout();applyTheme();
-    }
     unsigned int windowKey(HWND panel) const
     {
         if(panel==chatWindow)return 1;if(panel==controlsWindow)return 2;if(panel==attentionWindow)return 7;
         for(unsigned int i=0;i<MaxMonitors;++i)if(panel==monitors[i].window)return i+3;
         return 0;
     }
+    int pinSlot(const ChatPin& pin) const
+    {
+        for (int i = 0; i < MaxCharacters; ++i) if (slots[i] && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state == State::Ready &&
+            !(slots[i]->snapshot.flags & ChatRestricted) && pin.live(slots[i]->chat)) return i;
+        return -1;
+    }
+    int sourceSlot(const Message& item) const
+    {
+        for (int i = 0; i < MaxCharacters; ++i) if (slots[i] && slots[i]->chat.identity.owns(item)) return i;
+        return -1;
+    }
+    void editPreferences(unsigned int page=0,int target=-1)
+    {
+        if(preferencesOpen)return;
+        using namespace fs_host_ui;
+        struct ProfileDraft
+        {
+            Message source;bool ready=false,imported=false;
+            std::wstring label,alias;unsigned int color=0,categories=0;Mode mode=Mode::Warm;
+            std::string asset;WavSound wav;
+        };
+        std::array<ProfileDraft,MaxCharacters> people;
+        const auto originalLabels=chatPreferences.profileNames;const auto originalModes=standby;
+        std::vector<std::wstring> names;
+        for(int i=0;i<MaxCharacters;++i)
+        {
+            auto& p=people[i];p.label=wide(chatPreferences.profileNames[i]);p.mode=standby[i];names.push_back(characterName(i));
+            p.ready=slots[i] && slots[i]->snapshot.state==State::Ready;
+            if(p.ready){p.source=slots[i]->snapshot;const auto a=appearance(i);p.alias=wide(a.alias);p.color=a.color;const auto sound=characterSound(i);p.categories=sound.categories;p.asset=sound.asset;if(!p.asset.empty())readSound(profiles/L"sounds"/wide(p.asset),p.wav);}
+        }
+        int selected=validSlot(target)?target:lifecycle.selection();if(!validSlot(selected))selected=0;
+        std::vector<Field> fields;
+        const auto add=[&](unsigned int category,Field field){field.page=category;fields.push_back(std::move(field));return fields.size()-1;};
+        const auto chromeField=add(0,{L"Control strip",std::to_wstring(chrome),FieldType::Choice,{L"Expanded",L"Condensed",L"Minimal"}});
+        const auto hostedField=add(0,{L"Host active viewer",embedding?L"1":L"0",FieldType::Check});
+        const auto chatField=add(0,{L"Show shared Chat",showChat?L"1":L"0",FieldType::Check});
+        const auto chatDetachedField=add(0,{L"Pop out shared Chat",chatDetached?L"1":L"0",FieldType::Check});
+        const auto controlsDetachedField=add(0,{L"Pop out character controls",controlsDetached?L"1":L"0",FieldType::Check});
+        const auto folderField=add(0,{L"Saved host preferences",L"Open settings folder",FieldType::Action});
+        const auto saveField=add(0,{L"Saving accepted choices",L"Retry saving",FieldType::Action});
+        fields[saveField].action=[&](HWND){saveOptions();};
+        fields[folderField].action=[&](HWND owner){ShellExecuteW(owner,L"open",profiles.c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
+        const auto themeField=add(1,{L"Theme",std::to_wstring(experience.theme),FieldType::Choice,{L"Folderstorm Midnight",L"Folderstorm Daylight",L"Follow Windows"}});
+        const auto densityField=add(1,{L"Control density",std::to_wstring(experience.density),FieldType::Choice,{L"Compact",L"Comfortable"}});
+        const auto cardsField=add(1,{L"Show character cards",experience.cards?L"1":L"0",FieldType::Check});
+        const auto labelsField=add(1,{L"Quick button labels",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text",L"Icons with tooltips"}});
+        const auto diagnosticsField=add(1,{L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check});
+        const auto profileField=add(2,{L"Private profile",std::to_wstring(selected),FieldType::Choice,names});
+        const auto labelField=add(2,{L"Profile name",L""});
+        const auto modeField=add(2,{L"Background mode",L"0",FieldType::Choice,{L"Warm",L"Economy"}});
+        const auto aliasField=add(2,{L"Account friendly name",L""});
+        const auto colorField=add(2,{L"Character color",L"0",FieldType::Color});
+        const auto copyField=add(2,{L"After Apply, copy from main profile…",L"0",FieldType::Check});
+        const auto reportField=add(2,{L"Last profile copy",L"Open import report",FieldType::Action});
+        fields[reportField].action=[&](HWND owner)
+        {
+            const auto root=profiles/(L"Character"+std::to_wstring(selected+1))/L"Roaming";std::error_code error;
+            std::filesystem::directory_iterator item(root,error),end;unsigned int count=0;
+            while(!error && item!=end && count++<32)
+            {
+                const auto file=item->path()/L"user_settings"/L"settings-import-report.txt";
+                if(std::filesystem::is_regular_file(file,error)&&!error){ShellExecuteW(owner,L"open",file.c_str(),nullptr,nullptr,SW_SHOWNORMAL);return;}
+                error.clear();item.increment(error);
+            }
+            MessageBoxW(owner,L"No copy report is available for this profile yet. Successful copying also reports its summary in the host status.",L"Profile copy report",MB_OK|MB_ICONINFORMATION);
+        };
+        const auto showStart=fields.size();
+        for(const auto* name:{L"Show Nearby Chat",L"Show Direct IMs",L"Show Group Chats",L"Show Conferences",L"Show Viewer Notifications"})
+            add(3,{name,(chatPreferences.showMask&(1u<<static_cast<unsigned int>(fields.size()-showStart)))?L"1":L"0",FieldType::Check});
+        const auto attentionStart=fields.size();
+        for(const auto* name:{L"Attention: Nearby",L"Attention: Direct IMs",L"Attention: Group Chats",L"Attention: Conferences",L"Attention: Viewer Notifications",L"Attention: Teleport offers",L"Attention: Permission requests",L"Attention: Inventory offers"})
+            add(3,{name,(chatPreferences.attentionMask&(1u<<static_cast<unsigned int>(fields.size()-attentionStart)))?L"1":L"0",FieldType::Check});
+        const auto oldestField=add(3,{L"Oldest attention first",experience.oldestFirst?L"1":L"0",FieldType::Check});
+        const auto visibleReadField=add(3,{L"Mark displayed chats read",chatPreferences.visibleRead?L"1":L"0",FieldType::Check});
+        const auto activeReadField=add(3,{L"Auto-read active character",chatPreferences.activeRead?L"1":L"0",FieldType::Check});
+        const auto delayField=add(3,{L"Read after seconds",std::to_wstring(chatPreferences.delay),FieldType::Number,{},5,3600});
+        const auto accountStart=fields.size();for(int i=0;i<MaxCharacters;++i)add(3,{L"Attention: "+profileName(i),(experience.accountMask&(1u<<i))?L"1":L"0",FieldType::Check});
+        const auto voiceField=add(4,{L"Voice follows active",voice?L"1":L"0",FieldType::Check});
+        const auto muteField=add(4,{L"Mute background world sound",muteBackground?L"1":L"0",FieldType::Check});
+        const auto volumeField=add(4,{L"Host alert volume",std::to_wstring(presentation.volume),FieldType::Number,{},0,100});
+        const auto soundProfileField=add(4,{L"Character sounds",std::to_wstring(selected),FieldType::Choice,names});
+        const auto soundStart=fields.size();
+        for(const auto* name:{L"Direct IM alerts",L"Group chat alerts",L"Conference alerts",L"Supported notification alerts"})add(4,{name,L"0",FieldType::Check});
+        const auto wavField=add(4,{L"Custom notification sound",L"Choose WAV…",FieldType::Action});
+        const auto previewField=add(4,{L"Sound preview",L"Preview",FieldType::Action});
+        const auto resetSoundField=add(4,{L"Notification sound",L"Use built-in tone",FieldType::Action});
+        const auto transitionField=add(5,{L"Transition",std::to_wstring(presentation.transition),FieldType::Choice,{L"Instant",L"Bird's-eye",L"Fade"}});
+        const auto durationField=add(5,{L"Duration per leg (ms)",std::to_wstring(presentation.duration),FieldType::Number,{},250,2000});
+        const auto heightField=add(5,{L"Height above avatar (m)",std::to_wstring(presentation.height),FieldType::Number,{},16,96});
+        const auto sizeField=add(5,{L"Default monitor size",std::to_wstring(monitorSize),FieldType::Choice,{L"320 × 180",L"480 × 270",L"640 × 360"}});
+        const auto rateField=add(5,{L"Default monitor rate",std::to_wstring(monitorRate),FieldType::Choice,{L"0.5 FPS",L"1 FPS",L"2 FPS",L"5 FPS"}});
+        const unsigned int modifiers[]={5,6,3,7};const std::vector<unsigned int> keys{0,49,50,51,52,53,39,37,112,113,114,115,116,117,118,119,120,121,122,123};
+        const std::vector<std::wstring> keyNames{L"Disabled",L"1",L"2",L"3",L"4",L"5",L"Right",L"Left",L"F1",L"F2",L"F3",L"F4",L"F5",L"F6",L"F7",L"F8",L"F9",L"F10",L"F11",L"F12"};
+        const auto shortcutField=add(6,{L"Enable character shortcuts",presentation.shortcuts?L"1":L"0",FieldType::Check});
+        unsigned int modifier=0;for(unsigned int i=0;i<4;++i)if(presentation.bindings[0].modifiers==modifiers[i])modifier=i;
+        const auto modifierField=add(6,{L"Shortcut modifier",std::to_wstring(modifier),FieldType::Choice,{L"Alt + Shift",L"Ctrl + Shift",L"Ctrl + Alt",L"Ctrl + Alt + Shift"}});
+        const auto keysStart=fields.size();
+        for(unsigned int i=0;i<10;++i)
+        {
+            const auto key=i<7?presentation.bindings[i].key:experience.keys[i-7].key;const auto found=std::find(keys.begin(),keys.end(),key);
+            const auto label=i<5?L"Character "+std::to_wstring(i+1):i==5?L"Next ready":i==6?L"Previous ready":i==7?L"Restore controls":i==8?L"Next attention":L"Previous attention";
+            add(6,{label,std::to_wstring(found==keys.end()?0:static_cast<unsigned int>(found-keys.begin())),FieldType::Choice,keyNames});
+        }
+        const auto viewerKeysField=add(6,{L"Enable viewer shell actions",experience.viewerShellKeys?L"1":L"0",FieldType::Check});
+        std::vector<std::wstring> commands{L"Unused"};for(const auto& command:shellCommands())commands.push_back(command.label);
+        const auto quickStart=fields.size();
+        for(std::size_t i=0;i<12;++i)
+        {
+            unsigned int choice=0;if(i<experience.quick.size())for(std::size_t j=0;j<shellCommands().size();++j)if(shellCommands()[j].id==experience.quick[i])choice=static_cast<unsigned int>(j)+1;
+            add(7,{L"Quick action "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,commands});
+        }
+        const auto readField=[&](std::size_t at)
+        {
+            auto& field=fields[at];if(!field.control)return field.value;
+            if(field.type==FieldType::Check)return std::wstring(SendMessageW(field.control,BM_GETCHECK,0,0)==BST_CHECKED?L"1":L"0");
+            if(field.type==FieldType::Choice)return std::to_wstring(SendMessageW(field.control,CB_GETCURSEL,0,0));
+            if(field.type==FieldType::Color)return field.value;
+            std::vector<wchar_t> text(static_cast<std::size_t>(GetWindowTextLengthW(field.control))+1);GetWindowTextW(field.control,text.data(),static_cast<int>(text.size()));return std::wstring(text.data());
+        };
+        const auto remember=[&](bool controls)
+        {
+            auto& p=people[selected];const auto value=[&](std::size_t i){return controls?readField(i):fields[i].value;};
+            p.label=value(labelField);p.alias=value(aliasField);p.color=static_cast<unsigned int>(std::wcstoul(value(colorField).c_str(),nullptr,10));p.mode=value(modeField)==L"1"?Mode::Economy:Mode::Warm;
+            p.categories=0;for(unsigned int i=0;i<4;++i)if(value(soundStart+i)==L"1")p.categories|=1u<<i;
+        };
+        const auto showPerson=[&]()
+        {
+            const auto& p=people[selected];const auto set=[&](std::size_t at,const std::wstring& value){auto& field=fields[at];field.value=value;if(!field.control)return;if(field.type==FieldType::Check)SendMessageW(field.control,BM_SETCHECK,number(field)?BST_CHECKED:BST_UNCHECKED,0);else if(field.type==FieldType::Choice)SendMessageW(field.control,CB_SETCURSEL,number(field),0);else if(field.type!=FieldType::Color)SetWindowTextW(field.control,value.c_str());};
+            set(profileField,std::to_wstring(selected));set(soundProfileField,std::to_wstring(selected));set(labelField,p.label);set(aliasField,p.alias);set(colorField,std::to_wstring(p.color));set(modeField,p.mode==Mode::Economy?L"1":L"0");
+            for(unsigned int i=0;i<4;++i){set(soundStart+i,p.categories&(1u<<i)?L"1":L"0");fields[soundStart+i].enabled=p.ready;if(fields[soundStart+i].control)EnableWindow(fields[soundStart+i].control,p.ready);}
+            for(const auto at:{aliasField,colorField,wavField,previewField,resetSoundField}){fields[at].enabled=p.ready;if(fields[at].control)EnableWindow(fields[at].control,p.ready);}
+            fields[copyField].enabled=!slots[selected] || !slots[selected]->running();if(fields[copyField].control)EnableWindow(fields[copyField].control,fields[copyField].enabled);
+            if(fields[wavField].control)SetWindowTextW(fields[wavField].control,p.asset.empty()&&!p.imported?L"Choose WAV…":L"Choose another WAV…");
+        };
+        fields[profileField].changed=[&](HWND){const int next=static_cast<int>(SendMessageW(fields[profileField].control,CB_GETCURSEL,0,0));remember(true);if(validSlot(next))selected=next;showPerson();};
+        fields[soundProfileField].changed=[&](HWND){const int next=static_cast<int>(SendMessageW(fields[soundProfileField].control,CB_GETCURSEL,0,0));remember(true);if(validSlot(next))selected=next;showPerson();};
+        fields[wavField].action=[&](HWND owner)
+        {
+            if(!people[selected].ready)return;std::vector<wchar_t> file(32768);OPENFILENAMEW picker{};picker.lStructSize=sizeof(picker);picker.hwndOwner=owner;picker.lpstrFilter=L"PCM WAV (*.wav)\0*.wav\0\0";picker.lpstrFile=file.data();picker.nMaxFile=static_cast<DWORD>(file.size());picker.Flags=OFN_FILEMUSTEXIST|OFN_NOCHANGEDIR|OFN_DONTADDTORECENT;
+            if(!GetOpenFileNameW(&picker))return;WavSound sound;if(!readSound(std::filesystem::path(file.data()),sound)){MessageBoxW(owner,L"Choose a PCM WAV of at most 10 seconds / 4 MiB.",L"Sound not imported",MB_OK);return;}
+            people[selected].wav=std::move(sound);people[selected].imported=true;SetWindowTextW(fields[wavField].control,std::filesystem::path(file.data()).filename().c_str());
+        };
+        std::uint64_t preview=0;
+        fields[previewField].action=[&](HWND){const auto volume=static_cast<unsigned int>(std::wcstoul(readField(volumeField).c_str(),nullptr,10));if(volume<=100){const auto& wav=people[selected].wav;preview=playAlert(wav.bytes.empty()?builtinAlertTone(volume):wav.volume(volume));}};
+        fields[resetSoundField].action=[&](HWND){people[selected].wav={};people[selected].asset.clear();people[selected].imported=false;SetWindowTextW(fields[wavField].control,L"Choose WAV…");};
+        showPerson();HostPreferences accepted;
+        const auto validate=[&](HWND owner)
+        {
+            remember(false);auto next=preferences();const auto n=[&](std::size_t at){return number(fields[at]);};
+            next.options.chrome=n(chromeField);next.options.hosted=n(hostedField)!=0;next.options.chat=n(chatField)!=0;next.options.chatDetached=n(chatDetachedField)!=0;next.options.controlsDetached=n(controlsDetachedField)!=0;
+            next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;
+            next.chat.haveCategories=true;next.chat.showMask=next.chat.attentionMask=0;for(unsigned int i=0;i<5;++i)if(n(showStart+i))next.chat.showMask|=1u<<i;for(unsigned int i=0;i<8;++i)if(n(attentionStart+i))next.chat.attentionMask|=1u<<i;
+            next.chat.visibleRead=n(visibleReadField)!=0;next.chat.activeRead=n(activeReadField)!=0;next.chat.delay=n(delayField);next.experience.oldestFirst=n(oldestField)!=0;next.experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(n(accountStart+i))next.experience.accountMask|=1u<<i;
+            next.options.voice=n(voiceField)!=0;next.options.muteBackground=n(muteField)!=0;next.presentation.volume=n(volumeField);next.presentation.transition=n(transitionField);next.presentation.duration=n(durationField);next.presentation.height=n(heightField);next.options.previewSize=n(sizeField);next.options.previewRate=n(rateField);next.options.cinematic=next.presentation.transition==1;
+            next.presentation.shortcuts=n(shortcutField)!=0;next.experience.viewerShellKeys=n(viewerKeysField)!=0;for(unsigned int i=0;i<7;++i){const auto key=keys[n(keysStart+i)];next.presentation.bindings[i]={key,key!=presentation.bindings[i].key || n(modifierField)!=modifier?modifiers[n(modifierField)]:presentation.bindings[i].modifiers};}for(unsigned int i=0;i<3;++i){const auto key=keys[n(keysStart+7+i)];next.experience.keys[i]={key,key!=experience.keys[i].key || n(modifierField)!=modifier?modifiers[n(modifierField)]:experience.keys[i].modifiers};}
+            next.experience.quick.clear();for(unsigned int i=0;i<12;++i)if(n(quickStart+i))next.experience.quick.push_back(shellCommands()[n(quickStart+i)-1].id);
+            for(int i=0;i<MaxCharacters;++i)
+            {
+                const auto& p=people[i];const auto label=utf8(p.label);if(label.size()>64 || (!p.label.empty()&&label.empty())){MessageBoxW(owner,L"Profile names must fit in 64 UTF-8 bytes.",L"Invalid name",MB_OK);return false;}
+                if(p.label!=wide(originalLabels[i]))next.chat.profileNames[i]=label;
+                if(p.mode!=originalModes[i])next.options.standby[i]=p.mode;
+                if(!p.ready)continue;
+                if(!slots[i] || !slots[i]->chat.identity.owns(p.source) || slots[i]->snapshot.state!=State::Ready){MessageBoxW(owner,L"A character login changed while Preferences was open. Cancel and reopen Preferences to edit that account.",L"Character changed",MB_OK);return false;}
+                auto a=presentation.appearance(AccountKey::from(p.source));a.alias=utf8(p.alias);a.color=p.color;if(!p.alias.empty()&&a.alias.empty())return false;
+                if(!next.presentation.set(AccountKey::from(p.source),a))return false;
+                next.chat.sounds[AccountKey::from(p.source)]={p.categories,p.asset};
+            }
+            if(next.encode().empty()){MessageBoxW(owner,L"Check for duplicate shortcuts or quick actions and names longer than 64 UTF-8 bytes.",L"Preferences not applied",MB_OK);return false;}
+            accepted=std::move(next);return true;
+        };
+        preferencesOpen=true;
+        const bool ok=edit(profileDialogOwner(),L"Folderstorm Host Preferences · Apply saves; Cancel discards",fields,{L"General",L"Appearance",L"Characters & profiles",L"Chats & notifications",L"Audio",L"Switching & monitors",L"Keyboard shortcuts",L"Quick actions"},page,true,validate);
+        preferencesOpen=false;if(preview && preview==playbackSerial)playAlert({});if(!ok)return;
+        // Immutable WAV assets are written only after the complete draft passed
+        // validation. Cancel never changes an asset or a character's settings.
+        for(int i=0;i<MaxCharacters;++i)if(people[i].ready && people[i].imported)
+        {
+            WorkerId id{};if(BCryptGenRandom(nullptr,id.data(),static_cast<ULONG>(id.size()),BCRYPT_USE_SYSTEM_PREFERRED_RNG)!=0){message(L"Sound asset creation failed; preferences were not applied.");return;}
+            const auto asset=hexId(id)+L".wav";std::error_code error;std::filesystem::create_directories(profiles/L"sounds",error);
+            const auto file=profiles/L"sounds"/asset,temp=std::filesystem::path(file.wstring()+L".tmp");std::ofstream output(temp,std::ios::binary|std::ios::trunc);const auto& wav=people[i].wav;output.write(reinterpret_cast<const char*>(wav.bytes.data()),static_cast<std::streamsize>(wav.bytes.size()));output.close();
+            if(error || !output || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_WRITE_THROUGH)){std::filesystem::remove(temp,error);message(L"The sound could not be saved; preferences were not applied.");return;}
+            accepted.chat.sounds[AccountKey::from(people[i].source)].asset=utf8(asset);
+        }
+        const bool dockChat=accepted.options.chatDetached,dockControls=accepted.options.controlsDetached;
+        accepted.options.chatDetached=chatDetached;accepted.options.controlsDetached=controlsDetached;
+        saveDraft(true);applyPreferences(accepted);setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(chrome);
+        SendMessageW(embedControl,BM_SETCHECK,embedding?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(showChatControl,BM_SETCHECK,showChat?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(voiceControl,BM_SETCHECK,voice?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(muteControl,BM_SETCHECK,muteBackground?BST_CHECKED:BST_UNCHECKED,0);
+        for(int i=0;i<MaxCharacters;++i){SendMessageW(standbyControl[i],CB_SETCURSEL,standby[i]==Mode::Economy?1:0,0);if(slots[i])slots[i]->soundPrepared=false;}
+        activeReadClock={};applyTheme();refreshChat(true,true);refreshCharacters();updateMonitors();refreshAttention();refreshPins();layout();saveOptions();
+        if(number(fields[copyField]))copyProfileSettings(selected);
+    }
+    void editHostSettings(unsigned int page=1) { editPreferences(page); }
+    void customizeQuick() { editPreferences(7); }
     void pinWindow(HWND panel,bool toggle=true)
     {
         const auto id=windowKey(panel);if(!id)return;
@@ -714,72 +868,7 @@ struct Host
         const auto saved = soundCache.find(sound.asset);
         playAlert(saved == soundCache.end() ? builtinAlertTone(presentation.volume) : saved->second.volume(presentation.volume));
     }
-    void editCharacterSound(int index)
-    {
-        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.state != State::Ready) return;
-        const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); auto next = characterSound(index);
-        if (!chatPreferences.sounds.count(key) && chatPreferences.sounds.size() >= PresentationStore::MaxProfiles)
-        { message(L"Remembered sound profiles are full; existing profiles can still be edited."); return; }
-        WavSound chosen;
-        if (!next.asset.empty()) readSound(profiles/L"sounds"/wide(next.asset),chosen);
-        bool imported = false; std::uint64_t preview = 0;
-        using namespace fs_host_ui;
-        std::vector<Field> fields{
-            {L"Direct IM alerts",next.categories&SoundPrivate?L"1":L"0",FieldType::Check},
-            {L"Group chat alerts",next.categories&SoundGroup?L"1":L"0",FieldType::Check},
-            {L"Conference alerts",next.categories&SoundConference?L"1":L"0",FieldType::Check},
-            {L"Supported notifications",next.categories&SoundAttention?L"1":L"0",FieldType::Check},
-            {L"Background notification sound",next.asset.empty()?L"Choose WAV…":L"Choose another WAV…",FieldType::Action},
-            {L"Preview at host volume",L"Preview",FieldType::Action},
-            {L"Use the built-in tone",L"Reset sound",FieldType::Action}};
-        fields[4].action = [&](HWND owner)
-        {
-            std::vector<wchar_t> filename(32768,L'\0'); OPENFILENAMEW picker{}; picker.lStructSize = sizeof(picker); picker.hwndOwner = owner;
-            picker.lpstrFilter = L"WAV audio (*.wav)\0*.wav\0\0"; picker.lpstrFile = filename.data(); picker.nMaxFile = static_cast<DWORD>(filename.size());
-            picker.lpstrTitle = L"Choose a notification sound (PCM WAV, up to 10 seconds / 4 MiB)";
-            picker.Flags = OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR|OFN_DONTADDTORECENT;
-            if (!GetOpenFileNameW(&picker)) return;
-            WavSound candidate;
-            if (!readSound(std::filesystem::path(filename.data()),candidate))
-            { MessageBoxW(owner,L"Use a valid mono/stereo PCM WAV: 8/16-bit, 8–48 kHz, at most 10 seconds and 4 MiB.",L"Sound not imported",MB_OK|MB_ICONINFORMATION); return; }
-            chosen = std::move(candidate); imported = true;
-            SetWindowTextW(fields[4].control,std::filesystem::path(filename.data()).filename().c_str());
-        };
-        fields[5].action = [&](HWND)
-        {
-            if (!presentation.volume) { message(L"Host alert volume is zero. Raise it in Host settings → Audio to hear Preview."); return; }
-            preview = playAlert(chosen.bytes.empty()?builtinAlertTone(presentation.volume):chosen.volume(presentation.volume));
-        };
-        fields[6].action = [&](HWND)
-        { chosen = {}; next.asset.clear(); imported = false; SetWindowTextW(fields[4].control,L"Choose WAV…"); };
-        const auto title = L"Sounds: "+characterName(index)+L" · "+wide(identity.grid)+L" · Save host choices to keep";
-        const bool accepted = edit(profileDialogOwner(),title.c_str(),fields);
-        if (preview && preview == playbackSerial) playAlert({});
-        if (!accepted) return;
-        if (!slots[index] || slots[index]->detached || slots[index]->snapshot.state != State::Ready || !slots[index]->chat.identity.owns(identity))
-        { message(L"The character login changed; sound choices were not applied."); return; }
-        next.categories = (number(fields[0])?SoundPrivate:0u)|(number(fields[1])?SoundGroup:0u)|
-            (number(fields[2])?SoundConference:0u)|(number(fields[3])?SoundAttention:0u);
-        if (imported)
-        {
-            WorkerId random{};
-            if (BCryptGenRandom(nullptr,random.data(),static_cast<ULONG>(random.size()),BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
-            { message(L"Unable to create a sound asset identifier; choices were not applied."); return; }
-            std::ostringstream name; name<<std::hex<<std::setfill('0'); for (auto randomByte : random) name<<std::setw(2)<<static_cast<unsigned int>(randomByte);
-            next.asset = name.str()+".wav";
-            std::error_code error; const auto directory = profiles/L"sounds"; std::filesystem::create_directories(directory,error);
-            if (error) { message(L"Unable to create the character sound folder; choices were not applied."); return; }
-            const auto destination = directory/wide(next.asset), temporary = directory/wide(next.asset+".tmp");
-            std::ofstream output(temporary,std::ios::binary|std::ios::trunc);
-            output.write(reinterpret_cast<const char*>(chosen.bytes.data()),static_cast<std::streamsize>(chosen.bytes.size())); output.close();
-            if (!output || !MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_WRITE_THROUGH))
-            { std::filesystem::remove(temporary,error); message(L"The sound could not be saved; earlier choices remain active."); return; }
-        }
-        chatPreferences.sounds[key] = next;
-        if (!next.asset.empty() && !chosen.bytes.empty()) storeCachedSound(next.asset,std::move(chosen));
-        slots[index]->soundAsset = next.asset; slots[index]->soundPrepared = true;
-        message(L"Character sound choices applied. Save host choices to keep them after closing.");
-    }
+    void editCharacterSound(int index) { editPreferences(4,index); }
     unsigned int audioPolicyFor(int index) const
     { return (voice ? AudioVoice : 0u) | (muteBackground ? AudioMuteWorld : 0u) |
         (presentation.volume && characterSound(index).categories ? AudioHostUI : 0u); }
@@ -812,65 +901,9 @@ struct Host
         return false;
     }
     bool isMonitorRoot(HWND root) const {for(const auto& m:monitors)if(m.window && m.window==root)return true;return false;}
-    void editShortcuts()
-    {
-        using namespace fs_host_ui;
-        const unsigned int modifiers[] = {5,6,3,7};
-        const std::vector<unsigned int> keys{0,49,50,51,52,53,39,37,112,113,114,115,116,117,118,119,120,121,122,123};
-        const std::vector<std::wstring> labels{L"Disabled",L"1",L"2",L"3",L"4",L"5",L"Right",L"Left",L"F1",L"F2",L"F3",L"F4",L"F5",L"F6",L"F7",L"F8",L"F9",L"F10",L"F11",L"F12"};
-        unsigned int modifier = 0; for (unsigned int i = 0; i < 4; ++i) if (presentation.bindings[0].modifiers == modifiers[i]) modifier = i;
-        std::vector<Field> fields{{L"Enable character shortcuts",presentation.shortcuts ? L"1" : L"0",FieldType::Check},
-            {L"Host modifier",std::to_wstring(modifier),FieldType::Choice,{L"Alt + Shift",L"Ctrl + Shift",L"Ctrl + Alt",L"Ctrl + Alt + Shift"}}};
-        for (unsigned int i = 0; i < 7; ++i)
-        {
-            const auto found = std::find(keys.begin(),keys.end(),presentation.bindings[i].key);
-            const auto selected = found == keys.end() ? 0 : static_cast<unsigned int>(found-keys.begin());
-            fields.push_back({i < 5 ? L"Host: character "+std::to_wstring(i+1) : i == 5 ? L"Host: next ready" : L"Host: previous ready",std::to_wstring(selected),FieldType::Choice,labels});
-        }
-        for(unsigned int i=0;i<3;++i)
-        {const auto found=std::find(keys.begin(),keys.end(),experience.keys[i].key);Field field{i==0?L"Host: restore controls":i==1?L"Host: next attention":L"Host: previous attention",std::to_wstring(found==keys.end()?0:static_cast<unsigned int>(found-keys.begin())),FieldType::Choice,labels};field.page=1;fields.push_back(std::move(field));}
-        for(std::size_t i=6;i<9;++i)fields[i].page=1;
-        Field viewerKeys{L"Enable viewer shell actions",experience.viewerShellKeys?L"1":L"0",FieldType::Check};viewerKeys.page=1;fields.push_back(viewerKeys);
-        if (!edit(window,L"Host keys; viewer keys: Preferences → Controls",fields,{L"Character keys",L"Cycle and shell keys"})) return;
-        auto draft = presentation; draft.shortcuts = number(fields[0]);
-        for (unsigned int i = 0; i < 7; ++i) draft.bindings[i] = {keys[number(fields[i+2])],modifiers[number(fields[1])]};
-        if (!draft.valid()) { message(L"Two character actions use the same host shortcut; choices were not applied."); return; }
-        auto next=experience;next.viewerShellKeys=number(fields[12])!=0;for(unsigned int i=0;i<3;++i)next.keys[i]={keys[number(fields[i+9])],modifiers[number(fields[1])]};
-        if(!next.valid() || bindingsConflict(next,draft)){message(L"Host shell keys conflict; changes were not applied.");return;}
-        experience=std::move(next);presentation = std::move(draft);
-        message(L"Host shortcuts applied. Assign viewer Character actions through Preferences > Controls; typing is excluded. Save host choices to keep.");
-    }
-
-    void editTransition()
-    {
-        using namespace fs_host_ui;
-        std::vector<Field> fields{{L"Transition style",std::to_wstring(presentation.transition),FieldType::Choice,{L"Instant",L"Bird's-eye",L"Fade"}},
-            {L"Duration per leg (250–2000 ms)",std::to_wstring(presentation.duration),FieldType::Number,{},250,2000},
-            {L"Height above avatar (16–96 m)",std::to_wstring(presentation.height),FieldType::Number,{},16,96},
-            {L"Reset transition defaults",L"0",FieldType::Check}};
-        if (!edit(window,L"Character transition (Save host choices to keep)",fields)) return;
-        if (number(fields[3])) { presentation.transition = 0; presentation.duration = 1100; presentation.height = 64; }
-        else { presentation.transition = number(fields[0]); presentation.duration = number(fields[1]); presentation.height = number(fields[2]); }
-        message(L"Transition choices apply to the next switch. Escape skips the effect and completes switching.");
-    }
-    void editAlertVolume()
-    {
-        using namespace fs_host_ui;
-        std::vector<Field> fields{{L"Alert volume (0–100)",std::to_wstring(presentation.volume),FieldType::Number,{},0,100}};
-        if (edit(window,L"Host alert volume (Save host choices to keep)",fields)) presentation.volume = number(fields[0]);
-    }
-
-    int sourceSlot(const Message& item) const
-    {
-        for (int i = 0; i < MaxCharacters; ++i) if (slots[i] && slots[i]->chat.identity.owns(item)) return i;
-        return -1;
-    }
-    int pinSlot(const ChatPin& pin) const
-    {
-        for (int i = 0; i < MaxCharacters; ++i) if (slots[i] && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state == State::Ready &&
-            !(slots[i]->snapshot.flags & ChatRestricted) && pin.live(slots[i]->chat)) return i;
-        return -1;
-    }
+    void editShortcuts() { editPreferences(6); }
+    void editTransition() { editPreferences(5); }
+    void editAlertVolume() { editPreferences(4); }
     void selectPin(std::size_t id)
     {
         if (id >= pins.entries.size()) return;
@@ -1141,41 +1174,7 @@ struct Host
         const auto c=visibleAccent(appearance(index).color,rgb(theme.background),rgb(theme.text));
         return RGB((c >> 16) & 255, (c >> 8) & 255, c & 255);
     }
-    void editAppearance(int index)
-    {
-        if(!validSlot(index))return;
-        const auto label=[](const std::wstring& value)->std::optional<std::string>
-        {
-            const int length=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value.data(),static_cast<int>(value.size()),nullptr,0,nullptr,nullptr);
-            if((!value.empty() && !length) || length>64)return {};
-            std::string result(static_cast<std::size_t>(length),'\0');
-            if(length)WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value.data(),static_cast<int>(value.size()),result.data(),length,nullptr,nullptr);
-            return validUtf8(result)?std::optional<std::string>{result}:std::nullopt;
-        };
-        const auto position=static_cast<std::size_t>(index);const auto previousLabel=chatPreferences.profileNames[position];
-        const bool ready=slots[index] && slots[index]->snapshot.state==State::Ready;
-        const Message identity=ready?slots[index]->snapshot:Message{};
-        const auto key=AccountKey::from(identity);const auto current=presentation.appearance(key);
-        using namespace fs_host_ui;std::vector<Field> fields{{L"Profile name",wide(previousLabel)}};
-        if(ready){fields.push_back({L"Account friendly name",wide(current.alias)});fields.push_back({L"Character color",std::to_wstring(current.color),FieldType::Color});fields.push_back({L"Reset account name and color",L"0",FieldType::Check});}
-        if(!edit(profileDialogOwner(),ready?L"Profile name and character appearance · Save host choices to keep":L"Name this private profile · Save host choices to keep",fields))return;
-        auto profile=label(fields[0].value);if(!profile){message(L"Profile name must fit in 64 UTF-8 bytes.");return;}
-        if(ready)
-        {
-            if(!slots[index] || !slots[index]->chat.identity.owns(identity)){message(L"Login changed; appearance edits were discarded.");return;}
-            const auto alias=label(fields[1].value);if(!alias){message(L"Account friendly name must fit in 64 UTF-8 bytes.");return;}
-            CharacterAppearance next{*alias,number(fields[2]),current.alerts};
-            if(number(fields[3])){next.alias.clear();next.color=defaultAccountColor(key);}
-            if(!presentation.set(key,next)){message(L"Character appearance could not be applied; profile capacity or text is invalid.");return;}
-            if(!number(fields[3]) && *profile==previousLabel && next.alias!=current.alias && !next.alias.empty() &&
-                (previousLabel.empty() || previousLabel==current.alias || previousLabel==identity.name))*profile=next.alias;
-        }
-        chatPreferences.profileNames[position]=*profile;
-        for(auto& monitor:monitors)monitor.dirty=true;
-        for(auto button:pinButtons)InvalidateRect(button,nullptr,FALSE);
-        refreshCharacters();refreshChat(true);refreshAttention();updateMonitors();for(int i=0;i<MaxCharacters;++i)describe(i);
-        InvalidateRect(window,nullptr,FALSE);if(chatWindow)InvalidateRect(chatWindow,nullptr,FALSE);if(controlsWindow)InvalidateRect(controlsWindow,nullptr,FALSE);
-    }
+    void editAppearance(int index) { editPreferences(2,index); }
     void capturePlacement(HWND panel, unsigned int id, UINT localDpi)
     {
         if (!panel) return;
@@ -1201,18 +1200,26 @@ struct Host
         const auto fit = fitShellRect(r,{static_cast<int>(w.left),static_cast<int>(w.top),static_cast<int>(w.right-w.left),static_cast<int>(w.bottom-w.top),96},localDpi);
         if (fit.valid()) SetWindowPos(panel,nullptr,fit.x,fit.y,fit.width,fit.height,SWP_NOZORDER|SWP_NOACTIVATE);
     }
-    bool savePresentation()
+    void capturePreferencePlacement()
     {
         capturePlacement(window,0,dpi); capturePlacement(chatWindow,1,chatDpi); capturePlacement(controlsWindow,2,controlsDpi);
-        for (unsigned int i = 0; i < MaxMonitors; ++i) capturePlacement(monitors[i].window,i+3,monitors[i].dpi);
-        presentation.pins = pins.saved();
-        const auto data = presentation.encode();
-        if (data.empty()) { message(L"Host appearance choices failed validation."); return false; }
-        const auto temp = profiles / L"host-presentation.tmp";
-        std::ofstream out(temp,std::ios::binary|std::ios::trunc); out.write(data.data(),static_cast<std::streamsize>(data.size())); out.close();
-        if (!out || !MoveFileExW(temp.c_str(),(profiles / L"host-presentation.dat").c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
-        { message(L"Host appearance choices could not be saved; session choices remain active."); return false; }
-        return true;
+        for(unsigned int i=0;i<MaxMonitors;++i)capturePlacement(monitors[i].window,i+3,monitors[i].dpi);
+        presentation.pins=pins.saved();
+        if(attentionWindow)experience.attentionRect=liveRect(attentionWindow,attentionDpi);
+    }
+    HostPreferences preferences() const {return {options(),presentation,experience,chatPreferences};}
+    void applyPreferences(const HostPreferences& value)
+    {
+        const auto& o=value.options;standby=o.standby;voice=o.voice;muteBackground=o.muteBackground;
+        embedding=o.hosted;showChat=o.chat;chrome=o.chrome;chatDetached=o.chatDetached;controlsDetached=o.controlsDetached;
+        monitorSize=o.previewSize;monitorRate=o.previewRate;cinematic=o.cinematic;
+        presentation=value.presentation;experience=value.experience;chatPreferences=value.chat;
+    }
+    static bool readPreferences(const std::filesystem::path& path,HostPreferences& value)
+    {
+        std::ifstream input(path,std::ios::binary);if(!input)return false;
+        std::string bytes(HostPreferences::MaxBytes+1,'\0');input.read(bytes.data(),static_cast<std::streamsize>(bytes.size()));
+        bytes.resize(static_cast<std::size_t>(input.gcount()));return HostPreferences::decode(bytes,value);
     }
     bool drawIdentity(const DRAWITEMSTRUCT& draw)
     {
@@ -1311,8 +1318,8 @@ struct Host
 
     void message(const std::wstring& text)
     {
-        lastNotice = text; SetWindowTextW(notice, text.c_str());
-        if (chrome == 2) SetWindowTextW(revealControl,(L"Show controls · "+text).c_str());
+        lastNotice = text; const auto display=saveError.empty()?text:saveError+L" "+text; SetWindowTextW(notice, display.c_str());
+        if (chrome == 2) SetWindowTextW(revealControl,(L"Show controls · "+display).c_str());
     }
     void tray(bool add)
     {
@@ -1347,7 +1354,7 @@ struct Host
             { experience.pinned[windowKey(monitor.window)]=false;pinWindow(monitor.window,false);if(IsIconic(monitor.window))ShowWindow(monitor.window,SW_SHOWNOACTIVATE); fitOpenWindow(monitor.window,monitor.dpi,true); }
         }
         ShowWindow(window,SW_SHOW); SetForegroundWindow(window); layout();
-        message(positions ? L"Controls and window positions recovered. Window pins were cleared for this session." : L"Host controls restored.");
+        message(positions ? L"Controls and window positions recovered. Window pins were cleared." : L"Host controls restored.");
     }
     void refitWindows()
     {
@@ -1391,7 +1398,7 @@ struct Host
         chrome = mode;
         for (unsigned int i = 0; i < 3; ++i)
             CheckMenuItem(GetSystemMenu(window, FALSE), 0xA100u + i * 0x10u, MF_BYCOMMAND | (chrome == i ? MF_CHECKED : MF_UNCHECKED));
-        SetWindowTextW(window, (L"Folderstorm · " + std::to_wstring(MaxCharacters) + L" character slots").c_str());
+        SetWindowTextW(window, (L"Folderstorm · " + std::to_wstring(MaxCharacters) + (saveError.empty()?L" character slots":L" · settings not saved")).c_str());
         layout();
     }
     bool send(int index, Kind kind, Mode mode = Mode::Warm, std::uint64_t surface = 0, const Message* bound = nullptr)
@@ -1447,21 +1454,35 @@ struct Host
         result.cinematic = presentation.transition == 1;
         return result;
     }
-    void saveOptions()
+    bool saveOptions(bool announce=true)
     {
-        const auto temporary = profiles / L"host-options.tmp";
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        const auto data = options().encode(); output.write(data.data(), static_cast<std::streamsize>(data.size())); output.close();
-        if (!output || !MoveFileExW(temporary.c_str(), (profiles / L"host-options.txt").c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        { message(L"Host choices could not be saved. Current session choices remain active."); return; }
-        if (!savePresentation()) return;
-        if(attentionWindow)experience.attentionRect=liveRect(attentionWindow,attentionDpi);
-        if(!saveStore(L"host-experience.dat",experience.encode())){message(L"Earlier host choices saved, but appearance/quick actions could not be saved. Session changes remain active.");return;}
-        if (GetFileAttributesW((profiles/L"host-chat.dat").c_str()) != INVALID_FILE_ATTRIBUTES &&
-            !CopyFileW((profiles/L"host-chat.dat").c_str(),(profiles/L"host-chat.dat.bak").c_str(),FALSE))
-        { message(L"Chat/sound choices could not be backed up; earlier choices were retained."); return; }
-        if(!saveStore(L"host-chat.dat",chatPreferences.encode())){message(L"Chat/sound choices could not be saved; current session choices remain active.");return;}
-        message(L"Host choices saved. Character credentials, chats and workspace contents are not in this file.");
+        capturePreferencePlacement();const auto data=preferences().encode();
+        const auto fail=[&]()
+        {
+            saveError=L"Host settings not saved. Retry in Preferences → General.";
+            autosave.failed(GetTickCount64());message(lastNotice);
+            SetWindowTextW(window,L"Folderstorm · settings not saved");return false;
+        };
+        if(data.empty())return fail();
+        const auto target=profiles/L"host-preferences.dat";
+        if(GetFileAttributesW(target.c_str())!=INVALID_FILE_ATTRIBUTES)
+        {
+            HostPreferences prior;
+            const auto backup=profiles/(readPreferences(target,prior)?L"host-preferences.dat.bak":L"host-preferences.dat.invalid");
+            if(!CopyFileW(target.c_str(),backup.c_str(),FALSE))return fail();
+        }
+        if(!saveStore(L"host-preferences.dat",data))return fail();
+        autosave.committed(data);saveError.clear();
+        SetWindowTextW(window,(L"Folderstorm · "+std::to_wstring(MaxCharacters)+L" character slots").c_str());
+        if(announce)message(L"Host preferences saved automatically. Character data remains in its private profile.");
+        else message(lastNotice);
+        return true;
+    }
+    void autosaveChoices()
+    {
+        if(preferencesOpen || closing || detaching || GetTickCount64()-autosaveAt<250)return;
+        autosaveAt=GetTickCount64();capturePreferencePlacement();autosave.observe(preferences().encode(),GetTickCount64());
+        if(autosave.due(GetTickCount64()))saveOptions(false);
     }
     void sessionMenu(unsigned int group=0,UINT direct=0,int target=-1)
     {
@@ -1503,7 +1524,7 @@ struct Host
         add(view,435,L"Host active viewer",true,embedding);add(view,436,L"Show active viewer separately");AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(mon),L"Monitors");
         add(view,Details,L"Show diagnostics",true,experience.diagnostics);add(view,RestoreShell,L"Restore host controls");add(view,RecoverShell,L"Recover window positions");
         add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(conversationFilters()),L"Show conversations");
-        add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chats and notifications…");add(settings,CharacterSoundSettings,L"Sounds: "+name+L"…",slot && slot->snapshot.state==State::Ready);add(settings,206,L"Save host choices");
+        add(settings,AppearanceSettings,L"Host Preferences…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chats and notifications…");add(settings,CharacterSoundSettings,L"Sounds: "+name+L"…",slot && slot->snapshot.state==State::Ready);add(settings,206,L"Save preferences now");
         add(settings,277,L"Copy from main profile: "+name+L"…",!busy() && (!slot || !slot->running()));
         if(group==1){AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(characters),L"Selected character actions");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
         else if(group==2)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(view),L"View");
@@ -1686,7 +1707,7 @@ struct Host
         else if (choice == 20) stopMonitor(id, true);
         else if (choice == 21) setMonitorChat(id,!monitors[id].showChat);
         else if (choice == 22)
-        {monitorSize=current.size;monitorRate=current.rate;message(L"Monitor defaults updated for this session. Save host choices to keep them.");}
+        {monitorSize=current.size;monitorRate=current.rate;message(L"Monitor defaults updated; host preferences save automatically.");}
     }
     void openMonitor(int index)
     {
@@ -2086,30 +2107,7 @@ struct Host
         EnableWindow(chatReview, ready && !conversationBlocked); EnableWindow(chatRead, ready && !restricted && !conversationBlocked);
         updatingChat = false;
     }
-    void editChatSettings(unsigned int page=0)
-    {
-        using namespace fs_host_ui;std::vector<Field> fields;
-        const wchar_t* labels[]={L"Nearby Chat",L"Direct IMs",L"Group Chats",L"Conferences",L"Viewer Notifications",L"Teleport offers",L"Permission requests",L"Inventory offers"};
-        for(unsigned int i=0;i<5;++i)fields.push_back({labels[i],chatPreferences.showMask&(1u<<i)?L"1":L"0",FieldType::Check});
-        const auto attentionStart=fields.size();
-        for(unsigned int i=0;i<8;++i){Field field{labels[i],chatPreferences.attentionMask&(1u<<i)?L"1":L"0",FieldType::Check};field.page=1;fields.push_back(field);}
-        const auto oldest=fields.size();Field order{L"Oldest first across categories",experience.oldestFirst?L"1":L"0",FieldType::Check};order.page=1;fields.push_back(order);
-        const auto readStart=fields.size();
-        fields.push_back({L"Mark displayed chats read",chatPreferences.visibleRead?L"1":L"0",FieldType::Check});
-        fields.push_back({L"Auto-read active character",chatPreferences.activeRead?L"1":L"0",FieldType::Check});
-        fields.push_back({L"After seconds (5–3600)",std::to_wstring(chatPreferences.delay),FieldType::Number,{},5,3600});
-        for(std::size_t i=readStart;i<fields.size();++i)fields[i].page=2;
-        const auto accountStart=fields.size();for(int i=0;i<MaxCharacters;++i){Field field{characterName(i),experience.accountMask&(1u<<i)?L"1":L"0",FieldType::Check};field.page=3;fields.push_back(field);}
-        if(!edit(profileDialogOwner(),L"Chats and notifications · visibility, Attention and reading; sound choices are separate",fields,{L"Show in Chat",L"Attention",L"Read behavior",L"Characters"},page))return;
-        saveDraft(true);chatPreferences.showMask=chatPreferences.attentionMask=0;chatPreferences.haveCategories=true;
-        for(unsigned int i=0;i<5;++i)if(number(fields[i]))chatPreferences.showMask|=1u<<i;
-        for(unsigned int i=0;i<8;++i)if(number(fields[attentionStart+i]))chatPreferences.attentionMask|=1u<<i;
-        experience.oldestFirst=number(fields[oldest])!=0;
-        chatPreferences.visibleRead=number(fields[readStart])!=0;chatPreferences.activeRead=number(fields[readStart+1])!=0;chatPreferences.delay=number(fields[readStart+2]);
-        experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(number(fields[accountStart+i]))experience.accountMask|=1u<<i;
-        activeReadClock={};refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
-        message(L"Chat visibility and notification choices applied. Save host choices to keep them.");
-    }
+    void editChatSettings(unsigned int page=0) { (void)page;editPreferences(3); }
     bool automaticRead(int index)
     {
         auto& slot = *slots[index]; const auto now = GetTickCount64();
@@ -2268,11 +2266,11 @@ struct Host
             while (!error && entry != end && inspected++ < 512)
             {
                 const auto folder = entry->path();
-                if (plainDirectory(folder) && plainFile(folder/L"toolbars.xml",64u*1024u)) accounts.push_back(folder);
+                if (plainDirectory(folder) && (plainFile(folder/L"toolbars.xml",64u*1024u) || plainFile(folder/L"settings_per_account.xml",ProfileSettingsLimit))) accounts.push_back(folder);
                 entry.increment(error);
             }
             std::sort(accounts.begin(),accounts.end());
-            std::vector<std::wstring> choices{accounts.empty()?L"No saved toolbar layouts found":L"Choose the account whose toolbar layout to copy"};
+            std::vector<std::wstring> choices{accounts.empty()?L"No saved account UI or toolbar layouts found":L"Choose the source account for toolbar / UI preferences"};
             unsigned int selected = 0;
             for (std::size_t i = 0; i < accounts.size(); ++i)
             {
@@ -2280,14 +2278,17 @@ struct Host
                 if (accounts[i] == chosenAccount) selected = static_cast<unsigned int>(i)+1;
             }
             if (!selected && accounts.size() == 1) selected = 1;
-            if (accounts.empty()) groups &= ~CopyToolbars;
+            if (accounts.empty()) groups &= ~(CopyToolbars|CopyAccountUI);
             std::vector<Field> fields{
                 {L"Source settings",L"0",FieldType::Choice,{source.wstring(),L"Browse another installation / backup…"}},
-                {L"Toolbar source account",std::to_wstring(selected),FieldType::Choice,choices}};
+                {L"Source account (toolbar / UI)",std::to_wstring(selected),FieldType::Choice,choices}};
             const std::pair<const wchar_t*,std::uint32_t> options[] = {
                 {L"Graphics preferences",CopyGraphics},{L"Interface / skin",CopyInterface},
                 {L"Custom colors",CopyColors},{L"Keyboard bindings",CopyBindings},
-                {L"Quick preferences",CopyQuickPreferences},{L"Toolbar buttons / layout",CopyToolbars}};
+                {L"Quick preferences",CopyQuickPreferences},{L"Toolbar buttons / layout",CopyToolbars},
+                {L"Movement / WASD / quick jump",CopyMovement},{L"Camera / view behavior",CopyCamera},
+                {L"Avatar / beams / LookAt",CopyAvatar},{L"RLVa preferences",CopyRLVa},
+                {L"Account interface preferences",CopyAccountUI}};
             for (const auto& option : options) fields.push_back({option.first,(groups&option.second)?L"1":L"0",FieldType::Check});
             const auto title = L"Copy from main profile → Character "+std::to_wstring(index+1);
             if (!edit(profileDialogOwner(),title.c_str(),fields)) return false;
@@ -2301,20 +2302,20 @@ struct Host
             }
             if (!validProfileCopyGroups(groups))
             { MessageBoxW(profileDialogOwner(),L"Choose at least one group to copy.",L"Copy from main profile",MB_OK|MB_ICONINFORMATION); continue; }
-            if (!plainDirectory(source) || ((groups&(CopyGraphics|CopyInterface)) && !plainFile(source/L"settings.xml",ProfileSettingsLimit)))
+            if (!plainDirectory(source) || ((groups&CopyGlobalPreferences) && !plainFile(source/L"settings.xml",ProfileSettingsLimit)))
             { message(L"Choose a saved user_settings folder or backup containing settings.xml (up to 4 MiB)."); return false; }
             const auto account = number(fields[1]);
             if (account > 0 && account <= accounts.size()) chosenAccount = accounts[account-1];
             else chosenAccount.clear();
-            if ((groups&CopyToolbars) && chosenAccount.empty())
-            { MessageBoxW(profileDialogOwner(),L"Choose a source account for its toolbar layout, or uncheck Toolbar layout and buttons.",L"Copy toolbar layout",MB_OK|MB_ICONINFORMATION); continue; }
+            if ((groups&(CopyToolbars|CopyAccountUI)) && chosenAccount.empty())
+            { MessageBoxW(profileDialogOwner(),L"Choose a source account, or uncheck toolbar and account interface copying.",L"Copy account preferences",MB_OK|MB_ICONINFORMATION); continue; }
             break;
         }
         const auto destination = profiles/(L"Character"+std::to_wstring(index+1));
         const auto text = L"Copy the checked settings from:\n"+source.wstring()+
-            ((groups&CopyToolbars)?L"\nToolbar source: "+chosenAccount.wstring():L"")+
+            ((groups&(CopyToolbars|CopyAccountUI))?L"\nAccount source: "+chosenAccount.wstring():L"")+
             L"\n\nInto:\n"+destination.wstring()+
-            L"\n\nExisting files are backed up before replacement. Toolbars are applied only to the first account that successfully logs in. Credentials, other account data, chats, caches and security/automatic-action choices stay separate.\n\nSave and close the source viewer first for its latest choices. This opens a normal login; it does not log in automatically.";
+            L"\n\nExisting files are backed up before replacement. Account UI and toolbars are applied only to the first account that successfully logs in. Selected preferences omitted from the source file use this viewer version's defaults. Credentials, other account data, chats, caches and security/automatic-action choices stay separate.\n\nSave and close the source viewer first for its latest choices. This opens a normal login; it does not log in automatically.";
         if (MessageBoxW(profileDialogOwner(),text.c_str(),L"Copy checked settings and open login?",MB_OKCANCEL|MB_ICONQUESTION) != IDOK) return false;
         result.settings = source; result.toolbars = chosenAccount; result.groups = groups;
         return true;
@@ -2338,7 +2339,7 @@ struct Host
         using TaskDialog=HRESULT(WINAPI*)(const TASKDIALOGCONFIG*,int*,int*,BOOL*);
         const auto dialog=reinterpret_cast<TaskDialog>(GetProcAddress(GetModuleHandleW(L"comctl32.dll"),"TaskDialogIndirect"));
         const TASKDIALOG_BUTTON buttons[] = {
-            {3301,L"Copy from main profile…\nChoose graphics, interface, colors, key bindings, quick preferences and toolbar layout."},
+            {3301,L"Copy from main profile…\nChoose appearance, movement, camera, avatar, RLVa, account UI and toolbar preferences."},
             {3302,L"Keep this profile's settings\nOpen normal login with its existing settings, or defaults for a new profile."}};
         const auto title = L"Set up Character "+std::to_wstring(index+1);
         if (dialog)
@@ -2378,8 +2379,8 @@ struct Host
         const DWORD markerAttributes=GetFileAttributesW(marker.c_str());
         if (markerAttributes != INVALID_FILE_ATTRIBUTES && !(markerAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)))
         {
-            std::ifstream input(marker,std::ios::binary); char bytes[4]{}; input.read(bytes,4);
-            offered = input.gcount()==4 && input.peek()==std::char_traits<char>::eof() && std::string(bytes,4)==ProfilePromptMarker;
+            std::ifstream input(marker,std::ios::binary); char bytes[6]{}; input.read(bytes,sizeof(bytes));
+            offered = profilePromptWasOffered(std::string(bytes,static_cast<std::size_t>(input.gcount())));
         }
         ProfileCopyRequest copy = requested;
         if (!offered && !copy.groups)
@@ -2424,7 +2425,8 @@ struct Host
             const auto temporary=profile/(L"profile-copy-offered-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64())+L".tmp");
             Handle output(CreateFileW(temporary.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr));
             DWORD written=0;
-            bool saved=output.value!=INVALID_HANDLE_VALUE && WriteFile(output.value,ProfilePromptMarker,4,&written,nullptr) && written==4 && FlushFileBuffers(output.value);
+            const auto markerSize=static_cast<DWORD>(std::char_traits<char>::length(ProfilePromptMarker));
+            bool saved=output.value!=INVALID_HANDLE_VALUE && WriteFile(output.value,ProfilePromptMarker,markerSize,&written,nullptr) && written==markerSize && FlushFileBuffers(output.value);
             if (output.value!=INVALID_HANDLE_VALUE) CloseHandle(output.take());
             saved=saved && MoveFileExW(temporary.c_str(),marker.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
             if (!saved) { DeleteFileW(temporary.c_str()); message(L"Login opened, but the first-open choice could not be saved; the setup prompt may appear again."); }
@@ -2494,8 +2496,8 @@ struct Host
         { slot.pipe.close(); message(L"Worker identity or reply sequence changed; returning it to a separate viewer."); return; }
         const auto request = slot.request;
         slot.waiting = false; slot.pollAt = GetTickCount64();
-        if (!slot.importReported && response.detail.rfind("Settings import:",0) == 0)
-        { slot.importReported = true; message(wide(response.detail)); }
+        if (response.detail.rfind("Settings import:",0)==0 && response.detail!=slot.lastImportReport)
+        {slot.lastImportReport=response.detail;message(wide(response.detail));}
         const bool changedSession = !slot.chat.identity.owns(response);
         if (changedSession) attention.forget(slot.chat.identity);
         slot.chat.bind(response);
@@ -2677,6 +2679,7 @@ struct Host
     }
     void tick()
     {
+        autosaveChoices();
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
         bool ownForeground = foregroundPid == GetCurrentProcessId();
         for (const auto& slot : slots) if (slot && slot->pid == foregroundPid) ownForeground = true;
@@ -3529,6 +3532,11 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             if (host->logoutOnClose && host->closeAction(true)==1 && IsWindow(window)) host->logoutOnClose = false;
             return 0;
         }
+        if(!host->saveOptions(false))
+        {
+            const int choice=MessageBoxW(window,L"Host preferences could not be saved.\n\nYes: retry saving. No: close without saving. Cancel: keep the host open.",L"Preferences not saved",MB_YESNOCANCEL|MB_ICONWARNING);
+            if(choice==IDCANCEL || (choice==IDYES && !host->saveOptions(false)))return 0;
+        }
         switch (host->closeAction(false))
         {
         case 2: if(IsWindow(window))host->detach(true, true); break;
@@ -3615,6 +3623,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if(!state.chatPreferences.haveCategories)state.chatPreferences.attentionMask=legacyAttentionCategories(state.experience.attentionMask);
     std::ifstream setsFile(state.profiles/L"session-sets.dat",std::ios::binary);
     if(setsFile){std::string data(SessionSetStore::MaxBytes+1,'\0');setsFile.read(data.data(),static_cast<std::streamsize>(data.size()));data.resize(static_cast<std::size_t>(setsFile.gcount()));if(!SessionSetStore::decode(data,state.setStore))state.lastNotice=L"Saved session sets are invalid; no set was opened.";}
+    HostPreferences combined;
+    const bool haveCombined=state.readPreferences(state.profiles/L"host-preferences.dat",combined);
+    if(haveCombined || state.readPreferences(state.profiles/L"host-preferences.dat.bak",combined))
+    {
+        state.applyPreferences(combined);
+        if(haveCombined)state.autosave.committed(combined.encode());
+        else state.lastNotice=L"Recovered host preferences from the previous saved copy.";
+    }
+    else if(GetFileAttributesW((state.profiles/L"host-preferences.dat").c_str())!=INVALID_FILE_ATTRIBUTES)
+    {state.saveError=L"Saved host preferences could not be read. Earlier settings loaded; the invalid file will be retained.";}
     state.pins.restore(state.presentation.pins);
     host = &state;
     const auto icon = static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_SESSION_HOST),IMAGE_ICON,
