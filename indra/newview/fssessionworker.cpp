@@ -250,7 +250,7 @@ struct Worker : LLIMSessionObserver
     }
     bool backgroundAlertAllowed(const LLUUID& sender) const
     {
-        return backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
+        return hostUI && backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
             gAgent.isDoNotDisturb(), gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteUI") ||
             gSavedSettings.getF32("AudioLevelUI") <= 0.f, !sender.isNull() && sender != gAgentID &&
             !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat));
