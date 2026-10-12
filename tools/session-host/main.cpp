@@ -1852,7 +1852,8 @@ struct Host
         const int selection = found == ids.end() ? 0 : static_cast<int>(found-ids.begin());
         const auto previous = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
         const bool privacyChanged = live && previous != slot->chat.conversations.end() && previous->second.restricted;
-        if (syncChoices(m.choices,choices,selection,changed || !live || privacyChanged || (live && previous!=slot->chat.conversations.end() && !shownConversation(previous->second))))
+        if (syncChoices(m.choices,choices,selection,changed || !live || privacyChanged ||
+            (live && (previous==slot->chat.conversations.end() || !shownConversation(previous->second)))))
         {
             m.conversationIds = std::move(ids);
             if (live && !m.conversationIds.empty()) m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selection)]);
@@ -2055,7 +2056,7 @@ struct Host
             }
             const auto found = std::find(ids.begin(), ids.end(), conversation);
             const int selection = found == ids.end() ? 0 : static_cast<int>(found - ids.begin());
-            if (syncChoices(chatConversation, choices, selection, forceChoices || restricted || !ready))
+            if (syncChoices(chatConversation, choices, selection, forceChoices || restricted || !ready || conversationBlocked))
             {
                 conversationIds = std::move(ids);
                 conversation = conversationIds.empty()?std::string{}:conversationIds[static_cast<std::size_t>(selection)];
