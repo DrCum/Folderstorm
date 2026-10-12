@@ -64,13 +64,10 @@ std::string LLBase64::decodeAsString(const std::string &input)
     int b64_buffer_length = apr_base64_decode_len(input.c_str());
     char* b64_buffer = new char[b64_buffer_length];
 
-        // This is faster than apr_base64_encode() if you know
-        // you're not on an EBCDIC machine.  Also, the output is
-        // null terminated, even though the documentation doesn't
-        // specify.  See apr_base64.c for details. JC
     b64_buffer_length = apr_base64_decode(b64_buffer, input.c_str());
     std::string res;
-    res.assign(b64_buffer);
+    // Binary messages contain zero bytes, so copy the explicit decoded length.
+    res.assign(b64_buffer, b64_buffer_length);
     delete[] b64_buffer;
     return res;
 }
