@@ -147,6 +147,17 @@ public:
             {
                 restrictConversation(event);
             }
+            else
+            {
+                // A lost removal cannot be reconciled by the IM catalog. Drop
+                // uncertain notices and their history, retaining ordinary chat
+                // and drafts. A targeted restriction gap affects only its chat.
+                for (auto it = conversations.begin(); it != conversations.end();)
+                    if (it->second.topic == Topic::Notice) it = conversations.erase(it);
+                    else ++it;
+                lines.erase(std::remove_if(lines.begin(),lines.end(),[](const Message& line)
+                    { return line.topic == Topic::Notice; }),lines.end());
+            }
             return true;
         }
         if (event.eventType == EventType::Attention || event.eventType == EventType::AttentionRemoved || event.eventType == EventType::SwitchIntent)
@@ -166,7 +177,10 @@ public:
         }
         if(event.eventType==EventType::ConversationClosed)
         {
-            if(found->second.topic!=Topic::Nearby){close(event.conversation,event.event);found->second.unread=0;}
+            // Native close delivery must not lower an acknowledged host fence
+            // or its pending maximum. The acknowledgement explicitly replaces
+            // that temporary maximum through close().
+            if(found->second.topic!=Topic::Nearby){close(event.conversation,(std::max)(found->second.closedAt,event.event));found->second.unread=0;}
             if(event.event)cursor=event.event;
             return true;
         }

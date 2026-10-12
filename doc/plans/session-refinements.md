@@ -40,6 +40,14 @@ Final protocol cases explicitly round-trip CloseChat, ConversationClosed and Not
 
 No native Windows/MSVC or MinGW compiler is available here. No viewer/host build, installer/packaging/GitHub build, broad suite, unrelated Go test or subagent was used. Portable checks and source inspection do not establish Windows visual/runtime acceptance.
 
+## PR34 review corrections
+
+Native `ConversationClosed` events now retain the greater of their event ID and the existing close watermark. This preserves both acknowledged host closes and pending maximum-value fences; the explicit worker acknowledgement can still replace its temporary fence. Lifecycle regressions cover native close delivery before and after acknowledgement, queued arrivals, later genuine arrivals and draft retention.
+
+A retained-event gap clears uncertain Viewer Notification conversations and their notice history, since the native IM catalog cannot reconcile a lost notification removal. Ordinary chat, unread counts and drafts remain. Source-mismatched or stale gaps cannot clear state, and targeted restriction responses still affect only their conversation. The regression drops an actual removal out of `EventBuffer`, then verifies cleanup, harmless late removal and subsequent notice delivery.
+
+Both review reproductions failed against the prior published model. After correction, six affected checks passed with C++17 `-Wall -Wextra -Werror -Wshadow -pedantic -DNDEBUG -UNDEBUG`: chat_lifecycle, chat, monitor_chat, read_policy, usability and experience. Protocol and native interfaces are unchanged. Native Windows acceptance remains pending.
+
 ## Windows acceptance
 
 1. Reproduce the user's Standard-versus-custom viewport test. Check Volume/Media/Graphics/Camera hover and rollover-Off click behavior in window/viewport bar placements, resize, display scaling and supported skins. Leave a popup open while changing geometry.
