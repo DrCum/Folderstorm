@@ -21,6 +21,8 @@
 #include <mmsystem.h>
 #include <cmath>
 #include "fssessionalerts.h"
+#include "fssessionaudio.h"
+#include "fssessionchoicestate.h"
 #include "fssessionshortcuts.h"
 #include <imm.h>
 #include "dialog.h"
@@ -140,7 +142,9 @@ std::wstring hexId(const WorkerId& identity)
 // Refresh only changed choices; an open list owns its selection until close.
 bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int selected, bool force = false)
 {
-    if (!force && SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0)) return false;
+    auto* pending = reinterpret_cast<ChoiceTransaction*>(GetPropW(control,L"FolderstormChoicePending"));
+    if (!force && (pending || SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0))) return false;
+    if (force && pending) { pending->reset(); RemovePropW(control,L"FolderstormChoicePending"); }
     bool changed = SendMessageW(control, CB_GETCOUNT, 0, 0) != static_cast<LRESULT>(choices.size());
     for (std::size_t i = 0; !changed && i < choices.size(); ++i)
     {
@@ -161,6 +165,20 @@ bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int sel
     if (SendMessageW(control, CB_GETCURSEL, 0, 0) != selected)
         SendMessageW(control, CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
     return true;
+}
+std::optional<std::string> choiceNotification(HWND control, ChoiceTransaction& transaction, WORD notification,
+                                               const std::vector<std::string>& ids, const std::string& current)
+{
+    if (notification == CBN_DROPDOWN)
+    { transaction.begin(ids,current); SetPropW(control,L"FolderstormChoicePending",&transaction); return {}; }
+    if (notification == CBN_SELENDCANCEL)
+    { RemovePropW(control,L"FolderstormChoicePending"); return transaction.cancel(); }
+    const auto selected = static_cast<int>(SendMessageW(control,CB_GETCURSEL,0,0));
+    if (notification == CBN_SELENDOK)
+    { RemovePropW(control,L"FolderstormChoicePending"); return transaction.accept(selected); }
+    if (notification == CBN_SELCHANGE && !transaction.open && !SendMessageW(control,CB_GETDROPPEDSTATE,0,0) &&
+        selected >= 0 && static_cast<std::size_t>(selected) < ids.size()) return ids[static_cast<std::size_t>(selected)];
+    return {}; // CLOSEUP never refreshes an uncommitted selection.
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
 struct ProfileCopyRequest
@@ -312,6 +330,7 @@ struct MonitorWindow
     fs_host_ui::Transcript transcript; fs_host_ui::Composer editor;
     HFONT font = nullptr;
     std::vector<std::string> conversationIds;
+    ChoiceTransaction conversationChoice;
     std::wstring chatStatus;
     std::string historyConversation;
     std::uint64_t historyCursor = 0;
@@ -379,6 +398,8 @@ struct Host
     int chatIndex = 0;
     std::string conversation;
     std::vector<std::string> conversationIds;
+    ChoiceTransaction conversationChoice;
+    ChoiceTransaction accountChoice;
     bool updatingChat = false, voice = false, muteBackground = true;
     std::array<Mode, MaxCharacters> standby = warmModes();
     std::unique_ptr<Slot> slots[MaxCharacters];
@@ -686,7 +707,7 @@ struct Host
     {
         if (!presentation.volume || !slots[index]) return;
         const bool eligible = slots[index]->snapshot.state == State::Ready && !slots[index]->detached && slots[index]->snapshot.mode != Mode::Active &&
-            muteBackground && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
+            (slots[index]->audioPolicy & AudioHostUI) && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
         const auto sound = characterSound(index);
         if (!alertGate.admitCategories(item,sound.categories,GetTickCount64(),eligible)) return;
         const auto saved = soundCache.find(sound.asset);
@@ -758,6 +779,9 @@ struct Host
         slots[index]->soundAsset = next.asset; slots[index]->soundPrepared = true;
         message(L"Character sound choices applied. Save host choices to keep them after closing.");
     }
+    unsigned int audioPolicyFor(int index) const
+    { return (voice ? AudioVoice : 0u) | (muteBackground ? AudioMuteWorld : 0u) |
+        (presentation.volume && characterSound(index).categories ? AudioHostUI : 0u); }
     unsigned int shortcutPolicy() const {return (presentation.shortcuts?1u:0u)|(experience.viewerShellKeys?2u:0u);}
     void dispatchShortcut(unsigned int command)
     {
@@ -1349,7 +1373,7 @@ struct Host
             request.width = policy.width; request.height = policy.height; request.unread = policy.unread;
         }
         if (kind == Kind::ShortcutPolicy) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; request.unread = shortcutPolicy(); }
-        if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
+        if (kind == Kind::AudioPolicy) request.unread = audioPolicyFor(index);
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
         if ((kind == Kind::ReviewChat || kind == Kind::ReviewAttention) && foregroundPid == GetCurrentProcessId()) AllowSetForegroundWindow(slot.pid);
         if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
@@ -1814,15 +1838,12 @@ struct Host
         auto* slot = monitorChatSlot(id); if (!slot) { refreshMonitorChat(id); return; }
         const auto& binding = monitorSet.bindings[id];
         if (!m.chat.owns(binding,slot->snapshot,slot->chat)) { refreshMonitorChat(id); return; }
-        if (command == ChatConversation && notification == CBN_SELCHANGE)
+        if (command == ChatConversation)
         {
-            const auto selected = SendMessageW(m.choices,CB_GETCURSEL,0,0);
-            if (selected >= 0 && static_cast<std::size_t>(selected) < m.conversationIds.size())
-                m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selected)]);
-            refreshMonitorChat(id);
+            const auto selected = choiceNotification(m.choices,m.conversationChoice,notification,m.conversationIds,m.chat.identity.conversation);
+            if (selected && m.chat.select(binding,slot->snapshot,slot->chat,*selected)) refreshMonitorChat(id);
         }
         else if (command == ChatLatest) m.transcript.tail();
-        else if (command == ChatConversation && notification == CBN_CLOSEUP) refreshMonitorChat(id);
         else if (command == ChatCompose && notification == EN_CHANGE)
         {
             if (m.chat.draft(binding,slot->snapshot,slot->chat,editText(m.compose)))
@@ -2687,7 +2708,7 @@ struct Host
                 }
                 else if (!busy() && index != active && slot.snapshot.state == State::Ready && slot.snapshot.mode != standby[index])
                     send(index, Kind::SetMode, standby[index]);
-                else if (slot.snapshot.state == State::Ready && slot.audioPolicy != ((voice ? 1u : 0u) | (muteBackground ? 2u : 0u)))
+                else if (slot.snapshot.state == State::Ready && slot.audioPolicy != audioPolicyFor(index))
                     send(index, Kind::AudioPolicy);
                 else if (slot.snapshot.state == State::Ready && slot.shortcutPolicy != static_cast<int>(shortcutPolicy()))
                     send(index,Kind::ShortcutPolicy);
@@ -3369,22 +3390,21 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             host->saveDraft(true); host->showChat = SendMessageW(host->showChatControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
             host->layout(); break;
         case ChatAccount:
-            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            if (!host->updatingChat)
             {
-                host->saveDraft(true); host->chatIndex = host->selectedSlot(host->chatAccount);
-                host->conversation.clear(); host->refreshChat(true, true);
+                std::vector<std::string> ids; for (int i=0;i<MaxCharacters;++i) ids.push_back(std::to_string(i));
+                const auto selected = choiceNotification(host->chatAccount,host->accountChoice,HIWORD(wparam),ids,std::to_string(host->chatIndex));
+                if (selected)
+                { host->saveDraft(true); host->chatIndex = std::stoi(*selected); host->conversation.clear(); host->refreshChat(true,true); }
             }
-            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatConversation:
-            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            if (!host->updatingChat)
             {
-                const auto selected = SendMessageW(host->chatConversation, CB_GETCURSEL, 0, 0);
-                host->saveDraft(true);
-                if (selected >= 0 && static_cast<std::size_t>(selected) < host->conversationIds.size()) host->conversation = host->conversationIds[static_cast<std::size_t>(selected)];
-                host->refreshChat(true);
+                const auto selected = choiceNotification(host->chatConversation,host->conversationChoice,HIWORD(wparam),host->conversationIds,host->conversation);
+                if (selected && host->slots[host->chatIndex] && host->slots[host->chatIndex]->chat.conversations.count(*selected))
+                { host->saveDraft(true); host->conversation = *selected; host->refreshChat(true); }
             }
-            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatLatest: host->transcript.tail(); break;
         case ChatCompose: if (HIWORD(wparam) == EN_CHANGE) host->composeChanged(); break;

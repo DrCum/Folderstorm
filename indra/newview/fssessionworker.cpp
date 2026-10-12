@@ -55,6 +55,7 @@
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "fssessioninputguard.h"
+#include "fssessionaudio.h"
 #include "fssessionreadpolicy.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
@@ -160,7 +161,7 @@ struct Worker
     bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
-    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false, shellShortcuts = false;
+    bool permitVoice = false, muteBackground = true, hostUI = false, chatBlocked = false, shortcuts = false, shellShortcuts = false;
     EventBuffer events;
     std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
@@ -248,10 +249,10 @@ struct Worker
     }
     bool backgroundAlertAllowed(const LLUUID& sender) const
     {
-        return ready() && mode != Mode::Active && !promoting && !demoting && muteBackground && sharingAllowed() &&
-            !gAgent.isDoNotDisturb() && !gSavedSettings.getBOOL("MuteAudio") && !gSavedSettings.getBOOL("MuteUI") &&
-            gSavedSettings.getF32("AudioLevelUI") > 0.f && !sender.isNull() && sender != gAgentID &&
-            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat);
+        return backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
+            gAgent.isDoNotDisturb(), gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteUI") ||
+            gSavedSettings.getF32("AudioLevelUI") <= 0.f, !sender.isNull() && sender != gAgentID &&
+            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat));
     }
     void connectChat()
     {
@@ -266,9 +267,7 @@ struct Worker
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
-                const std::string sound = session->isGroupSessionType() ? "PlaySoundGroupChatIM" : session->isAdHocSessionType() ? "PlaySoundConferenceIM" :
-                    LLAvatarTracker::instance().isBuddy(sender) ? "PlaySoundFriendIM" : "PlaySoundNonFriendIM";
-                if (backgroundAlertAllowed(sender) && gSavedSettings.getBOOL(sound) && !data["is_region_msg"].asBoolean())
+                if (backgroundAlertAllowed(sender) && !data["is_region_msg"].asBoolean())
                 { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
                 events.push(std::move(message));
             });
@@ -676,8 +675,9 @@ struct Worker
             { reply(request,"Shortcut policy is invalid or its account changed."); break; }
             shortcuts = (request.unread&1)!=0; shellShortcuts = (request.unread&2)!=0; reply(request); break;
         case Kind::AudioPolicy:
-            if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
+            if (request.unread > 7) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
+            hostUI = (request.unread & AudioHostUI) != 0;
             applyVoice(); reply(request); break;
         case Kind::ReviewChat:
         {
@@ -1276,6 +1276,11 @@ bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
 }
+bool FSSessionWorker::backgroundUIAudioMuted()
+{
+    return managed() && worker->readyApplied && worker->hostUI &&
+        (worker->mode != Mode::Active || worker->promoting || worker->demoting);
+}
 bool FSSessionWorker::requestCharacterSwitch(unsigned int command)
 {
     if (!managed() || !worker->ready() || (command<=6 ? !worker->shortcuts : !worker->shellShortcuts) || !worker->inputGranted || worker->mode != Mode::Active ||
@@ -1410,6 +1415,7 @@ void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }
+bool FSSessionWorker::backgroundUIAudioMuted() { return false; }
 bool FSSessionWorker::requestCharacterSwitch(unsigned int) { return false; }
 void FSSessionWorker::nearbyMessage(const LLChat&) {}
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }
