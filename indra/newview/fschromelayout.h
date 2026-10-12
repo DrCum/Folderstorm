@@ -173,6 +173,7 @@ SideLayout computeSideLayout(const Rect& holder, const Rect& world,
                              const SideRequest& left, const SideRequest& right);
 Span computeHorizontalSpan(const Rect& window, const Rect& world,
                            const SpanRequest& request, int min_width);
+Rect placeStatusPopup(const Rect& window, const Rect& anchor, int width, int height);
 
 bool isBuiltinProfileId(const std::string& id);
 std::vector<std::string> builtinProfileIds();

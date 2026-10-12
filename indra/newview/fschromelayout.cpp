@@ -20,6 +20,16 @@
 
 namespace FSChromeLayout
 {
+
+Rect placeStatusPopup(const Rect& window, const Rect& anchor, int width, int height)
+{
+    if (!window.valid()) return {};
+    width = std::max(1, std::min(width, window.width()));
+    height = std::max(1, std::min(height, window.height()));
+    const int left = std::max(window.left, std::min(anchor.right - width, window.right - width));
+    const int top = std::max(window.bottom + height, std::min(anchor.bottom, window.top));
+    return {left, top - height, left + width, top};
+}
 namespace
 {
 

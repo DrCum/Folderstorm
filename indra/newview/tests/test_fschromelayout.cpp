@@ -53,6 +53,9 @@ Rect worldFromInsets(const Rect& window, float left_pct, float right_pct)
 
 int main()
 {
+    expect(placeStatusPopup({0,0,1920,1080},{1690,1060,1710,1080},300,220) == Rect{1410,840,1710,1060}, "popup anchors to the actual shifted status icon");
+    expect(placeStatusPopup({100,50,900,650},{110,620,130,640},300,220) == Rect{100,400,400,620}, "popup clamps to the full window, not the world viewport");
+    expect(placeStatusPopup({0,0,200,100},{190,10,210,30},300,220) == Rect{0,0,200,100}, "small window keeps popup reachable");
     const int toolbar = 40;
     const Rect window = windowRect();
 

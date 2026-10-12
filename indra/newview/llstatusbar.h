@@ -123,6 +123,7 @@ public:
     void setLandCommitted(S32 committed);
 
     void        refresh();
+    void        refreshPulldownPositions();
     void setVisibleForMouselook(bool visible);
         // some elements should hide in mouselook
 
@@ -173,6 +174,7 @@ private:
     void onMouseEnterPresets();
     void onMouseEnterVolume();
     void onMouseEnterNearbyMedia();
+    void positionPulldown(LLView* anchor, LLView* popup);
 
     static void onClickStreamToggle(void* data);        // <FS:Zi> Media/Stream separation
     static void onClickMediaToggle(void* data);
