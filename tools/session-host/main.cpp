@@ -926,6 +926,13 @@ struct Host
         }
         refreshPins(); layout();
     }
+    bool shownPin(const ChatPin& pin) const
+    {
+        if(!(chatPreferences.showMask&conversationCategory(pin.topic)))return false;
+        for(const auto& slot:slots)if(slot && AccountKey::from(slot->snapshot)==pin.owner)
+        {const auto found=slot->chat.conversations.find(pin.conversation);if(found!=slot->chat.conversations.end() && found->second.closed)return false;}
+        return true;
+    }
     void refreshPins()
     {
         for (int i = 0; i < MaxCharacters; ++i) if (slots[i]) pins.bind(slots[i]->chat,(slots[i]->snapshot.flags & ChatRestricted) != 0);
@@ -990,7 +997,7 @@ struct Host
     bool filterCommand(UINT command)
     {
         if(command>=VisibilityBase && command<VisibilityBase+5)
-        {saveDraft(true);chatPreferences.showMask^=1u<<(command-VisibilityBase);chatPreferences.haveCategories=true;refreshChat(true,true);updateMonitors();refreshAttention();return true;}
+        {saveDraft(true);chatPreferences.showMask^=1u<<(command-VisibilityBase);chatPreferences.haveCategories=true;refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();return true;}
         if(command==ChatFilters){editChatSettings();return true;}return false;
     }
     void closeConversation(int index,const std::string& id)
@@ -1005,7 +1012,7 @@ struct Host
         Message action=slot.snapshot;action.kind=Kind::CloseChat;action.topic=found->second.topic;action.conversation=id;
         slot.chat.close(id,(std::numeric_limits<std::uint64_t>::max)());
         slot.pendingAction=action;slot.hasPendingAction=true;
-        refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();
+        refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
     }
     void refreshAttention()
     {
@@ -2097,7 +2104,7 @@ struct Host
         experience.oldestFirst=number(fields[oldest])!=0;
         chatPreferences.visibleRead=number(fields[readStart])!=0;chatPreferences.activeRead=number(fields[readStart+1])!=0;chatPreferences.delay=number(fields[readStart+2]);
         experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(number(fields[accountStart+i]))experience.accountMask|=1u<<i;
-        activeReadClock={};refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();
+        activeReadClock={};refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
         message(L"Chat visibility and notification choices applied. Save host choices to keep them.");
     }
     bool automaticRead(int index)
@@ -2649,7 +2656,7 @@ struct Host
         if (experience.diagnostics && (slot.snapshot.flags & VoiceOwner)) text << L" · voice owner";
         if (!slot.workspace.empty()) text << L" · workspace " << wide(slot.workspace) << (slot.workspaceModified ? L" *" : L"");
         if (slot.preferencesOpen) text << L" · Preferences open";
-        std::uint64_t unread = 0; for (const auto& entry : slot.chat.conversations) if(!entry.second.restricted)unread += entry.second.unread;
+        std::uint64_t unread = 0; if(experience.accountMask&(1u<<index))for (const auto& entry : slot.chat.conversations) if(!entry.second.restricted && !entry.second.closed && (chatPreferences.attentionMask&conversationCategory(entry.second.topic)))unread += entry.second.unread;
         if (unread) text << L" · " << unread << L" unread";
         if (experience.diagnostics && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
             text << ((slot.snapshot.flags & ClientFocused) ? L" · keyboard focused" : L" · keyboard unfocused");
@@ -3019,8 +3026,11 @@ struct Host
         RECT r{};GetClientRect(parent,&r);const int width=static_cast<int>(r.right),height=static_cast<int>(r.bottom)-bottomInset;const UINT local=parent==window?dpi:chatDpi;
         const auto scale=[this,local](int n){return theme.scale(n,local);};const bool narrow=width<scale(650);
         for(auto child:chatControls())ShowWindow(child,visible?SW_SHOWNOACTIVATE:SW_HIDE);
-        const auto pinsVisible=(std::min)(pins.entries.size(),static_cast<std::size_t>(6));
-        for(std::size_t i=0;i<6;++i){MoveWindow(pinButtons[i],scale(6)+static_cast<int>(i)*((width-scale(12))/6),top,(std::max)(1,(width-scale(12))/6-scale(3)),scale(25),TRUE);ShowWindow(pinButtons[i],visible && i<pinsVisible?SW_SHOWNOACTIVATE:SW_HIDE);}if(pinsVisible)top+=scale(28);
+        std::vector<std::size_t> visiblePins;for(std::size_t i=0;i<pins.entries.size() && i<6;++i)if(shownPin(pins.entries[i]))visiblePins.push_back(i);
+        for(std::size_t i=0;i<6;++i)ShowWindow(pinButtons[i],SW_HIDE);
+        for(std::size_t position=0;position<visiblePins.size();++position)
+        {const auto i=visiblePins[position];MoveWindow(pinButtons[i],scale(6)+static_cast<int>(position)*((width-scale(12))/6),top,(std::max)(1,(width-scale(12))/6-scale(3)),scale(25),TRUE);ShowWindow(pinButtons[i],visible?SW_SHOWNOACTIVATE:SW_HIDE);}
+        if(!visiblePins.empty())top+=scale(28);
         const auto move=[&](HWND child,int x,int y,int w,int h){MoveWindow(child,x,y,(std::max)(1,w),h,TRUE);};
         const int inset=scale(6);const int usable=width-inset*2;
         move(chatAccount,inset,top,narrow?usable:scale(180),scale(150));

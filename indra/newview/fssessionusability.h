@@ -60,7 +60,7 @@ public:
             { const auto& liveConversation = view.conversations.at(pin.conversation); pin.title = liveConversation.title; pin.destination = liveConversation.destination; continue; }
             pin.source = {}; pin.title = "Unavailable";
             if (!pin.saved().valid()) { pin.title = "Unavailable"; continue; }
-            for (const auto& entry : view.conversations) if (!entry.second.restricted && entry.second.topic == pin.topic && entry.second.destination == pin.destination)
+            for (const auto& entry : view.conversations) if (!entry.second.restricted && !entry.second.closed && entry.second.topic == pin.topic && entry.second.destination == pin.destination)
             { pin.source = view.identity; pin.conversation = entry.first; pin.title = entry.second.title; break; }
         }
     }
