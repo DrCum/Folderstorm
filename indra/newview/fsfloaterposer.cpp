@@ -26,11 +26,15 @@
 
 #include "fsfloaterposer.h"
 #include "fsposeranimator.h"
+#include "fssharedposemanager.h"
 #include "fsvirtualtrackpad.h"
 #include "llagent.h"
 #include "llappviewer.h"
 #include "llavatarnamecache.h"
 #include "llcheckboxctrl.h"
+#include "llcombobox.h"
+#include "lltextbox.h"
+#include "lltimer.h"
 #include "llcommonutils.h"
 #include "llcontrolavatar.h"
 #include "lldiriterator.h"
@@ -82,6 +86,12 @@ constexpr F32 NormalTrackpadRangeInRads = F_PI;
 
 FSFloaterPoser::FSFloaterPoser(const LLSD& key) : LLFloater(key)
 {
+    mCommitCallbackRegistrar.add("Poser.Share", [](LLUICtrl*, const LLSD&) { FSSharedPoseManager::instance().shareSelf(); });
+    mCommitCallbackRegistrar.add("Poser.RequestPermission", [this](LLUICtrl*, const LLSD&)
+    { if (auto* avatar = getUiSelectedAvatar()) FSSharedPoseManager::instance().requestPermission(avatar->getID()); });
+    mCommitCallbackRegistrar.add("Poser.StopShared", [](LLUICtrl*, const LLSD&) { FSSharedPoseManager::instance().stopAll(); });
+    mCommitCallbackRegistrar.add("Poser.RemoveEditor", [this](LLUICtrl*, const LLSD&)
+    { FSSharedPoseManager::instance().removeEditor(LLUUID(mSharedEditors->getValue().asString())); });
     // Bind requests, other controls are find-and-binds, see postBuild()
     mCommitCallbackRegistrar.add("Poser.RefreshAvatars", [this](LLUICtrl*, const LLSD&) { onAvatarsRefresh(); });
     mCommitCallbackRegistrar.add("Poser.StartStopAnimating", [this](LLUICtrl*, const LLSD&) { onPoseStartStop(); });
@@ -123,6 +133,7 @@ FSFloaterPoser::FSFloaterPoser(const LLSD& key) : LLFloater(key)
 
 bool FSFloaterPoser::postBuild()
 {
+    mSharedEditors = getChild<LLComboBox>("shared_pose_editors");
     mAvatarTrackball = getChild<FSVirtualTrackpad>("limb_rotation");
     mAvatarTrackball->setCommitCallback([this](LLUICtrl *, const LLSD &) { onTrackballChanged(); });
 
@@ -259,6 +270,8 @@ bool FSFloaterPoser::postBuild()
 
 void FSFloaterPoser::onOpen(const LLSD& key)
 {
+    // Older saved rectangles need room for the shared-pose controls.
+    if (getRect().getHeight() < 450) reshape(getRect().getWidth(), 450);
     createUserPoseDirectoryIfNeeded();
     onAvatarsRefresh();
     refreshJointScrollListMembers();
@@ -283,9 +296,57 @@ void FSFloaterPoser::onFocusLost()
 
 void FSFloaterPoser::draw()
 {
+    refreshSharedControls();
     LLFloater::draw();
 
     drawOnHoverJointHint();
+}
+
+void FSFloaterPoser::refreshSharedControls()
+{
+    if (!mSharedEditors) return;
+    auto& shared = FSSharedPoseManager::instance();
+    auto* avatar = getUiSelectedAvatar();
+    const bool ready = shared.available();
+    getChild<LLButton>("share_pose_button")->setEnabled(ready && !shared.isShared(gAgentID));
+    getChild<LLButton>("request_pose_permission_button")->setEnabled(ready && avatar && !avatar->isSelf() &&
+        !avatar->isControlAvatar() && !shared.canEdit(avatar->getID()));
+    getChild<LLButton>("stop_shared_pose_button")->setEnabled(shared.hasSessions());
+    getChild<LLTextBox>("shared_pose_status")->setText(ready ? shared.status() : getString("shared_bridge_required"));
+    const auto editors = shared.editors();
+    std::string list;
+    for (const auto& id : editors) list += id.asString();
+    if (list != mSharedEditorList)
+    {
+        const auto selected = mSharedEditors->getValue();
+        mSharedEditors->clearRows();
+        for (const auto& id : editors)
+        {
+            LLAvatarName name;
+            const auto label = LLAvatarNameCache::get(id, &name) ? name.getDisplayName() : id.asString();
+            mSharedEditors->add(label, id);
+        }
+        if (!editors.empty()) { mSharedEditors->setValue(selected); if (mSharedEditors->getValue().asString().empty()) mSharedEditors->selectFirstItem(); }
+        else mSharedEditors->setLabel(getString("shared_no_editors"));
+        mSharedEditorList = list;
+    }
+    mSharedEditors->setEnabled(!editors.empty());
+    getChild<LLButton>("remove_pose_editor_button")->setEnabled(!editors.empty());
+    const bool permission = avatar && (havePermissionToAnimateAvatar(avatar) || havePermissionToAnimateOtherAvatar(avatar));
+    const bool posing = avatar && mPoserAnimator.isPosingAvatar(avatar);
+    if (avatar && (avatar->getID() != mLastSharedAvatar || permission != mLastSharedPermission || posing != mLastSharedPosing))
+    {
+        mLastSharedAvatar = avatar->getID(); mLastSharedPermission = permission; mLastSharedPosing = posing;
+        onAvatarSelect();
+    }
+    const F64 time = LLTimer::getTotalSeconds();
+    if (avatar && shared.isShared(avatar->getID()) && !gFocusMgr.getMouseCapture() && mLastSharedRefresh + .25 < time)
+    {
+        refreshRotationSlidersAndSpinners(); refreshPositionSlidersAndSpinners(); refreshScaleSlidersAndSpinners();
+        refreshTrackpadCursor(); enableOrDisableRedoAndUndoButton();
+        refreshTextHighlightingOnJointScrollLists();
+        mLastSharedRefresh = time;
+    }
 }
 
 void FSFloaterPoser::markSelectedJointsToHighlight()
@@ -391,6 +452,7 @@ void FSFloaterPoser::setVisualManipulators(LLVOAvatar* avatar)
 
 void FSFloaterPoser::onClose(bool app_quitting)
 {
+    FSSharedPoseManager::instance().stopAll();
     if (gSavedSettings.getBOOL(POSER_STOPPOSINGWHENCLOSED_SAVE_KEY))
     {
         stopPosingAllAvatars();
@@ -1156,6 +1218,18 @@ S32 FSFloaterPoser::tryGetPoseVersion(std::string pathToPoseFile)
 
 void FSFloaterPoser::onClickLoadHandPose(bool isRightHand)
 {
+    auto* selected = getUiSelectedAvatar();
+    auto& shared = FSSharedPoseManager::instance();
+    if (selected && shared.isShared(selected->getID()) && !shared.isApplying())
+    {
+        const LLUUID id = selected->getID();
+        shared.edit(id, mPoserAnimator.sharedEditJoints(selected, nullptr), [this, id, isRightHand]
+        {
+            auto* current = getUiSelectedAvatar();
+            if (getVisible() && current && current->getID() == id) onClickLoadHandPose(isRightHand);
+        });
+        return;
+    }
     LLScrollListItem* item = mHandPresetsScrollList->getFirstSelected();
     if (!item)
         return;
@@ -1266,6 +1340,15 @@ bool FSFloaterPoser::poseFileStartsFromTeePose(const std::string& poseFileName)
 
 bool FSFloaterPoser::loadPoseFromXml(LLVOAvatar* avatar, const std::string& poseFileName, E_LoadPoseMethods loadMethod)
 {
+    auto& shared = FSSharedPoseManager::instance();
+    if (avatar && shared.isShared(avatar->getID()) && !shared.isApplying())
+    {
+        const LLUUID id = avatar->getID();
+        return shared.edit(id, mPoserAnimator.sharedEditJoints(avatar, nullptr), [this, avatar, id, poseFileName, loadMethod]
+        {
+            if (getVisible() && FSSharedPoseManager::instance().canEdit(id)) loadPoseFromXml(avatar, poseFileName, loadMethod);
+        });
+    }
     bool        loadSuccess = false;
     std::string pathname = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, POSE_SAVE_SUBDIRECTORY);
     if (!gDirUtilp->fileExists(pathname))
@@ -1455,7 +1538,7 @@ void FSFloaterPoser::onPoseStartStop()
         if (!couldAnimateAvatar(avatar))
             return;
 
-        if (!havePermissionToAnimateAvatar(avatar))
+        if (!havePermissionToAnimateAvatar(avatar) && !havePermissionToAnimateOtherAvatar(avatar))
             return;
 
         mPoserAnimator.tryPosingAvatar(avatar);
@@ -1501,7 +1584,7 @@ bool FSFloaterPoser::havePermissionToAnimateOtherAvatar(LLVOAvatar* avatar) cons
     if (!avatar || avatar->isDead())
         return false;
 
-    return false;
+    return FSSharedPoseManager::instance().canEdit(avatar->getID());
 }
 
 void FSFloaterPoser::poseControlsEnable(bool enable)
@@ -1697,6 +1780,8 @@ void FSFloaterPoser::onToggleRotationFrameButton(const LLUICtrl* toggleButton)
 
 void FSFloaterPoser::onUndoLastChange()
 {
+    if (auto* avatar = getUiSelectedAvatar())
+        if (FSSharedPoseManager::instance().history(avatar->getID(), false)) return;
     LLVOAvatar* avatar = getUiSelectedAvatar();
     if (!avatar)
         return;
@@ -1770,6 +1855,8 @@ void FSFloaterPoser::onResetJoint(const LLSD& data)
 
 void FSFloaterPoser::onRedoLastChange()
 {
+    if (auto* avatar = getUiSelectedAvatar())
+        if (FSSharedPoseManager::instance().history(avatar->getID(), true)) return;
     LLVOAvatar* avatar = getUiSelectedAvatar();
     if (!avatar)
         return;
@@ -2529,11 +2616,11 @@ void FSFloaterPoser::onAvatarSelect()
 
     bool arePosingSelected = mPoserAnimator.isPosingAvatar(avatar);
 
-    mStartStopPosingBtn->setEnabled(haveImplicitPermission);
+    mStartStopPosingBtn->setEnabled(haveImplicitPermission || haveExplicitPermission);
     mStartStopPosingBtn->setValue(arePosingSelected);
 
-    mSetToTposeButton->setEnabled(haveImplicitPermission && arePosingSelected);
-    poseControlsEnable(arePosingSelected && haveImplicitPermission);
+    mSetToTposeButton->setEnabled((haveImplicitPermission || haveExplicitPermission) && arePosingSelected);
+    poseControlsEnable(arePosingSelected && (haveImplicitPermission || haveExplicitPermission));
 
     refreshTextHighlightingOnAvatarScrollList();
     refreshTextHighlightingOnJointScrollLists();
@@ -2557,7 +2644,7 @@ uuid_vec_t FSFloaterPoser::getNearbyAvatarsAndAnimeshes() const
 
         bool isSelfOrCtrl = avatar->isControlAvatar() || avatar->isSelf();
 
-        if (!isSelfOrCtrl)
+        if (!isSelfOrCtrl && !gSavedSettings.getBOOL("FSSharedPosingEnabled"))
             continue;
 
         avatar_ids.emplace_back(character->getID());
@@ -2651,7 +2738,7 @@ void FSFloaterPoser::onAvatarsRefresh()
         if (LLMuteList::getInstance()->isMuted(uuid))
             continue;
 
-        if (!avatar->isSelf())
+        if (!avatar->isSelf() && !gSavedSettings.getBOOL("FSSharedPosingEnabled"))
             continue;
 
         LLSD row;

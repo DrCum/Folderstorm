@@ -30,6 +30,7 @@
 #include "fscommon.h"
 #include "fslslbridge.h"
 #include "fslslbridgerequest.h"
+#include "fssharedposemanager.h"
 
 #include "apr_base64.h" // For getScriptInfo()
 #include "llagent.h"
@@ -55,7 +56,7 @@
 static const std::string FS_BRIDGE_FOLDER = "#LSL Bridge";
 static const std::string FS_BRIDGE_CONTAINER_FOLDER = "Landscaping";
 static const U32 FS_BRIDGE_MAJOR_VERSION = 2;
-static const U32 FS_BRIDGE_MINOR_VERSION = 29;
+static const U32 FS_BRIDGE_MINOR_VERSION = 30;
 static const U32 FS_MAX_MINOR_VERSION = 99;
 static const std::string UPLOAD_SCRIPT_CURRENT = "EBEDD1D2-A320-43f5-88CF-DD47BBCA5DFB.lsltxt";
 static const std::string FS_STATE_ATTRIBUTE = "state=";
@@ -150,7 +151,8 @@ void FSLSLBridge::setTimerResult(TimerResult result)
 
 bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, const LLUUID& ownerID)
 {
-    LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
+    if (message.substr(0, 12) != "<sharedPose>" && message.substr(0, 10) != "SharedPose")
+        LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
 
     //<FS:TS> FIRE-962: Script controls for built-in AO
     if (message.empty() || (message[0]) != '<')
@@ -182,6 +184,16 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
 
     bool bridgeIsEnabled = gSavedSettings.getBOOL("UseLSLBridge");
     bool status = false;
+    if (tag == "<sharedPose>")
+    {
+        // Trust only the registered attachment, which supplies actual peer ownership.
+        if (!bridgeIsEnabled || fromID != mBridgeUUID || ownerID != gAgentID) return false;
+        const auto payload = message.substr(12);
+        if (payload.size() < 79 || payload[36] != '|' || payload[73] != '|') return true;
+        FSSharedPoseManager::instance().receive(LLUUID(std::string(payload.substr(0, 36))),
+            LLUUID(std::string(payload.substr(37, 36))), std::string(payload.substr(74)));
+        return true;
+    }
     if (tag == "<bridgeURL>")
     {
         if (!bridgeIsEnabled)
@@ -248,6 +260,7 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
 
         // Get URL
         mCurrentURL = bURL;
+        mSharedPoseReady = false;
         LL_INFOS("FSLSLBridge") << "New Bridge URL is: " << mCurrentURL << LL_ENDL;
 
         if (!mpBridge)
@@ -257,7 +270,12 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
             mpBridge = fsBridge;
         }
 
-        status = viewerToLSL("URL Confirmed");
+        status = viewerToLSL("URL Confirmed", [this, fromID, bURL](const LLSD&)
+        {
+            if (mBridgeUUID != fromID || mCurrentURL != bURL) return;
+            mSharedPoseReady = true;
+            FSSharedPoseManager::instance().bridgeReady();
+        });
         if (!mIsFirstCallDone)
         {
             //on first call from bridge, confirm that we are here
@@ -558,7 +576,8 @@ bool FSLSLBridge::canUseBridge()
 
 bool FSLSLBridge::viewerToLSL(std::string_view message, Callback_t aCallback)
 {
-    LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
+    if (message.substr(0, 12) != "<sharedPose>" && message.substr(0, 10) != "SharedPose")
+        LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
 
     if (!canUseBridge())
     {
@@ -712,6 +731,7 @@ void FSLSLBridge::finishCleanUpPreCreation()
     // clear the stored bridge ID - we are starting over.
     mpBridge = nullptr; //the object itself will get cleaned up when new one is created.
     mCurrentURL.clear();
+    mSharedPoseReady = false;
 
     setBridgeCreating(true);
     mFinishCreation = false;

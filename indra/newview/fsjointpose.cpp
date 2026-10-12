@@ -58,6 +58,17 @@ void FSJointPose::setPublicPosition(const LLVector3& pos)
     mCurrentState.mPoserChangeType = POSER_CHANGE_DEFAULT;
 }
 
+void FSJointPose::applySharedTransform(const FSSharedPose::Joint& state)
+{
+    const auto& v = state.transform;
+    LLQuaternion rotation(v[0], v[1], v[2], v[3]);
+    rotation.normalize();
+    mCurrentState.updateFromJointProperties(false, rotation, LLVector3(v[4], v[5], v[6]), LLVector3(v[7], v[8], v[9]));
+    mCurrentState.mRotationIsWorldLocked = state.worldLocked;
+    mCurrentState.mJointRotationIsMirrored = state.mirrored;
+    mJointState->setPriority(static_cast<LLJoint::JointPriority>(state.priority));
+}
+
 void FSJointPose::setPublicRotation(bool zeroBase, bool zeroBaseAsUser, E_PoserChangeType changeType, const LLQuaternion& rot)
 {
     addStateToUndo(mCurrentState);
