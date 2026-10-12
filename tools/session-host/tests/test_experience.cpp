@@ -8,6 +8,14 @@ int main()
     assert(colorContrast(visibleAccent(0xffffff,0xf7f5fb,0x211a2b),0xf7f5fb)>=3.);assert(visibleAccent(0xbfa4fc,0x111016,0xf5f3fa)==0xbfa4fc);
     assert(HostExperience::decode(e.encode(),out));assert(out.theme==1 && out.pinned[3] && out.quick==e.quick && out.keys[0]==e.keys[0]);
     auto menus=e;menus.quick={SelectedActions,ViewActions,SettingsActions,SetActions,RecoverShell};assert(HostExperience::decode(menus.encode(),out) && out.quick==menus.quick);
+    auto legacy=e.encode();legacy.replace(0,4,"FSX1");legacy.resize(legacy.size()-4);
+    assert(HostExperience::decode(legacy,out) && out.toolbarVersion==0 && out.quick==e.quick);
+    assert(out.encode().substr(0,4)=="FSX2");
+    assert(upgradeHostToolbar(out) && out.quick.front()==274 && out.quick.size()==e.quick.size()+1);
+    assert(!upgradeHostToolbar(out));out.quick.clear();assert(!upgradeHostToolbar(out) && out.quick.empty());
+    out.toolbarVersion=0;out.quick={274,240};assert(upgradeHostToolbar(out) && out.quick.size()==2);
+    out.toolbarVersion=0;out.quick.clear();for(const auto& c:shellCommands())if(c.id!=274 && out.quick.size()<12)out.quick.push_back(c.id);
+    const auto fullOrder=out.quick;assert(upgradeHostToolbar(out) && out.quick==fullOrder);
     auto bytes=e.encode();assert(!HostExperience::decode(bytes+"x",out));assert(out.theme==1);assert(!HostExperience::decode(bytes.substr(0,17),out));
     e.quick.push_back(240);assert(e.encode().empty());e.quick={9999};assert(!e.valid());e.quick.clear();e.order[4]=0;assert(!e.valid());
     e=HostExperience{};e.keys[0]={49,5};assert(bindingsConflict(e,PresentationStore{}));
