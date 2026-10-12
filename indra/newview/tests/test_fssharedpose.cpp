@@ -19,8 +19,53 @@
 
 using namespace FSSharedPose;
 
+void unchangedPoseUpdates()
+{
+    const Pose initial{{"mHead", {}}};
+    OwnerSession session;
+    session.start("owner", "idle-drag", initial);
+    session.grant("editor", "token", 0);
+    assert(session.acquire("editor", "token", "idle", {"mHead"}, 0).granted);
+    for (std::uint32_t sequence = 1; sequence <= 10; ++sequence)
+    {
+        assert(session.apply("editor", "token", "idle", initial, false, 0, true, sequence));
+        assert(session.pose() == initial && session.revision() == 0);
+    }
+
+    Pose moved = initial;
+    moved.at("mHead").transform[4] = .25f;
+    // No-op updates still consume their sequence numbers and retain the lease.
+    assert(!session.apply("editor", "token", "idle", moved, false, 0, true, 10));
+    assert(!session.acquire("owner", "", "blocked", {"mHead"}, 0).granted);
+    assert(session.apply("editor", "token", "idle", initial, true, 1, true, 11));
+    assert(session.revision() == 0 && session.historyJoints("editor", false).empty());
+    assert(!session.renew("editor", "token", "idle", 1));
+    assert(session.acquire("owner", "", "released", {"mHead"}, 1).granted);
+    session.release("owner", "released");
+
+    assert(session.acquire("editor", "token", "drag", {"mHead"}, 1).granted);
+    assert(session.apply("editor", "token", "drag", moved, false, 1, true, 1));
+    assert(session.revision() == 1);
+    for (std::uint32_t sequence = 2; sequence <= 11; ++sequence)
+    {
+        assert(session.apply("editor", "token", "drag", moved, false, 1, true, sequence));
+        assert(session.pose() == moved && session.revision() == 1);
+    }
+    // An unchanged final packet must commit the drag's history and release it.
+    assert(session.apply("editor", "token", "drag", moved, true, 2, true, 12));
+    assert(session.revision() == 1);
+    assert(session.historyJoints("editor", false) == JointSet{"mHead"});
+    assert(session.acquire("editor", "token", "undo", {"mHead"}, 2).granted);
+    assert(session.restore("editor", "token", "undo", false, 2));
+    assert(session.pose() == initial && session.revision() == 2);
+    assert(session.acquire("editor", "token", "redo", {"mHead"}, 2).granted);
+    assert(session.restore("editor", "token", "redo", true, 2));
+    assert(session.pose() == moved && session.revision() == 3);
+}
+
 int main()
 {
+    unchangedPoseUpdates();
     Pose pose{{"mWristLeft", {}}, {"mWristRight", {}}, {"mHead", {}}};
     pose["mHead"].worldLocked = true;
     assert(decodePose(encodePose(pose)) == std::optional<Pose>(pose));

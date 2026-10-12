@@ -236,7 +236,11 @@ public:
             (sequence && sequence <= found->second.sequence)) return false;
         for (const auto& item : changes)
             if (!found->second.joints.count(item.first)) return false;
-        ++mRevision;
+        const bool changed = std::any_of(changes.begin(), changes.end(), [&](const auto& item)
+        {
+            return mPose.at(item.first) != item.second;
+        });
+        if (changed) ++mRevision;
         if (sequence) found->second.sequence = sequence;
         for (const auto& item : changes)
         {

@@ -373,6 +373,7 @@ void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     auto& work = found->second;
     if (subset(pose, work.joints).size() != work.joints.size()) { complete(id, false); return; }
     apply(id, subset(pose, work.joints));
+    work.lastSent = subset(pose, work.joints);
     work.granted = true;
     mStatus = "Editing pose";
     work.renewed = now();
@@ -715,7 +716,7 @@ void FSSharedPoseManager::tick()
         if (work.finished) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
         if (!work.granted) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
         const bool final = work.forceFinish || !gFocusMgr.getMouseCapture();
-        if (!work.latest.empty() && (final || work.sent + .2 <= time))
+        if (!work.latest.empty() && (final || (work.latest != work.lastSent && work.sent + .2 <= time)))
         {
             if (entry.first == gAgentID)
             {
@@ -731,6 +732,7 @@ void FSSharedPoseManager::tick()
                 if (final) { work.finished = true; work.requested = time; }
             }
             work.sent = time;
+            work.lastSent = work.latest;
         }
     }
     for (const auto& item : done) complete(item.first, item.second);

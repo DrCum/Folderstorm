@@ -64,7 +64,7 @@ private:
         LLUUID avatar, session, token, lease;
         FSSharedPose::JointSet joints;
         std::vector<std::function<void()>> actions;
-        FSSharedPose::Pose latest;
+        FSSharedPose::Pose latest, lastSent;
         double requested = 0., sent = -100., renewed = -100.;
         bool asked = false, granted = false, finished = false, forceFinish = false;
         int history = 0;
