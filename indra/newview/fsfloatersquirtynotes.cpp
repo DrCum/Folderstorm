@@ -21,14 +21,14 @@ bool FSFloaterSquirtyNotes::postBuild()
 {
     getChild<LLComboBox>("im_mode")->setCommitCallback([this](LLUICtrl*, const LLSD&) { updateEnabled(); });
     getChild<LLComboBox>("online_mode")->setCommitCallback([this](LLUICtrl*, const LLSD&) { updateEnabled(); });
-    getChild<LLButton>("im_add")->setClickedCallback([this] { addResident(false); });
-    getChild<LLButton>("online_add")->setClickedCallback([this] { addResident(true); });
-    getChild<LLButton>("im_remove")->setClickedCallback([this] { removeResident(false); });
-    getChild<LLButton>("online_remove")->setClickedCallback([this] { removeResident(true); });
-    getChild<LLButton>("apply")->setClickedCallback([this] { apply(); });
-    getChild<LLButton>("cancel")->setClickedCallback([this] { closeFloater(); });
-    getChild<LLButton>("check")->setClickedCallback([this] { test(false); });
-    getChild<LLButton>("test")->setClickedCallback([this] { test(true); });
+    getChild<LLButton>("im_add")->setClickedCallback([this](LLUICtrl*, const LLSD&) { addResident(false); });
+    getChild<LLButton>("online_add")->setClickedCallback([this](LLUICtrl*, const LLSD&) { addResident(true); });
+    getChild<LLButton>("im_remove")->setClickedCallback([this](LLUICtrl*, const LLSD&) { removeResident(false); });
+    getChild<LLButton>("online_remove")->setClickedCallback([this](LLUICtrl*, const LLSD&) { removeResident(true); });
+    getChild<LLButton>("apply")->setClickedCallback([this](LLUICtrl*, const LLSD&) { apply(); });
+    getChild<LLButton>("cancel")->setClickedCallback([this](LLUICtrl*, const LLSD&) { closeFloater(); });
+    getChild<LLButton>("check")->setClickedCallback([this](LLUICtrl*, const LLSD&) { test(false); });
+    getChild<LLButton>("test")->setClickedCallback([this](LLUICtrl*, const LLSD&) { test(true); });
     return true;
 }
 
@@ -70,6 +70,7 @@ void FSFloaterSquirtyNotes::refreshList(bool online)
     {
         LLSD row;
         row["id"] = LLUUID(it->first);
+        row["columns"][0]["name"] = "name";
         row["columns"][0]["value"] = it->second.asString();
         list->addElement(row);
     }
@@ -89,7 +90,7 @@ void FSFloaterSquirtyNotes::addResident(bool online)
             if (!self || !self->getVisible() || ids.empty() || names.empty()) return;
             if (online && !LLAvatarTracker::instance().isBuddy(ids.front())) return;
             (online ? self->mOnlineResidents : self->mIMResidents)[ids.front().asString()] = names.front().getCompleteName();
-            self->getChild<LLLineEditor>(online ? "online_name" : "im_name")->setText("");
+            self->getChild<LLLineEditor>(online ? "online_name" : "im_name")->setText(std::string());
             self->refreshList(online);
         }, false, true, true, search, this);
     if (picker)
