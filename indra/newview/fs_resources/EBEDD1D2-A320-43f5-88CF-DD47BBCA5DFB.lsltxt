@@ -194,6 +194,9 @@ default
             gIsFlyingNow = -1;
             gAO_EnabledOC = FALSE;
             gAO_EnabledLM = FALSE;
+            gSharedPoseEnabled = FALSE;
+            llListenRemove(gSharedPoseListener);
+            gSharedPoseListener = 0;
 
             // Disable all secondary stateful services
             setTimerEvent2(0);
@@ -632,7 +635,7 @@ default
     listen(integer fromChan, string senderName, key senderID, string msg)
     {
 
-        if (fromChan == SHARED_POSE_CHANNEL)
+        if (fromChan == SHARED_POSE_CHANNEL && llGetSubString(msg, 0, 4) == "FSP1:")
         {
             if (!gSharedPoseEnabled || !gViewerIsFirestorm || llStringLength(msg) > 800 ||
                 llGetSubString(msg, 0, 4) != "FSP1:") return;

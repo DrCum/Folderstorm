@@ -310,7 +310,7 @@ void FSFloaterPoser::refreshSharedControls()
     const bool ready = shared.available();
     getChild<LLButton>("share_pose_button")->setEnabled(ready && !shared.isShared(gAgentID));
     getChild<LLButton>("request_pose_permission_button")->setEnabled(ready && avatar && !avatar->isSelf() &&
-        !avatar->isControlAvatar() && !shared.canEdit(avatar->getID()));
+        !avatar->isControlAvatar() && shared.compatible(avatar->getID()) && !shared.canEdit(avatar->getID()));
     getChild<LLButton>("stop_shared_pose_button")->setEnabled(shared.hasSessions());
     getChild<LLTextBox>("shared_pose_status")->setText(ready ? shared.status() : getString("shared_bridge_required"));
     const auto editors = shared.editors();
@@ -323,7 +323,7 @@ void FSFloaterPoser::refreshSharedControls()
         for (const auto& id : editors)
         {
             LLAvatarName name;
-            const auto label = LLAvatarNameCache::get(id, &name) ? name.getDisplayName() : id.asString();
+            const auto label = LLAvatarNameCache::get(id, &name) ? name.getCompleteName() : id.asString();
             mSharedEditors->add(label, id);
         }
         if (!editors.empty()) { mSharedEditors->setValue(selected); if (mSharedEditors->getValue().asString().empty()) mSharedEditors->selectFirstItem(); }

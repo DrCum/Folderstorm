@@ -21,6 +21,7 @@ class FSSharedPoseManager : public LLSingleton<FSSharedPoseManager>
 public:
     bool available() const;
     bool canEdit(const LLUUID& avatar) const;
+    bool compatible(const LLUUID& avatar) const;
     bool isShared(const LLUUID& avatar) const;
     bool isApplying() const { return mApplying; }
     bool hasSessions() const { return mOwner.active() || !mApprovals.empty(); }
@@ -80,6 +81,7 @@ private:
     std::map<LLUUID, Approval> mApprovals;
     std::map<LLUUID, Request> mRequests, mOutgoingRequests;
     std::map<LLUUID, double> mLastRequests;
+    std::map<LLUUID, double> mLastIncomingRequests, mPeers;
     std::map<LLUUID, Work> mWorks;
     std::map<LLUUID, std::pair<LLUUID, double>> mClosed;
     std::deque<Queued> mQueue;
@@ -89,6 +91,7 @@ private:
     LLUUID mRegion, mBridge;
     bool mApplying = false, mReady = false;
     double mLastHeartbeat = -100., mLastPublish = -100., mLastPacket = -100.;
+    double mLastBeacon = -100.;
     std::string mStatus;
 };
 #endif

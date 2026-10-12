@@ -37,13 +37,18 @@ LLVOAvatar* avatarFor(const LLUUID& id)
 std::string nameFor(const LLUUID& id)
 {
     LLAvatarName name;
-    return LLAvatarNameCache::get(id, &name) ? name.getDisplayName() : id.asString();
+    return LLAvatarNameCache::get(id, &name) ? name.getCompleteName() : id.asString();
 }
 LLSD message(const std::string& type, const std::string& session = {})
 {
     LLSD result = LLSD::emptyMap();
     result["t"] = type;
     result["s"] = session;
+    return result;
+}
+LLSD capability()
+{
+    LLSD result = message("capable"); result["v"] = 1;
     return result;
 }
 LLSD poseData(const FSSharedPose::Pose& pose)
@@ -85,7 +90,7 @@ void FSSharedPoseManager::onIdle(void* data) { static_cast<FSSharedPoseManager*>
 
 bool FSSharedPoseManager::available() const
 {
-    return gAgent.getRegion() && gAgentID.notNull() &&
+    return gAgent.getRegion() && gAgentID.notNull() && gAgent.getTeleportState() == LLAgent::TELEPORT_NONE &&
         gSavedSettings.getBOOL("FSSharedPosingEnabled") && FSLSLBridge::instance().canUseBridge() &&
         FSLSLBridge::instance().isSharedPoseReady();
 }
@@ -108,6 +113,11 @@ bool FSSharedPoseManager::canEdit(const LLUUID& id) const
     return grant != mApprovals.end() && remote != mRemotes.end() && !remote->second.pose.empty() &&
         grant->second.session == remote->second.session && grant->second.seen + FSSharedPose::PEER_SECONDS > now();
 }
+bool FSSharedPoseManager::compatible(const LLUUID& id) const
+{
+    const auto found = mPeers.find(id);
+    return nearby(id) && found != mPeers.end() && found->second + 60. > now();
+}
 
 void FSSharedPoseManager::bridgeReady()
 {
@@ -116,8 +126,10 @@ void FSSharedPoseManager::bridgeReady()
     mReady = true;
     mRegion = gAgent.getRegion()->getRegionID();
     mBridge = FSLSLBridge::instance().getAttachedID();
+    mPeers.clear();
     FSLSLBridge::instance().viewerToLSL("SharedPoseEnable|1");
     send(LLUUID::null, message("hello"));
+    send(LLUUID::null, capability()); mLastBeacon = now();
     mStatus = "Ready";
 }
 
@@ -130,7 +142,8 @@ void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool cont
     {
         return !item.started && item.target == target && item.data["t"] == data["t"] &&
             item.data["s"] == data["s"] && item.data["l"] == data["l"] &&
-            (type == "update" || type == "snapshot" || type == "edit");
+            (type == "update" || type == "snapshot" || type == "edit" || type == "renew" ||
+             type == "heartbeat" || type == "permit" || type == "alive");
     });
     if (pending != mQueue.end())
     {
@@ -161,7 +174,9 @@ void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool cont
         mQueue.erase(discard);
     }
     Queued entry{target, std::deque<std::string>(packets.begin(), packets.end()), control, false, outgoing};
-    if (control)
+    if (type == "renew" || type == "heartbeat" || type == "permit" || type == "alive" || type == "stop" || type == "revoke")
+        mQueue.push_front(std::move(entry));
+    else if (control)
     {
         const auto position = std::find_if(mQueue.begin(), mQueue.end(), [](const Queued& item) { return !item.control; });
         mQueue.insert(position, std::move(entry));
@@ -202,7 +217,7 @@ void FSSharedPoseManager::shareSelf()
 
 void FSSharedPoseManager::requestPermission(const LLUUID& id)
 {
-    if (!available() || id == gAgentID || !nearby(id)) { mStatus = "Shared posing is unavailable"; return; }
+    if (!available() || id == gAgentID || !compatible(id)) { mStatus = "Shared posing is unavailable"; return; }
     const double time = now();
     auto found = mLastRequests.find(id);
     if (found != mLastRequests.end() && found->second + 30. > time) return;
@@ -322,6 +337,7 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
         work.lease = LLUUID::generateNewID();
         if (id == gAgentID) work.session = LLUUID(mOwner.session());
         else { work.session = mApprovals.at(id).session; work.token = mApprovals.at(id).token; }
+        mStatus = "Reserving joints";
     }
     if (!work.asked) work.joints.insert(joints.begin(), joints.end());
     if (work.actions.size() < 256) work.actions.push_back(std::move(action));
@@ -346,6 +362,7 @@ void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     if (subset(pose, work.joints).size() != work.joints.size()) { complete(id, false); return; }
     apply(id, subset(pose, work.joints));
     work.granted = true;
+    mStatus = "Editing pose";
     work.renewed = now();
     if (!work.history) execute(work);
 }
@@ -429,14 +446,15 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
     const std::string type = data["t"].asString();
     const LLUUID session(data["s"].asString());
     const double time = now();
-    if (type == "hello") { snapshot(sender); return; }
+    if (type == "hello") { send(sender, capability()); snapshot(sender); return; }
+    if (type == "capable") { if (data["v"].asInteger() == 1) mPeers[sender] = time; return; }
     if (type == "request")
     {
         const LLUUID request = data["id"].asUUID();
         if (request.isNull() || mRequests.count(sender)) return;
-        const auto last = mLastRequests.find(sender);
-        if (last != mLastRequests.end() && last->second + 30. > time) return;
-        mLastRequests[sender] = time;
+        const auto last = mLastIncomingRequests.find(sender);
+        if (last != mLastIncomingRequests.end() && last->second + 30. > time) return;
+        mLastIncomingRequests[sender] = time;
         mRequests[sender] = {request, time + 30.};
         LLSD args;
         args["NAME"] = nameFor(sender);
@@ -627,6 +645,13 @@ void FSSharedPoseManager::tick()
     if (!mReady || mRegion != gAgent.getRegion()->getRegionID() || mBridge != FSLSLBridge::instance().getAttachedID())
         bridgeReady();
     mOwner.expire(time);
+    for (auto it = mClosed.begin(); it != mClosed.end();)
+        if (it->second.second <= time) it = mClosed.erase(it); else ++it;
+    for (auto* requests : {&mLastRequests, &mLastIncomingRequests})
+        for (auto it = requests->begin(); it != requests->end();)
+            if (it->second + 30. <= time) it = requests->erase(it); else ++it;
+    for (auto it = mPeers.begin(); it != mPeers.end();)
+        if (!nearby(it->first) || it->second + 60. <= time) it = mPeers.erase(it); else ++it;
     for (auto it = mRequests.begin(); it != mRequests.end();)
         if (it->second.expires <= time) it = mRequests.erase(it); else ++it;
     for (auto it = mOutgoingRequests.begin(); it != mOutgoingRequests.end();)
@@ -669,14 +694,14 @@ void FSSharedPoseManager::tick()
                 send(entry.first, data);
             }
         }
-        if (work.finished) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
-        if (!work.granted) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
-        if (work.renewed + 1. <= time)
+        if (work.granted && work.renewed + 1. <= time)
         {
             if (entry.first == gAgentID) mOwner.renew(gAgentID.asString(), "", work.lease.asString(), time);
             else send(entry.first, workMessage(work, "renew"));
             work.renewed = time;
         }
+        if (work.finished) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
+        if (!work.granted) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
         const bool final = work.forceFinish || !gFocusMgr.getMouseCapture();
         if (!work.latest.empty() && (final || work.sent + .2 <= time))
         {
@@ -708,6 +733,7 @@ void FSSharedPoseManager::tick()
         LLSD data = message("alive", mOwner.session()); data["r"] = static_cast<S32>(mOwner.revision());
         send(LLUUID::null, data); mLastHeartbeat = time;
     }
+    if (mLastBeacon + 30. <= time) { send(LLUUID::null, capability()); mLastBeacon = time; }
     // One packet per 100 ms bounds bridge work, including large snapshots.
     if (!mQueue.empty() && mLastPacket + .1 <= time)
     {

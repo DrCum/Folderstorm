@@ -1076,6 +1076,11 @@ void FSLSLBridge::configureBridgePrim(LLViewerObject* object)
 
 void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttachment* attachment)
 {
+    if (object && object->getID() == mBridgeUUID)
+    {
+        mSharedPoseReady = false;
+        mCurrentURL.clear();
+    }
     LL_INFOS("FSLSLBridge") << "Entering processDetach" << LL_ENDL;
 
     // Begin cleanup part

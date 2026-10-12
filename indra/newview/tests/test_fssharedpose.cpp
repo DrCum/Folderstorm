@@ -94,4 +94,42 @@ int main()
     assert(!assembler.receive("sender", packets[1], 16));
     assert(!assembler.receive("sender", packets[2], 16));
     assert(assembler.receive("sender", packets[0], 16) == payload);
+
+    // Owner, two editors and an observer converge through complete, reordered frames.
+    Pose skeleton;
+    for (int i = 0; i < 160; ++i) skeleton.emplace("joint" + std::to_string(i), Joint{});
+    session.start("owner", "four-client-session", skeleton);
+    session.grant("left-editor", "left-token", 0);
+    session.grant("right-editor", "right-token", 0);
+    assert(session.acquire("left-editor", "left-token", "left-lease", {"joint1", "joint2"}, 0).granted);
+    assert(session.acquire("right-editor", "right-token", "right-lease", {"joint3"}, 0).granted);
+    Joint left, right;
+    left.transform[4] = .125f; right.transform[5] = .25f;
+    assert(session.apply("left-editor", "left-token", "left-lease", {{"joint1", left}, {"joint2", left}}, false, 0, true, 2));
+    assert(!session.apply("left-editor", "left-token", "left-lease", {{"joint1", Joint{}}}, false, 0, true, 1));
+    assert(session.apply("right-editor", "right-token", "right-lease", {{"joint3", right}}, true, 1, true, 1));
+    // Renewals protect a long final transfer; duplicates never rewind the pose.
+    assert(session.renew("left-editor", "left-token", "left-lease", 4));
+    assert(session.heartbeat("left-editor", "left-token", 4));
+    assert(session.apply("left-editor", "left-token", "left-lease", {{"joint1", left}, {"joint2", left}}, true, 6, true, 3));
+    const auto serialized = encodePose(session.pose());
+    auto network = fragment(id, serialized);
+    assert(network.size() > 10);
+    std::reverse(network.begin(), network.end());
+    for (const auto& peer : {"left-editor", "right-editor", "observer"})
+    {
+        Assembler receiver;
+        Pose display = skeleton;
+        for (std::size_t i = 0; i < network.size(); ++i)
+        {
+            auto completeFrame = receiver.receive(peer, network[i], 7);
+            if (i + 1 < network.size()) { assert(!completeFrame); assert(display == skeleton); }
+            else { assert(completeFrame); auto received = decodePose(*completeFrame); assert(received); display = *received; }
+        }
+        assert(display == session.pose());
+    }
+    session.revoke("left-editor");
+    assert(!session.acquire("left-editor", "left-token", "after-revoke", {"joint1"}, 7).granted);
+    session.clear();
+    assert(!session.active());
 }

@@ -2105,7 +2105,8 @@
                 <button.commit_callback function="Poser.Share" />
             </button>
             <button name="request_pose_permission_button" label="Request permission" layout="topleft" follows="top|left"
-                    top="2" left="268" height="20" width="166">
+                    top="2" left="268" height="20" width="166"
+                    tool_tip="Requires a nearby compatible Folderstorm user with shared posing enabled." >
                 <button.commit_callback function="Poser.RequestPermission" />
             </button>
             <button name="stop_shared_pose_button" label="Stop shared posing" layout="topleft" follows="top|left"
