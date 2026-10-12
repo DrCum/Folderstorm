@@ -60,6 +60,13 @@ int main()
     assert(encode(automatic,frame) && decode(frame,output) && output.flags == AutomaticRead && output.event == 42 && output.cursor == 43);
     automatic.kind = Kind::Status; automatic.flags = ReadDeferred;
     assert(encode(automatic,frame) && decode(frame,output) && output.flags == ReadDeferred);
+    auto closing=original;closing.kind=Kind::CloseChat;closing.topic=Topic::Private;
+    assert(encode(closing,frame) && decode(frame,output) && output.kind==Kind::CloseChat);
+    closing.kind=Kind::Status;closing.eventType=EventType::ConversationClosed;
+    assert(encode(closing,frame) && decode(frame,output) && output.eventType==EventType::ConversationClosed);
+    closing.eventType=EventType::NoticeRemoved;
+    assert(encode(closing,frame) && decode(frame,output) && output.eventType==EventType::NoticeRemoved);
+    closing.eventType=static_cast<EventType>(10);assert(!encode(closing,frame));
     assert(!validUtf8("\xed\xa0\x80") && !validUtf8("\xf4\x90\x80\x80") && !validUtf8("\xe2\x82"));
     std::string filename;
     assert(viewerFilename("Folderstorm-Release.exe\r\n", filename) && filename == "Folderstorm-Release.exe");

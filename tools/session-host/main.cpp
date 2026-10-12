@@ -1009,7 +1009,9 @@ struct Host
         {message(L"Finish the current chat action before closing this conversation.");return;}
         if(slot.snapshot.state!=State::Ready || slot.detached || !slot.pipe.alive())return;
         if(index==chatIndex && id==conversation)saveDraft(true);
-        Message action=slot.snapshot;action.kind=Kind::CloseChat;action.topic=found->second.topic;action.conversation=id;
+        Message action;action.worker=slot.chat.identity.worker;action.generation=slot.chat.identity.generation;
+        action.account=slot.chat.identity.account;action.grid=slot.chat.identity.grid;
+        action.kind=Kind::CloseChat;action.topic=found->second.topic;action.conversation=id;
         slot.chat.close(id,(std::numeric_limits<std::uint64_t>::max)());
         slot.pendingAction=action;slot.hasPendingAction=true;
         refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
