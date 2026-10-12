@@ -125,14 +125,14 @@ struct ProfileBackup
         return std::filesystem::copy_file(file,folder/file.filename(),std::filesystem::copy_options::none,error) && !error;
     }
 };
-void recordProfileImport(const std::string& detail)
+void recordProfileImport(const std::string& detail,bool reset=false)
 {
     // Retain a bounded explanation, never control values, conversations or
     // Inventory data. Later account/toolbar phases append to the same report.
     const auto name=gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings-import-report.txt");
     const auto file=std::filesystem::path(ll_convert_string_to_wide(name,name.size(),CP_UTF8));
     std::error_code error;const auto size=std::filesystem::file_size(file,error);
-    const bool append=!error && size<16384;
+    const bool append=!reset && !error && size<16384;
     std::ofstream output(file,std::ios::binary|(append?std::ios::app:std::ios::trunc));
     const auto line=boundedText(detail,4096,true);output.write(line.data(),static_cast<std::streamsize>(line.size()));output.put('\n');
 }
@@ -917,6 +917,7 @@ bool FSSessionWorker::managed() { return worker && !worker->detached; }
 void FSSessionWorker::importProfileSettings()
 {
     if (!managed()) return;
+    if(!worker->settingsSource.empty() || !worker->toolbarSource.empty())recordProfileImport("Profile copy: selected preferences use source values or this viewer version's defaults. Account UI and toolbar phases wait for a successful login. No credentials, contents or live restrictions are imported.",true);
     if(!worker->toolbarSource.empty() && (worker->copyGroups&(CopyAccountUI|CopyAvatar|CopyMovement)))
     {
         if(!readProfileFile(std::filesystem::path(worker->toolbarSource)/L"settings_per_account.xml",worker->accountImport))
@@ -950,9 +951,28 @@ void FSSessionWorker::importProfileSettings()
     if (copyPreferences && (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries))
     { worker->settingsNotice += "Settings import: invalid or oversized preferences; profile unchanged."; return; }
 
-    if(copyPreferences)fillImportDefaults(gSavedSettings,data,worker->copyGroups,false);
+    if(copyPreferences)
+    {
+        // Main-viewer settings omit values equal to their session preset. Read
+        // only registered, packaged presets so Phoenix/Modern defaults (for
+        // example WASD) survive a copy into a Firestorm-default profile.
+        const auto preset=data["SessionSettingsFile"]["Value"].asString();
+        if(knownProfilePreset(preset))
+        {
+            const auto name=gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS,preset);
+            const auto file=std::filesystem::path(ll_convert_string_to_wide(name,name.size(),CP_UTF8));
+            std::string text;LLSD defaults;
+            if(readProfileFile(file,text))
+            {
+                std::istringstream sourcePreset(text);
+                if(LLSDSerialize::fromXML(defaults,sourcePreset,false)>0 && defaults.isMap() && defaults.size()<=ProfileSettingsEntries)
+                    for(auto it=defaults.beginMap();it!=defaults.endMap();++it)if(!data.has(it->first))data[it->first]=it->second;
+            }
+        }
+        fillImportDefaults(gSavedSettings,data,worker->copyGroups,false);
+    }
     if(data.size()>ProfileSettingsEntries){worker->settingsNotice="Settings import: too many preferences after resolving defaults; destination retained.";recordProfileImport(worker->settingsNotice);return;}
-    LLSD changes; std::size_t skipped = 0;
+    LLSD changes; std::size_t skipped = 0;std::vector<std::string> skippedDetails;
     if (!copyPreferences) data = LLSD::emptyMap();
     for (auto it = data.beginMap(); it != data.endMap(); ++it)
     {
@@ -960,7 +980,7 @@ void FSSessionWorker::importProfileSettings()
         const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
         if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
             !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean(),worker->copyGroups) ||
-            !validImportedControlValue(type,record["Value"])) { ++skipped; continue; }
+            !validImportedControlValue(type,record["Value"])) { ++skipped;if(skippedDetails.size()<40)skippedDetails.push_back(boundedText(it->first,128)+": unselected, isolated, unsupported or invalid");continue; }
         changes[it->first] = record["Value"];
     }
     ProfileBackup backup;
@@ -1014,7 +1034,8 @@ void FSSessionWorker::importProfileSettings()
         ++copied;
     }
     worker->settingsNotice += "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
-        " UI files, "+std::to_string(skipped)+" skipped; previous files backed up.";
+        " UI files, "+std::to_string(skipped)+" unselected/isolated/unsupported/invalid; previous files backed up.";
+    for(const auto& skippedControl:skippedDetails)recordProfileImport("Skipped "+skippedControl);
     recordProfileImport(worker->settingsNotice);
     LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
 }

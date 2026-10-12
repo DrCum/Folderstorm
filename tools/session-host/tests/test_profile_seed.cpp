@@ -11,6 +11,8 @@ int main()
 {
     assert(profilePromptWasOffered("FSC1") && profilePromptWasOffered("FSC1\n"));
     for(const auto* invalid : {"", "FSC", "FSC2", "FSC1\nextra", "FSC1\r\n"}) assert(!profilePromptWasOffered(invalid));
+    assert(knownProfilePreset("settings_phoenix.xml") && knownProfilePreset("settings_firestorm.xml"));
+    for(const auto* invalid : {"../settings_firestorm.xml", "C:/settings_firestorm.xml", "settings_custom.xml", "account_settings_firestorm.xml"})assert(!knownProfilePreset(invalid));
     // Same-machine UI/graphics preferences are portable, but permission to
     // persist in the main viewer is insufficient to copy account/local data.
     assert(seedPreference("SkinCurrent","String",true,true,true));

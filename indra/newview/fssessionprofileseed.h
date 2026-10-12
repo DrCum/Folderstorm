@@ -28,6 +28,12 @@ inline bool profilePromptWasOffered(const std::string& bytes)
     // completed setup instead of offering to overwrite the profile again.
     return bytes == ProfilePromptMarker || bytes == "FSC1";
 }
+inline bool knownProfilePreset(const std::string& name)
+{
+    for(const auto* preset : {"settings_firestorm.xml", "settings_modern.xml", "settings_phoenix.xml", "settings_hybrid.xml", "settings_v3.xml", "settings_text.xml"})
+        if(name==preset)return true;
+    return false;
+}
 inline bool validProfileXmlText(const std::string& bytes)
 {
     return !bytes.empty() && bytes.size() <= ProfileSettingsLimit && validUtf8(bytes,true) &&

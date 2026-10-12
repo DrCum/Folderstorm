@@ -3615,7 +3615,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     {
         std::string data(ChatPreferences::MaxBytes+1,'\0'); chatPreferencesFile.read(data.data(),static_cast<std::streamsize>(data.size()));
         data.resize(static_cast<std::size_t>(chatPreferencesFile.gcount()));
-        if (!ChatPreferences::decode(data,state.chatPreferences)) state.lastNotice = L"Saved chat/sound choices are invalid; using defaults.";
+        if (!ChatPreferences::decode(data,state.chatPreferences))
+        {
+            std::ifstream previous(state.profiles/L"host-chat.dat.bak",std::ios::binary);std::string backup(ChatPreferences::MaxBytes+1,'\0');
+            previous.read(backup.data(),static_cast<std::streamsize>(backup.size()));backup.resize(static_cast<std::size_t>(previous.gcount()));
+            state.lastNotice=ChatPreferences::decode(backup,state.chatPreferences)?L"Recovered earlier chat/sound choices from their backup.":L"Saved chat/sound choices are invalid; using defaults.";
+        }
     }
     std::ifstream experienceFile(state.profiles/L"host-experience.dat",std::ios::binary);
     if(experienceFile){std::string data(HostExperience::MaxBytes+1,'\0');experienceFile.read(data.data(),static_cast<std::streamsize>(data.size()));data.resize(static_cast<std::size_t>(experienceFile.gcount()));if(!HostExperience::decode(data,state.experience) || bindingsConflict(state.experience,state.presentation)){state.experience=HostExperience{};state.lastNotice=L"Saved host experience settings are invalid; using defaults.";}}

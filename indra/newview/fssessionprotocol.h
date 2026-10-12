@@ -18,7 +18,8 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-constexpr std::uint32_t Version = 13;
+// Version 14 pairs the expanded startup profile-copy policy with its host.
+constexpr std::uint32_t Version = 14;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t

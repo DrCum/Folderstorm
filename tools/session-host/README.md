@@ -66,13 +66,23 @@ g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I indra/newview \
 
 Actual checks and pending native acceptance are in [prototype validation](../../doc/plans/multi-character-validation.md). No viewer/build/packaging/GitHub builds or unrelated Go tests were run during implementation.
 
+## Host Preferences and automatic saving
+
+**Settings → Host Preferences** opens one category-navigation window. Apply validates and saves the complete draft; Cancel discards edits. Menu shortcuts for sounds, filters, appearance, keys and quick actions open its relevant category. Characters & profiles and Audio share a profile selector, retaining individual drafts while you switch. Offline profile names stay editable; account-specific controls require the original live login.
+
+Accepted choices, quick toggles, docking, background modes, pins and window positions now save automatically. **Save preferences now** remains an immediate retry, not a required step. General offers **Retry saving** and **Open settings folder**. Write failures remain visible in the title/status; close offers retry, close without saving or Cancel. A bounded `host-preferences.dat` transaction and prior-copy backup use the existing `%LOCALAPPDATA%\FolderstormSessions\Prototype-v1` root. New builds recover/migrate earlier stores without moving the private profiles or deleting old files. Older builds predating this store cannot read choices first saved by the new build.
+
+The first-open prompt now recognizes earlier four-byte setup markers and writes the complete marker. Copy from main profile includes independent movement/WASD/quick-jump, camera/view, avatar/beams/LookAt, RLVa and reviewed account UI categories. Known built-in presets supply omitted source defaults; other omitted eligible values use this viewer version's defaults. Account UI and toolbars apply once to the first successful destination login, with backups and ownership guards. A private, bounded copy report can be opened from Characters & profiles. This copies reviewed preferences, not credentials, contents, live restrictions or all custom assets.
+
+See [the completed feature list and focused Windows checks](../../doc/plans/host-preferences-and-profile-copy.md). Protocol **14** requires building this host and viewer together. Native Windows compile/runtime/skin/DPI acceptance remains pending.
+
 ## Workspace and lifecycle controls
 
 **Characters** and card action menus refer to the management target and name it in their actions. **Workspaces** opens that character's existing workspace switcher, offering an explicit switch first when inactive; its native save/load/HUD review and Preferences rules still apply. Status reports the account-local workspace name, a `*` when modified, and an open Preferences transaction. World switching preserves live camera/HUD/Inventory/board state and does not auto-apply a named workspace. Configure per-character startup restore through that worker's existing Preferences; native UI/Inventory/account/session readiness gates are reused.
 
 **Close character** returns it to its ordinary window for the normal viewer logout confirmation. Cancelling that native confirmation leaves it logged in as a separate viewer; close it before relaunching the slot. Host close offers logout, leave connected in separate windows, or Cancel. Logout waits for native process exit; closing the host again can leave remaining native windows logged in. Failed/stale logout requests are not replayed on a new login.
 
-**Save host choices** explicitly saves only background modes, voice/background-mute, hosting and Chat panel choices in a bounded controller-options file. It never saves credentials, chat text, Inventory contents or named workspace data. Defaults remain voice/hosting Off, background mute On. One controller reserves the private profile slots/settings; detached viewers continue holding their own profile lease until native cleanup finishes.
+Accepted host preferences save automatically, including background modes, voice/background-mute, hosting and Chat panel choices in a bounded transaction. It never saves credentials, chat text, Inventory contents or named workspace data. Defaults remain voice/hosting Off, background mute On. One controller reserves the private profile slots/settings; detached viewers continue holding their own profile lease until native cleanup finishes.
 
 Managed workers always use their private default texture/object/sound cache directories, even when copied settings name a shared custom cache. Managed startup skips migration/purging of that external custom path. Saved custom choices stay intact for ordinary launches; detaching keeps the already-open private runtime cache. **Open selected profile folder** exposes the selected slot's files without adopting another running viewer.
 
@@ -118,10 +128,10 @@ The monitor retains its last complete valid image between frames and presents ea
 
 ## Compact host controls
 
-Choose **Session → Normal / Condensed / Collapsed**. Condensed uses a single slim control strip; full character details remain in Session. Collapsed removes host chrome and docked Chat from the world area. Right-click the title bar (or open its system menu) to restore controls or open Character sessions; leaving collapsed restores the prior docked Chat preference. Use Save host choices to persist the mode. Older settings default to normal. Native sizing/DPI/restore acceptance is pending.
+Choose **Session → Normal / Condensed / Collapsed**. Condensed uses a single slim control strip; full character details remain in Session. Collapsed removes host chrome and docked Chat from the world area. Right-click the title bar (or open its system menu) to restore controls or open Character sessions; leaving collapsed restores the prior docked Chat preference. The mode saves automatically. Older settings default to normal. Native sizing/DPI/restore acceptance is pending.
 
 ### Detached shared panels
-View offers **Pop out shared Chat** and **Pop out character controls**, independently of host chrome. Dock either from View. Closing Chat hides it and keeps its source-qualified draft; closing character controls docks them. The host system menu exposes Session even when chrome is collapsed. Panels reuse the existing controls/controller and can resize and move between DPI scales; they do not create another chat transport. Save host choices explicitly to retain docking preferences. Minimizing the host hides its owned panels, and restoring it restores eligible panels.
+View offers **Pop out shared Chat** and **Pop out character controls**, independently of host chrome. Dock either from View. Closing Chat hides it and keeps its source-qualified draft; closing character controls docks them. The host system menu exposes Session even when chrome is collapsed. Panels reuse the existing controls/controller and can resize and move between DPI scales; they do not create another chat transport. Docking preferences save automatically. Minimizing the host hides its owned panels, and restoring it restores eligible panels.
 
 ### Three-character native checkpoint
 The registry currently supports three independently launched logins. **+ Character** opens the next free slot; Session offers individual slot login/monitor actions. Character1/Character2 profiles and old host choices are preserved; Character3 uses its own profile/cache/lease and defaults to Warm. All ready characters can send source-bound shared chat, switch, restart and use account-local workspaces. One active input/voice owner remains. Periodic events/catalog/workspace/poll requests rotate per worker so a busy chat cannot starve other updates. No extra login starts automatically. This checkpoint retains one monitor; simultaneous monitors and the final five-character cap follow separately.
@@ -141,7 +151,7 @@ Disconnected native recovery UI may redraw without reacquiring managed simulator
 
 ## Character colors, pins and attention (PR #27)
 
-Use **Session → Character appearance and alerts** for the selected character's friendly name, RGB accent and optional background alerts. The color follows the account across selectors, shared Chat and monitors; **Send as** remains tied to the selected chat account rather than the active world. **Save host choices** keeps those metadata choices and fitted host/pop-out/monitor positions. Apply/Cancel edits affect only the current controller session until explicitly saved.
+Use **Session → Character appearance and alerts** for the selected character's friendly name, RGB accent and optional background alerts. The color follows the account across selectors, shared Chat and monitors; **Send as** remains tied to the selected chat account rather than the active world. Automatic saving keeps those metadata choices and fitted host/pop-out/monitor positions. Apply accepts and saves edits; Cancel discards them.
 
 **Pins…** adds/removes/reorders chat pins, including unavailable entries. Six compact tiles show the first pins; the menu lists overflow and tooltips give the full character/conversation. Nearby and known peer/group destinations can be saved; conferences remain session-only and restored IM pins wait for an existing native conversation. Named profiles never contain messages or drafts.
 
@@ -171,7 +181,7 @@ The host EXE and its main, detached-panel and monitor windows use the original w
 
 ### Copy from main profile
 
-Save/close the normal viewer so its latest preferences are on disk. The first open of each profile offers setup. You can also select a closed character and use **Characters → Copy from main profile…** or **Settings → Copy from main profile: character…** later. The dialog starts at `%APPDATA%\Folderstorm_x64\user_settings` for 64-bit; its source selector can browse another installation or native settings backup. Check the groups to copy: graphics, interface/skin, custom colors, keyboard bindings, quick preferences, and toolbar buttons/layout. A toolbar-only copy is supported. Choose the source account for toolbars if the source contains multiple accounts, then review the source/destination confirmation and open normal login. Copying never logs in automatically.
+Save/close the normal viewer so its latest preferences are on disk. The first open of each profile offers setup. You can also select a closed character and use **Characters → Copy from main profile…** or **Settings → Copy from main profile: character…** later. The dialog starts at `%APPDATA%\Folderstorm_x64\user_settings` for 64-bit; its source selector can browse another installation or native settings backup. Check the groups to copy: graphics, interface/skin, colors, bindings, quick preferences, toolbar layout, movement, camera, avatar/LookAt, RLVa and reviewed account UI. A toolbar-only copy is supported. Choose the source account for toolbars if the source contains multiple accounts, then review the source/destination confirmation and open normal login. Copying never logs in automatically.
 
 The first-open choice is recorded in the private profile only after its viewer launches successfully. Cancel, a cancelled picker or confirmation, and a failed launch leave setup available next time. The setup dialogs keep other workers serviced while blocking overlapping launches/switches; ending management or cancelling/replacing a session-set opening invalidates its pending launch. Dialogs belong to the active host panel so they remain accessible from popped-out/pinned controls. The existing profile lease prevents changes while another viewer owns that profile.
 
@@ -199,7 +209,7 @@ Minimal chrome now reserves a Show controls strip outside the fitted viewer. Res
 
 ## Folderstorm appearance and session tools
 
-The new default is a quiet Condensed strip. Characters, View, Settings, Open login and Attention replace the long Session menu; More exposes them in narrow windows. Expanded optionally shows reordered character cards. Settings supplies Midnight, Daylight or Follow Windows, Compact/Comfortable density, diagnostics and up to twelve ordered quick actions. High Contrast, per-window DPI and Windows text scale affect presentation. Accepting a settings draft applies it for this session; Cancel discards it; Save host choices persists it.
+The new default is a quiet Condensed strip. Characters, View, Settings, Open login and Attention replace the long Session menu; More exposes them in narrow windows. Expanded optionally shows reordered character cards. Settings supplies Midnight, Daylight or Follow Windows, Compact/Comfortable density, diagnostics and up to twelve ordered quick actions. High Contrast, per-window DPI and Windows text scale affect presentation. Apply accepts and saves a settings draft; Cancel discards it.
 
 Pin each detached Chat, character-controls, Attention or monitor window independently using Pin or its system menu. Docking suspends that window's pin; recovery clears pins for this session. Monitor Exchange, Chat and Options remain explicit; Options can make current size/rate the saved defaults after Save host choices.
 
@@ -207,7 +217,7 @@ Characters → Session sets saves selected private profiles/background policies,
 
 Attention → Next/Previous navigates filtered pending items without world activation, Mark read or offer acceptance. Native offers precede unread conversations by default; Nearby is an optional filter. Settings → Keyboard shortcuts supplies optional recovery and attention bindings in the host and the corresponding native Controls actions. Shared Chat sender/drafts remain source-bound.
 
-The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). The current protocol **13** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
+The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). The current protocol **14** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
 
 
 ### Chat behavior, reading and character sounds
@@ -220,7 +230,7 @@ Settings → Chats and notifications → Read behavior offers Mark displayed cha
 
 Characters → Sound and notifications, or Settings → Sounds: selected character, offers independent Direct IM, Group, Conference and supported-notification checkboxes plus Choose WAV, Preview and Reset. These control eligible **background-character** alerts; active characters retain native viewer notifications. Native DND, explicit master/UI mute and restrictions still apply; native friend/non-friend/group/conference sound switches are independent. Custom sounds support mono/stereo PCM WAV, 8/16-bit at 8–48 kHz, up to 10 seconds/4 MiB. Imported assets live in the host profile's sounds folder, use host alert volume, and fall back to the built-in tone if unavailable. Sounds load once when an account becomes Ready or its choice changes; playback uses the cache, capped at 20 MiB.
 
-Apply changes this session; Cancel discards the dialog choices. Save host choices persists the additive bounded host-chat.dat file, with a prior-file backup. Missing new settings inherit existing character alert policies and preserve the original host-presentation/host-experience formats. No credentials, transcripts, drafts or Inventory contents are stored. See [the completed roadmap and focused native checklist](../../doc/plans/session-chat-polish.md).
+Apply accepts and saves changes; Cancel discards the dialog choices. The bounded host-preferences.dat transaction includes chat/sound choices and its prior-copy backup. Missing new settings inherit existing character alert policies and preserve the original host-presentation/host-experience formats. No credentials, transcripts, drafts or Inventory contents are stored. See [the completed roadmap and focused native checklist](../../doc/plans/session-chat-polish.md).
 
 
 ### Refined Chat, notifications, profile labels and custom-viewport menus
@@ -231,7 +241,7 @@ Shared Chat's Chat… menu contains Close conversation in host; monitor Chat has
 
 Viewer notifications use individual IDs and descriptions and disappear when native notification removal/expiry is observed. Turn them Off in either visibility or Attention. Review and response stay native; host Read or Dismiss only affects the host's indication.
 
-Characters → Profile name and character color… (or Name this profile… before login) keeps a private profile's label visible while offline. Labels seed from known names, stay with the unchanged CharacterN folder when cards move, and are stored by Save host choices. Ready Chat still identifies its actual account. FSC3 host-chat.dat reads FSC2 and migrates existing combined Attention choices; labels/filters do not contain account credentials or conversation contents.
+Characters → Profile name and character color… (or Name this profile… before login) keeps a private profile's label visible while offline. Labels seed from known names, stay with the unchanged CharacterN folder when cards move, and are stored automatically. Ready Chat still identifies its actual account. FSC3 host-chat.dat reads FSC2 and migrates existing combined Attention choices; labels/filters do not contain account credentials or conversation contents.
 
 Background host alerts no longer require native IM sound switches. Their ownership is independent of background world/media muting and suppresses duplicate native immediate/deferred UI sounds while inactive. Active viewers keep native sounds. Host volume/categories, native master/UI mute and UI volume, DND, muted senders, restrictions and burst/freshness limits still apply. Monitor visibility does not suppress alerts.
 
