@@ -1575,7 +1575,6 @@ bool idle_startup()
 
         // Overwrite default user settings with user settings
         LLAppViewer::instance()->loadSettingsFromDirectory("Account");
-        FSSessionWorker::importProfileAccountSettings();
 
         // <FS:Ansariel> Restore bottom toolbar layout now he have the user settings
         LLLayoutStack* chat_bar_stack = gToolBarView->findChild<LLLayoutStack>("chat_bar_stack");
@@ -2058,6 +2057,11 @@ bool idle_startup()
 
         // We should have an agent id by this point.
         llassert(!(gAgentID == LLUUID::null));
+
+        // Login cleanup loads a tentative account before authentication. Apply
+        // the deliberate private-profile copy only now, after the successful
+        // response established both agent/session IDs, before world UI setup.
+        FSSessionWorker::importProfileAccountSettings();
 
         // <FS:Ansariel> Force HTTP inventory enabled on Second Life
 #ifdef OPENSIM
