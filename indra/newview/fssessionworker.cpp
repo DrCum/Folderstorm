@@ -322,6 +322,7 @@ struct Worker : LLIMSessionObserver
                         else
                         {
                             item.eventType=EventType::Attention;item.title=category;item.text="Review in this character's native viewer.";
+                            item.recipient=sender.isNull()?"":sender.asString();
                             if(fresh && backgroundAlertAllowed(sender)){item.flags|=AlertEligible;item.eventAt=GetTickCount64();}
                         }
                         events.push(std::move(item));
@@ -359,6 +360,8 @@ struct Worker : LLIMSessionObserver
             // the owning group as well as its sender immediately before IPC.
             filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
                 { return RlvActions::canReceiveIM(LLUUID(id)); });
+            if((payload.flags&AlertEligible) && !backgroundAlertAllowed(LLUUID(payload.recipient)))
+            {payload.flags&=~AlertEligible;payload.eventAt=0;}
             if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
                 if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
                     payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
