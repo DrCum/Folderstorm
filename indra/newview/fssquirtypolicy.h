@@ -9,6 +9,22 @@ namespace FSSquirtyPolicy
 {
 enum class Mode { Off, All, Custom };
 
+struct IncomingIM
+{
+    bool live;
+    bool muted;
+    bool regionMessage;
+    bool addressedToAgent;
+    bool simulatorNotice;
+    bool receiveAllowed;
+};
+
+inline bool eligibleIM(const IncomingIM& im)
+{
+    return im.live && !im.muted && !im.regionMessage && im.addressedToAgent &&
+           !im.simulatorNotice && im.receiveAllowed;
+}
+
 inline bool allows(Mode mode, bool selected)
 {
     return mode == Mode::All || (mode == Mode::Custom && selected);

@@ -7,6 +7,35 @@ using namespace FSSquirtyPolicy;
 
 int main()
 {
+    // Both normal and autoresponse paths reuse this classification.
+    const IncomingIM resident{true, false, false, true, false, true};
+    assert(eligibleIM(resident));
+    IncomingIM region = resident;
+    region.regionMessage = true;
+    assert(!eligibleIM(region));
+    auto excluded = resident;
+    excluded.live = false;
+    assert(!eligibleIM(excluded));
+    excluded = resident;
+    excluded.muted = true;
+    assert(!eligibleIM(excluded));
+    excluded = resident;
+    excluded.addressedToAgent = false;
+    assert(!eligibleIM(excluded));
+    excluded = resident;
+    excluded.simulatorNotice = true;
+    assert(!eligibleIM(excluded));
+    excluded = resident;
+    excluded.receiveAllowed = false;
+    assert(!eligibleIM(excluded));
+
+    // A region message must neither squirt nor reset a resident's silence gap.
+    Activity routing;
+    assert(routing.incoming("sender", 0, 120, Mode::All, false, false));
+    if (eligibleIM(region))
+        assert(!routing.incoming("sender", 60, 120, Mode::All, false, false));
+    assert(eligibleIM(resident) && routing.incoming("sender", 120, 120, Mode::All, false, false));
+
     assert(!allows(Mode::Off, true));
     assert(allows(Mode::All, false));
     assert(allows(Mode::Custom, true));
@@ -51,5 +80,5 @@ int main()
     activity.reset();
     assert(activity.incoming("sam", 0, 120, Mode::All, false, false));
     assert(!activity.presence("sam", true, Mode::All, false, false));
-    std::cout << "Squirty inactivity, independent residents, modes and presence passed\n";
+    std::cout << "Squirty resident/region eligibility, inactivity, modes and presence passed\n";
 }
