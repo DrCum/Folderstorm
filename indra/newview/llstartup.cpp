@@ -1575,6 +1575,7 @@ bool idle_startup()
 
         // Overwrite default user settings with user settings
         LLAppViewer::instance()->loadSettingsFromDirectory("Account");
+        FSSessionWorker::importProfileAccountSettings();
 
         // <FS:Ansariel> Restore bottom toolbar layout now he have the user settings
         LLLayoutStack* chat_bar_stack = gToolBarView->findChild<LLLayoutStack>("chat_bar_stack");

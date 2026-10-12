@@ -9,6 +9,8 @@
 using namespace fs_session;
 int main()
 {
+    assert(profilePromptWasOffered("FSC1") && profilePromptWasOffered("FSC1\n"));
+    for(const auto* invalid : {"", "FSC", "FSC2", "FSC1\nextra", "FSC1\r\n"}) assert(!profilePromptWasOffered(invalid));
     // Same-machine UI/graphics preferences are portable, but permission to
     // persist in the main viewer is insufficient to copy account/local data.
     assert(seedPreference("SkinCurrent","String",true,true,true));
@@ -78,7 +80,7 @@ int main()
     std::uint32_t parsed = CopyLegacy;
     for (std::uint32_t group = 1; group <= CopyAll; ++group)
     { assert(parseProfileCopyGroups(std::to_wstring(group),parsed)); assert(parsed == group); }
-    for (const auto* invalid : {L"",L"0",L"64",L"-1",L"+1",L" 1",L"1 ",L"1x",L"4294967295",L"\uFF11"})
+    for (const auto* invalid : {L"",L"0",L"2048",L"-1",L"+1",L" 1",L"1 ",L"1x",L"4294967295",L"\uFF11"})
     { const auto original = parsed; assert(!parseProfileCopyGroups(invalid,parsed)); assert(parsed == original); }
     assert(validProfileXmlText("<?xml version=\"1.0\"?><toolbars>\n<command name=\"chat\"/>\t</toolbars>"));
     assert(validProfileXmlText("<colors name=\"\xc3\xa9\"/>"));
@@ -91,6 +93,20 @@ int main()
     assert(files.count("colors.xml") && files.count("key_bindings.xml") && files.count("quick_preferences.xml"));
     for (const auto* forbidden : {"bin_conf.dat","settings_per_account.xml","grids.user.xml","workspaces.xml",
         "gesture_boards.xml","inventory.cache","chat.txt","settings_crash_behavior.xml","ignorable_dialogs.xml"}) assert(!files.count(forbidden));
+    for(const auto* control : {"LetterKeysAffectsMovementNotFocusChatBar", "FSIgnoreFinishAnimation", "AutomaticFly"})
+        assert(seedPreference(control,"Boolean",true,true,true,CopyMovement));
+    assert(!seedPreference("LetterKeysAffectsMovementNotFocusChatBar","Boolean",true,true,true,CopyInterface));
+    assert(seedPreference("DisableCameraConstraints","Boolean",true,true,true,CopyCamera));
+    assert(seedPreference("ShowSelectionBeam","Boolean",true,true,true,CopyAvatar));
+    assert(seedPreference("PrivateLookAtTarget","Boolean",true,true,true,CopyAvatar));
+    assert(seedPreference("RestrainedLove","Boolean",true,true,true,CopyRLVa));
+    assert(!seedPreference("RestrainedLove","Boolean",true,true,true,CopyAvatar));
+    assert(accountPreferenceAllowed("DebugLookAt",CopyAvatar));
+    assert(accountPreferenceAllowed("DebugLookAtHideOwn",CopyAvatar));
+    assert(accountPreferenceAllowed("FSCrouchToggle",CopyMovement));
+    assert(accountPreferenceAllowed("ConversationsListPaneWidth",CopyAccountUI));
+    for(const auto* control : {"FSAutorespondMode", "FSProtectedFolders", "FSStoredCameraFocusObjectId", "FSFavoriteGroups", "FSLastOpenIMs", "FSWorkspaceProfiles", "RLVaLoginLastLocation", "InstantMessageLogPath", "FSPrimfeedOAuthToken"})
+        assert(!accountPreferenceAllowed(control,CopyAll));
     assert(ProfileSettingsLimit == 4u*1024u*1024u && ProfileSettingsEntries <= 8192);
     std::cout << "Profile settings portability, native backup eligibility and isolated-data exclusions passed.\n";
 }
