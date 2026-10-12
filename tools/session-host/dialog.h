@@ -109,6 +109,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
             SendMessageW(editor->tabs,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
             for(std::size_t i=0;i<editor->pages.size();++i){TCITEMW item{};item.mask=TCIF_TEXT;item.pszText=editor->pages[i].data();TabCtrl_InsertItem(editor->tabs,static_cast<int>(i),&item);}
         }
+        if(editor->tabs)TabCtrl_SetCurSel(editor->tabs,editor->page);
         editor->heights.assign((std::max)(std::size_t{1},editor->pages.size()),14);editor->rows.clear();
         for(std::size_t i=0;i<editor->fields->size();++i)
         {
@@ -138,7 +139,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
             SetWindowPos(dialog,nullptr,x,y,width,height,SWP_NOZORDER);
         }
         else SetWindowPos(dialog,nullptr,owner.left+30,owner.top+30,size.right-size.left,size.bottom-size.top,SWP_NOZORDER);
-        layoutEditor(dialog,*editor);if(dialogTheme)dialogTheme->window(dialog);return TRUE;
+        layoutEditor(dialog,*editor);SendMessageW(dialog,DM_SETDEFID,IDOK,0);if(dialogTheme)dialogTheme->window(dialog);return TRUE;
     }
     if(!editor || !editor->body) return FALSE;
     if(message==WM_GETMINMAXINFO)
@@ -148,7 +149,8 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         editor->dpi=dialogTheme?dialogTheme->uiDpi(HIWORD(wparam)):static_cast<int>(HIWORD(wparam));
         const auto previous=editor->font;
         editor->font=CreateFontW(-editor->scale(12),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-        EnumChildWindows(dialog,[](HWND child,LPARAM data)->BOOL{setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE;},reinterpret_cast<LPARAM>(editor->font?editor->font:GetStockObject(DEFAULT_GUI_FONT)));
+        const HFONT nextFont=editor->font?editor->font:reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        EnumChildWindows(dialog,[](HWND child,LPARAM data)->BOOL{setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE;},reinterpret_cast<LPARAM>(nextFont));
         if(previous)DeleteObject(previous);editor->x=editor->y=0;
         const auto& next=*reinterpret_cast<RECT*>(lparam);SetWindowPos(dialog,nullptr,next.left,next.top,next.right-next.left,next.bottom-next.top,SWP_NOZORDER|SWP_NOACTIVATE);
         layoutEditor(dialog,*editor);return TRUE;
@@ -223,12 +225,12 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     }
     EndDialog(dialog,IDOK); return TRUE;
 }
-inline bool edit(HWND owner,const wchar_t* title,std::vector<Field>& fields,std::vector<std::wstring> pages={})
+inline bool edit(HWND owner,const wchar_t* title,std::vector<Field>& fields,std::vector<std::wstring> pages={},unsigned int page=0)
 {
     struct Template { DLGTEMPLATE dialog; WORD menu = 0, klass = 0, title = 0; } layout{};
     layout.dialog.style = WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|WS_THICKFRAME;
     layout.dialog.cx = 300; layout.dialog.cy = 200;
-    Editor editor{title,&fields,nullptr,std::move(pages)};
+    Editor editor{title,&fields,nullptr,std::move(pages)};editor.page=static_cast<int>((std::min)(page,editor.pages.empty()?0u:static_cast<unsigned int>(editor.pages.size()-1)));
     const bool accepted = DialogBoxIndirectParamW(GetModuleHandleW(nullptr),&layout.dialog,owner,editorProc,reinterpret_cast<LPARAM>(&editor)) == IDOK;
     if (editor.font) DeleteObject(editor.font); // Dialog and its controls are already destroyed.
     return accepted;
