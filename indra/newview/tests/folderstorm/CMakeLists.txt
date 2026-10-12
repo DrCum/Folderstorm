@@ -36,7 +36,7 @@ folderstorm_check(workspace_usability
 
 # Session protocol/model/controller checks are portable; they do not build the
 # Win32 host or viewer. Keep assertions enabled even with Release's NDEBUG.
-foreach(check IN ITEMS chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
+foreach(check IN ITEMS preferences chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
   folderstorm_check(session_${check}
     ../../../../tools/session-host/tests/test_${check}.cpp)
   target_include_directories(session_${check} PRIVATE ../..)

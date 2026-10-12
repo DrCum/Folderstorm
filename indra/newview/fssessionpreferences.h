@@ -1,0 +1,65 @@
+/** SPDX-License-Identifier: LGPL-2.1-or-later */
+#ifndef FS_SESSION_PREFERENCES_H
+#define FS_SESSION_PREFERENCES_H
+#include "fssessionhostoptions.h"
+#include "fssessionchatprefs.h"
+#include "fssessionexperience.h"
+namespace fs_session
+{
+// One transaction for related choices. No transcripts, drafts or credentials.
+struct HostPreferences
+{
+    static constexpr std::size_t MaxBytes=256u*1024u;
+    HostOptions options;
+    PresentationStore presentation;
+    HostExperience experience;
+    ChatPreferences chat;
+    std::string encode() const
+    {
+        const std::array<std::string,4> parts{options.encode(),presentation.encode(),experience.encode(),chat.encode()};
+        HostOptions checked;
+        if(!HostOptions::decode(parts[0],checked) || bindingsConflict(experience,presentation))return {};
+        std::string result="FHP1";
+        for(const auto& part:parts)
+        {
+            if(part.empty())return {};
+            const auto size=static_cast<std::uint32_t>(part.size());
+            for(unsigned int i=0;i<4;++i)result.push_back(static_cast<char>((size>>(8*i))&255));
+            result+=part;
+        }
+        return result.size()<=MaxBytes?result:std::string{};
+    }
+    static bool decode(const std::string& data,HostPreferences& output)
+    {
+        if(data.size()<20 || data.size()>MaxBytes || data.compare(0,4,"FHP1")!=0)return false;
+        std::array<std::string,4> parts;std::size_t at=4;
+        for(auto& part:parts)
+        {
+            if(data.size()-at<4)return false;
+            std::uint32_t size=0;for(unsigned int i=0;i<4;++i)size|=static_cast<std::uint32_t>(static_cast<unsigned char>(data[at++]))<<(8*i);
+            if(!size || size>65536 || size>data.size()-at)return false;
+            part=data.substr(at,size);at+=size;
+        }
+        HostPreferences next;
+        if(at!=data.size() || !HostOptions::decode(parts[0],next.options) || !PresentationStore::decode(parts[1],next.presentation) ||
+            !HostExperience::decode(parts[2],next.experience) || !ChatPreferences::decode(parts[3],next.chat) ||
+            bindingsConflict(next.experience,next.presentation))return false;
+        output=std::move(next);return true;
+    }
+};
+class ChoiceAutosave
+{
+public:
+    std::string saved,observed;
+    std::uint64_t changedAt=0,retryAt=0;
+    void observe(const std::string& value,std::uint64_t now)
+    {
+        if(value!=observed){observed=value;changedAt=now;}
+    }
+    bool dirty() const {return !observed.empty() && observed!=saved;}
+    bool due(std::uint64_t now) const {return dirty() && now>=retryAt && now>=changedAt && now-changedAt>=750;}
+    void committed(const std::string& value){saved=observed=value;retryAt=0;}
+    void failed(std::uint64_t now){retryAt=now+30000;}
+};
+}
+#endif
