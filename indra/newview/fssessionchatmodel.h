@@ -23,7 +23,7 @@ template<typename CanReceive>
 inline bool filterChatEvent(Message& event,const std::string& self,CanReceive canReceive)
 {
     const bool groupBlocked = event.topic == Topic::Group && !canReceive(event.conversation);
-    const bool senderBlocked = event.topic != Topic::Nearby && event.topic != Topic::Notice &&
+    const bool senderBlocked = event.topic != Topic::Nearby && (event.topic != Topic::Notice || event.eventType == EventType::Notice || (event.eventType == EventType::Conversation && !event.text.empty())) &&
         !event.recipient.empty() && event.recipient != self && !canReceive(event.recipient);
     if (!groupBlocked && !senderBlocked) return true;
     event.text.clear(); event.sender.clear(); event.recipient.clear(); event.title = "Restricted conversation";
@@ -82,6 +82,8 @@ struct Conversation
     std::string destination;
     std::uint64_t lastIncomingEvent = 0;
     bool restricted = false;
+    bool closed=false;
+    std::uint64_t closedAt=0;
     Conversation() = default;
     Conversation(std::string idValue,std::string titleValue,std::string draftValue,Topic topicValue,std::uint32_t count) :
         id(std::move(idValue)),title(std::move(titleValue)),draft(std::move(draftValue)),topic(topicValue),unread(count) {}
@@ -95,6 +97,12 @@ public:
     std::deque<Message> lines;
     std::uint64_t cursor = 0;
     bool gap = false;
+    bool close(const std::string& id,std::uint64_t watermark)
+    {
+        const auto found=conversations.find(id);
+        if(found==conversations.end() || found->second.topic==Topic::Nearby) return false;
+        found->second.closed=true;found->second.closedAt=watermark;return true;
+    }
     bool markRead(const Message& request)
     {
         if (request.kind != Kind::MarkRead || !identity.owns(request)) return false;
@@ -144,10 +152,23 @@ public:
         if (event.eventType == EventType::Attention || event.eventType == EventType::AttentionRemoved || event.eventType == EventType::SwitchIntent)
         { if (event.event) cursor = event.event; return true; }
         auto found = conversations.find(event.conversation);
+        if(event.eventType==EventType::NoticeRemoved)
+        {
+            if(found!=conversations.end() && found->second.topic==Topic::Notice)
+            {conversations.erase(found);lines.erase(std::remove_if(lines.begin(),lines.end(),[&event](const Message& line){return line.topic==Topic::Notice && line.conversation==event.conversation;}),lines.end());}
+            if(event.event)cursor=event.event;
+            return true;
+        }
         if (found == conversations.end())
         {
             if (conversations.size() >= MaxConversations) { gap = true; if (event.event) cursor = event.event; return false; }
             found = conversations.emplace(event.conversation, Conversation{event.conversation, event.title, "", event.topic, 0}).first;
+        }
+        if(event.eventType==EventType::ConversationClosed)
+        {
+            if(found->second.topic!=Topic::Nearby){close(event.conversation,event.event);found->second.unread=0;}
+            if(event.event)cursor=event.event;
+            return true;
         }
         if (event.eventType == EventType::Conversation)
         {
@@ -162,6 +183,8 @@ public:
         }
         found->second.title = event.title;
         found->second.topic = event.topic;
+        if(((event.eventType==EventType::Chat && event.recipient!=identity.account) || event.eventType==EventType::Notice) && event.event>found->second.closedAt)
+            found->second.closed=false;
         if (event.eventType == EventType::Chat && event.recipient != identity.account) found->second.lastIncomingEvent = event.event;
         if (event.topic == Topic::Nearby)
         {

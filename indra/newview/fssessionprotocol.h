@@ -25,12 +25,12 @@ enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
-    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat
+    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat, CloseChat
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
 enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
-enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap, Attention, AttentionRemoved, SwitchIntent };
+enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap, Attention, AttentionRemoved, SwitchIntent, ConversationClosed, NoticeRemoved };
 enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096, ConversationRestricted = 8192, AutomaticRead = 16384, ReadDeferred = 32768 };
 constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible | ConversationRestricted | AutomaticRead | ReadDeferred;
 
@@ -53,7 +53,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return kind >= Kind::Poll && kind <= Kind::ReviewChat;
+    return kind >= Kind::Poll && kind <= Kind::CloseChat;
 }
 inline bool validUtf8(const std::string& text, bool multiline = false)
 {
@@ -128,7 +128,7 @@ inline bool valid(const Message& message)
 {
     return validKind(message.kind) && message.generation && message.sequence &&
         message.mode <= Mode::Economy && message.state <= State::Disconnected &&
-        message.topic <= Topic::Notice && message.eventType <= EventType::SwitchIntent &&
+        message.topic <= Topic::Notice && message.eventType <= EventType::NoticeRemoved &&
         validAccount(message.conversation) && validAccount(message.recipient) &&
         !(message.flags & ~KnownFlags) && validAccount(message.account) &&
         std::any_of(message.worker.begin(), message.worker.end(), [](std::uint8_t c) { return c != 0; });

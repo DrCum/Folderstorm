@@ -13,7 +13,7 @@ struct ChatPin
     Topic topic = Topic::Nearby;
     SavedPin saved() const { return {owner,topic,destination}; }
     bool live(const ChatView& view) const
-    { return source.worker == view.identity.worker && source.generation == view.identity.generation && source.account == view.identity.account && source.grid == view.identity.grid && view.conversations.count(conversation) && !view.conversations.at(conversation).restricted; }
+    { return source.worker == view.identity.worker && source.generation == view.identity.generation && source.account == view.identity.account && source.grid == view.identity.grid && view.conversations.count(conversation) && !view.conversations.at(conversation).restricted && !view.conversations.at(conversation).closed; }
 };
 class PinBook
 {
