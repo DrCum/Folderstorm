@@ -1312,7 +1312,7 @@ bool FSSessionWorker::backgroundAudioMuted()
 }
 bool FSSessionWorker::backgroundUIAudioMuted()
 {
-    return managed() && worker->readyApplied && worker->hostUI &&
+    return managed() && worker->pipe.alive() && worker->readyApplied && worker->hostUI &&
         (worker->mode != Mode::Active || worker->promoting || worker->demoting);
 }
 bool FSSessionWorker::requestCharacterSwitch(unsigned int command)

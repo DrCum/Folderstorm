@@ -29,6 +29,7 @@ int main()
     assert(view.accept(chat) && !view.conversations.at(chat.conversation).closed && view.conversations.at(chat.conversation).draft=="unsent");
     auto close=chat;close.event=13;close.eventType=EventType::ConversationClosed;
     assert(view.accept(close) && view.conversations.at(chat.conversation).closed);
+    auto system=chat;system.event=14;system.recipient.clear();assert(view.accept(system) && view.conversations.at(chat.conversation).closed);
     assert(!view.close("",14)); // Nearby survives close commands.
     auto notice=source;notice.event=20;notice.eventType=EventType::Notice;notice.topic=Topic::Notice;
     notice.conversation="44444444-4444-4444-4444-444444444444";notice.text="Inventory delivery declined";notice.title="Viewer: Inventory Declined";

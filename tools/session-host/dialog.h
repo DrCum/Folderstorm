@@ -35,7 +35,7 @@ struct Editor
 };
 inline LRESULT CALLBACK editorBodyProc(HWND body,UINT message,WPARAM wp,LPARAM lp)
 {
-    if(message==WM_COMMAND || message==WM_NOTIFY || message==WM_DRAWITEM || message==WM_CTLCOLORSTATIC ||
+    if(message==WM_COMMAND || message==WM_NOTIFY || message==WM_DRAWITEM || message==WM_MEASUREITEM || message==WM_CTLCOLORSTATIC ||
        message==WM_CTLCOLOREDIT || message==WM_CTLCOLORLISTBOX || message==WM_CTLCOLORBTN || message==WM_MOUSEWHEEL ||
        message==WM_VSCROLL || message==WM_HSCROLL || message==WM_ERASEBKGND)
         return SendMessageW(GetParent(body),message,wp,lp);
@@ -117,9 +117,9 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
             field.page=static_cast<unsigned int>(page);editor->rows.push_back(editor->heights[page]);editor->heights[page]+=36;
             field.caption=CreateWindowExW(0,L"STATIC",field.label.c_str(),WS_CHILD|WS_VISIBLE,0,0,1,1,editor->body,nullptr,instance,nullptr);
             const bool check=field.type==FieldType::Check,choice=field.type==FieldType::Choice,color=field.type==FieldType::Color,action=field.type==FieldType::Action;
-            const DWORD style=WS_CHILD|WS_VISIBLE|WS_TABSTOP|(check?BS_AUTOCHECKBOX:choice?CBS_DROPDOWNLIST|WS_VSCROLL:(color||action)?BS_PUSHBUTTON:WS_BORDER|ES_AUTOHSCROLL);
+            const DWORD style=WS_CHILD|WS_VISIBLE|WS_TABSTOP|(check?BS_AUTOCHECKBOX:choice?CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL:(color||action)?BS_PUSHBUTTON:WS_BORDER|ES_AUTOHSCROLL);
             field.control=CreateWindowExW(0,check||color||action?L"BUTTON":choice?L"COMBOBOX":L"EDIT",check?field.label.c_str():color?L"Choose color…":field.value.c_str(),style,0,0,1,1,editor->body,reinterpret_cast<HMENU>(static_cast<INT_PTR>(100+i)),instance,nullptr);
-            for(HWND child:{field.caption,field.control})SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
+            for(HWND child:{field.caption,field.control})setNativeFont(child,font);
             SetWindowSubclass(field.control,editorFieldProc,3,0);
             if(check)SendMessageW(field.control,BM_SETCHECK,number(field)?BST_CHECKED:BST_UNCHECKED,0);
             if(choice){for(const auto& text:field.choices)SendMessageW(field.control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text.c_str()));SendMessageW(field.control,CB_SETCURSEL,number(field),0);}
@@ -155,6 +155,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
         const auto& next=*reinterpret_cast<RECT*>(lparam);SetWindowPos(dialog,nullptr,next.left,next.top,next.right-next.left,next.bottom-next.top,SWP_NOZORDER|SWP_NOACTIVATE);
         layoutEditor(dialog,*editor);return TRUE;
     }
+    if(message==WM_MEASUREITEM){reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(editor->scale(22));return TRUE;}
     if(message==WM_SIZE){layoutEditor(dialog,*editor);return TRUE;}
     if(message==WM_VSCROLL || message==WM_HSCROLL || message==WM_MOUSEWHEEL)
     {
@@ -174,7 +175,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog, UINT message, WPARAM wparam, LPA
     {
         if(message==WM_ERASEBKGND){RECT r{};GetClientRect(dialog,&r);FillRect(reinterpret_cast<HDC>(wparam),&r,dialogTheme->backBrush);return TRUE;}
         if(message==WM_CTLCOLORSTATIC || message==WM_CTLCOLOREDIT || message==WM_CTLCOLORLISTBOX || message==WM_CTLCOLORBTN)return dialogTheme->color(message,wparam,lparam);
-        if(message==WM_DRAWITEM && dialogTheme->button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;
+        if(message==WM_DRAWITEM && (dialogTheme->button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)) || dialogTheme->drawCombo(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam))))return TRUE;
     }
     if (message == WM_CLOSE) { EndDialog(dialog,IDCANCEL); return TRUE; }
     if(message==WM_NOTIFY && !editor->pages.empty())

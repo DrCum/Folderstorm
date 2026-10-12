@@ -5,6 +5,8 @@
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <algorithm>
+#include <string>
+#include <vector>
 namespace fs_host_ui
 {
 inline void setNativeFont(HWND child,HFONT font)
@@ -181,6 +183,24 @@ public:
         const HDC dc=reinterpret_cast<HDC>(wp);const HWND child=reinterpret_cast<HWND>(lp);
         const bool edit=message==WM_CTLCOLOREDIT || message==WM_CTLCOLORLISTBOX;
         SetTextColor(dc,IsWindowEnabled(child)?text:muted);SetBkColor(dc,edit?input:background);return reinterpret_cast<LRESULT>(edit?inputBrush:backBrush);
+    }
+    bool drawCombo(const DRAWITEMSTRUCT& d) const
+    {
+        if(d.CtlType!=ODT_COMBOBOX)return false;
+        selection(d);SetBkMode(d.hDC,TRANSPARENT);
+        if(d.itemID!=static_cast<UINT>(-1))
+        {
+            const auto length=SendMessageW(d.hwndItem,CB_GETLBTEXTLEN,d.itemID,0);
+            if(length!=CB_ERR && length>=0 && length<=4096)
+            {
+                std::vector<wchar_t> label(static_cast<std::size_t>(length)+1);
+                SendMessageW(d.hwndItem,CB_GETLBTEXT,d.itemID,reinterpret_cast<LPARAM>(label.data()));
+                const auto previous=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
+                RECT textRect=d.rcItem;InflateRect(&textRect,-5,-1);DrawTextW(d.hDC,label.data(),-1,&textRect,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+                if(previous)SelectObject(d.hDC,previous);
+            }
+        }
+        selectionFocus(d);return true;
     }
     bool button(const DRAWITEMSTRUCT& d) const
     {

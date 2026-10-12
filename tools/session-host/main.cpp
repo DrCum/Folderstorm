@@ -1254,7 +1254,7 @@ struct Host
             const HBRUSH brush=CreateSolidBrush(accountColor(owner));FillRect(draw.hDC,&stripe,brush);DeleteObject(brush);return true;
         }
         if(theme.button(draw))return true;
-        if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return false;
+        if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return theme.drawCombo(draw);
         const int index = draw.itemID == static_cast<UINT>(-1) ? (draw.CtlID == ActiveCharacter ? lifecycle.selection() : chatIndex) : static_cast<int>(draw.itemID);
         theme.selection(draw);
         RECT accent = draw.rcItem; accent.right = accent.left + scaled(5);
@@ -1746,7 +1746,7 @@ struct Host
         const HFONT next = CreateFontW(-theme.scale(12,m.dpi),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
             DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         if (!next) return;
-        for(auto item:monitorChatControls(id))if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
+        for(auto item:monitorChatControls(id))if(item)fs_host_ui::setNativeFont(item,next);
         for(auto item:{m.exchange,m.chatToggle,m.pin,m.options})if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
         if (m.font) DeleteObject(m.font); m.font = next;
     }
@@ -1764,7 +1764,7 @@ struct Host
         m.pin=make(L"BUTTON",L"Pin",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
         m.options=make(L"BUTTON",L"Options",BS_PUSHBUTTON|WS_TABSTOP,MonitorOptions);
         m.label = make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
-        m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,ChatConversation);
+        m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL|WS_TABSTOP,ChatConversation);
         m.read = make(L"BUTTON",L"Read",BS_PUSHBUTTON|WS_TABSTOP,ChatRead);
         m.close = make(L"BUTTON",L"×",BS_PUSHBUTTON|WS_TABSTOP,ChatClose);
         m.latest = make(L"BUTTON",L"Latest",BS_PUSHBUTTON|WS_TABSTOP,ChatLatest);
@@ -3184,7 +3184,8 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         if(LOWORD(wparam)==MonitorExchange)
         {const auto* slot=host->monitorChatSlot(id);if(slot && !(slot->snapshot.flags&ChatRestricted) && binding.enabled){SetForegroundWindow(host->window);host->switchTo(binding.slot);}return 0;}
         host->monitorChatCommand(id,LOWORD(wparam),HIWORD(wparam));return 0;
-    case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
+    case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(host->theme.scale(22,monitor->dpi));return TRUE;
+    case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)) || host->theme.drawCombo(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
     case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN: return host->theme.color(message,wparam,lparam);
     case WM_CONTEXTMENU: host->monitorMenu(id); return 0;
     case WM_CLOSE:
@@ -3284,7 +3285,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_MEASUREITEM:
     {
         auto* item=reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
-        const UINT local=item->CtlID==ChatAccount && host->chatDetached?host->chatDpi:item->CtlID==ActiveCharacter && host->controlsDetached?host->controlsDpi:item->CtlID==AttentionList?host->attentionDpi:host->dpi;
+        const UINT local=(item->CtlID==ChatAccount || item->CtlID==ChatConversation) && host->chatDetached?host->chatDpi:item->CtlID==ActiveCharacter && host->controlsDetached?host->controlsDpi:item->CtlID==AttentionList?host->attentionDpi:host->dpi;
         item->itemHeight=static_cast<UINT>(host->theme.scale(22,local));return TRUE;
     }
     case WM_ERASEBKGND: {RECT r{};GetClientRect(window,&r);FillRect(reinterpret_cast<HDC>(wparam),&r,host->theme.backBrush);return 1;}
@@ -3328,7 +3329,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->pinMenu = control(window,L"BUTTON",L"Chat…",BS_PUSHBUTTON|WS_TABSTOP,810,400,80,24,PinActions);
         for (int i = 0; i < 6; ++i) host->pinButtons[i] = control(window,L"BUTTON",L"",BS_OWNERDRAW|WS_TABSTOP,10+i*130,400,125,25,PinBase+i);
         host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
-        host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
+        host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
         host->chatHistory = control(window, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 10, 452, 850, 88);
         host->chatCompose = control(window, L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_TABSTOP, 10, 545, 800, 35, ChatCompose);
         SendMessageW(host->chatCompose, EM_SETLIMITTEXT, 1023, 0);

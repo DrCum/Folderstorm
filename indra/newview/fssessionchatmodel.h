@@ -183,7 +183,7 @@ public:
         }
         found->second.title = event.title;
         found->second.topic = event.topic;
-        if(((event.eventType==EventType::Chat && event.recipient!=identity.account) || event.eventType==EventType::Notice) && event.event>found->second.closedAt)
+        if(((event.eventType==EventType::Chat && !event.recipient.empty() && event.recipient!=identity.account) || event.eventType==EventType::Notice) && event.event>found->second.closedAt)
             found->second.closed=false;
         if (event.eventType == EventType::Chat && event.recipient != identity.account) found->second.lastIncomingEvent = event.event;
         if (event.topic == Topic::Nearby)
