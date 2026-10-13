@@ -61,12 +61,12 @@ struct HostExperience
     std::array<bool,8> pinned{};
     std::array<unsigned int,MaxCharacters> order{{0,1,2,3,4}};
     std::vector<unsigned int> quick{274};
-    unsigned int toolbarVersion=1;
+    unsigned int toolbarVersion=1,dockedArea=0;
     std::array<ShortcutChord,3> keys{}; // Host-local recovery/next/previous; no defaults.
     ShellRect attentionRect;
     bool valid() const
     {
-        if(theme>2 || density>1 || labels>2 || attentionMask>31 || accountMask>31 || pinned[0] || quick.size()>12 || toolbarVersion>1) return false;
+        if(theme>2 || density>1 || labels>2 || attentionMask>31 || accountMask>31 || pinned[0] || quick.size()>12 || toolbarVersion>1 || dockedArea>6) return false;
         std::set<unsigned int> seen;
         for(auto id:quick) if(!shellCommand(id) || !seen.insert(id).second) return false;
         seen.clear(); for(auto id:order) if(id>=MaxCharacters || !seen.insert(id).second) return false;
@@ -77,24 +77,24 @@ struct HostExperience
     std::string encode() const
     {
         if(!valid()) { return {}; }
-        StoreWriter w("FSX2");
+        StoreWriter w("FSX3");
         for(auto n:{theme,density,labels,attentionMask,accountMask}) w.number(n);
         w.number(cards); w.number(diagnostics); w.number(oldestFirst);w.number(viewerShellKeys);
         for(bool b:pinned) w.number(b);
         for(auto n:order) w.number(n);
         w.number(static_cast<std::uint32_t>(quick.size())); for(auto n:quick) w.number(n);
         for(const auto& k:keys) { w.number(k.key); w.number(k.modifiers); }
-        w.rect(attentionRect);w.number(toolbarVersion);return w.data;
+        w.rect(attentionRect);w.number(toolbarVersion);w.number(dockedArea);return w.data;
     }
     static bool decode(const std::string& data,HostExperience& output)
     {
-        const bool current=data.substr(0,4)=="FSX2";StoreReader r(data,current?"FSX2":"FSX1",MaxBytes);HostExperience v;
+        const bool placed=data.substr(0,4)=="FSX3",current=placed || data.substr(0,4)=="FSX2";StoreReader r(data,placed?"FSX3":current?"FSX2":"FSX1",MaxBytes);HostExperience v;
         v.theme=r.number();v.density=r.number();v.labels=r.number();v.attentionMask=r.number();v.accountMask=r.number();
         const auto boolean=[&r](bool& b){const auto n=r.number();if(n>1)r.ok=false;b=n!=0;};
         boolean(v.cards);boolean(v.diagnostics);boolean(v.oldestFirst);boolean(v.viewerShellKeys);for(auto& b:v.pinned)boolean(b);
         for(auto& n:v.order)n=r.number();
         auto count=r.number();if(count>12)return false;v.quick.clear();while(count--)v.quick.push_back(r.number());
-        for(auto& k:v.keys){k.key=r.number();k.modifiers=r.number();}v.attentionRect=r.rect();v.toolbarVersion=current?r.number():0;
+        for(auto& k:v.keys){k.key=r.number();k.modifiers=r.number();}v.attentionRect=r.rect();v.toolbarVersion=current?r.number():0;v.dockedArea=placed?r.number():0;
         if(!r.done() || !v.valid()) { return false; }
         output=std::move(v);return true;
     }
