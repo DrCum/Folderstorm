@@ -98,6 +98,10 @@
       name="FSFilterGrowlKeywordDuplicateIMs"
       label="Filter duplicate IMs if they have already been shown as part of a keyword alert"/>
 
+    <button name="squirty_notes_settings" label="Squirty Notes..." layout="topleft"
+      follows="left|top" left="10" top="172" width="150" height="23">
+      <button.commit_callback function="Floater.Show" parameter="fs_squirty_notes" />
+    </button>
     </panel>
 
     <!-- People -->
