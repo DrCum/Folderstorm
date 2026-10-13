@@ -18,7 +18,7 @@ int main()
         assert(std::any_of(alpha.begin(),alpha.end(),[](auto value){return value==0;}));
         assert(iconMask(mask.icon,mask.size)==&mask);
     }
-    assert(!iconMask(Icon::None,20));assert(iconMask(Icon::Cctv,30)->size==32);
+    assert(!iconMask(Icon::None,20));assert(iconMask(Icon::Cctv,30)->size==30 && iconMask(Icon::Cctv,31)->size==32);
     const std::uint8_t badRuns[]{255,0};const IconMask bad{Icon::Cctv,16,badRuns,2};assert(!iconAlpha(bad,alpha));
     for(const auto& command:fs_session::shellCommands())assert(commandIcon(command.id)!=Icon::None);
     assert(commandIcon(274)==Icon::Bell && commandIcon(fs_session::QuickSettings)==Icon::MousePointerClick);

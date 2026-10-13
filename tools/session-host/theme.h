@@ -287,7 +287,9 @@ public:
         SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
         const auto icon=buttonIcon(d.hwndItem);const bool withLabel=GetPropW(d.hwndItem,L"FolderstormIconLabel")!=nullptr;
-        TEXTMETRICW metrics{};GetTextMetricsW(d.hDC,&metrics);const int size=(std::max)(1,(std::min)(static_cast<int>(d.rcItem.bottom-d.rcItem.top)-4,static_cast<int>(metrics.tmHeight)+4));
+        using WindowDpi=UINT(WINAPI*)(HWND);static const auto windowDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
+        const auto dpi=windowDpi?windowDpi(d.hwndItem):static_cast<UINT>(GetDeviceCaps(d.hDC,LOGPIXELSX));
+        const int size=(std::max)(1,(std::min)(static_cast<int>(d.rcItem.bottom-d.rcItem.top)-4,scale(20,dpi)));
         SIZE extent{};if(withLabel)GetTextExtentPoint32W(d.hDC,label,lstrlenW(label),&extent);
         const int occupied=size+(withLabel?static_cast<int>(extent.cx)+6:0),center=(static_cast<int>(d.rcItem.left+d.rcItem.right)-occupied)/2;
         const int x=withLabel?(std::max)(static_cast<int>(r.left),center):center;

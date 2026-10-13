@@ -15,7 +15,7 @@ NAMES = ['cctv', 'settings', 'messages-square', 'user-plus', 'external-link',
          'arrow-down-left', 'chevron-up', 'chevron-down', 'pin', 'bell',
          'layout-dashboard', 'rotate-cw', 'mic', 'volume-x', 'info', 'ellipsis',
          'palette', 'mouse-pointer-click']
-SIZES = [16, 20, 24, 32, 40, 48, 64, 96]
+SIZES = [16, 20, 24, 25, 30, 32, 35, 40, 45, 48, 50, 56, 60, 64, 68, 80, 90, 96]
 
 def pack(values):
     result = []
