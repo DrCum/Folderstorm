@@ -13,7 +13,7 @@ struct ChatPin
     Topic topic = Topic::Nearby;
     SavedPin saved() const { return {owner,topic,destination}; }
     bool live(const ChatView& view) const
-    { return source.worker == view.identity.worker && source.generation == view.identity.generation && source.account == view.identity.account && source.grid == view.identity.grid && view.conversations.count(conversation) && !view.conversations.at(conversation).restricted; }
+    { return source.worker == view.identity.worker && source.generation == view.identity.generation && source.account == view.identity.account && source.grid == view.identity.grid && view.conversations.count(conversation) && !view.conversations.at(conversation).restricted && !view.conversations.at(conversation).closed; }
 };
 class PinBook
 {
@@ -60,7 +60,7 @@ public:
             { const auto& liveConversation = view.conversations.at(pin.conversation); pin.title = liveConversation.title; pin.destination = liveConversation.destination; continue; }
             pin.source = {}; pin.title = "Unavailable";
             if (!pin.saved().valid()) { pin.title = "Unavailable"; continue; }
-            for (const auto& entry : view.conversations) if (!entry.second.restricted && entry.second.topic == pin.topic && entry.second.destination == pin.destination)
+            for (const auto& entry : view.conversations) if (!entry.second.restricted && !entry.second.closed && entry.second.topic == pin.topic && entry.second.destination == pin.destination)
             { pin.source = view.identity; pin.conversation = entry.first; pin.title = entry.second.title; break; }
         }
     }

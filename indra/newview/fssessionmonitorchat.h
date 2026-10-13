@@ -13,7 +13,7 @@ inline bool chatRequestAllowed(const ChatView& view, const Message& source, cons
     if (!monitorSource(source) || !view.identity.owns(source) || !view.identity.owns(request) ||
         (source.flags & ChatRestricted)) return false;
     const auto found = view.conversations.find(request.conversation);
-    if (found == view.conversations.end() || found->second.restricted || found->second.topic != request.topic) return false;
+    if (found == view.conversations.end() || found->second.restricted || found->second.closed || found->second.topic != request.topic) return false;
     if (request.kind == Kind::MarkRead) return true;
     return (request.kind == Kind::SendChat || request.kind == Kind::Typing) && found->second.topic != Topic::Notice;
 }
@@ -44,14 +44,14 @@ public:
     }
     bool select(const MonitorBinding& binding, const Message& source, const ChatView& view, const std::string& conversation)
     {
-        if (!owns(binding,source,view) || !view.conversations.count(conversation)) return false;
+        if (!owns(binding,source,view) || !view.conversations.count(conversation) || view.conversations.at(conversation).closed) return false;
         identity.conversation = conversation; return true;
     }
     std::optional<Message> request(Kind kind, const MonitorBinding& binding, const Message& source, const ChatView& view) const
     {
         if (!owns(binding,source,view)) return std::nullopt;
         const auto found = view.conversations.find(identity.conversation);
-        if (found == view.conversations.end()) return std::nullopt;
+        if (found == view.conversations.end() || found->second.closed) return std::nullopt;
         Message result; result.worker = identity.worker; result.generation = identity.generation;
         result.account = identity.account; result.grid = identity.grid; result.conversation = identity.conversation;
         result.kind = kind; result.topic = found->second.topic;

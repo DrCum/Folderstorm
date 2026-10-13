@@ -2,15 +2,12 @@
 #ifndef FS_SESSION_ATTENTION_NAV_H
 #define FS_SESSION_ATTENTION_NAV_H
 #include "fssessionusability.h"
+#include "fssessioncategories.h"
 namespace fs_session
 {
 inline unsigned int attentionCategoryMask(const Message& m)
 {
-    if(m.eventType!=EventType::Attention)return m.topic==Topic::Nearby?2u:1u;
-    if(m.title=="Teleport offer")return 4u;
-    if(m.title=="Permission request")return 8u;
-    if(m.title=="Inventory offer")return 16u;
-    return 0;
+    return hostCategory(m);
 }
 class AttentionNavigator
 {

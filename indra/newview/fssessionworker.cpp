@@ -55,6 +55,7 @@
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
 #include "fssessioninputguard.h"
+#include "fssessionaudio.h"
 #include "fssessionreadpolicy.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
@@ -124,7 +125,7 @@ struct ProfileBackup
         return std::filesystem::copy_file(file,folder/file.filename(),std::filesystem::copy_options::none,error) && !error;
     }
 };
-struct Worker
+struct Worker : LLIMSessionObserver
 {
     Pipe pipe;
     FrameLane preview;
@@ -160,10 +161,11 @@ struct Worker
     bool economyTrimmed = false, recoveryShown = false;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
-    bool permitVoice = false, muteBackground = true, chatBlocked = false, shortcuts = false, shellShortcuts = false;
+    bool permitVoice = false, muteBackground = true, hostUI = false, chatBlocked = false, shortcuts = false, shellShortcuts = false;
     EventBuffer events;
     std::map<std::string,std::string> attention;
     boost::signals2::scoped_connection chatConnection, notificationConnection;
+    bool sessionObserverConnected=false;
     Message pendingPromotion;
     HWND window = nullptr, parent = nullptr;
     LONG_PTR style = 0, exStyle = 0;
@@ -248,13 +250,29 @@ struct Worker
     }
     bool backgroundAlertAllowed(const LLUUID& sender) const
     {
-        return ready() && mode != Mode::Active && !promoting && !demoting && muteBackground && sharingAllowed() &&
-            !gAgent.isDoNotDisturb() && !gSavedSettings.getBOOL("MuteAudio") && !gSavedSettings.getBOOL("MuteUI") &&
-            gSavedSettings.getF32("AudioLevelUI") > 0.f && !sender.isNull() && sender != gAgentID &&
-            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat);
+        return hostUI && backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
+            gAgent.isDoNotDisturb(), gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteUI") ||
+            gSavedSettings.getF32("AudioLevelUI") <= 0.f, !sender.isNull() && sender != gAgentID &&
+            !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat));
+    }
+    void sessionAdded(const LLUUID&,const std::string&,const LLUUID&,bool) override {}
+    void sessionActivated(const LLUUID&,const std::string&,const LLUUID&) override {}
+    void sessionVoiceOrIMStarted(const LLUUID&) override {}
+    void sessionIDUpdated(const LLUUID&,const LLUUID&) override {}
+    void sessionRemoved(const LLUUID& session) override
+    {
+        if(detached || !ready() || !sharingAllowed())return;
+        Message event;event.eventType=EventType::ConversationClosed;event.topic=Topic::Private;
+        event.conversation=session.asString();events.push(std::move(event));
+    }
+    void disconnectSessionObserver()
+    {
+        if(sessionObserverConnected && LLIMMgr::instanceExists() && gIMMgr)gIMMgr->removeSessionObserver(this);
+        sessionObserverConnected=false;
     }
     void connectChat()
     {
+        if(!sessionObserverConnected && gIMMgr){gIMMgr->addSessionObserver(this);sessionObserverConnected=true;}
         if (!chatConnection.connected())
             chatConnection = LLIMModel::instance().addNewMsgCallback([this](const LLSD& data)
             {
@@ -266,9 +284,7 @@ struct Worker
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
-                const std::string sound = session->isGroupSessionType() ? "PlaySoundGroupChatIM" : session->isAdHocSessionType() ? "PlaySoundConferenceIM" :
-                    LLAvatarTracker::instance().isBuddy(sender) ? "PlaySoundFriendIM" : "PlaySoundNonFriendIM";
-                if (backgroundAlertAllowed(sender) && gSavedSettings.getBOOL(sound) && !data["is_region_msg"].asBoolean())
+                if (backgroundAlertAllowed(sender) && !data["is_region_msg"].asBoolean())
                 { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
                 events.push(std::move(message));
             });
@@ -280,28 +296,36 @@ struct Worker
                     const LLUUID id = data["id"].asUUID(); if (id.isNull()) return false;
                     const auto key = id.asString(); const auto signal = data["sigtype"].asString();
                     const auto notification = LLNotifications::instance().find(id);
-                    const auto category = notification ? attentionCategory(notification->getName()) : std::string{};
-                    if (signal == "delete" || !notification || !notification->isActive())
+                    const auto supported = notification ? attentionCategory(notification->getName()) : std::string{};
+                    const auto category=supported.empty()?std::string("Viewer notification"):supported;
+                    const auto previous=attention.find(key);
+                    if(signal=="delete" || !notification || !notification->isActive())
                     {
-                        if (attention.erase(key))
-                        { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = key; events.push(item); }
+                        if(previous!=attention.end())
+                        {Message item;item.eventType=previous->second=="Viewer notification"?EventType::NoticeRemoved:EventType::AttentionRemoved;item.topic=Topic::Notice;item.conversation=key;events.push(item);attention.erase(previous);}
                     }
-                    else if (!category.empty() && attention.size() < AttentionBook::Capacity)
+                    else if(previous!=attention.end() || attention.size()<AttentionBook::Capacity)
                     {
-                        attention[key] = category;
-                        Message item; item.eventType = EventType::Attention; item.topic = Topic::Notice; item.conversation = key;
-                        item.title = category; item.text = "Review in this character's native viewer.";
-                        LLUUID sender = notification->getPayload()["from_id"].asUUID();
-                        if (sender.isNull()) sender = notification->getPayload()["owner_id"].asUUID();
-                        if (sender.isNull()) sender = notification->getPayload()["task_id"].asUUID();
-                        if (signal == "add" && backgroundAlertAllowed(sender)) { item.flags |= AlertEligible; item.eventAt = GetTickCount64(); }
-                        events.push(item);
-                    }
-                    else if (signal == "add")
-                    {
-                        Message item; item.eventType = EventType::Notice; item.topic = Topic::Notice;
-                        item.conversation = "00000000-0000-0000-0000-000000000000"; item.title = "Viewer notifications";
-                        item.text = "Review this notification in this character's viewer."; item.unread = 1; events.push(item);
+                        const bool fresh=previous==attention.end();attention[key]=category;
+                        Message item;item.topic=Topic::Notice;item.conversation=key;
+                        LLUUID sender=notification->getPayload()["from_id"].asUUID();
+                        if(sender.isNull())sender=notification->getPayload()["owner_id"].asUUID();
+                        if(sender.isNull())sender=notification->getPayload()["task_id"].asUUID();
+                        if(supported.empty())
+                        {
+                            item.eventType=fresh?EventType::Notice:EventType::Conversation;
+                            std::string label;
+                            for(const auto c:notification->getName()){if(!label.empty() && c>='A' && c<='Z')label+=' ';label+=c;}
+                            item.title="Viewer: "+boundedText(label,240);item.text=boundedText(notification->getMessage(),3071,true);
+                            item.recipient=sender.isNull()?"":sender.asString();item.unread=1;
+                        }
+                        else
+                        {
+                            item.eventType=EventType::Attention;item.title=category;item.text="Review in this character's native viewer.";
+                            item.recipient=sender.isNull()?"":sender.asString();
+                            if(fresh && backgroundAlertAllowed(sender)){item.flags|=AlertEligible;item.eventAt=GetTickCount64();}
+                        }
+                        events.push(std::move(item));
                     }
                     return false;
                 });
@@ -328,7 +352,7 @@ struct Worker
             {
                 const auto notification = LLNotifications::instance().find(LLUUID(it->first));
                 if (!notification || !notification->isActive())
-                { Message item; item.eventType = EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = it->first; events.push(item); it = attention.erase(it); }
+                { Message item; item.eventType = it->second=="Viewer notification"?EventType::NoticeRemoved:EventType::AttentionRemoved; item.topic = Topic::Notice; item.conversation = it->first; events.push(item); it = attention.erase(it); }
                 else ++it;
             }
             payload = events.after(request.cursor);
@@ -336,6 +360,8 @@ struct Worker
             // the owning group as well as its sender immediately before IPC.
             filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
                 { return RlvActions::canReceiveIM(LLUUID(id)); });
+            if((payload.flags&AlertEligible) && !backgroundAlertAllowed(LLUUID(payload.recipient)))
+            {payload.flags&=~AlertEligible;payload.eventAt=0;}
             if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
                 if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
                     payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
@@ -371,6 +397,12 @@ struct Worker
             response.conversation = payload.conversation; response.title = payload.title; response.unread = payload.unread; response.recipient = payload.recipient; response.flags |= payload.flags & ConversationRestricted;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
+        }
+        if(request.kind==Kind::CloseChat)
+        {
+            if(request.topic==Topic::Nearby){reply(request,"Nearby chat remains available.");return;}
+            auto response=status(request);response.cursor=events.latest();
+            if(!pipe.send(response)){detach();pipe.close();}return;
         }
         if (request.kind == Kind::MarkRead && request.topic == Topic::Notice)
         { reply(request); return; } // Host badge only; never accept a native offer.
@@ -532,7 +564,7 @@ struct Worker
         detached = true;
         toolbarImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
-        chatConnection.disconnect(); notificationConnection.disconnect(); events.clear();
+        chatConnection.disconnect(); notificationConnection.disconnect(); disconnectSessionObserver(); events.clear();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
         // Restore only our temporary overrides. Saved values were never changed.
         for (const auto& control : controls)
@@ -666,6 +698,7 @@ struct Worker
             else reply(request, unembed() ? "" : "Unable to restore the separate window.");
             break;
         case Kind::Focus: focusHostedClient(); reply(request); break;
+        case Kind::CloseChat:
         case Kind::Events:
         case Kind::SendChat:
         case Kind::MarkRead:
@@ -676,8 +709,9 @@ struct Worker
             { reply(request,"Shortcut policy is invalid or its account changed."); break; }
             shortcuts = (request.unread&1)!=0; shellShortcuts = (request.unread&2)!=0; reply(request); break;
         case Kind::AudioPolicy:
-            if (request.unread > 3) { reply(request, "Unsupported audio policy."); break; }
+            if (request.unread > 7) { reply(request, "Unsupported audio policy."); break; }
             permitVoice = (request.unread & 1) != 0; muteBackground = (request.unread & 2) != 0;
+            hostUI = (request.unread & AudioHostUI) != 0;
             applyVoice(); reply(request); break;
         case Kind::ReviewChat:
         {
@@ -1276,6 +1310,11 @@ bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
 }
+bool FSSessionWorker::backgroundUIAudioMuted()
+{
+    return managed() && worker->pipe.alive() && worker->readyApplied && worker->hostUI &&
+        (worker->mode != Mode::Active || worker->promoting || worker->demoting);
+}
 bool FSSessionWorker::requestCharacterSwitch(unsigned int command)
 {
     if (!managed() || !worker->ready() || (command<=6 ? !worker->shortcuts : !worker->shellShortcuts) || !worker->inputGranted || worker->mode != Mode::Active ||
@@ -1386,6 +1425,7 @@ void FSSessionWorker::shutdown()
         worker->inputGranted = false;
         if (worker->window) RemovePropW(worker->window, InputLeaseProperty);
         if (worker->window) RemovePropW(worker->window, FocusLeaseProperty);
+        worker->disconnectSessionObserver();worker->chatConnection.disconnect();worker->notificationConnection.disconnect();
         worker->pipe.close(); worker->detached = true;
     }
     // Keep the inherited profile lease until process/static teardown, after
@@ -1410,6 +1450,7 @@ void FSSessionWorker::endCameraFrame() {}
 bool FSSessionWorker::inputAllowed() { return true; }
 bool FSSessionWorker::voiceAllowed() { return true; }
 bool FSSessionWorker::backgroundAudioMuted() { return false; }
+bool FSSessionWorker::backgroundUIAudioMuted() { return false; }
 bool FSSessionWorker::requestCharacterSwitch(unsigned int) { return false; }
 void FSSessionWorker::nearbyMessage(const LLChat&) {}
 bool FSSessionWorker::keyAllowed(unsigned int) { return true; }

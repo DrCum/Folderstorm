@@ -408,6 +408,7 @@ void FSChromeLayoutController::applyMenuStatus()
     if (gStatusBar && gStatusBar->getParent())
     {
         applySpanToView(gStatusBar, mLastMenuSpan, FOLLOWS_LEFT | FOLLOWS_TOP | FOLLOWS_BOTTOM);
+        gStatusBar->refreshPulldownPositions();
     }
     if (gMenuBarView && gMenuBarView->getParent())
     {
@@ -474,6 +475,10 @@ void FSChromeLayoutController::applyMenuBarToSpan(LLView* menu, const FSChromeLa
     LLRect local = menu->getRect();
     local.mLeft = span_left;
     local.mRight = span_left + content_width;
+    // Only real menu items obscure the status controls behind this bar.
+    // The hover tree otherwise treats its resized blank area as opaque, even
+    // though menu click handling lets that area pass through.
+    menu->setMouseOpaque(false);
     if (menu->getRect() == local && menu->getFollows() == (FOLLOWS_LEFT | FOLLOWS_TOP))
     {
         return;

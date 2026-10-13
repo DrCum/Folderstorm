@@ -554,6 +554,7 @@ void idle_afk_check()
 // A callback set in LLAppViewer::init()
 static void ui_audio_callback(const LLUUID& uuid)
 {
+    if (FSSessionWorker::backgroundUIAudioMuted()) return;
     if (gAudiop)
     {
         SoundData soundData(uuid, gAgent.getID(), 1.0f, LLAudioEngine::AUDIO_TYPE_UI);
@@ -564,6 +565,7 @@ static void ui_audio_callback(const LLUUID& uuid)
 // A callback set in LLAppViewer::init()
 static void deferred_ui_audio_callback(const LLUUID& uuid)
 {
+    if (FSSessionWorker::backgroundUIAudioMuted()) return;
     if (gAudiop)
     {
         SoundData soundData(uuid, gAgent.getID(), 1.0f, LLAudioEngine::AUDIO_TYPE_UI);

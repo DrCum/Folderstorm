@@ -29,6 +29,7 @@ public:
     static bool inputAllowed();
     static bool voiceAllowed();
     static bool backgroundAudioMuted();
+    static bool backgroundUIAudioMuted(); // Host alerts own background UI; world/media mute is independent.
     static void nearbyMessage(const class LLChat& message);
     static bool keyAllowed(unsigned int key);
     static void keyReleased(unsigned int key);

@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llstatusbar.h"
+#include "fschromelayout.h"
 
 // viewer includes
 #include "llagent.h"
@@ -993,25 +994,31 @@ void LLStatusBar::onClickShop()
     }
 }
 
+void LLStatusBar::positionPulldown(LLView* anchor, LLView* popup)
+{
+    if (!anchor || !popup || !popup->getParent()) return;
+    const LLRect window = gViewerWindow->getRootView()->calcScreenRect();
+    const LLRect icon = anchor->calcScreenRect();
+    const auto fitted = FSChromeLayout::placeStatusPopup(
+        {window.mLeft, window.mBottom, window.mRight, window.mTop},
+        {icon.mLeft, icon.mBottom, icon.mRight, icon.mTop},
+        popup->getRect().getWidth(), popup->getRect().getHeight());
+    const LLRect parent = popup->getParent()->calcScreenRect();
+    popup->setShape(LLRect(fitted.left - parent.mLeft, fitted.top - parent.mBottom,
+                          fitted.right - parent.mLeft, fitted.bottom - parent.mBottom));
+}
+
+void LLStatusBar::refreshPulldownPositions()
+{
+    if (mPanelPresetsCameraPulldown && mPanelPresetsCameraPulldown->getVisible()) positionPulldown(mIconPresetsCamera,mPanelPresetsCameraPulldown);
+    if (mPanelPresetsPulldown && mPanelPresetsPulldown->getVisible()) positionPulldown(mIconPresetsGraphic,mPanelPresetsPulldown);
+    if (mPanelVolumePulldown && mPanelVolumePulldown->getVisible()) positionPulldown(mBtnVolume,mPanelVolumePulldown);
+    if (mPanelNearByMedia && mPanelNearByMedia->getVisible()) positionPulldown(mMediaToggle,mPanelNearByMedia);
+}
+
 void LLStatusBar::onMouseEnterPresetsCamera()
 {
-    LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
-    // <FS:Ansariel> Changed presets icon to LLButton
-    //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_camera" );
-    //LLRect icon_rect = icon->getRect();
-    LLRect icon_rect = mIconPresetsCamera->getRect();
-    // </FS:Ansariel>
-    LLRect pulldown_rect = mPanelPresetsCameraPulldown->getRect();
-    pulldown_rect.setLeftTopAndSize(icon_rect.mLeft -
-         (pulldown_rect.getWidth() - icon_rect.getWidth()),
-                   icon_rect.mBottom,
-                   pulldown_rect.getWidth(),
-                   pulldown_rect.getHeight());
-
-    pulldown_rect.translate(popup_holder->getRect().getWidth() - pulldown_rect.mRight, 0);
-    mPanelPresetsCameraPulldown->setShape(pulldown_rect);
-
-    // show the master presets pull-down
+    positionPulldown(mIconPresetsCamera,mPanelPresetsCameraPulldown);
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelPresetsCameraPulldown);
     mPanelNearByMedia->setVisible(false);
@@ -1022,23 +1029,7 @@ void LLStatusBar::onMouseEnterPresetsCamera()
 
 void LLStatusBar::onMouseEnterPresets()
 {
-    LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
-    // <FS:Ansariel> Changed presets icon to LLButton
-    //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_graphic" );
-    //LLRect icon_rect = icon->getRect();
-    LLRect icon_rect = mIconPresetsGraphic->getRect();
-    // </FS:Ansariel>
-    LLRect pulldown_rect = mPanelPresetsPulldown->getRect();
-    pulldown_rect.setLeftTopAndSize(icon_rect.mLeft -
-         (pulldown_rect.getWidth() - icon_rect.getWidth()),
-                   icon_rect.mBottom,
-                   pulldown_rect.getWidth(),
-                   pulldown_rect.getHeight());
-
-    pulldown_rect.translate(popup_holder->getRect().getWidth() - pulldown_rect.mRight, 0);
-    mPanelPresetsPulldown->setShape(pulldown_rect);
-
-    // show the master presets pull-down
+    positionPulldown(mIconPresetsGraphic,mPanelPresetsPulldown);
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelPresetsPulldown);
     mPanelNearByMedia->setVisible(false);
@@ -1048,24 +1039,7 @@ void LLStatusBar::onMouseEnterPresets()
 
 void LLStatusBar::onMouseEnterVolume()
 {
-    LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
-    LLButton* volbtn =  getChild<LLButton>( "volume_btn" );
-    LLRect vol_btn_rect = volbtn->getRect();
-    LLPanel* media_panel = getChild<LLPanel>("time_and_media_bg");
-    LLRect media_panel_rect = media_panel->getRect();
-    LLRect volume_pulldown_rect = mPanelVolumePulldown->getRect();
-    volume_pulldown_rect.setLeftTopAndSize(
-        (vol_btn_rect.mLeft + media_panel_rect.mLeft) -
-        (volume_pulldown_rect.getWidth() - vol_btn_rect.getWidth()),
-                   vol_btn_rect.mBottom,
-                   volume_pulldown_rect.getWidth(),
-                   volume_pulldown_rect.getHeight());
-
-    volume_pulldown_rect.translate(popup_holder->getRect().getWidth() - volume_pulldown_rect.mRight, 0);
-    mPanelVolumePulldown->setShape(volume_pulldown_rect);
-
-
-    // show the master volume pull-down
+    positionPulldown(mBtnVolume,mPanelVolumePulldown);
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelVolumePulldown);
     mPanelPresetsCameraPulldown->setVisible(false);
@@ -1076,20 +1050,7 @@ void LLStatusBar::onMouseEnterVolume()
 
 void LLStatusBar::onMouseEnterNearbyMedia()
 {
-    LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
-    LLRect nearby_media_rect = mPanelNearByMedia->getRect();
-    LLButton* nearby_media_btn =  getChild<LLButton>( "media_toggle_btn" );
-    LLRect nearby_media_btn_rect = nearby_media_btn->getRect();
-    nearby_media_rect.setLeftTopAndSize(nearby_media_btn_rect.mLeft -
-                                        (nearby_media_rect.getWidth() - nearby_media_btn_rect.getWidth())/2,
-                                        nearby_media_btn_rect.mBottom,
-                                        nearby_media_rect.getWidth(),
-                                        nearby_media_rect.getHeight());
-    // force onscreen
-    nearby_media_rect.translate(popup_holder->getRect().getWidth() - nearby_media_rect.mRight, 0);
-
-    // show the master volume pull-down
-    mPanelNearByMedia->setShape(nearby_media_rect);
+    positionPulldown(mMediaToggle,mPanelNearByMedia);
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelNearByMedia);
 

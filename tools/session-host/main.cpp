@@ -21,6 +21,8 @@
 #include <mmsystem.h>
 #include <cmath>
 #include "fssessionalerts.h"
+#include "fssessionaudio.h"
+#include "fssessionchoicestate.h"
 #include "fssessionshortcuts.h"
 #include <imm.h>
 #include "dialog.h"
@@ -48,6 +50,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -64,7 +67,7 @@ using namespace fs_session;
 constexpr int LaunchNext = 121, LaunchBase = 400, MonitorBase = 410, StandbyBase = 500;
 constexpr int HostSurface = 105, DetachAll = 106;
 constexpr int ChatAccount = 109, ChatConversation = 110, ChatCompose = 111, ChatSend = 112, ChatReview = 113;
-constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116, ChatLatest = 169, ChatSettings = 455, CharacterSoundSettings = 456;
+constexpr int VoicePolicy = 114, BackgroundMute = 115, ChatRead = 116, ChatLatest = 169, ChatSettings = 455, CharacterSoundSettings = 456, ChatFilters = 457, ChatClose = 458, VisibilityBase = 470;
 constexpr int ActiveCharacter = 117, ShowChat = 118;
 constexpr int SessionOptions = 119, ViewportFocus = 120;
 constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList = 130, AttentionReview = 131, AttentionDismiss = 132;
@@ -140,7 +143,9 @@ std::wstring hexId(const WorkerId& identity)
 // Refresh only changed choices; an open list owns its selection until close.
 bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int selected, bool force = false)
 {
-    if (!force && SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0)) return false;
+    auto* pending = reinterpret_cast<ChoiceTransaction*>(GetPropW(control,L"FolderstormChoicePending"));
+    if (!force && (pending || SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0))) return false;
+    if (force && pending) { pending->reset(); RemovePropW(control,L"FolderstormChoicePending"); }
     bool changed = SendMessageW(control, CB_GETCOUNT, 0, 0) != static_cast<LRESULT>(choices.size());
     for (std::size_t i = 0; !changed && i < choices.size(); ++i)
     {
@@ -161,6 +166,20 @@ bool syncChoices(HWND control, const std::vector<std::wstring>& choices, int sel
     if (SendMessageW(control, CB_GETCURSEL, 0, 0) != selected)
         SendMessageW(control, CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
     return true;
+}
+std::optional<std::string> choiceNotification(HWND control, ChoiceTransaction& transaction, WORD notification,
+                                               const std::vector<std::string>& ids, const std::string& current)
+{
+    if (notification == CBN_DROPDOWN)
+    { transaction.begin(ids,current); SetPropW(control,L"FolderstormChoicePending",&transaction); return {}; }
+    if (notification == CBN_SELENDCANCEL)
+    { RemovePropW(control,L"FolderstormChoicePending"); return transaction.cancel(); }
+    const auto selected = static_cast<int>(SendMessageW(control,CB_GETCURSEL,0,0));
+    if (notification == CBN_SELENDOK)
+    { RemovePropW(control,L"FolderstormChoicePending"); return transaction.accept(selected); }
+    if (notification == CBN_SELCHANGE && !transaction.open && !SendMessageW(control,CB_GETDROPPEDSTATE,0,0) &&
+        selected >= 0 && static_cast<std::size_t>(selected) < ids.size()) return ids[static_cast<std::size_t>(selected)];
+    return {}; // CLOSEUP never refreshes an uncommitted selection.
 }
 struct EnvLess { bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; } };
 struct ProfileCopyRequest
@@ -307,11 +326,12 @@ struct MonitorWindow
     std::vector<std::uint8_t> pixels;
     bool showChat = false, updatingChat = false;
     MonitorChat chat;
-    HWND label = nullptr, choices = nullptr, history = nullptr, compose = nullptr, send = nullptr, read = nullptr;
+    HWND label = nullptr, choices = nullptr, history = nullptr, compose = nullptr, send = nullptr, read = nullptr, close = nullptr;
     HWND exchange=nullptr,chatToggle=nullptr,pin=nullptr,options=nullptr,latest=nullptr;
     fs_host_ui::Transcript transcript; fs_host_ui::Composer editor;
     HFONT font = nullptr;
     std::vector<std::string> conversationIds;
+    ChoiceTransaction conversationChoice;
     std::wstring chatStatus;
     std::string historyConversation;
     std::uint64_t historyCursor = 0;
@@ -379,6 +399,8 @@ struct Host
     int chatIndex = 0;
     std::string conversation;
     std::vector<std::string> conversationIds;
+    ChoiceTransaction conversationChoice;
+    ChoiceTransaction accountChoice;
     bool updatingChat = false, voice = false, muteBackground = true;
     std::array<Mode, MaxCharacters> standby = warmModes();
     std::unique_ptr<Slot> slots[MaxCharacters];
@@ -686,7 +708,7 @@ struct Host
     {
         if (!presentation.volume || !slots[index]) return;
         const bool eligible = slots[index]->snapshot.state == State::Ready && !slots[index]->detached && slots[index]->snapshot.mode != Mode::Active &&
-            muteBackground && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
+            (slots[index]->audioPolicy & AudioHostUI) && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
         const auto sound = characterSound(index);
         if (!alertGate.admitCategories(item,sound.categories,GetTickCount64(),eligible)) return;
         const auto saved = soundCache.find(sound.asset);
@@ -758,6 +780,9 @@ struct Host
         slots[index]->soundAsset = next.asset; slots[index]->soundPrepared = true;
         message(L"Character sound choices applied. Save host choices to keep them after closing.");
     }
+    unsigned int audioPolicyFor(int index) const
+    { return (voice ? AudioVoice : 0u) | (muteBackground ? AudioMuteWorld : 0u) |
+        (presentation.volume && characterSound(index).categories ? AudioHostUI : 0u); }
     unsigned int shortcutPolicy() const {return (presentation.shortcuts?1u:0u)|(experience.viewerShellKeys?2u:0u);}
     void dispatchShortcut(unsigned int command)
     {
@@ -859,6 +884,11 @@ struct Host
         const int selected = slots[chatIndex] ? pins.find(slots[chatIndex]->chat,conversation) : -1;
         const auto source = boundChat(Kind::Poll);
         HMENU menu = CreatePopupMenu(); if (!menu) return;
+        const auto current=slots[chatIndex]?slots[chatIndex]->chat.conversations.find(conversation):std::map<std::string,Conversation>::iterator{};
+        const bool closable=slots[chatIndex] && current!=slots[chatIndex]->chat.conversations.end() && current->second.topic!=Topic::Nearby && !current->second.closed;
+        AppendMenuW(menu,MF_STRING|(closable?0:MF_GRAYED),ChatClose,L"Close conversation in host");
+        AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(conversationFilters()),L"Show conversations");
+        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
         AppendMenuW(menu,MF_STRING,1,selected < 0 ? L"Pin current conversation" : L"Unpin current conversation");
         AppendMenuW(menu,MF_STRING | (selected > 0 ? 0 : MF_GRAYED),2,L"Move current pin left");
         AppendMenuW(menu,MF_STRING | (selected >= 0 && static_cast<std::size_t>(selected+1) < pins.entries.size() ? 0 : MF_GRAYED),3,L"Move current pin right");
@@ -878,6 +908,8 @@ struct Host
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(left),L"Move pin left");
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(right),L"Move pin right");
         POINT point{}; GetCursorPos(&point); const auto choice = TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr); DestroyMenu(menu);
+        if(filterCommand(choice))return;
+        if(choice==ChatClose){if(slots[chatIndex] && slots[chatIndex]->chat.identity.owns(source) && source.conversation==conversation)closeConversation(chatIndex,conversation);return;}
         if (choice >= 100 && choice < 100 + pins.entries.size()) selectPin(choice-100);
         else if (choice >= 200 && choice < 200 + pins.entries.size()) pins.entries.erase(pins.entries.begin()+(choice-200));
         else if (choice >= 300 && choice < 300 + pins.entries.size()) pins.move(choice-300,-1);
@@ -893,6 +925,13 @@ struct Host
             else if (choice == 3 && selected >= 0) pins.move(static_cast<std::size_t>(selected),1);
         }
         refreshPins(); layout();
+    }
+    bool shownPin(const ChatPin& pin) const
+    {
+        if(!(chatPreferences.showMask&conversationCategory(pin.topic)))return false;
+        for(const auto& slot:slots)if(slot && AccountKey::from(slot->snapshot)==pin.owner)
+        {const auto found=slot->chat.conversations.find(pin.conversation);if(found!=slot->chat.conversations.end() && found->second.closed)return false;}
+        return true;
     }
     void refreshPins()
     {
@@ -934,29 +973,48 @@ struct Host
         for(int i=0;i<MaxCharacters;++i)if(slots[i] && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state==State::Ready && !(slots[i]->snapshot.flags&ChatRestricted) && (experience.accountMask&(1u<<i)))
         {
             const auto& view=slots[i]->chat;
-            for(const auto& entry:view.conversations)if(entry.second.unread && !entry.second.restricted)
+            for(const auto& entry:view.conversations)if(entry.second.unread && !entry.second.restricted && !entry.second.closed)
             {
                 Message item=slots[i]->snapshot;item.topic=entry.second.topic;item.conversation=entry.first;item.eventType=EventType::Conversation;item.cursor=entry.second.lastIncomingEvent;item.unread=entry.second.unread;item.title=entry.second.title;
-                if(attention.hiddenUnread(item) || !(experience.attentionMask&attentionCategoryMask(item)))continue;
+                if(attention.hiddenUnread(item) || !(chatPreferences.attentionMask&attentionCategoryMask(item)))continue;
                 const auto key=std::make_tuple(item.account,item.grid,item.conversation);liveUnread.insert(key);
                 if(!unreadSince.count(key))unreadSince[key]=GetTickCount64();item.eventAt=unreadSince[key];rows.push_back(item);
             }
         }
         for(auto it=unreadSince.begin();it!=unreadSince.end();)if(!liveUnread.count(it->first))it=unreadSince.erase(it);else ++it;
-        for(const auto& item:attention.entries){const int i=sourceSlot(item);if(i>=0 && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state==State::Ready && !(slots[i]->snapshot.flags&ChatRestricted) && (experience.accountMask&(1u<<i)) && (experience.attentionMask&attentionCategoryMask(item)))rows.push_back(item);}
+        for(const auto& item:attention.entries){const int i=sourceSlot(item);if(i>=0 && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state==State::Ready && !(slots[i]->snapshot.flags&ChatRestricted) && (experience.accountMask&(1u<<i)) && (chatPreferences.attentionMask&attentionCategoryMask(item)))rows.push_back(item);}
         attentionNavigation.update(std::move(rows),experience.oldestFirst);return attentionNavigation.rows;
     }
-    void editAttentionFilters()
+    void editAttentionFilters() { editChatSettings(1); }
+    bool shownConversation(const Conversation& item) const
+    { return !item.closed && (chatPreferences.showMask & conversationCategory(item.topic)) != 0; }
+    HMENU conversationFilters() const
     {
-        using namespace fs_host_ui;std::vector<Field> fields;
-        const wchar_t* labels[]={L"Unread IM/group chat",L"Nearby unread",L"Teleport offers",L"Permission requests",L"Inventory offers"};
-        for(unsigned int i=0;i<5;++i)fields.push_back({labels[i],experience.attentionMask&(1u<<i)?L"1":L"0",FieldType::Check});
-        fields.push_back({L"Oldest first across categories",experience.oldestFirst?L"1":L"0",FieldType::Check});
-        for(unsigned int i=0;i<MaxCharacters;++i){Field field{characterName(static_cast<int>(i)),experience.accountMask&(1u<<i)?L"1":L"0",FieldType::Check};field.page=1;fields.push_back(field);}
-        if(!edit(window,L"Attention navigation filters · account choices follow profile slots",fields,{L"Categories",L"Characters"}))return;
-        experience.attentionMask=experience.accountMask=0;for(unsigned int i=0;i<5;++i)if(number(fields[i]))experience.attentionMask|=1u<<i;
-        experience.oldestFirst=number(fields[5])!=0;for(unsigned int i=0;i<MaxCharacters;++i)if(number(fields[i+6]))experience.accountMask|=1u<<i;
-        refreshAttention();
+        HMENU menu=CreatePopupMenu();const wchar_t* labels[]={L"Nearby Chat",L"Direct IMs",L"Group Chats",L"Conferences",L"Viewer Notifications"};
+        for(unsigned int i=0;i<5;++i)AppendMenuW(menu,MF_STRING|((chatPreferences.showMask&(1u<<i))?MF_CHECKED:0),VisibilityBase+i,labels[i]);
+        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,ChatFilters,L"Chats and notifications settings…");return menu;
+    }
+    bool filterCommand(UINT command)
+    {
+        if(command>=VisibilityBase && command<VisibilityBase+5)
+        {saveDraft(true);chatPreferences.showMask^=1u<<(command-VisibilityBase);chatPreferences.haveCategories=true;refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();return true;}
+        if(command==ChatFilters){editChatSettings();return true;}return false;
+    }
+    void closeConversation(int index,const std::string& id)
+    {
+        if(!validSlot(index) || !slots[index])return;auto& slot=*slots[index];
+        const auto found=slot.chat.conversations.find(id);
+        if(found==slot.chat.conversations.end() || found->second.topic==Topic::Nearby || found->second.closed)return;
+        if(slot.hasPendingAction || slot.hasPendingSend || (slot.waiting && slot.request.kind==Kind::SendChat))
+        {message(L"Finish the current chat action before closing this conversation.");return;}
+        if(slot.snapshot.state!=State::Ready || slot.detached || !slot.pipe.alive())return;
+        if(index==chatIndex && id==conversation)saveDraft(true);
+        Message action;action.worker=slot.chat.identity.worker;action.generation=slot.chat.identity.generation;
+        action.account=slot.chat.identity.account;action.grid=slot.chat.identity.grid;
+        action.kind=Kind::CloseChat;action.topic=found->second.topic;action.conversation=id;
+        slot.chat.close(id,(std::numeric_limits<std::uint64_t>::max)());
+        slot.pendingAction=action;slot.hasPendingAction=true;
+        refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
     }
     void refreshAttention()
     {
@@ -1060,11 +1118,20 @@ struct Host
 
     CharacterAppearance appearance(int index) const
     { return validSlot(index) && slots[index] ? presentation.appearance(AccountKey::from(slots[index]->snapshot)) : CharacterAppearance{}; }
+    std::wstring profileName(int index) const
+    {
+        if(!validSlot(index))return L"Unavailable";
+        const auto& name=chatPreferences.profileNames[static_cast<std::size_t>(index)];
+        return name.empty()?L"Character "+std::to_wstring(index+1):wide(name);
+    }
     std::wstring characterName(int index) const
     {
-        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.name.empty()) return L"Character " + std::to_wstring(index + 1);
-        const auto alias = appearance(index).alias;
-        return alias.empty() ? wide(slots[index]->snapshot.name) : wide(alias) + L" (" + wide(slots[index]->snapshot.name) + L")";
+        const auto label=profileName(index);
+        if(!validSlot(index) || !slots[index] || slots[index]->snapshot.state!=State::Ready || slots[index]->snapshot.name.empty())return label;
+        const auto actual=wide(slots[index]->snapshot.name);
+        const auto alias=appearance(index).alias;
+        const auto friendly=chatPreferences.profileNames[static_cast<std::size_t>(index)].empty() && !alias.empty()?wide(alias):label;
+        return friendly==actual?actual:friendly+L" ("+actual+L")";
     }
     COLORREF accountColor(int index) const
     {
@@ -1076,26 +1143,38 @@ struct Host
     }
     void editAppearance(int index)
     {
-        if (!validSlot(index) || !slots[index] || slots[index]->snapshot.state != State::Ready) { message(L"Log in before editing character appearance."); return; }
-        const auto identity = slots[index]->snapshot; const auto key = AccountKey::from(identity); const auto current = presentation.appearance(key);
-        using namespace fs_host_ui;
-        std::vector<Field> fields{{L"Friendly name",wide(current.alias)}, {L"Character color",std::to_wstring(current.color),FieldType::Color},
-            {L"Reset name and color",L"0",FieldType::Check}};
-        if (!edit(window,L"Character appearance (Save host choices to keep)",fields)) return;
-        if (!slots[index] || !slots[index]->chat.identity.owns(identity)) { message(L"Login changed; appearance edits were discarded."); return; }
-        const auto& text = fields[0].value;
-        const int size = WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),nullptr,0,nullptr,nullptr);
-        if ((!text.empty() && size == 0) || size > 64) { message(L"Friendly name must fit in 64 UTF-8 bytes."); return; }
-        std::string alias(static_cast<std::size_t>(size),'\0');
-        if (size) WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),alias.data(),size,nullptr,nullptr);
-        CharacterAppearance next{alias,number(fields[1]),current.alerts};
-        if (number(fields[2])) { next.alias.clear(); next.color = defaultAccountColor(key); }
-        if (!presentation.set(key,next)) { message(L"Character appearance could not be applied; profile capacity or text is invalid."); return; }
-        for (auto& monitor : monitors) monitor.dirty = true;
-        for (auto button : pinButtons) InvalidateRect(button,nullptr,FALSE);
-        InvalidateRect(characterControl,nullptr,FALSE); InvalidateRect(chatAccount,nullptr,FALSE); InvalidateRect(status[index],nullptr,FALSE);
-        refreshCharacters(); refreshChat(); refreshAttention(); if (attentionList) InvalidateRect(attentionList,nullptr,FALSE); updateMonitors(); InvalidateRect(window,nullptr,FALSE);
-        if (chatWindow) InvalidateRect(chatWindow,nullptr,FALSE); if (controlsWindow) InvalidateRect(controlsWindow,nullptr,FALSE);
+        if(!validSlot(index))return;
+        const auto label=[](const std::wstring& value)->std::optional<std::string>
+        {
+            const int length=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value.data(),static_cast<int>(value.size()),nullptr,0,nullptr,nullptr);
+            if((!value.empty() && !length) || length>64)return {};
+            std::string result(static_cast<std::size_t>(length),'\0');
+            if(length)WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value.data(),static_cast<int>(value.size()),result.data(),length,nullptr,nullptr);
+            return validUtf8(result)?std::optional<std::string>{result}:std::nullopt;
+        };
+        const auto position=static_cast<std::size_t>(index);const auto previousLabel=chatPreferences.profileNames[position];
+        const bool ready=slots[index] && slots[index]->snapshot.state==State::Ready;
+        const Message identity=ready?slots[index]->snapshot:Message{};
+        const auto key=AccountKey::from(identity);const auto current=presentation.appearance(key);
+        using namespace fs_host_ui;std::vector<Field> fields{{L"Profile name",wide(previousLabel)}};
+        if(ready){fields.push_back({L"Account friendly name",wide(current.alias)});fields.push_back({L"Character color",std::to_wstring(current.color),FieldType::Color});fields.push_back({L"Reset account name and color",L"0",FieldType::Check});}
+        if(!edit(profileDialogOwner(),ready?L"Profile name and character appearance · Save host choices to keep":L"Name this private profile · Save host choices to keep",fields))return;
+        auto profile=label(fields[0].value);if(!profile){message(L"Profile name must fit in 64 UTF-8 bytes.");return;}
+        if(ready)
+        {
+            if(!slots[index] || !slots[index]->chat.identity.owns(identity)){message(L"Login changed; appearance edits were discarded.");return;}
+            const auto alias=label(fields[1].value);if(!alias){message(L"Account friendly name must fit in 64 UTF-8 bytes.");return;}
+            CharacterAppearance next{*alias,number(fields[2]),current.alerts};
+            if(number(fields[3])){next.alias.clear();next.color=defaultAccountColor(key);}
+            if(!presentation.set(key,next)){message(L"Character appearance could not be applied; profile capacity or text is invalid.");return;}
+            if(!number(fields[3]) && *profile==previousLabel && next.alias!=current.alias && !next.alias.empty() &&
+                (previousLabel.empty() || previousLabel==current.alias || previousLabel==identity.name))*profile=next.alias;
+        }
+        chatPreferences.profileNames[position]=*profile;
+        for(auto& monitor:monitors)monitor.dirty=true;
+        for(auto button:pinButtons)InvalidateRect(button,nullptr,FALSE);
+        refreshCharacters();refreshChat(true);refreshAttention();updateMonitors();for(int i=0;i<MaxCharacters;++i)describe(i);
+        InvalidateRect(window,nullptr,FALSE);if(chatWindow)InvalidateRect(chatWindow,nullptr,FALSE);if(controlsWindow)InvalidateRect(controlsWindow,nullptr,FALSE);
     }
     void capturePlacement(HWND panel, unsigned int id, UINT localDpi)
     {
@@ -1175,7 +1254,7 @@ struct Host
             const HBRUSH brush=CreateSolidBrush(accountColor(owner));FillRect(draw.hDC,&stripe,brush);DeleteObject(brush);return true;
         }
         if(theme.button(draw))return true;
-        if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return false;
+        if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return theme.drawCombo(draw);
         const int index = draw.itemID == static_cast<UINT>(-1) ? (draw.CtlID == ActiveCharacter ? lifecycle.selection() : chatIndex) : static_cast<int>(draw.itemID);
         theme.selection(draw);
         RECT accent = draw.rcItem; accent.right = accent.left + scaled(5);
@@ -1220,7 +1299,7 @@ struct Host
         for (int i = 0; i < MaxCharacters; ++i)
         {
             std::wstring text = std::to_wstring(i + 1) + L": ";
-            text += slots[i] && !slots[i]->snapshot.name.empty() ? characterName(i) : L"not logged in";
+            text += characterName(i);if(!slots[i] || slots[i]->snapshot.state!=State::Ready)text+=L" · not logged in";
             if (i == active) text += L" · active";
             choices.push_back(std::move(text));
         }
@@ -1349,7 +1428,7 @@ struct Host
             request.width = policy.width; request.height = policy.height; request.unread = policy.unread;
         }
         if (kind == Kind::ShortcutPolicy) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; request.unread = shortcutPolicy(); }
-        if (kind == Kind::AudioPolicy) request.unread = (voice ? 1u : 0u) | (muteBackground ? 2u : 0u);
+        if (kind == Kind::AudioPolicy) request.unread = audioPolicyFor(index);
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
         if ((kind == Kind::ReviewChat || kind == Kind::ReviewAttention) && foregroundPid == GetCurrentProcessId()) AllowSetForegroundWindow(slot.pid);
         if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
@@ -1404,7 +1483,7 @@ struct Host
         add(characters,201,L"Workspaces: "+name+ (index==active?L"":L" (switch then open)…"),slot && slot->snapshot.state==State::Ready && !busy());
         add(characters,MonitorSelected,L"Monitor: "+name,slot && slot->snapshot.state==State::Ready && index!=active && !busy());
         add(characters,430,L"Background: Warm",slot!=nullptr,standby[index]==Mode::Warm);add(characters,431,L"Background: Economy",slot!=nullptr,standby[index]==Mode::Economy);
-        add(characters,273,L"Name and color…",slot && slot->snapshot.state==State::Ready);
+        add(characters,273,slot && slot->snapshot.state==State::Ready?L"Profile name and character color…":L"Name this profile…");
         add(characters,CharacterSoundSettings,L"Sound and notifications…",slot && slot->snapshot.state==State::Ready);
         add(characters,432,L"Move character card earlier");add(characters,433,L"Move character card later");
         AppendMenuW(characters,MF_SEPARATOR,0,nullptr);
@@ -1417,14 +1496,14 @@ struct Host
         AppendMenuW(characters,MF_POPUP,reinterpret_cast<UINT_PTR>(switches),L"Switch character");
         AppendMenuW(characters,MF_SEPARATOR,0,nullptr);add(characters,209,L"Stop managing; leave viewers running separately…");add(characters,434,L"Close host…");
         add(login,LaunchNext,L"Open next available login",!busy());
-        for(int i=0;i<MaxCharacters;++i){add(login,LaunchBase+static_cast<UINT>(i),L"Open Character "+std::to_wstring(i+1)+L" login",!busy() && (!slots[i] || !slots[i]->running()));add(mon,MonitorBase+static_cast<UINT>(i),characterName(i),slots[i] && slots[i]->snapshot.state==State::Ready && i!=active && !busy());}
+        for(int i=0;i<MaxCharacters;++i){add(login,LaunchBase+static_cast<UINT>(i),L"Open "+profileName(i)+L" login",!busy() && (!slots[i] || !slots[i]->running()));add(mon,MonitorBase+static_cast<UINT>(i),characterName(i),slots[i] && slots[i]->snapshot.state==State::Ready && i!=active && !busy());}
         add(mon,212,L"Stop all monitors");
         add(view,250,L"Expanded controls",true,chrome==0);add(view,251,L"Condensed controls",true,chrome==1);add(view,252,L"Minimal with Show controls",true,chrome==2);
         add(view,270,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");add(view,271,controlsDetached?L"Dock character controls":L"Pop out character controls");add(view,272,L"Show shared Chat",true,showChat);
         add(view,435,L"Host active viewer",true,embedding);add(view,436,L"Show active viewer separately");AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(mon),L"Monitors");
         add(view,Details,L"Show diagnostics",true,experience.diagnostics);add(view,RestoreShell,L"Restore host controls");add(view,RecoverShell,L"Recover window positions");
-        add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);
-        add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chat and read behavior…");add(settings,CharacterSoundSettings,L"Sounds: "+name+L"…",slot && slot->snapshot.state==State::Ready);add(settings,206,L"Save host choices");
+        add(view,208,L"Skip current transition",handoff.step()!=Handoff::Step::Idle);AppendMenuW(view,MF_POPUP,reinterpret_cast<UINT_PTR>(conversationFilters()),L"Show conversations");
+        add(settings,AppearanceSettings,L"Host settings: appearance, audio and switching…");add(settings,QuickSettings,L"Customize quick actions…");add(settings,AttentionSettings,L"Attention filters and ordering…");add(settings,276,L"Keyboard shortcuts…");add(settings,ChatSettings,L"Chats and notifications…");add(settings,CharacterSoundSettings,L"Sounds: "+name+L"…",slot && slot->snapshot.state==State::Ready);add(settings,206,L"Save host choices");
         add(settings,277,L"Copy from main profile: "+name+L"…",!busy() && (!slot || !slot->running()));
         if(group==1){AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(characters),L"Selected character actions");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
         else if(group==2)AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(view),L"View");
@@ -1450,6 +1529,7 @@ struct Host
         menuOpen=false;DestroyMenu(menu);
         const bool scoped=choice==201 || choice==202 || choice==240 || choice==241 || choice==273 || choice==277 || choice==MonitorSelected || (choice>=430 && choice<=433);
         if(scoped && (slots[index].get()!=slot || (slot && !slot->chat.identity.owns(action)))){message(L"Character changed while choosing an action; choose it again.");return;}
+        if(filterCommand(choice))return;
         if(choice==RestoreShell){recover();return;}if(choice==RecoverShell){recover(true);return;}
         if(choice==AppearanceSettings){editHostSettings();return;}if(choice==QuickSettings){customizeQuick();return;}
         if(choice==NextAttention || choice==PreviousAttention){navigateAttention(choice==NextAttention?1:-1);return;}
@@ -1589,12 +1669,14 @@ struct Host
         AppendMenuW(popup, MF_STRING | MF_GRAYED, 19, L"All monitors share a 10 FPS budget; image is read only");
         AppendMenuW(popup, MF_STRING | (monitors[id].showChat ? MF_CHECKED : 0), 21, L"Show chat");
         AppendMenuW(popup, MF_STRING, 22, L"Use this size and frame rate as monitor defaults");
+        AppendMenuW(popup, MF_POPUP, reinterpret_cast<UINT_PTR>(conversationFilters()), L"Show conversations");
         AppendMenuW(popup, MF_STRING, 20, L"Close this monitor");
         POINT point{}; GetCursorPos(&point);
         menuOpen = true;
         const auto choice = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, monitors[id].window, nullptr);
         menuOpen = false;
         DestroyMenu(popup);
+        if(filterCommand(choice))return;
         const auto& current = monitorSet.bindings[id];
         if (!current.enabled || current.slot != captured.slot || !validSlot(current.slot) || !slots[current.slot] ||
             !captured.key.owns(slots[current.slot]->snapshot) || !current.key.owns(slots[current.slot]->snapshot))
@@ -1642,9 +1724,9 @@ struct Host
             updateMonitors();
         }
     }
-    std::array<HWND,7> monitorChatControls(int id) const
+    std::array<HWND,8> monitorChatControls(int id) const
     {
-        const auto& m = monitors[id]; return {m.label,m.choices,m.history,m.compose,m.send,m.read,m.latest};
+        const auto& m = monitors[id]; return {m.label,m.choices,m.history,m.compose,m.send,m.read,m.latest,m.close};
     }
     Slot* monitorChatSlot(int id) const
     {
@@ -1664,7 +1746,7 @@ struct Host
         const HFONT next = CreateFontW(-theme.scale(12,m.dpi),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
             DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         if (!next) return;
-        for(auto item:monitorChatControls(id))if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
+        for(auto item:monitorChatControls(id))if(item)fs_host_ui::setNativeFont(item,next);
         for(auto item:{m.exchange,m.chatToggle,m.pin,m.options})if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
         if (m.font) DeleteObject(m.font); m.font = next;
     }
@@ -1682,17 +1764,18 @@ struct Host
         m.pin=make(L"BUTTON",L"Pin",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
         m.options=make(L"BUTTON",L"Options",BS_PUSHBUTTON|WS_TABSTOP,MonitorOptions);
         m.label = make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
-        m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,ChatConversation);
+        m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL|WS_TABSTOP,ChatConversation);
         m.read = make(L"BUTTON",L"Read",BS_PUSHBUTTON|WS_TABSTOP,ChatRead);
+        m.close = make(L"BUTTON",L"×",BS_PUSHBUTTON|WS_TABSTOP,ChatClose);
         m.latest = make(L"BUTTON",L"Latest",BS_PUSHBUTTON|WS_TABSTOP,ChatLatest);
         m.history = make(L"EDIT",L"",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER|WS_TABSTOP,0);
         m.compose = make(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|WS_BORDER|WS_TABSTOP,ChatCompose);
         m.send = make(L"BUTTON",L"Send",BS_PUSHBUTTON|WS_TABSTOP,ChatSend);
-        auto items = std::vector<HWND>{m.label,m.choices,m.history,m.compose,m.send,m.read,m.exchange,m.chatToggle,m.pin,m.options,m.latest};
+        auto items = std::vector<HWND>{m.label,m.choices,m.history,m.compose,m.send,m.read,m.close,m.exchange,m.chatToggle,m.pin,m.options,m.latest};
         if (std::any_of(items.begin(),items.end(),[](HWND item) { return !item; }))
         {
             for (auto item : items) if (item) DestroyWindow(item);
-            m.label = m.choices = m.history = m.compose = m.send = m.read = m.exchange = m.chatToggle = m.pin = m.options = nullptr;
+            m.label = m.choices = m.history = m.compose = m.send = m.read = m.close = m.exchange = m.chatToggle = m.pin = m.options = nullptr;
             m.latest = nullptr; m.showChat = m.updatingChat = false;
             message(L"Unable to create monitor Chat controls. The read-only image remains available."); return;
         }
@@ -1704,6 +1787,7 @@ struct Host
         m.updatingChat = false; monitorFont(id);
         addTooltip(m.exchange,L"Exchange this monitored character with the active world; chat drafts remain bound to their owners");addTooltip(m.pin,L"Keep only this monitor above other windows");
         addTooltip(m.read,L"Mark this character's selected conversation read");
+        addTooltip(m.close,L"Close this conversation in the host; native groups and calls stay open");
         addTooltip(m.send,L"Send as the character shown above; the active world does not change");
         addTooltip(m.choices,L"Nearby chat and this character's existing conversations");
     }
@@ -1723,9 +1807,10 @@ struct Host
         {
             MoveWindow(m.label,scale(10),top+scale(4),(std::max)(1,width-scale(66)),scale(20),TRUE);
             MoveWindow(m.latest,static_cast<int>(r.right)-scale(62),top,scale(56),scale(24),TRUE);
-            MoveWindow(m.choices,scale(6),top+scale(26),(std::max)(1,width-scale(62)),scale(180),TRUE);
-            MoveWindow(m.read,static_cast<int>(r.right)-scale(62),top+scale(26),scale(56),scale(24),TRUE);
-            MoveWindow(m.history,scale(6),top+scale(54),width,scale(82),TRUE);
+            MoveWindow(m.choices,scale(6),top+scale(26),(std::max)(1,width-scale(98)),scale(180),TRUE);
+            MoveWindow(m.read,static_cast<int>(r.right)-scale(92),top+scale(26),scale(56),scale(24),TRUE);
+            MoveWindow(m.close,static_cast<int>(r.right)-scale(32),top+scale(26),scale(26),scale(24),TRUE);
+            MoveWindow(m.history,scale(6),top+scale(54),(std::max)(1,width-scale(12)),scale(82),TRUE);
             m.transcript.latestVisibility();
             MoveWindow(m.compose,scale(6),top+scale(142),(std::max)(1,width-scale(62)),scale(28),TRUE);
             MoveWindow(m.send,static_cast<int>(r.right)-scale(62),top+scale(142),scale(56),scale(28),TRUE);
@@ -1756,7 +1841,7 @@ struct Host
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const bool live = m.showChat && slot && !restricted;
         std::vector<std::string> ids; std::vector<std::wstring> choices;
-        if (live) for (const auto& entry : slot->chat.conversations)
+        if (live) for (const auto& entry : slot->chat.conversations) if(shownConversation(entry.second))
         {
             ids.push_back(entry.first);
             auto title = wide(entry.second.title);
@@ -1767,13 +1852,16 @@ struct Host
         const int selection = found == ids.end() ? 0 : static_cast<int>(found-ids.begin());
         const auto previous = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
         const bool privacyChanged = live && previous != slot->chat.conversations.end() && previous->second.restricted;
-        if (syncChoices(m.choices,choices,selection,changed || !live || privacyChanged))
+        if (syncChoices(m.choices,choices,selection,changed || !live || privacyChanged ||
+            (live && (previous==slot->chat.conversations.end() || !shownConversation(previous->second)))))
         {
             m.conversationIds = std::move(ids);
             if (live && !m.conversationIds.empty()) m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selection)]);
         }
-        const auto send = live ? m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
-        const auto read = live ? m.chat.request(Kind::MarkRead,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
+        const auto selectedEntry=live?slot->chat.conversations.find(m.chat.identity.conversation):std::map<std::string,Conversation>::iterator{};
+        const bool selectedShown=live && selectedEntry!=slot->chat.conversations.end() && shownConversation(selectedEntry->second);
+        const auto send = selectedShown ? m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
+        const auto read = selectedShown ? m.chat.request(Kind::MarkRead,binding,slot->snapshot,slot->chat) : std::optional<Message>{};
         const auto current = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
         const bool blocked = live && current != slot->chat.conversations.end() && current->second.restricted;
         std::wstring label = L"Send as: "+(slot ? characterName(binding.slot) : L"unavailable");
@@ -1782,7 +1870,7 @@ struct Host
         if (label != m.chatStatus) { m.chatStatus = label; SetWindowTextW(m.label,label.c_str()); }
         const auto color = slot ? accountColor(binding.slot) : GetSysColor(COLOR_GRAYTEXT);
         if (color != m.color) { m.color = color; InvalidateRect(m.window,nullptr,FALSE); }
-        const bool historyVisible = live && !blocked;
+        const bool historyVisible = selectedShown && !blocked;
         // The render/status timer must not rebuild four transcripts while no
         // chat changed. Privacy/source changes still clear them immediately.
         if (changed || m.historyVisible != historyVisible || (historyVisible &&
@@ -1805,7 +1893,7 @@ struct Host
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
         EnableWindow(m.choices,live); EnableWindow(m.compose,send.has_value());
         SendMessageW(m.compose,EM_SETREADONLY,sending?TRUE:FALSE,0);
-        EnableWindow(m.send,send.has_value() && !sending); EnableWindow(m.read,read.has_value());
+        EnableWindow(m.send,send.has_value() && !sending); EnableWindow(m.read,read.has_value());EnableWindow(m.close,selectedShown && selectedEntry->second.topic!=Topic::Nearby);
         m.updatingChat = false;
     }
     void monitorChatCommand(int id,WORD command,WORD notification)
@@ -1814,15 +1902,12 @@ struct Host
         auto* slot = monitorChatSlot(id); if (!slot) { refreshMonitorChat(id); return; }
         const auto& binding = monitorSet.bindings[id];
         if (!m.chat.owns(binding,slot->snapshot,slot->chat)) { refreshMonitorChat(id); return; }
-        if (command == ChatConversation && notification == CBN_SELCHANGE)
+        if (command == ChatConversation)
         {
-            const auto selected = SendMessageW(m.choices,CB_GETCURSEL,0,0);
-            if (selected >= 0 && static_cast<std::size_t>(selected) < m.conversationIds.size())
-                m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selected)]);
-            refreshMonitorChat(id);
+            const auto selected = choiceNotification(m.choices,m.conversationChoice,notification,m.conversationIds,m.chat.identity.conversation);
+            if (selected && m.chat.select(binding,slot->snapshot,slot->chat,*selected)) refreshMonitorChat(id);
         }
         else if (command == ChatLatest) m.transcript.tail();
-        else if (command == ChatConversation && notification == CBN_CLOSEUP) refreshMonitorChat(id);
         else if (command == ChatCompose && notification == EN_CHANGE)
         {
             if (m.chat.draft(binding,slot->snapshot,slot->chat,editText(m.compose)))
@@ -1837,6 +1922,7 @@ struct Host
             auto request = m.chat.request(Kind::SendChat,binding,slot->snapshot,slot->chat);
             if (request) { request->text = editText(m.compose); if (queueChat(binding.slot,std::move(*request))) m.transcript.tail(); }
         }
+        else if(command==ChatClose && notification==BN_CLICKED)closeConversation(binding.slot,m.chat.identity.conversation);
         else if (command == ChatRead && notification == BN_CLICKED)
         {
             const auto request = m.chat.request(Kind::MarkRead,binding,slot->snapshot,slot->chat);
@@ -1938,7 +2024,7 @@ struct Host
         std::vector<std::wstring> accounts;
         for (int i = 0; i < MaxCharacters; ++i)
         {
-            const std::wstring name = slots[i] && !slots[i]->snapshot.name.empty() ? characterName(i) : L"Character " + std::to_wstring(i + 1);
+            const std::wstring name = characterName(i);
             accounts.push_back(name);
         }
         syncChoices(chatAccount, accounts, chatIndex);
@@ -1946,7 +2032,7 @@ struct Host
         const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const auto selectedChat = slot ? slot->chat.conversations.find(conversation) : std::map<std::string,Conversation>::iterator{};
-        bool conversationBlocked = slot && selectedChat != slot->chat.conversations.end() && selectedChat->second.restricted;
+        bool conversationBlocked = !slot || selectedChat==slot->chat.conversations.end() || selectedChat->second.restricted || !shownConversation(selectedChat->second);
         std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? characterName(chatIndex) : L"not logged in");
         if (!ready) label += L" · unavailable";
         else if (restricted) label += L" · shared chat restricted; use native viewer";
@@ -1961,7 +2047,7 @@ struct Host
         if (loadDraft)
         {
             std::vector<std::string> ids; std::vector<std::wstring> choices;
-            if (slot) for (const auto& entry : slot->chat.conversations)
+            if (slot && !restricted) for (const auto& entry : slot->chat.conversations) if(shownConversation(entry.second))
             {
                 ids.push_back(entry.first);
                 std::wstring name = wide(entry.second.title);
@@ -1970,13 +2056,13 @@ struct Host
             }
             const auto found = std::find(ids.begin(), ids.end(), conversation);
             const int selection = found == ids.end() ? 0 : static_cast<int>(found - ids.begin());
-            if (syncChoices(chatConversation, choices, selection, forceChoices || restricted || !ready))
+            if (syncChoices(chatConversation, choices, selection, forceChoices || restricted || !ready || conversationBlocked))
             {
                 conversationIds = std::move(ids);
-                if (!conversationIds.empty()) conversation = conversationIds[static_cast<std::size_t>(selection)];
+                conversation = conversationIds.empty()?std::string{}:conversationIds[static_cast<std::size_t>(selection)];
             }
             const auto draft = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
-            conversationBlocked = slot && draft != slot->chat.conversations.end() && draft->second.restricted;
+            conversationBlocked = !slot || draft==slot->chat.conversations.end() || draft->second.restricted || !shownConversation(draft->second);
             const std::string wanted = slot && ready && !restricted && !conversationBlocked && draft != slot->chat.conversations.end() ? draft->second.draft : "";
             if (editText() != wanted) SetWindowTextW(chatCompose, wide(wanted).c_str());
         }
@@ -1988,7 +2074,8 @@ struct Host
                 history += wide(line.sender)+(line.sender.empty() ? L"" : L": ")+wide(line.text)+L"\r\n";
             }
         ChatKey historyKey = slot ? slot->chat.identity : ChatKey{}; historyKey.conversation = conversation;
-        const auto through = slot && !restricted && !conversationBlocked && selectedChat != slot->chat.conversations.end() ? selectedChat->second.lastIncomingEvent : 0;
+        const auto paintedChat=slot?slot->chat.conversations.find(conversation):std::map<std::string,Conversation>::iterator{};
+        const auto through = slot && !restricted && !conversationBlocked && paintedChat != slot->chat.conversations.end() ? paintedChat->second.lastIncomingEvent : 0;
         transcript.update(historyKey,std::move(history),std::move(offsets),through);
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
         const auto selected = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
@@ -1996,19 +2083,32 @@ struct Host
         EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !isNotice);
         SendMessageW(chatCompose,EM_SETREADONLY,sending?TRUE:FALSE,0);
         EnableWindow(chatSend, ready && !restricted && !conversationBlocked && !sending && !isNotice);
-        EnableWindow(chatReview, ready); EnableWindow(chatRead, ready && !restricted && !conversationBlocked);
+        EnableWindow(chatReview, ready && !conversationBlocked); EnableWindow(chatRead, ready && !restricted && !conversationBlocked);
         updatingChat = false;
     }
-    void editChatSettings()
+    void editChatSettings(unsigned int page=0)
     {
-        using namespace fs_host_ui;
-        std::vector<Field> fields{
-            {L"Mark displayed chats read",chatPreferences.visibleRead?L"1":L"0",FieldType::Check},
-            {L"Auto-read active character",chatPreferences.activeRead?L"1":L"0",FieldType::Check},
-            {L"After seconds (5–3600)",std::to_wstring(chatPreferences.delay),FieldType::Number,{},5,3600}};
-        if (!edit(profileDialogOwner(),L"Chat read behavior · Save host choices to keep",fields)) return;
-        chatPreferences.visibleRead = number(fields[0]) != 0; chatPreferences.activeRead = number(fields[1]) != 0;
-        chatPreferences.delay = number(fields[2]); activeReadClock = {};
+        using namespace fs_host_ui;std::vector<Field> fields;
+        const wchar_t* labels[]={L"Nearby Chat",L"Direct IMs",L"Group Chats",L"Conferences",L"Viewer Notifications",L"Teleport offers",L"Permission requests",L"Inventory offers"};
+        for(unsigned int i=0;i<5;++i)fields.push_back({labels[i],chatPreferences.showMask&(1u<<i)?L"1":L"0",FieldType::Check});
+        const auto attentionStart=fields.size();
+        for(unsigned int i=0;i<8;++i){Field field{labels[i],chatPreferences.attentionMask&(1u<<i)?L"1":L"0",FieldType::Check};field.page=1;fields.push_back(field);}
+        const auto oldest=fields.size();Field order{L"Oldest first across categories",experience.oldestFirst?L"1":L"0",FieldType::Check};order.page=1;fields.push_back(order);
+        const auto readStart=fields.size();
+        fields.push_back({L"Mark displayed chats read",chatPreferences.visibleRead?L"1":L"0",FieldType::Check});
+        fields.push_back({L"Auto-read active character",chatPreferences.activeRead?L"1":L"0",FieldType::Check});
+        fields.push_back({L"After seconds (5–3600)",std::to_wstring(chatPreferences.delay),FieldType::Number,{},5,3600});
+        for(std::size_t i=readStart;i<fields.size();++i)fields[i].page=2;
+        const auto accountStart=fields.size();for(int i=0;i<MaxCharacters;++i){Field field{characterName(i),experience.accountMask&(1u<<i)?L"1":L"0",FieldType::Check};field.page=3;fields.push_back(field);}
+        if(!edit(profileDialogOwner(),L"Chats and notifications · visibility, Attention and reading; sound choices are separate",fields,{L"Show in Chat",L"Attention",L"Read behavior",L"Characters"},page))return;
+        saveDraft(true);chatPreferences.showMask=chatPreferences.attentionMask=0;chatPreferences.haveCategories=true;
+        for(unsigned int i=0;i<5;++i)if(number(fields[i]))chatPreferences.showMask|=1u<<i;
+        for(unsigned int i=0;i<8;++i)if(number(fields[attentionStart+i]))chatPreferences.attentionMask|=1u<<i;
+        experience.oldestFirst=number(fields[oldest])!=0;
+        chatPreferences.visibleRead=number(fields[readStart])!=0;chatPreferences.activeRead=number(fields[readStart+1])!=0;chatPreferences.delay=number(fields[readStart+2]);
+        experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(number(fields[accountStart+i]))experience.accountMask|=1u<<i;
+        activeReadClock={};refreshChat(true,true);updateMonitors();refreshAttention();refreshPins();layout();
+        message(L"Chat visibility and notification choices applied. Save host choices to keep them.");
     }
     bool automaticRead(int index)
     {
@@ -2020,7 +2120,7 @@ struct Host
         {
             if (!chatPreferences.visibleRead || !history.bound || !history.source.owns(slot.snapshot) || !history.readReady()) return false;
             const auto found = slot.chat.conversations.find(history.source.conversation);
-            return found != slot.chat.conversations.end() && !found->second.restricted && found->second.topic != Topic::Notice &&
+            return found != slot.chat.conversations.end() && shownConversation(found->second) && !found->second.restricted && found->second.topic != Topic::Notice &&
                 found->second.unread && found->second.lastIncomingEvent && history.painted == found->second.lastIncomingEvent;
         };
         if (displayedBy(transcript)) { selected = transcript.source.conversation; displayed = true; }
@@ -2030,7 +2130,7 @@ struct Host
         if (index == active && chatPreferences.activeRead)
             for (const auto& entry : slot.chat.conversations)
             {
-                const bool due = activeReadClock.due(entry.second,now,chatPreferences.delay);
+                const bool due = shownConversation(entry.second) && activeReadClock.due(entry.second,now,chatPreferences.delay);
                 if (!displayed && !delayed && due) { selected = entry.first; delayed = true; }
             }
         if (!displayed && !delayed) return false;
@@ -2405,7 +2505,7 @@ struct Host
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.soundPrepared = false; slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
-            slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;
+            slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;slot.audioPolicy=0;
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         slot.snapshot = response;
@@ -2424,6 +2524,7 @@ struct Host
         }
         if (response.state == State::Ready && profileKey.valid())
         {
+            auto& label=chatPreferences.profileNames[static_cast<std::size_t>(index)];if(label.empty())label=boundedText(appearance(index).alias.empty()?response.name:appearance(index).alias,64);
             const auto asset = characterSound(index).asset;
             if (!slot.soundPrepared || slot.soundAsset != asset)
             { cacheSound(asset); slot.soundAsset = asset; slot.soundPrepared = true; }
@@ -2454,7 +2555,7 @@ struct Host
             else ++slot.catalogIndex;
             if (index == chatIndex)
             {
-                const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice || response.eventType == EventType::Gap;
+                const bool catalogChanged = response.eventType == EventType::Conversation || response.eventType == EventType::Chat || response.eventType == EventType::Notice || response.eventType == EventType::Gap || response.eventType == EventType::ConversationClosed || response.eventType == EventType::NoticeRemoved;
                 refreshChat(catalogChanged);
             }
         }
@@ -2462,6 +2563,13 @@ struct Host
         if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
         if (request.kind == Kind::MonitorPolicy && !(response.flags & Error))
         { slot.previewWidth = request.width; slot.previewHeight = request.height; slot.previewRate = request.unread; }
+        if(request.kind==Kind::CloseChat && slot.chat.identity.owns(request))
+        {
+            const auto found=slot.chat.conversations.find(request.conversation);
+            if(found!=slot.chat.conversations.end() && found->second.closedAt==(std::numeric_limits<std::uint64_t>::max)())
+            {if(response.flags&Error){found->second.closed=false;found->second.closedAt=0;}else slot.chat.close(request.conversation,response.cursor);}
+            refreshChat(true,true);updateMonitors();refreshAttention();
+        }
         if (request.kind == Kind::MarkRead && !(response.flags & (Error|ReadDeferred)))
         {
             if (slot.chat.markRead(request) && index == chatIndex)
@@ -2540,10 +2648,10 @@ struct Host
     }
     void describe(int index)
     {
-        if (!slots[index]) { descriptions[index] = L"Character " + std::to_wstring(index + 1) + L": not launched"; SetWindowTextW(status[index], descriptions[index].c_str());SetWindowTextW(cardButtons[index],descriptions[index].c_str()); return; }
+        if (!slots[index]) { descriptions[index] = profileName(index) + L" · not launched"; SetWindowTextW(status[index], descriptions[index].c_str());SetWindowTextW(cardButtons[index],descriptions[index].c_str()); return; }
         const auto& slot = *slots[index];
         std::wostringstream text;
-        text << (std::to_wstring(index + 1) + L": ") << (slot.snapshot.name.empty() ? L"Login" : characterName(index));
+        text << (std::to_wstring(index + 1) + L": ") << characterName(index);
         text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
@@ -2551,7 +2659,7 @@ struct Host
         if (experience.diagnostics && (slot.snapshot.flags & VoiceOwner)) text << L" · voice owner";
         if (!slot.workspace.empty()) text << L" · workspace " << wide(slot.workspace) << (slot.workspaceModified ? L" *" : L"");
         if (slot.preferencesOpen) text << L" · Preferences open";
-        std::uint64_t unread = 0; for (const auto& entry : slot.chat.conversations) if(!entry.second.restricted)unread += entry.second.unread;
+        std::uint64_t unread = 0; if(experience.accountMask&(1u<<index))for (const auto& entry : slot.chat.conversations) if(!entry.second.restricted && !entry.second.closed && (chatPreferences.attentionMask&conversationCategory(entry.second.topic)))unread += entry.second.unread;
         if (unread) text << L" · " << unread << L" unread";
         if (experience.diagnostics && slot.pipe.alive() && !slot.detached && slot.snapshot.state == State::Ready && slot.snapshot.mode == Mode::Active)
             text << ((slot.snapshot.flags & ClientFocused) ? L" · keyboard focused" : L" · keyboard unfocused");
@@ -2687,7 +2795,7 @@ struct Host
                 }
                 else if (!busy() && index != active && slot.snapshot.state == State::Ready && slot.snapshot.mode != standby[index])
                     send(index, Kind::SetMode, standby[index]);
-                else if (slot.snapshot.state == State::Ready && slot.audioPolicy != ((voice ? 1u : 0u) | (muteBackground ? 2u : 0u)))
+                else if (slot.snapshot.state == State::Ready && slot.audioPolicy != audioPolicyFor(index))
                     send(index, Kind::AudioPolicy);
                 else if (slot.snapshot.state == State::Ready && slot.shortcutPolicy != static_cast<int>(shortcutPolicy()))
                     send(index,Kind::ShortcutPolicy);
@@ -2700,7 +2808,7 @@ struct Host
                 {
                     const auto action = slot.pendingAction; slot.hasPendingAction = false;
                     if(action.kind==Kind::WorkspaceMenu && index!=active)message(L"Workspace opening was cancelled because its character did not become active.");
-                    else send(index, action.kind, Mode::Warm, 0, &action);
+                    else if(!send(index, action.kind, Mode::Warm, 0, &action) && action.kind==Kind::CloseChat && slot.chat.identity.owns(action))slot.hasPendingAction=true;
                 }
                 else if (slot.hasPendingSend)
                 {
@@ -2921,8 +3029,11 @@ struct Host
         RECT r{};GetClientRect(parent,&r);const int width=static_cast<int>(r.right),height=static_cast<int>(r.bottom)-bottomInset;const UINT local=parent==window?dpi:chatDpi;
         const auto scale=[this,local](int n){return theme.scale(n,local);};const bool narrow=width<scale(650);
         for(auto child:chatControls())ShowWindow(child,visible?SW_SHOWNOACTIVATE:SW_HIDE);
-        const auto pinsVisible=(std::min)(pins.entries.size(),static_cast<std::size_t>(6));
-        for(std::size_t i=0;i<6;++i){MoveWindow(pinButtons[i],scale(6)+static_cast<int>(i)*((width-scale(12))/6),top,(std::max)(1,(width-scale(12))/6-scale(3)),scale(25),TRUE);ShowWindow(pinButtons[i],visible && i<pinsVisible?SW_SHOWNOACTIVATE:SW_HIDE);}if(pinsVisible)top+=scale(28);
+        std::vector<std::size_t> visiblePins;for(std::size_t i=0;i<pins.entries.size() && i<6;++i)if(shownPin(pins.entries[i]))visiblePins.push_back(i);
+        for(std::size_t i=0;i<6;++i)ShowWindow(pinButtons[i],SW_HIDE);
+        for(std::size_t position=0;position<visiblePins.size();++position)
+        {const auto i=visiblePins[position];MoveWindow(pinButtons[i],scale(6)+static_cast<int>(position)*((width-scale(12))/6),top,(std::max)(1,(width-scale(12))/6-scale(3)),scale(25),TRUE);ShowWindow(pinButtons[i],visible?SW_SHOWNOACTIVATE:SW_HIDE);}
+        if(!visiblePins.empty())top+=scale(28);
         const auto move=[&](HWND child,int x,int y,int w,int h){MoveWindow(child,x,y,(std::max)(1,w),h,TRUE);};
         const int inset=scale(6);const int usable=width-inset*2;
         move(chatAccount,inset,top,narrow?usable:scale(180),scale(150));
@@ -3073,7 +3184,8 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         if(LOWORD(wparam)==MonitorExchange)
         {const auto* slot=host->monitorChatSlot(id);if(slot && !(slot->snapshot.flags&ChatRestricted) && binding.enabled){SetForegroundWindow(host->window);host->switchTo(binding.slot);}return 0;}
         host->monitorChatCommand(id,LOWORD(wparam),HIWORD(wparam));return 0;
-    case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
+    case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(host->theme.scale(22,monitor->dpi));return TRUE;
+    case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)) || host->theme.drawCombo(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
     case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN: return host->theme.color(message,wparam,lparam);
     case WM_CONTEXTMENU: host->monitorMenu(id); return 0;
     case WM_CLOSE:
@@ -3173,7 +3285,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_MEASUREITEM:
     {
         auto* item=reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
-        const UINT local=item->CtlID==ChatAccount && host->chatDetached?host->chatDpi:item->CtlID==ActiveCharacter && host->controlsDetached?host->controlsDpi:item->CtlID==AttentionList?host->attentionDpi:host->dpi;
+        const UINT local=(item->CtlID==ChatAccount || item->CtlID==ChatConversation) && host->chatDetached?host->chatDpi:item->CtlID==ActiveCharacter && host->controlsDetached?host->controlsDpi:item->CtlID==AttentionList?host->attentionDpi:host->dpi;
         item->itemHeight=static_cast<UINT>(host->theme.scale(22,local));return TRUE;
     }
     case WM_ERASEBKGND: {RECT r{};GetClientRect(window,&r);FillRect(reinterpret_cast<HDC>(wparam),&r,host->theme.backBrush);return 1;}
@@ -3204,7 +3316,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SendMessageW(host->embedControl, BM_SETCHECK, host->embedding ? BST_CHECKED : BST_UNCHECKED, 0);
         for (int i = 0; i < MaxCharacters; ++i)
         {
-            const auto label = L"Character " + std::to_wstring(i + 1) + L": not launched";
+            const auto label = host->profileName(i) + L" · not launched";
             host->status[i] = control(window, L"STATIC", label.c_str(), SS_OWNERDRAW, 10, 48 + i * 24, 850, 20);
             host->standbyControl[i] = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 760, 46 + i * 24, 190, 130, StandbyBase + i);
             SendMessageW(host->standbyControl[i], CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Background: Warm"));
@@ -3214,10 +3326,10 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->compactInfo = control(window, L"STATIC", L"Character status in Session menu", SS_LEFT, 536, 5, 250, 20);
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | SS_NOTIFY | WS_CLIPCHILDREN, 0, 99, 880, 490, ViewportFocus);
         host->notice = control(window, L"STATIC", L"Choose a character or open a login to begin.", SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX, 10, 600, 850, 20);
-        host->pinMenu = control(window,L"BUTTON",L"Pins…",BS_PUSHBUTTON|WS_TABSTOP,810,400,80,24,PinActions);
+        host->pinMenu = control(window,L"BUTTON",L"Chat…",BS_PUSHBUTTON|WS_TABSTOP,810,400,80,24,PinActions);
         for (int i = 0; i < 6; ++i) host->pinButtons[i] = control(window,L"BUTTON",L"",BS_OWNERDRAW|WS_TABSTOP,10+i*130,400,125,25,PinBase+i);
         host->chatAccount = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP, 10, 400, 180, 150, ChatAccount);
-        host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
+        host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
         host->chatHistory = control(window, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 10, 452, 850, 88);
         host->chatCompose = control(window, L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_TABSTOP, 10, 545, 800, 35, ChatCompose);
         SendMessageW(host->chatCompose, EM_SETLIMITTEXT, 1023, 0);
@@ -3369,22 +3481,21 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             host->saveDraft(true); host->showChat = SendMessageW(host->showChatControl, BM_GETCHECK, 0, 0) == BST_CHECKED;
             host->layout(); break;
         case ChatAccount:
-            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            if (!host->updatingChat)
             {
-                host->saveDraft(true); host->chatIndex = host->selectedSlot(host->chatAccount);
-                host->conversation.clear(); host->refreshChat(true, true);
+                std::vector<std::string> ids; for (int i=0;i<MaxCharacters;++i) ids.push_back(std::to_string(i));
+                const auto selected = choiceNotification(host->chatAccount,host->accountChoice,HIWORD(wparam),ids,std::to_string(host->chatIndex));
+                if (selected)
+                { host->saveDraft(true); host->chatIndex = std::stoi(*selected); host->conversation.clear(); host->refreshChat(true,true); }
             }
-            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatConversation:
-            if (!host->updatingChat && HIWORD(wparam) == CBN_SELCHANGE)
+            if (!host->updatingChat)
             {
-                const auto selected = SendMessageW(host->chatConversation, CB_GETCURSEL, 0, 0);
-                host->saveDraft(true);
-                if (selected >= 0 && static_cast<std::size_t>(selected) < host->conversationIds.size()) host->conversation = host->conversationIds[static_cast<std::size_t>(selected)];
-                host->refreshChat(true);
+                const auto selected = choiceNotification(host->chatConversation,host->conversationChoice,HIWORD(wparam),host->conversationIds,host->conversation);
+                if (selected && host->slots[host->chatIndex] && host->slots[host->chatIndex]->chat.conversations.count(*selected))
+                { host->saveDraft(true); host->conversation = *selected; host->refreshChat(true); }
             }
-            if (HIWORD(wparam) == CBN_CLOSEUP) host->refreshChat(true);
             break;
         case ChatLatest: host->transcript.tail(); break;
         case ChatCompose: if (HIWORD(wparam) == EN_CHANGE) host->composeChanged(); break;
@@ -3501,6 +3612,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     std::ifstream experienceFile(state.profiles/L"host-experience.dat",std::ios::binary);
     if(experienceFile){std::string data(HostExperience::MaxBytes+1,'\0');experienceFile.read(data.data(),static_cast<std::streamsize>(data.size()));data.resize(static_cast<std::size_t>(experienceFile.gcount()));if(!HostExperience::decode(data,state.experience) || bindingsConflict(state.experience,state.presentation)){state.experience=HostExperience{};state.lastNotice=L"Saved host experience settings are invalid; using defaults.";}}
     else if(!haveHostOptions)state.chrome=1;
+    if(!state.chatPreferences.haveCategories)state.chatPreferences.attentionMask=legacyAttentionCategories(state.experience.attentionMask);
     std::ifstream setsFile(state.profiles/L"session-sets.dat",std::ios::binary);
     if(setsFile){std::string data(SessionSetStore::MaxBytes+1,'\0');setsFile.read(data.data(),static_cast<std::streamsize>(data.size()));data.resize(static_cast<std::size_t>(setsFile.gcount()));if(!SessionSetStore::decode(data,state.setStore))state.lastNotice=L"Saved session sets are invalid; no set was opened.";}
     state.pins.restore(state.presentation.pins);
