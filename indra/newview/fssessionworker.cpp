@@ -183,7 +183,8 @@ struct Worker : LLIMSessionObserver
     std::wstring toolbarSource;
     std::uint32_t copyGroups = CopyLegacy;
     std::string toolbarImport,accountImport;
-    std::string settingsNotice,lastRecordedImport;
+    std::string settingsNotice;
+    mutable std::string lastRecordedImport; // Report deduplication only; status() remains logically const.
     TransitionClock transition;
     unsigned int transitionStyle = 0, transitionHeight = 64;
     bool demoting = false, escapeHeld = false;

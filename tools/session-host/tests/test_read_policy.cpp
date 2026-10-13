@@ -31,9 +31,12 @@ int main()
     read.event = 2; read.topic = Topic::Notice; assert(!readFenceCurrent(read,3));
     ChatPreferences prefs, out; assert(prefs.visibleRead && !prefs.activeRead && prefs.delay == 60);
     prefs.activeRead = true; prefs.delay = 120;
-    prefs.sounds.emplace(AccountKey::from(source),CharacterSound{SoundPrivate,"0123456789abcdef0123456789abcdef.wav"});
+    prefs.sounds.emplace(AccountKey::from(source),CharacterSound{SoundPrivate,"0123456789abcdef0123456789abcdef.wav","Sodie chime.wav"});
     assert(ChatPreferences::decode(prefs.encode(),out) && out.activeRead && out.delay == 120);
-    assert(out.sounds.begin()->second.categories == SoundPrivate);
+    assert(out.sounds.begin()->second.categories == SoundPrivate && out.sounds.begin()->second.name=="Sodie chime.wav");
+    auto legacy=prefs.encode();legacy.replace(0,4,"FSC3");legacy.resize(legacy.size()-4-prefs.sounds.begin()->second.name.size());
+    assert(ChatPreferences::decode(legacy,out) && out.sounds.begin()->second.name.empty() && out.activeRead);
+    assert(ChatPreferences::decode(prefs.encode(),out));
     const auto previous = out.encode(); assert(!ChatPreferences::decode(prefs.encode()+"bad",out) && out.encode() == previous);
     for (std::size_t size = 0; size < previous.size(); ++size)
         assert(!ChatPreferences::decode(previous.substr(0,size),out) && out.encode() == previous);

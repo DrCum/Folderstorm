@@ -2,6 +2,8 @@
 #ifndef FS_HOST_THEME_H
 #define FS_HOST_THEME_H
 #include <windows.h>
+#include <windowsx.h>
+#include "fssessiondialoglayout.h"
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -67,10 +69,10 @@ public:
     {
         FillRect(dc,&rect,backBrush);
         const int length=static_cast<int>(vertical?rect.bottom-rect.top:rect.right-rect.left),cross=static_cast<int>(vertical?rect.right-rect.left:rect.bottom-rect.top);
-        const int edge=(std::min)(cross,length/2),track=(std::max)(0,length-2*edge);
+        const int edge=(std::min)(cross,length/2);
         SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(child,kind,&info);
-        const int total=(std::max)(1,info.nMax-info.nMin+1),thumb=(std::min)(track,(std::max)(edge,MulDiv(track,static_cast<int>(info.nPage),total)));
-        const int range=(std::max)(1,total-static_cast<int>(info.nPage)),offset=edge+MulDiv(track-thumb,info.nPos-info.nMin,range);
+        const auto geometry=fs_session::scrollThumbLayout(length,cross,info.nMin,info.nMax,info.nPage,info.nPos);
+        const int thumb=geometry.length,offset=geometry.start;
         RECT grip=vertical?RECT{rect.left+2,rect.top+offset,rect.right-2,rect.top+offset+thumb}:RECT{rect.left+offset,rect.top+2,rect.left+offset+thumb,rect.bottom-2};
         FillRect(dc,&grip,panelBrush);const HBRUSH outline=CreateSolidBrush(border);FrameRect(dc,&grip,outline);DeleteObject(outline);
         const HPEN pen=CreatePen(PS_SOLID,1,text);const auto old=SelectObject(dc,pen);const int arm=(std::max)(3,cross/5);
@@ -114,7 +116,7 @@ public:
             const HBRUSH edge=CreateSolidBrush(enabled?border:muted);FrameRect(dc,&check,edge);DeleteObject(edge);
             if(SendMessageW(child,BM_GETCHECK,0,0)!=BST_UNCHECKED)
             {const HPEN pen=CreatePen(PS_SOLID,(std::max)(1,box/8),enabled?accent:muted);const auto old=SelectObject(dc,pen);MoveToEx(dc,check.left+3,(check.top+check.bottom)/2,nullptr);LineTo(dc,check.left+box/2,check.bottom-4);LineTo(dc,check.right-3,check.top+3);SelectObject(dc,old);DeleteObject(pen);}
-            wchar_t label[512]{};GetWindowTextW(child,label,512);rect.left=check.right+7;DrawTextW(dc,label,-1,&rect,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+            wchar_t label[512]{};GetWindowTextW(child,label,512);rect.left=check.right+7;DrawTextW(dc,label,-1,&rect,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
             if(GetFocus()==child){InflateRect(&rect,-1,-2);DrawFocusRect(dc,&rect);}
         }
         else if(!_wcsicmp(klass,WC_TABCONTROLW))
@@ -124,7 +126,7 @@ public:
             {
                 RECT item{};TabCtrl_GetItemRect(child,i,&item);wchar_t label[256]{};TCITEMW tab{};tab.mask=TCIF_TEXT;tab.pszText=label;tab.cchTextMax=256;TabCtrl_GetItem(child,i,&tab);
                 FillRect(dc,&item,i==selected?panelBrush:backBrush);const HBRUSH edge=CreateSolidBrush(i==selected?accent:border);FrameRect(dc,&item,edge);DeleteObject(edge);
-                InflateRect(&item,-6,-2);SetTextColor(dc,i==selected?text:muted);DrawTextW(dc,label,-1,&item,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
+                InflateRect(&item,-6,-2);SetTextColor(dc,i==selected?text:muted);DrawTextW(dc,label,-1,&item,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
                 if(i==selected && GetFocus()==child)DrawFocusRect(dc,&item);
             }
         }
@@ -132,10 +134,56 @@ public:
             paintScrollbar(child,dc,rect,(GetWindowLongPtrW(child,GWL_STYLE)&SBS_VERT)!=0,SB_CTL);
         if(previous)SelectObject(dc,previous);
     }
+    struct ScrollDrag {int grab=0,repeat=-1;bool dragging=false;};
+    static LRESULT scrollControl(HWND child,UINT message,WPARAM wp,LPARAM lp,bool& handled)
+    {
+        auto* drag=reinterpret_cast<ScrollDrag*>(GetPropW(child,L"FolderstormCustomScroll"));
+        if(!drag){handled=false;return 0;}
+        const bool vertical=(GetWindowLongPtrW(child,GWL_STYLE)&SBS_VERT)!=0;
+        const auto notify=[&](int command)
+        {
+            SendMessageW(GetParent(child),vertical?WM_VSCROLL:WM_HSCROLL,MAKEWPARAM(command,0),reinterpret_cast<LPARAM>(child));
+            RedrawWindow(child,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
+        };
+        const auto geometry=[&]()
+        {
+            RECT r{};GetClientRect(child,&r);SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(child,SB_CTL,&info);
+            return fs_session::scrollThumbLayout(static_cast<int>(vertical?r.bottom:r.right),static_cast<int>(vertical?r.right:r.bottom),info.nMin,info.nMax,info.nPage,info.nPos);
+        };
+        handled=true;
+        if(message==WM_LBUTTONDOWN || message==WM_LBUTTONDBLCLK)
+        {
+            const int point=vertical?GET_Y_LPARAM(lp):GET_X_LPARAM(lp);const auto g=geometry();RECT r{};GetClientRect(child,&r);
+            const int extent=static_cast<int>(vertical?r.bottom:r.right);SetCapture(child);
+            drag->dragging=point>=g.start && point<g.start+g.length;
+            if(drag->dragging){drag->grab=point-g.start;return 0;}
+            drag->repeat=point<g.edge?SB_LINEUP:point>=extent-g.edge?SB_LINEDOWN:point<g.start?SB_PAGEUP:SB_PAGEDOWN;
+            notify(drag->repeat);SetTimer(child,7,300,nullptr);return 0;
+        }
+        if(message==WM_MOUSEMOVE && GetCapture()==child && drag->dragging)
+        {
+            const auto g=geometry();SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_POS;
+            info.nPos=fs_session::scrollPositionAt(g,vertical?GET_Y_LPARAM(lp):GET_X_LPARAM(lp),drag->grab);SetScrollInfo(child,SB_CTL,&info,FALSE);notify(SB_THUMBTRACK);return 0;
+        }
+        if(message==WM_TIMER && wp==7){if(GetCapture()==child && drag->repeat>=0){notify(drag->repeat);SetTimer(child,7,65,nullptr);}return 0;}
+        if(message==WM_LBUTTONUP || message==WM_CAPTURECHANGED || message==WM_CANCELMODE)
+        {
+            const bool wasDragging=drag->dragging;drag->dragging=false;drag->repeat=-1;KillTimer(child,7);
+            if(message!=WM_CAPTURECHANGED && GetCapture()==child)ReleaseCapture();
+            if(wasDragging)notify(SB_THUMBPOSITION);notify(SB_ENDSCROLL);return 0;
+        }
+        if(message==WM_MOUSEWHEEL)return SendMessageW(GetParent(child),message,wp,lp);
+        handled=false;return 0;
+    }
     static LRESULT CALLBACK controlProc(HWND child,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
         const auto& theme=*reinterpret_cast<const Theme*>(data);
-        if(message==WM_NCDESTROY)RemoveWindowSubclass(child,controlProc,4);
+        if(message==WM_NCDESTROY)
+        {
+            KillTimer(child,7);delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormCustomScroll"));RemoveWindowSubclass(child,controlProc,4);
+        }
+        if(!theme.highContrast && GetPropW(child,L"FolderstormCustomScroll"))
+        {bool handled=false;const auto result=scrollControl(child,message,wp,lp,handled);if(handled)return result;}
         if(!theme.highContrast && message==WM_NCPAINT)
         {const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
         if(!theme.highContrast && (message==WM_PAINT || message==WM_PRINTCLIENT))
@@ -163,6 +211,12 @@ public:
                 const auto style=GetWindowLongPtrW(child,GWL_STYLE);const auto kind=style&BS_TYPEMASK;
                 if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON)SetWindowLongPtrW(child,GWL_STYLE,(style&~BS_TYPEMASK)|BS_OWNERDRAW);
                 if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON || kind==BS_OWNERDRAW)SetWindowSubclass(child,hoverProc,2,0);
+            }
+            if(!_wcsicmp(name,L"SCROLLBAR"))
+            {
+                if(t.highContrast){KillTimer(child,7);delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormCustomScroll"));}
+                else if(!GetPropW(child,L"FolderstormCustomScroll"))
+                {auto* drag=new ScrollDrag;if(!SetPropW(child,L"FolderstormCustomScroll",reinterpret_cast<HANDLE>(drag)))delete drag;}
             }
             const auto controlStyle=GetWindowLongPtrW(child,GWL_STYLE);const auto checkboxKind=controlStyle&BS_TYPEMASK;
             if(!_wcsicmp(name,L"COMBOBOX"))
@@ -196,7 +250,7 @@ public:
                 std::vector<wchar_t> label(static_cast<std::size_t>(length)+1);
                 SendMessageW(d.hwndItem,CB_GETLBTEXT,d.itemID,reinterpret_cast<LPARAM>(label.data()));
                 const auto previous=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
-                RECT textRect=d.rcItem;InflateRect(&textRect,-5,-1);DrawTextW(d.hDC,label.data(),-1,&textRect,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+                RECT textRect=d.rcItem;InflateRect(&textRect,-5,-1);DrawTextW(d.hDC,label.data(),-1,&textRect,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
                 if(previous)SelectObject(d.hDC,previous);
             }
         }
@@ -205,14 +259,14 @@ public:
     bool button(const DRAWITEMSTRUCT& d) const
     {
         if(d.CtlType!=ODT_BUTTON)return false;
-        const bool selected=(d.itemState&ODS_SELECTED)!=0,disabled=(d.itemState&ODS_DISABLED)!=0;
+        const bool selected=(d.itemState&ODS_SELECTED)!=0 || GetPropW(d.hwndItem,L"FolderstormToggle"),disabled=(d.itemState&ODS_DISABLED)!=0;
         const bool hovered=GetPropW(d.hwndItem,L"FolderstormHover")!=nullptr;
         FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected || hovered?panelBrush:backBrush);
         const HBRUSH line=CreateSolidBrush((d.itemState&ODS_FOCUS) || hovered?accent:border);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);
         wchar_t label[256]{};GetWindowTextW(d.hwndItem,label,256);RECT r=d.rcItem;InflateRect(&r,-5,-2);
         SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
-        DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);if(old)SelectObject(d.hDC,old);
+        DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
         if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}return true;
     }
 };

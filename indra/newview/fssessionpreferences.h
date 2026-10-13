@@ -3,6 +3,7 @@
 #define FS_SESSION_PREFERENCES_H
 #include "fssessionhostoptions.h"
 #include "fssessionchatprefs.h"
+#include "fssessionchatmodel.h"
 #include "fssessionexperience.h"
 namespace fs_session
 {
@@ -45,6 +46,47 @@ struct HostPreferences
             !HostExperience::decode(parts[2],next.experience) || !ChatPreferences::decode(parts[3],next.chat) ||
             bindingsConflict(next.experience,next.presentation))return false;
         output=std::move(next);return true;
+    }
+};
+// Compare with the accepted baseline, not the current login in the profile slot.
+// Unedited accounts must not gate global choices or consume bounded records.
+struct AccountPreferenceDraft
+{
+    CharacterAppearance originalAppearance,appearance;
+    CharacterSound originalSound,sound;
+    bool importedWav=false;
+    bool aliasChanged() const {return appearance.alias!=originalAppearance.alias;}
+    bool appearanceChanged() const {return aliasChanged() || appearance.color!=originalAppearance.color;}
+    bool soundChanged() const
+    {return importedWav || sound.categories!=originalSound.categories || sound.asset!=originalSound.asset || sound.name!=originalSound.name;}
+    bool edited() const {return appearanceChanged() || soundChanged();}
+    bool apply(HostPreferences& choices,const AccountKey& key,bool owns) const
+    {
+        if(!edited())return true;
+        if(!owns || !key.valid())return false;
+        auto next=choices;
+        if(appearanceChanged())
+        {
+            auto changed=next.presentation.appearance(key);
+            if(aliasChanged())changed.alias=appearance.alias;
+            if(appearance.color!=originalAppearance.color)changed.color=appearance.color;
+            if(!next.presentation.set(key,changed))return false;
+        }
+        if(soundChanged())
+        {
+            auto changed=sound;if(importedWav)changed.asset.clear(); // Assigned after validated asset creation.
+            next.chat.sounds[key]=std::move(changed);
+            if(!next.chat.valid())return false;
+        }
+        choices=std::move(next);return true;
+    }
+    std::string profileLabel(const std::string& captured,const std::string& requested,
+        const std::string& current,const std::string& accountName) const
+    {
+        const auto native=boundedText(accountName,64);
+        if(!aliasChanged() || requested!=captured || current!=captured ||
+            (!captured.empty() && captured!=native && captured!=originalAppearance.alias))return current;
+        return appearance.alias.empty()?native:appearance.alias;
     }
 };
 class ChoiceAutosave

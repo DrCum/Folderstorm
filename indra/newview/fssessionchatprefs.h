@@ -18,9 +18,10 @@ struct CharacterSound
 {
     unsigned int categories = 0;
     std::string asset;
+    std::string name{}; // Display filename only; never an adopted source path.
     bool valid() const
     {
-        if (categories > 15) return false;
+        if (categories > 15 || name.size()>128 || !validUtf8(name) || name.find('\0')!=std::string::npos) return false;
         if (asset.empty()) return true;
         return asset.size() == 36 && asset.substr(32) == ".wav" && asset.substr(0,32).find_first_not_of("0123456789abcdef") == std::string::npos;
     }
@@ -48,18 +49,18 @@ struct ChatPreferences
     std::string encode() const
     {
         if (!valid()) return {};
-        StoreWriter writer("FSC3"); writer.number(visibleRead); writer.number(activeRead); writer.number(delay);
+        StoreWriter writer("FSC4"); writer.number(visibleRead); writer.number(activeRead); writer.number(delay);
         writer.number(showMask);writer.number(attentionMask);
         for(const auto& name:profileNames)writer.text(name);
         writer.number(static_cast<std::uint32_t>(sounds.size()));
         for (const auto& entry : sounds)
-        { writer.text(entry.first.account); writer.text(entry.first.grid); writer.number(entry.second.categories); writer.text(entry.second.asset); }
+        { writer.text(entry.first.account); writer.text(entry.first.grid); writer.number(entry.second.categories); writer.text(entry.second.asset);writer.text(entry.second.name); }
         return writer.data.size() <= MaxBytes ? writer.data : std::string{};
     }
     static bool decode(const std::string& data,ChatPreferences& output)
     {
-        const bool categories=data.substr(0,4)=="FSC3";
-        StoreReader reader(data,categories?"FSC3":"FSC2",MaxBytes); ChatPreferences next;
+        const bool current=data.substr(0,4)=="FSC4",categories=current || data.substr(0,4)=="FSC3";
+        StoreReader reader(data,current?"FSC4":categories?"FSC3":"FSC2",MaxBytes); ChatPreferences next;
         const auto visible = reader.number(), active = reader.number();
         if (visible > 1 || active > 1) return false;
         next.visibleRead = visible != 0; next.activeRead = active != 0; next.delay = reader.number();
@@ -69,7 +70,7 @@ struct ChatPreferences
         for (std::uint32_t i = 0; i < count && reader.ok; ++i)
         {
             AccountKey key{reader.text(36),reader.text(127)};
-            CharacterSound choice{reader.number(),reader.text(36)};
+            CharacterSound choice{reader.number(),reader.text(36)};if(current)choice.name=reader.text(128);
             if (!next.sounds.emplace(key,choice).second) return false;
         }
         if (!reader.done() || !next.valid()) return false;
