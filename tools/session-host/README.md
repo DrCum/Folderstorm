@@ -153,7 +153,7 @@ Optional alert sounds default Off per character. Enable them in Character appear
 
 **Settings → Keyboard shortcuts** enables optional host chords; the character submenu displays their assignments. Host shortcuts work in the shell/pop-outs, outside editors, IME and menus. For the focused native world, assign the seven Character actions in **Preferences → Controls** using its normal conflict checking; no viewer defaults are imposed. Both use the host's enable policy, skip unavailable cycle targets and drop keys during a handoff. World switching preserves Chat's selected sender and drafts.
 
-The matching private protocol is **11**; do not mix the host/viewer from earlier checkpoints. New presentation metadata is a bounded atomic `host-presentation.dat` file beside existing host options, without credentials or conversation contents. See [the completed usability roadmap and native checklist](../../doc/plans/multi-character-usability.md).
+The current matching private protocol is **12**; do not mix the host/viewer from earlier checkpoints. New presentation metadata is a bounded atomic `host-presentation.dat` file beside existing host options, without credentials or conversation contents. See [the completed usability roadmap and native checklist](../../doc/plans/multi-character-usability.md).
 
 
 ### Optional Chat in each monitor
@@ -207,4 +207,17 @@ Characters → Session sets saves selected private profiles/background policies,
 
 Attention → Next/Previous navigates filtered pending items without world activation, Mark read or offer acceptance. Native offers precede unread conversations by default; Nearby is an optional filter. Settings → Keyboard shortcuts supplies optional recovery and attention bindings in the host and the corresponding native Controls actions. Shared Chat sender/drafts remain source-bound.
 
-The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). Protocol **11** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
+The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). The current protocol **12** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
+
+
+### Chat behavior, reading and character sounds
+
+Build the matching protocol **12** host and viewer for this follow-up. Managed text input uses physical key release and per-origin quarantine rather than a global held-key text veto. Missed releases quietly clear only stale logical-key state, preserving fresh physical aliases. Per-frame scans match all forward key mappings instead of the last message's origin. Posted input cannot cross a handoff ownership epoch; native four/five-character keyboard/IME acceptance is still required.
+
+Main, detached and monitor Chat open at the latest message. Scroll back or select text to pause following; Latest resumes it. Enter sends from the focused composer, Shift+Enter adds a newline, and an IME-commit Enter does not send. Draft/account guards and uncertain sends remain unchanged. A pending send leaves the editor focused with temporary read-only backpressure.
+
+Settings → Chat and read behavior offers Mark displayed chats read (On initially) and Auto-read active character (Off initially, after 60 seconds, adjustable 5–3600). Displayed reading requires a visible, non-minimized painted tail view. Scrolling back, hiding or collapsing the surface pauses it. The optional active timer resets on ownership/session/focus/visibility changes and grants newer messages a fresh delay. Automatic acknowledgements cannot dismiss newer unseen arrivals and never accept offers or clear other characters' attention.
+
+Characters → Sound and notifications, or Settings → Sounds: selected character, offers independent Direct IM, Group, Conference and supported-notification checkboxes plus Choose WAV, Preview and Reset. These control eligible **background-character** alerts; active characters retain native viewer notifications. Native DND, mute, sound preferences and restrictions still apply. Custom sounds support mono/stereo PCM WAV, 8/16-bit at 8–48 kHz, up to 10 seconds/4 MiB. Imported assets live in the host profile's sounds folder, use host alert volume, and fall back to the built-in tone if unavailable. Sounds load once when an account becomes Ready or its choice changes; playback uses the cache, capped at 20 MiB.
+
+Apply changes this session; Cancel discards the dialog choices. Save host choices persists the additive bounded host-chat.dat file, with a prior-file backup. Missing new settings inherit existing character alert policies and preserve the original host-presentation/host-experience formats. No credentials, transcripts, drafts or Inventory contents are stored. See [the completed roadmap and focused native checklist](../../doc/plans/session-chat-polish.md).

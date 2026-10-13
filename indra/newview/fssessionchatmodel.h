@@ -37,6 +37,7 @@ public:
     static constexpr std::size_t Capacity = 256;
     void resetSession() { clear(); mLast = 0; } // Only at a new login generation.
     void clear() { mEvents.clear(); } // Privacy flushes keep session-local IDs monotonic.
+    std::uint64_t latest() const { return mLast; }
     void push(Message message)
     {
         message.event = ++mLast;
@@ -99,6 +100,24 @@ public:
         if (request.kind != Kind::MarkRead || !identity.owns(request)) return false;
         const auto found = conversations.find(request.conversation);
         if (found == conversations.end() || found->second.topic != request.topic) return false;
+        if (request.flags & AutomaticRead)
+        {
+            if (found->second.lastIncomingEvent > request.event)
+            {
+                // An acknowledgement cannot dismiss arrivals the surface did
+                // not render. Nearby uses local counts; native IMs converge
+                // through the next authoritative count/catalog response.
+                if (found->second.topic == Topic::Nearby)
+                {
+                    std::uint32_t newer = 0;
+                    for (const auto& line : lines) if (line.conversation == request.conversation &&
+                        line.eventType == EventType::Chat && line.recipient != identity.account && line.event > request.event) ++newer;
+                    if (!lines.empty() && lines.front().event <= request.event+1)
+                        found->second.unread = (std::min)(found->second.unread,newer);
+                }
+                return true;
+            }
+        }
         found->second.unread = 0; return true;
     }
     void bind(const Message& status)

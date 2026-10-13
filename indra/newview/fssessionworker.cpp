@@ -54,6 +54,8 @@
 #include <imm.h>
 #include "llfloaterreg.h"
 #include "llkeyboard.h"
+#include "fssessioninputguard.h"
+#include "fssessionreadpolicy.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
 #include "llviewercamera.h"
@@ -168,7 +170,8 @@ struct Worker
     WINDOWPLACEMENT placement{sizeof(WINDOWPLACEMENT)};
     struct Override { LLSD effective; bool saved = false; };
     std::map<std::string, Override> controls;
-    std::array<bool, KEY_COUNT> heldKeys{};
+    InputQuarantine inputQuarantine;
+    std::uint64_t lastInputDiagnostic = 0;
 
     ~Worker() { if (profileLease != INVALID_HANDLE_VALUE) CloseHandle(profileLease); }
 
@@ -333,6 +336,9 @@ struct Worker
             // the owning group as well as its sender immediately before IPC.
             filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
                 { return RlvActions::canReceiveIM(LLUUID(id)); });
+            if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
+                if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
+                    payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
             auto response = status(request);
             response.event = payload.event; response.cursor = payload.cursor; response.eventType = payload.eventType;
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
@@ -373,6 +379,15 @@ struct Worker
         { reply(request, "This conversation is no longer available. Open it in the character's viewer."); return; }
         if (request.kind == Kind::MarkRead)
         {
+            if ((request.flags & AutomaticRead) && !readFenceCurrent(request,events.latest()))
+            {
+                auto response = status(request); response.flags |= ReadDeferred;
+                if (!pipe.send(response)) { detach(); pipe.close(); }
+                return;
+            }
+            if (session && ((session->isP2PSessionType() && !RlvActions::canReceiveIM(session->mOtherParticipantID)) ||
+                (session->isGroupSessionType() && !RlvActions::canReceiveIM(session->mSessionID))))
+            { reply(request,"Conversation is blocked by receive restrictions."); return; }
             if (session) LLIMModel::instance().sendNoUnreadMessages(session->mSessionID);
             reply(request); return;
         }
@@ -401,6 +416,7 @@ struct Worker
     void releaseInput()
     {
         inputGranted = false;
+        inputQuarantine.reset();
         if (window) RemovePropW(window, InputLeaseProperty);
         if (window) RemovePropW(window, FocusLeaseProperty);
         gViewerInput.releaseHeldInputs();
@@ -627,12 +643,9 @@ struct Worker
                     mode = previousMode; reply(request, "Hosted preparation failed. Disable hosting and try the separate window."); break;
                 }
                 promoting = true; pendingPromotion = request; promotionStart = frames;
-                if (gKeyboard)
-                    for (std::size_t key = 0; key < heldKeys.size(); ++key)
-                    {
-                        const auto native = gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
-                        heldKeys[key] = native < 256 && (GetAsyncKeyState(static_cast<int>(native)) & 0x8000) != 0;
-                    }
+                inputQuarantine.capture([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; });
+                LL_DEBUGS("SessionInput") << "Promotion quarantine: " << inputQuarantine.size()
+                    << " physical keys; generation " << generation << LL_ENDL;
                 EnableWindow(window, FALSE); ShowWindow(window, request.surface ? SW_SHOWNOACTIVATE : SW_RESTORE);
                 startTransition(request);
                 // Reply/grant input only after an actual normal buffer swap.
@@ -1055,13 +1068,30 @@ void FSSessionWorker::tick()
         else if (value.demoting)
         { value.demoting = false; value.reply(value.pendingDemotion, "Character disconnected before switching completed."); }
     }
-    if (gKeyboard)
-        for (std::size_t key = 0; key < value.heldKeys.size(); ++key)
-            if (value.heldKeys[key])
+    const auto quarantined = value.inputQuarantine.size();
+    value.inputQuarantine.refresh([](unsigned int key) { return (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0; },
+        [](unsigned int native)
+        {
+            if (!gKeyboard) return;
+            KEY mapped = 0;
+            // Win32 normal and extended key translation both use this map.
+            if (gKeyboard->translateKey(static_cast<U16>(native),&mapped))
             {
-                const auto native = gKeyboard->inverseTranslateKey(static_cast<KEY>(key));
-                if ((GetAsyncKeyState(static_cast<int>(native)) & 0x8000) == 0 && !gKeyboard->getKeyDown(static_cast<KEY>(key))) value.heldKeys[key] = false;
+                // A fresh key on the other keypad/modifier side may share the
+                // same logical key. Clear stale state only after every actual
+                // physical origin for that logical key is up.
+                bool physical = false;
+                for (unsigned int key = 7; key < 256 && !physical; ++key)
+                {
+                    KEY translated = 0;
+                    const bool matches = gKeyboard->translateKey(static_cast<U16>(key),&translated) && translated == mapped;
+                    physical = matches && (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0;
+                }
+                if (!physical) gKeyboard->clearKeyState(mapped);
             }
+        });
+    if (quarantined != value.inputQuarantine.size())
+        LL_DEBUGS("SessionInput") << "Physical release; remaining " << value.inputQuarantine.size() << LL_ENDL;
     if (LLStartUp::getStartupState() < STATE_LOGIN_AUTH_INIT)
     {
         value.loginRequested = false; value.gate = LoginGate::Wait;
@@ -1274,15 +1304,38 @@ void FSSessionWorker::nearbyMessage(const LLChat& chat)
 }
 bool FSSessionWorker::keyAllowed(unsigned int key)
 {
-    return inputAllowed() && (!managed() || key >= worker->heldKeys.size() || !worker->heldKeys[key]);
+    if (!inputAllowed()) return false;
+    if (!managed()) return true;
+    // Scan callbacks have no current native event. Match every forward key
+    // mapping instead of using the last message or the lossy inverse map
+    // (regular digits and keypad digits can share a viewer key).
+    if (!gKeyboard) return false;
+    return worker->inputQuarantine.allowsLogical(key,[](unsigned int native,unsigned int logical)
+    {
+        KEY translated = 0;
+        return gKeyboard->translateKey(static_cast<U16>(native),&translated) && translated == logical;
+    });
 }
-void FSSessionWorker::keyReleased(unsigned int key)
+void FSSessionWorker::keyReleased(unsigned int)
 {
-    if (managed() && key < worker->heldKeys.size()) worker->heldKeys[key] = false;
+    if (managed() && gViewerWindow)
+        worker->inputQuarantine.released(static_cast<unsigned int>(gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger()));
 }
 bool FSSessionWorker::textAllowed()
 {
-    return inputAllowed() && (!managed() || std::none_of(worker->heldKeys.begin(), worker->heldKeys.end(), [](bool held) { return held; }));
+    if (!inputAllowed()) return false;
+    if (!managed()) return true;
+    // WM_CHAR records its own scan-derived origin, rather than the preceding
+    // key-down. Unknown-origin IME text is still protected by input ownership.
+    const auto native = static_cast<unsigned int>(gViewerWindow->getWindow()->getNativeKeyData()["virtual_key"].asInteger());
+    const bool allowed = worker->inputQuarantine.allows(native);
+    if (!allowed && GetTickCount64() - worker->lastInputDiagnostic >= 2000)
+    {
+        worker->lastInputDiagnostic = GetTickCount64();
+        LL_DEBUGS("SessionInput") << "Held-origin text suppressed; generation " << worker->generation
+            << "; quarantined keys " << worker->inputQuarantine.size() << LL_ENDL;
+    }
+    return allowed;
 }
 void FSSessionWorker::focusHostedClient()
 {
