@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include "fssessiondialoglayout.h"
+#include "lucide.h"
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -17,8 +18,19 @@ inline void setNativeFont(HWND child,HFONT font)
     wchar_t klass[32]{};GetClassNameW(child,klass,32);
     if(_wcsicmp(klass,L"COMBOBOX") || !(GetWindowLongPtrW(child,GWL_STYLE)&CBS_OWNERDRAWFIXED))return;
     const HDC dc=GetDC(child);if(!dc)return;const auto previous=SelectObject(dc,font);TEXTMETRICW metrics{};
-    if(GetTextMetricsW(dc,&metrics)){const int height=static_cast<int>(metrics.tmHeight)+6;SendMessageW(child,CB_SETITEMHEIGHT,0,height);SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),height);}
+    if(GetTextMetricsW(dc,&metrics)){const int height=static_cast<int>(metrics.tmHeight);SendMessageW(child,CB_SETITEMHEIGHT,0,height+6);SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),height+2);}
     if(previous)SelectObject(dc,previous);ReleaseDC(child,dc);
+}
+inline int comboFaceHeight(HWND child,int target)
+{
+    RECT rect{};GetWindowRect(child,&rect);const int height=static_cast<int>(rect.bottom-rect.top);
+    if(height==target)return height;
+    const auto selection=SendMessageW(child,CB_GETITEMHEIGHT,static_cast<WPARAM>(-1),0);if(selection==CB_ERR)return height;
+    int minimum=1;const HDC dc=GetDC(child);
+    if(dc){const auto old=SelectObject(dc,reinterpret_cast<HFONT>(SendMessageW(child,WM_GETFONT,0,0)));TEXTMETRICW metrics{};if(GetTextMetricsW(dc,&metrics))minimum=static_cast<int>(metrics.tmHeight)+2;if(old)SelectObject(dc,old);ReleaseDC(child,dc);}
+    const int trim=(std::max)(0,height-static_cast<int>(selection));
+    SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),(std::max)(minimum,target-trim));
+    GetWindowRect(child,&rect);return static_cast<int>(rect.bottom-rect.top);
 }
 class Theme
 {
@@ -26,6 +38,7 @@ public:
     COLORREF background=0,panel=0,text=0,muted=0,accent=0,border=0,input=0;
     HBRUSH backBrush=nullptr,panelBrush=nullptr,inputBrush=nullptr;
     bool highContrast=false,dark=true;
+    IconCache icons;
     unsigned int textPercent=100;
     int uiDpi(unsigned int dpi) const {return MulDiv(static_cast<int>(dpi),static_cast<int>(textPercent),100);}
     int scale(int value,unsigned int dpi) const {return MulDiv(value,uiDpi(dpi),96);}
@@ -36,23 +49,24 @@ public:
         if(message==WM_MOUSEMOVE && !GetPropW(child,L"FolderstormHover"))
         {SetPropW(child,L"FolderstormHover",reinterpret_cast<HANDLE>(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,child,0};TrackMouseEvent(&track);InvalidateRect(child,nullptr,FALSE);}
         if(message==WM_MOUSELEAVE){RemovePropW(child,L"FolderstormHover");InvalidateRect(child,nullptr,FALSE);}
-        if(message==WM_NCDESTROY){RemovePropW(child,L"FolderstormHover");RemoveWindowSubclass(child,hoverProc,2);}
+        if(message==WM_NCDESTROY){RemovePropW(child,L"FolderstormHover");RemovePropW(child,L"FolderstormIcon");RemovePropW(child,L"FolderstormIconLabel");RemoveWindowSubclass(child,hoverProc,2);}
         return DefSubclassProc(child,message,wp,lp);
     }
     void selection(const DRAWITEMSTRUCT& d) const
     {
-        const bool selected=(d.itemState&ODS_SELECTED)!=0;
+        const bool selected=(d.itemState&ODS_SELECTED)!=0 && !(d.itemState&ODS_COMBOBOXEDIT);
         FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected?panelBrush:inputBrush);
-        SetTextColor(d.hDC,selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
+        SetTextColor(d.hDC,(d.itemState&ODS_DISABLED)?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
     }
     void selectionFocus(const DRAWITEMSTRUCT& d) const
     {
-        if(d.itemState&ODS_SELECTED){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}
-        if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
+        if(!highContrast){if((d.itemState&(ODS_SELECTED|ODS_FOCUS)) && !(d.itemState&ODS_COMBOBOXEDIT)){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}}
+        else if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
     }
     void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);backBrush=panelBrush=inputBrush=nullptr;}
     void set(unsigned int choice)
     {
+        icons.clear();
         DWORD percent=100,bytes=sizeof(percent);
         RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Accessibility",L"TextScaleFactor",RRF_RT_REG_DWORD,nullptr,&percent,&bytes);
         textPercent=(std::max)(100u,(std::min)(225u,static_cast<unsigned int>(percent)));
@@ -84,14 +98,24 @@ public:
         }
         SelectObject(dc,old);DeleteObject(pen);
     }
+    static bool scrollbarRect(HWND child,int kind,RECT& rect)
+    {
+        if(kind==SB_CTL){GetClientRect(child,&rect);MapWindowPoints(child,nullptr,reinterpret_cast<POINT*>(&rect),2);return !IsRectEmpty(&rect);}
+        if(!(GetWindowLongPtrW(child,GWL_STYLE)&(kind==SB_VERT?WS_VSCROLL:WS_HSCROLL)))return false;
+        SCROLLBARINFO bar{};bar.cbSize=sizeof(bar);
+        if(!GetScrollBarInfo(child,kind==SB_VERT?OBJID_VSCROLL:OBJID_HSCROLL,&bar) || IsRectEmpty(&bar.rcScrollBar))return false;
+        rect=bar.rcScrollBar;return true;
+    }
     void paintNonClient(HWND child) const
     {
         RECT outer{},client{};GetWindowRect(child,&outer);GetClientRect(child,&client);MapWindowPoints(child,nullptr,reinterpret_cast<POINT*>(&client),2);
         OffsetRect(&client,-outer.left,-outer.top);const int width=static_cast<int>(outer.right-outer.left),height=static_cast<int>(outer.bottom-outer.top);
         const HDC dc=GetWindowDC(child);if(!dc)return;const auto style=GetWindowLongPtrW(child,GWL_STYLE);
-        if((style&WS_VSCROLL) && width-client.right>4){RECT bar{client.right,client.top,width-1,client.bottom};paintScrollbar(child,dc,bar,true,SB_VERT);}
-        if((style&WS_HSCROLL) && height-client.bottom>4){RECT bar{client.left,client.bottom,client.right,height-1};paintScrollbar(child,dc,bar,false,SB_HORZ);}
-        RECT frame{0,0,width,height};const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&frame,edge);DeleteObject(edge);ReleaseDC(child,dc);
+        const int saved=SaveDC(dc);ExcludeClipRect(dc,client.left,client.top,client.right,client.bottom);
+        RECT whole{0,0,width,height};FillRect(dc,&whole,inputBrush);
+        for(const int kind:{SB_VERT,SB_HORZ})
+        {RECT bar{};if((style&(kind==SB_VERT?WS_VSCROLL:WS_HSCROLL)) && scrollbarRect(child,kind,bar)){OffsetRect(&bar,-outer.left,-outer.top);paintScrollbar(child,dc,bar,kind==SB_VERT,kind);}}
+        RECT frame{0,0,width,height};const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&frame,edge);DeleteObject(edge);RestoreDC(dc,saved);ReleaseDC(child,dc);
     }
     void paintControl(HWND child,HDC dc,const wchar_t* klass) const
     {
@@ -103,7 +127,11 @@ public:
             COMBOBOXINFO info{};info.cbSize=sizeof(info);
             if(GetComboBoxInfo(child,&info))
             {
-                FillRect(dc,&info.rcButton,panelBrush);const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&rect,edge);DeleteObject(edge);
+                FillRect(dc,&rect,inputBrush);
+                DRAWITEMSTRUCT item{};item.CtlType=ODT_COMBOBOX;item.CtlID=static_cast<UINT>(GetDlgCtrlID(child));item.itemID=static_cast<UINT>(SendMessageW(child,CB_GETCURSEL,0,0));
+                item.itemAction=ODA_DRAWENTIRE;item.itemState=ODS_COMBOBOXEDIT|(enabled?0:ODS_DISABLED);item.hwndItem=child;item.hDC=dc;item.rcItem=info.rcItem;
+                SendMessageW(GetParent(child),WM_DRAWITEM,item.CtlID,reinterpret_cast<LPARAM>(&item));
+                FillRect(dc,&info.rcButton,panelBrush);const HBRUSH edge=CreateSolidBrush(GetFocus()==child?accent:border);FrameRect(dc,&rect,edge);DeleteObject(edge);
                 const int cx=(info.rcButton.left+info.rcButton.right)/2,cy=(info.rcButton.top+info.rcButton.bottom)/2;
                 POINT points[]={{cx-4,cy-2},{cx+4,cy-2},{cx,cy+3}};
                 const HBRUSH arrow=CreateSolidBrush(enabled?text:muted);const auto oldBrush=SelectObject(dc,arrow);const auto oldPen=SelectObject(dc,GetStockObject(NULL_PEN));Polygon(dc,points,3);SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(arrow);
@@ -134,45 +162,115 @@ public:
             paintScrollbar(child,dc,rect,(GetWindowLongPtrW(child,GWL_STYLE)&SBS_VERT)!=0,SB_CTL);
         if(previous)SelectObject(dc,previous);
     }
-    struct ScrollDrag {int grab=0,repeat=-1;bool dragging=false;};
-    static LRESULT scrollControl(HWND child,UINT message,WPARAM wp,LPARAM lp,bool& handled)
+    struct ScrollDrag
+    {
+        int grab=0,repeat=-1,kind=SB_CTL,position=0;
+        bool active=false,dragging=false,native=false;
+        HWND previousCapture=nullptr;
+    };
+    static ScrollDrag* scrollDrag(HWND child)
     {
         auto* drag=reinterpret_cast<ScrollDrag*>(GetPropW(child,L"FolderstormCustomScroll"));
+        return drag?drag:reinterpret_cast<ScrollDrag*>(GetPropW(child,L"FolderstormNativeScroll"));
+    }
+    static void finishScroll(HWND child,ScrollDrag& drag,bool restoreCapture)
+    {
+        const bool wasActive=drag.active;
+        drag.active=drag.dragging=false;drag.repeat=-1;KillTimer(child,7);
+        if(!wasActive || GetCapture()!=child)return;
+        // A dropdown already owns capture while open. Keep that ownership so
+        // scrolling does not close it or stop outside-click/Escape handling.
+        if(restoreCapture && drag.previousCapture==child)return;
+        if(restoreCapture && IsWindow(drag.previousCapture) && IsWindowVisible(drag.previousCapture))SetCapture(drag.previousCapture);
+        else ReleaseCapture();
+    }
+    static void removeScroll(HWND child)
+    {
+        if(auto* drag=scrollDrag(child))finishScroll(child,*drag,false);
+        delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormCustomScroll"));
+        delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormNativeScroll"));
+    }
+    static void installScroll(HWND child,bool native,bool highContrast)
+    {
+        if(highContrast){removeScroll(child);return;}
+        if(scrollDrag(child))return;
+        auto* drag=new ScrollDrag;drag->native=native;
+        if(!SetPropW(child,native?L"FolderstormNativeScroll":L"FolderstormCustomScroll",reinterpret_cast<HANDLE>(drag)))delete drag;
+    }
+    static LRESULT scrollControl(HWND child,UINT message,WPARAM wp,LPARAM lp,bool& handled)
+    {
+        auto* drag=scrollDrag(child);
         if(!drag){handled=false;return 0;}
-        const bool vertical=(GetWindowLongPtrW(child,GWL_STYLE)&SBS_VERT)!=0;
+        const auto vertical=[&](){return drag->native?drag->kind==SB_VERT:(GetWindowLongPtrW(child,GWL_STYLE)&SBS_VERT)!=0;};
         const auto notify=[&](int command)
         {
-            SendMessageW(GetParent(child),vertical?WM_VSCROLL:WM_HSCROLL,MAKEWPARAM(command,0),reinterpret_cast<LPARAM>(child));
-            RedrawWindow(child,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
+            if(drag->native)
+            {
+                // Native listboxes obtain SB_THUMBTRACK from the OS's private
+                // tracking state. Use absolute SB_THUMBPOSITION while dragging;
+                // selection stays native and no fabricated nTrackPos is read.
+                const int nativeCommand=command==SB_THUMBTRACK?SB_THUMBPOSITION:command;
+                SendMessageW(child,vertical()?WM_VSCROLL:WM_HSCROLL,MAKEWPARAM(nativeCommand,drag->position),0);
+            }
+            else SendMessageW(GetParent(child),vertical()?WM_VSCROLL:WM_HSCROLL,MAKEWPARAM(command,0),reinterpret_cast<LPARAM>(child));
+            RedrawWindow(child,nullptr,nullptr,RDW_INVALIDATE|RDW_FRAME|RDW_UPDATENOW);
         };
         const auto geometry=[&]()
         {
-            RECT r{};GetClientRect(child,&r);SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(child,SB_CTL,&info);
-            return fs_session::scrollThumbLayout(static_cast<int>(vertical?r.bottom:r.right),static_cast<int>(vertical?r.right:r.bottom),info.nMin,info.nMax,info.nPage,info.nPos);
+            RECT r{};scrollbarRect(child,drag->kind,r);SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(child,drag->kind,&info);
+            return fs_session::scrollThumbLayout(static_cast<int>(vertical()?r.bottom-r.top:r.right-r.left),static_cast<int>(vertical()?r.right-r.left:r.bottom-r.top),info.nMin,info.nMax,info.nPage,info.nPos);
+        };
+        const auto coordinate=[&]()
+        {
+            RECT r{};scrollbarRect(child,drag->kind,r);POINT point{};GetCursorPos(&point);
+            return static_cast<int>(vertical()?point.y-r.top:point.x-r.left);
+        };
+        const auto commandFor=[](fs_session::ScrollHit hit)
+        {
+            switch(hit){case fs_session::ScrollHit::LineUp:return SB_LINEUP;case fs_session::ScrollHit::LineDown:return SB_LINEDOWN;case fs_session::ScrollHit::PageUp:return SB_PAGEUP;case fs_session::ScrollHit::PageDown:return SB_PAGEDOWN;default:return -1;}
         };
         handled=true;
-        if(message==WM_LBUTTONDOWN || message==WM_LBUTTONDBLCLK)
+        if(message==WM_LBUTTONDOWN || message==WM_LBUTTONDBLCLK || message==WM_NCLBUTTONDOWN || message==WM_NCLBUTTONDBLCLK)
         {
-            const int point=vertical?GET_Y_LPARAM(lp):GET_X_LPARAM(lp);const auto g=geometry();RECT r{};GetClientRect(child,&r);
-            const int extent=static_cast<int>(vertical?r.bottom:r.right);SetCapture(child);
-            drag->dragging=point>=g.start && point<g.start+g.length;
-            if(drag->dragging){drag->grab=point-g.start;return 0;}
-            drag->repeat=point<g.edge?SB_LINEUP:point>=extent-g.edge?SB_LINEDOWN:point<g.start?SB_PAGEUP:SB_PAGEDOWN;
+            if(drag->native)
+            {
+                // Open combos can deliver a client mouse message for their
+                // scrollbar because the popup already has mouse capture.
+                POINT point{};GetCursorPos(&point);bool found=false;
+                for(const int kind:{SB_VERT,SB_HORZ}){RECT r{};if(scrollbarRect(child,kind,r) && PtInRect(&r,point)){drag->kind=kind;found=true;break;}}
+                SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_RANGE;
+                if(!found || !GetScrollInfo(child,drag->kind,&info) || info.nMin<0 || info.nMax>65535){handled=false;return 0;}
+            }
+            else if(message==WM_NCLBUTTONDOWN || message==WM_NCLBUTTONDBLCLK){handled=false;return 0;}
+            const int point=coordinate();const auto g=geometry();const int extent=2*g.edge+g.length+g.travel;
+            const auto hit=fs_session::scrollHit(g,extent,point);if(hit==fs_session::ScrollHit::None)return 0;
+            drag->previousCapture=GetCapture();drag->active=true;SetCapture(child);
+            drag->dragging=hit==fs_session::ScrollHit::Thumb;
+            if(drag->dragging){drag->grab=point-g.start;SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_POS;GetScrollInfo(child,drag->kind,&info);drag->position=info.nPos;return 0;}
+            drag->repeat=commandFor(hit);
             notify(drag->repeat);SetTimer(child,7,300,nullptr);return 0;
         }
-        if(message==WM_MOUSEMOVE && GetCapture()==child && drag->dragging)
+        if(message==WM_MOUSEMOVE && drag->active && GetCapture()==child)
         {
-            const auto g=geometry();SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_POS;
-            info.nPos=fs_session::scrollPositionAt(g,vertical?GET_Y_LPARAM(lp):GET_X_LPARAM(lp),drag->grab);SetScrollInfo(child,SB_CTL,&info,FALSE);notify(SB_THUMBTRACK);return 0;
+            if(drag->dragging)
+            {
+                const auto g=geometry();drag->position=fs_session::scrollPositionAt(g,coordinate(),drag->grab);
+                if(!drag->native){SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_POS;info.nPos=drag->position;SetScrollInfo(child,SB_CTL,&info,FALSE);}
+                notify(SB_THUMBTRACK);
+            }
+            return 0;
         }
-        if(message==WM_TIMER && wp==7){if(GetCapture()==child && drag->repeat>=0){notify(drag->repeat);SetTimer(child,7,65,nullptr);}return 0;}
-        if(message==WM_LBUTTONUP || message==WM_CAPTURECHANGED || message==WM_CANCELMODE)
+        if(message==WM_TIMER && wp==7)
         {
-            const bool wasDragging=drag->dragging;drag->dragging=false;drag->repeat=-1;KillTimer(child,7);
-            if(message!=WM_CAPTURECHANGED && GetCapture()==child)ReleaseCapture();
-            if(wasDragging)notify(SB_THUMBPOSITION);notify(SB_ENDSCROLL);return 0;
+            if(drag->active && GetCapture()==child && drag->repeat>=0)
+            {const auto g=geometry();if(commandFor(fs_session::scrollHit(g,2*g.edge+g.length+g.travel,coordinate()))==drag->repeat)notify(drag->repeat);SetTimer(child,7,65,nullptr);}return 0;
         }
-        if(message==WM_MOUSEWHEEL)return SendMessageW(GetParent(child),message,wp,lp);
+        if(drag->active && (message==WM_LBUTTONUP || message==WM_CAPTURECHANGED || message==WM_CANCELMODE || message==WM_KILLFOCUS || (message==WM_SHOWWINDOW&&!wp)))
+        {
+            const bool wasDragging=drag->dragging;finishScroll(child,*drag,message==WM_LBUTTONUP);
+            if(wasDragging && message==WM_LBUTTONUP)notify(SB_THUMBPOSITION);notify(SB_ENDSCROLL);handled=message==WM_LBUTTONUP;return 0;
+        }
+        if(message==WM_MOUSEWHEEL && !drag->native)return SendMessageW(GetParent(child),message,wp,lp);
         handled=false;return 0;
     }
     static LRESULT CALLBACK controlProc(HWND child,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
@@ -180,22 +278,26 @@ public:
         const auto& theme=*reinterpret_cast<const Theme*>(data);
         if(message==WM_NCDESTROY)
         {
-            KillTimer(child,7);delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormCustomScroll"));RemoveWindowSubclass(child,controlProc,4);
+            removeScroll(child);RemoveWindowSubclass(child,controlProc,4);return DefSubclassProc(child,message,wp,lp);
         }
-        if(!theme.highContrast && GetPropW(child,L"FolderstormCustomScroll"))
+        if(!theme.highContrast && scrollDrag(child))
         {bool handled=false;const auto result=scrollControl(child,message,wp,lp,handled);if(handled)return result;}
+        if(!theme.highContrast && (message==WM_SETFOCUS || message==WM_KILLFOCUS || message==WM_ENABLE || message==CB_SETCURSEL || message==CB_SHOWDROPDOWN))
+        {wchar_t klass[32]{};GetClassNameW(child,klass,32);if(!_wcsicmp(klass,L"COMBOBOX")){const auto result=DefSubclassProc(child,message,wp,lp);InvalidateRect(child,nullptr,FALSE);return result;}}
         if(!theme.highContrast && message==WM_NCPAINT)
-        {const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
+        {theme.paintNonClient(child);return 0;}
         if(!theme.highContrast && (message==WM_PAINT || message==WM_PRINTCLIENT))
         {
             wchar_t klass[32]{};GetClassNameW(child,klass,32);
-            if(!_wcsicmp(klass,L"COMBOBOX"))
-            {const auto result=DefSubclassProc(child,message,wp,lp);const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):GetDC(child);if(dc){theme.paintControl(child,dc,klass);if(message!=WM_PRINTCLIENT)ReleaseDC(child,dc);}return result;}
-            if(_wcsicmp(klass,L"BUTTON") && _wcsicmp(klass,WC_TABCONTROLW) && _wcsicmp(klass,L"SCROLLBAR")){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
+            if(_wcsicmp(klass,L"COMBOBOX") && _wcsicmp(klass,L"BUTTON") && _wcsicmp(klass,WC_TABCONTROLW) && _wcsicmp(klass,L"SCROLLBAR")){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
             PAINTSTRUCT paint{};const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):BeginPaint(child,&paint);
             if(dc)theme.paintControl(child,dc,klass);if(message!=WM_PRINTCLIENT)EndPaint(child,&paint);return 0;
         }
         if(!theme.highContrast && (message==WM_VSCROLL || message==WM_HSCROLL)){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
+        if(!theme.highContrast && GetPropW(child,L"FolderstormNativeScroll") &&
+           (message==WM_WINDOWPOSCHANGED || message==WM_SHOWWINDOW || message==WM_SIZE || message==WM_NCACTIVATE ||
+            message==WM_MOUSEMOVE || message==WM_NCMOUSEMOVE || message==WM_MOUSEWHEEL))
+        {const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
         return DefSubclassProc(child,message,wp,lp);
     }
     void window(HWND w) const
@@ -213,15 +315,12 @@ public:
                 if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON || kind==BS_OWNERDRAW)SetWindowSubclass(child,hoverProc,2,0);
             }
             if(!_wcsicmp(name,L"SCROLLBAR"))
-            {
-                if(t.highContrast){KillTimer(child,7);delete reinterpret_cast<ScrollDrag*>(RemovePropW(child,L"FolderstormCustomScroll"));}
-                else if(!GetPropW(child,L"FolderstormCustomScroll"))
-                {auto* drag=new ScrollDrag;if(!SetPropW(child,L"FolderstormCustomScroll",reinterpret_cast<HANDLE>(drag)))delete drag;}
-            }
+                installScroll(child,false,t.highContrast);
+            if(!_wcsicmp(name,L"LISTBOX"))installScroll(child,true,t.highContrast);
             const auto controlStyle=GetWindowLongPtrW(child,GWL_STYLE);const auto checkboxKind=controlStyle&BS_TYPEMASK;
             if(!_wcsicmp(name,L"COMBOBOX"))
-            {COMBOBOXINFO combo{};combo.cbSize=sizeof(combo);if(GetComboBoxInfo(child,&combo) && combo.hwndList){SetWindowTheme(combo.hwndList,t.highContrast?nullptr:L"",t.highContrast?nullptr:L"");SetWindowSubclass(combo.hwndList,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));}}
-            if((controlStyle&(WS_HSCROLL|WS_VSCROLL)) || !_wcsicmp(name,L"COMBOBOX") || !_wcsicmp(name,WC_TABCONTROLW) || !_wcsicmp(name,L"SCROLLBAR") ||
+            {COMBOBOXINFO combo{};combo.cbSize=sizeof(combo);if(GetComboBoxInfo(child,&combo) && combo.hwndList){SetWindowTheme(combo.hwndList,t.highContrast?nullptr:L"",t.highContrast?nullptr:L"");installScroll(combo.hwndList,true,t.highContrast);SetWindowSubclass(combo.hwndList,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));}}
+            if((controlStyle&(WS_HSCROLL|WS_VSCROLL)) || !_wcsicmp(name,L"LISTBOX") || !_wcsicmp(name,L"COMBOBOX") || !_wcsicmp(name,WC_TABCONTROLW) || !_wcsicmp(name,L"SCROLLBAR") ||
                (!_wcsicmp(name,L"BUTTON") && (checkboxKind==BS_AUTOCHECKBOX || checkboxKind==BS_CHECKBOX)))
                 SetWindowSubclass(child,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));
             InvalidateRect(child,nullptr,TRUE);return TRUE;
@@ -266,7 +365,16 @@ public:
         wchar_t label[256]{};GetWindowTextW(d.hwndItem,label,256);RECT r=d.rcItem;InflateRect(&r,-5,-2);
         SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
-        DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
+        const auto icon=buttonIcon(d.hwndItem);const bool withLabel=GetPropW(d.hwndItem,L"FolderstormIconLabel")!=nullptr;
+        using WindowDpi=UINT(WINAPI*)(HWND);static const auto windowDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
+        const auto dpi=windowDpi?windowDpi(d.hwndItem):static_cast<UINT>(GetDeviceCaps(d.hDC,LOGPIXELSX));
+        const int size=(std::max)(1,(std::min)(static_cast<int>(d.rcItem.bottom-d.rcItem.top)-4,scale(20,dpi)));
+        SIZE extent{};if(withLabel)GetTextExtentPoint32W(d.hDC,label,lstrlenW(label),&extent);
+        const int occupied=size+(withLabel?static_cast<int>(extent.cx)+6:0),center=(static_cast<int>(d.rcItem.left+d.rcItem.right)-occupied)/2;
+        const int x=withLabel?(std::max)(static_cast<int>(r.left),center):center;
+        const bool painted=icon!=Icon::None && icons.draw(d.hDC,icon,x,(static_cast<int>(d.rcItem.top+d.rcItem.bottom)-size)/2,size,GetTextColor(d.hDC));
+        if(painted && withLabel)r.left=x+size+6;
+        if(!painted || withLabel)DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|(painted?DT_LEFT:DT_CENTER)|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
         if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}return true;
     }
 };

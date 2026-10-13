@@ -3,8 +3,60 @@
 #define FS_SESSION_TOOLBAR_LAYOUT_H
 #include <algorithm>
 #include <vector>
+#include <cstdint>
 namespace fs_session
 {
+enum class DockedArea : unsigned int { Automatic,Full,LeftHalf,RightHalf,LeftThird,MiddleThird,RightThird };
+struct ToolbarRange {int x=0,width=0;};
+inline ToolbarRange dockedToolbarRange(int width,DockedArea area,int windowX=0,const std::vector<ToolbarRange>& monitors={})
+{
+    width=(std::max)(0,width);
+    if(area==DockedArea::Automatic)
+    {
+        int substantial=0,narrowest=0;
+        for(const auto& monitor:monitors)if(monitor.width>0)
+        {
+            const auto overlap=(std::min)(static_cast<std::int64_t>(windowX)+width,static_cast<std::int64_t>(monitor.x)+monitor.width)-(std::max)(static_cast<std::int64_t>(windowX),static_cast<std::int64_t>(monitor.x));
+            if(overlap*3>=monitor.width){++substantial;narrowest=narrowest?(std::min)(narrowest,monitor.width):monitor.width;}
+        }
+        area=substantial==3 && static_cast<std::int64_t>(width)*2>=static_cast<std::int64_t>(narrowest)*5?DockedArea::MiddleThird:
+            substantial==2 && static_cast<std::int64_t>(width)*2>=static_cast<std::int64_t>(narrowest)*3?DockedArea::RightHalf:DockedArea::Full;
+    }
+    const int secondThird=static_cast<int>(static_cast<std::int64_t>(width)*2/3);
+    switch(area)
+    {
+    case DockedArea::LeftHalf:return {0,width/2};
+    case DockedArea::RightHalf:return {width/2,width-width/2};
+    case DockedArea::LeftThird:return {0,width/3};
+    case DockedArea::MiddleThird:return {width/3,secondThird-width/3};
+    case DockedArea::RightThird:return {secondThird,width-secondThird};
+    default:return {0,width};
+    }
+}
+struct ToolbarGroups
+{
+    int selector=0,mainCount=4,leftEnd=0,rightStart=0,centerStart=0,centerAvailable=0;
+    bool mainOverflow=false;
+};
+inline ToolbarGroups toolbarGroups(int width,bool quick,bool pinned=false)
+{
+    width=(std::max)(0,width);
+    ToolbarGroups g;const int end=(std::max)(0,width-4),right=pinned?92:60;
+    g.rightStart=(std::max)(4,end-right);g.selector=(std::max)(0,(std::min)(180,g.rightStart-12));
+    const int reserve=quick?28:0;
+    const auto left=[&](){return 4+g.selector+(g.mainCount+(g.mainOverflow?1:0))*32;};
+    while(g.mainCount>0 && left()+reserve+16>g.rightStart)
+    {
+        if(g.selector>80)g.selector=(std::max)(80,g.rightStart-reserve-16-4-g.mainCount*32);
+        else {--g.mainCount;g.mainOverflow=true;}
+    }
+    if(left()+reserve+16>g.rightStart)g.selector=(std::max)(0,g.rightStart-reserve-16-4-(g.mainOverflow?32:0));
+    g.leftEnd=(std::min)(g.rightStart,left());g.centerStart=g.leftEnd+8;
+    g.centerAvailable=(std::max)(0,g.rightStart-8-g.centerStart);
+    return g;
+}
+inline int centeredQuickStart(int width,const ToolbarGroups& g,int used)
+{return (std::max)(g.centerStart,(std::min)((width-used)/2,g.rightStart-8-used));}
 struct QuickButtonSize {int full=0,compact=0;};
 struct QuickToolbarLayout
 {

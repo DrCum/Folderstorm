@@ -48,6 +48,7 @@
 #include "fssessionattentionnav.h"
 #include "fssessionsets.h"
 #include "theme.h"
+#include "tooltips.h"
 #include "fssessionlifecycle.h"
 #include <filesystem>
 #include <fstream>
@@ -75,7 +76,7 @@ constexpr int SessionOptions = 119, ViewportFocus = 120;
 constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList = 130, AttentionReview = 131, AttentionDismiss = 132;
 constexpr int RestoreControls = 140, RecoverWindows = 141;
 constexpr int CardBase=700, CardActionBase=710, QuickBase=730, PanelPin=165, MonitorExchange=166, MonitorChatToggle=167, MonitorOptions=168;
-constexpr int DensityToggle=175,ControlsDock=176,ChatDock=177,QuickOverflow=178,MonitorsMenu=179;
+constexpr int DensityToggle=175,ControlsDock=176,ChatDock=177,QuickOverflow=178,MonitorsMenu=179,MainOverflow=181;
 constexpr UINT TrayMessage = WM_APP + 20;
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -356,7 +357,8 @@ struct Host
     HWND viewMenu=nullptr,settingsMenu=nullptr,attentionButton=nullptr,nextButton=nullptr,restartButton=nullptr;
     HWND cardButtons[MaxCharacters]{},cardActions[MaxCharacters]{},quickButtons[12]{};
     bool commandOverflow=false;
-    HWND densityToggle=nullptr,controlsDock=nullptr,chatDock=nullptr,quickDivider=nullptr,quickOverflow=nullptr;
+    HWND densityToggle=nullptr,controlsDock=nullptr,chatDock=nullptr,quickDivider=nullptr,rightDivider=nullptr,quickOverflow=nullptr,mainOverflow=nullptr;
+    std::vector<unsigned int> overflowMain;
     std::vector<unsigned int> overflowActions;
     std::size_t attentionCount=0;
     int controlsExpandedHeight=0;
@@ -365,7 +367,8 @@ struct Host
     SessionSetStore setStore;SessionSetOpen setOpen;
     std::map<std::tuple<std::string,std::string,std::string>,std::uint64_t> unreadSince;
     unsigned int chrome = 0;
-    HWND chatWindow = nullptr, controlsWindow = nullptr, tooltips = nullptr;
+    HWND chatWindow = nullptr, controlsWindow = nullptr;
+    fs_host_ui::Tooltips tooltips;
     bool chatDetached = false, controlsDetached = false;
     UINT chatDpi = 96, controlsDpi = 96, attentionDpi = 96;
     HFONT chatFont = nullptr, controlsFont = nullptr, attentionFont = nullptr;
@@ -436,11 +439,12 @@ struct Host
         theme.set(experience.theme);fs_host_ui::dialogTheme=&theme;
         for(HWND panel:{window,chatWindow,controlsWindow,attentionWindow})theme.window(panel);
         for(auto& m:monitors)if(m.window){theme.window(m.window);m.dirty=true;}
+        tooltips.style(theme);
     }
     std::wstring quickLabel(unsigned int id) const
     {
         const auto* c=shellCommand(id);if(!c)return L"";
-        return experience.labels==2 ? c->icon : experience.labels==1 ? c->label : std::wstring(c->icon)+L" "+c->label;
+        return c->label;
     }
     unsigned int windowKey(HWND panel) const
     {
@@ -501,6 +505,8 @@ struct Host
             {5,L"Controls",L"Keyboard shortcuts",L""},
             {6,L"Advanced",L"Diagnostics",L""},{6,L"Advanced",L"Files & recovery",L""}};
         const auto chromeField=add(PrefLayout,{L"Character controls",std::to_wstring(chrome==2?1:chrome),FieldType::Choice,{L"Expanded",L"Condensed"}});
+        const auto areaField=add(PrefLayout,{L"Docked controls area",std::to_wstring(experience.dockedArea),FieldType::Choice,{L"Automatic",L"Full window",L"Left half",L"Right half",L"Left third",L"Middle third",L"Right third"}});
+        fields[areaField].help=L"Automatic uses the right half for a broad two-monitor span and the middle third for three. Explicit choices override detection; this moves host controls only.";
         const auto hostedField=add(PrefLayout,{L"Show viewer inside host",embedding?L"1":L"0",FieldType::Check});
         fields[hostedField].help=L"Fit the active viewer inside the host. Turn off to use separate viewer windows while retaining character switching.";
         const auto chatField=add(PrefLayout,{L"Shared Chat",std::to_wstring(!showChat?0:chatDetached?2:1),FieldType::Choice,{L"Hidden",L"Docked",L"Separate window"}});
@@ -508,7 +514,7 @@ struct Host
         const auto themeField=add(PrefAppearance,{L"Theme",std::to_wstring(experience.theme),FieldType::Choice,{L"Folderstorm Midnight",L"Folderstorm Daylight",L"Follow Windows"}});
         const auto densityField=add(PrefAppearance,{L"Button spacing",std::to_wstring(experience.density),FieldType::Choice,{L"Compact",L"Comfortable"}});
         const auto cardsField=add(PrefAppearance,{L"Character cards in Expanded mode",experience.cards?L"1":L"0",FieldType::Check});
-        const auto labelsField=add(PrefAppearance,{L"Quick-action labels",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text",L"Icons with tooltips"}});
+        const auto labelsField=add(PrefQuick,{L"Button display",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text only",L"Icons only"}});
         fields[labelsField].help=L"Docked quick actions share the toolbar row. Labels collapse as space runs out; Attention becomes its count.";
         const auto profileField=add(PrefCharacter,{L"Character",std::to_wstring(selected),FieldType::Choice,names});
         fields[profileField].fixed=true;fields[profileField].transient=true;
@@ -615,6 +621,7 @@ struct Host
         const auto diagnosticsField=add(PrefDiagnostics,{L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check});
         const auto minimalField=add(PrefRecovery,{L"Minimal host controls",chrome==2?L"1":L"0",FieldType::Check});fields[minimalField].help=L"Advanced: hide the regular toolbar. Show controls, the tray and recovery shortcuts remain available.";
         const auto folderField=add(PrefRecovery,{L"Host settings",L"Open settings folder",FieldType::Action});fields[folderField].action=[&](HWND owner){ShellExecuteW(owner,L"open",profiles.c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
+        const auto licenseField=add(PrefRecovery,{L"Icon credits",L"Lucide license",FieldType::Action});fields[licenseField].action=[&](HWND owner){MessageBoxW(owner,wide(fs_host_ui::lucideLicense).c_str(),L"Lucide icon license",MB_OK|MB_ICONINFORMATION);};
         const auto saveField=add(PrefRecovery,{L"Saving",L"Retry saving",FieldType::Action});fields[saveField].enabled=!saveError.empty();fields[saveField].help=L"Retry saving already applied choices. Use Apply for the changes currently being edited.";fields[saveField].action=[&](HWND owner)
         {
             const bool saved=saveOptions();fields[saveField].enabled=!saved;EnableWindow(fields[saveField].control,!saved);EnableWindow(fields[saveField].caption,!saved);
@@ -688,13 +695,13 @@ struct Host
         fields[activeReadField].changed=dependencies;fields[transitionField].changed=dependencies;
         const auto updateQuick=[&](HWND owner)
         {
-            EditorUpdate update(owner);std::wstring full,compact;
+            EditorUpdate update(owner);std::wstring full;
             for(unsigned int i=0;i<12;++i)
             {
                 const auto n=static_cast<unsigned int>(std::wcstoul(readField(quickStart+i).c_str(),nullptr,10));if(!n || n>quickChoices.size())continue;const auto& command=*quickChoices[n-1];
-                if(!full.empty()){full+=L" | ";compact+=L" | ";}full+=command.label;compact+=command.id==274?L"0":command.icon;
+                if(!full.empty())full+=L" | ";full+=command.label;
             }
-            fields[quickPreview].value=full.empty()?L"Toolbar preview: no quick actions":L"Toolbar: "+full+L"\nCompact: "+compact;
+            fields[quickPreview].value=full.empty()?L"Toolbar preview: no quick actions":L"Toolbar: "+full;
             if(fields[quickPreview].control)SetWindowTextW(fields[quickPreview].control,fields[quickPreview].value.c_str());
         };
         for(unsigned int i=0;i<12;++i)fields[quickStart+i].changed=updateQuick;
@@ -704,7 +711,7 @@ struct Host
         {
             remember(false);auto next=preferences();const auto n=[&](std::size_t at){return number(fields[at]);};
             next.options.chrome=n(minimalField)?2:n(chromeField);next.options.hosted=n(hostedField)!=0;next.options.chat=n(chatField)!=0;next.options.chatDetached=n(chatField)==0?chatDetached:n(chatField)==2;next.options.controlsDetached=n(controlsDetachedField)!=0;
-            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;
+            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;next.experience.dockedArea=n(areaField);
             next.chat.haveCategories=true;next.chat.showMask=next.chat.attentionMask=0;for(unsigned int i=0;i<5;++i)if(n(showStart+i))next.chat.showMask|=1u<<i;for(unsigned int i=0;i<8;++i)if(n(attentionStart+i))next.chat.attentionMask|=1u<<i;
             next.chat.visibleRead=n(visibleReadField)!=0;next.chat.activeRead=n(activeReadField)!=0;next.chat.delay=n(activeReadField)?n(delayField):chatPreferences.delay;next.experience.oldestFirst=n(oldestField)!=0;next.experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(people[i].attention)next.experience.accountMask|=1u<<i;
             next.options.voice=n(voiceField)!=0;next.options.muteBackground=n(muteField)!=0;next.presentation.volume=n(volumeField);next.presentation.transition=n(transitionField);next.presentation.duration=n(transitionField)?n(durationField):presentation.duration;next.presentation.height=n(transitionField)==1?n(heightField):presentation.height;next.options.previewSize=n(sizeField);next.options.previewRate=n(rateField);next.options.cinematic=next.presentation.transition==1;
@@ -784,7 +791,7 @@ struct Host
         if(toggle)experience.pinned[id]=!experience.pinned[id];
         SetWindowPos(panel,experience.pinned[id]?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE);
         CheckMenuItem(GetSystemMenu(panel,FALSE),0xA160,MF_BYCOMMAND|(experience.pinned[id]?MF_CHECKED:MF_UNCHECKED));
-        HWND pin=GetDlgItem(panel,PanelPin);if(pin){SetWindowTextW(pin,experience.pinned[id]?L"◆":L"◇");addTooltip(pin,L"Always on top");}
+        HWND pin=GetDlgItem(panel,PanelPin);if(pin){SetWindowTextW(pin,L"Always on top");fs_host_ui::setButtonIcon(pin,fs_host_ui::Icon::Pin);setToggle(pin,experience.pinned[id]);addTooltip(pin,L"Always on top");}
     }
     void installPanelMenuOnce(HWND panel){if(!GetPropW(panel,L"FolderstormPanelMenu")){installPanelMenu(panel);SetPropW(panel,L"FolderstormPanelMenu",reinterpret_cast<HANDLE>(1));}}
     void installPanelMenu(HWND panel)
@@ -1129,12 +1136,7 @@ struct Host
             {
                 pinLabels[i] = std::move(label); SetWindowTextW(pinButtons[i],pinLabels[i].c_str()); InvalidateRect(pinButtons[i],nullptr,FALSE);
                 pinTips[i] = (owner >= 0 ? characterName(owner) : L"Unavailable") + L" · " + wide(pin.title);
-                TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.uFlags = TTF_IDISHWND|TTF_SUBCLASS; tool.hwnd = GetParent(pinButtons[i]); tool.uId = reinterpret_cast<UINT_PTR>(pinButtons[i]);
-                if (tooltips)
-                {
-                    const bool exists = SendMessageW(tooltips,TTM_GETTOOLINFOW,0,reinterpret_cast<LPARAM>(&tool)) != 0;
-                    tool.lpszText = pinTips[i].data(); SendMessageW(tooltips,exists ? TTM_UPDATETIPTEXTW : TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
-                }
+                addTooltip(pinButtons[i],pinTips[i].c_str());
             }
         }
     }
@@ -1683,6 +1685,18 @@ struct Host
             {message(L"Character changed while the menu was open; choose the action again.");return;}
             sessionMenu(0,actions[choice-1],target);
         }
+    }
+    void mainOverflowMenu()
+    {
+        focusRequested=false;RemovePropW(window,L"FolderstormViewportFocusIntent");const auto actions=overflowMain;
+        HMENU popup=CreatePopupMenu();
+        for(const auto action:actions)
+        {
+            const auto* name=action==LaunchNext?L"Login":action==ShowChat?L"Chat":action==MonitorsMenu?L"Monitors":L"Preferences";
+            AppendMenuW(popup,MF_STRING|(action==LaunchNext&&!IsWindowEnabled(launchButton)?MF_GRAYED:0),action,name);
+        }
+        POINT point{};GetCursorPos(&point);menuOpen=true;const UINT action=TrackPopupMenu(popup,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(popup);
+        if(action)SendMessageW(window,WM_COMMAND,action,0);
     }
     void sessionMenu(unsigned int group=0,UINT direct=0,int target=-1)
     {
@@ -3095,7 +3109,7 @@ struct Host
     }
     std::vector<HWND> characterControls() const
     {
-        std::vector<HWND> result{densityToggle,controlsDock,quickDivider,quickOverflow,characterControl, launchButton, embedControl, detachControl, showChatControl, optionsControl, compactInfo,viewMenu,settingsMenu,attentionButton,nextButton,restartButton};
+        std::vector<HWND> result{densityToggle,controlsDock,quickDivider,rightDivider,quickOverflow,mainOverflow,characterControl, launchButton, embedControl, detachControl, showChatControl, optionsControl, compactInfo,viewMenu,settingsMenu,attentionButton,nextButton,restartButton};
         for(int i=0;i<MaxCharacters;++i){result.push_back(cardButtons[i]);result.push_back(cardActions[i]);}for(auto button:quickButtons)result.push_back(button);
         for (int i = 0; i < MaxCharacters; ++i) { result.push_back(status[i]); result.push_back(standbyControl[i]); }
         return result;
@@ -3148,16 +3162,7 @@ struct Host
                 moved.emplace_back(child, old);
             }
         }
-        for (const auto& entry : moved)
-        {
-            TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.hwnd = entry.second;
-            tool.uId = reinterpret_cast<UINT_PTR>(entry.first);
-            if (tooltips && SendMessageW(tooltips, TTM_GETTOOLINFOW, 0, reinterpret_cast<LPARAM>(&tool)))
-            {
-                SendMessageW(tooltips, TTM_DELTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
-                tool.hwnd = target; SendMessageW(tooltips, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
-            }
-        }
+        for (const auto& entry : moved)tooltips.reparent(entry.first,theme);
         preference = detached;
         if (chat && show) { showChat = true; SendMessageW(showChatControl, BM_SETCHECK, BST_CHECKED, 0); }
         if(!detached && panel)SetWindowPos(panel,HWND_NOTOPMOST,0,0,0,0,SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE);
@@ -3186,51 +3191,95 @@ struct Host
         const int rows=1+(parent!=window && !experience.quick.empty()?1:0)+(!condensed && experience.cards?MaxCharacters:0)+(!condensed && experience.diagnostics?MaxCharacters:0)+(needsRestart?1:0);
         return theme.scale(rows*row,local);
     }
+    ToolbarRange controlsArea(HWND parent) const
+    {
+        RECT client{};GetClientRect(parent,&client);const int width=static_cast<int>(client.right);
+        if(parent!=window)return {0,width};
+        struct Coverage {RECT rect;std::vector<ToolbarRange> monitors;};
+        MapWindowPoints(parent,nullptr,reinterpret_cast<POINT*>(&client),2);Coverage coverage{client,{}};
+        EnumDisplayMonitors(nullptr,nullptr,[](HMONITOR,HDC,LPRECT monitor,LPARAM data)->BOOL
+        {
+            auto& c=*reinterpret_cast<Coverage*>(data);
+            const LONG overlap=(std::min)(c.rect.bottom,monitor->bottom)-(std::max)(c.rect.top,monitor->top);
+            if(overlap>0 && overlap*3>=(std::min)(c.rect.bottom-c.rect.top,monitor->bottom-monitor->top))
+                c.monitors.push_back({static_cast<int>(monitor->left),static_cast<int>(monitor->right-monitor->left)});
+            return TRUE;
+        },reinterpret_cast<LPARAM>(&coverage));
+        return dockedToolbarRange(width,static_cast<DockedArea>(experience.dockedArea),static_cast<int>(client.left),coverage.monitors);
+    }
     void layoutCharacters(HWND parent,bool condensed,bool visible)
     {
-        RECT r{};GetClientRect(parent,&r);const UINT local=parent==window?dpi:controlsDpi;
-        const auto scale=[this,local](int n){return theme.scale(n,local);};const int width=MulDiv(static_cast<int>(r.right),96,theme.uiDpi(local));
+        const UINT local=parent==window?dpi:controlsDpi;const auto area=controlsArea(parent);
+        const auto scale=[this,local](int n){return theme.scale(n,local);};const int width=MulDiv(area.width,96,theme.uiDpi(local));
         const int row=experience.density?38:30,h=row-6;
-        for(auto child:characterControls())ShowWindow(child,SW_HIDE);if(!visible)return;
-        const auto move=[&](HWND child,int x,int y,int w){MoveWindow(child,scale(x),scale(y),(std::max)(1,scale(w)),scale(h),TRUE);ShowWindow(child,SW_SHOWNOACTIVATE);};
-        const bool compact=width<600;int x=4;
-        const int selector=(std::max)(80,(std::min)(180,width-(parent!=window?280:260)));
-        MoveWindow(characterControl,scale(x),scale(3),scale(selector),scale(220),TRUE);ShowWindow(characterControl,SW_SHOWNOACTIVATE);x+=selector+4;
-        move(launchButton,x,3,compact?28:64);x+=compact?32:68;SetWindowTextW(launchButton,compact?L"+":L"+ Login");
-        move(showChatControl,x,3,compact?32:44);x+=compact?36:48;SetWindowTextW(showChatControl,compact?L"▤":L"Chat");setToggle(showChatControl,showChat);
-        move(viewMenu,x,3,32);x+=36;move(settingsMenu,x,3,28);x+=32;
-        const bool requestedCondensed=chrome==1;
-        move(densityToggle,x,3,28);x+=32;SetWindowTextW(densityToggle,requestedCondensed?L"↓":L"↑");
-        addTooltip(densityToggle,requestedCondensed?L"Expand character controls":condensed?L"Condense character controls. Currently compacted to fit; enlarge the window to show cards.":L"Condense character controls");
-        move(controlsDock,x,3,28);x+=32;SetWindowTextW(controlsDock,controlsDetached?L"↙":L"↗");addTooltip(controlsDock,controlsDetached?L"Dock character controls":L"Pop out character controls");
-        if(parent!=window){move(GetDlgItem(parent,PanelPin),x,3,28);x+=32;}
-        int y=row;int quickX=x+8,quickY=3,available=(std::max)(0,width-quickX-4);
-        if(parent!=window){quickX=4;quickY=y+3;available=(std::max)(0,width-8);if(!experience.quick.empty())y+=row;}
-        std::vector<QuickButtonSize> sizes;std::vector<std::wstring> full,compactLabels;
-        const HDC dc=GetDC(parent);const auto previous=dc?SelectObject(dc,parent==window?font:controlsFont):nullptr;
-        const auto textWidth=[&](const std::wstring& text){SIZE size{};if(dc)GetTextExtentPoint32W(dc,text.c_str(),static_cast<int>(text.size()),&size);return (std::max)(28,MulDiv(static_cast<int>(size.cx),96,theme.uiDpi(local))+14);};
-        for(const auto command:experience.quick)
+        std::vector<HWND> shown;
+        const auto show=[&](HWND child){shown.push_back(child);if(!(GetWindowLongPtrW(child,GWL_STYLE)&WS_VISIBLE))ShowWindow(child,SW_SHOWNOACTIVATE);};
+        const int faceHeight=(std::max)(scale(h),fs_host_ui::comboFaceHeight(characterControl,scale(h)));
+        const auto position=[&](HWND child,int x,int y,int w,int height,int expectedHeight)
+        {RECT old{};GetWindowRect(child,&old);MapWindowPoints(nullptr,parent,reinterpret_cast<POINT*>(&old),2);if(old.left!=x || old.top!=y || old.right-old.left!=w || old.bottom-old.top!=expectedHeight)MoveWindow(child,x,y,w,height,TRUE);show(child);};
+        const auto move=[&](HWND child,int x,int y,int w){position(child,area.x+scale(x),scale(y),(std::max)(1,scale(w)),faceHeight,faceHeight);};
+        const auto name=[&](HWND child,const wchar_t* label){wchar_t old[256]{};GetWindowTextW(child,old,256);if(wcscmp(old,label))SetWindowTextW(child,label);};
+        const auto icon=[&](HWND child,int x,int y,fs_host_ui::Icon glyph,const wchar_t* label,const wchar_t* tip)
+        {name(child,label);fs_host_ui::setButtonIcon(child,glyph);move(child,x,y,28);addTooltip(child,tip);};
+        if(visible)
         {
-            const auto* c=shellCommand(command);const auto badge=std::to_wstring(attentionCount);
-            full.push_back(command==274?(experience.labels==2?badge:L"Attention · "+badge):quickLabel(command));compactLabels.push_back(command==274?badge:c?c->icon:L"?");
-            sizes.push_back({textWidth(full.back()),textWidth(compactLabels.back())});
+            const bool detached=parent!=window;const auto groups=toolbarGroups(width,!experience.quick.empty()&&!detached,detached);
+            position(characterControl,area.x+scale(4),scale(3),(std::max)(1,scale(groups.selector)),scale(220),faceHeight);
+            addTooltip(characterControl,(L"Select character: "+characterName(lifecycle.selection())+L". Right-click for actions.").c_str());
+            SendMessageW(characterControl,CB_SETDROPPEDWIDTH,scale((std::max)(180,groups.selector)),0);
+            const HWND mainButtons[]={launchButton,showChatControl,viewMenu,settingsMenu};
+            const unsigned int mainCommands[]={LaunchNext,ShowChat,MonitorsMenu,SettingsActions};
+            const fs_host_ui::Icon mainIcons[]={fs_host_ui::Icon::UserPlus,fs_host_ui::Icon::MessagesSquare,fs_host_ui::Icon::Cctv,fs_host_ui::Icon::Settings};
+            const wchar_t* mainNames[]={L"Login",L"Chat",L"Monitors",L"Preferences"};
+            const wchar_t* mainTips[]={L"Open the next available login; right-click to choose a character",L"Show or hide shared Chat",L"Open or close character monitors",L"Host Preferences"};
+            int x=4+groups.selector+4;overflowMain.clear();
+            for(int i=0;i<4;++i){if(i<groups.mainCount){icon(mainButtons[i],x,3,mainIcons[i],mainNames[i],mainTips[i]);x+=32;}else overflowMain.push_back(mainCommands[i]);}
+            setToggle(showChatControl,showChat);
+            if(groups.mainOverflow)icon(mainOverflow,x,3,fs_host_ui::Icon::Ellipsis,L"More controls",L"More character controls");
+            int right=groups.rightStart;
+            if(detached){move(GetDlgItem(parent,PanelPin),right,3,28);right+=32;}
+            icon(controlsDock,right,3,controlsDetached?fs_host_ui::Icon::ArrowDownLeft:fs_host_ui::Icon::ExternalLink,
+                controlsDetached?L"Dock character controls":L"Pop out character controls",controlsDetached?L"Dock character controls":L"Pop out character controls");right+=32;
+            const bool requestedCondensed=chrome==1;
+            icon(densityToggle,right,3,requestedCondensed?fs_host_ui::Icon::ChevronDown:fs_host_ui::Icon::ChevronUp,
+                requestedCondensed?L"Expand character controls":L"Condense character controls",
+                requestedCondensed?L"Expand character controls":condensed?L"Condense character controls. Currently compacted to fit; enlarge the window to show cards.":L"Condense character controls");
+            int y=row;const int available=detached?(std::max)(0,width-8):groups.centerAvailable;
+            const int quickY=detached?y+3:3;if(detached&&!experience.quick.empty())y+=row;
+            std::vector<QuickButtonSize> sizes;std::vector<std::wstring> labels;
+            const HDC dc=GetDC(parent);const auto previous=dc?SelectObject(dc,parent==window?font:controlsFont):nullptr;
+            const auto textWidth=[&](const std::wstring& label){SIZE size{};if(dc)GetTextExtentPoint32W(dc,label.c_str(),static_cast<int>(label.size()),&size);return (std::max)(28,MulDiv(static_cast<int>(size.cx),96,theme.uiDpi(local))+14);};
+            for(const auto command:experience.quick)
+            {
+                const auto badge=std::to_wstring(attentionCount);labels.push_back(command==274?L"Attention · "+badge:quickLabel(command));
+                const int compact=command==274?textWidth(badge):28;
+                sizes.push_back({experience.labels==2?compact:textWidth(labels.back())+(experience.labels==0?24:0),compact});
+            }
+            if(dc){if(previous)SelectObject(dc,previous);ReleaseDC(parent,dc);}
+            const auto fit=quickToolbarLayout(available,sizes);int quickX=detached?(width-fit.used)/2:centeredQuickStart(width,groups,fit.used);
+            const int first=quickX;overflowActions.clear();
+            for(std::size_t i=0;i<experience.quick.size();++i)
+            {
+                const auto command=experience.quick[i];if(i>=fit.visible){overflowActions.push_back(command);continue;}
+                const bool compact=experience.labels==2 || fit.widths[i]<sizes[i].full;
+                name(quickButtons[i],(compact&&command==274?std::to_wstring(attentionCount):labels[i]).c_str());
+                fs_host_ui::setButtonIcon(quickButtons[i],compact?(command==274?fs_host_ui::Icon::None:fs_host_ui::commandIcon(command)):experience.labels==0?fs_host_ui::commandIcon(command):fs_host_ui::Icon::None,!compact&&experience.labels==0);
+                move(quickButtons[i],quickX,quickY,fit.widths[i]);quickX+=fit.widths[i]+4;
+                if(const auto* commandInfo=shellCommand(command))addTooltip(quickButtons[i],commandInfo->tip);
+                setToggle(quickButtons[i],command==274&&attentionWindow&&IsWindowVisible(attentionWindow));
+            }
+            if(fit.overflow&&available>0){fs_host_ui::setButtonIcon(quickOverflow,fs_host_ui::Icon::Ellipsis);move(quickOverflow,quickX,quickY,(std::min)(28,available));}
+            if(!detached&&fit.used>0)
+            {
+                if(first-groups.leftEnd<12)move(quickDivider,(first+groups.leftEnd)/2-2,3,4);
+                if(groups.rightStart-first-fit.used<12)move(rightDivider,(groups.rightStart+first+fit.used)/2-2,3,4);
+            }
+            const int selected=lifecycle.selection();const bool needsRestart=slots[selected]&&(slots[selected]->snapshot.state==State::Disconnected||!slots[selected]->pipe.alive()||slots[selected]->restart.phase()!=Restart::Phase::Idle);
+            if(needsRestart){move(restartButton,4,y,160);name(restartButton,slots[selected]->restart.phase()==Restart::Phase::Idle?L"Restart character":L"Cancel restart");fs_host_ui::setButtonIcon(restartButton,fs_host_ui::Icon::RotateCw,true);addTooltip(restartButton,L"Restart this character or cancel its pending restart");y+=row;}
+            if(!condensed&&experience.cards)for(unsigned int position=0;position<MaxCharacters;++position){const int i=static_cast<int>(experience.order[position]);move(cardButtons[i],4,y,width-48);move(cardActions[i],width-40,y,34);name(cardActions[i],L"Character actions");fs_host_ui::setButtonIcon(cardActions[i],fs_host_ui::Icon::Ellipsis);addTooltip(cardButtons[i],(L"Select "+characterName(i)).c_str());addTooltip(cardActions[i],(L"Actions for "+characterName(i)).c_str());y+=row;}
+            if(!condensed&&experience.diagnostics)for(int i=0;i<MaxCharacters;++i){move(status[i],4,y,width-8);y+=row;}
         }
-        if(dc){if(previous)SelectObject(dc,previous);ReleaseDC(parent,dc);}
-        const auto fit=quickToolbarLayout(available,sizes);overflowActions.clear();
-        if(!experience.quick.empty() && parent==window)move(quickDivider,x+2,3,4);
-        for(std::size_t i=0;i<experience.quick.size();++i)
-        {
-            if(i>=fit.visible){overflowActions.push_back(experience.quick[i]);continue;}
-            const bool shortLabel=fit.widths[i]<sizes[i].full || experience.labels==2;
-            SetWindowTextW(quickButtons[i],(shortLabel?compactLabels[i]:full[i]).c_str());move(quickButtons[i],quickX,quickY,fit.widths[i]);quickX+=fit.widths[i]+4;
-            const auto* c=shellCommand(experience.quick[i]);if(c)addTooltip(quickButtons[i],c->tip);
-            setToggle(quickButtons[i],experience.quick[i]==274 && attentionWindow && IsWindowVisible(attentionWindow));
-        }
-        if(fit.overflow && available>0)move(quickOverflow,quickX,quickY,(std::min)(28,available));
-        const int selected=lifecycle.selection();const bool needsRestart=slots[selected] && (slots[selected]->snapshot.state==State::Disconnected || !slots[selected]->pipe.alive() || slots[selected]->restart.phase()!=Restart::Phase::Idle);
-        if(needsRestart){move(restartButton,4,y,160);SetWindowTextW(restartButton,slots[selected]->restart.phase()==Restart::Phase::Idle?L"Restart character":L"Cancel restart");y+=row;}
-        if(!condensed && experience.cards)for(unsigned int position=0;position<MaxCharacters;++position){const int i=static_cast<int>(experience.order[position]);move(cardButtons[i],4,y,width-48);move(cardActions[i],width-40,y,34);y+=row;}
-        if(!condensed && experience.diagnostics)for(int i=0;i<MaxCharacters;++i){MoveWindow(status[i],scale(4),scale(y),scale(width-8),scale(22),TRUE);ShowWindow(status[i],SW_SHOWNOACTIVATE);y+=row;}
+        for(auto child:characterControls())if(std::find(shown.begin(),shown.end(),child)==shown.end()&&(GetWindowLongPtrW(child,GWL_STYLE)&WS_VISIBLE))ShowWindow(child,SW_HIDE);
     }
     void setToggle(HWND child,bool selected)
     {
@@ -3255,7 +3304,7 @@ struct Host
         const int reviewWidth=scale(narrow?84:120),readWidth=scale(narrow?44:60),pinWidth=scale(narrow?44:64);
         move(chatReview,inset,top,reviewWidth,scale(24));move(chatRead,inset+reviewWidth+scale(6),top,readWidth,scale(24));move(pinMenu,inset+reviewWidth+readWidth+scale(12),top,pinWidth,scale(24));
         SetWindowTextW(chatReview,narrow?L"View":L"Review in viewer");addTooltip(chatReview,L"Review the selected conversation in its native viewer");
-        move(chatDock,width-scale(parent!=window?78:40),top,scale(32),scale(24));SetWindowTextW(chatDock,chatDetached?L"↙":L"↗");addTooltip(chatDock,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");
+        move(chatDock,width-scale(parent!=window?78:40),top,scale(32),scale(24));SetWindowTextW(chatDock,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");fs_host_ui::setButtonIcon(chatDock,chatDetached?fs_host_ui::Icon::ArrowDownLeft:fs_host_ui::Icon::ExternalLink);addTooltip(chatDock,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");
         if(parent!=window)move(GetDlgItem(parent,PanelPin),width-scale(44),top,scale(32),scale(24));
         top+=scale(28);move(chatAccent,inset,top,scale(5),scale(20));move(chatLabel,scale(18),top,(std::max)(1,width-scale(90)),scale(20));move(chatLatest,width-scale(66),top,scale(60),scale(20));top+=scale(24);
         const int input=(std::max)(top+scale(50),height-scale(42));
@@ -3296,13 +3345,7 @@ struct Host
     }
     void addTooltip(HWND child, const wchar_t* text)
     {
-        if (!tooltips) return;
-        TOOLINFOW tool{}; tool.cbSize = sizeof(tool); tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
-        tool.hwnd = GetParent(child); tool.uId = reinterpret_cast<UINT_PTR>(child); tool.lpszText = const_cast<wchar_t*>(text);
-        const auto* label=tool.lpszText;
-        const bool exists=SendMessageW(tooltips,TTM_GETTOOLINFOW,0,reinterpret_cast<LPARAM>(&tool))!=0;
-        tool.lpszText=const_cast<wchar_t*>(label);
-        SendMessageW(tooltips,exists?TTM_UPDATETIPTEXTW:TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
+        tooltips.set(child,text,theme);
     }
 };
 Host* host = nullptr;
@@ -3519,15 +3562,17 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SendMessageW(host->showChatControl, BM_SETCHECK, host->showChat ? BST_CHECKED : BST_UNCHECKED, 0);
         host->embedControl = control(window, L"BUTTON", L"Host active viewer", BS_AUTOCHECKBOX | WS_TABSTOP, 383, 10, 235, 28, HostSurface);
         host->detachControl = control(window, L"BUTTON", L"Separate windows", BS_PUSHBUTTON | WS_TABSTOP, 630, 10, 125, 28, DetachAll);
-        host->viewMenu=control(window,L"BUTTON",L"▣ ▾",BS_PUSHBUTTON|WS_TABSTOP,0,0,60,28,MonitorsMenu);
-        host->settingsMenu=control(window,L"BUTTON",L"⚙",BS_PUSHBUTTON|WS_TABSTOP,0,0,70,28,SettingsActions);
+        host->viewMenu=control(window,L"BUTTON",L"Monitors",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,MonitorsMenu);
+        host->settingsMenu=control(window,L"BUTTON",L"Preferences",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,SettingsActions);
         host->attentionButton=control(window,L"BUTTON",L"Attention",BS_PUSHBUTTON|WS_TABSTOP,0,0,80,28,274);
         host->nextButton=control(window,L"BUTTON",L"Next",BS_PUSHBUTTON|WS_TABSTOP,0,0,45,28,NextAttention);
         host->densityToggle=control(window,L"BUTTON",L"↑",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,DensityToggle);
         host->controlsDock=control(window,L"BUTTON",L"↗",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,ControlsDock);
         host->chatDock=control(window,L"BUTTON",L"↗",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,ChatDock);
         host->quickDivider=control(window,L"STATIC",L"|",SS_CENTER,0,0,4,28);
+        host->rightDivider=control(window,L"STATIC",L"|",SS_CENTER,0,0,4,28);
         host->quickOverflow=control(window,L"BUTTON",L"…",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,QuickOverflow);
+        host->mainOverflow=control(window,L"BUTTON",L"More controls",BS_PUSHBUTTON|WS_TABSTOP,0,0,28,28,MainOverflow);
         host->restartButton=control(window,L"BUTTON",L"Restart",BS_PUSHBUTTON|WS_TABSTOP,0,0,70,28,240);
         for(int i=0;i<MaxCharacters;++i){host->cardButtons[i]=control(window,L"BUTTON",L"Character",BS_PUSHBUTTON|WS_TABSTOP,0,0,200,30,CardBase+i);host->cardActions[i]=control(window,L"BUTTON",L"…",BS_PUSHBUTTON|WS_TABSTOP,0,0,30,30,CardActionBase+i);}
         for(int i=0;i<12;++i)host->quickButtons[i]=control(window,L"BUTTON",L"",BS_PUSHBUTTON|WS_TABSTOP,0,0,50,28,QuickBase+i);
@@ -3580,13 +3625,14 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->chatDetached = host->controlsDetached = false;
         if(!host->revealControl && host->chrome==2)host->chrome=1;
         host->setChrome(host->chrome);
-        host->tooltips = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP,
-            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, GetModuleHandleW(nullptr), nullptr);
         host->addTooltip(host->launchButton,L"Open the next available login; right-click to choose a character");
         host->addTooltip(host->showChatControl,L"Show or hide shared Chat");host->addTooltip(host->viewMenu,L"Open or close character monitors");host->addTooltip(host->settingsMenu,L"Host Preferences");host->addTooltip(host->quickOverflow,L"More quick actions");
         host->addTooltip(host->embedControl, L"Fit the active viewer to this host; uncheck to return to a separate managed window");
         host->addTooltip(host->detachControl, L"Use separate viewer windows while retaining character management");
         host->addTooltip(host->optionsControl, L"Character actions, monitors, host presentation and docking");
+        host->addTooltip(host->mainOverflow,L"More character controls");host->addTooltip(host->characterControl,L"Select a character; right-click for its actions");
+        host->addTooltip(host->chatReview,L"Review the selected conversation in its native viewer");host->addTooltip(host->chatRead,L"Mark this conversation read");
+        host->addTooltip(host->chatSend,L"Send as the account shown above");host->addTooltip(host->pinMenu,L"Pinned conversations");
         if (chatDetached) host->setPanelDetached(true, true, false);
         if (controlsDetached) host->setPanelDetached(false, true, false);
         if (!host->lastNotice.empty()) host->message(host->lastNotice);
@@ -3629,6 +3675,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if (LOWORD(wparam) == WA_INACTIVE)
         { host->focusRequested = false; RemovePropW(window, L"FolderstormViewportFocusIntent"); }
         return DefWindowProcW(window, message, wparam, lparam);
+    case WM_MOVE:
     case WM_SIZE: if (host->viewport) host->layout(); return 0;
     case WM_DPICHANGED:
     {
@@ -3665,6 +3712,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if(LOWORD(wparam)>=QuickBase && LOWORD(wparam)<QuickBase+12)
         {const auto i=static_cast<std::size_t>(LOWORD(wparam)-QuickBase);if(i<host->experience.quick.size())host->sessionMenu(0,host->experience.quick[i]);return 0;}
         if(LOWORD(wparam)==MonitorsMenu){host->monitorsMenu();return 0;}if(LOWORD(wparam)==SettingsActions){host->editPreferences();return 0;}
+        if(LOWORD(wparam)==MainOverflow){host->mainOverflowMenu();return 0;}
         if(LOWORD(wparam)==DensityToggle){host->setChrome(host->chrome==1?0:1);return 0;}
         if(LOWORD(wparam)==ControlsDock){host->setPanelDetached(false,!host->controlsDetached);return 0;}
         if(LOWORD(wparam)==ChatDock){host->setPanelDetached(true,!host->chatDetached);return 0;}
