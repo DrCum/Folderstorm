@@ -471,6 +471,7 @@ struct Host
             Message source;bool ready=false,imported=false,attention=true;
             std::wstring label,alias;unsigned int color=0,categories=0;Mode mode=Mode::Warm;
             std::string asset,soundName;WavSound wav;
+            CharacterAppearance originalAppearance;CharacterSound originalSound;
         };
         std::array<ProfileDraft,MaxCharacters> people;
         auto originalLabels=chatPreferences.profileNames;auto originalModes=standby;auto draftOrder=experience.order;
@@ -479,7 +480,7 @@ struct Host
         {
             auto& p=people[i];p.attention=(experience.accountMask&(1u<<i))!=0;p.label=wide(chatPreferences.profileNames[i]);p.mode=standby[i];names.push_back(characterName(i));
             p.ready=slots[i] && slots[i]->snapshot.state==State::Ready;
-            if(p.ready){p.source=slots[i]->snapshot;const auto a=appearance(i);p.alias=wide(a.alias);p.color=a.color;const auto sound=characterSound(i);p.categories=sound.categories;p.asset=sound.asset;p.soundName=sound.name;if(!p.asset.empty())readSound(profiles/L"sounds"/wide(p.asset),p.wav);}
+            if(p.ready){p.source=slots[i]->snapshot;p.originalAppearance=appearance(i);p.originalSound=characterSound(i);p.alias=wide(p.originalAppearance.alias);p.color=p.originalAppearance.color;p.categories=p.originalSound.categories;p.asset=p.originalSound.asset;p.soundName=p.originalSound.name;}
         }
         int selected=validSlot(target)?target:lifecycle.selection();if(!validSlot(selected))selected=0;
         std::vector<Field> fields;
@@ -670,7 +671,13 @@ struct Host
             people[selected].wav=std::move(sound);people[selected].imported=true;people[selected].soundName=boundedText(utf8(std::filesystem::path(file.data()).filename().wstring()),128);dirtyEditor(owner);showPerson(owner);
         };
         std::uint64_t preview=0;
-        fields[previewField].action=[&](HWND){const auto volume=static_cast<unsigned int>(std::wcstoul(readField(volumeField).c_str(),nullptr,10));if(volume<=100){const auto& wav=people[selected].wav;preview=playAlert(wav.bytes.empty()?builtinAlertTone(volume):wav.volume(volume));}};
+        fields[previewField].action=[&](HWND)
+        {
+            const auto volume=static_cast<unsigned int>(std::wcstoul(readField(volumeField).c_str(),nullptr,10));if(volume>100)return;
+            auto& p=people[selected];if(p.wav.bytes.empty()&&!p.asset.empty()&&!readSound(profiles/L"sounds"/wide(p.asset),p.wav))
+            {message(L"Saved alert sound is unavailable. Choose another WAV or reset the sound.");return;}
+            preview=playAlert(p.wav.bytes.empty()?builtinAlertTone(volume):p.wav.volume(volume));
+        };
         fields[resetSoundField].action=[&](HWND owner){remember(true);people[selected].wav={};people[selected].asset.clear();people[selected].soundName.clear();people[selected].imported=false;dirtyEditor(owner);showPerson(owner);};
         const auto dependencies=[&](HWND)
         {
@@ -709,10 +716,13 @@ struct Host
                 if(p.label!=wide(originalLabels[i]))next.chat.profileNames[i]=label;
                 if(p.mode!=originalModes[i])next.options.standby[i]=p.mode;
                 if(!p.ready)continue;
+                const AccountPreferenceDraft account{p.originalAppearance,{utf8(p.alias),p.color,p.originalAppearance.alerts},
+                    p.originalSound,{p.categories,p.asset,p.soundName},p.imported};
+                if(!account.edited())continue;
                 if(!slots[i] || !slots[i]->chat.identity.owns(p.source) || slots[i]->snapshot.state!=State::Ready){MessageBoxW(owner,L"A character login changed while Preferences was open. Cancel and reopen Preferences to edit that account.",L"Character changed",MB_OK);return false;}
-                auto a=presentation.appearance(AccountKey::from(p.source));a.alias=utf8(p.alias);a.color=p.color;if(!p.alias.empty()&&a.alias.empty())return false;
-                if(!next.presentation.set(AccountKey::from(p.source),a))return false;
-                next.chat.sounds[AccountKey::from(p.source)]={p.categories,p.imported?std::string{}:p.asset,p.soundName};
+                if((!p.alias.empty()&&account.appearance.alias.empty()) || !account.apply(next,AccountKey::from(p.source),true))
+                {MessageBoxW(owner,L"Account choices could not be applied. Check the name and sound; at most 32 customized accounts can be saved.",L"Preferences not applied",MB_OK|MB_ICONINFORMATION);return false;}
+                next.chat.profileNames[i]=account.profileLabel(originalLabels[i],label,next.chat.profileNames[i],p.source.name);
             }
             const auto error=[&](std::size_t at,const std::wstring& message){MessageBoxW(owner,message.c_str(),L"Preferences not applied",MB_OK|MB_ICONINFORMATION);revealEditorField(owner,fields[at]);return false;};
             for(unsigned int i=0;i<10;++i)for(unsigned int j=0;j<i;++j)
@@ -743,7 +753,15 @@ struct Host
         SendMessageW(embedControl,BM_SETCHECK,embedding?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(showChatControl,BM_SETCHECK,showChat?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(voiceControl,BM_SETCHECK,voice?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(muteControl,BM_SETCHECK,muteBackground?BST_CHECKED:BST_UNCHECKED,0);
         for(int i=0;i<MaxCharacters;++i){SendMessageW(standbyControl[i],CB_SETCURSEL,standby[i]==Mode::Economy?1:0,0);if(slots[i])slots[i]->soundPrepared=false;}
         activeReadClock={};applyTheme();refreshChat(true,true);refreshCharacters();updateMonitors();refreshAttention();refreshPins();layout();
-        originalLabels=chatPreferences.profileNames;originalModes=standby;modifier=number(fields[modifierField]);showPerson(owner);dependencies(owner);
+        originalLabels=chatPreferences.profileNames;originalModes=standby;modifier=number(fields[modifierField]);
+        for(int i=0;i<MaxCharacters;++i)
+        {
+            auto& p=people[i];p.label=wide(originalLabels[i]);if(!p.ready)continue;
+            const auto key=AccountKey::from(p.source);p.originalAppearance=presentation.appearance(key);p.originalSound=chatPreferences.sound(key,p.originalAppearance.alerts);
+        }
+        fields[profileField].choices.clear();SendMessageW(fields[profileField].control,CB_RESETCONTENT,0,0);
+        for(int i=0;i<MaxCharacters;++i){fields[profileField].choices.push_back(characterName(i));SendMessageW(fields[profileField].control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(fields[profileField].choices.back().c_str()));}
+        showPerson(owner);dependencies(owner);
         for(const auto pair:{std::make_pair(delayField,chatPreferences.delay),std::make_pair(durationField,presentation.duration),std::make_pair(heightField,presentation.height)})
             if(!fields[pair.first].enabled){fields[pair.first].value=std::to_wstring(pair.second);if(fields[pair.first].control)SetWindowTextW(fields[pair.first].control,fields[pair.first].value.c_str());}
         const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);return saved;
@@ -3181,7 +3199,9 @@ struct Host
         move(launchButton,x,3,compact?28:64);x+=compact?32:68;SetWindowTextW(launchButton,compact?L"+":L"+ Login");
         move(showChatControl,x,3,compact?32:44);x+=compact?36:48;SetWindowTextW(showChatControl,compact?L"▤":L"Chat");setToggle(showChatControl,showChat);
         move(viewMenu,x,3,32);x+=36;move(settingsMenu,x,3,28);x+=32;
-        move(densityToggle,x,3,28);x+=32;SetWindowTextW(densityToggle,condensed?L"↓":L"↑");addTooltip(densityToggle,condensed?L"Expand character controls":L"Condense character controls");
+        const bool requestedCondensed=chrome==1;
+        move(densityToggle,x,3,28);x+=32;SetWindowTextW(densityToggle,requestedCondensed?L"↓":L"↑");
+        addTooltip(densityToggle,requestedCondensed?L"Expand character controls":condensed?L"Condense character controls. Currently compacted to fit; enlarge the window to show cards.":L"Condense character controls");
         move(controlsDock,x,3,28);x+=32;SetWindowTextW(controlsDock,controlsDetached?L"↙":L"↗");addTooltip(controlsDock,controlsDetached?L"Dock character controls":L"Pop out character controls");
         if(parent!=window){move(GetDlgItem(parent,PanelPin),x,3,28);x+=32;}
         int y=row;int quickX=x+8,quickY=3,available=(std::max)(0,width-quickX-4);

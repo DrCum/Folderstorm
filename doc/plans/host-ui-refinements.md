@@ -23,6 +23,14 @@ The existing `%LOCALAPPDATA%\FolderstormSessions\Prototype-v1` root and FHP1 tra
 
 Preferences remains owned by the stable main host and positions near the panel that invoked it, so docking a panel during Apply does not give Preferences a hidden owner. The last visited page is remembered for this host session; each category remembers its tab while the dialog is open.
 
+## PR37/38 review follow-up
+
+The reported account-draft, alias-label and density-arrow findings were confirmed in the published source. Preferences now compares account drafts with their accepted originals before checking account ownership or inserting bounded records. Only edited appearance/sound components are written. Untouched disconnected or replaced accounts cannot block global changes, and a full appearance/sound store does not acquire unchanged default records. Edited accounts still require the captured login identity. Each Apply refreshes the baselines so another Apply after a disconnection does not replay earlier account edits.
+
+Changing an alias updates an unchanged automatically seeded profile label (native name or previous alias), including clearing the alias back to the native name. Custom labels, labels edited in the same draft and labels changed by a newer login are preserved. Applied labels refresh in Preferences as well as the host. Existing WAVs load into the selected draft only on Preview; importing still validates immediately, and Apply/Cancel asset rules remain intact. The density arrow now advertises the same saved-state action as its handler; automatic compaction is explained in its tooltip and still yields when more window space becomes available.
+
+The affected `preferences` regression was extended and rerun with the same strict C++17 flags. It covers full stores, untouched/edited accounts after ownership loss, selective record insertion, rejection without partial writes, imported/renamed sound drafts, repeated accepted baselines, alias/default/custom labels and preserving unedited appearance fields. `git diff --check` passed. Windows acceptance should additionally check a theme-only Apply after an unrelated logout; alias Apply twice/clear/custom label; Preview/import/reset then Cancel; and the arrow while automatically compacted and after enlarging docked/detached controls. No new native build was run.
+
 ## Actual checks and review
 
 Nine affected portable checks passed with C++17 `-Wall -Wextra -Werror -Wshadow -pedantic -DNDEBUG -UNDEBUG`: toolbar_layout, dialog_layout, preferences, experience, options, chat_behavior, sound, read_policy and alerts. New cases cover bounded label collapse/overflow/order, scrollbar thumb endpoints, FSX1/FSX2 migration (including full/action-removed configurations), and FSC3/FSC4 sound-name migration. Relevant checks were repeated after their code/test changes; no unrelated suite was run.
