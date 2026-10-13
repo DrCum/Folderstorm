@@ -31,6 +31,8 @@ Changing an alias updates an unchanged automatically seeded profile label (nativ
 
 The affected `preferences` regression was extended and rerun with the same strict C++17 flags. It covers full stores, untouched/edited accounts after ownership loss, selective record insertion, rejection without partial writes, imported/renamed sound drafts, repeated accepted baselines, alias/default/custom labels and preserving unedited appearance fields. `git diff --check` passed. Windows acceptance should additionally check a theme-only Apply after an unrelated logout; alias Apply twice/clear/custom label; Preview/import/reset then Cancel; and the arrow while automatically compacted and after enlarging docked/detached controls. No new native build was run.
 
+The reported MSVC C2678 in `Worker::status() const` was also confirmed: its import-report deduplication assignment targeted a non-mutable string member. Only `lastRecordedImport` is now mutable; `settingsNotice` and the const method signature retain their original semantics. All cache references were inspected and `git diff --check` passed; no native build was available.
+
 ## Actual checks and review
 
 Nine affected portable checks passed with C++17 `-Wall -Wextra -Werror -Wshadow -pedantic -DNDEBUG -UNDEBUG`: toolbar_layout, dialog_layout, preferences, experience, options, chat_behavior, sound, read_policy and alerts. New cases cover bounded label collapse/overflow/order, scrollbar thumb endpoints, FSX1/FSX2 migration (including full/action-removed configurations), and FSC3/FSC4 sound-name migration. Relevant checks were repeated after their code/test changes; no unrelated suite was run.
