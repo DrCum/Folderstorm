@@ -2,13 +2,15 @@
 <floater
  positioning="None"
  save_rect="true"
- height="330"
+ height="450"
  layout="topleft"
  name="floater_poser"
  title="Avatar and Animesh Poser"
  help_topic="poser"
  width="450">
 	<string name="icon_category" translate="false">Inv_BodyShape</string>
+    <string name="shared_bridge_required">LSL bridge required</string>
+    <string name="shared_no_editors">No approved editors</string>
 	<string name="icon_bone" translate="false"></string>
 	<string name="icon_object" translate="false">Inv_Object</string>
 	<string name="icon_rotation_bvh_locked_edited" translate="false">Script_Running</string>
@@ -463,7 +465,7 @@
 <!-- The layout is a vertical stack of 3 rows, and each row a horizontal stack of panels -->
 	<layout_stack
 	 follows="top|left|right"
-	 height="435"
+	 height="515"
 	 layout="topleft"
 	 left="3"
 	 border_size="-4"
@@ -2093,6 +2095,33 @@
 				</button>
 			</panel>
 		</layout_panel>
+        <layout_panel name="shared_controls_layout" layout="topleft" follows="top|left|right"
+                      height="80" width="450" auto_resize="false">
+            <check_box name="enable_shared_posing" control_name="FSSharedPosingEnabled" label="Shared posing"
+                       layout="topleft" follows="top|left" top="2" left="0" height="20" width="130"
+                       tool_tip="See shared poses and receive permission requests through the LSL bridge." />
+            <button name="share_pose_button" label="Share my pose" layout="topleft" follows="top|left"
+                    top="2" left="134" height="20" width="130">
+                <button.commit_callback function="Poser.Share" />
+            </button>
+            <button name="request_pose_permission_button" label="Request permission" layout="topleft" follows="top|left"
+                    top="2" left="268" height="20" width="166"
+                    tool_tip="Requires a nearby compatible Folderstorm user with shared posing enabled." >
+                <button.commit_callback function="Poser.RequestPermission" />
+            </button>
+            <button name="stop_shared_pose_button" label="Stop shared posing" layout="topleft" follows="top|left"
+                    top="27" left="0" height="20" width="138">
+                <button.commit_callback function="Poser.StopShared" />
+            </button>
+            <text name="shared_pose_status" layout="topleft" follows="top|left" top="28" left="145"
+                  height="20" width="289" wrap="false" />
+            <combo_box name="shared_pose_editors" label="No approved editors" layout="topleft" follows="top|left"
+                       top="52" left="0" height="20" width="350" />
+            <button name="remove_pose_editor_button" label="Remove" layout="topleft" follows="top|left"
+                    top="52" left="357" height="20" width="77">
+                <button.commit_callback function="Poser.RemoveEditor" />
+            </button>
+        </layout_panel>
 		<layout_panel
 		 follows="top|left|right"
 		 layout="topleft"

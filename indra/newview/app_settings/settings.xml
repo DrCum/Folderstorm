@@ -8335,6 +8335,14 @@
     <key>Value</key>
     <integer>0</integer>
   </map>
+  <key>FSSharedPosingEnabled</key>
+  <map>
+    <key>Comment</key>
+    <string>Receive shared Folderstorm poses and permission requests through the LSL bridge. Publishing and editing require session consent.</string>
+    <key>Persist</key><integer>1</integer>
+    <key>Type</key><string>Boolean</string>
+    <key>Value</key><integer>1</integer>
+  </map>
   <key>FSPoserSaveExternalFileAlso</key>
   <map>
     <key>Comment</key>

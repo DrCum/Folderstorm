@@ -83,6 +83,7 @@ public:
     void setBridge(LLViewerInventoryItem* item) { mpBridge = item; };
     LLViewerInventoryItem* getBridge() const { return mpBridge; };
     bool canUseBridge();
+    bool isSharedPoseReady() const { return mSharedPoseReady; }
     bool isBridgeValid() const { return nullptr != mpBridge; }
 
     void checkBridgeScriptName();
@@ -117,6 +118,7 @@ private:
     LLUUID                  mReattachBridgeUUID; // used when re-attachming the bridge after creation
 
     bool                    mIsFirstCallDone; //initialization conversation
+    bool                    mSharedPoseReady = false;
 
     uuid_vec_t              mAllowedDetachables;
 
