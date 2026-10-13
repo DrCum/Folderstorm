@@ -68,7 +68,11 @@ Actual checks and pending native acceptance are in [prototype validation](../../
 
 ## Host Preferences and automatic saving
 
-The compact toolbar provides character selection, Login, Chat, monitors, Preferences and an Expanded/Condensed arrow. Quick actions share its docked row after a divider and collapse to icons/overflow as space runs out; detached controls may use a second row. Attention is a removable default quick action, showing its count when compact. Click toggles its inbox; right-click reveals filters/navigation. Chat toggles its panel. Dock and Always on top buttons live on their panels. Character cards/selection retain concise lifecycle/recovery access.
+The compact toolbar uses the selected Lucide icons. Character selection, Login, Chat, monitors and Preferences are left aligned; quick actions are centered; pop-out and Expanded/Condensed are right aligned, with density last. Chat has an icon instead of visible text; monitors has no extra arrow. Dividers appear only when groups are crowded. Narrow regions put additional main controls in More. Detached controls may use a second quick-action row. Attention is a removable default quick action, showing its count when compact. Click toggles its inbox; right-click reveals filters/navigation. Chat toggles its panel. Dock and Always on top buttons live on their panels. Character cards/selection retain concise lifecycle/recovery access.
+
+**Layout & theme → Layout → Docked controls area** offers Automatic, Full window, halves and thirds. Automatic uses the right half for broad two-monitor spans and the middle third for three; small overlaps across a screen boundary stay full width. Explicit areas override detection. Placement changes host controls, without changing the viewer's world viewport.
+
+**Controls → Quick actions → Button display** offers Icon and text, Text only and Icons only, retaining the existing saved modes. Labels collapse before ordered overflow. Stable per-panel tooltip entries keep hover descriptions available while status updates, panels move and themes change.
 
 **Preferences** uses sidebar categories and top tabs. Character settings shares one profile selector across Profile, Sounds, Viewer settings and Session. Chats & notifications separates Conversations, Attention and Reading. Controls contains Quick actions (with a preview) and Keyboard shortcuts. Detailed explanations and numeric ranges use hover tooltips.
 
@@ -78,7 +82,7 @@ The bounded transaction and backup remain in `%LOCALAPPDATA%\FolderstormSessions
 
 **Character settings → Viewer settings → Copy settings** explicitly captures its destination and offers save/discard/Cancel for current edits. Copy groups include movement/WASD/quick jump, camera/view, avatar/beams/LookAt, RLVa, account UI, appearance, bindings and toolbars. Known presets supply omitted defaults. Account UI/toolbars apply once after successful login, with backups and ownership guards. Copy reports remain private and bounded; credentials, contents, live restrictions and unrelated security policies remain excluded.
 
-See [host UI refinements](../../doc/plans/host-ui-refinements.md) for the current behavior/checklist and [profile copying](../../doc/plans/host-preferences-and-profile-copy.md) for import limits. Protocol **14** is unchanged; no IPC/viewer behavior changed. Native Windows UI/build acceptance of the refinements remains pending.
+See [Lucide toolbar refinements](../../doc/plans/host-lucide-toolbar.md), [host UI refinements](../../doc/plans/host-ui-refinements.md) and [profile copying](../../doc/plans/host-preferences-and-profile-copy.md). Protocol **14** is unchanged; no IPC/viewer behavior changed. Native Windows UI/build acceptance remains pending.
 
 ## Workspace and lifecycle controls
 
