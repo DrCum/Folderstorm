@@ -3,6 +3,7 @@
 #define FS_HOST_DIALOG_H
 #include <windows.h>
 #include "theme.h"
+#include "tooltips.h"
 #include "fssessiondialoglayout.h"
 #include "fssessionexperience.h"
 #include <commdlg.h>
@@ -50,7 +51,8 @@ struct Editor
     std::vector<std::wstring> categories;
     std::vector<unsigned int> categoryIds,tabPages;
     std::map<unsigned int,unsigned int> lastTabs;
-    HWND subTabs=nullptr,introduction=nullptr,tooltips=nullptr,savedLabel=nullptr;
+    HWND subTabs=nullptr,introduction=nullptr,savedLabel=nullptr;
+    Tooltips tooltips;
     std::function<bool(HWND)> apply;
     unsigned int* lastPage=nullptr;HWND positionNear=nullptr;
     bool dirty=false,updating=false,applying=false;
@@ -185,16 +187,13 @@ inline void revealEditorField(HWND dialog,Field& field)
 {
     if(auto* e=currentEditor(dialog)){if(!e->visible(field))selectEditorPage(dialog,*e,field.page);SetFocus(field.control);SendMessageW(dialog,WM_APP+2,0,reinterpret_cast<LPARAM>(field.control));}
 }
-inline void editorTooltip(Editor& e,HWND dialog,Field& f)
+inline void editorTooltip(Editor& e,Field& f)
 {
     if(f.type==FieldType::Number)
     {if(!f.help.empty())f.help+=L" ";f.help+=std::to_wstring(f.minimum)+L"–"+std::to_wstring(f.maximum)+L".";}
-    if(f.help.empty() || !e.tooltips)return;
+    if(f.help.empty() || !dialogTheme)return;
     for(HWND child:{f.caption,f.control})
-    {
-        TOOLINFOW tip{};tip.cbSize=sizeof(tip);tip.hwnd=dialog;tip.uId=reinterpret_cast<UINT_PTR>(child);tip.uFlags=TTF_IDISHWND|TTF_SUBCLASS;
-        tip.lpszText=f.help.data();SendMessageW(e.tooltips,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tip));
-    }
+        e.tooltips.set(child,f.help.c_str(),*dialogTheme);
 }
 inline bool applyEditor(HWND dialog,Editor& editor,bool close)
 {
@@ -222,7 +221,7 @@ inline bool applyEditor(HWND dialog,Editor& editor,bool close)
     editor.applying=false;
     if(!accepted){SetWindowTextW(editor.savedLabel,L"Not saved");return false;}
     editor.dirty=false;SetWindowTextW(editor.savedLabel,L"Saved");
-    if(dialogTheme)dialogTheme->window(dialog);
+    if(dialogTheme){dialogTheme->window(dialog);editor.tooltips.style(*dialogTheme);}
     if(close)EndDialog(dialog,IDOK);
     return true;
 }
@@ -259,7 +258,6 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
         e->body=CreateWindowExW(WS_EX_CONTROLPARENT,bodyClass.lpszClassName,L"",WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,1,1,dialog,nullptr,instance,nullptr);
         e->vertical=CreateWindowExW(0,L"SCROLLBAR",L"",WS_CHILD|SBS_VERT,0,0,1,1,dialog,nullptr,instance,nullptr);
         e->horizontal=CreateWindowExW(0,L"SCROLLBAR",L"",WS_CHILD|SBS_HORZ,0,0,1,1,dialog,nullptr,instance,nullptr);
-        e->tooltips=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP,0,0,0,0,dialog,nullptr,instance,nullptr);SendMessageW(e->tooltips,TTM_SETMAXTIPWIDTH,0,e->scale(380));
         if(e->structured())
         {
             e->sidebar=true;e->pages.clear();
@@ -293,7 +291,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
             if(check)SendMessageW(f.control,BM_SETCHECK,number(f)?BST_CHECKED:BST_UNCHECKED,0);
             if(choice){for(const auto& label:f.choices)SendMessageW(f.control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));SendMessageW(f.control,CB_SETCURSEL,number(f),0);}
             if(!check&&!choice&&!color&&!action&&!note)SendMessageW(f.control,EM_SETLIMITTEXT,f.type==FieldType::Number?6:f.maximum,0);
-            editorTooltip(*e,dialog,f);
+            editorTooltip(*e,f);
         }
         for(const int id:{IDOK,IDCANCEL,EditorApply})
         {
@@ -318,12 +316,14 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
     {
         e->dpi=dialogTheme?dialogTheme->uiDpi(HIWORD(wparam)):static_cast<int>(HIWORD(wparam));const auto previous=e->font;
         e->font=CreateFontW(-e->scale(12),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-        const HFONT nextFont=e->font?e->font:reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));EnumChildWindows(dialog,[](HWND child,LPARAM data)->BOOL{setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE;},reinterpret_cast<LPARAM>(nextFont));if(previous)DeleteObject(previous);
+        const HFONT nextFont=e->font?e->font:reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));EnumChildWindows(dialog,[](HWND child,LPARAM data)->BOOL{setNativeFont(child,reinterpret_cast<HFONT>(data));return TRUE;},reinterpret_cast<LPARAM>(nextFont));
+        if(dialogTheme)for(const auto& field:*e->fields)if(!field.help.empty())for(HWND child:{field.caption,field.control})e->tooltips.set(child,field.help.c_str(),*dialogTheme);
+        if(previous)DeleteObject(previous);
         const auto& next=*reinterpret_cast<RECT*>(lparam);SetWindowPos(dialog,nullptr,next.left,next.top,next.right-next.left,next.bottom-next.top,SWP_NOZORDER|SWP_NOACTIVATE);layoutEditor(dialog,*e);return TRUE;
     }
     if(message==WM_MEASUREITEM){reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(e->scale(22));return TRUE;}
     if(message==WM_SIZE){layoutEditor(dialog,*e);return TRUE;}
-    if(message==WM_SETTINGCHANGE){if(dialogTheme)dialogTheme->window(dialog);layoutEditor(dialog,*e);return TRUE;}
+    if(message==WM_SETTINGCHANGE){if(dialogTheme){dialogTheme->window(dialog);e->tooltips.style(*dialogTheme);}layoutEditor(dialog,*e);return TRUE;}
     if(message==WM_VSCROLL || message==WM_HSCROLL || message==WM_MOUSEWHEEL)
     {
         const bool horizontal=message==WM_HSCROLL;const HWND bar=horizontal?e->horizontal:e->vertical;SCROLLINFO scroll{};scroll.cbSize=sizeof(scroll);scroll.fMask=SIF_ALL;GetScrollInfo(bar,SB_CTL,&scroll);int next=horizontal?e->x:e->y;

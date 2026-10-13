@@ -19,15 +19,36 @@ class Tooltips
         SetWindowTheme(tip,theme.highContrast?nullptr:L"",theme.highContrast?nullptr:L"");
         SendMessageW(tip,TTM_SETTIPBKCOLOR,theme.background,0);SendMessageW(tip,TTM_SETTIPTEXTCOLOR,theme.text,0);
     }
+    static TOOLINFOW toolInfo(HWND parent,HWND child)
+    {
+        TOOLINFOW tool{};
+        // No v6 common-controls manifest is guaranteed. Use the v5-compatible
+        // prefix; legacy tooltips can reject sizeof(TOOLINFOW)'s reserved tail.
+        tool.cbSize=TTTOOLINFOW_V2_SIZE;tool.hwnd=parent;tool.uId=reinterpret_cast<UINT_PTR>(child);
+        tool.uFlags=TTF_IDISHWND;return tool;
+    }
     void erase(HWND child)
     {
         const auto found=entries.find(child);if(found==entries.end())return;
-        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.hwnd=found->second.parent;tool.uId=reinterpret_cast<UINT_PTR>(child);
+        auto tool=toolInfo(found->second.parent,child);
         if(GetPropW(found->second.tip,L"FolderstormTooltipOwner")==reinterpret_cast<HANDLE>(this))SendMessageW(found->second.tip,TTM_DELTOOLW,0,reinterpret_cast<LPARAM>(&tool));entries.erase(found);
     }
     static LRESULT CALLBACK childProc(HWND child,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
-        if(message==WM_NCDESTROY){reinterpret_cast<Tooltips*>(data)->erase(child);RemoveWindowSubclass(child,childProc,8);}
+        auto* tips=reinterpret_cast<Tooltips*>(data);
+        if(message>=WM_MOUSEFIRST && message<=WM_MOUSELAST)
+        {
+            const auto found=tips->entries.find(child);
+            if(found!=tips->entries.end())
+            {
+                // Relay from our own child subclass, including inside modal
+                // Preferences. Do not also ask the tooltip to subclass it.
+                MSG event{};event.hwnd=child;event.message=message;event.wParam=wp;event.lParam=lp;
+                event.time=static_cast<DWORD>(GetMessageTime());GetCursorPos(&event.pt);
+                SendMessageW(found->second.tip,TTM_RELAYEVENT,0,reinterpret_cast<LPARAM>(&event));
+            }
+        }
+        if(message==WM_NCDESTROY){tips->erase(child);RemoveWindowSubclass(child,childProc,8);}
         return DefSubclassProc(child,message,wp,lp);
     }
 public:
@@ -45,7 +66,8 @@ public:
             window.tip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,
                 CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,root,nullptr,GetModuleHandleW(nullptr),nullptr);
             if(!window.tip)return;
-            SetPropW(window.tip,L"FolderstormTooltipOwner",reinterpret_cast<HANDLE>(this));window.font=nullptr;
+            if(!SetPropW(window.tip,L"FolderstormTooltipOwner",reinterpret_cast<HANDLE>(this))){DestroyWindow(window.tip);window.tip=nullptr;return;}window.font=nullptr;
+            SendMessageW(window.tip,TTM_ACTIVATE,TRUE,0);
             SendMessageW(window.tip,TTM_SETMAXTIPWIDTH,0,420);SendMessageW(window.tip,TTM_SETDELAYTIME,TTDT_INITIAL,500);
             SendMessageW(window.tip,TTM_SETDELAYTIME,TTDT_AUTOPOP,12000);colors(window.tip,theme);
         }
@@ -55,10 +77,11 @@ public:
         if(found!=entries.end() && (found->second.parent!=parent || found->second.tip!=window.tip)){erase(child);found=entries.end();}
         if(found!=entries.end() && found->second.text==text)return; // Preserve a running hover timer.
         const bool exists=found!=entries.end();auto& entry=entries[child];entry.parent=parent;entry.tip=window.tip;entry.text=text;
-        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.hwnd=parent;tool.uId=reinterpret_cast<UINT_PTR>(child);
-        tool.uFlags=TTF_IDISHWND|TTF_SUBCLASS;tool.lpszText=entry.text.data();
-        SendMessageW(window.tip,exists?TTM_UPDATETIPTEXTW:TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
-        SetWindowSubclass(child,childProc,8,reinterpret_cast<DWORD_PTR>(this));
+        auto tool=toolInfo(parent,child);tool.lpszText=entry.text.data();
+        if(exists)SendMessageW(window.tip,TTM_UPDATETIPTEXTW,0,reinterpret_cast<LPARAM>(&tool));
+        else if(!SendMessageW(window.tip,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool)))
+        {entries.erase(child);return;} // Never cache a registration the OS refused.
+        if(!SetWindowSubclass(child,childProc,8,reinterpret_cast<DWORD_PTR>(this)))erase(child);
     }
     void reparent(HWND child,const Theme& theme)
     {const auto found=entries.find(child);if(found!=entries.end()){const auto text=found->second.text;set(child,text.c_str(),theme);}}
