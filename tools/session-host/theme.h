@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include "fssessiondialoglayout.h"
+#include "lucide.h"
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -17,8 +18,19 @@ inline void setNativeFont(HWND child,HFONT font)
     wchar_t klass[32]{};GetClassNameW(child,klass,32);
     if(_wcsicmp(klass,L"COMBOBOX") || !(GetWindowLongPtrW(child,GWL_STYLE)&CBS_OWNERDRAWFIXED))return;
     const HDC dc=GetDC(child);if(!dc)return;const auto previous=SelectObject(dc,font);TEXTMETRICW metrics{};
-    if(GetTextMetricsW(dc,&metrics)){const int height=static_cast<int>(metrics.tmHeight)+6;SendMessageW(child,CB_SETITEMHEIGHT,0,height);SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),height);}
+    if(GetTextMetricsW(dc,&metrics)){const int height=static_cast<int>(metrics.tmHeight);SendMessageW(child,CB_SETITEMHEIGHT,0,height+6);SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),height+2);}
     if(previous)SelectObject(dc,previous);ReleaseDC(child,dc);
+}
+inline int comboFaceHeight(HWND child,int target)
+{
+    RECT rect{};GetWindowRect(child,&rect);const int height=static_cast<int>(rect.bottom-rect.top);
+    if(height==target)return height;
+    const auto selection=SendMessageW(child,CB_GETITEMHEIGHT,static_cast<WPARAM>(-1),0);if(selection==CB_ERR)return height;
+    int minimum=1;const HDC dc=GetDC(child);
+    if(dc){const auto old=SelectObject(dc,reinterpret_cast<HFONT>(SendMessageW(child,WM_GETFONT,0,0)));TEXTMETRICW metrics{};if(GetTextMetricsW(dc,&metrics))minimum=static_cast<int>(metrics.tmHeight)+2;if(old)SelectObject(dc,old);ReleaseDC(child,dc);}
+    const int trim=(std::max)(0,height-static_cast<int>(selection));
+    SendMessageW(child,CB_SETITEMHEIGHT,static_cast<WPARAM>(-1),(std::max)(minimum,target-trim));
+    GetWindowRect(child,&rect);return static_cast<int>(rect.bottom-rect.top);
 }
 class Theme
 {
@@ -26,6 +38,7 @@ public:
     COLORREF background=0,panel=0,text=0,muted=0,accent=0,border=0,input=0;
     HBRUSH backBrush=nullptr,panelBrush=nullptr,inputBrush=nullptr;
     bool highContrast=false,dark=true;
+    IconCache icons;
     unsigned int textPercent=100;
     int uiDpi(unsigned int dpi) const {return MulDiv(static_cast<int>(dpi),static_cast<int>(textPercent),100);}
     int scale(int value,unsigned int dpi) const {return MulDiv(value,uiDpi(dpi),96);}
@@ -36,23 +49,24 @@ public:
         if(message==WM_MOUSEMOVE && !GetPropW(child,L"FolderstormHover"))
         {SetPropW(child,L"FolderstormHover",reinterpret_cast<HANDLE>(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,child,0};TrackMouseEvent(&track);InvalidateRect(child,nullptr,FALSE);}
         if(message==WM_MOUSELEAVE){RemovePropW(child,L"FolderstormHover");InvalidateRect(child,nullptr,FALSE);}
-        if(message==WM_NCDESTROY){RemovePropW(child,L"FolderstormHover");RemoveWindowSubclass(child,hoverProc,2);}
+        if(message==WM_NCDESTROY){RemovePropW(child,L"FolderstormHover");RemovePropW(child,L"FolderstormIcon");RemovePropW(child,L"FolderstormIconLabel");RemoveWindowSubclass(child,hoverProc,2);}
         return DefSubclassProc(child,message,wp,lp);
     }
     void selection(const DRAWITEMSTRUCT& d) const
     {
-        const bool selected=(d.itemState&ODS_SELECTED)!=0;
+        const bool selected=(d.itemState&ODS_SELECTED)!=0 && !(d.itemState&ODS_COMBOBOXEDIT);
         FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected?panelBrush:inputBrush);
-        SetTextColor(d.hDC,selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
+        SetTextColor(d.hDC,(d.itemState&ODS_DISABLED)?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
     }
     void selectionFocus(const DRAWITEMSTRUCT& d) const
     {
-        if(d.itemState&ODS_SELECTED){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}
-        if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
+        if(!highContrast){if((d.itemState&(ODS_SELECTED|ODS_FOCUS)) && !(d.itemState&ODS_COMBOBOXEDIT)){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}}
+        else if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
     }
     void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);backBrush=panelBrush=inputBrush=nullptr;}
     void set(unsigned int choice)
     {
+        icons.clear();
         DWORD percent=100,bytes=sizeof(percent);
         RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Accessibility",L"TextScaleFactor",RRF_RT_REG_DWORD,nullptr,&percent,&bytes);
         textPercent=(std::max)(100u,(std::min)(225u,static_cast<unsigned int>(percent)));
@@ -89,9 +103,11 @@ public:
         RECT outer{},client{};GetWindowRect(child,&outer);GetClientRect(child,&client);MapWindowPoints(child,nullptr,reinterpret_cast<POINT*>(&client),2);
         OffsetRect(&client,-outer.left,-outer.top);const int width=static_cast<int>(outer.right-outer.left),height=static_cast<int>(outer.bottom-outer.top);
         const HDC dc=GetWindowDC(child);if(!dc)return;const auto style=GetWindowLongPtrW(child,GWL_STYLE);
+        const int saved=SaveDC(dc);ExcludeClipRect(dc,client.left,client.top,client.right,client.bottom);
+        RECT whole{0,0,width,height};FillRect(dc,&whole,inputBrush);
         if((style&WS_VSCROLL) && width-client.right>4){RECT bar{client.right,client.top,width-1,client.bottom};paintScrollbar(child,dc,bar,true,SB_VERT);}
         if((style&WS_HSCROLL) && height-client.bottom>4){RECT bar{client.left,client.bottom,client.right,height-1};paintScrollbar(child,dc,bar,false,SB_HORZ);}
-        RECT frame{0,0,width,height};const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&frame,edge);DeleteObject(edge);ReleaseDC(child,dc);
+        RECT frame{0,0,width,height};const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&frame,edge);DeleteObject(edge);RestoreDC(dc,saved);ReleaseDC(child,dc);
     }
     void paintControl(HWND child,HDC dc,const wchar_t* klass) const
     {
@@ -103,7 +119,11 @@ public:
             COMBOBOXINFO info{};info.cbSize=sizeof(info);
             if(GetComboBoxInfo(child,&info))
             {
-                FillRect(dc,&info.rcButton,panelBrush);const HBRUSH edge=CreateSolidBrush(border);FrameRect(dc,&rect,edge);DeleteObject(edge);
+                FillRect(dc,&rect,inputBrush);
+                DRAWITEMSTRUCT item{};item.CtlType=ODT_COMBOBOX;item.CtlID=static_cast<UINT>(GetDlgCtrlID(child));item.itemID=static_cast<UINT>(SendMessageW(child,CB_GETCURSEL,0,0));
+                item.itemAction=ODA_DRAWENTIRE;item.itemState=ODS_COMBOBOXEDIT|(enabled?0:ODS_DISABLED);item.hwndItem=child;item.hDC=dc;item.rcItem=info.rcItem;
+                SendMessageW(GetParent(child),WM_DRAWITEM,item.CtlID,reinterpret_cast<LPARAM>(&item));
+                FillRect(dc,&info.rcButton,panelBrush);const HBRUSH edge=CreateSolidBrush(GetFocus()==child?accent:border);FrameRect(dc,&rect,edge);DeleteObject(edge);
                 const int cx=(info.rcButton.left+info.rcButton.right)/2,cy=(info.rcButton.top+info.rcButton.bottom)/2;
                 POINT points[]={{cx-4,cy-2},{cx+4,cy-2},{cx,cy+3}};
                 const HBRUSH arrow=CreateSolidBrush(enabled?text:muted);const auto oldBrush=SelectObject(dc,arrow);const auto oldPen=SelectObject(dc,GetStockObject(NULL_PEN));Polygon(dc,points,3);SelectObject(dc,oldPen);SelectObject(dc,oldBrush);DeleteObject(arrow);
@@ -184,14 +204,14 @@ public:
         }
         if(!theme.highContrast && GetPropW(child,L"FolderstormCustomScroll"))
         {bool handled=false;const auto result=scrollControl(child,message,wp,lp,handled);if(handled)return result;}
+        if(!theme.highContrast && (message==WM_SETFOCUS || message==WM_KILLFOCUS || message==WM_ENABLE || message==CB_SETCURSEL || message==CB_SHOWDROPDOWN))
+        {wchar_t klass[32]{};GetClassNameW(child,klass,32);if(!_wcsicmp(klass,L"COMBOBOX")){const auto result=DefSubclassProc(child,message,wp,lp);InvalidateRect(child,nullptr,FALSE);return result;}}
         if(!theme.highContrast && message==WM_NCPAINT)
         {const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
         if(!theme.highContrast && (message==WM_PAINT || message==WM_PRINTCLIENT))
         {
             wchar_t klass[32]{};GetClassNameW(child,klass,32);
-            if(!_wcsicmp(klass,L"COMBOBOX"))
-            {const auto result=DefSubclassProc(child,message,wp,lp);const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):GetDC(child);if(dc){theme.paintControl(child,dc,klass);if(message!=WM_PRINTCLIENT)ReleaseDC(child,dc);}return result;}
-            if(_wcsicmp(klass,L"BUTTON") && _wcsicmp(klass,WC_TABCONTROLW) && _wcsicmp(klass,L"SCROLLBAR")){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
+            if(_wcsicmp(klass,L"COMBOBOX") && _wcsicmp(klass,L"BUTTON") && _wcsicmp(klass,WC_TABCONTROLW) && _wcsicmp(klass,L"SCROLLBAR")){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
             PAINTSTRUCT paint{};const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):BeginPaint(child,&paint);
             if(dc)theme.paintControl(child,dc,klass);if(message!=WM_PRINTCLIENT)EndPaint(child,&paint);return 0;
         }
@@ -266,7 +286,14 @@ public:
         wchar_t label[256]{};GetWindowTextW(d.hwndItem,label,256);RECT r=d.rcItem;InflateRect(&r,-5,-2);
         SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
-        DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
+        const auto icon=buttonIcon(d.hwndItem);const bool withLabel=GetPropW(d.hwndItem,L"FolderstormIconLabel")!=nullptr;
+        TEXTMETRICW metrics{};GetTextMetricsW(d.hDC,&metrics);const int size=(std::max)(1,(std::min)(static_cast<int>(d.rcItem.bottom-d.rcItem.top)-4,static_cast<int>(metrics.tmHeight)+4));
+        SIZE extent{};if(withLabel)GetTextExtentPoint32W(d.hDC,label,lstrlenW(label),&extent);
+        const int occupied=size+(withLabel?static_cast<int>(extent.cx)+6:0),center=(static_cast<int>(d.rcItem.left+d.rcItem.right)-occupied)/2;
+        const int x=withLabel?(std::max)(static_cast<int>(r.left),center):center;
+        const bool painted=icon!=Icon::None && icons.draw(d.hDC,icon,x,(static_cast<int>(d.rcItem.top+d.rcItem.bottom)-size)/2,size,GetTextColor(d.hDC));
+        if(painted && withLabel)r.left=x+size+6;
+        if(!painted || withLabel)DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|(painted?DT_LEFT:DT_CENTER)|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
         if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}return true;
     }
 };
