@@ -125,6 +125,50 @@ struct ProfileBackup
         return std::filesystem::copy_file(file,folder/file.filename(),std::filesystem::copy_options::none,error) && !error;
     }
 };
+void recordProfileImport(const std::string& detail,bool reset=false)
+{
+    // Retain a bounded explanation, never control values, conversations or
+    // Inventory data. Later account/toolbar phases append to the same report.
+    const auto name=gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings-import-report.txt");
+    const auto file=std::filesystem::path(ll_convert_string_to_wide(name,name.size(),CP_UTF8));
+    std::error_code error;const auto size=std::filesystem::file_size(file,error);
+    const bool append=!reset && !error && size<16384;
+    std::ofstream output(file,std::ios::binary|(append?std::ios::app:std::ios::trunc));
+    const auto line=boundedText(detail,4096,true);output.write(line.data(),static_cast<std::streamsize>(line.size()));output.put('\n');
+}
+bool validImportedControlValue(const std::string& type,const LLSD& value)
+{
+        const auto number = [](const LLSD& v) { return (v.isReal() || v.isInteger()) && std::isfinite(v.asReal()); };
+        if (type == "Boolean") return value.isBoolean() || (value.isInteger() && (value.asInteger() == 0 || value.asInteger() == 1));
+        if (type == "S32") return value.isInteger();
+        if (type == "U32") return value.isInteger() && value.asInteger() >= 0;
+        if (type == "F32") return number(value) && std::abs(value.asReal()) <= (std::numeric_limits<F32>::max)();
+        if (type == "String") return value.isString() && value.asString().size() <= 4096 && validUtf8(value.asString(),true);
+        if(type!="Vector3" && type!="Vector3D" && type!="Color3" && type!="Color4" && type!="Color4U" && type!="Rect")return false;
+        const std::size_t expected = type == "Vector3" || type == "Vector3D" || type == "Color3" ? 3 : 4;
+        if (!value.isArray() || value.size() != expected) return false;
+        for (auto it = value.beginArray(); it != value.endArray(); ++it)
+            if (!number(*it) || ((type == "Rect" || type == "Color4U") && !it->isInteger()) ||
+                (type != "Vector3D" && std::abs(it->asReal()) > (std::numeric_limits<F32>::max)()) ||
+                (type == "Color4U" && (it->asInteger() < 0 || it->asInteger() > 255))) return false;
+        return true;
+    }
+
+void fillImportDefaults(LLControlGroup& controls,LLSD& records,std::uint32_t groups,bool account)
+{
+    struct Defaults final : LLControlGroup::ApplyFunctor
+    {
+        LLSD& records;std::uint32_t groups;bool account;
+        Defaults(LLSD& data,std::uint32_t selected,bool perAccount):records(data),groups(selected),account(perAccount){}
+        void apply(const std::string& name,LLControlVariable* control) override
+        {
+            const auto type=LLControlGroup::typeEnumToString(control->type());
+            const bool eligible=account?(accountPreferenceAllowed(name,groups)&&control->isPersisted()&&control->isBackupable()):seedPreference(name,type,control->isPersisted(),control->isBackupable(),true,groups);
+            if(eligible && !records.has(name)){records[name]["Type"]=type;records[name]["Value"]=control->getDefault();records[name]["Backup"]=true;}
+        }
+    } defaults(records,groups,account);
+    controls.applyToAll(&defaults);
+}
 struct Worker : LLIMSessionObserver
 {
     Pipe pipe;
@@ -138,8 +182,8 @@ struct Worker : LLIMSessionObserver
     std::wstring settingsSource;
     std::wstring toolbarSource;
     std::uint32_t copyGroups = CopyLegacy;
-    std::string toolbarImport;
-    std::string settingsNotice;
+    std::string toolbarImport,accountImport;
+    std::string settingsNotice,lastRecordedImport;
     TransitionClock transition;
     unsigned int transitionStyle = 0, transitionHeight = 64;
     bool demoting = false, escapeHeld = false;
@@ -562,7 +606,7 @@ struct Worker : LLIMSessionObserver
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
         detached = true;
-        toolbarImport.clear(); toolbarSource.clear(); settingsSource.clear();
+        toolbarImport.clear(); accountImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); disconnectSessionObserver(); events.clear();
         if (window) { EnableWindow(window, TRUE); ShowWindow(window, SW_RESTORE); }
@@ -607,7 +651,11 @@ struct Worker : LLIMSessionObserver
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
-        if (!settingsNotice.empty() && error.empty()) reply.detail = boundedText(settingsNotice,119);
+        if (!settingsNotice.empty() && error.empty())
+        {
+            if(settingsNotice!=lastRecordedImport){recordProfileImport(settingsNotice);lastRecordedImport=settingsNotice;}
+            reply.detail = boundedText(settingsNotice,119);
+        }
         if (!previewError.empty())
         {
             reply.flags |= PreviewUnavailable;
@@ -859,8 +907,8 @@ bool FSSessionWorker::initialize()
     value->settingsSource = explicitCopy ? profileSource : settingsSource;
     value->toolbarSource = toolbarSource;
     if (explicitCopy && !parseProfileCopyGroups(copyGroups,value->copyGroups)) return false;
-    if ((!toolbarSource.empty() && !(value->copyGroups & CopyToolbars)) ||
-        ((value->copyGroups & CopyToolbars) && toolbarSource.empty())) return false;
+    if ((!toolbarSource.empty() && !(value->copyGroups & (CopyToolbars|CopyAccountUI|CopyAvatar|CopyMovement))) ||
+        ((value->copyGroups & (CopyToolbars|CopyAccountUI)) && toolbarSource.empty())) return false;
     value->lastCommand = GetTickCount64();
     worker = std::move(value);
     return true;
@@ -869,6 +917,12 @@ bool FSSessionWorker::managed() { return worker && !worker->detached; }
 void FSSessionWorker::importProfileSettings()
 {
     if (!managed()) return;
+    if(!worker->settingsSource.empty() || !worker->toolbarSource.empty())recordProfileImport("Profile copy: selected preferences use source values or this viewer version's defaults. Account UI and toolbar phases wait for a successful login. No credentials, contents or live restrictions are imported.",true);
+    if(!worker->toolbarSource.empty() && (worker->copyGroups&(CopyAccountUI|CopyAvatar|CopyMovement)))
+    {
+        if(!readProfileFile(std::filesystem::path(worker->toolbarSource)/L"settings_per_account.xml",worker->accountImport))
+            worker->settingsNotice="Settings import: account UI source missing or invalid; destination retained. ";
+    }
     if (worker->copyGroups & CopyToolbars)
     {
         // Snapshot the selected source before login. The destination account is
@@ -879,14 +933,15 @@ void FSSessionWorker::importProfileSettings()
         worker->toolbarSource.clear();
         worker->copyGroups &= ~CopyToolbars;
     }
-    if (worker->settingsSource.empty() || !(worker->copyGroups & CopyLegacy)) return;
+    worker->toolbarSource.clear();
+    if (worker->settingsSource.empty() || !(worker->copyGroups & (CopyGlobalPreferences|CopyColors|CopyBindings|CopyQuickPreferences))) return;
     const auto folder = std::filesystem::path(worker->settingsSource);
     worker->settingsSource.clear(); // One deliberate attempt; never retry at a new login.
     const auto targetName = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"settings.xml");
     const auto target = std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
     const auto destination = target.parent_path();
     std::string bytes;
-    const bool copyPreferences = (worker->copyGroups & (CopyGraphics|CopyInterface)) != 0;
+    const bool copyPreferences = (worker->copyGroups & CopyGlobalPreferences) != 0;
     if (copyPreferences && !readProfileFile(folder/L"settings.xml",bytes))
     { worker->settingsNotice += "Settings import: source unavailable, too large or not a plain settings file; preferences unchanged."; return; }
     std::error_code error;
@@ -895,23 +950,29 @@ void FSSessionWorker::importProfileSettings()
     LLSD data; std::istringstream input(bytes);
     if (copyPreferences && (LLSDSerialize::fromXML(data,input,false) <= 0 || !data.isMap() || data.size() > ProfileSettingsEntries))
     { worker->settingsNotice += "Settings import: invalid or oversized preferences; profile unchanged."; return; }
-    const auto validValue = [](const std::string& type,const LLSD& value)
+
+    if(copyPreferences)
     {
-        const auto number = [](const LLSD& v) { return (v.isReal() || v.isInteger()) && std::isfinite(v.asReal()); };
-        if (type == "Boolean") return value.isBoolean() || (value.isInteger() && (value.asInteger() == 0 || value.asInteger() == 1));
-        if (type == "S32") return value.isInteger();
-        if (type == "U32") return value.isInteger() && value.asInteger() >= 0;
-        if (type == "F32") return number(value) && std::abs(value.asReal()) <= (std::numeric_limits<F32>::max)();
-        if (type == "String") return value.isString() && value.asString().size() <= 4096 && validUtf8(value.asString(),true);
-        const std::size_t expected = type == "Vector3" || type == "Vector3D" || type == "Color3" ? 3 : 4;
-        if (!value.isArray() || value.size() != expected) return false;
-        for (auto it = value.beginArray(); it != value.endArray(); ++it)
-            if (!number(*it) || ((type == "Rect" || type == "Color4U") && !it->isInteger()) ||
-                (type != "Vector3D" && std::abs(it->asReal()) > (std::numeric_limits<F32>::max)()) ||
-                (type == "Color4U" && (it->asInteger() < 0 || it->asInteger() > 255))) return false;
-        return true;
-    };
-    LLSD changes; std::size_t skipped = 0;
+        // Main-viewer settings omit values equal to their session preset. Read
+        // only registered, packaged presets so Phoenix/Modern defaults (for
+        // example WASD) survive a copy into a Firestorm-default profile.
+        const auto preset=data["SessionSettingsFile"]["Value"].asString();
+        if(knownProfilePreset(preset))
+        {
+            const auto name=gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS,preset);
+            const auto file=std::filesystem::path(ll_convert_string_to_wide(name,name.size(),CP_UTF8));
+            std::string text;LLSD defaults;
+            if(readProfileFile(file,text))
+            {
+                std::istringstream sourcePreset(text);
+                if(LLSDSerialize::fromXML(defaults,sourcePreset,false)>0 && defaults.isMap() && defaults.size()<=ProfileSettingsEntries)
+                    for(auto it=defaults.beginMap();it!=defaults.endMap();++it)if(!data.has(it->first))data[it->first]=it->second;
+            }
+        }
+        fillImportDefaults(gSavedSettings,data,worker->copyGroups,false);
+    }
+    if(data.size()>ProfileSettingsEntries){worker->settingsNotice="Settings import: too many preferences after resolving defaults; destination retained.";recordProfileImport(worker->settingsNotice);return;}
+    LLSD changes; std::size_t skipped = 0;std::vector<std::string> skippedDetails;
     if (!copyPreferences) data = LLSD::emptyMap();
     for (auto it = data.beginMap(); it != data.endMap(); ++it)
     {
@@ -919,7 +980,7 @@ void FSSessionWorker::importProfileSettings()
         const auto type = control ? LLControlGroup::typeEnumToString(control->type()) : std::string{};
         if (!control || !record.isMap() || record["Type"].asString() != type || !record.has("Value") ||
             !seedPreference(it->first,type,control->isPersisted(),control->isBackupable(),!record.has("Backup") || record["Backup"].asBoolean(),worker->copyGroups) ||
-            !validValue(type,record["Value"])) { ++skipped; continue; }
+            !validImportedControlValue(type,record["Value"])) { ++skipped;if(skippedDetails.size()<40)skippedDetails.push_back(boundedText(it->first,128)+": unselected, isolated, unsupported or invalid");continue; }
         changes[it->first] = record["Value"];
     }
     ProfileBackup backup;
@@ -973,8 +1034,50 @@ void FSSessionWorker::importProfileSettings()
         ++copied;
     }
     worker->settingsNotice += "Settings import: "+std::to_string(changes.size())+" preferences, "+std::to_string(copied)+
-        " UI files, "+std::to_string(skipped)+" skipped; previous files backed up.";
+        " UI files, "+std::to_string(skipped)+" unselected/isolated/unsupported/invalid; previous files backed up.";
+    for(const auto& skippedControl:skippedDetails)recordProfileImport("Skipped "+skippedControl);
+    recordProfileImport(worker->settingsNotice);
     LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
+}
+void FSSessionWorker::importProfileAccountSettings()
+{
+    if(!worker || worker->accountImport.empty())return;
+    if(!managed()){worker->accountImport.clear();return;}
+    if(gAgent.getID().isNull() || gAgent.getSessionID().isNull() || gDisconnected)return;
+    const auto bytes=std::move(worker->accountImport);worker->accountImport.clear();
+    const auto report=[&](const std::string& text){worker->settingsNotice="Settings import: "+text;recordProfileImport(worker->settingsNotice);LL_INFOS("SessionWorker")<<worker->settingsNotice<<LL_ENDL;};
+    LLSD records;std::istringstream input(bytes);
+    if(LLSDSerialize::fromXML(records,input,false)<=0 || !records.isMap() || records.size()>ProfileSettingsEntries){report("account preferences invalid; destination retained.");return;}
+    fillImportDefaults(gSavedPerAccountSettings,records,worker->copyGroups,true);
+    if(records.size()>ProfileSettingsEntries){report("too many account preferences after resolving defaults; destination retained.");return;}
+    LLSD changes;std::size_t skipped=0;
+    for(auto it=records.beginMap();it!=records.endMap();++it)
+    {
+        auto control=gSavedPerAccountSettings.getControl(it->first);const auto& record=it->second;
+        const auto type=control?LLControlGroup::typeEnumToString(control->type()):std::string{};
+        if(!control || !accountPreferenceAllowed(it->first,worker->copyGroups) || !control->isPersisted() || !control->isBackupable() ||
+           !record.isMap() || record["Type"].asString()!=type || !record.has("Value") || (record.has("Backup")&&!record["Backup"].asBoolean()) ||
+           !validImportedControlValue(type,record["Value"])){++skipped;continue;}
+        changes[it->first]=record["Value"];
+    }
+    if(!changes.size()){report("no eligible account UI preferences; destination retained.");return;}
+    const auto targetName=gSavedSettings.getString("PerAccountSettingsFile");
+    const auto target=std::filesystem::path(ll_convert_string_to_wide(targetName,targetName.size(),CP_UTF8));
+    if(targetName.empty()){report("destination account settings unavailable; original choices retained.");return;}
+    ProfileBackup backup;if(!backup.create(target.parent_path()) || !backup.save(target)){report("account backup failed; original choices retained.");return;}
+    LLSD previous,effective;
+    for(auto it=changes.beginMap();it!=changes.endMap();++it){auto control=gSavedPerAccountSettings.getControl(it->first);previous[it->first]=control->getSaveValue();effective[it->first]=control->getValue();control->setValue(it->second,true);}
+    const auto temporary=backup.folder/L"account-settings-import.tmp";
+    gSavedPerAccountSettings.saveToFile(ll_convert_wide_to_string(temporary.wstring()),true);
+    LLSD saved;std::string written;bool complete=readProfileFile(temporary,written);
+    if(complete){std::istringstream check(written);complete=LLSDSerialize::fromXML(saved,check,false)>0 && saved.isMap();}
+    for(auto it=changes.beginMap();complete && it!=changes.endMap();++it){auto control=gSavedPerAccountSettings.getControl(it->first);if(control->shouldSave(true))complete=saved.has(it->first)&&saved[it->first]["Value"]==control->getSaveValue();}
+    if(!complete || !MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    {
+        for(auto it=previous.beginMap();it!=previous.endMap();++it){auto control=gSavedPerAccountSettings.getControl(it->first);control->setValue(it->second,true);control->setValue(effective[it->first],false);}
+        std::error_code error;std::filesystem::remove(temporary,error);report("account write failed; original choices restored.");return;
+    }
+    report(std::to_string(changes.size())+" account UI/LookAt preferences copied; "+std::to_string(skipped)+" unselected or unsupported; prior file backed up.");
 }
 bool FSSessionWorker::importProfileToolbars()
 {
@@ -1046,6 +1149,7 @@ bool FSSessionWorker::importProfileToolbars()
     // A destination's first-run reset must not overwrite this explicit choice.
     gSavedSettings.setBOOL("ResetToolbarSettings",false);
     worker->settingsNotice = "Settings import: toolbar layout copied; "+std::to_string(skipped)+" unavailable commands skipped; previous file backed up.";
+    recordProfileImport(worker->settingsNotice);
     LL_INFOS("SessionWorker") << worker->settingsNotice << LL_ENDL;
     return true;
 }
@@ -1436,6 +1540,7 @@ bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}
+void FSSessionWorker::importProfileAccountSettings() {}
 bool FSSessionWorker::importProfileToolbars() { return false; }
 bool FSSessionWorker::temporaryControl(const std::string&) { return false; }
 void FSSessionWorker::tick() {}

@@ -2059,6 +2059,11 @@ bool idle_startup()
         // We should have an agent id by this point.
         llassert(!(gAgentID == LLUUID::null));
 
+        // Login cleanup loads a tentative account before authentication. Apply
+        // the deliberate private-profile copy only now, after the successful
+        // response established both agent/session IDs, before world UI setup.
+        FSSessionWorker::importProfileAccountSettings();
+
         // <FS:Ansariel> Force HTTP inventory enabled on Second Life
 #ifdef OPENSIM
         if (LLGridManager::getInstance()->isInSecondLife())
