@@ -3491,8 +3491,11 @@ struct Host
     }
     std::vector<HWND> chatControls() const
     {
-        std::vector<HWND> result{sharedFriends.window,chatNewIM,chatFriends,chatDock,chatAccent,chatAccount,chatConversation,chatReview,chatRead,chatLatest,chatLabel,chatHistory,chatCompose,chatSend,voiceControl,muteControl,pinMenu};
-        for (auto button : pinButtons) result.push_back(button); return result;
+        std::vector<HWND> result{chatNewIM,chatFriends,chatDock,chatAccent,chatAccount,chatConversation,chatReview,chatRead,chatLatest,chatLabel,chatHistory,chatCompose,chatSend,voiceControl,muteControl,pinMenu};
+        // The sidebar is created on demand; an absent window cannot be reparented.
+        if (sharedFriends.window) result.insert(result.begin(), sharedFriends.window);
+        for (auto button : pinButtons) result.push_back(button);
+        return result;
     }
     std::vector<HWND> characterControls() const
     {

@@ -62,3 +62,11 @@ Additional Windows acceptance:
 1. Pause cycling on a private IM, type an unsent draft, then disconnect that character while another remains ready. Continue typing/Enter and try a queued/held Return, paste and unfinished IME input. No text may enter another character's Nearby draft or send publicly; Next/Play are explicit recovery actions. Reconnect without using those actions and verify it remains disabled.
 2. Resume/advance while Chat was focused, then pause: old keyboard input must be dropped until the new composer receives fresh focus. Close/hide its selected conversation while typing; automatic fallback must also remove focus and preserve the original draft.
 3. At 200% DPI, five Chat-enabled windows on a 1920×1040 work area must refuse both arrangements without moving any window. Check a fitting two-window layout, Chat-hidden previews, 4K screens and increased text size. Move between screens with different DPI; successful rectangles must retain their validated sizes without overlaps or off-screen windows.
+
+## First-use Chat pop-out correction
+
+The Friends sidebar is created on demand. Including its null window in the Chat control list made the first pop-out call `SetParent` on a nonexistent control, producing “Could not move the panel controls; docking was retained.” Opening Friends once created the window and masked the failure. The control list now includes the sidebar only after creation, including when it is hidden.
+
+A focused C++17 harness compiled the actual production control-list and docking-loop snippets against mocked parent APIs, reproducing the failure before the fix and successful first-use pop-out afterward. Existing/hidden sidebars, creation after detachment, repeated docking and rollback after a genuine move refusal passed with `-Wall -Wextra -Werror -pedantic -UNDEBUG`. This checks the docking logic, not native Windows window behavior. Diff hygiene passed; protocol remains 15. No broad or native builds were run.
+
+Windows retest: start the host with Friends never opened, pop out shared Chat, dock it again, open/hide Friends and repeat. Also reopen a host with detached Chat saved; its panel should restore without requiring Friends. Check that the sidebar follows Chat after being created while detached and that the draft, selection and tooltips survive docking.
