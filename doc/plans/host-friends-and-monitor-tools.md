@@ -46,3 +46,19 @@ No native Windows compiler/runtime was available. No viewer/host build, installe
 7. Leave default safety on: cycling Chat says “Pause to chat.” and cannot send/change/mark read until paused. Save drafts under two accounts/conversations, navigate and return; each draft stays with its owner. With safety off, focus the composer and type immediately: rotation must pause first. Play must resume explicitly.
 8. Show the same character in a fixed and cycling monitor. Check one native preview stream and total acknowledged/pending preview rates at or below 10 FPS; minimize/hide/close views and check release. Watch for flicker, stale images and source-label mismatch.
 9. Ctrl+A, copy/paste, Enter to send, Shift+Enter and IME input in each Chat surface; history selection must preserve reading position. Reopen the host and check interval, safety, pins and placements. Verify Preferences Cancel discards edits and Apply autosaves them.
+
+## Post-review fixes
+
+Both #41 findings were confirmed against the published head and corrected in separate commits.
+
+- An invalid paused cycling assignment stays disabled until explicit Next/Previous or Play. It clears its image and removes composer focus without adopting another sender. Reconnection alone does not re-enable the binding; the original session's private draft remains with that conversation.
+- Source changes and automatic conversation fallback cancel unfinished composition and move focus to the neutral monitor window. Queued typing, paste, Unicode/IME and Enter require a focused, paused, source-owned composer. The message loop rejects stale editor input before dialog navigation can activate another button.
+- Grid/row tiling validates every rectangle against the same minimum helper used by `WM_GETMINMAXINFO`, at destination-screen DPI and host text scaling, before moving any monitor. Unknown scaling or insufficient space produces a refusal with positions untouched. Cross-screen `WM_DPICHANGED` keeps the validated tile rectangles while updating fonts and layout.
+
+Four affected portable checks passed with strict C++17 warnings/assertions: `monitor_tools`, `monitor_chat`, `chat_behavior`, `monitors`. The added regressions cover paused private IM → disconnect → attempted typing/send, reconnect without implicit re-enabling, stale unfocused Enter after explicit recovery, 200% DPI refusal on 1920×1040, successful 4K layouts, differing cycling minimums and larger text. Diff hygiene passed. Protocol remains 15. No native viewer/host/build/packaging or unrelated checks were run.
+
+Additional Windows acceptance:
+
+1. Pause cycling on a private IM, type an unsent draft, then disconnect that character while another remains ready. Continue typing/Enter and try a queued/held Return, paste and unfinished IME input. No text may enter another character's Nearby draft or send publicly; Next/Play are explicit recovery actions. Reconnect without using those actions and verify it remains disabled.
+2. Resume/advance while Chat was focused, then pause: old keyboard input must be dropped until the new composer receives fresh focus. Close/hide its selected conversation while typing; automatic fallback must also remove focus and preserve the original draft.
+3. At 200% DPI, five Chat-enabled windows on a 1920×1040 work area must refuse both arrangements without moving any window. Check a fitting two-window layout, Chat-hidden previews, 4K screens and increased text size. Move between screens with different DPI; successful rectangles must retain their validated sizes without overlaps or off-screen windows.
