@@ -18,6 +18,29 @@ int main()
         const auto tiles=monitorTiles({1920,-800,1919,1041},count,row);assert(tiles.size()==count);
         for(std::size_t i=0;i<tiles.size();++i){const auto& t=tiles[i];assert(t.x>=1920 && t.y>=-800 && t.x+t.width<=3839 && t.y+t.height<=241);for(std::size_t j=0;j<i;++j){const auto& old=tiles[j];assert(t.x>=old.x+old.width || old.x>=t.x+t.width || t.y>=old.y+old.height || old.y>=t.y+t.height);}}
     }
+    std::vector<MonitorMinimum> min100,min200,minText,minPreview;
+    for(int id=0;id<MonitorViews;++id)
+    {
+        min100.push_back(monitorMinimum(true,id==CyclingView,96));
+        min200.push_back(monitorMinimum(true,id==CyclingView,192));
+        minText.push_back(monitorMinimum(true,id==CyclingView,240)); // 200% DPI, 125% text.
+        minPreview.push_back(monitorMinimum(false,id==CyclingView,192));
+    }
+    assert(min200[0].width==640 && min200[0].height==784 && min200[CyclingView].height==848);
+    for(bool row:{false,true})
+    {
+        const auto fullHD=monitorTiles({0,0,1920,1040},5,row);
+        assert(tilesRespectMinimums(fullHD,min100));
+        assert(!tilesRespectMinimums(fullHD,min200)); // Reject every move before the first resize.
+        assert(tilesRespectMinimums(monitorTiles({-3840,0,3840,2080},5,row),min200));
+    }
+    assert(tilesRespectMinimums(monitorTiles({0,0,1920,1040},5,false),minPreview));
+    const std::vector<MonitorMinimum> pair{min200[0],min200[CyclingView]},largeText{minText[0],minText[CyclingView]};
+    assert(tilesRespectMinimums(monitorTiles({0,0,1920,1040},2,false),pair));
+    assert(!tilesRespectMinimums(monitorTiles({0,0,1920,1040},2,false),largeText));
+    assert(!tilesRespectMinimums({},min200));assert(!tilesRespectMinimums(monitorTiles({0,0,1920,1040},2,false),min200));
+    assert(!tilesRespectMinimums({{0,0,640,784}},{{640,785}}));
+    assert(monitorMinimum(true,false,120).height==490 && monitorMinimum(true,false,0).width==0);
     std::array<Message,MaxCharacters> sources{};std::array<ChatView,MaxCharacters> chats{};MonitorSet set;
     for(int i=0;i<MaxCharacters;++i){auto& s=sources[i];s.worker[0]=static_cast<std::uint8_t>(i+1);s.generation=1;s.pid=static_cast<std::uint32_t>(100+i);s.account="account"+std::to_string(i);s.grid="grid";s.state=State::Ready;chats[i].bind(s);chats[i].conversations.at("").draft="draft "+std::to_string(i);}
     for(int i=1;i<MaxCharacters;++i)assert(set.open(i,sources[i],0,3)>=0);

@@ -38,6 +38,22 @@ inline bool cyclingComposerInputAllowed(const CyclingMonitor& cycle,bool focused
     return !cycle.playing && focused && chat.request(Kind::SendChat,binding,source,view).has_value();
 }
 struct MonitorTile { int x=0,y=0,width=0,height=0; };
+struct MonitorMinimum { int width=0,height=0; };
+inline MonitorMinimum monitorMinimum(bool chat,bool cycling,unsigned int effectiveDpi)
+{
+    if(!effectiveDpi || effectiveDpi>10000)return {};
+    const auto scale=[effectiveDpi](unsigned int value)
+    {return static_cast<int>((static_cast<std::uint64_t>(value)*effectiveDpi+48)/96);};
+    // Match native MulDiv rounding, including the host's larger-text scale.
+    return {scale(chat?320u:280u),scale((chat?392u:120u)+(cycling?32u:0u))};
+}
+inline bool tilesRespectMinimums(const std::vector<MonitorTile>& tiles,const std::vector<MonitorMinimum>& minimums)
+{
+    if(tiles.empty() || tiles.size()!=minimums.size())return false;
+    for(std::size_t i=0;i<tiles.size();++i)
+        if(minimums[i].width<1 || minimums[i].height<1 || tiles[i].width<minimums[i].width || tiles[i].height<minimums[i].height)return false;
+    return true;
+}
 inline std::vector<MonitorTile> monitorTiles(MonitorTile work,unsigned int count,bool row,int gap=8)
 {
     if(!count || count>MonitorViews || work.width<1 || work.height<1 || gap<0)return {};

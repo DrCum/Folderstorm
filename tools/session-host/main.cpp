@@ -392,7 +392,7 @@ struct Host
     std::uintptr_t focusIntent = 0;
     MonitorSet monitorSet;
     std::array<MonitorWindow, MonitorViews> monitors{};
-    CyclingMonitor cycler;bool cycleOpen=false;
+    CyclingMonitor cycler;bool cycleOpen=false,tilingMonitors=false;
     fs_host_ui::FriendsPane sharedFriends;bool showFriends=false;
     std::array<fs_host_ui::FriendsPane,MaxCharacters> friendsWindows;
     HWND chatNewIM=nullptr,chatFriends=nullptr;
@@ -2140,14 +2140,37 @@ struct Host
     }
     void openAllMonitors()
     {for(const auto i:experience.order)if(cycleEligible(static_cast<int>(i)))openMonitor(static_cast<int>(i));}
+    MonitorMinimum monitorMinimumFor(int id,UINT targetDpi) const
+    {return monitorMinimum(monitors[id].showChat,id==CyclingView,static_cast<unsigned int>(theme.uiDpi(targetDpi)));}
+    UINT tileDestinationDpi(const RECT& work,UINT fallback) const
+    {
+        using WindowDpi=UINT(WINAPI*)(HWND);
+        const auto getDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
+        if(!getDpi)return fallback;
+        // A hidden, non-activating probe queries the target screen in this
+        // process's DPI awareness context without moving any actual monitor.
+        const HWND probe=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,L"STATIC",L"",WS_POPUP,
+            work.left+(work.right-work.left)/2,work.top+(work.bottom-work.top)/2,1,1,window,nullptr,GetModuleHandleW(nullptr),nullptr);
+        if(!probe)return 0;
+        const UINT result=getDpi(probe);DestroyWindow(probe);return result>=96?result:0;
+    }
     void arrangeMonitors(POINT point,bool row)
     {
         MONITORINFO info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(MonitorFromPoint(point,MONITOR_DEFAULTTONEAREST),&info))return;
         std::vector<int> ids;for(int id=0;id<MonitorViews;++id)if(monitors[id].window && IsWindowVisible(monitors[id].window) && (monitorSet.bindings[id].enabled || (id==CyclingView && cycleOpen)))ids.push_back(id);
+        if(ids.empty()){message(L"Open a monitor before arranging windows.");return;}
         const auto& r=info.rcWork;const auto tiles=monitorTiles({static_cast<int>(r.left),static_cast<int>(r.top),static_cast<int>(r.right-r.left),static_cast<int>(r.bottom-r.top)},static_cast<unsigned int>(ids.size()),row);
+        UINT fallback=96;for(const auto id:ids)fallback=(std::max)(fallback,monitors[id].dpi);
+        const UINT targetDpi=tileDestinationDpi(r,fallback);
+        if(!targetDpi){message(L"Unable to determine this screen's scaling; monitors were left in place.");return;}
+        std::vector<MonitorMinimum> minimums;for(const auto id:ids)minimums.push_back(monitorMinimumFor(id,targetDpi));
+        if(!tilesRespectMinimums(tiles,minimums))
+        {message(L"These monitors cannot fit on this screen at the current scaling.");return;}
         // Place outer rectangles in the invoked screen’s work area without
         // changing each monitor’s preview size, rate, source or pin.
+        tilingMonitors=true;
         for(std::size_t i=0;i<tiles.size();++i){const auto& t=tiles[i];ShowWindow(monitors[ids[i]].window,SW_SHOWNOACTIVATE);SetWindowPos(monitors[ids[i]].window,nullptr,t.x,t.y,t.width,t.height,SWP_NOZORDER|SWP_NOACTIVATE);}
+        tilingMonitors=false;
     }
     void clearMonitor(int id)
     {
@@ -3910,11 +3933,14 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     {
         monitor->dpi = (std::max)(96u, static_cast<UINT>(LOWORD(wparam))); host->monitorFont(id);
         const auto* rect = reinterpret_cast<const RECT*>(lparam);
-        SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        if(!host->tilingMonitors)SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         host->layoutMonitorChat(id); return 0;
     }
     case WM_GETMINMAXINFO:
-        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {scale(monitor->showChat ? 320 : 280),scale((monitor->showChat?392:120)+(id==CyclingView?32:0))}; return 0;
+    {
+        const auto minimum=host->monitorMinimumFor(id,monitor->dpi);
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize={minimum.width,minimum.height};return 0;
+    }
     case WM_SIZE: host->layoutMonitorChat(id); InvalidateRect(window,nullptr,FALSE); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
