@@ -28,6 +28,7 @@ public:
     static void drawTransition(); // World-only fade, before native 2D controls.
     static void endCameraFrame();   // Paired even when display returns early.
     static bool inputAllowed();
+    static bool nativeChatReadAllowed(); // Logical floater focus alone cannot read an inactive character's IMs.
     static bool voiceAllowed();
     static bool backgroundAudioMuted();
     static bool backgroundUIAudioMuted(); // Host alerts own background UI; world/media mute is independent.

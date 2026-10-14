@@ -32,5 +32,18 @@ int main()
     ++event.event; event.eventAt = 42000; event.flags |= ConversationRestricted;
     assert(!categories.admitCategories(event,15,42000,true)); event.flags &= ~ConversationRestricted;
     Frame frame; Message roundtrip; assert(encode(event,frame) && decode(frame,roundtrip) && roundtrip.eventAt == 42000 && (roundtrip.flags & AlertEligible));
+    event.eventType=EventType::Chat;event.topic=Topic::Private;event.eventAt=50000;event.unread=0;event.event++;
+    AlertGate reasons;assert(reasons.decide(event,SoundPrivate,50001,true)==AlertDecision::Allowed);
+    assert(reasons.decide(event,SoundPrivate,50001,true)==AlertDecision::Duplicate);
+    const auto check=[](Message item,unsigned int mask,std::uint64_t now,bool background)
+    {AlertGate single;return single.decide(item,mask,now,background);};
+    assert(check(event,SoundPrivate,50001,false)==AlertDecision::BackgroundUnavailable);
+    assert(check(event,SoundGroup,50001,true)==AlertDecision::CategoryOff);
+    assert(check(event,SoundPrivate,54001,true)==AlertDecision::Stale);
+    event.flags=0;assert(check(event,SoundPrivate,50001,true)==AlertDecision::WorkerIneligible);
+    event.flags=AlertEligible|ConversationRestricted;assert(check(event,SoundPrivate,50001,true)==AlertDecision::Restricted);
+    event.flags=AlertEligible;event.recipient=event.account;assert(check(event,SoundPrivate,50001,true)==AlertDecision::OwnMessage);
+    event.recipient.clear();event.detail="Alert: viewer master/UI muted or UI volume zero";
+    assert(encode(event,frame) && decode(frame,roundtrip) && roundtrip.detail==event.detail && roundtrip.unread==0);
     std::cout << "Eligible background-only alerts, deduplication, freshness and burst suppression passed.\n";
 }
