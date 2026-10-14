@@ -11,6 +11,13 @@
 #include "fssessionchatbehavior.h"
 namespace fs_host_ui
 {
+inline bool selectAllChatText(HWND edit,UINT message,WPARAM key)
+{
+    if(message!=WM_KEYDOWN && message!=WM_CHAR)return false;
+    if(!(GetKeyState(VK_CONTROL)&0x8000) || (GetKeyState(VK_MENU)&0x8000))return false;
+    if(message==WM_KEYDOWN && key=='A'){SendMessageW(edit,EM_SETSEL,0,-1);return true;}
+    return message==WM_CHAR && key==1; // Consume Ctrl+A's control character.
+}
 struct Transcript
 {
     HWND edit = nullptr, latest = nullptr;
@@ -50,6 +57,7 @@ struct Transcript
     static LRESULT CALLBACK proc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
         auto& view = *reinterpret_cast<Transcript*>(data);
+        if(selectAllChatText(window,message,wp)){view.observe();return 0;}
         const auto result = DefSubclassProc(window,message,wp,lp);
         if (message == WM_PAINT && view.visible() && view.following && view.atTail()) view.painted = view.watermark;
         if (message == WM_VSCROLL || message == WM_MOUSEWHEEL || message == WM_KEYUP || message == WM_LBUTTONUP) view.observe();
@@ -96,11 +104,35 @@ struct Transcript
 struct Composer
 {
     HWND edit = nullptr;
-    std::function<void()> send;
+    std::function<void()> send,enter;
+    std::function<bool()> acceptsInput;
     fs_session::ComposerReturn keys;
+    static bool inputMessage(UINT message)
+    {
+        return message==WM_KEYDOWN || message==WM_KEYUP || message==WM_CHAR || message==WM_UNICHAR ||
+            message==WM_SYSKEYDOWN || message==WM_SYSKEYUP || message==WM_SYSCHAR ||
+            message==WM_PASTE || message==WM_CUT || message==WM_CLEAR ||
+            message==WM_IME_STARTCOMPOSITION || message==WM_IME_COMPOSITION ||
+            message==WM_IME_ENDCOMPOSITION || message==WM_IME_CHAR;
+    }
+    bool allowsInput(UINT message) const
+    {return !inputMessage(message) || !acceptsInput || acceptsInput();}
+    void releaseFocus(HWND target)
+    {
+        keys={};
+        if(edit && GetFocus()==edit)
+        {
+            const HIMC context=ImmGetContext(edit);
+            if(context){ImmNotifyIME(context,NI_COMPOSITIONSTR,CPS_CANCEL,0);ImmReleaseContext(edit,context);}
+            SetFocus(target);
+        }
+    }
     static LRESULT CALLBACK proc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
         auto& composer = *reinterpret_cast<Composer*>(data);
+        if(message==WM_SETFOCUS && composer.enter)composer.enter();
+        if(!composer.allowsInput(message)){composer.keys={};return 0;}
+        if(selectAllChatText(window,message,wp))return 0;
         if (message == WM_GETDLGCODE)
         {
             const auto result = DefSubclassProc(window,message,wp,lp);

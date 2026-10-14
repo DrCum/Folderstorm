@@ -6,12 +6,14 @@
 namespace fs_session
 {
 constexpr int MaxMonitors = MaxCharacters - 1;
+constexpr int CyclingView = MaxMonitors, MonitorViews = MaxMonitors + 1;
 constexpr std::uint32_t PreviewAggregateRate = 20; // Half-FPS units: 10 FPS total.
 inline std::uint32_t previewTarget(unsigned int index)
 { const std::uint32_t rates[] = {1, 2, 4, 10}; return index < 4 ? rates[index] : 0; }
 inline std::uint32_t previewBudget(unsigned int target, unsigned int visible)
 {
-    if (!visible || visible > static_cast<unsigned int>(MaxMonitors)) return 0;
+    // With no active world selected, all five characters may be inactive.
+    if (!visible || visible > static_cast<unsigned int>(MaxCharacters)) return 0;
     const auto cap = PreviewAggregateRate / visible;
     for (unsigned int i = 4; i > 0; --i)
         if (previewTarget(i - 1) <= cap && previewTarget(i - 1) <= previewTarget(target)) return previewTarget(i - 1);
@@ -41,7 +43,7 @@ class MonitorSet
 {
 public:
     enum class Exchange { None, Kept, Exchanged, Stopped };
-    std::array<MonitorBinding, MaxMonitors> bindings{};
+    std::array<MonitorBinding, MonitorViews> bindings{};
     int find(int slot) const
     { for (int i = 0; i < MaxMonitors; ++i) if (bindings[i].enabled && bindings[i].slot == slot) return i; return -1; }
     int open(int slot, const Message& source, unsigned int size, unsigned int rate)
@@ -55,13 +57,36 @@ public:
         }
         return -1;
     }
+    bool cycle(int slot,const Message& source,unsigned int size,unsigned int rate)
+    {
+        if(!validSlot(slot) || !monitorSource(source) || size>2 || rate>3)return false;
+        bindings[CyclingView]={true,slot,monitorIdentity(source),size,rate};return true;
+    }
+    template<class Wants> unsigned int visibleSources(Wants wants) const
+    {
+        std::array<bool,MaxCharacters> seen{};unsigned int count=0;
+        for(int i=0;i<MonitorViews;++i)if(bindings[i].enabled && validSlot(bindings[i].slot) && wants(i) && !seen[bindings[i].slot])
+        {seen[bindings[i].slot]=true;++count;}
+        return count;
+    }
+    template<class Wants> Message policyFor(int slot,Wants wants) const
+    {
+        Message policy;const auto count=visibleSources(wants);
+        for(int i=0;i<MonitorViews;++i)if(bindings[i].enabled && bindings[i].slot==slot && wants(i))
+        {
+            const auto& b=bindings[i];policy.width=(std::max)(policy.width,320u+b.size*160u);policy.height=(std::max)(policy.height,180u+b.size*90u);
+            policy.unread=(std::max)(policy.unread,previewBudget(b.rate,count));
+        }
+        return policy;
+    }
     void stop(int index)
-    { if (index >= 0 && index < MaxMonitors) { bindings[index].enabled = false; if (pending == index) pending = -1; } }
-    void stopSlot(int slot) { stop(find(slot)); }
-    void stopAll() { for (int i = 0; i < MaxMonitors; ++i) stop(i); }
+    { if (index >= 0 && index < MonitorViews) { bindings[index].enabled = false; if (pending == index) pending = -1; } }
+    void stopSlot(int slot) { for(int i=0;i<MonitorViews;++i)if(bindings[i].slot==slot)stop(i); }
+    void stopAll() { for (int i = 0; i < MonitorViews; ++i) stop(i); }
     void beginExchange(int current, int target, const Message* original, const Message& promoted)
     {
         pending = find(target); old = current; next = target;
+        if(pending<0 && bindings[CyclingView].enabled && bindings[CyclingView].slot==target)pending=CyclingView;
         if (pending < 0 || !bindings[pending].key.owns(promoted)) { pending = -1; return; }
         previous = original && monitorSource(*original) ? monitorIdentity(*original) : ChatKey{};
     }
@@ -75,7 +100,7 @@ public:
         const auto* promoted = sourceAt(next);
         const auto* original = validSlot(old) ? sourceAt(old) : nullptr;
         if (active != next || !binding.enabled || !promoted || !binding.key.owns(*promoted) ||
-            !original || !monitorSource(*original) || !previous.owns(*original) || find(old) >= 0)
+            !original || !monitorSource(*original) || !previous.owns(*original) || (index!=CyclingView && find(old) >= 0))
         { binding.enabled = false; return Exchange::Stopped; }
         binding.slot = old; binding.key = previous;
         return Exchange::Exchanged;

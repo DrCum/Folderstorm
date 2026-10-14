@@ -1436,6 +1436,8 @@ set(viewer_HEADER_FILES
     fseventapibridge.h
     fssessionworker.h
     fssessionprotocol.h
+    fssessioncontacts.h
+    fssessionmonitortools.h
     fssessionchatmodel.h
     fssessionrestart.h
     fssessionhostoptions.h

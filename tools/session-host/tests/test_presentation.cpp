@@ -26,7 +26,8 @@ int main()
     auto invalid = store; invalid.bindings[1] = invalid.bindings[0]; assert(invalid.encode().empty());
     invalid = store; invalid.pins.push_back(invalid.pins.front()); assert(invalid.encode().empty());
     invalid = store; invalid.duration = 249; assert(invalid.encode().empty());
-    invalid = store; invalid.rectangles[8] = invalid.rectangles[0]; assert(invalid.encode().empty());
+    invalid = store; invalid.rectangles[14] = invalid.rectangles[0]; assert(invalid.encode().empty());
+    auto windows=store;windows.rectangles[8]=windows.rectangles[0];windows.rectangles[13]=windows.rectangles[0];assert(PresentationStore::decode(windows.encode(),decoded) && decoded.rectangles.count(13));
     const auto fitted = fitShellRect({-2000,-100,1200,800,144},{0,0,1920,1080,96},192);
     assert(fitted.x == 0 && fitted.y == 0 && fitted.width == 1600 && fitted.height == 1066);
     const auto negative = fitShellRect({-1800,0,700,500,96},{-1920,0,1920,1080,96},96);

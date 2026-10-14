@@ -27,6 +27,8 @@
 #include <imm.h>
 #include "dialog.h"
 #include "chatui.h"
+#include "friendsui.h"
+#include "fssessionmonitortools.h"
 #include "fssessionchatprefs.h"
 #include "fssessionreadpolicy.h"
 #include "fssessionsound.h"
@@ -77,10 +79,14 @@ constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList =
 constexpr int RestoreControls = 140, RecoverWindows = 141;
 constexpr int CardBase=700, CardActionBase=710, QuickBase=730, PanelPin=165, MonitorExchange=166, MonitorChatToggle=167, MonitorOptions=168;
 constexpr int DensityToggle=175,ControlsDock=176,ChatDock=177,QuickOverflow=178,MonitorsMenu=179,MainOverflow=181;
+constexpr int ChatNewIM=460,ChatFriends=461,ContactFilter=810,ContactSearch=811,ContactFriends=812,ContactList=813,ContactOpen=814,ContactPopout=815,ContactOnlineOnly=816;
+constexpr int CyclePlay=820,CyclePrevious=821,CycleNext=822,CycleInterval=823;
 constexpr UINT TrayMessage = WM_APP + 20;
 constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp);
+LRESULT CALLBACK friendsListProc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR data);
 struct ComApartment
 {
     HRESULT result = CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
@@ -286,6 +292,10 @@ struct Slot
     FrameLane preview;
     std::uint32_t previewWidth = 0, previewHeight = 0, previewRate = 0;
     ChatView chat;
+    ContactDirectory contacts;
+    Message pendingContact;bool hasPendingContact=false;
+    ULONGLONG contactsAt=0,friendRefreshAt=0;
+    int openIMOrigin=-1;
     Message pendingSend, pendingTyping;
     Message pendingAction;
     Message pendingSkip;
@@ -334,6 +344,8 @@ struct MonitorWindow
     std::vector<std::uint8_t> pixels;
     bool showChat = false, updatingChat = false;
     MonitorChat chat;
+    fs_host_ui::FriendsPane friends;bool showFriends=false;
+    HWND newIM=nullptr,friendsToggle=nullptr,cyclePlay=nullptr,cyclePrevious=nullptr,cycleNext=nullptr,cycleInterval=nullptr;
     HWND label = nullptr, choices = nullptr, history = nullptr, compose = nullptr, send = nullptr, read = nullptr, close = nullptr;
     HWND exchange=nullptr,chatToggle=nullptr,pin=nullptr,options=nullptr,latest=nullptr;
     fs_host_ui::Transcript transcript; fs_host_ui::Composer editor;
@@ -380,7 +392,11 @@ struct Host
     bool logoutOnClose = false;
     std::uintptr_t focusIntent = 0;
     MonitorSet monitorSet;
-    std::array<MonitorWindow, MaxMonitors> monitors{};
+    std::array<MonitorWindow, MonitorViews> monitors{};
+    CyclingMonitor cycler;bool cycleOpen=false,tilingMonitors=false;
+    fs_host_ui::FriendsPane sharedFriends;bool showFriends=false;
+    std::array<fs_host_ui::FriendsPane,MaxCharacters> friendsWindows;
+    HWND chatNewIM=nullptr,chatFriends=nullptr;
     unsigned int monitorSize = 0, monitorRate = 1; // Saved defaults, not assignments.
     bool showChat = true;
     PresentationStore presentation;
@@ -442,7 +458,9 @@ struct Host
     {
         theme.set(experience.theme);fs_host_ui::dialogTheme=&theme;
         for(HWND panel:{window,chatWindow,controlsWindow,attentionWindow})theme.window(panel);
-        for(auto& m:monitors)if(m.window){theme.window(m.window);m.dirty=true;}
+        if(sharedFriends.window){friendsFont(sharedFriends);layoutFriends(sharedFriends);}
+        for(auto& m:monitors)if(m.window){if(m.friends.window){friendsFont(m.friends);layoutFriends(m.friends);}theme.window(m.window);m.dirty=true;}
+        for(auto& p:friendsWindows)if(p.window){friendsFont(p);theme.window(p.window);layoutFriends(p);}
         tooltips.style(theme);
     }
     std::wstring quickLabel(unsigned int id) const
@@ -453,7 +471,8 @@ struct Host
     unsigned int windowKey(HWND panel) const
     {
         if(panel==chatWindow)return 1;if(panel==controlsWindow)return 2;if(panel==attentionWindow)return 7;
-        for(unsigned int i=0;i<MaxMonitors;++i)if(panel==monitors[i].window)return i+3;
+        for(unsigned int i=0;i<MonitorViews;++i)if(panel==monitors[i].window)return i==CyclingView?8:i+3;
+        for(unsigned int i=0;i<MaxCharacters;++i)if(panel==friendsWindows[i].window)return 9+i;
         return 0;
     }
     int pinSlot(const ChatPin& pin) const
@@ -594,6 +613,7 @@ struct Host
         const auto durationField=add(PrefSwitching,{L"Animation time (ms)",std::to_wstring(presentation.duration),FieldType::Number,{},250,2000});fields[durationField].help=L"Time for each zoom or fade stage.";
         const auto heightField=add(PrefSwitching,{L"Height above avatar (m)",std::to_wstring(presentation.height),FieldType::Number,{},16,96});
         const auto sizeField=add(PrefMonitors,{L"Image size",std::to_wstring(monitorSize),FieldType::Choice,{L"320 × 180",L"480 × 270",L"640 × 360"}});
+        const auto cycleSecondsField=add(PrefMonitors,{L"Cycle interval (seconds)",std::to_wstring(experience.cycleSeconds),FieldType::Number,{},2,3600});fields[cycleSecondsField].help=L"The separate cycling monitor visits inactive characters in card order. It never changes the active world.";
         const auto rateField=add(PrefMonitors,{L"Refresh rate",std::to_wstring(monitorRate),FieldType::Choice,{L"0.5 FPS",L"1 FPS",L"2 FPS",L"5 FPS"}});fields[rateField].help=L"Higher rates increase preview rendering and readback work. Open or close monitors from the toolbar camera button.";
         const unsigned int modifiers[]={5,6,3,7};const std::vector<unsigned int> keys{0,49,50,51,52,53,39,37,112,113,114,115,116,117,118,119,120,121,122,123};
         const std::vector<std::wstring> keyNames{L"Disabled",L"1",L"2",L"3",L"4",L"5",L"Right",L"Left",L"F1",L"F2",L"F3",L"F4",L"F5",L"F6",L"F7",L"F8",L"F9",L"F10",L"F11",L"F12"};
@@ -622,6 +642,7 @@ struct Host
             unsigned int choice=0;if(i<experience.quick.size())for(std::size_t j=0;j<quickChoices.size();++j)if(quickChoices[j]->id==experience.quick[i])choice=static_cast<unsigned int>(j)+1;
             const auto field=add(PrefQuick,{L"Position "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,commands});fields[field].rowHeight=28;
         }
+        const auto cycleLockField=add(PrefDiagnostics,{L"Require pause to chat",experience.requirePauseToChat?L"1":L"0",FieldType::Check});fields[cycleLockField].help=L"Cycling monitors disable Chat until paused. When unchecked, focusing the composer pauses before typing; Play resumes explicitly.";
         const auto diagnosticsField=add(PrefDiagnostics,{L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check});
         const auto chatReportField=add(PrefDiagnostics,{L"Chat and alerts",L"Show report…",FieldType::Action});
         fields[chatReportField].help=L"Applied choices and the latest alert decision for each character. No message text is included.";
@@ -718,7 +739,7 @@ struct Host
         {
             remember(false);auto next=preferences();const auto n=[&](std::size_t at){return number(fields[at]);};
             next.options.chrome=n(minimalField)?2:n(chromeField);next.options.hosted=n(hostedField)!=0;next.options.chat=n(chatField)!=0;next.options.chatDetached=n(chatField)==0?chatDetached:n(chatField)==2;next.options.controlsDetached=n(controlsDetachedField)!=0;
-            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;next.experience.dockedArea=n(areaField);
+            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;next.experience.dockedArea=n(areaField);next.experience.cycleSeconds=n(cycleSecondsField);next.experience.requirePauseToChat=n(cycleLockField)!=0;
             next.chat.haveCategories=true;next.chat.showMask=next.chat.attentionMask=0;for(unsigned int i=0;i<5;++i)if(n(showStart+i))next.chat.showMask|=1u<<i;for(unsigned int i=0;i<8;++i)if(n(attentionStart+i))next.chat.attentionMask|=1u<<i;
             next.chat.visibleRead=n(visibleReadField)!=0;next.chat.activeRead=n(activeReadField)!=0;next.chat.delay=n(activeReadField)?n(delayField):chatPreferences.delay;next.experience.oldestFirst=n(oldestField)!=0;next.experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(people[i].attention)next.experience.accountMask|=1u<<i;
             next.options.voice=n(voiceField)!=0;next.options.muteBackground=n(muteField)!=0;next.presentation.volume=n(volumeField);next.presentation.transition=n(transitionField);next.presentation.duration=n(transitionField)?n(durationField):presentation.duration;next.presentation.height=n(transitionField)==1?n(heightField):presentation.height;next.options.previewSize=n(sizeField);next.options.previewRate=n(rateField);next.options.cinematic=next.presentation.transition==1;
@@ -1391,7 +1412,8 @@ struct Host
     void capturePreferencePlacement()
     {
         capturePlacement(window,0,dpi); capturePlacement(chatWindow,1,chatDpi); capturePlacement(controlsWindow,2,controlsDpi);
-        for(unsigned int i=0;i<MaxMonitors;++i)capturePlacement(monitors[i].window,i+3,monitors[i].dpi);
+        for(unsigned int i=0;i<MonitorViews;++i)capturePlacement(monitors[i].window,i==CyclingView?8:i+3,monitors[i].dpi);
+        for(unsigned int i=0;i<MaxCharacters;++i)capturePlacement(friendsWindows[i].window,9+i,friendsWindows[i].dpi);
         presentation.pins=pins.saved();
         if(attentionWindow)experience.attentionRect=liveRect(attentionWindow,attentionDpi);
     }
@@ -1541,6 +1563,7 @@ struct Host
             for (auto& monitor : monitors) if (monitor.window)
             { experience.pinned[windowKey(monitor.window)]=false;pinWindow(monitor.window,false);if(IsIconic(monitor.window))ShowWindow(monitor.window,SW_SHOWNOACTIVATE); fitOpenWindow(monitor.window,monitor.dpi,true); }
         }
+        if(positions)for(auto& p:friendsWindows)if(p.window){experience.pinned[windowKey(p.window)]=false;pinWindow(p.window,false);fitOpenWindow(p.window,p.dpi,true);}
         ShowWindow(window,SW_SHOW); SetForegroundWindow(window); layout();
         message(positions ? L"Controls and window positions recovered. Window pins were cleared." : L"Host controls restored.");
     }
@@ -1549,6 +1572,7 @@ struct Host
         fitOpenWindow(window,dpi,false);
         for (HWND panel : {chatWindow,controlsWindow,attentionWindow}) if (panel) fitOpenWindow(panel,panel == chatWindow ? chatDpi : panel == controlsWindow ? controlsDpi : attentionDpi,false);
         for (auto& monitor : monitors) if (monitor.window) fitOpenWindow(monitor.window,monitor.dpi,false);
+        for(auto& p:friendsWindows)if(p.window)fitOpenWindow(p.window,p.dpi,false);
         layout();
     }
     void recoveryMenu(HWND panel)
@@ -1705,8 +1729,9 @@ struct Host
             const bool ready=slots[i] && slots[i]->running() && !slots[i]->detached && slots[i]->snapshot.state==State::Ready;
             AppendMenuW(menu,MF_STRING|(open?MF_CHECKED:0)|(!open && (!ready || i==active || busy())?MF_GRAYED:0),MonitorBase+static_cast<UINT>(i),characterName(i).c_str());
         }
-        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,212,L"Close all monitors");AppendMenuW(menu,MF_STRING,180,L"Monitor settings…");
+        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,213,L"Open all inactive monitors");AppendMenuW(menu,MF_STRING,214,L"Tile as grid");AppendMenuW(menu,MF_STRING,215,L"Arrange as row");AppendMenuW(menu,MF_STRING,216,L"Cycling monitor");AppendMenuW(menu,MF_STRING,212,L"Close all monitors");AppendMenuW(menu,MF_STRING,180,L"Monitor settings…");
         POINT point{};GetCursorPos(&point);menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
+        if(choice==213){openAllMonitors();return;}if(choice==214 || choice==215){arrangeMonitors(point,choice==215);return;}if(choice==216){openCycler();return;}
         if(choice==212){stopMonitors();return;}if(choice==180){editPreferences(PrefMonitors);return;}
         if(choice>=MonitorBase && choice<MonitorBase+MaxCharacters)
         {
@@ -1872,6 +1897,386 @@ struct Host
             const int id = monitorSet.find(index); if (id >= 0 && monitorSet.bindings[id].key.owns(action)) monitorSet.bindings[id].rate = monitorRate;
         }
     }
+    bool contactsLive(int index) const
+    {
+        const auto* s=validSlot(index)?slots[index].get():nullptr;
+        return s && s->running() && !s->detached && s->pipe.alive() && s->contacts.owns(s->snapshot);
+    }
+    bool contactsVisible(int index) const
+    {
+        const auto visible=[index](const fs_host_ui::FriendsPane& p){return p.slot==index && p.window && IsWindowVisible(p.window) && !IsIconic(GetAncestor(p.window,GA_ROOT));};
+        if(visible(sharedFriends))return true;
+        for(const auto& p:friendsWindows)if(visible(p))return true;
+        for(const auto& m:monitors)if(visible(m.friends))return true;
+        return false;
+    }
+    Message contactRequest(int index,Kind kind) const
+    {
+        const auto& source=slots[index]->snapshot;Message request;request.kind=kind;request.worker=source.worker;request.generation=source.generation;request.account=source.account;request.grid=source.grid;request.name=source.name;return request;
+    }
+    bool pollContacts(int index)
+    {
+        auto& s=*slots[index];const auto now=GetTickCount64();
+        if(!contactsLive(index) || now-s.contactsAt<250)return false;
+        if(s.hasPendingContact)
+        {
+            const auto request=s.pendingContact;s.hasPendingContact=false;
+            if(s.contacts.source.owns(request)){s.contactsAt=now;if(send(index,request.kind,Mode::Warm,0,&request))return true;if(s.pipe.alive())s.hasPendingContact=true;}
+            return false;
+        }
+        if(!contactsVisible(index))return false;
+        auto& d=s.contacts;
+        if(!d.friends.loading && (!s.friendRefreshAt || now-s.friendRefreshAt>=5000))d.beginFriends();
+        auto* transfer=d.search.loading?&d.search:d.friends.loading?&d.friends:nullptr;
+        if(!transfer)return false;
+        auto request=contactRequest(index,Kind::Contacts);request.width=transfer==&d.search?1u:0u;request.event=transfer->token;request.cursor=transfer->offset;
+        s.contactsAt=now;return send(index,Kind::Contacts,Mode::Warm,0,&request);
+    }
+    void friendsFont(fs_host_ui::FriendsPane& p)
+    {
+        const auto next=CreateFontW(-theme.scale(12,p.dpi),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        if(!next)return;
+        for(auto child:{p.label,p.filter,p.onlineOnlyControl,p.searchButton,p.friendsButton,p.list,p.open,p.popout,p.pin})if(child)fs_host_ui::setNativeFont(child,next);
+        if(p.list)SendMessageW(p.list,LB_SETITEMHEIGHT,0,theme.scale(24,p.dpi));
+        if(p.font)DeleteObject(p.font);p.font=next;
+    }
+    bool drawFriend(fs_host_ui::FriendsPane& p,const DRAWITEMSTRUCT& draw)
+    {
+        if(draw.CtlType!=ODT_LISTBOX || draw.hwndItem!=p.list)return false;
+        theme.selection(draw);
+        if(draw.itemID>=p.presentation.rows.size() || draw.itemID>=p.labels.size())return true;
+        const int saved=SaveDC(draw.hDC);
+        const auto scale=[&](int n){return theme.scale(n,p.dpi);};
+        const auto* c=p.presentation.at(draw.itemID);
+        RECT text=draw.rcItem;text.left+=scale(8);text.right-=scale(8);
+        SetBkMode(draw.hDC,TRANSPARENT);
+        SelectObject(draw.hDC,reinterpret_cast<HFONT>(SendMessageW(p.list,WM_GETFONT,0,0)));
+        if(!c)
+        {
+            FillRect(draw.hDC,&draw.rcItem,theme.highContrast?theme.inputBrush:theme.panelBrush);
+            SetTextColor(draw.hDC,theme.highContrast?theme.text:theme.accent);
+            DrawTextW(draw.hDC,p.labels[draw.itemID].c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+        }
+        else
+        {
+            const bool selected=(draw.itemState&ODS_SELECTED)!=0,disabled=(draw.itemState&ODS_DISABLED)!=0;
+            if(!p.searching)
+            {
+                const int diameter=scale(9),left=text.left,top=(draw.rcItem.top+draw.rcItem.bottom-diameter)/2;
+                const COLORREF marker=theme.highContrast?GetTextColor(draw.hDC):disabled?theme.muted:c->online?(theme.dark?RGB(89,211,149):RGB(26,125,74)):theme.muted;
+                const HPEN pen=CreatePen(PS_SOLID,(std::max)(1,scale(1)),marker);
+                const HBRUSH brush=c->online?CreateSolidBrush(marker):nullptr;
+                const auto oldPen=SelectObject(draw.hDC,pen),oldBrush=SelectObject(draw.hDC,brush?static_cast<HGDIOBJ>(brush):GetStockObject(NULL_BRUSH));
+                Ellipse(draw.hDC,left,top,left+diameter,top+diameter);
+                SelectObject(draw.hDC,oldBrush);SelectObject(draw.hDC,oldPen);
+                if(brush)DeleteObject(brush);
+                DeleteObject(pen);
+                text.left+=scale(19);
+                if(!c->online && !selected && !theme.highContrast)SetTextColor(draw.hDC,theme.muted);
+            }
+            const auto name=wide(c->display)+L" ("+wide(c->username)+L")"+(c->allowed?L"":L" · restricted");
+            DrawTextW(draw.hDC,name.c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+            theme.selectionFocus(draw);
+        }
+        if(saved)RestoreDC(draw.hDC,saved);
+        return true;
+    }
+    LRESULT friendsKey(const fs_host_ui::FriendsPane& p,WORD key,int current) const
+    {
+        const int count=static_cast<int>(p.presentation.rows.size());
+        int start=current,direction=1;
+        if(key==VK_DOWN)start=current+1;
+        else if(key==VK_UP){start=current<0?count-1:current-1;direction=-1;}
+        else if(key==VK_HOME)start=0;
+        else if(key==VK_END){start=count-1;direction=-1;}
+        else if(key==VK_PRIOR || key==VK_NEXT)
+        {
+            RECT rect{};GetClientRect(p.list,&rect);
+            const auto height=SendMessageW(p.list,LB_GETITEMHEIGHT,0,0);
+            const int page=(std::max)(1,static_cast<int>(rect.bottom)/(std::max)(1,static_cast<int>(height))-1);
+            direction=key==VK_PRIOR?-1:1;
+            start=(std::max)(0,(std::min)(count-1,current+direction*page));
+        }
+        else return -1;
+        if(count==0)return -2;
+        const auto selected=p.presentation.selectable(start,direction);
+        // A heading at a page boundary must not become a resident selection.
+        const auto fallback=selected<0 && (key==VK_PRIOR || key==VK_NEXT)?p.presentation.selectable(start,-direction):selected;
+        return fallback<0?-2:fallback;
+    }
+    LRESULT friendsCharacter(const fs_host_ui::FriendsPane& p,wchar_t character,int current) const
+    {
+        const int count=static_cast<int>(p.presentation.rows.size());
+        for(int step=1;step<=count;++step)
+        {
+            const int row=(current+step+count)%count;
+            if(!p.presentation.at(static_cast<std::size_t>(row)) || static_cast<std::size_t>(row)>=p.labels.size())continue;
+            const auto& label=p.labels[static_cast<std::size_t>(row)];
+            if(!label.empty() && CompareStringOrdinal(&character,1,label.c_str(),1,TRUE)==CSTR_EQUAL)return row;
+        }
+        return -2;
+    }
+    void layoutFriends(fs_host_ui::FriendsPane& p)
+    {
+        if(!p.label)return;RECT r{};GetClientRect(p.window,&r);const auto scale=[&](int n){return theme.scale(n,p.dpi);};const int width=static_cast<int>(r.right),height=static_cast<int>(r.bottom);
+        MoveWindow(p.label,scale(8),scale(6),(std::max)(1,width-scale(16)),scale(38),TRUE);
+        MoveWindow(p.filter,scale(8),scale(48),(std::max)(1,width-scale(p.searching?16:124)),scale(24),TRUE);
+        MoveWindow(p.onlineOnlyControl,width-scale(116),scale(48),scale(108),scale(24),TRUE);
+        ShowWindow(p.onlineOnlyControl,p.searching?SW_HIDE:SW_SHOWNOACTIVATE);
+        const int cell=(width-scale(20))/2;
+        MoveWindow(p.friendsButton,scale(8),scale(76),cell,scale(24),TRUE);MoveWindow(p.searchButton,scale(12)+cell,scale(76),cell,scale(24),TRUE);
+        MoveWindow(p.list,scale(8),scale(104),(std::max)(1,width-scale(16)),(std::max)(1,height-scale(146)),TRUE);
+        MoveWindow(p.open,scale(8),height-scale(34),(std::max)(1,width-scale(54)),scale(26),TRUE);
+        MoveWindow(p.standalone?p.pin:p.popout,width-scale(38),height-scale(34),scale(30),scale(26),TRUE);
+        ShowWindow(p.pin,p.standalone?SW_SHOWNOACTIVATE:SW_HIDE);ShowWindow(p.popout,p.standalone?SW_HIDE:SW_SHOWNOACTIVATE);
+    }
+    void createFriends(fs_host_ui::FriendsPane& p,HWND parent,bool standalone,int index,int origin)
+    {
+        p.slot=index;p.monitor=origin;p.standalone=standalone;if(p.window)return;p.source={};p.presentation={};p.labels.clear();p.token=p.revision=p.queryToken=0;
+        p.window=CreateWindowExW(standalone?WS_EX_TOOLWINDOW:WS_EX_CONTROLPARENT,L"FolderstormSessionFriends",L"Friends / New IM",(standalone?WS_OVERLAPPEDWINDOW:WS_CHILD)|WS_CLIPCHILDREN,
+            standalone?CW_USEDEFAULT:0,standalone?CW_USEDEFAULT:0,scaled(340),scaled(460),parent,nullptr,GetModuleHandleW(nullptr),&p);
+        if(!p.window)return;
+        using WindowDpi=UINT(WINAPI*)(HWND);const auto getDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));if(getDpi)p.dpi=(std::max)(96u,getDpi(p.window));
+        const auto make=[&](const wchar_t* type,const wchar_t* text,DWORD style,int command){return CreateWindowExW(0,type,text,WS_CHILD|WS_VISIBLE|style,0,0,1,1,p.window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(command)),GetModuleHandleW(nullptr),nullptr);};
+        p.label=make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
+        p.filter=make(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,ContactFilter);SendMessageW(p.filter,EM_SETLIMITTEXT,127,0);
+        p.onlineOnlyControl=make(L"BUTTON",L"Online only",BS_AUTOCHECKBOX|WS_TABSTOP,ContactOnlineOnly);
+        SendMessageW(p.onlineOnlyControl,BM_SETCHECK,p.onlineOnly?BST_CHECKED:BST_UNCHECKED,0);
+        p.friendsButton=make(L"BUTTON",L"Friends",BS_PUSHBUTTON|WS_TABSTOP,ContactFriends);
+        p.searchButton=make(L"BUTTON",L"Search names",BS_PUSHBUTTON|WS_TABSTOP,ContactSearch);
+        p.list=make(L"LISTBOX",L"",WS_BORDER|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS|LBS_WANTKEYBOARDINPUT|WS_TABSTOP,ContactList);
+        const bool keyboardInstalled=p.list && SetWindowSubclass(p.list,friendsListProc,9,reinterpret_cast<DWORD_PTR>(&p));
+        p.open=make(L"BUTTON",L"Open IM",BS_PUSHBUTTON|WS_TABSTOP,ContactOpen);
+        p.popout=make(L"BUTTON",L"Pop out friends",BS_PUSHBUTTON|WS_TABSTOP,ContactPopout);
+        p.pin=make(L"BUTTON",L"Always on top",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
+        fs_host_ui::setButtonIcon(p.popout,fs_host_ui::Icon::ExternalLink);fs_host_ui::setButtonIcon(p.pin,fs_host_ui::Icon::Pin);
+        addTooltip(p.friendsButton,L"Friends are grouped by online status. Offline friends can receive IMs too.");addTooltip(p.filter,L"Filter friends, or enter a resident name and choose Search names");addTooltip(p.searchButton,L"Search this character's grid; display names and usernames are shown together");
+        addTooltip(p.onlineOnlyControl,L"Show online friends only; offline friends remain available when unchecked");
+        addTooltip(p.open,L"Open an IM as the sending character; no message is sent until you choose Send");addTooltip(p.popout,L"Open an independent friends window for this character");
+        if(!p.label || !p.filter || !p.onlineOnlyControl || !p.friendsButton || !p.searchButton || !keyboardInstalled || !p.open || !p.popout || !p.pin){DestroyWindow(p.window);message(L"Unable to create the friends controls. Choose Friends or New IM again.");return;}
+        friendsFont(p);theme.window(p.window);layoutFriends(p);
+        if(standalone){installPanelMenu(p.window);restorePlacement(p.window,9u+static_cast<unsigned int>(index),p.dpi);pinWindow(p.window,false);}
+    }
+    void refreshFriendsPane(fs_host_ui::FriendsPane& p)
+    {
+        if(!p.window)return;
+        auto* s=validSlot(p.slot)?slots[p.slot].get():nullptr;const bool live=contactsLive(p.slot);
+        if(!s || !live || !p.source.owns(s->snapshot))
+        {
+            p.presentation={};p.labels.clear();p.token=0;p.revision=0;p.queryToken=0;p.lastFilter.clear();p.searching=false;p.source=live?s->contacts.source:ChatKey{};
+            SendMessageW(p.list,LB_RESETCONTENT,0,0);p.updating=true;SetWindowTextW(p.filter,L"");p.updating=false;
+        }
+        if(!IsWindowVisible(p.window))return;
+        const auto label=L"Send as: "+(live?wide(s->snapshot.name):std::wstring(L"unavailable"))+(p.searching?L" · search":L" · friends");
+        SetWindowTextW(p.label,label.c_str());
+        if(p.standalone)SetWindowTextW(p.window,(L"Friends: "+characterName(p.slot)).c_str());
+        const bool changedSearch=live && p.searching && p.queryToken!=s->contacts.search.token;
+        const auto* transfer=live && !changedSearch?(p.searching?&s->contacts.search:&s->contacts.friends):nullptr;
+        if(live)addTooltip(p.label,(L"Send as: "+wide(s->snapshot.name)+L" · "+wide(s->snapshot.grid)).c_str());
+        const auto filter=p.searching?std::string{}:editText(p.filter);
+        const bool changed=!transfer || p.token!=transfer->token || p.revision!=transfer->revision || filter!=p.lastFilter || p.onlineOnly!=p.lastOnlineOnly || p.searching!=p.lastSearching;
+        if(changed)
+        {
+            std::string selected,topId;
+            const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0),top=SendMessageW(p.list,LB_GETTOPINDEX,0,0);
+            if(const auto* c=p.presentation.at(static_cast<std::size_t>(at)))selected=c->id;
+            if(const auto* c=p.presentation.at(static_cast<std::size_t>(top)))topId=c->id;
+            auto nextList=transfer?presentFriends(transfer->rows,filter,p.onlineOnly,p.searching):FriendsList{};
+            std::vector<std::wstring> labels;
+            for(std::size_t i=0;i<nextList.rows.size();++i)
+            {
+                const auto& row=nextList.rows[i];
+                if(const auto* c=nextList.at(i))
+                    labels.push_back(wide(c->display)+L" ("+wide(c->username)+L")"+(p.searching?L"":c->online?L" · Online":L" · Offline")+(c->allowed?L"":L" · restricted"));
+                else labels.push_back(std::wstring(row.kind==FriendsRowKind::OnlineHeading?L"Online · ":L"Offline · ")+std::to_wstring(row.count));
+            }
+            p.updating=true;SendMessageW(p.list,WM_SETREDRAW,FALSE,0);SendMessageW(p.list,LB_RESETCONTENT,0,0);
+            p.presentation=std::move(nextList);p.labels=std::move(labels);
+            for(const auto& name:p.labels)SendMessageW(p.list,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));
+            const auto restored=p.presentation.find(selected),restoredTop=p.presentation.find(topId);
+            if(restored>=0)SendMessageW(p.list,LB_SETCURSEL,static_cast<WPARAM>(restored),0);
+            const auto topIndex=restoredTop>=0?restoredTop:(std::max)(0,(std::min)(static_cast<int>(top),static_cast<int>(p.labels.size())-1));
+            SendMessageW(p.list,LB_SETTOPINDEX,static_cast<WPARAM>(topIndex),0);
+            SendMessageW(p.list,WM_SETREDRAW,TRUE,0);p.updating=false;InvalidateRect(p.list,nullptr,TRUE);
+            p.token=transfer?transfer->token:0;
+        }
+        if(p.searching!=p.lastSearching)layoutFriends(p);
+        p.revision=transfer?transfer->revision:0;p.lastFilter=filter;p.lastOnlineOnly=p.onlineOnly;p.lastSearching=p.searching;
+        std::wstring action=changedSearch?L"Search changed in another panel. Search again.":L"Open IM";if(transfer && transfer->loading && p.presentation.contacts.empty())action=transfer->pending?L"Searching…":L"Loading…";
+        if(transfer && !transfer->error.empty())action=wide(transfer->error);
+        SetWindowTextW(p.open,L"Open IM");
+        if(action!=L"Open IM")SetWindowTextW(p.label,(label+L"\r\n"+action).c_str());
+        addTooltip(p.open,transfer && !transfer->error.empty()?wide(transfer->error).c_str():L"Open an IM as this character; sending stays explicit");
+        const auto selected=SendMessageW(p.list,LB_GETCURSEL,0,0);
+        const auto* resident=p.presentation.at(static_cast<std::size_t>(selected));
+        const bool allowed=live && resident && s->contacts.selected(s->snapshot,*resident,p.searching?1u:0u,p.token);
+        const bool directVisible=(chatPreferences.showMask&conversationCategory(Topic::Private))!=0;
+        EnableWindow(p.open,allowed && directVisible);if(!directVisible)addTooltip(p.open,L"Enable Direct IMs under Chats & notifications before opening an IM in the host");EnableWindow(p.filter,live);EnableWindow(p.searchButton,live);EnableWindow(p.friendsButton,live);EnableWindow(p.list,live);
+        EnableWindow(p.onlineOnlyControl,live && !p.searching);
+        setToggle(p.friendsButton,!p.searching);setToggle(p.searchButton,p.searching);
+    }
+    void refreshFriends()
+    {
+        sharedFriends.slot=chatIndex;refreshFriendsPane(sharedFriends);
+        for(auto& p:friendsWindows)refreshFriendsPane(p);
+        for(int id=0;id<MonitorViews;++id){auto& p=monitors[id].friends;p.slot=monitorSet.bindings[id].enabled?monitorSet.bindings[id].slot:-1;refreshFriendsPane(p);}
+    }
+    void openFriendsWindow(int index,int origin=-1,bool search=false)
+    {
+        if(!contactsLive(index)){message(L"Log in this character before opening friends or New IM.");return;}
+        auto& p=friendsWindows[index];createFriends(p,window,true,index,origin);if(!p.window)return;p.monitor=origin;
+        if(search){p.searching=false;SetWindowTextW(p.filter,L"");}
+        ShowWindow(p.window,SW_SHOWNORMAL);SetForegroundWindow(p.window);refreshFriendsPane(p);SetFocus(p.filter);
+    }
+    void toggleFriends(int origin=-1)
+    {
+        if(origin>=0)
+        {
+            auto& m=monitors[origin];if(origin==CyclingView && cycler.playing){cycler.pause();refreshMonitorChat(origin);}
+            m.showFriends=!m.showFriends;createFriends(m.friends,m.window,false,monitorSet.bindings[origin].slot,origin);
+            if(m.showFriends){RECT r{};GetWindowRect(m.window,&r);SetWindowPos(m.window,nullptr,0,0,(std::max)(static_cast<int>(r.right-r.left),theme.scale(640,m.dpi)),(std::max)(static_cast<int>(r.bottom-r.top),theme.scale(480,m.dpi)),SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);}
+            layoutMonitorChat(origin);
+        }
+        else
+        {
+            showFriends=!showFriends;createFriends(sharedFriends,chatDetached?chatWindow:window,false,chatIndex,-1);
+            if(showFriends && chatDetached){RECT r{};GetWindowRect(chatWindow,&r);SetWindowPos(chatWindow,nullptr,0,0,(std::max)(static_cast<int>(r.right-r.left),theme.scale(720,chatDpi)),static_cast<int>(r.bottom-r.top),SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);}
+            layout();
+        }
+        refreshFriends();
+    }
+    void friendsCommand(fs_host_ui::FriendsPane& p,WORD command,WORD notification)
+    {
+        if(command==PanelPin){pinWindow(p.window);return;}
+        if(p.updating || !contactsLive(p.slot) || !p.source.owns(slots[p.slot]->snapshot))return;
+        auto& s=*slots[p.slot];
+        if(command==ContactFilter && notification==EN_CHANGE){if(!p.searching)refreshFriendsPane(p);return;}
+        if(command==ContactOnlineOnly){p.onlineOnly=SendMessageW(p.onlineOnlyControl,BM_GETCHECK,0,0)==BST_CHECKED;refreshFriendsPane(p);return;}
+        if(command==ContactFriends){p.searching=false;refreshFriendsPane(p);return;}
+        if(command==ContactSearch)
+        {
+            const auto query=editText(p.filter);if(query.size()<2 || query.size()>127){message(L"Enter a resident name (at least two characters).");return;}
+            s.contacts.beginSearch();p.searching=true;p.queryToken=s.contacts.search.token;auto request=contactRequest(p.slot,Kind::ContactSearch);request.width=1;request.event=s.contacts.search.token;request.text=query;
+            s.pendingContact=request;s.hasPendingContact=true;s.contactsAt=0;refreshFriendsPane(p);return;
+        }
+        if(command==ContactPopout){openFriendsWindow(p.slot,p.monitor);return;}
+        if(command==ContactList && notification!=LBN_DBLCLK){refreshFriendsPane(p);return;}
+        if(command!=ContactOpen && !(command==ContactList && notification==LBN_DBLCLK))return;
+        const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0);
+        const auto* resident=p.presentation.at(static_cast<std::size_t>(at));if(!resident)return;
+        const auto selected=*resident;
+        if(!(chatPreferences.showMask&conversationCategory(Topic::Private))){message(L"Direct IMs are hidden. Enable them in Chats & notifications before opening an IM.");return;}
+        if(!s.contacts.selected(s.snapshot,selected,p.searching?1u:0u,p.token)){refreshFriendsPane(p);return;}
+        if(s.hasPendingAction || (s.waiting && s.request.kind==Kind::OpenIM)){message(L"Character is busy; choose Open IM again shortly.");return;}
+        auto request=contactRequest(p.slot,Kind::OpenIM);request.width=p.searching?1u:0u;request.event=p.token;request.recipient=selected.id;
+        s.openIMOrigin=p.monitor;s.pendingAction=request;s.hasPendingAction=true;
+    }
+    bool cycleEligible(int index) const
+    {return index!=active && contactsLive(index) && !(slots[index]->snapshot.flags&(PreviewUnavailable|Promoting));}
+    void selectCycle(int target)
+    {
+        if(!cycleEligible(target))return;
+        auto& m=monitors[CyclingView];auto& b=monitorSet.bindings[CyclingView];
+        if(b.enabled && b.slot==target && b.key.owns(slots[target]->snapshot))return;
+        m.editor.releaseFocus(m.window);
+        // Draft edits have already entered the source-owned ChatView via EN_CHANGE.
+        // Clear pixels and selection before publishing a different sender label.
+        clearMonitor(CyclingView);if(m.window){InvalidateRect(m.window,nullptr,FALSE);UpdateWindow(m.window);}m.frame={};m.chat.bind(MonitorBinding{},nullptr,nullptr);
+        if(m.friends.window)ShowWindow(m.friends.window,SW_HIDE);m.showFriends=false;
+        monitorSet.cycle(target,slots[target]->snapshot,b.enabled?b.size:monitorSize,b.enabled?b.rate:monitorRate);m.dirty=true;
+        refreshMonitorChat(CyclingView);layoutMonitorChat(CyclingView);
+    }
+    void openCycler()
+    {
+        if(busy())return;const int target=cycler.next(-1,1,experience.order,[this](int i){return cycleEligible(i);});
+        if(target<0){message(L"Log in an inactive character before opening a cycling monitor.");return;}
+        cycleOpen=true;cycler.seconds=experience.cycleSeconds;cycler.play(GetTickCount64());openMonitor(target,true);
+    }
+    void cycleCommand(int command)
+    {
+        if(!cycleOpen)return;
+        if(command==CyclePlay)
+        {
+            if(cycler.playing)cycler.pause();
+            else
+            {
+                auto& m=monitors[CyclingView];m.showFriends=false;layoutMonitorChat(CyclingView);if(m.compose && IsChild(m.window,GetFocus()))SetFocus(m.cyclePlay);
+                cycler.seconds=experience.cycleSeconds;cycler.play(GetTickCount64());
+            }
+        }
+        else if(command==CycleInterval)
+        {
+            auto& m=monitors[CyclingView];const auto text=editText(m.cycleInterval);unsigned int value=0;
+            for(const auto c:text){if(c<'0' || c>'9' || value>3600){value=0;break;}value=value*10+static_cast<unsigned int>(c-'0');}
+            if(!CyclingMonitor::validInterval(value)){SetWindowTextW(m.cycleInterval,std::to_wstring(experience.cycleSeconds).c_str());return;}
+            experience.cycleSeconds=value;cycler.seconds=value;if(cycler.playing)cycler.play(GetTickCount64());
+        }
+        else
+        {
+            cycler.pause();const int next=cycler.next(monitorSet.bindings[CyclingView].slot,command==CyclePrevious?-1:1,experience.order,[this](int i){return cycleEligible(i);});selectCycle(next);
+        }
+        refreshMonitorChat(CyclingView);
+    }
+    void tickCycler()
+    {
+        if(!cycleOpen)return;
+        cycler.seconds=experience.cycleSeconds;
+        if(busy() || menuOpen || preferencesOpen || monitors[CyclingView].conversationChoice.open){if(cycler.playing)cycler.play(GetTickCount64());return;}
+        const auto& b=monitorSet.bindings[CyclingView];
+        const bool invalid=!b.enabled || !cycleEligible(b.slot) || !b.key.owns(slots[b.slot]->snapshot);
+        auto& m=monitors[CyclingView];
+        const auto action=cycler.action(!invalid,m.window && IsWindowVisible(m.window) && !IsIconic(m.window),GetTickCount64());
+        if(action==CyclingMonitor::Action::Disable)
+        {
+            // Keep the last assignment disabled until an explicit Next/Play;
+            // neither a disconnect nor reconnect can change a paused sender.
+            if(b.enabled || m.chat.bound || !m.pixels.empty())
+            {
+                m.editor.releaseFocus(m.window);clearMonitor(CyclingView);monitorSet.stop(CyclingView);
+                m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);
+            }
+            return;
+        }
+        if(action==CyclingMonitor::Action::Advance)
+        {
+            const int next=cycler.next(b.slot,1,experience.order,[this](int i){return cycleEligible(i);});
+            if(next>=0)selectCycle(next);else{m.editor.releaseFocus(m.window);clearMonitor(CyclingView);monitorSet.stop(CyclingView);m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);}
+        }
+    }
+    void openAllMonitors()
+    {for(const auto i:experience.order)if(cycleEligible(static_cast<int>(i)))openMonitor(static_cast<int>(i));}
+    MonitorMinimum monitorMinimumFor(int id,UINT targetDpi) const
+    {return monitorMinimum(monitors[id].showChat,id==CyclingView,static_cast<unsigned int>(theme.uiDpi(targetDpi)));}
+    UINT tileDestinationDpi(const RECT& work,UINT fallback) const
+    {
+        using WindowDpi=UINT(WINAPI*)(HWND);
+        const auto getDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
+        if(!getDpi)return fallback;
+        // A hidden, non-activating probe queries the target screen in this
+        // process's DPI awareness context without moving any actual monitor.
+        const HWND probe=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,L"STATIC",L"",WS_POPUP,
+            work.left+(work.right-work.left)/2,work.top+(work.bottom-work.top)/2,1,1,window,nullptr,GetModuleHandleW(nullptr),nullptr);
+        if(!probe)return 0;
+        const UINT result=getDpi(probe);DestroyWindow(probe);return result>=96?result:0;
+    }
+    void arrangeMonitors(POINT point,bool row)
+    {
+        MONITORINFO info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(MonitorFromPoint(point,MONITOR_DEFAULTTONEAREST),&info))return;
+        std::vector<int> ids;for(int id=0;id<MonitorViews;++id)if(monitors[id].window && IsWindowVisible(monitors[id].window) && (monitorSet.bindings[id].enabled || (id==CyclingView && cycleOpen)))ids.push_back(id);
+        if(ids.empty()){message(L"Open a monitor before arranging windows.");return;}
+        const auto& r=info.rcWork;const auto tiles=monitorTiles({static_cast<int>(r.left),static_cast<int>(r.top),static_cast<int>(r.right-r.left),static_cast<int>(r.bottom-r.top)},static_cast<unsigned int>(ids.size()),row);
+        UINT fallback=96;for(const auto id:ids)fallback=(std::max)(fallback,monitors[id].dpi);
+        const UINT targetDpi=tileDestinationDpi(r,fallback);
+        if(!targetDpi){message(L"Unable to determine this screen's scaling; monitors were left in place.");return;}
+        std::vector<MonitorMinimum> minimums;for(const auto id:ids)minimums.push_back(monitorMinimumFor(id,targetDpi));
+        if(!tilesRespectMinimums(tiles,minimums))
+        {message(L"These monitors cannot fit on this screen at the current scaling.");return;}
+        // Place outer rectangles in the invoked screen’s work area without
+        // changing each monitor’s preview size, rate, source or pin.
+        tilingMonitors=true;
+        for(std::size_t i=0;i<tiles.size();++i){const auto& t=tiles[i];ShowWindow(monitors[ids[i]].window,SW_SHOWNOACTIVATE);SetWindowPos(monitors[ids[i]].window,nullptr,t.x,t.y,t.width,t.height,SWP_NOZORDER|SWP_NOACTIVATE);}
+        tilingMonitors=false;
+    }
     void clearMonitor(int id)
     {
         auto& monitor = monitors[id];
@@ -1879,13 +2284,14 @@ struct Host
     }
     void stopMonitor(int id, bool hide = false)
     {
-        if (id < 0 || id >= MaxMonitors) return;
+        if (id < 0 || id >= MonitorViews) return;
+        if(id==CyclingView){cycleOpen=false;cycler.pause();}
         monitorSet.stop(id); clearMonitor(id); monitors[id].dirty = true;
         refreshMonitorChat(id);
         if (hide && monitors[id].window) ShowWindow(monitors[id].window, SW_HIDE);
     }
     void stopMonitors()
-    { for (int i = 0; i < MaxMonitors; ++i) stopMonitor(i, true); }
+    { for (int i = 0; i < MonitorViews; ++i) stopMonitor(i, true); }
     bool wantsMonitor(int id) const
     {
         const auto& binding = monitorSet.bindings[id]; const auto& monitor = monitors[id];
@@ -1896,17 +2302,10 @@ struct Host
             binding.slot != active && !busy() && monitor.window && IsWindowVisible(monitor.window) && !IsIconic(monitor.window) && !IsIconic(window);
     }
     unsigned int visibleMonitors() const
-    { unsigned int count = 0; for (int i = 0; i < MaxMonitors; ++i) if (wantsMonitor(i)) ++count; return count; }
+    {return monitorSet.visibleSources([this](int id){return wantsMonitor(id);});}
     Message monitorPolicy(int index) const
     {
-        Message policy; const int id = monitorSet.find(index);
-        if (id >= 0 && wantsMonitor(id))
-        {
-            const auto& binding = monitorSet.bindings[id];
-            policy.width = 320u + binding.size * 160u; policy.height = 180u + binding.size * 90u;
-            policy.unread = previewBudget(binding.rate, visibleMonitors());
-        }
-        return policy;
+        return monitorSet.policyFor(index,[this](int id){return wantsMonitor(id);});
     }
     bool admitMonitorPolicy(int index, const Message& policy) const
     {
@@ -1924,7 +2323,7 @@ struct Host
     }
     void monitorMenu(int id)
     {
-        if (id < 0 || id >= MaxMonitors || !monitorSet.bindings[id].enabled) return;
+        if (id < 0 || id >= MonitorViews || !monitorSet.bindings[id].enabled) return;
         const auto captured = monitorSet.bindings[id]; const auto popup = CreatePopupMenu();
         if (!popup) return;
         const wchar_t* rates[] = {L"Target 0.5 FPS", L"Target 1 FPS", L"Target 2 FPS", L"Target 5 FPS"};
@@ -1939,13 +2338,14 @@ struct Host
         AppendMenuW(popup, MF_STRING | (monitors[id].showChat ? MF_CHECKED : 0), 21, L"Show chat");
         AppendMenuW(popup, MF_STRING, 22, L"Use this size and frame rate as monitor defaults");
         AppendMenuW(popup, MF_POPUP, reinterpret_cast<UINT_PTR>(conversationFilters()), L"Show conversations");
+        AppendMenuW(popup,MF_STRING,23,L"Tile monitors as grid");AppendMenuW(popup,MF_STRING,24,L"Arrange monitors as row");
         AppendMenuW(popup, MF_STRING, 20, L"Close this monitor");
         POINT point{}; GetCursorPos(&point);
         menuOpen = true;
         const auto choice = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, monitors[id].window, nullptr);
         menuOpen = false;
         DestroyMenu(popup);
-        if(filterCommand(choice))return;
+        if(filterCommand(choice))return;if(choice==23 || choice==24){arrangeMonitors(point,choice==24);return;}
         const auto& current = monitorSet.bindings[id];
         if (!current.enabled || current.slot != captured.slot || !validSlot(current.slot) || !slots[current.slot] ||
             !captured.key.owns(slots[current.slot]->snapshot) || !current.key.owns(slots[current.slot]->snapshot))
@@ -1957,12 +2357,13 @@ struct Host
         else if (choice == 22)
         {monitorSize=current.size;monitorRate=current.rate;message(L"Monitor defaults updated; host preferences save automatically.");}
     }
-    void openMonitor(int index)
+    void openMonitor(int index,bool cycle=false)
     {
         if (!validSlot(index) || !slots[index] || !slots[index]->running() || slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready)
         { message(L"Log in this character before opening its read-only monitor."); return; }
         if (busy() || index == active) { message(L"Choose an inactive character after the switch finishes to open its monitor."); return; }
-        const int id = monitorSet.open(index, slots[index]->snapshot, monitorSize, monitorRate);
+        if(cycle)monitors[CyclingView].editor.releaseFocus(monitors[CyclingView].window);
+        const int id=cycle?(monitorSet.cycle(index,slots[index]->snapshot,monitorSize,monitorRate)?CyclingView:-1):monitorSet.open(index,slots[index]->snapshot,monitorSize,monitorRate);
         if (id < 0) { message(L"All inactive-monitor slots are occupied, or this session changed. Close a monitor before opening another."); return; }
         auto& monitor = monitors[id];
         monitor.frame = {}; clearMonitor(id); monitor.dirty = true;
@@ -1974,7 +2375,7 @@ struct Host
         using WindowDpi = UINT(WINAPI*)(HWND);
         const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
-        if (newMonitor) { installPanelMenu(monitor.window); restorePlacement(monitor.window,static_cast<unsigned int>(id)+3,monitor.dpi); }
+        if (newMonitor) { installPanelMenu(monitor.window); restorePlacement(monitor.window,id==CyclingView?8u:static_cast<unsigned int>(id)+3,monitor.dpi); }
         createMonitorChat(id); layoutMonitorChat(id);
         pinWindow(monitor.window,false);theme.window(monitor.window);ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
     }
@@ -1993,9 +2394,9 @@ struct Host
             updateMonitors();
         }
     }
-    std::array<HWND,8> monitorChatControls(int id) const
+    std::array<HWND,10> monitorChatControls(int id) const
     {
-        const auto& m = monitors[id]; return {m.label,m.choices,m.history,m.compose,m.send,m.read,m.latest,m.close};
+        const auto& m = monitors[id]; return {m.label,m.choices,m.history,m.compose,m.send,m.read,m.latest,m.close,m.newIM,m.friendsToggle};
     }
     Slot* monitorChatSlot(int id) const
     {
@@ -2007,16 +2408,17 @@ struct Host
     int monitorImageHeight(int id) const
     {
         const auto& m = monitors[id]; RECT r{}; GetClientRect(m.window,&r);
-        return (std::max)(0,static_cast<int>(r.bottom)-theme.scale(m.showChat ? 238 : 60,m.dpi));
+        return (std::max)(0,static_cast<int>(r.bottom)-theme.scale((m.showChat?266:60)+(id==CyclingView?32:0),m.dpi));
     }
     void monitorFont(int id)
     {
         auto& m = monitors[id];
+        m.friends.dpi=m.dpi;if(m.friends.window)friendsFont(m.friends);
         const HFONT next = CreateFontW(-theme.scale(12,m.dpi),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
             DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         if (!next) return;
         for(auto item:monitorChatControls(id))if(item)fs_host_ui::setNativeFont(item,next);
-        for(auto item:{m.exchange,m.chatToggle,m.pin,m.options})if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
+        for(auto item:{m.exchange,m.chatToggle,m.pin,m.options,m.cyclePlay,m.cyclePrevious,m.cycleNext,m.cycleInterval})if(item)SendMessageW(item,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);
         if (m.font) DeleteObject(m.font); m.font = next;
     }
     void createMonitorChat(int id)
@@ -2032,6 +2434,8 @@ struct Host
         m.chatToggle=make(L"BUTTON",L"Chat",BS_PUSHBUTTON|WS_TABSTOP,MonitorChatToggle);
         m.pin=make(L"BUTTON",L"Pin",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
         m.options=make(L"BUTTON",L"Options",BS_PUSHBUTTON|WS_TABSTOP,MonitorOptions);
+        m.newIM=make(L"BUTTON",L"New IM",BS_PUSHBUTTON|WS_TABSTOP,ChatNewIM);m.friendsToggle=make(L"BUTTON",L"Friends",BS_PUSHBUTTON|WS_TABSTOP,ChatFriends);
+        if(id==CyclingView){m.cyclePrevious=make(L"BUTTON",L"‹",BS_PUSHBUTTON|WS_TABSTOP,CyclePrevious);m.cycleNext=make(L"BUTTON",L"›",BS_PUSHBUTTON|WS_TABSTOP,CycleNext);m.cyclePlay=make(L"BUTTON",L"Pause",BS_PUSHBUTTON|WS_TABSTOP,CyclePlay);m.cycleInterval=make(L"EDIT",std::to_wstring(experience.cycleSeconds).c_str(),ES_NUMBER|WS_BORDER|WS_TABSTOP,CycleInterval);SendMessageW(m.cycleInterval,EM_SETLIMITTEXT,4,0);addTooltip(m.cycleInterval,L"Seconds between characters (2–3,600). Apply by leaving this field.");addTooltip(m.cyclePrevious,L"Previous inactive character; pauses cycling");addTooltip(m.cycleNext,L"Next inactive character; pauses cycling");}
         m.label = make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
         m.choices = make(L"COMBOBOX",L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL|WS_TABSTOP,ChatConversation);
         m.read = make(L"BUTTON",L"Read",BS_PUSHBUTTON|WS_TABSTOP,ChatRead);
@@ -2040,18 +2444,27 @@ struct Host
         m.history = make(L"EDIT",L"",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER|WS_TABSTOP,0);
         m.compose = make(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|WS_BORDER|WS_TABSTOP,ChatCompose);
         m.send = make(L"BUTTON",L"Send",BS_PUSHBUTTON|WS_TABSTOP,ChatSend);
-        auto items = std::vector<HWND>{m.label,m.choices,m.history,m.compose,m.send,m.read,m.close,m.exchange,m.chatToggle,m.pin,m.options,m.latest};
+        auto items = std::vector<HWND>{m.label,m.choices,m.history,m.compose,m.send,m.read,m.close,m.exchange,m.chatToggle,m.pin,m.options,m.latest,m.newIM,m.friendsToggle};
+        if(id==CyclingView){items.insert(items.end(),{m.cyclePrevious,m.cycleNext,m.cyclePlay,m.cycleInterval});}
         if (std::any_of(items.begin(),items.end(),[](HWND item) { return !item; }))
         {
             for (auto item : items) if (item) DestroyWindow(item);
             m.label = m.choices = m.history = m.compose = m.send = m.read = m.close = m.exchange = m.chatToggle = m.pin = m.options = nullptr;
-            m.latest = nullptr; m.showChat = m.updatingChat = false;
+            m.latest=m.newIM=m.friendsToggle=m.cyclePrevious=m.cycleNext=m.cyclePlay=m.cycleInterval=nullptr; m.showChat = m.updatingChat = false;
             message(L"Unable to create monitor Chat controls. The read-only image remains available."); return;
         }
         if (m.compose) SendMessageW(m.compose,EM_SETLIMITTEXT,1023,0);
         SendMessageW(m.history,EM_SETLIMITTEXT,2*1024*1024,0);
         m.transcript.attach(m.history,m.latest);
         m.editor.attach(m.compose,[this,id] { monitorChatCommand(id,ChatSend,BN_CLICKED); });
+        m.editor.enter=[this,id]{if(id==CyclingView && cycler.playing && !experience.requirePauseToChat){cycler.enteredComposer(false);refreshMonitorChat(id);}};
+        if(id==CyclingView)m.editor.acceptsInput=[this,id]
+        {
+            const auto& monitor=monitors[id];const auto* slot=monitorChatSlot(id);
+            return slot && IsWindowEnabled(monitor.compose) && cyclingComposerInputAllowed(cycler,GetFocus()==monitor.compose,
+                monitor.chat,monitorSet.bindings[id],slot->snapshot,slot->chat);
+        };
+        addTooltip(m.newIM,L"Choose a friend or search for a resident; open an IM as this character");addTooltip(m.friendsToggle,L"Show or hide this character’s friends sidebar");
         addTooltip(m.latest,L"Jump to the latest message and resume following chat");
         m.updatingChat = false; monitorFont(id);
         addTooltip(m.exchange,L"Exchange this monitored character with the active world; chat drafts remain bound to their owners");addTooltip(m.pin,L"Keep only this monitor above other windows");
@@ -2062,29 +2475,31 @@ struct Host
     }
     void layoutMonitorChat(int id)
     {
-        auto& m = monitors[id]; if (!m.label) return;
-        const auto scale = [this,&m](int v) { return theme.scale(v,m.dpi); };
-        RECT r{}; GetClientRect(m.window,&r);
-        const int width = (std::max)(1,static_cast<int>(r.right)-scale(12));
-        const int top = monitorImageHeight(id)+scale(60);
-        const int header=monitorImageHeight(id)+scale(28);
+        auto& m=monitors[id];if(!m.label)return;const auto scale=[this,&m](int v){return theme.scale(v,m.dpi);};RECT r{};GetClientRect(m.window,&r);
+        const int fullWidth=static_cast<int>(r.right),side=m.showChat && m.showFriends?(std::min)(scale(260),fullWidth/2):0;
+        const int width=(std::max)(1,fullWidth-scale(12)-side),image=monitorImageHeight(id),header=image+scale(28),cycle=id==CyclingView?scale(32):0,top=image+scale(60)+cycle;
         for(HWND child:{m.exchange,m.chatToggle,m.pin,m.options})ShowWindow(child,SW_SHOWNOACTIVATE);
-        const int cell=(static_cast<int>(r.right)-scale(12))/4;
+        const int cell=(fullWidth-scale(12))/4;
         MoveWindow(m.exchange,scale(6),header,cell-scale(3),scale(26),TRUE);MoveWindow(m.chatToggle,scale(6)+cell,header,cell-scale(3),scale(26),TRUE);MoveWindow(m.pin,scale(6)+cell*2,header,cell-scale(3),scale(26),TRUE);MoveWindow(m.options,scale(6)+cell*3,header,cell-scale(3),scale(26),TRUE);
-        for (auto item : monitorChatControls(id)) if (item) ShowWindow(item,m.showChat ? SW_SHOWNOACTIVATE : SW_HIDE);
-        if (m.showChat)
+        if(id==CyclingView)
+        {
+            MoveWindow(m.cyclePrevious,scale(6),header+scale(30),scale(32),scale(26),TRUE);MoveWindow(m.cyclePlay,scale(42),header+scale(30),(std::max)(scale(40),fullWidth-scale(174)),scale(26),TRUE);
+            MoveWindow(m.cycleNext,fullWidth-scale(128),header+scale(30),scale(32),scale(26),TRUE);MoveWindow(m.cycleInterval,fullWidth-scale(92),header+scale(30),scale(86),scale(26),TRUE);
+            for(auto child:{m.cyclePrevious,m.cyclePlay,m.cycleNext,m.cycleInterval})ShowWindow(child,SW_SHOWNOACTIVATE);
+        }
+        for(auto item:monitorChatControls(id))if(item)ShowWindow(item,m.showChat?SW_SHOWNOACTIVATE:SW_HIDE);
+        if(m.showChat)
         {
             MoveWindow(m.label,scale(10),top+scale(4),(std::max)(1,width-scale(66)),scale(20),TRUE);
-            MoveWindow(m.latest,static_cast<int>(r.right)-scale(62),top,scale(56),scale(24),TRUE);
-            MoveWindow(m.choices,scale(6),top+scale(26),(std::max)(1,width-scale(98)),scale(180),TRUE);
-            MoveWindow(m.read,static_cast<int>(r.right)-scale(92),top+scale(26),scale(56),scale(24),TRUE);
-            MoveWindow(m.close,static_cast<int>(r.right)-scale(32),top+scale(26),scale(26),scale(24),TRUE);
-            MoveWindow(m.history,scale(6),top+scale(54),(std::max)(1,width-scale(12)),scale(82),TRUE);
-            m.transcript.latestVisibility();
-            MoveWindow(m.compose,scale(6),top+scale(142),(std::max)(1,width-scale(62)),scale(28),TRUE);
-            MoveWindow(m.send,static_cast<int>(r.right)-scale(62),top+scale(142),scale(56),scale(28),TRUE);
+            MoveWindow(m.latest,width-scale(56),top,scale(56),scale(24),TRUE);
+            MoveWindow(m.newIM,scale(6),top+scale(26),scale(64),scale(24),TRUE);MoveWindow(m.friendsToggle,scale(76),top+scale(26),scale(68),scale(24),TRUE);
+            MoveWindow(m.choices,scale(6),top+scale(54),(std::max)(1,width-scale(98)),scale(180),TRUE);
+            MoveWindow(m.read,width-scale(86),top+scale(54),scale(56),scale(24),TRUE);MoveWindow(m.close,width-scale(26),top+scale(54),scale(26),scale(24),TRUE);
+            MoveWindow(m.history,scale(6),top+scale(82),(std::max)(1,width-scale(12)),scale(82),TRUE);m.transcript.latestVisibility();
+            MoveWindow(m.compose,scale(6),top+scale(170),(std::max)(1,width-scale(62)),scale(28),TRUE);MoveWindow(m.send,width-scale(56),top+scale(170),scale(56),scale(28),TRUE);
         }
-        InvalidateRect(m.window,nullptr,FALSE);
+        if(m.friends.window){ShowWindow(m.friends.window,m.showChat && m.showFriends?SW_SHOWNOACTIVATE:SW_HIDE);MoveWindow(m.friends.window,fullWidth-side,top,side,(std::max)(1,static_cast<int>(r.bottom)-top),TRUE);layoutFriends(m.friends);}
+        setToggle(m.friendsToggle,m.showFriends);InvalidateRect(m.window,nullptr,FALSE);
     }
     void setMonitorChat(int id,bool enabled)
     {
@@ -2094,7 +2509,7 @@ struct Host
         {
             RECT r{}; GetWindowRect(m.window,&r);
             const int width = (std::max)(static_cast<int>(r.right-r.left),theme.scale(320,m.dpi));
-            const int height = (std::max)(static_cast<int>(r.bottom-r.top),theme.scale(360,m.dpi));
+            const int height = (std::max)(static_cast<int>(r.bottom-r.top),theme.scale(id==CyclingView?424:392,m.dpi));
             SetWindowPos(m.window,nullptr,0,0,width,height,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
         }
         else if (IsChild(m.window,GetFocus())) SetFocus(m.window);
@@ -2106,6 +2521,7 @@ struct Host
         auto* slot = monitorChatSlot(id);
         m.updatingChat = true;
         const auto& binding = monitorSet.bindings[id];
+        if(id==CyclingView && (!slot || !binding.enabled || !m.chat.identity.owns(slot->snapshot)))m.editor.releaseFocus(m.window);
         const bool changed = m.chat.bind(binding,slot ? &slot->snapshot : nullptr,slot ? &slot->chat : nullptr);
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const bool live = m.showChat && slot && !restricted;
@@ -2125,7 +2541,12 @@ struct Host
             (live && (previous==slot->chat.conversations.end() || !shownConversation(previous->second)))))
         {
             m.conversationIds = std::move(ids);
-            if (live && !m.conversationIds.empty()) m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selection)]);
+            if (live && !m.conversationIds.empty())
+            {
+                const auto& selected=m.conversationIds[static_cast<std::size_t>(selection)];
+                if(id==CyclingView && selected!=m.chat.identity.conversation)m.editor.releaseFocus(m.window);
+                m.chat.select(binding,slot->snapshot,slot->chat,selected);
+            }
         }
         const auto selectedEntry=live?slot->chat.conversations.find(m.chat.identity.conversation):std::map<std::string,Conversation>::iterator{};
         const bool selectedShown=live && selectedEntry!=slot->chat.conversations.end() && shownConversation(selectedEntry->second);
@@ -2134,6 +2555,8 @@ struct Host
         const auto current = live ? slot->chat.conversations.find(m.chat.identity.conversation) : std::map<std::string,Conversation>::iterator{};
         const bool blocked = live && current != slot->chat.conversations.end() && current->second.restricted;
         std::wstring label = L"Send as: "+(slot ? characterName(binding.slot) : L"unavailable");
+        const bool cyclingLocked=id==CyclingView && cycler.playing && experience.requirePauseToChat;
+        if(cyclingLocked)label+=L" · Pause to chat.";
         if (restricted || blocked) label += L" · restricted; use native viewer";
         else if (slot && slot->chat.gap) label += L" · history gap";
         if (label != m.chatStatus) { m.chatStatus = label; SetWindowTextW(m.label,label.c_str()); }
@@ -2160,14 +2583,18 @@ struct Host
         const auto draft = send ? slot->chat.conversations.at(m.chat.identity.conversation).draft : std::string{};
         if (editText(m.compose) != draft) SetWindowTextW(m.compose,wide(draft).c_str());
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
-        EnableWindow(m.choices,live); EnableWindow(m.compose,send.has_value());
+        EnableWindow(m.choices,live && !cyclingLocked); EnableWindow(m.compose,send.has_value() && !cyclingLocked);
         SendMessageW(m.compose,EM_SETREADONLY,sending?TRUE:FALSE,0);
-        EnableWindow(m.send,send.has_value() && !sending); EnableWindow(m.read,read.has_value());EnableWindow(m.close,selectedShown && selectedEntry->second.topic!=Topic::Nearby);
+        EnableWindow(m.send,send.has_value() && !sending && !cyclingLocked); EnableWindow(m.read,read.has_value() && !cyclingLocked);EnableWindow(m.close,selectedShown && selectedEntry->second.topic!=Topic::Nearby && !cyclingLocked);
+        EnableWindow(m.newIM,live && !cyclingLocked);EnableWindow(m.friendsToggle,live && !cyclingLocked);
+        if(id==CyclingView){SetWindowTextW(m.cyclePlay,cycler.playing?L"Pause":L"Play");addTooltip(m.cyclePlay,cycler.playing?L"Pause on this character to use Chat":L"Resume cycling; Chat keeps each character’s draft");}
         m.updatingChat = false;
     }
     void monitorChatCommand(int id,WORD command,WORD notification)
     {
-        auto& m = monitors[id]; if (!m.label || !m.showChat || m.updatingChat) return;
+        auto& m = monitors[id]; if (!m.label || !m.showChat || m.updatingChat || (id==CyclingView && cycler.playing && experience.requirePauseToChat)) return;
+        if(command==ChatNewIM){if(id==CyclingView)cycler.pause();openFriendsWindow(monitorSet.bindings[id].slot,id,true);refreshMonitorChat(id);return;}
+        if(command==ChatFriends){toggleFriends(id);return;}
         auto* slot = monitorChatSlot(id); if (!slot) { refreshMonitorChat(id); return; }
         const auto& binding = monitorSet.bindings[id];
         if (!m.chat.owns(binding,slot->snapshot,slot->chat)) { refreshMonitorChat(id); return; }
@@ -2183,7 +2610,7 @@ struct Host
             {
                 if (chatIndex == binding.slot && conversation == m.chat.identity.conversation) refreshChat(true);
                 // Other visible editors share the same canonical conversation draft.
-                for (int other = 0; other < MaxMonitors; ++other) if (other != id) refreshMonitorChat(other);
+                for (int other = 0; other < MonitorViews; ++other) if (other != id) refreshMonitorChat(other);
             }
         }
         else if (command == ChatSend && notification == BN_CLICKED)
@@ -2200,7 +2627,7 @@ struct Host
     }
     void updateMonitors()
     {
-        for (int id = 0; id < MaxMonitors; ++id)
+        for (int id = 0; id < MonitorViews; ++id)
         {
             auto& monitor = monitors[id]; auto& binding = monitorSet.bindings[id];
             if (!monitor.window) continue;
@@ -2210,19 +2637,20 @@ struct Host
                 clearMonitor(id);
                 if (monitor.dirty)
                 {
-                    SetWindowTextW(monitor.window, L"Character monitor · session ended or stopped; choose again");
-                    monitor.title.clear();monitor.previewStatus=L"Session ended or stopped"; InvalidateRect(monitor.window, nullptr, FALSE); monitor.dirty = false;
+                    const bool pausedUnavailable=id==CyclingView && cycleOpen && !cycler.playing;
+                    SetWindowTextW(monitor.window,pausedUnavailable?L"Cycling monitor · paused · character unavailable":L"Character monitor · session ended or stopped; choose again");
+                    monitor.title.clear();monitor.previewStatus=pausedUnavailable?L"Paused · choose Next or Play":L"Session ended or stopped"; InvalidateRect(monitor.window, nullptr, FALSE); monitor.dirty = false;
                 }
                 continue;
             }
             const auto* slot = validSlot(binding.slot) ? slots[binding.slot].get() : nullptr;
             std::wstring status=L"Read-only preview";
-            std::wstring title = L"Monitor: ";
+            std::wstring title = id==CyclingView?L"Cycling monitor: ":L"Monitor: ";
             title += slot && !(slot->snapshot.flags & ChatRestricted) && binding.key.owns(slot->snapshot) && !slot->snapshot.name.empty() ? characterName(binding.slot) : L"unavailable";
             title += monitor.showChat ? L" · read-only image + chat" : L" · read only";
             if (!slot || !slot->running() || slot->detached || !slot->pipe.alive() || !binding.key.owns(slot->snapshot))
-            { stopMonitor(id); title += L" · session ended; choose again";status=L"Session ended · choose again"; }
-            else if (slot->snapshot.state != State::Ready) { stopMonitor(id); title += L" · disconnected";status=L"Disconnected"; }
+            { if(id==CyclingView){monitorSet.stop(id);clearMonitor(id);}else stopMonitor(id); title += L" · session ended; choose again";status=L"Session ended · choose again"; }
+            else if (slot->snapshot.state != State::Ready) { if(id==CyclingView){monitorSet.stop(id);clearMonitor(id);}else stopMonitor(id); title += L" · disconnected";status=L"Disconnected"; }
             else if (slot->snapshot.flags & (PreviewUnavailable | ChatRestricted))
             { clearMonitor(id);status=(slot->snapshot.flags&ChatRestricted)?L"Restricted":L"Preview unavailable";title+=L" · "+status; }
             else if (binding.slot == active || busy()) { clearMonitor(id);status=L"Paused while active or switching";title+=L" · "+status; }
@@ -2349,6 +2777,8 @@ struct Host
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
         const auto selected = slot ? slot->chat.conversations.find(conversation) : std::map<std::string, Conversation>::iterator{};
         const bool isNotice = slot && selected != slot->chat.conversations.end() && selected->second.topic == Topic::Notice;
+        sharedFriends.slot=chatIndex;refreshFriendsPane(sharedFriends);
+        EnableWindow(chatNewIM,ready && !restricted);EnableWindow(chatFriends,ready && !restricted);
         EnableWindow(chatCompose, ready && !restricted && !conversationBlocked && !isNotice);
         SendMessageW(chatCompose,EM_SETREADONLY,sending?TRUE:FALSE,0);
         EnableWindow(chatSend, ready && !restricted && !conversationBlocked && !sending && !isNotice);
@@ -2370,8 +2800,8 @@ struct Host
                 found->second.unread && found->second.lastIncomingEvent && history.painted == found->second.lastIncomingEvent;
         };
         if (displayedBy(transcript)) { selected = transcript.source.conversation; displayed = true; }
-        for (const auto& monitor : monitors) if (!displayed && monitor.showChat && displayedBy(monitor.transcript))
-        { selected = monitor.transcript.source.conversation; displayed = true; }
+        for(int id=0;id<MonitorViews;++id)if(!displayed && !(id==CyclingView && cycler.playing) && monitors[id].showChat && displayedBy(monitors[id].transcript))
+        {selected=monitors[id].transcript.source.conversation;displayed=true;}
         bool delayed = false;
         if (index == active && chatPreferences.activeRead)
             for (const auto& entry : slot.chat.conversations)
@@ -2403,7 +2833,7 @@ struct Host
                 slot.hasPendingTyping = true;
             }
         }
-        for (int id = 0; id < MaxMonitors; ++id) refreshMonitorChat(id);
+        for (int id = 0; id < MonitorViews; ++id) refreshMonitorChat(id);
     }
     bool queueChat(int index, Message request)
     {
@@ -2435,8 +2865,8 @@ struct Host
         if (!slot.restart.begin(slot.snapshot, GetTickCount64()))
         { message(L"Character is changing login or already restarting; finish its native window first."); return; }
         lifecycle.beginManagement();
-        slot.hasPendingSend = slot.hasPendingTyping = slot.hasPendingAction = false;
-        if (const int id = monitorSet.find(index); id >= 0) stopMonitor(id);
+        slot.hasPendingSend = slot.hasPendingTyping = slot.hasPendingAction = false;slot.hasPendingContact=false;slot.contacts={};
+        for(int id=0;id<MonitorViews;++id)if(monitorSet.bindings[id].slot==index && monitorSet.bindings[id].enabled){if(id==CyclingView){monitorSet.stop(id);clearMonitor(id);}else stopMonitor(id);}
         message(L"Restarting " + wide(slot.snapshot.name) + L": confirm native close. Waiting for process/profile release before a fresh login; queued messages are not replayed.");
     }
     std::filesystem::path mainSettingsFolder() const
@@ -2748,7 +3178,7 @@ struct Host
         {slot.lastImportReport=response.detail;message(wide(response.detail));}
         const bool changedSession = !slot.chat.identity.owns(response);
         if (changedSession) attention.forget(slot.chat.identity);
-        slot.chat.bind(response);
+        slot.chat.bind(response);slot.contacts.bind(response);
         if (changedSession)
         {
             if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
@@ -2760,6 +3190,7 @@ struct Host
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
         }
         slot.snapshot = response;
+        if(response.state!=State::Ready || (response.flags&ChatRestricted) || slot.detached){slot.hasPendingContact=false;slot.contactsAt=slot.friendRefreshAt=0;}
         const auto profileKey = AccountKey::from(response);
         if (response.state == State::Ready && profileKey.valid() && !presentation.accounts.count(profileKey))
         {
@@ -2779,6 +3210,18 @@ struct Host
             const auto asset = characterSound(index).asset;
             if (!slot.soundPrepared || slot.soundAsset != asset)
             { cacheSound(asset); slot.soundAsset = asset; slot.soundPrepared = true; }
+        }
+        if(request.kind==Kind::Contacts){slot.contacts.accept(request,response);slot.contactsAt=GetTickCount64();if(!request.width && !slot.contacts.friends.loading)slot.friendRefreshAt=GetTickCount64();}
+        if(request.kind==Kind::ContactSearch){slot.contactsAt=GetTickCount64();if(request.event==slot.contacts.search.token && slot.contacts.source.owns(request) && (response.flags&Error)){slot.contacts.search.error=response.detail;slot.contacts.search.loading=false;}}
+        if(request.kind==Kind::OpenIM && !(response.flags&(Error|ChatRestricted)) && slot.contacts.owns(response))
+        {
+            const bool opened=slot.chat.reopen(response);
+            if(!opened || !(chatPreferences.showMask&conversationCategory(Topic::Private))){message(L"Native IM opened; enable Direct IMs and free conversation capacity to show it in host Chat.");return;}
+            const int origin=slot.openIMOrigin;
+            if(origin>=0 && origin<MonitorViews && monitorSet.bindings[origin].enabled && monitorSet.bindings[origin].key.owns(response))
+            {auto& m=monitors[origin];m.chat.select(monitorSet.bindings[origin],response,slot.chat,response.conversation);refreshMonitorChat(origin);}
+            else if(origin<0){saveDraft(true);chatIndex=index;conversation=response.conversation;showChat=true;refreshChat(true,true);layout();if(chatDetached && chatWindow)ShowWindow(chatWindow,SW_SHOWNORMAL);}
+            else message(L"IM opened for its original character; its monitor changed. Select it in shared Chat.");
         }
         if (request.kind == Kind::WorkspaceInfo && !(response.flags & Error))
         {
@@ -3079,6 +3522,7 @@ struct Host
                     const auto pending = slot.pendingTyping; slot.hasPendingTyping = false;
                     if (send(index, Kind::Typing, Mode::Warm, 0, &pending)) slot.typingAt = GetTickCount64();
                 }
+                else if (pollContacts(index)) {}
                 else if (automaticRead(index)) {}
                 else
                 {
@@ -3104,6 +3548,7 @@ struct Host
         }
         EnableWindow(launchButton, canLaunch && !busy());
         pollSessionSet();
+        tickCycler();refreshFriends();
         refreshChat();
         refreshPins(); refreshAttention();
         refreshCharacters();
@@ -3151,8 +3596,11 @@ struct Host
     }
     std::vector<HWND> chatControls() const
     {
-        std::vector<HWND> result{chatDock,chatAccent,chatAccount,chatConversation,chatReview,chatRead,chatLatest,chatLabel,chatHistory,chatCompose,chatSend,voiceControl,muteControl,pinMenu};
-        for (auto button : pinButtons) result.push_back(button); return result;
+        std::vector<HWND> result{chatNewIM,chatFriends,chatDock,chatAccent,chatAccount,chatConversation,chatReview,chatRead,chatLatest,chatLabel,chatHistory,chatCompose,chatSend,voiceControl,muteControl,pinMenu};
+        // The sidebar is created on demand; an absent window cannot be reparented.
+        if (sharedFriends.window) result.insert(result.begin(), sharedFriends.window);
+        for (auto button : pinButtons) result.push_back(button);
+        return result;
     }
     std::vector<HWND> characterControls() const
     {
@@ -3335,9 +3783,12 @@ struct Host
     }
     void layoutChat(HWND parent,int top,bool visible,int bottomInset=0)
     {
-        RECT r{};GetClientRect(parent,&r);const int width=static_cast<int>(r.right),height=static_cast<int>(r.bottom)-bottomInset;const UINT local=parent==window?dpi:chatDpi;
-        const auto scale=[this,local](int n){return theme.scale(n,local);};const bool narrow=width<scale(650);
+        const UINT paneDpi=parent==window?dpi:chatDpi;if(sharedFriends.window && sharedFriends.dpi!=paneDpi){sharedFriends.dpi=paneDpi;friendsFont(sharedFriends);}
+        RECT r{};GetClientRect(parent,&r);const int fullWidth=static_cast<int>(r.right),height=static_cast<int>(r.bottom)-bottomInset;const UINT local=parent==window?dpi:chatDpi;
+        const auto scale=[this,local](int n){return theme.scale(n,local);};const int side=showFriends?(std::min)(scale(280),fullWidth/2):0,width=fullWidth-side;const bool narrow=width<scale(650);
+        if(sharedFriends.window){ShowWindow(sharedFriends.window,visible && showFriends?SW_SHOWNOACTIVATE:SW_HIDE);MoveWindow(sharedFriends.window,width,top,side,(std::max)(1,height-top),TRUE);layoutFriends(sharedFriends);}
         for(auto child:chatControls())ShowWindow(child,visible?SW_SHOWNOACTIVATE:SW_HIDE);
+        if(sharedFriends.window)ShowWindow(sharedFriends.window,visible && showFriends?SW_SHOWNOACTIVATE:SW_HIDE);
         std::vector<std::size_t> visiblePins;for(std::size_t i=0;i<pins.entries.size() && i<6;++i)if(shownPin(pins.entries[i]))visiblePins.push_back(i);
         for(std::size_t i=0;i<6;++i)ShowWindow(pinButtons[i],SW_HIDE);
         for(std::size_t position=0;position<visiblePins.size();++position)
@@ -3353,7 +3804,7 @@ struct Host
         SetWindowTextW(chatReview,narrow?L"View":L"Review in viewer");addTooltip(chatReview,L"Review the selected conversation in its native viewer");
         move(chatDock,width-scale(parent!=window?78:40),top,scale(32),scale(24));SetWindowTextW(chatDock,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");fs_host_ui::setButtonIcon(chatDock,chatDetached?fs_host_ui::Icon::ArrowDownLeft:fs_host_ui::Icon::ExternalLink);addTooltip(chatDock,chatDetached?L"Dock shared Chat":L"Pop out shared Chat");
         if(parent!=window)move(GetDlgItem(parent,PanelPin),width-scale(44),top,scale(32),scale(24));
-        top+=scale(28);move(chatAccent,inset,top,scale(5),scale(20));move(chatLabel,scale(18),top,(std::max)(1,width-scale(90)),scale(20));move(chatLatest,width-scale(66),top,scale(60),scale(20));top+=scale(24);
+        top+=scale(28);move(chatNewIM,inset,top,scale(70),scale(24));move(chatFriends,inset+scale(76),top,scale(76),scale(24));setToggle(chatFriends,showFriends);top+=scale(28);move(chatAccent,inset,top,scale(5),scale(20));move(chatLabel,scale(18),top,(std::max)(1,width-scale(90)),scale(20));move(chatLatest,width-scale(66),top,scale(60),scale(20));top+=scale(24);
         const int input=(std::max)(top+scale(50),height-scale(42));
         move(chatHistory,inset,top,usable,(std::max)(1,input-top-scale(6)));transcript.latestVisibility();
         move(chatCompose,inset,input,usable-scale(70),scale(30));move(chatSend,width-scale(70),input,scale(64),scale(30));
@@ -3375,7 +3826,7 @@ struct Host
         MoveWindow(revealControl,0,0,width,scaled(revealHeight(chrome,experience.density!=0)),TRUE);
         const bool dockChat = showChat && !chatDetached && !collapsed;
         const int footerHeight = chrome != 2 ? scaled(24) : 0;
-        const int chatTop = dockChat ? (std::max)(top + scaled(100), height - footerHeight - scaled(pins.entries.empty() ? 250 : 278)) : height - footerHeight;
+        const int chatTop = dockChat ? (std::max)(top + scaled(100), height - footerHeight - scaled(pins.entries.empty() ? 278 : 306)) : height - footerHeight;
         MoveWindow(viewport, 0, top, width, (std::max)(1, chatTop - top), TRUE);
         layoutChat(chatDetached ? chatWindow : window, chatDetached ? theme.scale(8,chatDpi) : chatTop, showChat && (chatDetached || !collapsed),chatDetached?0:footerHeight);
         auto showPanel = [](HWND panel, bool visible)
@@ -3465,6 +3916,67 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
 }
+LRESULT CALLBACK friendsListProc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR data)
+{
+    if(message==WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(window,friendsListProc,id);
+        return DefSubclassProc(window,message,wp,lp);
+    }
+    auto* pane=reinterpret_cast<fs_host_ui::FriendsPane*>(data);
+    // LBS_HASSTRINGS retains accessible names, but prevents WM_CHARTOITEM.
+    // Consume printable input here so native search cannot select a heading.
+    if(message==WM_CHAR && wp>=L' ' && host && pane && pane->list==window)
+    {
+        if(!pane->updating && IsWindowEnabled(window))
+        {
+            const auto current=static_cast<int>(SendMessageW(window,LB_GETCURSEL,0,0));
+            const auto row=host->friendsCharacter(*pane,static_cast<wchar_t>(wp),current);
+            if(row>=0)SendMessageW(window,LB_SETCURSEL,static_cast<WPARAM>(row),0);
+            // LB_SETCURSEL does not send LBN_SELCHANGE; refresh Open IM explicitly.
+            host->refreshFriendsPane(*pane);
+        }
+        return 0;
+    }
+    return DefSubclassProc(window,message,wp,lp);
+}
+LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
+{
+    if(message==WM_NCCREATE){const auto* create=reinterpret_cast<const CREATESTRUCTW*>(lp);SetWindowLongPtrW(window,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(create->lpCreateParams));}
+    auto* pane=reinterpret_cast<fs_host_ui::FriendsPane*>(GetWindowLongPtrW(window,GWLP_USERDATA));
+    if(!host || !pane)return DefWindowProcW(window,message,wp,lp);
+    switch(message)
+    {
+    case WM_COMMAND:host->friendsCommand(*pane,LOWORD(wp),HIWORD(wp));return 0;
+    case WM_SIZE:host->layoutFriends(*pane);return 0;
+    case WM_DPICHANGED:
+    {
+        pane->dpi=(std::max)(96u,static_cast<UINT>(LOWORD(wp)));host->friendsFont(*pane);
+        if(pane->standalone){const auto* r=reinterpret_cast<const RECT*>(lp);SetWindowPos(window,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);}
+        host->layoutFriends(*pane);return 0;
+    }
+    case WM_GETMINMAXINFO:if(pane->standalone){reinterpret_cast<MINMAXINFO*>(lp)->ptMinTrackSize={host->theme.scale(280,pane->dpi),host->theme.scale(260,pane->dpi)};return 0;}break;
+    case WM_SYSCOMMAND:
+        if((wp&0xfff0u)==0xA160){host->pinWindow(window);return 0;}
+        if((wp&0xfff0u)==0xA140 || (wp&0xfff0u)==0xA150){host->recover((wp&0xfff0u)==0xA150);return 0;}break;
+    case WM_MEASUREITEM:
+        if(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->CtlID==ContactList){reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->itemHeight=static_cast<UINT>(host->theme.scale(24,pane->dpi));return TRUE;}break;
+    case WM_DRAWITEM:if(host->drawFriend(*pane,*reinterpret_cast<DRAWITEMSTRUCT*>(lp)) || host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lp)))return TRUE;break;
+    case WM_VKEYTOITEM:
+        if(reinterpret_cast<HWND>(lp)==pane->list)return host->friendsKey(*pane,LOWORD(wp),static_cast<short>(HIWORD(wp)));break;
+    case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return host->theme.color(message,wp,lp);
+    case WM_CTLCOLORSTATIC:
+    {
+        const auto brush=host->theme.color(message,wp,lp);
+        if(reinterpret_cast<HWND>(lp)==pane->label && host->contactsLive(pane->slot))SetTextColor(reinterpret_cast<HDC>(wp),host->accountColor(pane->slot));return brush;
+    }
+    case WM_ERASEBKGND:{RECT r{};GetClientRect(window,&r);FillRect(reinterpret_cast<HDC>(wp),&r,host->theme.backBrush);return 1;}
+    case WM_CLOSE:ShowWindow(window,SW_HIDE);return 0;
+    case WM_NCDESTROY:pane->window=nullptr;break;
+    default:break;
+    }
+    return DefWindowProcW(window,message,wp,lp);
+}
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     if (message == WM_NCCREATE)
@@ -3475,7 +3987,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     auto* monitor = reinterpret_cast<MonitorWindow*>(GetWindowLongPtrW(window, GWLP_USERDATA));
     if (!host || !monitor) return DefWindowProcW(window, message, wparam, lparam);
     int id = -1;
-    for (int i = 0; i < MaxMonitors; ++i) if (&host->monitors[i] == monitor) { id = i; break; }
+    for (int i = 0; i < MonitorViews; ++i) if (&host->monitors[i] == monitor) { id = i; break; }
     if (id < 0) return DefWindowProcW(window, message, wparam, lparam);
     if(message==WM_SYSCOMMAND){const auto command=wparam&0xfff0u;if(command==0xA140 || command==0xA150){host->recover(command==0xA150);return 0;}if(command==0xA160){host->pinWindow(window);return 0;}}
     const auto& binding = host->monitorSet.bindings[id];
@@ -3483,11 +3995,12 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     switch (message)
     {
     case WM_COMMAND:
+        if(LOWORD(wparam)>=CyclePlay && LOWORD(wparam)<=CycleInterval){if(LOWORD(wparam)!=CycleInterval || HIWORD(wparam)==EN_KILLFOCUS)host->cycleCommand(LOWORD(wparam));return 0;}
         if(LOWORD(wparam)==PanelPin){host->pinWindow(window);return 0;}
         if(LOWORD(wparam)==MonitorChatToggle){host->setMonitorChat(id,!monitor->showChat);return 0;}
         if(LOWORD(wparam)==MonitorOptions){host->monitorMenu(id);return 0;}
         if(LOWORD(wparam)==MonitorExchange)
-        {const auto* slot=host->monitorChatSlot(id);if(slot && !(slot->snapshot.flags&ChatRestricted) && binding.enabled){SetForegroundWindow(host->window);host->switchTo(binding.slot);}return 0;}
+        {if(id==CyclingView)host->cycler.pause();const auto* slot=host->monitorChatSlot(id);if(slot && !(slot->snapshot.flags&ChatRestricted) && binding.enabled){SetForegroundWindow(host->window);host->switchTo(binding.slot);}return 0;}
         host->monitorChatCommand(id,LOWORD(wparam),HIWORD(wparam));return 0;
     case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(host->theme.scale(22,monitor->dpi));return TRUE;
     case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)) || host->theme.drawCombo(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
@@ -3556,11 +4069,14 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     {
         monitor->dpi = (std::max)(96u, static_cast<UINT>(LOWORD(wparam))); host->monitorFont(id);
         const auto* rect = reinterpret_cast<const RECT*>(lparam);
-        SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        if(!host->tilingMonitors)SetWindowPos(window, nullptr, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         host->layoutMonitorChat(id); return 0;
     }
     case WM_GETMINMAXINFO:
-        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize = {scale(monitor->showChat ? 320 : 280),scale(monitor->showChat ? 360 : 120)}; return 0;
+    {
+        const auto minimum=host->monitorMinimumFor(id,monitor->dpi);
+        reinterpret_cast<MINMAXINFO*>(lparam)->ptMinTrackSize={minimum.width,minimum.height};return 0;
+    }
     case WM_SIZE: host->layoutMonitorChat(id); InvalidateRect(window,nullptr,FALSE); return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
@@ -3647,6 +4163,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SendMessageW(host->chatCompose, EM_SETLIMITTEXT, 1023, 0);
         host->chatSend = control(window, L"BUTTON", L"Send", BS_PUSHBUTTON | WS_TABSTOP, 820, 545, 75, 35, ChatSend);
         host->chatReview = control(window, L"BUTTON", L"Review in viewer", BS_PUSHBUTTON | WS_TABSTOP, 620, 400, 140, 24, ChatReview);
+        host->chatNewIM=control(window,L"BUTTON",L"New IM",BS_PUSHBUTTON|WS_TABSTOP,0,0,70,24,ChatNewIM);host->chatFriends=control(window,L"BUTTON",L"Friends",BS_PUSHBUTTON|WS_TABSTOP,0,0,76,24,ChatFriends);
+        host->addTooltip(host->chatNewIM,L"Choose a friend or search for a resident as the selected sending character");host->addTooltip(host->chatFriends,L"Show or hide the selected character’s friends sidebar");
         host->chatRead = control(window, L"BUTTON", L"Mark read", BS_PUSHBUTTON | WS_TABSTOP, 770, 400, 90, 24, ChatRead);
         host->chatLatest = control(window,L"BUTTON",L"Latest",BS_PUSHBUTTON|WS_TABSTOP,0,0,60,24,ChatLatest);
         SendMessageW(host->chatHistory,EM_SETLIMITTEXT,2*1024*1024,0);
@@ -3700,7 +4218,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_SETTINGCHANGE:
         host->applyTheme();host->updateDpi(host->dpi);
         for(HWND panel:{host->chatWindow,host->controlsWindow,host->attentionWindow})if(panel)host->panelFont(panel,panel==host->chatWindow?host->chatDpi:panel==host->controlsWindow?host->controlsDpi:host->attentionDpi);
-        for(int i=0;i<MaxMonitors;++i)if(host->monitors[i].window){host->monitorFont(i);host->layoutMonitorChat(i);}
+        for(int i=0;i<MonitorViews;++i)if(host->monitors[i].window){host->monitorFont(i);host->layoutMonitorChat(i);}
         host->refitWindows(); return 0;
     case TrayMessage:
         if (lparam == WM_LBUTTONDBLCLK) host->recover();
@@ -3823,6 +4341,8 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         case PinActions: host->pinActions(); break;
         case AttentionReview: host->attentionAction(false); break;
         case AttentionDismiss: host->attentionAction(true); break;
+        case ChatNewIM: host->openFriendsWindow(host->chatIndex,-1,true);break;
+        case ChatFriends: host->toggleFriends();break;
         case ChatSend: host->saveDraft(true); host->sendChat(); break;
         case ChatReview: host->reviewChat(); break;
         case ChatRead:
@@ -3974,6 +4494,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     WNDCLASSEXW monitorClass{}; monitorClass.cbSize = sizeof(monitorClass); monitorClass.hIcon = icon; monitorClass.hIconSm = smallIcon; monitorClass.lpfnWndProc = monitorProc; monitorClass.hInstance = instance;
     monitorClass.lpszClassName = L"FolderstormSessionMonitor"; monitorClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     if (!RegisterClassExW(&monitorClass)) return 1;
+    auto friendsClass=panelClass;friendsClass.lpfnWndProc=friendsProc;friendsClass.lpszClassName=L"FolderstormSessionFriends";
+    if(!RegisterClassExW(&friendsClass))return 1;
     HWND window = CreateWindowExW(0, klass.lpszClassName, L"Folderstorm character sessions",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 980, 700, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;
@@ -3985,11 +4507,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
+        auto& cycleEditor=state.monitors[CyclingView].editor;
+        // Filter before dialog routing as well: old composer Enter must not
+        // activate panel buttons after focus has left the unavailable composer.
+        if(message.hwnd==cycleEditor.edit && !cycleEditor.allowsInput(message.message))
+        {cycleEditor.keys={};continue;}
         if (state.hostShortcut(message)) continue;
         if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
         { state.skipTransition(); continue; }
-        std::array<HWND,4+MaxMonitors> panels{window,state.chatWindow,state.controlsWindow,state.attentionWindow};
-        for (int i = 0; i < MaxMonitors; ++i) panels[static_cast<std::size_t>(i)+4] = state.monitors[i].window;
+        std::array<HWND,4+MonitorViews+MaxCharacters> panels{window,state.chatWindow,state.controlsWindow,state.attentionWindow};
+        for (int i = 0; i < MonitorViews; ++i) panels[static_cast<std::size_t>(i)+4] = state.monitors[i].window;
+        for(int i=0;i<MaxCharacters;++i)panels[static_cast<std::size_t>(i)+4+MonitorViews]=state.friendsWindows[i].window;
         const bool handled = routePanelDialog(message.hwnd, panels,
             [](HWND panel, HWND target)
             { return IsWindow(panel) && IsWindowVisible(panel) && (panel == target || IsChild(panel, target)); },

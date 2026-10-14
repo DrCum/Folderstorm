@@ -8,10 +8,11 @@ int main()
     assert(colorContrast(visibleAccent(0xffffff,0xf7f5fb,0x211a2b),0xf7f5fb)>=3.);assert(visibleAccent(0xbfa4fc,0x111016,0xf5f3fa)==0xbfa4fc);
     assert(HostExperience::decode(e.encode(),out));assert(out.theme==1 && out.pinned[3] && out.quick==e.quick && out.keys[0]==e.keys[0]);
     auto menus=e;menus.quick={SelectedActions,ViewActions,SettingsActions,SetActions,RecoverShell};assert(HostExperience::decode(menus.encode(),out) && out.quick==menus.quick);
-    auto v2=e.encode();v2.replace(0,4,"FSX2");v2.resize(v2.size()-4);assert(HostExperience::decode(v2,out) && out.dockedArea==0 && out.toolbarVersion==1);
-    auto legacy=e.encode();legacy.replace(0,4,"FSX1");legacy.resize(legacy.size()-8);
+    auto v3=e.encode();v3.replace(0,4,"FSX3");v3.resize(v3.size()-32);assert(HostExperience::decode(v3,out) && out.cycleSeconds==10 && out.requirePauseToChat);
+    auto v2=v3;v2.replace(0,4,"FSX2");v2.resize(v2.size()-4);assert(HostExperience::decode(v2,out) && out.dockedArea==0 && out.toolbarVersion==1);
+    auto legacy=v3;legacy.replace(0,4,"FSX1");legacy.resize(legacy.size()-8);
     assert(HostExperience::decode(legacy,out) && out.toolbarVersion==0 && out.quick==e.quick);
-    assert(out.encode().substr(0,4)=="FSX3");
+    assert(out.encode().substr(0,4)=="FSX4");
     assert(upgradeHostToolbar(out) && out.quick.front()==274 && out.quick.size()==e.quick.size()+1);
     assert(!upgradeHostToolbar(out));out.quick.clear();assert(!upgradeHostToolbar(out) && out.quick.empty());
     out.toolbarVersion=0;out.quick={274,240};assert(upgradeHostToolbar(out) && out.quick.size()==2);
@@ -21,6 +22,8 @@ int main()
     e.quick.push_back(240);assert(e.encode().empty());e.quick={9999};assert(!e.valid());e.quick.clear();e.order[4]=0;assert(!e.valid());
     e=HostExperience{};e.keys[0]={49,5};assert(bindingsConflict(e,PresentationStore{}));
     e=HostExperience{};e.labels=2;e.dockedArea=5;assert(HostExperience::decode(e.encode(),out) && out.labels==2 && out.dockedArea==5);
+    e.cycleSeconds=2;e.requirePauseToChat=false;e.pinned[13]=true;assert(HostExperience::decode(e.encode(),out) && out.cycleSeconds==2 && !out.requirePauseToChat && out.pinned[13]);
+    e.cycleSeconds=3601;assert(e.encode().empty());e.cycleSeconds=10;
     e.dockedArea=7;assert(e.encode().empty());
     Message a,b;a.worker[0]=1;a.generation=1;a.account="11111111-1111-1111-1111-111111111111";a.grid="grid";a.conversation="first";a.eventType=EventType::Conversation;a.eventAt=10;b=a;b.conversation="second";b.eventType=EventType::Attention;b.title="Teleport offer";b.eventAt=20;
     AttentionNavigator nav;nav.update({a,b,a},false);assert(nav.rows.size()==2 && nav.step(1)->conversation=="second");assert(nav.step(1)->conversation=="first");assert(nav.step(1)->conversation=="second");nav.update({a},false);assert(nav.step(1)->conversation=="first");nav.update({},false);assert(!nav.step(1));nav.update({b,a},true);assert(nav.rows.front().conversation=="first");
