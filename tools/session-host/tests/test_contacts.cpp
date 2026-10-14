@@ -1,5 +1,5 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
-#include "fssessioncontacts.h"
+#include "fssessionfriendspresentation.h"
 #include <cassert>
 #include <iostream>
 using namespace fs_session;
@@ -9,6 +9,24 @@ int main()
     Contact a{uuid(1),"Zebra","zebra.resident",true,true},b{uuid(2),"Alice","alice.resident",false,true},c{uuid(3),"Alpha","alpha.resident",true,false};
     const auto sorted=sortedContacts({b,a,c});assert(sorted[0].id==c.id && sorted[1].id==a.id && sorted[2].id==b.id);
     assert(sortedContacts(sorted,"RESIDENT").size()==3 && sortedContacts(sorted,"alice")[0].id==b.id);
+    const auto grouped=presentFriends({b,a,c});
+    assert(grouped.rows.size()==5 && grouped.rows[0].kind==FriendsRowKind::OnlineHeading && grouped.rows[0].count==2);
+    assert(grouped.rows[3].kind==FriendsRowKind::OfflineHeading && grouped.rows[3].count==1);
+    assert(!grouped.at(0) && !grouped.at(3) && !grouped.at(static_cast<std::size_t>(-1)));
+    assert(grouped.at(1)->id==c.id && grouped.at(2)->id==a.id && grouped.at(4)->id==b.id);
+    assert(grouped.selectable(0,1)==1 && grouped.selectable(3,1)==4 && grouped.selectable(3,-1)==2);
+    assert(grouped.selectable(5,1)==-1 && grouped.selectable(-1,-1)==-1 && grouped.selectable(0,0)==-1);
+    const auto onlineOnly=presentFriends({b,a,c},{},true);
+    assert(onlineOnly.contacts.size()==2 && onlineOnly.rows.size()==3 && onlineOnly.find(b.id)==-1);
+    const auto offlineOnly=presentFriends({b,a,c},"alice");
+    assert(offlineOnly.rows.size()==2 && offlineOnly.rows[0].kind==FriendsRowKind::OfflineHeading && offlineOnly.rows[0].count==1);
+    assert(offlineOnly.at(1)->id==b.id && presentFriends({b,a,c},"alice",true).rows.empty());
+    auto changedStatus=a;changedStatus.online=false;
+    const auto refreshed=presentFriends({b,changedStatus,c});
+    assert(grouped.find(a.id)==2 && refreshed.find(a.id)==4 && refreshed.at(static_cast<std::size_t>(refreshed.find(a.id)))->id==a.id);
+    const auto results=presentFriends({b,a,c},{},true,true); // Searches do not claim online status or hide offline/unknown results.
+    assert(results.rows.size()==3 && results.contacts.size()==3 && results.at(static_cast<std::size_t>(results.find(b.id)))->id==b.id);
+    assert(presentFriends({}).rows.empty());
     Message source;source.worker[0]=1;source.generation=9;source.account=uuid(9);source.grid="grid";source.state=State::Ready;
     ContactDirectory directory;assert(directory.bind(source));directory.beginFriends();
     Message request=source;request.kind=Kind::Contacts;request.width=0;request.event=directory.friends.token;request.cursor=0;
@@ -34,5 +52,5 @@ int main()
     assert(!pages.friends.loading && pages.friends.rows.size()==many.size());
     std::vector<Contact> parsed;assert(!readContactPage("FSC1\ninvalid\n",parsed));auto bad=a;bad.display="bad\tname";assert(!bad.valid());
     auto blocked=source;blocked.flags|=ChatRestricted;pages.bind(blocked);assert(pages.friends.rows.empty());
-    std::cout<<"Contacts: online-first sorting, offline messaging, bounded pagination, ownership and stale search guards passed.\n";
+    std::cout<<"Contacts: grouped status/counts, safe heading selection, online-only filtering, stable resident selection, offline messaging, bounded pagination and ownership guards passed.\n";
 }

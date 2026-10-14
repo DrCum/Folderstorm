@@ -79,7 +79,7 @@ constexpr int ChatAccent = 122, PinActions = 123, PinBase = 600, AttentionList =
 constexpr int RestoreControls = 140, RecoverWindows = 141;
 constexpr int CardBase=700, CardActionBase=710, QuickBase=730, PanelPin=165, MonitorExchange=166, MonitorChatToggle=167, MonitorOptions=168;
 constexpr int DensityToggle=175,ControlsDock=176,ChatDock=177,QuickOverflow=178,MonitorsMenu=179,MainOverflow=181;
-constexpr int ChatNewIM=460,ChatFriends=461,ContactFilter=810,ContactSearch=811,ContactFriends=812,ContactList=813,ContactOpen=814,ContactPopout=815;
+constexpr int ChatNewIM=460,ChatFriends=461,ContactFilter=810,ContactSearch=811,ContactFriends=812,ContactList=813,ContactOpen=814,ContactPopout=815,ContactOnlineOnly=816;
 constexpr int CyclePlay=820,CyclePrevious=821,CycleNext=822,CycleInterval=823;
 constexpr UINT TrayMessage = WM_APP + 20;
 constexpr UINT_PTR Timer = 1;
@@ -457,8 +457,9 @@ struct Host
     {
         theme.set(experience.theme);fs_host_ui::dialogTheme=&theme;
         for(HWND panel:{window,chatWindow,controlsWindow,attentionWindow})theme.window(panel);
-        for(auto& m:monitors)if(m.window){theme.window(m.window);m.dirty=true;}
-        for(auto& p:friendsWindows)if(p.window)theme.window(p.window);
+        if(sharedFriends.window){friendsFont(sharedFriends);layoutFriends(sharedFriends);}
+        for(auto& m:monitors)if(m.window){if(m.friends.window){friendsFont(m.friends);layoutFriends(m.friends);}theme.window(m.window);m.dirty=true;}
+        for(auto& p:friendsWindows)if(p.window){friendsFont(p);theme.window(p.window);layoutFriends(p);}
         tooltips.style(theme);
     }
     std::wstring quickLabel(unsigned int id) const
@@ -1934,14 +1935,93 @@ struct Host
     {
         const auto next=CreateFontW(-theme.scale(12,p.dpi),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         if(!next)return;
-        for(auto child:{p.label,p.filter,p.searchButton,p.friendsButton,p.list,p.open,p.popout,p.pin})if(child)fs_host_ui::setNativeFont(child,next);
+        for(auto child:{p.label,p.filter,p.onlineOnlyControl,p.searchButton,p.friendsButton,p.list,p.open,p.popout,p.pin})if(child)fs_host_ui::setNativeFont(child,next);
+        if(p.list)SendMessageW(p.list,LB_SETITEMHEIGHT,0,theme.scale(24,p.dpi));
         if(p.font)DeleteObject(p.font);p.font=next;
+    }
+    bool drawFriend(fs_host_ui::FriendsPane& p,const DRAWITEMSTRUCT& draw)
+    {
+        if(draw.CtlType!=ODT_LISTBOX || draw.hwndItem!=p.list)return false;
+        theme.selection(draw);
+        if(draw.itemID>=p.presentation.rows.size() || draw.itemID>=p.labels.size())return true;
+        const int saved=SaveDC(draw.hDC);
+        const auto scale=[&](int n){return theme.scale(n,p.dpi);};
+        const auto* c=p.presentation.at(draw.itemID);
+        RECT text=draw.rcItem;text.left+=scale(8);text.right-=scale(8);
+        SetBkMode(draw.hDC,TRANSPARENT);
+        SelectObject(draw.hDC,reinterpret_cast<HFONT>(SendMessageW(p.list,WM_GETFONT,0,0)));
+        if(!c)
+        {
+            FillRect(draw.hDC,&draw.rcItem,theme.highContrast?theme.inputBrush:theme.panelBrush);
+            SetTextColor(draw.hDC,theme.highContrast?theme.text:theme.accent);
+            DrawTextW(draw.hDC,p.labels[draw.itemID].c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+        }
+        else
+        {
+            const bool selected=(draw.itemState&ODS_SELECTED)!=0,disabled=(draw.itemState&ODS_DISABLED)!=0;
+            if(!p.searching)
+            {
+                const int diameter=scale(9),left=text.left,top=(draw.rcItem.top+draw.rcItem.bottom-diameter)/2;
+                const COLORREF marker=theme.highContrast?GetTextColor(draw.hDC):disabled?theme.muted:c->online?(theme.dark?RGB(89,211,149):RGB(26,125,74)):theme.muted;
+                const HPEN pen=CreatePen(PS_SOLID,(std::max)(1,scale(1)),marker);
+                const HBRUSH brush=c->online?CreateSolidBrush(marker):nullptr;
+                const auto oldPen=SelectObject(draw.hDC,pen),oldBrush=SelectObject(draw.hDC,brush?static_cast<HGDIOBJ>(brush):GetStockObject(NULL_BRUSH));
+                Ellipse(draw.hDC,left,top,left+diameter,top+diameter);
+                SelectObject(draw.hDC,oldBrush);SelectObject(draw.hDC,oldPen);
+                if(brush)DeleteObject(brush);
+                DeleteObject(pen);
+                text.left+=scale(19);
+                if(!c->online && !selected && !theme.highContrast)SetTextColor(draw.hDC,theme.muted);
+            }
+            const auto name=wide(c->display)+L" ("+wide(c->username)+L")"+(c->allowed?L"":L" · restricted");
+            DrawTextW(draw.hDC,name.c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+            theme.selectionFocus(draw);
+        }
+        if(saved)RestoreDC(draw.hDC,saved);
+        return true;
+    }
+    LRESULT friendsKey(const fs_host_ui::FriendsPane& p,WORD key,int current) const
+    {
+        const int count=static_cast<int>(p.presentation.rows.size());
+        int start=current,direction=1;
+        if(key==VK_DOWN)start=current+1;
+        else if(key==VK_UP){start=current<0?count-1:current-1;direction=-1;}
+        else if(key==VK_HOME)start=0;
+        else if(key==VK_END){start=count-1;direction=-1;}
+        else if(key==VK_PRIOR || key==VK_NEXT)
+        {
+            RECT rect{};GetClientRect(p.list,&rect);
+            const auto height=SendMessageW(p.list,LB_GETITEMHEIGHT,0,0);
+            const int page=(std::max)(1,static_cast<int>(rect.bottom)/(std::max)(1,static_cast<int>(height))-1);
+            direction=key==VK_PRIOR?-1:1;
+            start=(std::max)(0,(std::min)(count-1,current+direction*page));
+        }
+        else return -1;
+        if(count==0)return -2;
+        const auto selected=p.presentation.selectable(start,direction);
+        // A heading at a page boundary must not become a resident selection.
+        const auto fallback=selected<0 && (key==VK_PRIOR || key==VK_NEXT)?p.presentation.selectable(start,-direction):selected;
+        return fallback<0?-2:fallback;
+    }
+    LRESULT friendsCharacter(const fs_host_ui::FriendsPane& p,wchar_t character,int current) const
+    {
+        const int count=static_cast<int>(p.presentation.rows.size());
+        for(int step=1;step<=count;++step)
+        {
+            const int row=(current+step+count)%count;
+            if(!p.presentation.at(static_cast<std::size_t>(row)) || static_cast<std::size_t>(row)>=p.labels.size())continue;
+            const auto& label=p.labels[static_cast<std::size_t>(row)];
+            if(!label.empty() && CompareStringOrdinal(&character,1,label.c_str(),1,TRUE)==CSTR_EQUAL)return row;
+        }
+        return -2;
     }
     void layoutFriends(fs_host_ui::FriendsPane& p)
     {
         if(!p.label)return;RECT r{};GetClientRect(p.window,&r);const auto scale=[&](int n){return theme.scale(n,p.dpi);};const int width=static_cast<int>(r.right),height=static_cast<int>(r.bottom);
         MoveWindow(p.label,scale(8),scale(6),(std::max)(1,width-scale(16)),scale(38),TRUE);
-        MoveWindow(p.filter,scale(8),scale(48),(std::max)(1,width-scale(16)),scale(24),TRUE);
+        MoveWindow(p.filter,scale(8),scale(48),(std::max)(1,width-scale(p.searching?16:124)),scale(24),TRUE);
+        MoveWindow(p.onlineOnlyControl,width-scale(116),scale(48),scale(108),scale(24),TRUE);
+        ShowWindow(p.onlineOnlyControl,p.searching?SW_HIDE:SW_SHOWNOACTIVATE);
         const int cell=(width-scale(20))/2;
         MoveWindow(p.friendsButton,scale(8),scale(76),cell,scale(24),TRUE);MoveWindow(p.searchButton,scale(12)+cell,scale(76),cell,scale(24),TRUE);
         MoveWindow(p.list,scale(8),scale(104),(std::max)(1,width-scale(16)),(std::max)(1,height-scale(146)),TRUE);
@@ -1951,7 +2031,7 @@ struct Host
     }
     void createFriends(fs_host_ui::FriendsPane& p,HWND parent,bool standalone,int index,int origin)
     {
-        p.slot=index;p.monitor=origin;p.standalone=standalone;if(p.window)return;p.source={};p.rows.clear();p.labels.clear();p.token=p.revision=p.queryToken=0;
+        p.slot=index;p.monitor=origin;p.standalone=standalone;if(p.window)return;p.source={};p.presentation={};p.labels.clear();p.token=p.revision=p.queryToken=0;
         p.window=CreateWindowExW(standalone?WS_EX_TOOLWINDOW:WS_EX_CONTROLPARENT,L"FolderstormSessionFriends",L"Friends / New IM",(standalone?WS_OVERLAPPEDWINDOW:WS_CHILD)|WS_CLIPCHILDREN,
             standalone?CW_USEDEFAULT:0,standalone?CW_USEDEFAULT:0,scaled(340),scaled(460),parent,nullptr,GetModuleHandleW(nullptr),&p);
         if(!p.window)return;
@@ -1959,16 +2039,19 @@ struct Host
         const auto make=[&](const wchar_t* type,const wchar_t* text,DWORD style,int command){return CreateWindowExW(0,type,text,WS_CHILD|WS_VISIBLE|style,0,0,1,1,p.window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(command)),GetModuleHandleW(nullptr),nullptr);};
         p.label=make(L"STATIC",L"Send as: unavailable",SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0);
         p.filter=make(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|WS_TABSTOP,ContactFilter);SendMessageW(p.filter,EM_SETLIMITTEXT,127,0);
+        p.onlineOnlyControl=make(L"BUTTON",L"Online only",BS_AUTOCHECKBOX|WS_TABSTOP,ContactOnlineOnly);
+        SendMessageW(p.onlineOnlyControl,BM_SETCHECK,p.onlineOnly?BST_CHECKED:BST_UNCHECKED,0);
         p.friendsButton=make(L"BUTTON",L"Friends",BS_PUSHBUTTON|WS_TABSTOP,ContactFriends);
         p.searchButton=make(L"BUTTON",L"Search names",BS_PUSHBUTTON|WS_TABSTOP,ContactSearch);
-        p.list=make(L"LISTBOX",L"",WS_BORDER|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|WS_TABSTOP,ContactList);
+        p.list=make(L"LISTBOX",L"",WS_BORDER|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS|LBS_WANTKEYBOARDINPUT|WS_TABSTOP,ContactList);
         p.open=make(L"BUTTON",L"Open IM",BS_PUSHBUTTON|WS_TABSTOP,ContactOpen);
         p.popout=make(L"BUTTON",L"Pop out friends",BS_PUSHBUTTON|WS_TABSTOP,ContactPopout);
         p.pin=make(L"BUTTON",L"Always on top",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
         fs_host_ui::setButtonIcon(p.popout,fs_host_ui::Icon::ExternalLink);fs_host_ui::setButtonIcon(p.pin,fs_host_ui::Icon::Pin);
-        addTooltip(p.friendsButton,L"Friends: ● online, ○ offline. Offline friends can receive IMs too.");addTooltip(p.filter,L"Filter friends, or enter a resident name and choose Search names");addTooltip(p.searchButton,L"Search this character's grid; display names and usernames are shown together");
+        addTooltip(p.friendsButton,L"Friends are grouped by online status. Offline friends can receive IMs too.");addTooltip(p.filter,L"Filter friends, or enter a resident name and choose Search names");addTooltip(p.searchButton,L"Search this character's grid; display names and usernames are shown together");
+        addTooltip(p.onlineOnlyControl,L"Show online friends only; offline friends remain available when unchecked");
         addTooltip(p.open,L"Open an IM as the sending character; no message is sent until you choose Send");addTooltip(p.popout,L"Open an independent friends window for this character");
-        if(!p.label || !p.filter || !p.friendsButton || !p.searchButton || !p.list || !p.open || !p.popout || !p.pin){DestroyWindow(p.window);message(L"Unable to create the friends controls. Choose Friends or New IM again.");return;}
+        if(!p.label || !p.filter || !p.onlineOnlyControl || !p.friendsButton || !p.searchButton || !p.list || !p.open || !p.popout || !p.pin){DestroyWindow(p.window);message(L"Unable to create the friends controls. Choose Friends or New IM again.");return;}
         friendsFont(p);theme.window(p.window);layoutFriends(p);
         if(standalone){installPanelMenu(p.window);restorePlacement(p.window,9u+static_cast<unsigned int>(index),p.dpi);pinWindow(p.window,false);}
     }
@@ -1978,7 +2061,7 @@ struct Host
         auto* s=validSlot(p.slot)?slots[p.slot].get():nullptr;const bool live=contactsLive(p.slot);
         if(!s || !live || !p.source.owns(s->snapshot))
         {
-            p.rows.clear();p.labels.clear();p.token=0;p.revision=0;p.queryToken=0;p.lastFilter.clear();p.searching=false;p.source=live?s->contacts.source:ChatKey{};
+            p.presentation={};p.labels.clear();p.token=0;p.revision=0;p.queryToken=0;p.lastFilter.clear();p.searching=false;p.source=live?s->contacts.source:ChatKey{};
             SendMessageW(p.list,LB_RESETCONTENT,0,0);p.updating=true;SetWindowTextW(p.filter,L"");p.updating=false;
         }
         if(!IsWindowVisible(p.window))return;
@@ -1989,27 +2072,45 @@ struct Host
         const auto* transfer=live && !changedSearch?(p.searching?&s->contacts.search:&s->contacts.friends):nullptr;
         if(live)addTooltip(p.label,(L"Send as: "+wide(s->snapshot.name)+L" · "+wide(s->snapshot.grid)).c_str());
         const auto filter=p.searching?std::string{}:editText(p.filter);
-        const bool changed=!transfer || p.token!=transfer->token || p.revision!=transfer->revision || filter!=p.lastFilter;
-        auto rows=changed?(transfer?sortedContacts(transfer->rows,filter):std::vector<Contact>{}):std::vector<Contact>{};
-        std::vector<std::wstring> labels;if(changed)for(const auto& c:rows)labels.push_back((p.searching?L"":c.online?L"● ":L"○ ")+wide(c.display)+L" ("+wide(c.username)+L")"+(c.allowed?L"":L" · restricted"));
-        if(changed && (labels!=p.labels || (transfer && p.token!=transfer->token)))
+        const bool changed=!transfer || p.token!=transfer->token || p.revision!=transfer->revision || filter!=p.lastFilter || p.onlineOnly!=p.lastOnlineOnly || p.searching!=p.lastSearching;
+        if(changed)
         {
-            std::string selected;const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0);if(at>=0 && static_cast<std::size_t>(at)<p.rows.size())selected=p.rows[static_cast<std::size_t>(at)].id;
-            const auto top=SendMessageW(p.list,LB_GETTOPINDEX,0,0);SendMessageW(p.list,WM_SETREDRAW,FALSE,0);SendMessageW(p.list,LB_RESETCONTENT,0,0);
-            for(std::size_t i=0;i<labels.size();++i){SendMessageW(p.list,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(labels[i].c_str()));if(rows[i].id==selected)SendMessageW(p.list,LB_SETCURSEL,i,0);}
-            SendMessageW(p.list,LB_SETTOPINDEX,top,0);SendMessageW(p.list,WM_SETREDRAW,TRUE,0);InvalidateRect(p.list,nullptr,TRUE);
-            p.rows=std::move(rows);p.labels=std::move(labels);p.token=transfer?transfer->token:0;
+            std::string selected,topId;
+            const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0),top=SendMessageW(p.list,LB_GETTOPINDEX,0,0);
+            if(const auto* c=p.presentation.at(static_cast<std::size_t>(at)))selected=c->id;
+            if(const auto* c=p.presentation.at(static_cast<std::size_t>(top)))topId=c->id;
+            auto nextList=transfer?presentFriends(transfer->rows,filter,p.onlineOnly,p.searching):FriendsList{};
+            std::vector<std::wstring> labels;
+            for(std::size_t i=0;i<nextList.rows.size();++i)
+            {
+                const auto& row=nextList.rows[i];
+                if(const auto* c=nextList.at(i))
+                    labels.push_back(wide(c->display)+L" ("+wide(c->username)+L")"+(p.searching?L"":c->online?L" · Online":L" · Offline")+(c->allowed?L"":L" · restricted"));
+                else labels.push_back(std::wstring(row.kind==FriendsRowKind::OnlineHeading?L"Online · ":L"Offline · ")+std::to_wstring(row.count));
+            }
+            p.updating=true;SendMessageW(p.list,WM_SETREDRAW,FALSE,0);SendMessageW(p.list,LB_RESETCONTENT,0,0);
+            p.presentation=std::move(nextList);p.labels=std::move(labels);
+            for(const auto& name:p.labels)SendMessageW(p.list,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));
+            const auto restored=p.presentation.find(selected),restoredTop=p.presentation.find(topId);
+            if(restored>=0)SendMessageW(p.list,LB_SETCURSEL,static_cast<WPARAM>(restored),0);
+            const auto topIndex=restoredTop>=0?restoredTop:(std::max)(0,(std::min)(static_cast<int>(top),static_cast<int>(p.labels.size())-1));
+            SendMessageW(p.list,LB_SETTOPINDEX,static_cast<WPARAM>(topIndex),0);
+            SendMessageW(p.list,WM_SETREDRAW,TRUE,0);p.updating=false;InvalidateRect(p.list,nullptr,TRUE);
+            p.token=transfer?transfer->token:0;
         }
-        p.revision=transfer?transfer->revision:0;p.lastFilter=filter;
-        std::wstring action=changedSearch?L"Search changed in another panel. Search again.":L"Open IM";if(transfer && transfer->loading && p.rows.empty())action=transfer->pending?L"Searching…":L"Loading…";
+        if(p.searching!=p.lastSearching)layoutFriends(p);
+        p.revision=transfer?transfer->revision:0;p.lastFilter=filter;p.lastOnlineOnly=p.onlineOnly;p.lastSearching=p.searching;
+        std::wstring action=changedSearch?L"Search changed in another panel. Search again.":L"Open IM";if(transfer && transfer->loading && p.presentation.contacts.empty())action=transfer->pending?L"Searching…":L"Loading…";
         if(transfer && !transfer->error.empty())action=wide(transfer->error);
         SetWindowTextW(p.open,L"Open IM");
         if(action!=L"Open IM")SetWindowTextW(p.label,(label+L"\r\n"+action).c_str());
         addTooltip(p.open,transfer && !transfer->error.empty()?wide(transfer->error).c_str():L"Open an IM as this character; sending stays explicit");
         const auto selected=SendMessageW(p.list,LB_GETCURSEL,0,0);
-        const bool allowed=live && selected>=0 && static_cast<std::size_t>(selected)<p.rows.size() && s->contacts.selected(s->snapshot,p.rows[static_cast<std::size_t>(selected)],p.searching?1u:0u,p.token);
+        const auto* resident=p.presentation.at(static_cast<std::size_t>(selected));
+        const bool allowed=live && resident && s->contacts.selected(s->snapshot,*resident,p.searching?1u:0u,p.token);
         const bool directVisible=(chatPreferences.showMask&conversationCategory(Topic::Private))!=0;
         EnableWindow(p.open,allowed && directVisible);if(!directVisible)addTooltip(p.open,L"Enable Direct IMs under Chats & notifications before opening an IM in the host");EnableWindow(p.filter,live);EnableWindow(p.searchButton,live);EnableWindow(p.friendsButton,live);EnableWindow(p.list,live);
+        EnableWindow(p.onlineOnlyControl,live && !p.searching);
         setToggle(p.friendsButton,!p.searching);setToggle(p.searchButton,p.searching);
     }
     void refreshFriends()
@@ -2048,6 +2149,7 @@ struct Host
         if(p.updating || !contactsLive(p.slot) || !p.source.owns(slots[p.slot]->snapshot))return;
         auto& s=*slots[p.slot];
         if(command==ContactFilter && notification==EN_CHANGE){if(!p.searching)refreshFriendsPane(p);return;}
+        if(command==ContactOnlineOnly){p.onlineOnly=SendMessageW(p.onlineOnlyControl,BM_GETCHECK,0,0)==BST_CHECKED;refreshFriendsPane(p);return;}
         if(command==ContactFriends){p.searching=false;refreshFriendsPane(p);return;}
         if(command==ContactSearch)
         {
@@ -2058,8 +2160,9 @@ struct Host
         if(command==ContactPopout){openFriendsWindow(p.slot,p.monitor);return;}
         if(command==ContactList && notification!=LBN_DBLCLK){refreshFriendsPane(p);return;}
         if(command!=ContactOpen && !(command==ContactList && notification==LBN_DBLCLK))return;
-        const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0);if(at<0 || static_cast<std::size_t>(at)>=p.rows.size())return;
-        const auto selected=p.rows[static_cast<std::size_t>(at)];
+        const auto at=SendMessageW(p.list,LB_GETCURSEL,0,0);
+        const auto* resident=p.presentation.at(static_cast<std::size_t>(at));if(!resident)return;
+        const auto selected=*resident;
         if(!(chatPreferences.showMask&conversationCategory(Topic::Private))){message(L"Direct IMs are hidden. Enable them in Chats & notifications before opening an IM.");return;}
         if(!s.contacts.selected(s.snapshot,selected,p.searching?1u:0u,p.token)){refreshFriendsPane(p);return;}
         if(s.hasPendingAction || (s.waiting && s.request.kind==Kind::OpenIM)){message(L"Character is busy; choose Open IM again shortly.");return;}
@@ -3830,7 +3933,13 @@ LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
     case WM_SYSCOMMAND:
         if((wp&0xfff0u)==0xA160){host->pinWindow(window);return 0;}
         if((wp&0xfff0u)==0xA140 || (wp&0xfff0u)==0xA150){host->recover((wp&0xfff0u)==0xA150);return 0;}break;
-    case WM_DRAWITEM:if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lp)))return TRUE;break;
+    case WM_MEASUREITEM:
+        if(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->CtlID==ContactList){reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->itemHeight=static_cast<UINT>(host->theme.scale(24,pane->dpi));return TRUE;}break;
+    case WM_DRAWITEM:if(host->drawFriend(*pane,*reinterpret_cast<DRAWITEMSTRUCT*>(lp)) || host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lp)))return TRUE;break;
+    case WM_VKEYTOITEM:
+        if(reinterpret_cast<HWND>(lp)==pane->list)return host->friendsKey(*pane,LOWORD(wp),static_cast<short>(HIWORD(wp)));break;
+    case WM_CHARTOITEM:
+        if(reinterpret_cast<HWND>(lp)==pane->list)return host->friendsCharacter(*pane,static_cast<wchar_t>(LOWORD(wp)),static_cast<short>(HIWORD(wp)));break;
     case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return host->theme.color(message,wp,lp);
     case WM_CTLCOLORSTATIC:
     {
