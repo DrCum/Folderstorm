@@ -227,7 +227,7 @@ Characters → Session sets saves selected private profiles/background policies,
 
 Attention → Next/Previous navigates filtered pending items without world activation, Mark read or offer acceptance. Native offers precede unread conversations by default; Nearby is an optional filter. Settings → Keyboard shortcuts supplies optional recovery and attention bindings in the host and the corresponding native Controls actions. Shared Chat sender/drafts remain source-bound.
 
-The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). The current protocol **14** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
+The added versioned stores are bounded `host-experience.dat` and `session-sets.dat`, alongside existing host options/presentation. No credentials, transcripts, drafts or Inventory contents are saved in these stores. See the [completed-feature checklist, command map and focused Windows tests](../../doc/plans/session-host-experience-completion.md). The current protocol **15** requires the matching host and viewer. Native visual/focus/IME/DPI/topmost/voice acceptance remains pending.
 
 
 ### Chat behavior, reading and character sounds
@@ -256,3 +256,11 @@ Characters → Profile name and character color… (or Name this profile… befo
 Background host alerts no longer require native IM sound switches. Their ownership is independent of background world/media muting and suppresses duplicate native immediate/deferred UI sounds while inactive. Active viewers keep native sounds. Host volume/categories, native master/UI mute and UI volume, DND, muted senders, restrictions and burst/freshness limits still apply. Monitor visibility does not suppress alerts.
 
 Settings dialogs keep tabs/actions fixed and show scrollbars only for field overflow, with Midnight/Daylight/High Contrast rendering. Custom-viewport status pulldowns now anchor to actual icons and fit the full window. See [the complete checklist, actual focused checks and Windows acceptance matrix](../../doc/plans/session-refinements.md).
+
+## Friends, New IM and monitor tools
+
+New IM is available in shared and monitor Chat. Friends opens a right sidebar; its pop-out button opens an independent friends window. Filter friends or use Search names, select a resident, then Open IM. Sending remains explicit.
+
+The monitor camera menu includes Open all inactive monitors, Tile as grid, Arrange as row and Cycling monitor. Cycling defaults to ten seconds and does not change the active world. Pause to use Chat, or change Advanced → Require pause to chat. Four fixed windows and the cycling window share the existing ten-FPS budget; duplicate views share a source stream.
+
+This follow-up uses private protocol **15**. Build the host and viewer together. See [completion, limits and focused Windows acceptance](../../doc/plans/host-friends-and-monitor-tools.md).
