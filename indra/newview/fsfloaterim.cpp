@@ -35,6 +35,7 @@
 #include "fschatoptionsmenu.h"
 #include "fscommon.h"
 #include "fsdata.h"
+#include "fssessionworker.h"
 #include "fsfloaterimcontainer.h" // to replace separate IM Floaters with multifloater container
 #include "fsfloaternearbychat.h"
 #include "fsnearbychathub.h"    // <FS:Zi> FIRE-24133 - Redirect chat channel messages
@@ -219,7 +220,7 @@ void FSFloaterIM::onFocusReceived()
 
     LLChicletBar::getInstance()->getChicletPanel()->setChicletToggleState(mSessionID, true);
 
-    if (getVisible())
+    if (getVisible() && FSSessionWorker::nativeChatReadAllowed())
     {
         LLIMModel::instance().sendNoUnreadMessages(mSessionID);
     }
@@ -1560,7 +1561,8 @@ void FSFloaterIM::updateMessages()
     std::list<LLSD> messages;
 
     // we shouldn't reset unread message counters if IM floater doesn't have focus
-    LLIMModel::instance().getMessages(mSessionID, messages, mLastMessageIndex + 1, hasFocus());
+    LLIMModel::instance().getMessages(mSessionID, messages, mLastMessageIndex + 1,
+        hasFocus() && FSSessionWorker::nativeChatReadAllowed());
 
     if (messages.size())
     {

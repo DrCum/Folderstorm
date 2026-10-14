@@ -6,6 +6,13 @@
 using namespace fs_session;
 int main()
 {
+    assert(nativeChatReadAllowed(false,false,false,false,false,true)); // Ordinary viewer behavior stays native.
+    assert(nativeChatReadAllowed(true,true,true,true,true,false));
+    assert(!nativeChatReadAllowed(true,true,false,true,true,false)); // Warm/Economy has no input owner.
+    assert(!nativeChatReadAllowed(true,true,true,false,true,false)); // Host controls/another app focused.
+    assert(!nativeChatReadAllowed(true,true,true,true,false,false)); // Hidden/minimized native window.
+    assert(!nativeChatReadAllowed(true,true,true,true,true,true)); // Handoff in progress.
+    assert(!nativeChatReadAllowed(true,false,true,true,true,false));
     Message source; source.worker[0] = 1; source.account = "11111111-1111-1111-1111-111111111111"; source.grid = "grid";
     ActiveReadClock clock; Conversation chat{"","Nearby","",Topic::Nearby,2}; chat.lastIncomingEvent = 2;
     clock.update(source,true,1000); assert(!clock.due(chat,1000,60));

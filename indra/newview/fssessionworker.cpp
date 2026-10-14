@@ -1411,6 +1411,12 @@ bool FSSessionWorker::inputAllowed()
     return !managed() || gDisconnected || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting && !worker->demoting);
 }
 bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed(); }
+bool FSSessionWorker::nativeChatReadAllowed()
+{
+    if(!managed())return true;
+    return fs_session::nativeChatReadAllowed(true,worker->ready(),worker->inputGranted && worker->mode==Mode::Active,
+        gFocusMgr.getAppHasFocus(),worker->window && IsWindowVisible(worker->window) && !IsIconic(worker->window),worker->promoting || worker->demoting);
+}
 bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
@@ -1539,6 +1545,7 @@ void FSSessionWorker::shutdown()
 #else
 bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
+bool FSSessionWorker::nativeChatReadAllowed() { return true; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}
 void FSSessionWorker::importProfileAccountSettings() {}
