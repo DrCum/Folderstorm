@@ -293,12 +293,19 @@ struct Worker : LLIMSessionObserver
     {
         return session.isGroupSessionType() ? Topic::Group : session.isAdHocSessionType() ? Topic::Conference : Topic::Private;
     }
-    bool backgroundAlertAllowed(const LLUUID& sender) const
+    WorkerAlertDecision backgroundAlertDecision(const LLUUID& sender) const
     {
-        return hostUI && backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
+        if(!hostUI)return WorkerAlertDecision::PolicyOff;
+        return backgroundHostAlertDecision(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
             gAgent.isDoNotDisturb(), gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteUI") ||
             gSavedSettings.getF32("AudioLevelUI") <= 0.f, !sender.isNull() && sender != gAgentID &&
             !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat));
+    }
+    void prepareAlert(Message& message,const LLUUID& sender,bool region=false) const
+    {
+        const auto decision=region?WorkerAlertDecision::RegionMessage:backgroundAlertDecision(sender);
+        message.detail=workerAlertDecisionText(decision);
+        if(decision==WorkerAlertDecision::Allowed){message.flags|=AlertEligible;message.eventAt=GetTickCount64();}
     }
     void sessionAdded(const LLUUID&,const std::string&,const LLUUID&,bool) override {}
     void sessionActivated(const LLUUID&,const std::string&,const LLUUID&) override {}
@@ -329,8 +336,7 @@ struct Worker : LLIMSessionObserver
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
-                if (backgroundAlertAllowed(sender) && !data["is_region_msg"].asBoolean())
-                { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
+                prepareAlert(message,sender,data["is_region_msg"].asBoolean());
                 events.push(std::move(message));
             });
         if (!notificationConnection.connected())
@@ -368,7 +374,7 @@ struct Worker : LLIMSessionObserver
                         {
                             item.eventType=EventType::Attention;item.title=category;item.text="Review in this character's native viewer.";
                             item.recipient=sender.isNull()?"":sender.asString();
-                            if(fresh && backgroundAlertAllowed(sender)){item.flags|=AlertEligible;item.eventAt=GetTickCount64();}
+                            if(fresh)prepareAlert(item,sender);
                         }
                         events.push(std::move(item));
                     }
@@ -403,10 +409,13 @@ struct Worker : LLIMSessionObserver
             payload = events.after(request.cursor);
             // Restrictions may change after the native enqueue callback. Check
             // the owning group as well as its sender immediately before IPC.
-            filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
-                { return RlvActions::canReceiveIM(LLUUID(id)); });
-            if((payload.flags&AlertEligible) && !backgroundAlertAllowed(LLUUID(payload.recipient)))
-            {payload.flags&=~AlertEligible;payload.eventAt=0;}
+            if(!filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
+                { return RlvActions::canReceiveIM(LLUUID(id)); }))payload.detail=workerAlertDecisionText(WorkerAlertDecision::Restricted);
+            if(payload.flags&AlertEligible)
+            {
+                const auto decision=backgroundAlertDecision(LLUUID(payload.recipient));
+                if(decision!=WorkerAlertDecision::Allowed){payload.flags&=~AlertEligible;payload.eventAt=0;payload.detail=workerAlertDecisionText(decision);}
+            }
             if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
                 if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
                     payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
@@ -415,6 +424,7 @@ struct Worker : LLIMSessionObserver
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
             response.recipient = payload.recipient; response.flags |= payload.flags & (AlertEligible|ConversationRestricted); response.eventAt = payload.eventAt;
+            if(payload.detail.rfind("Alert:",0)==0)response.detail=payload.detail;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }

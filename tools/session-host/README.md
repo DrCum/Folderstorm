@@ -82,7 +82,9 @@ The bounded transaction and backup remain in `%LOCALAPPDATA%\FolderstormSessions
 
 **Character settings → Viewer settings → Copy settings** explicitly captures its destination and offers save/discard/Cancel for current edits. Copy groups include movement/WASD/quick jump, camera/view, avatar/beams/LookAt, RLVa, account UI, appearance, bindings and toolbars. Known presets supply omitted defaults. Account UI/toolbars apply once after successful login, with backups and ownership guards. Copy reports remain private and bounded; credentials, contents, live restrictions and unrelated security policies remain excluded.
 
-See [Lucide toolbar refinements](../../doc/plans/host-lucide-toolbar.md), [host UI refinements](../../doc/plans/host-ui-refinements.md) and [profile copying](../../doc/plans/host-preferences-and-profile-copy.md). Protocol **14** is unchanged; no IPC/viewer behavior changed. Native Windows UI/build acceptance remains pending.
+See [Lucide toolbar refinements](../../doc/plans/host-lucide-toolbar.md), [host UI refinements](../../doc/plans/host-ui-refinements.md) and [profile copying](../../doc/plans/host-preferences-and-profile-copy.md). The Lucide toolbar follow-up retains protocol **14** and does not change viewer behavior. Native Windows UI/build acceptance remains pending.
+
+Viewer notices now have their own bounded conversation/history budget, so hidden notifications cannot consume IM slots. Managed inactive IM floaters no longer clear native unread merely because they retain internal focus. **Advanced → Diagnostics → Chat and alerts → Show report** provides the latest per-character/category alert result and live queue/count information without message text or saved diagnostics. Host alert eligibility and rate limits remain; the report distinguishes a skipped alert from a Windows playback request. See [chat delivery fixes and the focused Windows checklist](../../doc/plans/host-chat-delivery.md).
 
 ## Workspace and lifecycle controls
 

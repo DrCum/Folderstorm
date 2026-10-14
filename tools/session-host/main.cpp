@@ -312,6 +312,9 @@ struct Slot
     bool waiting = false, detached = false, soundPrepared = false;
     std::string lastImportReport;
     std::string soundAsset;
+    std::array<std::wstring,4> alertReasons;
+    std::array<ULONGLONG,4> alertAt{};
+    std::uint64_t latestChatEvent=0;
     double fps = 0, loops = 0;
     bool running() const { return process.value != INVALID_HANDLE_VALUE && WaitForSingleObject(process.value, 0) == WAIT_TIMEOUT; }
     HWND surface() const
@@ -387,6 +390,7 @@ struct Host
     AlertGate alertGate;
     std::vector<std::uint8_t> alertTone;
     std::map<std::string,WavSound> soundCache;
+    bool playbackSucceeded=true;
     std::uint64_t playbackSerial = 0;
     HWND pinMenu = nullptr, pinButtons[6]{}, attentionWindow = nullptr, attentionList = nullptr;
     std::vector<Message> attentionRows;
@@ -619,6 +623,9 @@ struct Host
             const auto field=add(PrefQuick,{L"Position "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,commands});fields[field].rowHeight=28;
         }
         const auto diagnosticsField=add(PrefDiagnostics,{L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check});
+        const auto chatReportField=add(PrefDiagnostics,{L"Chat and alerts",L"Show report…",FieldType::Action});
+        fields[chatReportField].help=L"Applied choices and the latest alert decision for each character. No message text is included.";
+        fields[chatReportField].action=[&](HWND owner){chatAlertReport(owner);};
         const auto minimalField=add(PrefRecovery,{L"Minimal host controls",chrome==2?L"1":L"0",FieldType::Check});fields[minimalField].help=L"Advanced: hide the regular toolbar. Show controls, the tray and recovery shortcuts remain available.";
         const auto folderField=add(PrefRecovery,{L"Host settings",L"Open settings folder",FieldType::Action});fields[folderField].action=[&](HWND owner){ShellExecuteW(owner,L"open",profiles.c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
         const auto licenseField=add(PrefRecovery,{L"Icon credits",L"Lucide license",FieldType::Action});fields[licenseField].action=[&](HWND owner){MessageBoxW(owner,wide(fs_host_ui::lucideLicense).c_str(),L"Lucide icon license",MB_OK|MB_ICONINFORMATION);};
@@ -1006,18 +1013,53 @@ struct Host
     {
         // SND_MEMORY playback owns its buffer until stopped, including Preview.
         PlaySoundW(nullptr,nullptr,0); ++playbackSerial; alertTone = std::move(bytes);
-        if (!alertTone.empty()) PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+        playbackSucceeded=alertTone.empty() || PlaySoundW(reinterpret_cast<LPCWSTR>(alertTone.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT)!=FALSE;
         return playbackSerial;
     }
     void alert(const Message& item,int index)
     {
-        if (!presentation.volume || !slots[index]) return;
+        if(!slots[index] || (item.eventType!=EventType::Chat && item.eventType!=EventType::Attention))return;
+        const auto category=soundCategory(item);if(!category)return;
+        if(!presentation.volume){recordAlert(item,index,L"Host alert volume zero");return;}
         const bool eligible = slots[index]->snapshot.state == State::Ready && !slots[index]->detached && slots[index]->snapshot.mode != Mode::Active &&
             (slots[index]->audioPolicy & AudioHostUI) && !(slots[index]->snapshot.flags & (ChatRestricted|Promoting|Error));
         const auto sound = characterSound(index);
-        if (!alertGate.admitCategories(item,sound.categories,GetTickCount64(),eligible)) return;
+        const auto decision=alertGate.decide(item,sound.categories,GetTickCount64(),eligible);
+        if(decision!=AlertDecision::Allowed)
+        {
+            recordAlert(item,index,decision==AlertDecision::WorkerIneligible && item.detail.rfind("Alert:",0)==0?
+                wide(item.detail):wide(alertDecisionText(decision)));return;
+        }
         const auto saved = soundCache.find(sound.asset);
         playAlert(saved == soundCache.end() ? builtinAlertTone(presentation.volume) : saved->second.volume(presentation.volume));
+        recordAlert(item,index,playbackSucceeded?(saved==soundCache.end()?L"Built-in tone playback requested":L"Custom WAV playback requested"):L"Windows refused sound playback");
+    }
+    void recordAlert(const Message& item,int index,const std::wstring& reason)
+    {
+        if(!slots[index] || (item.topic==Topic::Nearby && item.eventType!=EventType::Attention))return;
+        if(item.eventType==EventType::Chat && item.recipient==item.account)return; // Keep the last incoming result when replying.
+        const std::size_t at=item.eventType==EventType::Attention || item.topic==Topic::Notice?3:item.topic==Topic::Private?0:item.topic==Topic::Group?1:2;
+        slots[index]->alertReasons[at]=reason;slots[index]->alertAt[at]=GetTickCount64();
+    }
+    void chatAlertReport(HWND owner) const
+    {
+        std::wstring report=L"Applied choices; latest live results. No message text.\n";
+        const wchar_t* categories[]={L"Direct IM",L"Group",L"Conference",L"Notification"};
+        for(int i=0;i<MaxCharacters;++i)if(slots[i])
+        {
+            const auto& slot=*slots[i];report+=L"\n"+characterName(i)+L" · "+(!slot.pipe.alive() || slot.detached?L"unavailable":slot.snapshot.mode==Mode::Active?L"active":slot.snapshot.mode==Mode::Warm?L"Warm":L"Economy")+L"\n";
+            const auto chats=slot.chat.conversationCount(false);
+            report+=L"Chats: "+std::to_wstring(chats?chats-1:0)+L"; viewer notices: "+std::to_wstring(slot.chat.conversationCount(true))+L"\n";
+            const auto queued=slot.latestChatEvent>slot.chat.cursor?slot.latestChatEvent-slot.chat.cursor:0;
+            report+=L"Queued events: "+std::to_wstring(queued)+L"; host alert volume: "+std::to_wstring(presentation.volume)+L"%; viewer alert policy: "+((slot.audioPolicy&AudioHostUI)?L"applied":L"off/pending")+L"\n";
+            for(std::size_t at=0;at<4;++at)
+            {
+                report+=std::wstring(categories[at])+L": "+(slot.alertReasons[at].empty()?L"No event observed":slot.alertReasons[at]);
+                if(slot.alertAt[at])report+=L" ("+std::to_wstring((GetTickCount64()-slot.alertAt[at])/1000)+L"s ago)";
+                report+=L"\n";
+            }
+        }
+        MessageBoxW(owner,report.c_str(),L"Chat and alert diagnostics",MB_OK|MB_ICONINFORMATION);
     }
     void editCharacterSound(int index) { editPreferences(PrefSounds,index); }
     unsigned int audioPolicyFor(int index) const
@@ -2712,6 +2754,7 @@ struct Host
             if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.soundPrepared = false; slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            slot.alertReasons={};slot.alertAt={};slot.latestChatEvent=0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;slot.audioPolicy=0;
             if (chatIndex == index) { conversation.clear(); refreshChat(true, true); }
@@ -2752,12 +2795,16 @@ struct Host
         if (!(response.flags & Error) && (request.kind == Kind::Events || request.kind == Kind::Conversations))
         {
             const bool accepted = slot.chat.accept(response);
+            if(request.kind==Kind::Events)slot.latestChatEvent=response.cursor;
+            if(response.eventType==EventType::Gap && (response.flags&ConversationRestricted))recordAlert(response,index,L"Conversation restricted");
             if (accepted)
             {
                 attention.accept(response); alert(response,index);
                 if (validSwitchIntent(response,slot.snapshot,index,active,GetTickCount64(),presentation.shortcuts,busy())) dispatchShortcut(response.unread);
                 else if(validShellIntent(response,slot.snapshot,index,active,GetTickCount64(),experience.viewerShellKeys)){if(response.unread==7)recover();else navigateAttention(response.unread==8?1:-1);}
             }
+            else if(response.eventType==EventType::Chat && response.event)
+                recordAlert(response,index,slot.chat.conversationCount(false)>=ChatView::MaxConversations?L"Native conversation limit reached":L"Shared view rejected duplicate or restricted event");
             if (request.kind == Kind::Events) slot.eventsAt = GetTickCount64();
             else if (response.eventType == EventType::None) { slot.catalogIndex = 0; slot.catalogAt = GetTickCount64(); }
             else ++slot.catalogIndex;
