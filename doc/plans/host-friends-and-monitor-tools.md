@@ -80,3 +80,11 @@ Headers cannot open an IM. Keyboard arrows, Home/End, Page Up/Down and first-let
 The affected `contacts` check passed with strict C++17 warnings/assertions. Added cases cover both group counts, heading/invalid selection rejection, offline and online-only filtering, search behavior, navigation across headings and preserving the recipient when presence changes. Diff hygiene passed. No broad/native builds or unrelated tests were run.
 
 Windows retest: compare Midnight, Daylight and High Contrast in shared/monitor sidebars and standalone Friends; resize and use larger text/100–200% DPI. Test Online only with the name filter, switch to Search and back, select a friend who changes status, click/double-click a heading and navigate with arrows/Home/End/Page keys/letters. Confirm offline IMs still work and selection never silently changes recipients.
+
+## First-letter message routing correction
+
+Confirmed the review finding against Microsoft's `WM_CHARTOITEM` documentation: owner-drawn lists with `LBS_HASSTRINGS` do not receive that message. Friends retains native strings for accessibility and now subclasses the list itself to consume printable `WM_CHAR` input through the resident-only first-letter helper. Unmatched characters cannot fall through to native heading search. Selection changes explicitly refresh Open IM because `LB_SETCURSEL` does not emit `LBN_SELCHANGE`. Disabled/rebuilding lists ignore printable input; control characters and other navigation retain normal handling. Subclass installation is checked and the callback removes itself on destruction.
+
+A focused C++17 harness compiled the actual production subclass and first-letter helper against mocked Win32 APIs, passing `O`/`o` resident cycling across both headings, unmatched-selection preservation, explicit IM-state refresh, disabled/rebuild guards, control-key routing and teardown with strict warnings/assertions. This validates message-routing logic, not native Windows delivery. Diff hygiene passed; no broad/native builds or unrelated tests. Protocol stays 15.
+
+Windows retest: focus Friends in each sidebar/window, type `O` repeatedly with online and offline matching names, then a letter with no match. No heading should become selected, and Open IM should follow the selected resident. Repeat with Online only, Search, lowercase letters and normal Tab/arrow/Page-key navigation.

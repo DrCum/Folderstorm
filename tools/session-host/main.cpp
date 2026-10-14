@@ -86,6 +86,7 @@ constexpr UINT_PTR Timer = 1;
 LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp);
+LRESULT CALLBACK friendsListProc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR data);
 struct ComApartment
 {
     HRESULT result = CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
@@ -2044,6 +2045,7 @@ struct Host
         p.friendsButton=make(L"BUTTON",L"Friends",BS_PUSHBUTTON|WS_TABSTOP,ContactFriends);
         p.searchButton=make(L"BUTTON",L"Search names",BS_PUSHBUTTON|WS_TABSTOP,ContactSearch);
         p.list=make(L"LISTBOX",L"",WS_BORDER|WS_VSCROLL|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS|LBS_WANTKEYBOARDINPUT|WS_TABSTOP,ContactList);
+        const bool keyboardInstalled=p.list && SetWindowSubclass(p.list,friendsListProc,9,reinterpret_cast<DWORD_PTR>(&p));
         p.open=make(L"BUTTON",L"Open IM",BS_PUSHBUTTON|WS_TABSTOP,ContactOpen);
         p.popout=make(L"BUTTON",L"Pop out friends",BS_PUSHBUTTON|WS_TABSTOP,ContactPopout);
         p.pin=make(L"BUTTON",L"Always on top",BS_PUSHBUTTON|WS_TABSTOP,PanelPin);
@@ -2051,7 +2053,7 @@ struct Host
         addTooltip(p.friendsButton,L"Friends are grouped by online status. Offline friends can receive IMs too.");addTooltip(p.filter,L"Filter friends, or enter a resident name and choose Search names");addTooltip(p.searchButton,L"Search this character's grid; display names and usernames are shown together");
         addTooltip(p.onlineOnlyControl,L"Show online friends only; offline friends remain available when unchecked");
         addTooltip(p.open,L"Open an IM as the sending character; no message is sent until you choose Send");addTooltip(p.popout,L"Open an independent friends window for this character");
-        if(!p.label || !p.filter || !p.onlineOnlyControl || !p.friendsButton || !p.searchButton || !p.list || !p.open || !p.popout || !p.pin){DestroyWindow(p.window);message(L"Unable to create the friends controls. Choose Friends or New IM again.");return;}
+        if(!p.label || !p.filter || !p.onlineOnlyControl || !p.friendsButton || !p.searchButton || !keyboardInstalled || !p.open || !p.popout || !p.pin){DestroyWindow(p.window);message(L"Unable to create the friends controls. Choose Friends or New IM again.");return;}
         friendsFont(p);theme.window(p.window);layoutFriends(p);
         if(standalone){installPanelMenu(p.window);restorePlacement(p.window,9u+static_cast<unsigned int>(index),p.dpi);pinWindow(p.window,false);}
     }
@@ -3914,6 +3916,30 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
 }
+LRESULT CALLBACK friendsListProc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR data)
+{
+    if(message==WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(window,friendsListProc,id);
+        return DefSubclassProc(window,message,wp,lp);
+    }
+    auto* pane=reinterpret_cast<fs_host_ui::FriendsPane*>(data);
+    // LBS_HASSTRINGS retains accessible names, but prevents WM_CHARTOITEM.
+    // Consume printable input here so native search cannot select a heading.
+    if(message==WM_CHAR && wp>=L' ' && host && pane && pane->list==window)
+    {
+        if(!pane->updating && IsWindowEnabled(window))
+        {
+            const auto current=static_cast<int>(SendMessageW(window,LB_GETCURSEL,0,0));
+            const auto row=host->friendsCharacter(*pane,static_cast<wchar_t>(wp),current);
+            if(row>=0)SendMessageW(window,LB_SETCURSEL,static_cast<WPARAM>(row),0);
+            // LB_SETCURSEL does not send LBN_SELCHANGE; refresh Open IM explicitly.
+            host->refreshFriendsPane(*pane);
+        }
+        return 0;
+    }
+    return DefSubclassProc(window,message,wp,lp);
+}
 LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
 {
     if(message==WM_NCCREATE){const auto* create=reinterpret_cast<const CREATESTRUCTW*>(lp);SetWindowLongPtrW(window,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(create->lpCreateParams));}
@@ -3938,8 +3964,6 @@ LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
     case WM_DRAWITEM:if(host->drawFriend(*pane,*reinterpret_cast<DRAWITEMSTRUCT*>(lp)) || host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lp)))return TRUE;break;
     case WM_VKEYTOITEM:
         if(reinterpret_cast<HWND>(lp)==pane->list)return host->friendsKey(*pane,LOWORD(wp),static_cast<short>(HIWORD(wp)));break;
-    case WM_CHARTOITEM:
-        if(reinterpret_cast<HWND>(lp)==pane->list)return host->friendsCharacter(*pane,static_cast<wchar_t>(LOWORD(wp)),static_cast<short>(HIWORD(wp)));break;
     case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN:return host->theme.color(message,wp,lp);
     case WM_CTLCOLORSTATIC:
     {
