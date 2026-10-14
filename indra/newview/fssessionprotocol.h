@@ -18,15 +18,16 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-// Version 14 pairs the expanded startup profile-copy policy with its host.
-constexpr std::uint32_t Version = 14;
+// Version 15 adds source-bound contacts, resident search and explicit New IM.
+constexpr std::uint32_t Version = 15;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
-    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat, CloseChat
+    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat, CloseChat,
+    Contacts, ContactSearch, OpenIM
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
@@ -54,7 +55,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return kind >= Kind::Poll && kind <= Kind::CloseChat;
+    return kind >= Kind::Poll && kind <= Kind::OpenIM;
 }
 inline bool validUtf8(const std::string& text, bool multiline = false)
 {

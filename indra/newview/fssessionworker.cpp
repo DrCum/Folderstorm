@@ -10,6 +10,12 @@
 #if LL_WINDOWS
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
+#include "fssessioncontacts.h"
+#include "llavatarnamecache.h"
+#include "llavatarname.h"
+#include "llcoros.h"
+#include "llcorehttputil.h"
+#include "lluri.h"
 #include "fssessionlifecycle.h"
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
@@ -616,7 +622,7 @@ struct Worker : LLIMSessionObserver
         releaseInput();
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
-        detached = true;
+        detached = true;contactSearch.reset();friendSnapshot.clear();friendToken=0;
         toolbarImport.clear(); accountImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); disconnectSessionObserver(); events.clear();
@@ -681,6 +687,115 @@ struct Worker : LLIMSessionObserver
         const auto response = status(request,error);
         if (!pipe.send(response)) { detach(); pipe.close(); }
         else if (response.detail.rfind("Settings import:",0) == 0) settingsNotice.clear();
+    }
+    struct SearchResult
+    {
+        ChatKey source;
+        LLUUID login;
+        std::uint64_t token=0;
+        bool pending=true;
+        std::string error;
+        std::vector<Contact> rows;
+    };
+    std::shared_ptr<SearchResult> contactSearch;
+    std::weak_ptr<SearchResult> runningContactSearch; // At most one bounded HTTP request, including discarded sessions.
+    std::vector<Contact> friendSnapshot;
+    std::uint64_t friendToken=0;
+    bool contactAllowed(const LLUUID& resident) const
+    {
+        return resident.notNull() && resident!=gAgentID && RlvActions::canStartIM(resident) &&
+            RlvActions::canSendIM(resident) && RlvActions::canReceiveIM(resident) && FSData::instance().canSendToIMContact(IM_NOTHING_SPECIAL,gAgentID,resident);
+    }
+    Contact contactFor(const LLUUID& resident) const
+    {
+        LLAvatarName name;Contact c;c.id=resident.asString();
+        if(LLAvatarNameCache::get(resident,&name)){c.display=boundedText(name.getDisplayName(true),255);c.username=boundedText(name.getUserName(),127);}
+        else {c.display=c.id;c.username="Name loading";}
+        c.online=LLAvatarTracker::instance().isBuddyOnline(resident);c.allowed=contactAllowed(resident);return c;
+    }
+    void contactCommand(const Message& request)
+    {
+        if(!ready() || !sharingAllowed() || request.account!=gAgentID.asString() || request.grid!=loginGrid || request.width>1 || !request.event)
+        {reply(request,"Contacts are unavailable or their character/session changed.");return;}
+        const ChatKey identity{id,generation,gAgentID.asString(),loginGrid,{}};
+        auto response=status(request);response.width=request.width;response.height=0;response.event=request.event;
+        if(request.kind==Kind::ContactSearch)
+        {
+            if(request.text.size()<2 || request.text.size()>127 || !validUtf8(request.text))
+            {reply(request,"Enter 2 to 127 UTF-8 bytes of a resident name.");return;}
+            if(const auto running=runningContactSearch.lock();running && running->pending){reply(request,"A resident search is still running. Try again shortly.");return;}
+            auto* region=gAgent.getRegion();auto url=region?region->getCapability("AvatarPickerSearch"):std::string{};
+            if(url.empty()){reply(request,"Resident search is unavailable on this region. Friends remain available.");return;}
+            if(!url.empty() && url.back()!='/')url+='/';
+            auto query=request.text;std::replace(query.begin(),query.end(),'.',' ');url+="?page_size=100&names="+LLURI::escape(query);
+            auto result=std::make_shared<SearchResult>();result->source=identity;result->login=gAgent.getSessionID();result->token=request.event;contactSearch=result;runningContactSearch=result;
+            LLCoros::instance().launch("FolderstormContactSearch",[result,url]()
+            {
+                auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("FolderstormContactSearch",LLCore::HttpRequest::DEFAULT_POLICY_ID);
+                auto http=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();options->setTimeout(20);
+                const LLSD data=adapter->getAndSuspend(http,url,options);
+                const auto httpStatus=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(data[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+                // This state is session-only. Replaced requests own separate state;
+                // never keep a Worker pointer alive through an HTTP yield.
+                if(result->login!=gAgent.getSessionID() || result->source.account!=gAgentID.asString() || !FSSessionWorker::managed())
+                {result->error="Search session ended.";result->pending=false;return;}
+                if(!httpStatus || !data["agents"].isArray()){result->error="Resident search failed. Try again.";result->pending=false;return;}
+                for(auto it=data["agents"].beginArray();it!=data["agents"].endArray() && result->rows.size()<MaxSearchContacts;++it)
+                {
+                    const auto resident=(*it)["id"].asUUID();if(resident.isNull() || resident==gAgentID)continue;
+                    Contact c{resident.asString(),boundedText((*it)["display_name"].asString(),255),boundedText((*it)["username"].asString(),127),false,false};
+                    if(c.display.empty())c.display=c.username;
+                    if(c.valid() && std::none_of(result->rows.begin(),result->rows.end(),[&](const Contact& old){return old.id==c.id;}))result->rows.push_back(std::move(c));
+                }
+                result->pending=false;
+            });
+            response.height=1;response.text="FSC1\n";
+        }
+        else if(request.kind==Kind::OpenIM)
+        {
+            const LLUUID resident(request.recipient);
+            const Contact* chosen=nullptr;
+            if(request.width==1 && contactSearch && contactSearch->token==request.event && contactSearch->source.owns(request) && !contactSearch->pending && contactSearch->error.empty())
+                for(const auto& c:contactSearch->rows)if(c.id==request.recipient){chosen=&c;break;}
+            const bool friendNow=LLAvatarTracker::instance().isBuddy(resident);
+            if(!contactAllowed(resident) || (request.width==0?!friendNow:!chosen))
+            {reply(request,"This resident is unavailable or starting an IM is blocked by restrictions.");return;}
+            const auto name=chosen?chosen->display:contactFor(resident).display;
+            const auto sessionID=gIMMgr->addSession(name,IM_NOTHING_SPECIAL,resident);
+            auto* im=LLIMModel::instance().findIMSession(sessionID);
+            if(!im){reply(request,"The native conversation could not be opened.");return;}
+            response.event=0;response.cursor=events.latest();response.eventType=EventType::Conversation;response.topic=Topic::Private;
+            response.conversation=sessionID.asString();response.recipient=resident.asString();response.title=boundedText(im->mName,255);
+            response.unread=static_cast<std::uint32_t>((std::max)(0,im->mNumUnread));
+        }
+        else
+        {
+            std::vector<Contact>* rows=&friendSnapshot;
+            if(request.width==0)
+            {
+                if(!request.cursor)
+                {
+                    friendToken=request.event;friendSnapshot.clear();LLAvatarTracker::buddy_map_t buddies;LLAvatarTracker::instance().copyBuddyList(buddies);
+                    for(bool online:{true,false})for(const auto& buddy:buddies){if(friendSnapshot.size()>=MaxContacts)break;if(buddy.first!=gAgentID && LLAvatarTracker::instance().isBuddyOnline(buddy.first)==online)friendSnapshot.push_back(contactFor(buddy.first));}
+                    friendSnapshot=sortedContacts(std::move(friendSnapshot));
+                }
+                if(friendToken!=request.event){reply(request,"Friend refresh expired; refresh again.");return;}
+            }
+            else
+            {
+                if(!contactSearch || contactSearch->token!=request.event || !contactSearch->source.owns(request) || contactSearch->login!=gAgent.getSessionID())
+                {reply(request,"Search changed or expired. Search again.");return;}
+                if(!contactSearch->error.empty()){reply(request,contactSearch->error);return;}
+                if(contactSearch->pending){response.height=1;response.text="FSC1\n";if(!pipe.send(response)){detach();pipe.close();}return;}
+                rows=&contactSearch->rows;
+                for(auto& c:*rows){const LLUUID resident(c.id);c.allowed=contactAllowed(resident);c.online=LLAvatarTracker::instance().isBuddyOnline(resident);}
+            }
+            for(auto& c:*rows)c.allowed=contactAllowed(LLUUID(c.id));
+            if(request.cursor>rows->size()){reply(request,"Invalid contact page.");return;}
+            std::size_t next=0;response.text=contactPage(*rows,static_cast<std::size_t>(request.cursor),next);
+            response.cursor=next;response.unread=static_cast<std::uint32_t>(rows->size());
+        }
+        if(!pipe.send(response)){detach();pipe.close();}
     }
     void command(const Message& request)
     {
@@ -757,6 +872,9 @@ struct Worker : LLIMSessionObserver
             else reply(request, unembed() ? "" : "Unable to restore the separate window.");
             break;
         case Kind::Focus: focusHostedClient(); reply(request); break;
+        case Kind::Contacts:
+        case Kind::ContactSearch:
+        case Kind::OpenIM: contactCommand(request); break;
         case Kind::CloseChat:
         case Kind::Events:
         case Kind::SendChat:
@@ -1195,6 +1313,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
+        value.contactSearch.reset();value.friendSnapshot.clear();value.friendToken=0;
         value.events.resetSession(); value.attention.clear(); value.shortcuts = value.shellShortcuts = false;
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
@@ -1205,7 +1324,7 @@ void FSSessionWorker::tick()
     }
     if (gDisconnected && !value.recoveryShown)
     {
-        value.recoveryShown = true;
+        value.recoveryShown = true;value.contactSearch.reset();value.friendSnapshot.clear();value.friendToken=0;
         value.transition.cancel();
         value.releaseInput(); value.unembed(); value.mode = Mode::Warm;
         if (value.window) { EnableWindow(value.window, TRUE); ShowWindow(value.window, SW_SHOWNOACTIVATE); }
@@ -1270,7 +1389,7 @@ void FSSessionWorker::tick()
     {
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
-        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.chatBlocked = blocked; }
+        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.contactSearch.reset(); value.friendSnapshot.clear(); value.friendToken=0; value.chatBlocked = blocked; }
         if (blocked && value.previewRate)
         {
             value.previewError = "Preview unavailable while names or locations are restricted.";
@@ -1546,6 +1665,7 @@ void FSSessionWorker::shutdown()
         worker->inputGranted = false;
         if (worker->window) RemovePropW(worker->window, InputLeaseProperty);
         if (worker->window) RemovePropW(worker->window, FocusLeaseProperty);
+        worker->contactSearch.reset();worker->friendSnapshot.clear();
         worker->disconnectSessionObserver();worker->chatConnection.disconnect();worker->notificationConnection.disconnect();
         worker->pipe.close(); worker->detached = true;
     }

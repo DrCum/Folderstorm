@@ -106,6 +106,13 @@ public:
         if(found==conversations.end() || found->second.topic==Topic::Nearby) return false;
         found->second.closed=true;found->second.closedAt=watermark;return true;
     }
+    bool reopen(const Message& acknowledgement)
+    {
+        if(acknowledgement.eventType!=EventType::Conversation || acknowledgement.topic!=Topic::Private ||
+            (acknowledgement.flags&(Error|ChatRestricted|ConversationRestricted)) || !accept(acknowledgement))return false;
+        auto& entry=conversations.at(acknowledgement.conversation);entry.closed=false;entry.closedAt=acknowledgement.cursor;
+        return true;
+    }
     bool markRead(const Message& request)
     {
         if (request.kind != Kind::MarkRead || !identity.owns(request)) return false;
@@ -184,6 +191,10 @@ public:
         if(event.event)found->second.lastEvent=event.event;
         if(event.eventType==EventType::ConversationClosed)
         {
+            // Explicit New IM also establishes a fence. A queued native Close
+            // from before that acknowledgement cannot undo the user's reopen.
+            if(!found->second.closed && event.event<=found->second.closedAt)
+            {if(event.event)cursor=event.event;return true;}
             // Native close delivery must not lower an acknowledged host fence
             // or its pending maximum. The acknowledgement explicitly replaces
             // that temporary maximum through close().

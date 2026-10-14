@@ -49,7 +49,7 @@ int main()
     monitors.stopAll(); for (const auto& binding : monitors.bindings) assert(!binding.enabled);
     // Every combination of requested rates stays within the shared cap, with
     // conservative equal shares rounded down to an actual wire-supported rate.
-    for (unsigned int count = 1; count <= static_cast<unsigned int>(MaxMonitors); ++count)
+    for (unsigned int count = 1; count <= static_cast<unsigned int>(MaxCharacters); ++count)
     {
         unsigned int combinations = 1; for (unsigned int i = 0; i < count; ++i) combinations *= 4;
         for (unsigned int pattern = 0; pattern < combinations; ++pattern)
@@ -63,7 +63,7 @@ int main()
             assert(sum <= PreviewAggregateRate);
         }
     }
-    assert(previewBudget(3, 0) == 0 && previewBudget(3, MaxMonitors + 1) == 0 && previewBudget(9, 1) == 0);
+    assert(previewBudget(3, 0) == 0 && previewBudget(3, MaxCharacters + 1) == 0 && previewBudget(9, 1) == 0);
     std::array<std::uint32_t, MaxCharacters> applied{}; applied[1] = applied[2] = 10;
     auto rates = [&](int i) { return applied[i]; };
     assert(!previewAdmission(3, 4, rates)); // Existing 5+5 FPS lanes must lower first.
