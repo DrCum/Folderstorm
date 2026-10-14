@@ -2073,6 +2073,7 @@ struct Host
         if(!cycleEligible(target))return;
         auto& m=monitors[CyclingView];auto& b=monitorSet.bindings[CyclingView];
         if(b.enabled && b.slot==target && b.key.owns(slots[target]->snapshot))return;
+        m.editor.releaseFocus(m.window);
         // Draft edits have already entered the source-owned ChatView via EN_CHANGE.
         // Clear pixels and selection before publishing a different sender label.
         clearMonitor(CyclingView);if(m.window){InvalidateRect(m.window,nullptr,FALSE);UpdateWindow(m.window);}m.frame={};m.chat.bind(MonitorBinding{},nullptr,nullptr);
@@ -2119,10 +2120,22 @@ struct Host
         const auto& b=monitorSet.bindings[CyclingView];
         const bool invalid=!b.enabled || !cycleEligible(b.slot) || !b.key.owns(slots[b.slot]->snapshot);
         auto& m=monitors[CyclingView];
-        if(invalid || (m.window && IsWindowVisible(m.window) && !IsIconic(m.window) && cycler.elapsed(GetTickCount64())))
+        const auto action=cycler.action(!invalid,m.window && IsWindowVisible(m.window) && !IsIconic(m.window),GetTickCount64());
+        if(action==CyclingMonitor::Action::Disable)
+        {
+            // Keep the last assignment disabled until an explicit Next/Play;
+            // neither a disconnect nor reconnect can change a paused sender.
+            if(b.enabled || m.chat.bound || !m.pixels.empty())
+            {
+                m.editor.releaseFocus(m.window);clearMonitor(CyclingView);monitorSet.stop(CyclingView);
+                m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);
+            }
+            return;
+        }
+        if(action==CyclingMonitor::Action::Advance)
         {
             const int next=cycler.next(b.slot,1,experience.order,[this](int i){return cycleEligible(i);});
-            if(next>=0)selectCycle(next);else{clearMonitor(CyclingView);monitorSet.stop(CyclingView);m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);}
+            if(next>=0)selectCycle(next);else{m.editor.releaseFocus(m.window);clearMonitor(CyclingView);monitorSet.stop(CyclingView);m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);}
         }
     }
     void openAllMonitors()
@@ -2221,6 +2234,7 @@ struct Host
         if (!validSlot(index) || !slots[index] || !slots[index]->running() || slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready)
         { message(L"Log in this character before opening its read-only monitor."); return; }
         if (busy() || index == active) { message(L"Choose an inactive character after the switch finishes to open its monitor."); return; }
+        if(cycle)monitors[CyclingView].editor.releaseFocus(monitors[CyclingView].window);
         const int id=cycle?(monitorSet.cycle(index,slots[index]->snapshot,monitorSize,monitorRate)?CyclingView:-1):monitorSet.open(index,slots[index]->snapshot,monitorSize,monitorRate);
         if (id < 0) { message(L"All inactive-monitor slots are occupied, or this session changed. Close a monitor before opening another."); return; }
         auto& monitor = monitors[id];
@@ -2316,6 +2330,12 @@ struct Host
         m.transcript.attach(m.history,m.latest);
         m.editor.attach(m.compose,[this,id] { monitorChatCommand(id,ChatSend,BN_CLICKED); });
         m.editor.enter=[this,id]{if(id==CyclingView && cycler.playing && !experience.requirePauseToChat){cycler.enteredComposer(false);refreshMonitorChat(id);}};
+        if(id==CyclingView)m.editor.acceptsInput=[this,id]
+        {
+            const auto& monitor=monitors[id];const auto* slot=monitorChatSlot(id);
+            return slot && IsWindowEnabled(monitor.compose) && cyclingComposerInputAllowed(cycler,GetFocus()==monitor.compose,
+                monitor.chat,monitorSet.bindings[id],slot->snapshot,slot->chat);
+        };
         addTooltip(m.newIM,L"Choose a friend or search for a resident; open an IM as this character");addTooltip(m.friendsToggle,L"Show or hide this character’s friends sidebar");
         addTooltip(m.latest,L"Jump to the latest message and resume following chat");
         m.updatingChat = false; monitorFont(id);
@@ -2373,6 +2393,7 @@ struct Host
         auto* slot = monitorChatSlot(id);
         m.updatingChat = true;
         const auto& binding = monitorSet.bindings[id];
+        if(id==CyclingView && (!slot || !binding.enabled || !m.chat.identity.owns(slot->snapshot)))m.editor.releaseFocus(m.window);
         const bool changed = m.chat.bind(binding,slot ? &slot->snapshot : nullptr,slot ? &slot->chat : nullptr);
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const bool live = m.showChat && slot && !restricted;
@@ -2392,7 +2413,12 @@ struct Host
             (live && (previous==slot->chat.conversations.end() || !shownConversation(previous->second)))))
         {
             m.conversationIds = std::move(ids);
-            if (live && !m.conversationIds.empty()) m.chat.select(binding,slot->snapshot,slot->chat,m.conversationIds[static_cast<std::size_t>(selection)]);
+            if (live && !m.conversationIds.empty())
+            {
+                const auto& selected=m.conversationIds[static_cast<std::size_t>(selection)];
+                if(id==CyclingView && selected!=m.chat.identity.conversation)m.editor.releaseFocus(m.window);
+                m.chat.select(binding,slot->snapshot,slot->chat,selected);
+            }
         }
         const auto selectedEntry=live?slot->chat.conversations.find(m.chat.identity.conversation):std::map<std::string,Conversation>::iterator{};
         const bool selectedShown=live && selectedEntry!=slot->chat.conversations.end() && shownConversation(selectedEntry->second);
@@ -2483,8 +2509,9 @@ struct Host
                 clearMonitor(id);
                 if (monitor.dirty)
                 {
-                    SetWindowTextW(monitor.window, L"Character monitor · session ended or stopped; choose again");
-                    monitor.title.clear();monitor.previewStatus=L"Session ended or stopped"; InvalidateRect(monitor.window, nullptr, FALSE); monitor.dirty = false;
+                    const bool pausedUnavailable=id==CyclingView && cycleOpen && !cycler.playing;
+                    SetWindowTextW(monitor.window,pausedUnavailable?L"Cycling monitor · paused · character unavailable":L"Character monitor · session ended or stopped; choose again");
+                    monitor.title.clear();monitor.previewStatus=pausedUnavailable?L"Paused · choose Next or Play":L"Session ended or stopped"; InvalidateRect(monitor.window, nullptr, FALSE); monitor.dirty = false;
                 }
                 continue;
             }
@@ -4318,6 +4345,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
+        auto& cycleEditor=state.monitors[CyclingView].editor;
+        // Filter before dialog routing as well: old composer Enter must not
+        // activate panel buttons after focus has left the unavailable composer.
+        if(message.hwnd==cycleEditor.edit && !cycleEditor.allowsInput(message.message))
+        {cycleEditor.keys={};continue;}
         if (state.hostShortcut(message)) continue;
         if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE && state.busy())
         { state.skipTransition(); continue; }

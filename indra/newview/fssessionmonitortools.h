@@ -1,12 +1,13 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #ifndef FS_SESSION_MONITOR_TOOLS_H
 #define FS_SESSION_MONITOR_TOOLS_H
-#include "fssessionmonitormodel.h"
+#include "fssessionmonitorchat.h"
 #include <vector>
 namespace fs_session
 {
 struct CyclingMonitor
 {
+    enum class Action { Keep, Disable, Advance };
     bool playing=true;
     unsigned int seconds=10;
     std::uint64_t due=0;
@@ -23,7 +24,19 @@ struct CyclingMonitor
         return -1;
     }
     bool elapsed(std::uint64_t now){if(!playing)return false;if(!due){play(now);return false;}if(now<due)return false;play(now);return true;}
+    Action action(bool sourceValid,bool visible,std::uint64_t now)
+    {
+        if(!sourceValid)return playing?Action::Advance:Action::Disable;
+        return visible && elapsed(now)?Action::Advance:Action::Keep;
+    }
 };
+inline bool cyclingComposerInputAllowed(const CyclingMonitor& cycle,bool focused,const MonitorChat& chat,
+    const MonitorBinding& binding,const Message& source,const ChatView& view)
+{
+    // A rebind alone cannot authorize queued typing/Enter/IME input. A fresh
+    // focus in a paused composer is also required for the displayed destination.
+    return !cycle.playing && focused && chat.request(Kind::SendChat,binding,source,view).has_value();
+}
 struct MonitorTile { int x=0,y=0,width=0,height=0; };
 inline std::vector<MonitorTile> monitorTiles(MonitorTile work,unsigned int count,bool row,int gap=8)
 {

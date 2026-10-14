@@ -105,11 +105,33 @@ struct Composer
 {
     HWND edit = nullptr;
     std::function<void()> send,enter;
+    std::function<bool()> acceptsInput;
     fs_session::ComposerReturn keys;
+    static bool inputMessage(UINT message)
+    {
+        return message==WM_KEYDOWN || message==WM_KEYUP || message==WM_CHAR || message==WM_UNICHAR ||
+            message==WM_SYSKEYDOWN || message==WM_SYSKEYUP || message==WM_SYSCHAR ||
+            message==WM_PASTE || message==WM_CUT || message==WM_CLEAR ||
+            message==WM_IME_STARTCOMPOSITION || message==WM_IME_COMPOSITION ||
+            message==WM_IME_ENDCOMPOSITION || message==WM_IME_CHAR;
+    }
+    bool allowsInput(UINT message) const
+    {return !inputMessage(message) || !acceptsInput || acceptsInput();}
+    void releaseFocus(HWND target)
+    {
+        keys={};
+        if(edit && GetFocus()==edit)
+        {
+            const HIMC context=ImmGetContext(edit);
+            if(context){ImmNotifyIME(context,NI_COMPOSITIONSTR,CPS_CANCEL,0);ImmReleaseContext(edit,context);}
+            SetFocus(target);
+        }
+    }
     static LRESULT CALLBACK proc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
         auto& composer = *reinterpret_cast<Composer*>(data);
         if(message==WM_SETFOCUS && composer.enter)composer.enter();
+        if(!composer.allowsInput(message)){composer.keys={};return 0;}
         if(selectAllChatText(window,message,wp))return 0;
         if (message == WM_GETDLGCODE)
         {

@@ -32,5 +32,31 @@ int main()
     assert(set.cycle(3,sources[3],2,3));assert(chat.bind(set.bindings[CyclingView],&sources[3],&chats[3]));assert(chats[1].conversations.at("").draft=="unsent A" && chats[3].conversations.at("").draft=="draft 3");
     assert(!chat.request(Kind::SendChat,set.bindings[CyclingView],sources[1],chats[1]));
     set.stopSlot(3);assert(!set.bindings[CyclingView].enabled && set.find(3)<0);assert(set.find(1)==0);
+    // Controller regression: a paused private editor loses its source while
+    // another account is ready. Continued input cannot become public Nearby.
+    CyclingMonitor paused;paused.pause();MonitorSet pausedSet;MonitorChat privateChat;
+    const std::string privateId="11111111-1111-1111-1111-111111111111";
+    chats[1].conversations.emplace(privateId,Conversation{privateId,"Private IM","private draft",Topic::Private,0});
+    assert(pausedSet.cycle(1,sources[1],0,1));
+    assert(privateChat.bind(pausedSet.bindings[CyclingView],&sources[1],&chats[1]));
+    assert(privateChat.select(pausedSet.bindings[CyclingView],sources[1],chats[1],privateId));
+    assert(cyclingComposerInputAllowed(paused,true,privateChat,pausedSet.bindings[CyclingView],sources[1],chats[1]));
+    sources[1].state=State::Disconnected;
+    assert(paused.action(false,true,50000)==CyclingMonitor::Action::Disable);
+    pausedSet.stop(CyclingView);privateChat.bind(pausedSet.bindings[CyclingView],nullptr,nullptr);
+    assert(pausedSet.bindings[CyclingView].slot==1 && !pausedSet.bindings[CyclingView].enabled);
+    assert(!cyclingComposerInputAllowed(paused,true,privateChat,pausedSet.bindings[CyclingView],sources[1],chats[1]));
+    assert(!privateChat.draft(pausedSet.bindings[CyclingView],sources[3],chats[3],"continued private text"));
+    assert(!privateChat.request(Kind::SendChat,pausedSet.bindings[CyclingView],sources[3],chats[3]));
+    assert(chats[1].conversations.at(privateId).draft=="private draft" && chats[3].conversations.at("").draft=="draft 3");
+    sources[1].state=State::Ready; // Reconnection alone must not re-enable it.
+    assert(paused.action(false,true,60000)==CyclingMonitor::Action::Disable);
+    paused.play(60000);assert(paused.action(false,true,60000)==CyclingMonitor::Action::Advance);
+    assert(pausedSet.cycle(3,sources[3],0,1));assert(privateChat.bind(pausedSet.bindings[CyclingView],&sources[3],&chats[3]));
+    assert(!cyclingComposerInputAllowed(paused,true,privateChat,pausedSet.bindings[CyclingView],sources[3],chats[3]));
+    paused.pause(); // Even after pausing again, old unfocused Enter is rejected.
+    assert(!cyclingComposerInputAllowed(paused,false,privateChat,pausedSet.bindings[CyclingView],sources[3],chats[3]));
+    assert(cyclingComposerInputAllowed(paused,true,privateChat,pausedSet.bindings[CyclingView],sources[3],chats[3]));
+    assert(paused.action(true,true,60001)==CyclingMonitor::Action::Keep);
     std::cout<<"Monitor tools: order/timing, typing pause, source-owned drafts, tiling and shared preview budgets passed.\n";
 }
