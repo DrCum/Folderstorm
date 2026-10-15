@@ -1154,6 +1154,9 @@ public:
 
     void post(ResponsePtr response, const LLSD& context, const LLSD& input) const override
     {
+        // Rotate stale login credentials before authorization, including legacy
+        // ordinary clients that do not yet send an expected session reference.
+        FSEventAPIBridge::instance().refreshSession();
         if (!mState->authorize(context))
         {
             fail_response(response, HTTP_UNAUTHORIZED, "Unauthorized");
@@ -1289,12 +1292,6 @@ bool FSEventAPIBridge::bindOnce()
     }
 
     auto state = std::make_shared<State>(std::move(token));
-    U16 port = 0;
-    LLHTTPNode& root = LLIOHTTPServer::create(
-        gAPRPoolp, *mPump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port, 75.f);
-    root.addNode(BRIDGE_PATH, new Node(state));
-    mPort = port;
-
     const std::string filename =
         "fs-mcp-" + std::to_string(LLApp::getPid()) + ".json";
     mDiscoveryPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, filename);
@@ -1307,6 +1304,12 @@ bool FSEventAPIBridge::bindOnce()
         mDiscoveryPath=ll_convert<std::string>((std::filesystem::path(directory)/ll_convert<std::wstring>(filename)).wstring());
     }
 #endif
+    U16 port = 0;
+    LLHTTPNode& root = LLIOHTTPServer::create(
+        gAPRPoolp, *mPump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port, 75.f);
+    root.addNode(BRIDGE_PATH, new Node(state));
+    mPort = port;
+
     mState = std::move(state);
     mSessionKey.clear();refreshSession();
     if (!writeDiscovery())
