@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fs-mcp/internal/discover"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"testing"
 )
 
@@ -88,5 +89,63 @@ func TestSocialDraftGetNeedsOriginatingRead(t *testing.T) {
 	r, _, _ := socialTestServer(api).chatDraftGet(context.Background(), nil, socialConversationArgs{ViewerSession: "social-login", ConversationID: "nearby"})
 	if !r.IsError || contains(api.opsCopy(), "FSChat.draftGet") {
 		t.Fatal("draft disclosed through state permission")
+	}
+}
+func TestSocialRegisteredAdapters(t *testing.T) {
+	api := &fakeAPI{status: socialStatus(`{"chat_read":"allow","chat_state":"allow","chat_send_im":"allow","chat_send_group":"allow","chat_send_conference":"allow","chat_send_nearby":"allow","friends_read":"allow","resident_search":"allow","profile_read":"allow","notifications_read":"allow","notification_review":"allow"}`, 1)}
+	server := mcp.NewServer(&mcp.Implementation{Name: "social-tests", Version: "1"}, nil)
+	state := socialTestServer(api)
+	registerSocial(server, state)
+	registerSocialEvents(server, state)
+	ct, st := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "social-client", Version: "1"}, nil)
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	resident := "11111111-1111-4111-8111-111111111111"
+	tests := []struct {
+		name, op string
+		args     map[string]any
+	}{
+		{"chat_conversations", "FSChat.conversations", map[string]any{}},
+		{"chat_history", "FSChat.history", map[string]any{"conversation_id": "nearby"}},
+		{"chat_search", "FSChat.search", map[string]any{"query": "hello"}},
+		{"friends_list", "FSContacts.friends", map[string]any{}},
+		{"resident_search", "FSContacts.search", map[string]any{"query": "hello"}},
+		{"resident_profile", "FSContacts.profile", map[string]any{"resident_id": resident, "grid": "grid"}},
+		{"chat_open_im", "FSChat.open", map[string]any{"resident_id": resident, "grid": "grid"}},
+		{"chat_draft_get", "FSChat.draftGet", map[string]any{"conversation_id": "nearby"}},
+		{"chat_draft_set", "FSChat.draftSet", map[string]any{"conversation_id": "nearby", "text": "draft", "expected_revision": "0"}},
+		{"chat_send", "FSChat.sendNearby", map[string]any{"conversation_id": "nearby", "topic": "nearby", "text": "hello", "client_request_id": "intent"}},
+		{"chat_mark_read", "FSChat.markRead", map[string]any{"conversation_id": resident}},
+		{"chat_close", "FSChat.close", map[string]any{"conversation_id": resident}},
+		{"events_poll", "FSEvents.poll", map[string]any{"topics": []string{"chat", "contacts", "notifications"}, "start": "retained"}},
+		{"notifications_list", "FSEvents.notifications", map[string]any{}},
+		{"notifications_get", "FSEvents.getNotification", map[string]any{"notification_id": resident}},
+		{"notification_review", "FSEvents.reviewNotification", map[string]any{"notification_id": resident}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.args["viewer_session"] = "social-login"
+			r := call(t, cs, test.name, test.args)
+			if r.IsError || !contains(api.opsCopy(), test.op) {
+				t.Fatalf("registered schema/adapter failed: %s", textOf(r))
+			}
+		})
+	}
+	tools, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		if tool.Annotations.OpenWorldHint == nil || !*tool.Annotations.OpenWorldHint {
+			t.Fatal("social effect mislabeled local-only", tool.Name)
+		}
 	}
 }

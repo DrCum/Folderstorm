@@ -271,6 +271,8 @@ public:
                     bool is_announcement = false,
                     bool keyword_alert_performed = false);
 
+    // Monotonic native ingress watermark, captured before translation yields.
+    static U64 assistantLiveSequence();
     void processAddingMessage(const LLUUID& session_id,
                     const std::string& from,
                     const LLUUID& from_id,
@@ -280,7 +282,8 @@ public:
                     U32 time_stamp,
                     // <FS:Ansariel> FS extra params
                     bool is_announcement,
-                    bool keyword_alert_performed = false);
+                    bool keyword_alert_performed = false,
+                    U64 live_sequence = 0);
 
     /**
      * Similar to addMessage(...) above but won't send a signal about a new message added

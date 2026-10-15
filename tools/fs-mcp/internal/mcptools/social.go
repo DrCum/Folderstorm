@@ -95,6 +95,7 @@ type socialPageArgs struct {
 	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional owning viewer process id"`
 	Limit         int    `json:"limit,omitempty" jsonschema:"1..100 entries; default 50"`
 	Offset        int    `json:"offset,omitempty" jsonschema:"0..2048 retained entry offset"`
+	SnapshotID    string `json:"snapshot_id,omitempty" jsonschema:"opaque friends snapshot_id for continuation pages"`
 }
 type socialConversationArgs struct {
 	ViewerSession  string `json:"viewer_session" jsonschema:"exact login reference from viewer_list"`
@@ -195,6 +196,12 @@ func (s *Server) friendsList(ctx context.Context, _ *mcp.CallToolRequest, a soci
 	p, valid := socialPage(a.Limit, a.Offset)
 	if !valid {
 		return errorResult("invalid_args", "invalid page bounds", nil)
+	}
+	if len(a.SnapshotID) > 128 || (a.Offset > 0 && a.SnapshotID == "") {
+		return errorResult("invalid_args", "friend continuation requires snapshot_id from the first page", nil)
+	}
+	if a.SnapshotID != "" {
+		p["snapshot_id"] = a.SnapshotID
 	}
 	return s.socialCall(ctx, a.ViewerSession, a.ViewerPID, "FSContacts", "friends", []string{"friends_read"}, p)
 }

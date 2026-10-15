@@ -17,5 +17,20 @@ int main()
     stream.append("oversized",Stream<std::string>::ByteCapacity+1);assert(stream.entries().empty() && stream.latest()==522);
     Draft draft;assert(setDraft(draft,0,"typing"));assert(!setDraft(draft,0,"overwrite"));assert(draft.text=="typing" && draft.revision==1);
     assert(!liveMessage(true,1,true) && !liveMessage(true,2,true) && !liveMessage(false,0,false) && liveMessage(false,0,true));
+    assert(!reopens(true,8,9) && !reopens(true,9,9) && reopens(true,10,9) && !reopens(false,10,9));
     assert(validText("hello") && !validText("") && !validText(std::string(1024,'x')) && !validText(std::string("x\0y",3)));
+    Cursors cursors;Reader reader;reader.binding="viewer-login-grid";reader.epoch=3;reader.topics={"chat"};reader.positions["chat"]=8;
+    cursors.save("opaque-a",reader,0);Reader output;
+    assert(cursors.read("opaque-a",reader.binding,3,{"chat"},1,output));
+    output.positions["chat"]=9;cursors.save("next",output,1);
+    output.positions["chat"]=520;cursors.save("latest",output,1);
+    assert(cursors.read("opaque-a",reader.binding,3,{"chat"},2,output) && output.positions["chat"]==8);
+    assert(cursors.read("next",reader.binding,3,{"chat"},2,output) && output.positions["chat"]==9);
+    assert(cursors.read("latest",reader.binding,3,{"chat"},2,output) && output.positions["chat"]==520);
+    assert(!cursors.read("unknown",reader.binding,3,{"chat"},2,output));
+    assert(!cursors.read("next","other-login",3,{"chat"},2,output));
+    assert(!cursors.read("next",reader.binding,4,{"chat"},2,output));
+    assert(!cursors.read("next",reader.binding,3,{"notifications"},2,output));
+    assert(!cursors.read("next",reader.binding,3,{"chat"},302,output));
+    cursors.clear();assert(!cursors.read("next",reader.binding,3,{"chat"},2,output));
 }

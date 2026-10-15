@@ -311,6 +311,7 @@ public:
 
     static bool hasPaymentInfoOnFile(const LLAvatarData* avatar_data);
 
+    fs_assistant::AsyncLoads<std::pair<LLUUID,EAvatarProcessorType>> mProfileLoads;
     static void requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type,
         fs_assistant::AsyncTaskPtr task, LLUUID account, LLUUID login);
 

@@ -176,7 +176,7 @@ void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequestMessage(const LLUUI
 void LLAvatarPropertiesProcessor::initAgentProfileCapRequest(const LLUUID& avatar_id, const std::string& cap_url, EAvatarProcessorType type)
 {
     addPendingRequest(avatar_id, type);
-    const auto task=fs_assistant::asyncTask();
+    const auto task=mProfileLoads.begin({avatar_id,type});
     const auto account=gAgentID,login=gAgent.getSessionID();
     LLCoros::instance().launch("requestAgentUserInfoCoro",
         [cap_url, avatar_id, type, task, account, login]() { requestAvatarPropertiesCoro(cap_url, avatar_id, type, task, account, login); });
@@ -327,10 +327,11 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
     std::string finalUrl = cap_url + "/" + avatar_id.asString();
 
     if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskSubmit(task))
-    {inst.removePendingRequest(avatar_id,type);return;}
+    {if(inst.mProfileLoads.finish({avatar_id,type},task))inst.removePendingRequest(avatar_id,type);return;}
     LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
 
     // Response is being processed, no longer pending is required
+    if(!inst.mProfileLoads.finish({avatar_id,type},task))return;
     inst.removePendingRequest(avatar_id, type);
     if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskAllowed(task))return;
 
