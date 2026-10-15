@@ -67,6 +67,7 @@ void dialog_refresh_all();
 static const U32 LL_ASSET_UPLOAD_TIMEOUT_SEC = 60;
 namespace {
 std::map<const LLResourceUploadInfo*,std::pair<LLUUID,unsigned>> sPendingInventoryUploads;
+fs_content::PendingSourceOwners<LLUUID> sPendingLegacyInventoryUploads;
 struct PendingInventoryUpload
 {
     explicit PendingInventoryUpload(const LLResourceUploadInfo::ptr_t& upload):info(upload.get())
@@ -77,9 +78,21 @@ struct PendingInventoryUpload
 }
 bool LLViewerAssetUpload::hasPendingInventoryUpload(const LLUUID& itemId,const LLResourceUploadInfo* except)
 {
+    if(sPendingLegacyInventoryUploads.has(itemId))return true;
     for(const auto& upload:sPendingInventoryUploads)
         if(upload.first!=except && upload.second.first==itemId)return true;
     return false;
+}
+std::shared_ptr<void> LLViewerAssetUpload::trackLegacyInventoryUpload(const LLUUID& itemId)
+{
+    if(itemId.isNull())return {};
+    sPendingLegacyInventoryUploads.begin(itemId);
+    return std::shared_ptr<void>(new LLUUID(itemId), [](void* raw)
+    {
+        auto* id=static_cast<LLUUID*>(raw);
+        sPendingLegacyInventoryUploads.end(*id);
+        delete id;
+    });
 }
 
 LLResourceUploadInfo::LLResourceUploadInfo(LLTransactionID transactId,

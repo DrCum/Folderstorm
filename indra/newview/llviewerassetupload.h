@@ -300,6 +300,9 @@ class LLViewerAssetUpload
 {
 public:
     static bool hasPendingInventoryUpload(const LLUUID& itemId, const LLResourceUploadInfo* except = nullptr);
+    // Legacy asset-storage callbacks can outlive the native editor. The lease
+    // prevents another source writer until that callback has finished.
+    static std::shared_ptr<void> trackLegacyInventoryUpload(const LLUUID& itemId);
 
     static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo);
 

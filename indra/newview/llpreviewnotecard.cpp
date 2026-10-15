@@ -596,10 +596,12 @@ struct LLSaveNotecardInfo
     LLUUID mObjectUUID;
     LLTransactionID mTransactionID;
     LLPointer<LLInventoryItem> mCopyItem;
+    std::shared_ptr<void> mPendingSource;
     LLSaveNotecardInfo(LLPreviewNotecard* self, const LLUUID& item_id, const LLUUID& object_id,
                        const LLTransactionID& transaction_id, LLInventoryItem* copyitem) :
         mSelf(self), mItemUUID(item_id), mObjectUUID(object_id), mTransactionID(transaction_id), mCopyItem(copyitem)
     {
+        if(object_id.isNull())mPendingSource=LLViewerAssetUpload::trackLegacyInventoryUpload(item_id);
     }
 };
 

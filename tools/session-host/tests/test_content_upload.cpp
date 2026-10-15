@@ -6,6 +6,10 @@
 int main()
 {
  using namespace fs_content;using namespace fs_assistant;
+ PendingSourceOwners<std::string> legacy;
+ legacy.begin("item");legacy.begin("item");assert(legacy.has("item"));
+ legacy.end("item");assert(legacy.has("item")); // another callback still owns it
+ legacy.end("item");assert(!legacy.has("item"));
  // Hidden, pristine source does not imply dormant ownership: an include fetch
  // or external watcher can still submit the old buffer later.
  NativeSourceOwner dormant;assert(!nativeSourceBusy(dormant));

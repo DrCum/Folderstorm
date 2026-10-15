@@ -17,6 +17,16 @@ class ContentBoundaries(unittest.TestCase):
         service = (ROOT / "fscontentlistener.cpp").read_text()
         self.assertEqual(service.count("->assistantSourceBusy()"), 4)
 
+    def test_legacy_native_save_holds_item_lease_until_callback_cleanup(self):
+        card = (ROOT / "llpreviewnotecard.cpp").read_text()
+        context = card[card.index("struct LLSaveNotecardInfo"):card.index("void LLPreviewNotecard::finishInventoryUpload")]
+        self.assertIn("std::shared_ptr<void> mPendingSource", context)
+        self.assertIn("LLViewerAssetUpload::trackLegacyInventoryUpload(item_id)", context)
+        completion = card[card.index("void LLPreviewNotecard::onSaveComplete"):card.index("bool LLPreviewNotecard::handleSaveChangesDialog")]
+        self.assertLess(completion.index("updateServer(false)"), completion.index("delete info"))
+        uploads = (ROOT / "llviewerassetupload.cpp").read_text()
+        self.assertIn("if(sPendingLegacyInventoryUploads.has(itemId))return true", uploads)
+
     def test_confirmed_rich_bytes_are_evicted_and_not_exported_generically(self):
         service = (ROOT / "fscontentlistener.cpp").read_text()
         self.assertIn("if(confirmed && write->notecard)LLFileSystem::removeFile(asset,LLAssetType::AT_NOTECARD)", service)

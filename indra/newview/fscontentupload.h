@@ -2,7 +2,16 @@
 #ifndef FS_CONTENT_UPLOAD_H
 #define FS_CONTENT_UPLOAD_H
 #include <string>
+#include <map>
 namespace fs_content {
+template<class Key> class PendingSourceOwners
+{
+public:
+    void begin(const Key& id){++counts[id];}
+    void end(const Key& id){auto found=counts.find(id);if(found!=counts.end() && !--found->second)counts.erase(found);}
+    bool has(const Key& id)const{return counts.find(id)!=counts.end();}
+private: std::map<Key,unsigned> counts;
+};
 struct NativeSourceOwner
 {
     bool missingCore=false, pendingUploads=false, dirty=false, externalWatcher=false;
