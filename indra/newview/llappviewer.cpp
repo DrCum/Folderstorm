@@ -1603,6 +1603,7 @@ bool LLAppViewer::doFrame()
 {
     resumeMainloopTimeout("Main:doFrameStart");
     FSSessionWorker::tick();
+    if(FSEventAPIBridge::instanceExists())FSEventAPIBridge::instance().refreshSession();
 #ifdef LL_DISCORD
     {
         LL_PROFILE_ZONE_NAMED("discord_callbacks");

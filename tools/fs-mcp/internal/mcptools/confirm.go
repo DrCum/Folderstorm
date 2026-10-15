@@ -12,19 +12,23 @@ import (
 )
 
 type storedPlan struct {
-	API       string
-	Op        string
-	Params    map[string]any
-	ViewerPID int
-	Class     string
-	Message   string
-	Expires   time.Time
+	API           string
+	Op            string
+	Params        map[string]any
+	ViewerPID     int
+	ViewerSession string
+	TargetKey     string
+	Managed       bool
+	Class         string
+	Message       string
+	Expires       time.Time
 }
 
 type confirmArgs struct {
-	PlanID    string `json:"plan_id" jsonschema:"plan id returned when confirmation could not be prompted"`
-	Confirm   *bool  `json:"confirm,omitempty" jsonschema:"approve the plan; defaults to true"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	PlanID        string `json:"plan_id" jsonschema:"plan id returned when confirmation could not be prompted"`
+	Confirm       *bool  `json:"confirm,omitempty" jsonschema:"approve the plan; defaults to true"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type confirmState struct {
@@ -32,6 +36,7 @@ type confirmState struct {
 }
 
 func (s *Server) confirmAction(ctx context.Context, _ *mcp.CallToolRequest, args confirmArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.PlanID == "" {
 		return errorResult("invalid_args", "plan_id is required", nil)
 	}
@@ -58,8 +63,8 @@ func (s *Server) confirmAction(ctx context.Context, _ *mcp.CallToolRequest, args
 			"op":           plan.Op,
 		})
 	}
-	if args.ViewerPID != 0 {
-		plan.ViewerPID = args.ViewerPID
+	if args.ViewerPID != 0 && args.ViewerPID != plan.ViewerPID {
+		return errorResult("session_changed", "A confirmation cannot change its viewer", nil)
 	}
 	if res, payload, err, blocked := s.blockedByCurrentPolicy(ctx, plan, args.PlanID); blocked {
 		return res, payload, err
@@ -68,9 +73,12 @@ func (s *Server) confirmAction(ctx context.Context, _ *mcp.CallToolRequest, args
 }
 
 func (s *Server) runConfirmed(ctx context.Context, plan storedPlan) (*mcp.CallToolResult, any, error) {
-	_, api, errRes := s.resolve(plan.ViewerPID)
+	inst, api, errRes := s.resolve(ctx, plan.ViewerPID)
 	if errRes != nil {
 		return errRes, nil, nil
+	}
+	if plan.TargetKey != "" && inst.BindingKey() != plan.TargetKey {
+		return errorResult("session_changed", "The preparing login changed; request a fresh plan", nil)
 	}
 	params := map[string]any{}
 	for key, value := range plan.Params {
@@ -84,14 +92,24 @@ func (s *Server) gateConfirm(ctx context.Context, req *mcp.CallToolRequest, view
 	if len(req.Params.InputResponses) > 0 {
 		return s.finishConfirmElicitation(ctx, req)
 	}
+	inst, _, targetError := s.resolve(ctx, viewerPID)
+	if targetError != nil {
+		return targetError, nil, nil
+	}
+	if inst.Managed {
+		return errorResult("unsupported_feature", "Managed characters require native permission/approval support", nil)
+	}
 	plan := storedPlan{
-		API:       apiName,
-		Op:        op,
-		Params:    params,
-		ViewerPID: viewerPID,
-		Class:     classForOp(apiName, op),
-		Message:   message,
-		Expires:   time.Now().Add(10 * time.Minute),
+		API:           apiName,
+		Op:            op,
+		Params:        params,
+		ViewerPID:     inst.PID,
+		ViewerSession: inst.ViewerSession,
+		TargetKey:     inst.BindingKey(),
+		Managed:       inst.Managed,
+		Class:         classForOp(apiName, op),
+		Message:       message,
+		Expires:       time.Now().Add(10 * time.Minute),
 	}
 	planID := newPlanID()
 	s.mu.Lock()
@@ -162,11 +180,15 @@ func (s *Server) blockedByCurrentPolicy(ctx context.Context, plan storedPlan, pl
 	if class == "" {
 		return nil, nil, nil, false
 	}
-	inst, api, errRes := s.resolve(plan.ViewerPID)
+	inst, api, errRes := s.resolve(ctx, plan.ViewerPID)
 	if errRes != nil {
 		return errRes, nil, nil, true
 	}
-	policy, err := s.loadPolicy(ctx, inst.PID, api)
+	if plan.TargetKey != "" && inst.BindingKey() != plan.TargetKey {
+		r, p, e := errorResult("session_changed", "The preparing login changed", nil)
+		return r, p, e, true
+	}
+	policy, err := s.loadPolicy(ctx, inst.BindingKey(), api)
 	if err != nil {
 		res, payload, callErr := apiError(err)
 		return res, payload, callErr, true
@@ -186,6 +208,14 @@ func (s *Server) prunePlansLocked() {
 	for id, plan := range s.plans {
 		if now.After(plan.Expires) {
 			delete(s.plans, id)
+		}
+	}
+	if len(s.plans) >= 256 {
+		for id := range s.plans {
+			delete(s.plans, id)
+			if len(s.plans) < 128 {
+				break
+			}
 		}
 	}
 }

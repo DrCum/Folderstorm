@@ -43,6 +43,7 @@ public:
     // Disable rejects every request and deletes the discovery file. It does
     // not unbind the socket.
     bool applyEnabled(bool enabled);
+    void refreshSession(); // Main-thread login/connection identity; revokes old work.
     void stop();
     bool isRunning() const;
     int getPort() const;
@@ -83,6 +84,7 @@ private:
     std::string mDiscoveryPath;
     int mPort = 0;
     std::string mLastError;
+    std::string mSessionKey, mViewerSession;
 };
 
 #endif
