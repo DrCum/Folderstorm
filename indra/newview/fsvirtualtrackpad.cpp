@@ -535,6 +535,12 @@ void FSVirtualTrackpad::convertNormalizedToPixelPos(F32 x, F32 y, F32 z, S32 *va
     *valZ = ll_round(z / ThirdAxisQuantization);
 }
 
+void FSVirtualTrackpad::onMouseCaptureLost()
+{
+    LLUICtrl::onMouseCaptureLost();
+    if (mDragEndCallback) mDragEndCallback();
+}
+
 bool FSVirtualTrackpad::handleMouseUp(S32 x, S32 y, MASK mask)
 {
     if (hasMouseCapture())

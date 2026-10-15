@@ -14,10 +14,131 @@
  * $/LicenseInfo$
  */
 #include "../fssharedposemodel.h"
+#include "../fssharedposeeditqueue.h"
 #include <cassert>
 #include <limits>
 
 using namespace FSSharedPose;
+
+void previewBeforeReservation()
+{
+    const Pose initial{{"mHead", {}}};
+    OwnerSession owner;
+    owner.start("owner", "preview", initial);
+    owner.grant("editor", "token", 0);
+    std::deque<EditGesture> queue;
+    float localPosition = 0.f;
+    for (int frame = 0; frame < 300; ++frame)
+    {
+        auto& gesture = appendGesture(queue, {"mHead"}, [&] { localPosition += 1.f; });
+        gesture.asked = true;
+        gesture.preview();
+        assert(localPosition == static_cast<float>(frame + 1));
+        assert(queue.size() == 1 && owner.pose() == initial);
+    }
+    finishGesture(queue);
+    assert(queue.front().inputComplete);
+
+    // The owner moved before granting the reservation. Replay the intent once
+    // against that canonical pose, rather than applying the preview twice.
+    Pose canonical = initial;
+    canonical.at("mHead").transform[4] = 10.f;
+    assert(owner.acquire("owner", "", "owner-move", {"mHead"}, 0).granted);
+    assert(owner.apply("owner", "", "owner-move", canonical, true, 0));
+    assert(owner.acquire("editor", "token", "drag", queue.front().joints, 1).granted);
+    localPosition = owner.pose().at("mHead").transform[4];
+    queue.front().granted = true;
+    queue.front().preview();
+    assert(localPosition == 310.f && queue.front().actions.empty());
+    canonical.at("mHead").transform[4] = localPosition;
+    assert(owner.apply("editor", "token", "drag", canonical, true, 1, true, 1));
+    assert(owner.pose() == canonical);
+    assert(owner.historyJoints("editor", false) == JointSet{"mHead"});
+}
+
+void rapidRegrabGroupsWholeDrags()
+{
+    std::deque<EditGesture> queue;
+    float localPosition = 0.f;
+    auto& first = appendGesture(queue, {"mHead"}, [&] { localPosition += 1.f; });
+    first.preview();
+    first.asked = first.granted = true;
+    finishGesture(queue);
+    first.finished = true; // The final update is waiting for its acknowledgment.
+
+    for (int frame = 0; frame < 120; ++frame)
+    {
+        auto& second = appendGesture(queue, {"mHead"}, [&] { localPosition += 1.f; });
+        second.preview();
+        assert(queue.size() == 2 && second.actions.size() == static_cast<std::size_t>(frame + 1));
+        assert(localPosition == static_cast<float>(frame + 2));
+    }
+    finishGesture(queue);
+    assert(queue.back().inputComplete);
+
+    // A quick release and re-grab stays a new gesture even between idle ticks.
+    auto& third = appendGesture(queue, {"mHead"}, [&] { localPosition += 1.f; });
+    third.preview();
+    finishGesture(queue);
+    assert(queue.size() == 3 && queue.back().actions.size() == 1);
+
+    queue.pop_front();
+    localPosition = 1.f;
+    queue.front().asked = queue.front().granted = true;
+    queue.front().preview();
+    assert(localPosition == 121.f && queue.front().actions.empty());
+    queue.pop_front();
+    queue.front().granted = true;
+    queue.front().preview();
+    assert(localPosition == 122.f);
+    queue.pop_front();
+    assert(queue.empty());
+}
+
+void reservationScopeAndLiveUpdates()
+{
+    std::deque<EditGesture> queue;
+    int calls = 0;
+    auto& first = appendGesture(queue, {"mWristLeft"}, [&] { ++calls; });
+    first.preview();
+    appendGesture(queue, {"mWristRight"}, [&] { ++calls; }).preview();
+    assert(queue.size() == 1 && first.joints.size() == 2 && calls == 2);
+    first.asked = true;
+    calls = 0; // Restore the canonical pose before accepting the grant.
+    first.granted = true;
+    first.preview();
+    assert(calls == 2 && first.actions.empty());
+    appendGesture(queue, {"mWristLeft"}, [&] { ++calls; }).preview();
+    assert(queue.size() == 1 && first.actions.empty() && calls == 3);
+
+    // A new joint cannot expand an already requested reservation. Its entire
+    // gesture waits together and previews while the old scope is finalized.
+    appendGesture(queue, {"mHead"}, [&] { ++calls; }).preview();
+    appendGesture(queue, {"mHead", "mWristLeft"}, [&] { ++calls; }).preview();
+    assert(queue.size() == 2 && first.inputComplete && calls == 5);
+    assert(queue.back().actions.size() == 2 && queue.back().joints.size() == 2);
+}
+
+void newerPreviewsSurviveOlderConfirmations()
+{
+    std::deque<EditGesture> queue(3);
+    Joint first, second, third, other;
+    first.transform[4] = 1.f;
+    second.transform[4] = 2.f;
+    third.transform[4] = 3.f;
+    other.transform[4] = 4.f;
+    queue[0].latest = {{"mHead", first}};
+    queue[1].latest = {{"mHead", second}, {"mWristLeft", other}};
+    queue[2].latest = {{"mHead", third}};
+    const Pose expected{{"mHead", third}, {"mWristLeft", other}};
+    assert(previewPose(queue) == expected);
+    queue.pop_front();
+    assert(previewPose(queue) == expected);
+    queue.pop_front();
+    assert(previewPose(queue) == Pose({{"mHead", third}}));
+    queue.clear();
+    assert(previewPose(queue).empty());
+}
 
 void unchangedPoseUpdates()
 {
@@ -65,6 +186,10 @@ void unchangedPoseUpdates()
 
 int main()
 {
+    previewBeforeReservation();
+    rapidRegrabGroupsWholeDrags();
+    reservationScopeAndLiveUpdates();
+    newerPreviewsSurviveOlderConfirmations();
     unchangedPoseUpdates();
     Pose pose{{"mWristLeft", {}}, {"mWristRight", {}}, {"mHead", {}}};
     pose["mHead"].worldLocked = true;

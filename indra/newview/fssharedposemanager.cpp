@@ -287,6 +287,7 @@ void FSSharedPoseManager::stopRemote(const LLUUID& id)
     mRemotes.erase(id);
     mApprovals.erase(id);
     mWorks.erase(id);
+    mBlockedEdits.erase(id);
     Applying guard(mApplying);
     mAnimator.stopPosingAvatar(avatarFor(id));
 }
@@ -298,8 +299,9 @@ void FSSharedPoseManager::leave(const LLUUID& id)
     LLSD data = message("leave", approval->second.session.asString());
     data["g"] = approval->second.token;
     send(id, data);
+    complete(id, false);
     mApprovals.erase(id);
-    mWorks.erase(id);
+    mBlockedEdits.erase(id);
     mStatus = "Editing session ended";
 }
 void FSSharedPoseManager::stopAll()
@@ -315,7 +317,7 @@ void FSSharedPoseManager::stopAll()
     mRequests.clear();
     mOutgoingRequests.clear();
     mWorks.clear();
-    mDeferred.clear();
+    mBlockedEdits.clear();
     mAssembler.clear();
     Applying guard(mApplying);
     if (owned) mAnimator.stopPosingAvatar(avatarFor(gAgentID));
@@ -333,16 +335,8 @@ LLSD FSSharedPoseManager::workMessage(const Work& work, const std::string& type)
 bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& joints, std::function<void()> action)
 {
     if (mApplying || !isShared(id)) return false;
-    if (!canEdit(id) || joints.empty()) return true;
-    auto found = mWorks.find(id);
-    if (found != mWorks.end() && found->second.asked &&
-        (found->second.finished || !std::includes(found->second.joints.begin(), found->second.joints.end(), joints.begin(), joints.end())))
-    {
-        if (mDeferred.size() < 64) mDeferred.push_back({id, joints, std::move(action)});
-        found->second.forceFinish = true;
-        return true;
-    }
-    auto& work = mWorks[id];
+    if (!canEdit(id) || joints.empty() || mBlockedEdits.count(id)) return true;
+    auto& work = FSSharedPose::appendGesture(mWorks[id], joints, std::move(action));
     if (work.avatar.isNull())
     {
         work.avatar = id;
@@ -351,43 +345,76 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
         else { work.session = mApprovals.at(id).session; work.token = mApprovals.at(id).token; }
         mStatus = "Reserving joints";
     }
-    if (!work.asked) work.joints.insert(joints.begin(), joints.end());
-    if (work.actions.size() < 256) work.actions.push_back(std::move(action));
-    if (work.granted) execute(work);
+    execute(work);
     return true;
+}
+
+void FSSharedPoseManager::finishEdit(const LLUUID& id)
+{
+    const auto found = mWorks.find(id);
+    if (found != mWorks.end()) FSSharedPose::finishGesture(found->second);
+    mBlockedEdits.erase(id);
 }
 
 void FSSharedPoseManager::execute(Work& work)
 {
     Applying guard(mApplying);
-    auto actions = std::move(work.actions);
-    work.actions.clear();
-    for (const auto& action : actions) action();
+    work.preview();
     work.latest = subset(mAnimator.captureSharedPose(avatarFor(work.avatar)), work.joints);
 }
 
-void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& pose)
+void FSSharedPoseManager::restorePreviews(const LLUUID& id)
+{
+    const auto found = mWorks.find(id);
+    if (found != mWorks.end()) apply(id, FSSharedPose::previewPose(found->second));
+}
+
+bool FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& pose)
 {
     auto found = mWorks.find(id);
-    if (found == mWorks.end() || found->second.finished) return;
-    auto& work = found->second;
-    if (subset(pose, work.joints).size() != work.joints.size()) { complete(id, false); return; }
+    if (found == mWorks.end() || found->second.front().finished) return false;
+    auto& work = found->second.front();
+    if (work.granted) return true;
+    if (subset(pose, work.joints).size() != work.joints.size()) return false;
     apply(id, subset(pose, work.joints));
     work.lastSent = subset(pose, work.joints);
     work.granted = true;
     mStatus = "Editing pose";
     work.renewed = now();
     if (!work.history) execute(work);
+    restorePreviews(id);
+    return true;
 }
 
 void FSSharedPoseManager::complete(const LLUUID& id, bool accepted)
 {
     auto found = mWorks.find(id);
     if (found == mWorks.end()) return;
-    if (!accepted) mStatus = "Edit cancelled; pose refreshed";
-    if (id != gAgentID && mRemotes.count(id)) apply(id, subset(mRemotes.at(id).pose, found->second.joints));
-    else if (id == gAgentID && mOwner.active()) apply(id, subset(mOwner.pose(), found->second.joints));
-    mWorks.erase(found);
+    auto joints = found->second.front().joints;
+    if (!accepted)
+    {
+        mStatus = "Edit cancelled; pose refreshed";
+        // A refused drag must also cancel its queued previews and network work.
+        for (const auto& work : found->second)
+        {
+            joints.insert(work.joints.begin(), work.joints.end());
+            mQueue.erase(std::remove_if(mQueue.begin(), mQueue.end(), [&](const Queued& packet)
+                { return packet.target == id && packet.data["l"].asUUID() == work.lease; }), mQueue.end());
+        }
+        const auto& work = found->second.front();
+        if (id == gAgentID) mOwner.release(gAgentID.asString(), work.lease.asString());
+        else if (work.asked) send(id, workMessage(work, "release"));
+        mWorks.erase(found);
+        mBlockedEdits.insert(id);
+    }
+    else
+    {
+        found->second.pop_front();
+        if (found->second.empty()) mWorks.erase(found);
+    }
+    if (id != gAgentID && mRemotes.count(id)) apply(id, subset(mRemotes.at(id).pose, joints));
+    else if (id == gAgentID && mOwner.active()) apply(id, subset(mOwner.pose(), joints));
+    restorePreviews(id);
 }
 
 bool FSSharedPoseManager::canHistory(const LLUUID& id, bool redo) const
@@ -404,6 +431,7 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
     work.avatar = id;
     work.lease = LLUUID::generateNewID();
     work.history = redo ? 2 : 1;
+    work.inputComplete = true;
     work.asked = true;
     work.requested = now();
     if (id == gAgentID)
@@ -427,7 +455,7 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
         LLSD data = workMessage(work, "history");
         data["redo"] = redo;
         send(id, data);
-        mWorks.emplace(id, std::move(work));
+        mWorks[id].push_back(std::move(work));
     }
     return true;
 }
@@ -548,18 +576,24 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         remote.revision = static_cast<U32>(revision);
         auto display = *pose;
         const auto work = mWorks.find(sender);
-        if (work != mWorks.end() && work->second.granted)
-            for (const auto& joint : work->second.joints) display.erase(joint);
+        if (work != mWorks.end())
+            for (const auto& gesture : work->second)
+                for (const auto& joint : gesture.joints) display.erase(joint);
         apply(sender, display);
         return;
     }
     if (type == "locked" || type == "busy" || type == "ack")
     {
         const auto found = mWorks.find(sender);
-        if (found == mWorks.end() || found->second.session != session || found->second.lease != data["l"].asUUID()) return;
-        if (type == "busy") { complete(sender, false); mStatus = "Joint reserved by " + nameFor(data["by"].asUUID()); return; }
+        if (found == mWorks.end() || found->second.front().session != session || found->second.front().lease != data["l"].asUUID()) return;
         const auto pose = readPose(data["p"]);
-        if (type == "locked") { if (pose) grantWork(sender, *pose); else complete(sender, false); return; }
+        if (type == "busy")
+        {
+            if (pose && mRemotes.count(sender))
+                for (const auto& item : *pose) mRemotes.at(sender).pose[item.first] = item.second;
+            complete(sender, false); mStatus = "Joint reserved by " + nameFor(data["by"].asUUID()); return;
+        }
+        if (type == "locked") { if (!pose || !grantWork(sender, *pose)) complete(sender, false); return; }
         if (mApprovals.count(sender)) { mApprovals.at(sender).undo = data["u"].asBoolean(); mApprovals.at(sender).redo = data["d"].asBoolean(); }
         if (pose && mRemotes.count(sender)) for (const auto& item : *pose) mRemotes.at(sender).pose[item.first] = item.second;
         if (data["f"].asBoolean() || !data["ok"].asBoolean()) complete(sender, data["ok"].asBoolean());
@@ -596,8 +630,8 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         const auto acquired = mOwner.acquire(editor, token, lease, joints, time);
         LLSD reply = message(acquired.granted ? "locked" : "busy", mOwner.session());
         reply["l"] = data["l"];
-        if (acquired.granted) reply["p"] = poseData(subset(mOwner.pose(), joints));
-        else reply["by"] = LLUUID(acquired.occupiedBy);
+        reply["p"] = poseData(subset(mOwner.pose(), joints));
+        if (!acquired.granted) reply["by"] = LLUUID(acquired.occupiedBy);
         send(sender, reply);
         return;
     }
@@ -687,9 +721,15 @@ void FSSharedPoseManager::tick()
         ++it;
     }
     std::vector<std::pair<LLUUID, bool>> done;
+    std::string busyStatus;
+    if (!gFocusMgr.getMouseCapture())
+    {
+        for (auto& entry : mWorks) FSSharedPose::finishGesture(entry.second);
+        mBlockedEdits.clear();
+    }
     for (auto& entry : mWorks)
     {
-        auto& work = entry.second;
+        auto& work = entry.second.front();
         if (!canEdit(entry.first)) { done.emplace_back(entry.first, false); continue; }
         if (!work.asked)
         {
@@ -697,8 +737,11 @@ void FSSharedPoseManager::tick()
             if (entry.first == gAgentID)
             {
                 const auto result = mOwner.acquire(gAgentID.asString(), "", work.lease.asString(), work.joints, time);
-                if (result.granted) grantWork(entry.first, mOwner.pose());
-                else { mStatus = "Joint reserved by " + nameFor(LLUUID(result.occupiedBy)); done.emplace_back(entry.first, true); }
+                if (result.granted)
+                {
+                    if (!grantWork(entry.first, mOwner.pose())) { done.emplace_back(entry.first, false); continue; }
+                }
+                else { busyStatus = "Joint reserved by " + nameFor(LLUUID(result.occupiedBy)); done.emplace_back(entry.first, false); }
             }
             else
             {
@@ -715,7 +758,7 @@ void FSSharedPoseManager::tick()
         }
         if (work.finished) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
         if (!work.granted) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
-        const bool final = work.forceFinish || !gFocusMgr.getMouseCapture();
+        const bool final = work.inputComplete;
         if (!work.latest.empty() && (final || (work.latest != work.lastSent && work.sent + .2 <= time)))
         {
             if (entry.first == gAgentID)
@@ -736,11 +779,7 @@ void FSSharedPoseManager::tick()
         }
     }
     for (const auto& item : done) complete(item.first, item.second);
-    if (!mDeferred.empty() && !mWorks.count(mDeferred.front().avatar))
-    {
-        auto deferred = std::move(mDeferred.front()); mDeferred.pop_front();
-        edit(deferred.avatar, deferred.joints, std::move(deferred.action));
-    }
+    if (!busyStatus.empty()) mStatus = busyStatus;
     if (mLastPublish + .2 <= time) { publish(); mLastPublish = time; }
     if (mOwner.active() && mLastHeartbeat + 2. <= time)
     {
