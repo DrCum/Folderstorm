@@ -140,6 +140,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 	registerAppearance(s, state, readOnly, destructive)
 	registerCamera(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{Name: "assistant_operation_status", Description: "Read a source-bound asynchronous operation receipt. Submitted work may still complete; never replay an uncertain mutation.", Annotations: withTitle(readOnly, "Assistant operation status")}, state.assistantOperationStatus)
+	registerWorld(s, state, readOnly)
 	registerWorkspaces(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "confirm_action",
