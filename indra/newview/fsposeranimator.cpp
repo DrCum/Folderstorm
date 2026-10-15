@@ -26,13 +26,80 @@
 
 #include <boost/algorithm/string.hpp>
 #include "fsposeranimator.h"
+#include "fsposepolicy.h"
 #include "llcharacter.h"
 #include "llagent.h"
+#include "llvoavatarself.h"
 #include "llagentcamera.h"
 #include "fsposingmotion.h"
 #include "fssharedposemanager.h"
 
 std::map<LLUUID, LLAssetID> FSPoserAnimator::sAvatarIdToRegisteredAnimationId;
+
+LLUUID FSPoserAnimator::startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void()> stopped)
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID || avatar->isControlAvatar() ||
+       !isAvatarSafeToUse(avatar) || isPosingAvatar(avatar) || FSSharedPoseManager::instance().isShared(gAgentID) ||
+       !allowed || !allowed())return LLUUID::null;
+    const auto existing=mAssistantMotions.find(gAgentID);
+    if(existing!=mAssistantMotions.end())
+    {avatar->removeMotion(existing->second);mAssistantMotions.erase(existing);}
+    const LLUUID id=LLUUID::generateNewID();
+    if(!avatar->registerMotion(id,FSPosingMotion::create))return LLUUID::null;
+    auto* motion=dynamic_cast<FSPosingMotion*>(avatar->createMotion(id));
+    if(!motion)return LLUUID::null;
+    motion->configureAssistantRotations(std::move(allowed),std::move(stopped));
+    mAssistantMotions[gAgentID]=id;
+    if(!avatar->startMotion(id)){avatar->removeMotion(id);mAssistantMotions.erase(gAgentID);return LLUUID::null;}
+    return id;
+}
+bool FSPoserAnimator::assistantPoseActive(LLVOAvatar* avatar,const LLUUID& id) const
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID || !isAvatarSafeToUse(avatar))return false;
+    const auto found=mAssistantMotions.find(gAgentID);
+    if(found==mAssistantMotions.end() || found->second!=id)return false;
+    const auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(id));
+    return motion && motion->assistantRotationOnly() && !motion->isStopped();
+}
+bool FSPoserAnimator::updateAssistantPose(LLVOAvatar* avatar,const LLUUID& id,
+    const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed)
+{
+    if(!assistantPoseActive(avatar,id) || isPosingAvatar(avatar) || FSSharedPoseManager::instance().isShared(gAgentID))return false;
+    if(rotations.size()>fs_pose::jointLimit)return false;
+    for(const auto& rotation:rotations)
+    {
+        fs_pose::Rotation bounded{{rotation.second.mQ[0],rotation.second.mQ[1],rotation.second.mQ[2],rotation.second.mQ[3]}};
+        if(!fs_pose::jointName(rotation.first) || !fs_pose::normalize(bounded))return false;
+        const auto* joint=getPoserJointByName(rotation.first);
+        if(!joint || joint->boneType()==WHOLEAVATAR || joint->boneType()==COL_VOLUMES)return false;
+    }
+    return static_cast<FSPosingMotion*>(avatar->findMotion(id))->setAssistantRotations(rotations,std::move(allowed));
+}
+bool FSPoserAnimator::stopAssistantPose(LLVOAvatar* avatar,const LLUUID& id)
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID)return false;
+    const auto found=mAssistantMotions.find(gAgentID);
+    if(found==mAssistantMotions.end() || found->second!=id)return false;
+    // Private onDeactivate releases ROT usage only; it never resets skeleton
+    // position/scale or the native manual Poser motion/history.
+    avatar->stopMotion(id,true);avatar->removeMotion(id);mAssistantMotions.erase(found);return true;
+}
+FSSharedPose::Pose FSPoserAnimator::captureAssistantPose(LLVOAvatar* avatar,const LLUUID& id) const
+{
+    FSSharedPose::Pose result;
+    if(!assistantPoseActive(avatar,id))return result;
+    auto* motion=static_cast<FSPosingMotion*>(avatar->findMotion(id));
+    for(const auto& definition:PoserJoints)
+    {
+        if(definition.boneType()==WHOLEAVATAR || definition.boneType()==COL_VOLUMES)continue;
+        const auto* joint=motion->getJointPoseByJointName(definition.jointName());if(!joint)continue;
+        const auto q=joint->getTargetRotation();FSSharedPose::Joint value;
+        value.transform[0]=q.mQ[0];value.transform[1]=q.mQ[1];value.transform[2]=q.mQ[2];value.transform[3]=q.mQ[3];
+        value.enabled=(joint->getJointState()->getUsage() & LLJointState::ROT)!=0;
+        result.emplace(definition.jointName(),value);
+    }
+    return result;
+}
 
 FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
 {

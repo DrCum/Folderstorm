@@ -69,6 +69,26 @@ LLMotion::LLMotionInitStatus FSPosingMotion::onInitialize(LLCharacter* character
     return STATUS_SUCCESS;
 }
 
+void FSPosingMotion::configureAssistantRotations(std::function<bool()> allowed,std::function<void()> stopped)
+{
+    mAssistantRotationOnly=true;mAssistantAllowed=std::move(allowed);mAssistantStopped=std::move(stopped);
+    for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);
+}
+
+bool FSPosingMotion::setAssistantRotations(const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed)
+{
+    if(!mAssistantRotationOnly || !allowed || !allowed())return false;
+    for(const auto& entry:rotations)if(!getJointPoseByJointName(entry.first))return false;
+    mAssistantAllowed=std::move(allowed);
+    for(auto& joint:mJointPoses)
+    {
+        const auto found=rotations.find(joint.jointName());
+        setJointState(joint.getJointState()->getJoint(),found==rotations.end()?0:LLJointState::ROT);
+        if(found!=rotations.end())joint.setAssistantTargetRotation(found->second);
+    }
+    return true;
+}
+
 bool FSPosingMotion::onActivate()
 {
     return true;
@@ -76,6 +96,8 @@ bool FSPosingMotion::onActivate()
 
 bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)
 {
+    if(mAssistantRotationOnly && (!mAssistantAllowed || !mAssistantAllowed()))
+    {for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);return false;}
     LLQuaternion targetRotation;
     LLQuaternion currentRotation;
     LLVector3 currentPosition;
@@ -89,6 +111,17 @@ bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)
         if (!joint)
             continue;
 
+        if(mAssistantRotationOnly)
+        {
+            if(!(jointPose.getJointState()->getUsage() & LLJointState::ROT))continue;
+            // Authority is checked at the actual timed write, without a TLS
+            // scope spanning a viewer frame or coroutine yield.
+            if(!mAssistantAllowed || !mAssistantAllowed())
+            {for(auto& state:mJointPoses)setJointState(state.getJointState()->getJoint(),0);return false;}
+            const auto rotation=slerp(mInterpolationTime,joint->getRotation(),jointPose.getTargetRotation());
+            jointPose.getJointState()->setRotation(rotation);
+            continue;
+        }
         currentRotation = joint->getRotation();
         currentPosition = joint->getPosition();
         currentScale = joint->getScale();
@@ -118,7 +151,15 @@ bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)
     return true;
 }
 
-void FSPosingMotion::onDeactivate() { revertJointsAndCollisionVolumes(); }
+void FSPosingMotion::onDeactivate()
+{
+    if(mAssistantRotationOnly)
+    {
+        for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);
+        mAssistantAllowed={};if(mAssistantStopped){auto stopped=std::move(mAssistantStopped);stopped();}return;
+    }
+    revertJointsAndCollisionVolumes();
+}
 
 void FSPosingMotion::revertJointsAndCollisionVolumes()
 {

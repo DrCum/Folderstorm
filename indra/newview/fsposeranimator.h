@@ -795,6 +795,15 @@ public:
     /// </remarks>
     void applyJointMirrorToBaseRotations(FSPosingMotion* posingMotion);
 
+    // Private rotation-only motion. These never use the native UI's registered
+    // motion or FSPoseState, and can stop only the returned owned motion.
+    LLUUID startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void()> stopped);
+    bool assistantPoseActive(LLVOAvatar* avatar,const LLUUID& motion) const;
+    bool updateAssistantPose(LLVOAvatar* avatar,const LLUUID& motion,
+        const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);
+    bool stopAssistantPose(LLVOAvatar* avatar,const LLUUID& motion);
+    FSSharedPose::Pose captureAssistantPose(LLVOAvatar* avatar,const LLUUID& motion) const;
+
     FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
     void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
     FSSharedPose::JointSet sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,
@@ -803,6 +812,7 @@ public:
                          bool position, std::function<void()> action);
 
   private:
+    std::map<LLUUID,LLUUID> mAssistantMotions;
     /// <summary>
     /// Translates the supplied rotation vector from UI to a Quaternion for the bone.
     /// Also performs the axis-swapping and other transformations for up/down/left/right to make sense.

@@ -58,6 +58,13 @@ void FSJointPose::setPublicPosition(const LLVector3& pos)
     mCurrentState.mPoserChangeType = POSER_CHANGE_DEFAULT;
 }
 
+void FSJointPose::setAssistantTargetRotation(const LLQuaternion& rotation)
+{
+    // This joint belongs to a private assistant motion, never the native UI's
+    // poser/undo stack. Do not zero the base or alter non-rotation state.
+    mCurrentState.setTargetRotationOnly(rotation);
+}
+
 void FSJointPose::applySharedTransform(const FSSharedPose::Joint& state)
 {
     const auto& v = state.transform;
