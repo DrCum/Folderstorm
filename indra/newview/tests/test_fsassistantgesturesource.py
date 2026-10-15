@@ -80,6 +80,36 @@ class GestureNativeBoundaryTests(unittest.TestCase):
         self.assertIn("gesture_request_tombstone_capacity", text)
         self.assertIn('result["cleanup_complete"]=!play.incomplete', text)
 
+    def test_local_preview_acquisition_and_manual_claim_boundaries(self):
+        text = source("fsgesturelistener.cpp")
+        self.assertIn("!animationAvailable(foreign(id),gAgentAvatarp->mSignaledAnimations.count(id)", text)
+        self.assertIn("gAgentAvatarp->mPlayingAnimations.count(id),gAgentAvatarp->isMotionActive(id)", text)
+        preview = source("llpreviewanim.cpp")
+        play = preview[preview.index("void LLPreviewAnim::play("):preview.index("void LLPreviewAnim::draw()")]
+        self.assertLess(play.index("fs_assistant_animation_request(itemID)"), play.index("gAgentAvatarp->startMotion("))
+        agent = source("llagentlistener.cpp")
+        local = agent[agent.index("void LLAgentListener::playAnimation("):agent.index("void LLAgentListener::stopAnimation(")]
+        self.assertLess(local.index("fs_assistant_animation_request(item->getAssetUUID())"), local.index("gAgentAvatarp->startMotion("))
+        bvh = source("llfloaterbvhpreview.cpp")
+        reset = bvh[bvh.index("void LLFloaterBvhPreview::resetMotion()"):bvh.index("bool LLFloaterBvhPreview::handleMouseDown(")]
+        self.assertLess(reset.index("if (avatarp->isSelf()) fs_assistant_animation_reset()"), reset.index("avatarp->deactivateAllMotions()"))
+        # Simulator acknowledgments are not manual local-preview intent.
+        self.assertNotIn("fs_assistant_animation_request", source("llvoavatar.cpp"))
+
+    def test_registered_builtin_states_cannot_invoke_agent_controls(self):
+        text = source("fsgesturelistener.cpp")
+        native = text[text.index("bool nativeAllowed("):text.index("bool foreign(")]
+        self.assertIn("animationPolicy(plan", native)
+        self.assertIn("gAnimLibrary.animStateToString(LLUUID(id))!=nullptr", native)
+        model = source("fsassistantgesturemodel.h")
+        policy = model[model.index("template<typename Builtin>"):model.index("class Timeline")]
+        self.assertIn("Effect::AnimationStart || step.effect==Effect::AnimationStop", policy)
+        self.assertIn("unsupported_builtin_animation", policy)
+        # This native lookup does not register unknown custom asset IDs.
+        library = (ROOT.parent / "llcharacter" / "llanimationstates.cpp").read_text()
+        lookup = library[library.index("const char *LLAnimationLibrary::animStateToString"):library.index("LLUUID LLAnimationLibrary::stringToAnimState")]
+        self.assertLess(lookup.index("mAnimMap.count(state)"), lookup.index("mAnimMap[state]"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -65,6 +65,15 @@ int main(int argc,char** argv)
     leases.invalidate();assert(!leases.owns(animation,third));
     assert(cleanupAllowed(true,true,false));assert(!cleanupAllowed(false,true,false));
     assert(!cleanupAllowed(true,false,false));assert(!cleanupAllowed(true,true,true));
+    assert(animationAvailable(false,false,false,false));
+    assert(!animationAvailable(false,false,false,true)); // local preview existed before acquisition
+    assert(!animationAvailable(true,false,false,false));
+    assert(!animationAvailable(false,true,false,false));assert(!animationAvailable(false,false,true,false));
+    Plan builtins;builtins.steps={{Effect::AnimationStart,animation,0},{Effect::AnimationStop,animation,0}};
+    assert(!animationPolicy(builtins,[&](const std::string& id){return id==animation;},error));
+    builtins.steps.erase(builtins.steps.begin()); // STOP is independently checked too
+    assert(!animationPolicy(builtins,[&](const std::string& id){return id==animation;},error));
+    assert(animationPolicy(builtins,[](const std::string&){return false;},error));
     // Manual replay claims an animation while the old timeline is waiting;
     // source/lease validation prevents its next effect and unsafe cleanup.
     const auto old=leases.acquire(animation);Timeline overlap({{Effect::WaitTime,"",5},{Effect::Chat,"stale",0}},0);

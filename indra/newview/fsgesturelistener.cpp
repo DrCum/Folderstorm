@@ -8,6 +8,7 @@
 #include "fsassetblacklist.h"
 #include "fsnearbychathub.h"
 #include "llagent.h"
+#include "llanimationstates.h"
 #include "llaudioengine.h"
 #include "llassetstorage.h"
 #include "llfilesystem.h"
@@ -54,6 +55,9 @@ LLSD evidence(const LLViewerInventoryItem* item)
 bool nativeAllowed(const Plan& plan,std::string& error)
 {
     if(!ready() || !isAgentAvatarValid()){error="native_avatar_unavailable";return false;}
+    // Built-in motion states can invoke AFK/sit, flight or agent-control paths.
+    // They need separate authority beyond approval of an animation UUID.
+    if(!animationPolicy(plan,[](const std::string& id){return gAnimLibrary.animStateToString(LLUUID(id))!=nullptr;},error))return false;
     if(!FSSessionWorker::assistantActiveAllowed()){error="requires_active_character";return false;}
     if(!gSavedPerAccountSettings.getBOOL("FSGesturesEnabled") || !RlvActions::canPlayGestures())
     {error="native_gestures_disabled_or_restricted";return false;}
@@ -224,7 +228,8 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
             if(current!=play.animations.end() && !owned(play,id,current->second))
             {play.incomplete=true;play.failure="animation_ownership_superseded";return false;}
             if(start && current==play.animations.end() &&
-                (foreign(id) || gAgentAvatarp->mSignaledAnimations.count(id) || gAgentAvatarp->mPlayingAnimations.count(id)))
+                !animationAvailable(foreign(id),gAgentAvatarp->mSignaledAnimations.count(id),
+                    gAgentAvatarp->mPlayingAnimations.count(id),gAgentAvatarp->isMotionActive(id)))
             {play.failure="animation_already_owned_by_native_or_foreign_source";return false;}
             if(!start && current==play.animations.end()){play.failure="animation_stop_not_owned";return false;}
             if(!fs_assistant::asyncTaskSubmit(play.task))return false;

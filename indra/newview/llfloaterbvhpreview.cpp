@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llfloaterbvhpreview.h"
 
@@ -545,6 +546,7 @@ LLFloaterBvhPreview::~LLFloaterBvhPreview()
 
         if (sOwnAvatarInstanceCount == 0 && isAgentAvatarValid())
         {
+            fs_assistant_animation_reset();
             gAgentAvatarp->deactivateAllMotions();
             gAgentAvatarp->startDefaultMotions();
             gAgentAvatarp->startMotion(ANIM_AGENT_STAND);
@@ -641,6 +643,7 @@ void LLFloaterBvhPreview::resetMotion()
     }
 
     LLUUID base_id = mIDList[getChild<LLUICtrl>("preview_base_anim")->getValue().asString()];
+    if (avatarp->isSelf()) fs_assistant_animation_reset();
     avatarp->deactivateAllMotions();
     avatarp->startMotion(mMotionID, 0.0f);
     avatarp->startMotion(base_id, BASE_ANIM_TIME_OFFSET);
@@ -882,6 +885,7 @@ void LLFloaterBvhPreview::onSliderMove()
         LLMotion* motionp = avatarp->findMotion(mMotionID);
         F32 duration = motionp->getDuration();// + motionp->getEaseOutDuration();
         F32 delta_time = duration * slider_value;
+        if (avatarp->isSelf()) fs_assistant_animation_reset();
         avatarp->deactivateAllMotions();
         avatarp->startMotion(base_id, delta_time + BASE_ANIM_TIME_OFFSET);
         avatarp->startMotion(mMotionID, delta_time);

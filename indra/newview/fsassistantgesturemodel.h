@@ -100,6 +100,15 @@ private: std::map<std::string,std::uint64_t> versions;std::uint64_t serial=0;
 };
 inline bool cleanupAllowed(bool sameLogin,bool owns,bool foreignSource)
 {return sameLogin && owns && !foreignSource;}
+inline bool animationAvailable(bool foreignSource,bool signaled,bool playing,bool locallyActive)
+{return !foreignSource && !signaled && !playing && !locallyActive;}
+template<typename Builtin> bool animationPolicy(const Plan& plan,Builtin builtin,std::string& error)
+{
+    for(const auto& step:plan.steps)
+        if((step.effect==Effect::AnimationStart || step.effect==Effect::AnimationStop) && builtin(step.value))
+        {error="unsupported_builtin_animation: native animation states can change avatar controls";return false;}
+    return true;
+}
 class Timeline {
 public:
     explicit Timeline(std::vector<Step> steps,double now):mSteps(std::move(steps)),mStarted(now){}
