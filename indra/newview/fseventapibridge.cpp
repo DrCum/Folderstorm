@@ -39,6 +39,7 @@
 #include "fsworldlistener.h"
 #include "fscontentlistener.h"
 #include "fsgesturelistener.h"
+#include "fspreferenceslistener.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -377,6 +378,7 @@ public:
         fs_initialize_world_api();
         fs_initialize_content_api();
         fs_initialize_gesture_api();
+        fs_initialize_preferences_api();
         mSocial=std::make_shared<FSAssistantSocial>();
         refreshSocialPrivacy();
     }
@@ -1575,6 +1577,8 @@ void FSEventAPIBridge::removeDiscoveryFile()
 
 void FSEventAPIBridge::refreshSession()
 {
+    // Preview cleanup must run even while the authenticated bridge is paused.
+    fs_preferences_tick();
     if(!mState || !mState->enabled())return;
     mState->maintenance();
     const bool ready=LLStartUp::getStartupState()==STATE_STARTED && !gDisconnected;

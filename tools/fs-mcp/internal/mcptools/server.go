@@ -145,6 +145,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 	registerWorld(s, state, readOnly)
 	registerContent(s, state, readOnly, mutating)
 	registerGestures(s, state)
+	registerPreferences(s, state, readOnly, mutating)
 	registerWorkspaces(s, state, readOnly, mutating)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "confirm_action",

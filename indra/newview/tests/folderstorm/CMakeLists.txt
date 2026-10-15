@@ -21,6 +21,7 @@ endfunction()
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
+folderstorm_check(assistant_preferences ../test_fspreferencesmodel.cpp)
 folderstorm_check(assistant_gestures ../test_fsassistantgesturemodel.cpp)
 folderstorm_check(assistant_social ../test_fsassistantsocialmodel.cpp)
 folderstorm_check(assistant_nearby ../test_fsassistantnearbychatpolicy.cpp)

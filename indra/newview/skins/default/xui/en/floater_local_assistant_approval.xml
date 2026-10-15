@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="local_assistant_approval" title="Local assistant request" width="550" height="470"
  can_resize="true" min_width="410" min_height="340" can_minimize="false" save_rect="false" layout="topleft">
+ <string name="action_preferences_preview">Preview these viewer settings?</string>
+ <string name="action_preferences_accept">Save this viewer settings preview?</string>
+ <string name="action_preferences_cancel">Discard this viewer settings preview?</string>
  <string name="action_feature">Allow this assistant action?</string>
  <string name="action_saveNotecard">Replace this notecard's source?</string>
  <string name="action_saveScript">Save and compile this inventory script?</string>
