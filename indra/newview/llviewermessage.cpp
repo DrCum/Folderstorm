@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 #include "llviewermessage.h"
 
 // Linden libraries
@@ -5285,6 +5286,15 @@ void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
             // </FS:Zi>
 
             avatarp->mSignaledAnimations[animation_id] = anim_sequence_id;
+
+            // Object sources can be unloaded and absent from mAnimationSources.
+            // Unknown provenance is conservative: retain native state and report
+            // incomplete assistant cleanup instead of stopping an unrelated anim.
+            LLUUID assistant_source;
+            if (i < num_source_blocks)
+                mesgsys->getUUIDFast(_PREHASH_AnimationSourceList, _PREHASH_ObjectID, assistant_source, i);
+            if (assistant_source != gAgent.getID())
+                fs_assistant_animation_request(animation_id);
 
             // *HACK: Disabling flying mode if it has been enabled shortly before the agent
             // stand up animation is signaled. In this case we don't get a signal to start
