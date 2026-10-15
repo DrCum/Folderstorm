@@ -29,10 +29,14 @@
 
 #include "llassetstorage.h"
 #include "llcorehttputil.h"
+#include <boost/signals2/connection.hpp>
+#include <memory>
 
 class LLFileSystem;
 
 class LLViewerAssetRequest;
+struct LLViewerAssetFetch;
+struct LLViewerAssetFetchSource;
 
 class LLViewerAssetStorage : public LLAssetStorage
 {
@@ -66,6 +70,12 @@ public:
         F64Seconds timeout=LL_ASSET_STORAGE_TIMEOUT) override;
 
 protected:
+    std::function<bool()> captureAssetReadGuard(LLGetAssetCallback& callback) override;
+    std::shared_ptr<LLViewerAssetFetch> captureAssistantFetch();
+    void initializeAssistantFetchSource();
+    void enqueueAssetRequest(LLViewerAssetRequest* request);
+    bool assistantRequestPending(LLViewerAssetRequest* request, const std::shared_ptr<LLViewerAssetFetch>& fetch) const;
+    void dropDeniedAssistantRequests(const LLUUID& uuid, LLAssetType::EType type);
     void _queueDataRequest(const LLUUID& uuid,
                            LLAssetType::EType type,
                            LLGetAssetCallback callback,
@@ -86,7 +96,8 @@ protected:
                           const LLUUID uuid,
                           LLAssetType::EType atype,
                           LLGetAssetCallback callback,
-                          void *user_data);
+                          void *user_data,
+                          std::shared_ptr<LLViewerAssetFetch> assistant);
 
     std::string getAssetURL(const std::string& cap_url, const LLUUID& uuid, LLAssetType::EType atype);
 
@@ -123,6 +134,8 @@ protected:
     S32 mCountCompleted;
     S32 mCountSucceeded;
     S64 mTotalBytesFetched;
+    std::shared_ptr<LLViewerAssetFetchSource> mAssistantFetchSource;
+    boost::signals2::scoped_connection mAssistantRegionConnection;
 
     static S32 sAssetCoroCount; // coroutine count, static since coroutines can outlive LLViewerAssetStorage
 };
