@@ -279,6 +279,8 @@ public:
         operation.summary=llsd::map("op",op,"subject_count",1,"subjects",LLSD::emptyArray(),"diff",diffValue(snapshot->text,request["text"].asString()),
             "atomic_revision_check",false,"source_bytes",static_cast<S32>(request["text"].asString().size()));
         operation.summary["subjects"].append(llsd::map("id",item->getUUID(),"name",item->getName(),"after_name","Replace inventory source"));
+        operation.summary["replacement_text"]=request["text"];
+        operation.summary["compiler"]=notecard?"not_applicable":request["compiler"].asString();
         operation.summary["consequences"]=LLSD::emptyArray();operation.summary["consequences"].append("content_replace_source");
         if(op!="preview" && std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"read")==operation.requiredClasses.end())operation.requiredClasses.push_back("read");
         return true;

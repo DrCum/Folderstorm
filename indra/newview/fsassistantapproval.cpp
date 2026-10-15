@@ -143,6 +143,17 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
         for (const LLSD& number : llsd::inArray(summary[vector])) text << number.asReal() << " ";
         text << "\n";
     }
+    if (summary.has("replacement_text"))
+    {
+        // Source text is untrusted data. Show the complete bounded replacement
+        // verbatim (without URL parsing), rather than treating it as a label.
+        auto replacement = summary["replacement_text"].asString();
+        replacement = utf8str_truncate(replacement, 65536);
+        for (char& c : replacement)
+            if ((static_cast<unsigned char>(c) < 32 && c != '\n' && c != '\r' && c != '\t') || c == 127) c = ' ';
+        text << "\n" << getString("content_replacement") << "\n" << replacement << "\n";
+        text << getString("content_compiler") << format(summary["compiler"]) << "\n";
+    }
     for (const LLSD& warning : llsd::inArray(summary["consequences"]))
     {
         text << "\n" << getString(warning.asString()) << "\n";
