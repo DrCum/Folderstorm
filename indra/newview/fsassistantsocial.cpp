@@ -395,10 +395,9 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     }
     void processProperties(void* data,EAvatarProcessorType type)override
     {
-        if(!profile || !data || (type!=APT_PROPERTIES && type!=APT_PROPERTIES_LEGACY))return;
-        LLAvatarData converted;const LLAvatarData* native=nullptr;
-        if(type==APT_PROPERTIES)native=static_cast<LLAvatarData*>(data);else{converted=LLAvatarData(*static_cast<LLAvatarLegacyData*>(data));native=&converted;}
-        if(native->avatar_id!=profile->target)return;
+        if(!profile || !data || type!=APT_PROPERTIES)return;
+        const auto* native=static_cast<LLAvatarData*>(data);
+        if(native->avatar_id!=profile->target || native->agent_id!=account)return;
         auto pending=profile;
         fs_assistant::AsyncScope scope(pending->guard);
         if(!current() || restricted || !visible() || now()>pending->deadline || !pending->guard || !pending->guard->allowed() || !residentAllowed(pending->target)){cancelProfile("expired_or_not_permitted");return;}
@@ -485,6 +484,7 @@ public:
         {
             if(op=="search" && (request["query"].asString().size()<2 || request["query"].asString().size()>127 || wstring_to_utf8str(utf8str_to_wstring(request["query"].asString()))!=request["query"].asString())){error="invalid_args: resident search needs 2..127 UTF-8 bytes";return false;}
             if(op=="profile" && (!residentAllowed(request["resident_id"].asUUID()) || request["grid"].asString()!=mState->grid)){error="invalid_target: exact resident_id and current grid are required";return false;}
+            if(op=="profile" && gAgent.getRegionCapability("AgentProfile").empty()){error="unsupported_feature: native AgentProfile capability unavailable";return false;}
         }
         if(getName()=="FSEvents")
         {
@@ -542,10 +542,14 @@ public:
         if(op=="search"){mState->search(request,guard,response);return;}
         if(op=="profile")
         {
+            if(gAgent.getRegionCapability("AgentProfile").empty()){response->error("unsupported_feature: native AgentProfile capability unavailable");return;}
             if(mState->profile || now()<mState->profileBusyUntil){response->error("busy: a native profile request is still pending");return;}
             const auto target=request["resident_id"].asUUID();if(!residentAllowed(target) || request["grid"].asString()!=mState->grid){response->error("invalid_target");return;}
             auto pending=std::make_shared<FSAssistantSocial::State::PendingProfile>();pending->target=target;pending->request=request;pending->guard=guard;pending->response=response;pending->deadline=now()+20;pending->task=fs_assistant::asyncTask();mState->profile=pending;mState->profileBusyUntil=pending->deadline;
-            LLAvatarPropertiesProcessor::getInstance()->addObserver(target,mState.get());if(!fs_assistant::asyncSubmit()){mState->cancelProfile("expired_or_not_permitted");return;}LLAvatarPropertiesProcessor::getInstance()->sendAvatarPropertiesRequest(target);return;
+            // The HTTP processor captures this scope and records submission at
+            // its actual guarded transport boundary, never for a suppressed or
+            // unsupported native request.
+            LLAvatarPropertiesProcessor::getInstance()->addObserver(target,mState.get());LLAvatarPropertiesProcessor::getInstance()->sendAvatarPropertiesRequest(target);return;
         }
         if(op=="friends")
         {

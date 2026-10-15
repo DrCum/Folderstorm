@@ -58,6 +58,20 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         self.assertIn("account!=gAgentID || login!=gAgent.getSessionID()", coro)
         self.assertNotIn("AsyncScope", coro)  # TLS must never span a coroutine yield
 
+    def test_profile_accepts_only_owning_account_http_replies(self):
+        text = source("fsassistantsocial.cpp")
+        observer = text[text.index("void processProperties("):text.index("LLSD readChat(")]
+        self.assertIn("type!=APT_PROPERTIES", observer)
+        self.assertNotIn("APT_PROPERTIES_LEGACY", observer)
+        self.assertIn("native->avatar_id!=profile->target || native->agent_id!=account", observer)
+        self.assertLess(observer.index("native->agent_id!=account"), observer.index("setResponse(result)"))
+        dispatch = text[text.index("void dispatch(const LLSD& request)"):]
+        profile = dispatch[dispatch.index('if(op=="profile")'):dispatch.index('if(op=="friends")')]
+        self.assertLess(profile.index('getRegionCapability("AgentProfile").empty()'), profile.index("PendingProfile"))
+        self.assertIn("unsupported_feature:", profile)
+        self.assertNotIn("asyncSubmit()", profile)
+        self.assertLess(profile.index('getRegionCapability("AgentProfile").empty()'), profile.index("addObserver("))
+
     def test_translation_origin_and_close_fence_use_ingress(self):
         text = source("llimview.cpp")
         live = text[text.index("void LLIMModel::addMessage(const LLUUID& session_id"):text.index("void LLIMModel::processAddingMessage")]
