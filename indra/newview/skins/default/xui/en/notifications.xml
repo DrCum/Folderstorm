@@ -15084,6 +15084,13 @@ https://wiki.firestormviewer.org/fs_media#one_or_more_viewer_processes_are_curre
      yestext="Okay"/>
   </notification>
 
+  <notification icon="alertmodal.tga" name="FSSharedPoseRequest" type="alertmodal">
+    Allow [NAME] to edit your pose for this session?
+    Your shared pose will be visible to nearby Folderstorm users. You can remove editors or stop sharing in the poser.
+    <tag>confirm</tag>
+    <usetemplate name="okcancelbuttons" yestext="Allow" notext="Decline" />
+  </notification>
+
   <notification
    icon="notifytip.tga"
    name="FSLargeOutfitsWarningInThisSession"

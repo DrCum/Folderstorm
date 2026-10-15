@@ -31,6 +31,7 @@
 #include "fsposestate.h"
 #include "llvoavatar.h"
 #include "fsmaniprotatejoint.h"
+#include <functional>
 
 /// <summary>
 /// Describes how we will cluster the joints/bones/thingos.
@@ -108,7 +109,7 @@ class FSPoserAnimator
 public:
     FSPoserAnimator() = default;
 
-    virtual ~FSPoserAnimator() = default;
+    virtual ~FSPoserAnimator();
 
     /// <summary>
     /// A class encapsulating 'metadata' for a joint, such as its catagory and its opposite joint name.
@@ -794,7 +795,27 @@ public:
     /// </remarks>
     void applyJointMirrorToBaseRotations(FSPosingMotion* posingMotion);
 
+    // Private rotation-only motion. These never use the native UI's registered
+    // motion or FSPoseState, and can stop only the returned owned motion.
+    LLUUID startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void(bool)> stopped);
+    void tickAssistantPoses(LLVOAvatar* avatar);
+    static void invalidateAssistantPose(LLVOAvatar* avatar);
+    bool assistantRestorationComplete(LLVOAvatar* avatar,const LLUUID& motion) const;
+    bool assistantPoseActive(LLVOAvatar* avatar,const LLUUID& motion) const;
+    bool updateAssistantPose(LLVOAvatar* avatar,const LLUUID& motion,
+        const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);
+    bool stopAssistantPose(LLVOAvatar* avatar,const LLUUID& motion);
+    FSSharedPose::Pose captureAssistantPose(LLVOAvatar* avatar,const LLUUID& motion) const;
+
+    FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
+    void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
+    FSSharedPose::JointSet sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,
+                                          E_BoneDeflectionStyles style = NONE, bool position = false) const;
+    bool routeSharedEdit(LLVOAvatar* avatar, const FSPoserJoint* joint, E_BoneDeflectionStyles style,
+                         bool position, std::function<void()> action);
+
   private:
+    std::map<LLUUID,LLUUID> mAssistantMotions;
     /// <summary>
     /// Translates the supplied rotation vector from UI to a Quaternion for the bone.
     /// Also performs the axis-swapping and other transformations for up/down/left/right to make sense.

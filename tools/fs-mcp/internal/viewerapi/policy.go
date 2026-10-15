@@ -37,6 +37,7 @@ const (
 	ClassGesturePlay        = "gesture_play"
 	ClassPoseRead           = "pose_read"
 	ClassPoseEdit           = "pose_edit"
+	ClassPoseSave           = "pose_save"
 	ClassPoseShare          = "pose_share"
 	ClassContentEdit        = "content_edit"
 	ClassPreferencesRead    = "preferences_read"
@@ -92,6 +93,7 @@ var classDefaults = []classDefault{
 	{ClassGesturePlay, "ask", true},
 	{ClassPoseRead, "deny", false},
 	{ClassPoseEdit, "ask", true},
+	{ClassPoseSave, "ask", true},
 	{ClassPoseShare, "ask", true},
 	{ClassContentEdit, "ask", true},
 	{ClassPreferencesRead, "deny", false},

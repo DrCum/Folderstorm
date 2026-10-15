@@ -26,11 +26,14 @@
 
 #ifndef FS_POSINGMOTION_H
 #define FS_POSINGMOTION_H
+#include <functional>
+#include <map>
 
 //-----------------------------------------------------------------------------
 // Header files
 //-----------------------------------------------------------------------------
 #include "llmotion.h"
+#include "fsposepolicy.h"
 #include "fsjointpose.h"
 #include "llkeyframemotion.h"
 
@@ -56,14 +59,14 @@ public:
 
     virtual F32 getEaseInDuration() { return 0.0f; }
 
-    virtual F32 getEaseOutDuration() { return 0.5f; }
+    virtual F32 getEaseOutDuration() { return mAssistantRotationOnly?0.f:0.5f; }
 
     virtual LLJoint::JointPriority getPriority() { return LLJoint::ADDITIVE_PRIORITY; }
 
     virtual LLMotionBlendType getBlendType() { return NORMAL_BLEND; }
 
     // called to determine when a motion should be activated/deactivated based on avatar pixel coverage
-    virtual F32 getMinPixelArea() { return MIN_REQUIRED_PIXEL_AREA_POSING; }
+    virtual F32 getMinPixelArea() { return mAssistantRotationOnly?0.f:MIN_REQUIRED_PIXEL_AREA_POSING; }
 
     // run-time (post constructor) initialization,
     // called after parameters have been set
@@ -74,6 +77,14 @@ public:
     // must return TRUE to indicate success, or else
     // it will be deactivated
     virtual bool onActivate();
+
+    // Opt-in private assistant motion. Native Poser instances retain their
+    // original channels, restoration and undo behavior.
+    void configureAssistantRotations(std::function<bool()> allowed,std::function<void(bool)> stopped);
+    bool setAssistantRotations(const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);
+    bool assistantRotationOnly() const{return mAssistantRotationOnly;}
+    bool assistantAuthorityValid();
+    bool assistantRestorationComplete() const{return mAssistantRestorationComplete;}
 
     // called per time step
     // must return TRUE while it is active, and
@@ -194,6 +205,13 @@ public:
     bool motionAnimatesJoints(const std::vector<S32>& recapturedJointNumbers);
 
 private:
+    bool mAssistantRotationOnly=false;
+    std::function<bool()> mAssistantAllowed;
+    std::function<void(bool)> mAssistantStopped;
+    bool mAssistantRevoked=false,mAssistantRestorationComplete=true;
+    std::map<std::string,fs_pose::OwnedRotation> mAssistantOwned;
+    void releaseAssistantJoint(FSJointPose& joint);
+    void releaseAssistantRotations();
     /// <summary>
     /// The axial difference considered close enough to be the same.
     /// </summary>
