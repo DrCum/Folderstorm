@@ -1773,10 +1773,10 @@ void finish_asset_read(AssetRead* raw, S32 status)
     const LLAssetType::EType type = request->notecard ? LLAssetType::AT_NOTECARD : LLAssetType::AT_LSL_TEXT;
     LLFileSystem file(request->asset_id, type);
     const S32 file_length = file.getSize();
-    if (file_length < 0 || static_cast<std::size_t>(file_length)>fs_content::assetLimit)
+    if (file_length <= 0 || static_cast<std::size_t>(file_length)>fs_content::assetLimit)
     {
         sendReply(llsd::map(
-            "error", "Asset exceeds the bounded content read limit",
+            "error", "Asset is unavailable, empty or exceeds the bounded content read limit",
             "id", request->item_id,
             "asset_id", request->asset_id,
             "stale", true), request->request);
@@ -1784,7 +1784,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     }
 
     std::vector<char> buffer(file_length + 1, 0);
-    if(file_length && !file.read(reinterpret_cast<U8*>(&buffer[0]), file_length))
+    if(file_length && (!file.read(reinterpret_cast<U8*>(&buffer[0]), file_length) || file.getLastBytesRead()!=file_length))
     {sendReply(llsd::map("error","Asset read was incomplete"),request->request);return;}
     std::string raw_content(buffer.data(),file_length);
     if(!raw_content.empty() && raw_content.back()=='\0')raw_content.pop_back();
