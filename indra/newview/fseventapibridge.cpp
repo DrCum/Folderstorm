@@ -406,9 +406,16 @@ public:
             LLSD health=mIdentity;
             health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
             health["managed_async_appearance_writes"]=false;health["managed_create_item"]=false;
-            health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1);
+            health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1,"async_operations",1);
             response->extendedResult(HTTP_OK,to_json(health),json_headers());
 
+            return;
+        }
+        if(api=="LocalAssistant" && op=="operationStatus")
+        {
+            auto result=asyncStatus(input["operation_id"].asUUID());
+            if(result.isUndefined())fail_response(response,HTTP_NOT_FOUND,"Operation belongs to an expired connection or is unavailable");
+            else {result["viewer_session"]=mIdentity["viewer_session"];response->extendedResult(HTTP_OK,to_json(result),json_headers());}
             return;
         }
         if(mIdentity["managed"].asBoolean())
@@ -547,10 +554,12 @@ public:
             if (!pending.second.sent)
             {
                 pending.second.sent = true;
-                fail_response(pending.second.response, HTTP_SERVICE_UNAVAILABLE, "Viewer Event API bridge is shutting down");
+                fail_response(pending.second.response, HTTP_SERVICE_UNAVAILABLE, "Viewer Event API bridge is shutting down; submitted work may still complete",asyncStatus(pending.first));
             }
         }
         mPending.clear();
+        for(auto& entry:mAsync)entry.second->cancel("connection_changed");
+        mAsync.clear();
     }
 
     void enable() { mEnabled = true; ++mSessionGeneration; }
@@ -563,12 +572,26 @@ public:
         const auto found=mPending.find(request["__assistant_guard"].asUUID());
         return found!=mPending.end() && postedAllowed(found->second);
     }
+    fs_assistant::AsyncGuard asyncContext(const LLSD& request) const
+    {
+        const auto found=mPending.find(request["__assistant_guard"].asUUID());
+        return found==mPending.end()?fs_assistant::AsyncGuard():found->second.async;
+    }
+    LLSD asyncStatus(const LLUUID& id)
+    {
+        const auto found=mAsync.find(id);if(found==mAsync.end())return LLSD();
+        auto& operation=*found->second;
+        LLSD result=llsd::map("operation_id",id,"state",operation.state(),"submitted",static_cast<S32>(operation.submitted()),
+            "pending_callbacks",static_cast<S32>(operation.pending()),"stop_reason",operation.reason(),"known_ids",LLSD::emptyArray());
+        for(const auto& value:operation.ids())result["known_ids"].append(value);
+        return result;
+    }
     void maintenance()
     {
         for(auto it=mPending.begin();it!=mPending.end();)
         {
             if(!postedAllowed(it->second))
-            {fail_response(it->second.response,HTTP_FORBIDDEN,"Assistant request expired or its session/permission changed",llsd::map("error_code","session_changed"));it=mPending.erase(it);}
+            {auto receipt=asyncStatus(it->first);receipt["error_code"]="session_changed";fail_response(it->second.response,HTTP_FORBIDDEN,"Assistant request expired or its session/permission changed",receipt);it=mPending.erase(it);}
             else ++it;
         }
     }
@@ -619,10 +642,11 @@ private:
         F64 deadline=0;
         U64 generation=0;
         std::shared_ptr<fs_assistant::ExecutionGate> gate;
+        fs_assistant::AsyncGuard async;
     };
     bool postedAllowed(const Posted& posted) const
     {
-        return mEnabled && !posted.sent && !gDisconnected && posted.generation==mSessionGeneration && posted.login==gAgent.getSessionID() &&
+        return (!posted.async || posted.async->allowed()) && mEnabled && !posted.sent && !gDisconnected && posted.generation==mSessionGeneration && posted.login==gAgent.getSessionID() &&
             posted.account==gAgentID && now_seconds()<posted.deadline && posted.gate && posted.gate->allowed() &&
             (!mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(posted.api,posted.op) || FSSessionWorker::assistantActiveAllowed());
     }
@@ -835,6 +859,26 @@ private:
         posted.gate=std::make_shared<fs_assistant::ExecutionGate>(required);
         mExecutions.erase(std::remove_if(mExecutions.begin(),mExecutions.end(),[](const auto& gate){return gate.expired();}),mExecutions.end());
         mExecutions.emplace_back(posted.gate);
+        const bool durable=(api=="LLAppearance" && !is_read_op(api,op)) || (api=="LLInventory" && op=="createItem");
+        if(durable)
+        {
+            for(auto it=mAsync.begin();it!=mAsync.end() && mAsync.size()>=64;)
+                if(it->second->state()!="pending")it=mAsync.erase(it);else ++it;
+            if(mAsync.size()>=64){fail_response(response,HTTP_SERVICE_UNAVAILABLE,"Too many active assistant operations");return;}
+            std::weak_ptr<State> weak=weak_from_this();
+            posted.async=std::make_shared<fs_assistant::AsyncOperation>([weak,gate=posted.gate,generation=mSessionGeneration,
+                account=gAgentID,login=gAgent.getSessionID(),grid=LLGridManager::instance().getGrid(),
+                managed=FSSessionWorker::managed(),deadline=posted.deadline]() -> std::string
+            {
+                const auto self=weak.lock();
+                if(!self || !self->mEnabled || self->mSessionGeneration!=generation)return "connection_changed";
+                if(gDisconnected || LLApp::isExiting() || LLStartUp::getStartupState()!=STATE_STARTED || account!=gAgentID || login!=gAgent.getSessionID() || grid!=LLGridManager::instance().getGrid() || managed!=FSSessionWorker::managed())return "login_changed";
+                if(now_seconds()>=deadline)return "deadline_expired";
+                if(!gate->allowed())return "permission_revoked";
+                return {};
+            });
+            mAsync.emplace(request_id,posted.async);
+        }
         mPending.emplace(request_id, posted);
 
         if (!LLEventAPI::getInstance(api))
@@ -1118,6 +1162,7 @@ private:
         found->second.sent = true;
         LLSD body = reply;
         body["viewer_session"]=mIdentity["viewer_session"];
+        if(found->second.async){if(reply.has("error"))found->second.async->cancel("native_operation_failed");found->second.async->seal();body["operation_id"]=request_id;body["operation"]=asyncStatus(request_id);}
         if (found->second.api == "LLInventory" && found->second.op == "status" && body.isMap())
         {
             body["permissions"] = effective_permissions();
@@ -1134,6 +1179,7 @@ private:
     LLEventStream mReplyPump;
     LLTempBoundListener mReplyConnection;
     std::map<LLUUID, Posted> mPending;
+    std::map<LLUUID,fs_assistant::AsyncGuard> mAsync;
     std::map<LLUUID, Ask> mAsks;
     std::deque<LLUUID> mAskOrder;
     std::vector<std::weak_ptr<fs_assistant::ExecutionGate>> mExecutions;
@@ -1422,6 +1468,11 @@ bool FSEventAPIBridge::requestAllowed(const LLSD& request)
     if(!request.has("__assistant_guard"))return true;
     return instanceExists() && instance().mState && instance().mState->requestAllowed(request);
 }
+fs_assistant::AsyncGuard FSEventAPIBridge::asyncContext(const LLSD& request)
+{
+    return instanceExists() && instance().mState?instance().mState->asyncContext(request):fs_assistant::AsyncGuard();
+}
+fs_assistant::AsyncGuard fs_assistant_async_context(const LLSD& request){return FSEventAPIBridge::asyncContext(request);}
 bool fs_assistant_request_allowed(const LLSD& request) {return FSEventAPIBridge::requestAllowed(request);}
 
 void FSEventAPIBridge::stop()

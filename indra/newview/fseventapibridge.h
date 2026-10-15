@@ -24,6 +24,7 @@
 
 #include "llsingleton.h"
 #include "llsd.h"
+#include "fsassistantasync.h"
 
 #include <memory>
 #include <string>
@@ -46,6 +47,7 @@ public:
     void refreshSession(); // Main-thread login/connection identity; revokes old work.
     void reviewPending(); // Presents native approval only on the active owner.
     static bool requestAllowed(const LLSD& request);
+    static fs_assistant::AsyncGuard asyncContext(const LLSD& request);
     void stop();
     bool isRunning() const;
     int getPort() const;
