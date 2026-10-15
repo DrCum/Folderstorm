@@ -110,18 +110,29 @@ FSSharedPoseManager::FSSharedPoseManager()
   for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_region_changed");
   endAssistantPublishing("Native region changed");
  });
- if(LLControlVariable* control=gSavedSettings.getControl("FSSharedPosingEnabled"))
-  mSharingConnection=control->getSignal()->connect([this](LLControlVariable*,const LLSD& value,const LLSD&)
-  {
-   if(value.asBoolean())return;
-   // Observe disable/re-enable within one frame: later native polls must not
-   // revive an already captured source operation or queued transport.
-   for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_sharing_disabled");
-   endAssistantPublishing("Native shared posing was disabled");
-  });
+ const auto disable=[this](LLControlVariable*,const LLSD& value,const LLSD&)
+ {
+  if(!value.asBoolean())invalidateNativeSharing("native_sharing_disabled");
+ };
+ if(LLControlVariable* control=gSavedSettings.getControl("FSSharedPosingEnabled"))mSharingConnection=control->getSignal()->connect(disable);
+ if(LLControlVariable* control=gSavedSettings.getControl("UseLSLBridge"))mBridgeUseConnection=control->getSignal()->connect(disable);
 }
 FSSharedPoseManager::~FSSharedPoseManager()
-{mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
+{mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();mBridgeUseConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
+void FSSharedPoseManager::invalidateNativeSharing(const std::string& reason)
+{
+ // A native Off/On cycle must revoke consent even when this viewer has no
+ // assistant operation and the publication was started manually. Do it at the
+ // synchronous control signal, not at a later available()/idle observation.
+ for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel(reason);
+ endAssistantPublishing(reason);
+ mOwner.clear();mPublicGeneration=LLUUID::generateNewID();mPublished.clear();mPublishedRevision=0;
+ mApprovals.clear();mRequests.clear();mOutgoingRequests.clear();mWorks.clear();mDeferred.clear();
+ mQueue.clear();mRemotes.clear();mClosed.clear();mPeers.clear();mTypedPeers.clear();mAssembler.clear();
+ // Preserve all native Poser motions and manual joint state. Setting mReady
+ // false also prevents the legacy unavailable branch from calling stopAll.
+ mReady=false;mRegion.setNull();mBridge.setNull();mStatus="Shared posing stopped";
+}
 void FSSharedPoseManager::onIdle(void* data) { static_cast<FSSharedPoseManager*>(data)->tick(); }
 
 bool FSSharedPoseManager::available() const

@@ -31,6 +31,10 @@ acceptance:
 6. Revoke the native grant, replace the native session/bridge URL, pause or
    switch source while acquire, renew or final edit packets are queued. No
    remaining source packet may POST after the corresponding guard fails.
+   Toggle either native sharing or Use LSL Bridge Off/On before an idle tick,
+   including a manually published owner with no local assistant work. Old
+   grants/leases and queued source work must stay invalid; native Poser remains,
+   and publishing/editing consent requires a new explicit native flow.
 7. Duplicate a locked reply, lose or delay a final POST/acknowledgement, and
    deliver an acknowledgement late. There is one final sequence, no uncertain
    resend, and `owner_accepted` appears only for the exact owner acknowledgement.

@@ -117,9 +117,10 @@ private:
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
     void ensureSharedSelf(bool nativeTakeover);
+    void invalidateNativeSharing(const std::string& reason);
     LLSD workMessage(const Work& work, const std::string& type) const;
     bool nearby(const LLUUID& avatar) const;
-    boost::signals2::scoped_connection mSharingConnection,mAssistantRegionConnection;
+    boost::signals2::scoped_connection mSharingConnection,mBridgeUseConnection,mAssistantRegionConnection;
     fs_pose::RegionGeneration mAssistantRegionGeneration;
     FSPoserAnimator mAnimator;
     FSSharedPose::OwnerSession mOwner;

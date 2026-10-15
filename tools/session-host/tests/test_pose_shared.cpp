@@ -88,6 +88,23 @@ int main()
   editReceipt->cancel("receipt_pruned");editReceipt.reset();assert(asyncTaskAllowed(publicationTask));
  }
  assert(publication.authorized("peer-a","grant-a",0) && publication.authorized("peer-b","grant-b",0));
+ // Both native disable controls use OwnerSession::clear synchronously,
+ // including a manually published owner with no local assistant work. Turning
+ // the control back on does not recreate consent, reservations or publication.
+ for(const auto* control:{"FSSharedPosingEnabled","UseLSLBridge"})
+ {
+  (void)control;OwnerSession manualPublication;manualPublication.start("owner","manual-session",{{"mHead",initial}});
+  manualPublication.grant("remote","old-grant",0);assert(manualPublication.acquire("remote","old-grant","old-lease",{"mHead"},0).granted);
+  manualPublication.clear();
+  assert(!manualPublication.active() && manualPublication.editors().empty());
+  assert(!manualPublication.authorized("remote","old-grant",0));
+  assert(!manualPublication.apply("remote","old-grant","old-lease",{{"mHead",changed}},true,0,true,1));
+  // Only a later explicit native publication/consent flow grants again.
+  manualPublication.start("owner","new-manual-session",{{"mHead",initial}});
+  assert(!manualPublication.authorized("remote","old-grant",0));manualPublication.grant("remote","new-grant",0);
+  assert(!manualPublication.apply("remote","new-grant","old-lease",{{"mHead",changed}},true,0,true,1));
+  assert(manualPublication.pose().at("mHead")==initial);
+ }
  // A -> B -> A with identical current region/URL IDs still invalidates a
  // captured queued transport. The production synchronous signal advances this
  // epoch and cancels captured guards before idle or the HTTP pool can observe.
