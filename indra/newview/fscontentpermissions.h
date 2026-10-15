@@ -2,6 +2,8 @@
 #ifndef FS_CONTENT_PERMISSIONS_H
 #define FS_CONTENT_PERMISSIONS_H
 #include "llagent.h"
+#include "fscontentreadpolicy.h"
+#include "rlvhandler.h"
 #include "llinventorymodel.h"
 #include "llviewerinventory.h"
 #include "llviewernetwork.h"
@@ -37,8 +39,10 @@ inline bool readable(const LLViewerInventoryItem* item,bool notecard)
     const auto& permissions=item->getPermissions();
     // Match native COPY / COPY+MODIFY, including its Library exception.
     // Assistant access never broadens this through a godlike override.
-    return gAgent.allowOperation(PERM_COPY,permissions,GP_OBJECT_MANIPULATE) &&
-        (notecard || library(item->getUUID()) || gAgent.allowOperation(PERM_MODIFY,permissions,GP_OBJECT_MANIPULATE));
+    return nativeContentReadable({notecard,agentInventory(item->getUUID()),library(item->getUUID()),
+        gAgent.allowOperation(PERM_COPY,permissions,GP_OBJECT_MANIPULATE),
+        gAgent.allowOperation(PERM_MODIFY,permissions,GP_OBJECT_MANIPULATE),
+        rlv_handler_t::isEnabled(),gRlvHandler.hasBehaviour(RLV_BHVR_VIEWNOTE),gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT)});
 }
 inline bool writable(const LLViewerInventoryItem* item,bool notecard)
 {return readable(item,notecard) && agentInventory(item->getUUID()) && !library(item->getUUID()) &&
