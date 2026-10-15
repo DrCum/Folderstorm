@@ -7,6 +7,7 @@
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
 #include "llagent.h"
+#include "llagentcamera.h"
 #include "llapp.h"
 #include "llappviewer.h"
 #include "llfloaterreg.h"
@@ -30,6 +31,7 @@ namespace
 {
 using namespace fs_preferences;
 constexpr const char* CAMERA_PRESET = "@camera_preset";
+constexpr const char* CAMERA_PRESET_TYPE = "@camera_preset_type";
 constexpr const char* GRAPHICS_PRESET = "@graphics_preset";
 struct Equal { bool operator()(const LLSD& a, const LLSD& b) const { return llsd_equals(a,b); } };
 using Model = Transaction<LLSD, Equal>;
@@ -58,6 +60,7 @@ bool ready()
 LLControlVariable* control(const std::string& key)
 {
     if (key == CAMERA_PRESET) return gSavedSettings.getControl("PresetCameraActive");
+    if (key == CAMERA_PRESET_TYPE) return gSavedSettings.getControl("CameraPresetType");
     if (key == GRAPHICS_PRESET) return gSavedSettings.getControl("PresetGraphicActive");
     const auto* entry = descriptor(key);
     return entry ? (entry->account ? gSavedPerAccountSettings : gSavedSettings).getControl(entry->control) : nullptr;
@@ -148,7 +151,7 @@ struct Service
     {
         std::vector<std::string> keys;
         for (const auto& entry : catalog) keys.emplace_back(entry.id);
-        keys.emplace_back(CAMERA_PRESET); keys.emplace_back(GRAPHICS_PRESET);
+        keys.emplace_back(CAMERA_PRESET); keys.emplace_back(CAMERA_PRESET_TYPE); keys.emplace_back(GRAPHICS_PRESET);
         for (const auto& key : keys)
         {
             auto* var = control(key);
@@ -198,6 +201,7 @@ struct Service
                         // draft value remains unrestored or externally owned.
                         const std::string metadata = effect == Effect::Camera ? CAMERA_PRESET : GRAPHICS_PRESET;
                         owned.erase(std::remove(owned.begin(),owned.end(),metadata),owned.end());
+                        if (effect == Effect::Camera) owned.erase(std::remove(owned.begin(),owned.end(),CAMERA_PRESET_TYPE),owned.end());
                     }
         bool restoreDirty = cameraTouched;
         for (const auto& entry : transaction.entries())
@@ -387,6 +391,7 @@ bool FSPreferencesListener::prepareAssistant(FSAssistantPreparedOperation& opera
             {
                 const std::string key = effect == Effect::Camera ? CAMERA_PRESET : GRAPHICS_PRESET;
                 operation.summary["subjects"].append(llsd::map("name",key,"before_name",label(read(key)),"after_name","preset label may clear at runtime; saved value unchanged"));
+                if (effect == Effect::Camera) operation.summary["subjects"].append(llsd::map("name",CAMERA_PRESET_TYPE,"before_name",label(read(CAMERA_PRESET_TYPE)),"after_name","camera preset type may become Custom at runtime; saved value unchanged"));
             }
     operation.summary["subject_count"] = static_cast<S32>(operation.summary["subjects"].size());
     return true;
@@ -424,12 +429,15 @@ void FSPreferencesListener::dispatch(const LLSD& request)
         std::vector<std::string> keys = ids;
         bool camera = false, graphics = false;
         for (const auto& id : ids) { camera |= descriptor(id)->effect == Effect::Camera; graphics |= descriptor(id)->effect == Effect::Graphics; }
-        if (camera) keys.emplace_back(CAMERA_PRESET);
+        // The label's native camera-floater callback can also change the type.
+        // Restore that dependent type after the label and all primary values.
+        if (camera) { keys.emplace_back(CAMERA_PRESET); keys.emplace_back(CAMERA_PRESET_TYPE); }
         if (graphics) keys.emplace_back(GRAPHICS_PRESET);
         for (const auto& key : keys)
         {
             auto* var = control(key);
             if (!var || !var->isPersisted() || ((key == CAMERA_PRESET || key == GRAPHICS_PRESET) && !var->isType(TYPE_STRING))) return response.error("unsupported: required native control is missing or has changed type");
+            if (key == CAMERA_PRESET_TYPE && !var->isType(TYPE_U32)) return response.error("unsupported: native camera preset type has changed type");
         }
         if (!fs_assistant::asyncAllowed()) return response.error("session_changed: preview authority changed");
         if (!FSWorkspaceController::instance().preparePreferencesPreview()) return response.error("busy: a workspace transaction owns viewer settings");
@@ -497,7 +505,17 @@ bool fs_preferences_preset_invalidated(bool camera)
             const bool hidden = !entry.external && self.transaction.same(read(key),entry.expected) &&
                 !entry.before.effective.asString().empty() && entry.expected.effective.asString().empty();
             self.transaction.changed(key);
+            if (camera) self.transaction.changed(CAMERA_PRESET_TYPE);
             return hidden;
         }
     return false;
+}
+bool fs_preferences_camera_preset_type_write(S32 value)
+{
+    auto& self = service();
+    return dependentPreviewWrite(self.writing,self.metadataAllowed.count(CAMERA_PRESET_TYPE) != 0,value,
+        [](S32 type,bool saved)
+        {
+            if (auto* var = control(CAMERA_PRESET_TYPE)) var->setValue(LLSD(type),saved);
+        });
 }

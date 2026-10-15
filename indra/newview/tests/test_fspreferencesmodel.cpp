@@ -2,6 +2,7 @@
 #include "../fspreferencesmodel.h"
 #include <functional>
 #include <limits>
+#include <set>
 #include <stdexcept>
 
 static void check(bool value) { if (!value) throw std::runtime_error("Preference transaction regression"); }
@@ -23,6 +24,37 @@ struct Store
         writes.push_back(key);
         // Native camera/graphics signals invalidate the runtime preset label.
         if (callbacks && key == "a") { values["preset"].effective = 0; values["preset"].unsaved = true; }
+    }
+};
+struct CameraCallbacks
+{
+    std::map<std::string,Layers> values {{"camera",{1,1,1,false,true}},
+        {"label",{10,10,0,false,true}}, {"type",{0,0,0,false,true}}};
+    bool writing = false;
+    std::set<std::string> owned;
+    std::vector<std::string> writes;
+    Layers read(const std::string& key) const { return values.at(key); }
+    void scope(const std::vector<std::string>& keys) { writing = true; owned = {keys.begin(),keys.end()}; }
+    void populatePresetCombo()
+    {
+        if (read("label").effective == 0 && !fs_preferences::dependentPreviewWrite(writing,owned.count("type") != 0,3.,
+            [this](double value,bool saved){write("type",value,saved);})) write("type",3,true);
+    }
+    void write(const std::string& key,double value,bool saved)
+    {
+        auto& state = values.at(key);
+        const auto previous = state.effective;
+        if (saved) { state.saved = state.effective = value; state.unsaved = false; }
+        else if (state.effective != value) { state.effective = value; state.unsaved = true; }
+        writes.push_back(key);
+        // Native chain: settingChanged -> triggerChangeCameraSignal -> the
+        // constructed floater's populatePresetCombo -> CameraPresetType write.
+        if (key == "camera" && previous != value && read("label").effective != 0)
+        {
+            if (!fs_preferences::dependentPreviewWrite(writing,owned.count("label") != 0,0.,
+                [this](double label,bool persist){write("label",label,persist);})) write("label",0,true);
+            populatePresetCombo();
+        }
     }
 };
 int main()
@@ -135,4 +167,47 @@ int main()
     write("a",8,false); write("b",9,false); tx.remember(read);
     cleanup = tx.cancel(source(),read,write,[](const std::string& key){return key != "a";});
     check(cleanup.state == "partially_restored" && cleanup.skipped == std::vector<std::string>{"a"} && store.read("b").effective == 3);
+
+    CameraCallbacks camera; Model cameraTx;
+    const auto cameraRead = [&camera](const std::string& key){return camera.read(key);};
+    const auto cameraWrite = [&camera](const std::string& key,double value,bool saved){camera.write(key,value,saved);};
+    const std::vector<std::string> cameraKeys {"camera","label","type"};
+    check(cameraTx.begin(source(),"camera-mode",cameraTx.revision(),90,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead); camera.writing = false;
+    check(camera.read("camera").saved == 1 && camera.read("label").saved == 10 && camera.read("type").saved == 0);
+    check(camera.read("label").effective == 0 && camera.read("type").effective == 3 && camera.read("type").unsaved);
+    camera.scope(cameraTx.owned(cameraRead));
+    cleanup = cameraTx.cancel(source(),cameraRead,cameraWrite,allowed); camera.writing = false;
+    check(cleanup.state == "cancelled" && camera.read("camera").effective == 1 && camera.read("label").effective == 10);
+    check(camera.read("type").saved == 0 && camera.read("type").effective == 0 && !camera.read("type").unsaved && camera.writes.back() == "type");
+
+    // Preserve an already present type override, including its saved layer.
+    camera.values["type"] = {0,1,0,true,true};
+    check(cameraTx.begin(source(),"camera-override",cameraTx.revision(),91,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead);
+    camera.scope(cameraTx.owned(cameraRead));
+    cleanup = cameraTx.cancel(source(),cameraRead,cameraWrite,allowed); camera.writing = false;
+    check(cleanup.state == "cancelled" && camera.read("type").saved == 0 && camera.read("type").effective == 1 && camera.read("type").unsaved);
+
+    check(cameraTx.begin(source(),"camera-manual",cameraTx.revision(),92,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead); camera.writing = false;
+    camera.write("type",4,true); cameraTx.changed("type");
+    check(!cameraTx.canAccept(source(),"camera-manual",cameraTx.revision(),93,cameraRead));
+    camera.scope(cameraTx.owned(cameraRead));
+    camera.populatePresetCombo(); // cleanup callback cannot overwrite manual type
+    check(camera.read("type").saved == 4 && camera.read("type").effective == 4);
+    cleanup = cameraTx.cancel(source(),cameraRead,cameraWrite,allowed); camera.writing = false;
+    check(cleanup.state == "partially_restored" && cleanup.skipped == std::vector<std::string>{"type"});
+    check(camera.read("type").saved == 4 && camera.read("type").effective == 4 && !camera.read("type").unsaved);
+
+    // Normal native callbacks retain their saved-layer behavior outside a scope.
+    camera.write("label",0,true); camera.populatePresetCombo();
+    check(camera.read("type").saved == 3 && !camera.read("type").unsaved);
+
+    camera = CameraCallbacks{};
+    check(cameraTx.begin(source(),"camera-accept",cameraTx.revision(),94,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead);
+    cleanup = cameraTx.accept(source(),"camera-accept",cameraTx.revision(),95,cameraRead,cameraWrite); camera.writing = false;
+    check(cleanup.state == "accepted" && camera.read("camera").saved == 2 && camera.read("label").saved == 0);
+    check(camera.read("type").saved == 3 && camera.read("type").effective == 3 && !camera.read("type").unsaved);
 }

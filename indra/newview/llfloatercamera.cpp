@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatercamera.h"
+#include "fspreferenceslistener.h"
 
 // Library includes
 #include "llfloaterreg.h"
@@ -941,7 +942,8 @@ void LLFloaterCamera::populatePresetCombo()
     std::string active_preset_name = gSavedSettings.getString("PresetCameraActive");
     if (active_preset_name.empty())
     {
-        gSavedSettings.setU32("CameraPresetType", CAMERA_PRESET_CUSTOM);
+        if (!fs_preferences_camera_preset_type_write(CAMERA_PRESET_CUSTOM))
+            gSavedSettings.setU32("CameraPresetType", CAMERA_PRESET_CUSTOM);
         updateItemsSelection();
         mPresetCombo->setLabel(getString("inactive_combo_text"));
     }

@@ -17,6 +17,7 @@ namespace fs_preferences
 {
 constexpr int SCHEMA_VERSION = 1;
 constexpr std::size_t MAX_CHANGES = 16;
+constexpr std::size_t MAX_METADATA = 3;
 constexpr int MAX_TTL = 300;
 enum class Type { Boolean, Real, Integer };
 enum class Effect { None, UI, Camera, Graphics, Audio, Quality, LookAt };
@@ -88,6 +89,15 @@ inline bool dormantWorkspaceBaseline(const WorkspaceOwnership& state)
     return state.transaction && state.ready && state.sameIdentity && !state.nativeVisible &&
         !state.nativeOpening && state.definitionsUnchanged && state.activeUnchanged && !state.edited && !state.deferred;
 }
+// A synchronous native callback may update dependent metadata during our
+// runtime write. Handle it even when ownership was lost, so cleanup cannot
+// overwrite a later native/manual edit through that callback.
+template<class Value, class Write> bool dependentPreviewWrite(bool writing, bool owned, const Value& value, Write write)
+{
+    if (!writing) return false;
+    if (owned) write(value,false);
+    return true;
+}
 
 template<class Value, class Equal> class Transaction
 {
@@ -111,7 +121,7 @@ public:
     template<class Read> bool begin(const Identity& source, const std::string& id, std::uint64_t revision,
         double now, int ttl, const std::vector<std::string>& keys, Read read)
     {
-        if (busy() || !source.valid() || id.empty() || revision != mRevision || !std::isfinite(now) || ttl < 1 || ttl > MAX_TTL || keys.empty() || keys.size() > MAX_CHANGES + 2) return false;
+        if (busy() || !source.valid() || id.empty() || revision != mRevision || !std::isfinite(now) || ttl < 1 || ttl > MAX_TTL || keys.empty() || keys.size() > MAX_CHANGES + MAX_METADATA) return false;
         std::vector<std::string> unique = keys;
         std::sort(unique.begin(), unique.end());
         if (std::adjacent_find(unique.begin(),unique.end()) != unique.end()) return false;

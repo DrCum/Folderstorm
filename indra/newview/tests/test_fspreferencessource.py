@@ -58,6 +58,30 @@ class PreferencesNativeBoundaryTests(unittest.TestCase):
         self.assertLess(preview.index("std::vector<std::string> keys = ids"), preview.index("keys.emplace_back(CAMERA_PRESET)"))
         self.assertLess(preview.index("keys.emplace_back(CAMERA_PRESET)"), preview.index("self.transaction.begin("))
 
+    def test_constructed_camera_floater_callback_keeps_type_runtime_only(self):
+        camera = source("llfloatercamera.cpp")
+        registration = camera[camera.index("bool LLFloaterCamera::postBuild()"):camera.index("void LLFloaterCamera::populatePresetCombo()")]
+        self.assertIn('setPresetListChangeCameraCallback(boost::bind(&LLFloaterCamera::populatePresetCombo, this))', registration)
+        populate = camera[camera.index("void LLFloaterCamera::populatePresetCombo()"):camera.index("void LLFloaterCamera::onSavePreset()")]
+        self.assertIn('if (!fs_preferences_camera_preset_type_write(CAMERA_PRESET_CUSTOM))', populate)
+        self.assertIn('gSavedSettings.setU32("CameraPresetType", CAMERA_PRESET_CUSTOM)', populate)
+        adapter = source("fspreferenceslistener.cpp")
+        self.assertIn('constexpr const char* CAMERA_PRESET_TYPE = "@camera_preset_type"', adapter)
+        self.assertIn('if (key == CAMERA_PRESET_TYPE) return gSavedSettings.getControl("CameraPresetType")', adapter)
+        self.assertIn('keys.emplace_back(CAMERA_PRESET); keys.emplace_back(CAMERA_PRESET_TYPE)', adapter)
+        self.assertIn('key == CAMERA_PRESET_TYPE && !var->isType(TYPE_U32)', adapter)
+        self.assertIn('if (camera) self.transaction.changed(CAMERA_PRESET_TYPE)', adapter)
+        hook = adapter[adapter.index('bool fs_preferences_camera_preset_type_write('):]
+        self.assertIn('dependentPreviewWrite(self.writing,self.metadataAllowed.count(CAMERA_PRESET_TYPE) != 0,value', hook)
+        self.assertIn('var->setValue(LLSD(type),saved)', hook)
+        self.assertNotIn('switchCameraPreset(', hook)
+        # The scoped runtime hook belongs only to this UI metadata callback.
+        self.assertEqual(camera.count('fs_preferences_camera_preset_type_write('), 1)
+        model = source("fspreferencesmodel.h")
+        helper = model[model.index('bool dependentPreviewWrite('):model.index('template<class Value, class Equal> class Transaction')]
+        self.assertIn('if (!writing) return false', helper)
+        self.assertIn('if (owned) write(value,false)', helper)
+
     def test_runtime_native_ownership_guards_and_no_audio_input_writes(self):
         adapter = source("fspreferenceslistener.cpp")
         for guard in ("FSSessionWorker::assistantActiveAllowed()", "FSWorkspaceContext::cameraAllowed()", "RLV_BHVR_SHOWNAMES", "RlvActions::canShowNearbyAgents()", "userAutoTuneEnabled", 'instanceVisible("preferences")', "preferencesBusy()", "getPolicyGeneration() != policyGeneration"):
