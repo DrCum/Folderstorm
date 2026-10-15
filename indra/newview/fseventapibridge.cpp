@@ -29,6 +29,8 @@
 #include "fsassistantpermissions.h"
 #include "fsassistantapproval.h"
 #include "fsassistantoperation.h"
+#include "fsassistantfeature.h"
+#include "fsassistantfeatures.h"
 #include "fsassistantpolicy.h"
 #include "fslinkreplacement.h"
 #include "fsinventorybulk.h"
@@ -188,6 +190,7 @@ LLSD policy_error_details(const std::string& op, const std::vector<std::string>&
 
 bool is_read_op(const std::string& api, const std::string& op)
 {
+    if(const auto* feature=fs_assistant::featureOperation(api,op))return feature->readOnly;
     if (api == "LLInventory")
     {
         return op == "status" || op == "get" || op == "list" || op == "search" ||
@@ -326,7 +329,23 @@ std::string to_json(const LLSD& value)
 
 bool bridge_api_allowed(const std::string& api)
 {
-    return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera" || api == "LLWorkspace";
+    return api == "LLInventory" || api == "LLAppearance" || api == "LLCamera" || api == "LLWorkspace" || fs_assistant::featureAPI(api);
+}
+
+std::shared_ptr<FSAssistantFeature> feature_listener(const std::string& api)
+{return std::dynamic_pointer_cast<FSAssistantFeature>(LLEventAPI::getInstance(api));}
+
+LLSD assistant_capabilities()
+{
+    LLSD result=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1,"async_operations",1);
+    for(const auto& entry:fs_assistant::featureOperations)
+        if(const auto feature=feature_listener(entry.api))
+        {
+            const auto advertised=feature->assistantCapabilities();
+            if(advertised.has(entry.capability) && advertised[entry.capability].asInteger()==1)
+                result[entry.capability]=1;
+        }
+    return result;
 }
 
 void fail_response(LLHTTPNode::ResponsePtr response, S32 code, const std::string& error, const LLSD& extra = LLSD())
@@ -406,7 +425,12 @@ public:
             LLSD health=mIdentity;
             health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
             health["managed_async_appearance_writes"]=true;health["managed_create_item"]=true;
-            health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1,"async_operations",1);
+            health["apis_ready"]=apis;health["capabilities"]=assistant_capabilities();
+            LLSD limits=LLSD::emptyMap();
+            for(const auto& entry:fs_assistant::featureOperations)
+                if(const auto feature=feature_listener(entry.api))
+                {apis[entry.api]=true;limits[entry.api]=feature->assistantLimits();}
+            health["apis_ready"]=apis;health["feature_limits"]=limits;
             response->extendedResult(HTTP_OK,to_json(health),json_headers());
 
             return;
@@ -474,6 +498,32 @@ public:
             else postEvent(prepared.request, response, api, op, false, &prepared);
             return;
         }
+        if(fs_assistant::featureAPI(api))
+        {
+            const auto* entry=fs_assistant::featureOperation(api,op);
+            const auto feature=feature_listener(api);
+            if(!entry || !feature || feature->assistantCapabilities()[entry->capability].asInteger()!=1)
+            {fail_response(response,HTTP_NOT_FOUND,"This exact assistant feature is unsupported",llsd::map("error_code","unsupported"));return;}
+            if(*entry->permission)
+            {
+                const auto* def=find_def(entry->permission);
+                if(!def || effective_level(def->kind)=="deny")
+                {fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,llsd::map("class",entry->permission));return;}
+            }
+            FSAssistantPreparedOperation prepared;std::string error;
+            std::vector<std::string> classes;
+            if(*entry->permission)classes.emplace_back(entry->permission);
+            if(!prepareOperation(input,classes,prepared,error))
+            {fail_response(response,HTTP_BAD_REQUEST,error);return;}
+            if(prepared.requiredClasses.empty())
+            {fail_response(response,HTTP_FORBIDDEN,"Feature did not declare a permission scope");return;}
+            const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses));
+            if(decision==fs_assistant::Decision::Deny)
+            {fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,policy_error_details(op,prepared.requiredClasses));return;}
+            if(decision==fs_assistant::Decision::Ask)enqueueAsk(std::move(prepared),response,api,op);
+            else postEvent(prepared.request,response,api,op,false,&prepared);
+            return;
+        }
         const ActionClass kind = classify(api, op);
         if (kind == ActionClass::Unknown || kind == ActionClass::Permanent)
         {
@@ -489,7 +539,7 @@ public:
             {
                 extra["permissions"] = effective_permissions();
                 extra["policy_generation"] = gPolicyGeneration;
-                extra["capabilities"] = llsd::map("bulk_inventory_review", 1, "workspace_tools", 1);
+                extra["capabilities"] = assistant_capabilities();
             }
             fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, extra);
             return;
@@ -567,7 +617,7 @@ public:
         }
         mPending.clear();
         for(auto& entry:mAsync)entry.second->cancel("connection_changed");
-        mAsync.clear();
+        mAsync.clear();mAsyncReadScopes.clear();
     }
 
     void enable() { mEnabled = true; ++mSessionGeneration; }
@@ -591,7 +641,11 @@ public:
         auto& operation=*found->second;
         LLSD result=llsd::map("operation_id",id,"state",operation.state(),"submission_steps",static_cast<S32>(operation.submitted()),
             "pending_callbacks",static_cast<S32>(operation.pending()),"stop_reason",operation.reason(),"known_ids",LLSD::emptyArray());
-        for(const auto& value:operation.ids())result["known_ids"].append(value);
+        const auto scope=mAsyncReadScopes.find(id);
+        const bool reveal=scope==mAsyncReadScopes.end() || fs_assistant::receiptVisible(scope->second,
+            [](const std::string& permission){const auto* def=find_def(permission);return def?effective_level(def->kind):std::string("deny");});
+        if(reveal)for(const auto& value:operation.ids())result["known_ids"].append(value);
+        else result["results_restricted"]=true;
         return result;
     }
     void maintenance()
@@ -725,6 +779,18 @@ private:
         prepared.request = input;
         prepared.request["__assistant_epoch"]=mIdentity["viewer_session"];
         prepared.requiredClasses = classes;
+        if(fs_assistant::featureAPI(input["api"].asString()))
+        {
+            const auto feature=feature_listener(input["api"].asString());
+            const auto* entry=fs_assistant::featureOperation(input["api"].asString(),input["op"].asString());
+            if(!feature || !entry){error="Feature is unavailable";return false;}
+            if(!feature->prepareAssistant(prepared,error))return false;
+            if(prepared.request["api"]!=input["api"] || prepared.request["op"]!=input["op"])
+            {error="Feature changed its operation identity";return false;}
+            if(*entry->permission && std::find(prepared.requiredClasses.begin(),prepared.requiredClasses.end(),entry->permission)==prepared.requiredClasses.end())
+                prepared.requiredClasses.emplace_back(entry->permission);
+            return true;
+        }
         if (input["api"].asString() == "LLWorkspace") return fs_prepare_workspace(prepared, error);
         const std::string op = input["op"].asString();
         if (op == "executeBulkPlan" || op == "rename" || op == "move" || op == "batchRename" || op == "batchMove")
@@ -812,6 +878,12 @@ private:
 
     bool validateOperation(const FSAssistantPreparedOperation& prepared, std::string& error)
     {
+        if(fs_assistant::featureAPI(prepared.request["api"].asString()))
+        {
+            const auto feature=feature_listener(prepared.request["api"].asString());
+            if(!feature){error="Feature became unavailable";return false;}
+            return feature->validateAssistant(prepared,error);
+        }
         if (prepared.request["api"].asString() == "LLWorkspace") return fs_validate_workspace(prepared, error);
         const std::string op = prepared.request["op"].asString();
         if (prepared.validation.has("bulk_plan_id")) return FSInventoryBulk::validate(prepared.validation["bulk_plan_id"].asString(), error);
@@ -871,7 +943,7 @@ private:
         if(durable)
         {
             for(auto it=mAsync.begin();it!=mAsync.end() && mAsync.size()>=64;)
-                if(it->second->pending()==0 && it->second->state()!="pending")it=mAsync.erase(it);else ++it;
+                if(it->second->pending()==0 && it->second->state()!="pending"){mAsyncReadScopes.erase(it->first);it=mAsync.erase(it);}else ++it;
             if(mAsync.size()>=64){fail_response(response,HTTP_SERVICE_UNAVAILABLE,"Too many active assistant operations");return;}
             std::weak_ptr<State> weak=weak_from_this();
             posted.async=std::make_shared<fs_assistant::AsyncOperation>([weak,gate=posted.gate,generation=mSessionGeneration,
@@ -885,12 +957,22 @@ private:
                 if(!gate->allowed())return "permission_revoked";
                 return {};
             });
-            if(prepared && api=="LLAppearance")
+            if(prepared && (api=="LLAppearance" || fs_assistant::featureAPI(api)))
             {
                 const auto frozen=*prepared;
-                posted.async->checkWith([frozen](){std::string error;return fs_validate_assistant_operation(frozen,error)?std::string():std::string("appearance_source_changed");});
+                posted.async->checkWith([weak,frozen](){std::string error;const auto self=weak.lock();return self && self->validateOperation(frozen,error)?std::string():std::string("operation_source_changed");});
             }
+            if(fs_assistant::needsActiveCharacter(api,op))
+                posted.async->checkWith([](){return FSSessionWorker::assistantActiveAllowed()?std::string():std::string("requires_active_character");});
             mAsync.emplace(request_id,posted.async);
+            if(fs_assistant::featureAPI(api))
+            {
+                auto& reads=mAsyncReadScopes[request_id];
+                const auto* entry=fs_assistant::featureOperation(api,op);
+                if(entry && *entry->receiptRead)reads.emplace_back(entry->receiptRead);
+                else for(const auto& permission:required)
+                    if(const auto* def=find_def(permission))if(def->privateRead)reads.push_back(permission);
+            }
         }
         mPending.emplace(request_id, posted);
 
@@ -1188,7 +1270,7 @@ private:
         {
             body["permissions"] = effective_permissions();
             body["policy_generation"] = gPolicyGeneration;
-            body["capabilities"] = llsd::map("bulk_inventory_review", 1, "workspace_tools", 1);
+            body["capabilities"] = assistant_capabilities();
         }
         found->second.response->extendedResult(HTTP_OK, to_json(body), json_headers());
         mPending.erase(found);
@@ -1201,6 +1283,7 @@ private:
     LLTempBoundListener mReplyConnection;
     std::map<LLUUID, Posted> mPending;
     std::map<LLUUID,fs_assistant::AsyncGuard> mAsync;
+    std::map<LLUUID,std::vector<std::string>> mAsyncReadScopes;
     std::map<LLUUID, Ask> mAsks;
     std::deque<LLUUID> mAskOrder;
     std::vector<std::weak_ptr<fs_assistant::ExecutionGate>> mExecutions;

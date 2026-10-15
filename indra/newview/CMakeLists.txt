@@ -1433,6 +1433,8 @@ set(viewer_HEADER_FILES
     llinspectremoteobject.h
     llinspecttexture.h
     llinspecttoast.h
+    fsassistantfeature.h
+    fsassistantfeatures.h
     fseventapibridge.h
     fssessionworker.h
     fssessionprotocol.h

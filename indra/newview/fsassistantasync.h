@@ -2,6 +2,7 @@
 #ifndef FS_ASSISTANT_ASYNC_H
 #define FS_ASSISTANT_ASYNC_H
 #include <functional>
+#include "fsassistantfeatures.h"
 #include <algorithm>
 #include <memory>
 #include <map>
@@ -13,7 +14,7 @@ namespace fs_assistant
 {
 inline bool requiresAsyncAuthority(const std::string& api, const std::string& op, bool readOnly)
 {
-    return (api == "LLAppearance" && !readOnly) ||
+    return featureOperation(api,op) || (api == "LLAppearance" && !readOnly) ||
         (api == "LLInventory" && (op == "createItem" || op == "createFolder"));
 }
 // Viewer-main-thread state. Authority is supplied by the owning bridge, never
