@@ -3,6 +3,8 @@
 #include "fsposelistener.h"
 #include "fsassistantfeature.h"
 #include "fsposepolicy.h"
+#include "fsposexml.h"
+#include "fsposefile.h"
 #include "fsposeranimator.h"
 #include "fssharedposemanager.h"
 #include "fssessionworker.h"
@@ -123,29 +125,17 @@ std::filesystem::path poseDirectory()
 std::string presetKey(const std::string& name){return "preset-"+hash(name);}
 bool readPreset(const std::string& id,std::string& bytes,std::string& error)
 {
- std::error_code ec;const auto dir=poseDirectory();
- if(!std::filesystem::is_directory(dir,ec) || std::filesystem::is_symlink(dir,ec)){error="Native pose directory is unavailable";return false;}
- unsigned seen=0;
- for(std::filesystem::directory_iterator it(dir,ec),end;!ec && it!=end && seen<256;it.increment(ec))
- {
-  const auto name=pathString(it->path().filename());if(it->path().extension()!=".xml")continue;++seen;
-  if(presetKey(name)!=id)continue;
-  if(it->is_symlink(ec) || !it->is_regular_file(ec) || it->file_size(ec)>presetLimit || ec){error="Preset is not a bounded regular native pose file";return false;}
-  llifstream input(pathString(it->path()),std::ios::binary);if(!input){error="Preset could not be opened";return false;}
-  bytes.resize(presetLimit+1);input.read(&bytes[0],presetLimit+1);bytes.resize(static_cast<std::size_t>(input.gcount()));
-  if(input.bad()){error="Preset read failed";return false;}
-  if(bytes.size()>presetLimit){error="Preset exceeds the 65536 byte limit";return false;}return true;
- }
+ NativePoseStore store;if(!store.open(poseDirectory().parent_path(),false,error))return false;
+ for(const auto& name:store.names())if(presetKey(name)==id)return store.read(name,bytes,error);
  error="Exact saved preset ID was not found in the native pose store";return false;
 }
 bool parsePreset(const std::string& bytes,Rotations& result,std::string& error)
 {
- if(bytes.empty() || bytes.size()>presetLimit || bytes.find("<!")!=std::string::npos){error="Preset XML is empty, oversized or contains unsupported declarations";return false;}
+ if(!presetXML(bytes)){error="Preset XML is empty, oversized or contains unsupported declarations";return false;}
  LLSD pose;std::istringstream input(bytes);LLPointer<LLSDXMLParser> parser=new LLSDXMLParser(false);
  if(parser->parse(input,pose,presetLimit,8)==LLSDParser::PARSE_FAILURE || !pose.isMap() || pose.size()>static_cast<S32>(jointLimit+2))
  {error="Preset is not a bounded native rotation-only pose document";return false;}
- input>>std::ws;
- if(!input.eof() || !pose["version"]["value"].isInteger() || pose["version"].size()!=1 ||
+ if(!pose["version"]["value"].isInteger() || pose["version"].size()!=1 ||
  pose["version"]["value"].asInteger()!=8 || !pose["startFromTeePose"]["value"].isBoolean() ||
  pose["startFromTeePose"].size()!=1 || pose["startFromTeePose"]["value"].asBoolean())
  {error="Only native version 8 local absolute rotation presets without global T-pose reset are supported";return false;}
@@ -157,7 +147,9 @@ bool parsePreset(const std::string& bytes,Rotations& result,std::string& error)
   for(auto field=joint.beginMap();field!=joint.endMap();++field)
    if(field->first!="rotation" && field->first!="enabled" && field->first!="jointBaseRotationIsZero" && field->first!="userSetBaseRotationToZero")
    {error="Preset contains position, scale, mirror, lock or wider motion state; rotation-only import refused";return false;}
-  if((joint.has("enabled") && !joint["enabled"].asBoolean()) || !joint["jointBaseRotationIsZero"].asBoolean() || !joint["rotation"].isArray() || joint["rotation"].size()!=3)
+  if((joint.has("enabled") && (!joint["enabled"].isBoolean() || !joint["enabled"].asBoolean())) ||
+     (joint.has("userSetBaseRotationToZero") && (!joint["userSetBaseRotationToZero"].isBoolean() || !joint["userSetBaseRotationToZero"].asBoolean())) ||
+     !joint["jointBaseRotationIsZero"].isBoolean() || !joint["jointBaseRotationIsZero"].asBoolean() || !joint["rotation"].isArray() || joint["rotation"].size()!=3)
   {error="Preset requires unsupported joint enable or relative/base state changes";return false;}
   F32 angles[3];for(unsigned i=0;i<3;++i){const auto& component=joint["rotation"][i];const double angle=component.asReal();if((!component.isReal() && !component.isInteger()) || !std::isfinite(angle) || std::abs(angle)>3.141593){error="Preset rotation exceeds local Euler bounds";return false;}angles[i]=angle;}
   LLQuaternion q;q.setEulerAngles(angles[0],angles[1],angles[2]);LLSD rotation=LLSD::emptyArray();for(float component:q.mQ)rotation.append(component);
@@ -209,7 +201,7 @@ LLSD evidence(const LLSD& request,std::string& error)
  else if(op=="load")
  {std::string bytes;Rotations changes;if(!readPreset(request["preset_id"].asString(),bytes,error) || hash(bytes)!=request["preset_revision"].asString() || !parsePreset(bytes,changes,error)){if(error.empty())error="Preset changed; list presets again";return LLSD();}auto next=sSession.transaction;if(!next.update(sSession.transaction.revision(),changes,captured())){error="Preset exceeds transaction joint bounds";return LLSD();}value["preset_bytes"]=bytes;value["effect_rotations"]=rotationValue(next.rotations());}
  else if(op=="save")
- {if(!presetID(request["name"].asString()) || request["expected_preset_revision"].asString()!="absent" || !valid(sSession.transaction.rotations())){error="Saving requires a new confined preset name, expected_preset_revision=absent and owned rotations";return LLSD();}std::error_code ec;if(std::filesystem::exists(poseDirectory()/(request["name"].asString()+".xml"),ec)){error="Preset name collision; replacement is not supported";return LLSD();}value["preset_bytes"]=saveBytes(sSession.transaction.rotations());}
+ {if(!presetID(request["name"].asString()) || request["expected_preset_revision"].asString()!="absent" || !valid(sSession.transaction.rotations())){error="Saving requires a new confined preset name, expected_preset_revision=absent and owned rotations";return LLSD();}NativePoseStore store;if(!store.open(poseDirectory().parent_path(),false,error,true))return LLSD();if(store.exists(request["name"].asString()+".xml")){error="Preset name collision; replacement is not supported";return LLSD();}value["preset_bytes"]=saveBytes(sSession.transaction.rotations());}
  else if(op=="undo")
  {auto next=sSession.transaction;if(!next.undo(sSession.transaction.revision())){error="No owned transaction change can be undone";return LLSD();}value["effect_rotations"]=rotationValue(next.rotations());}
  else if(op=="reset")value["effect_rotations"]=LLSD::emptyMap();
@@ -287,10 +279,10 @@ public:
   }
   if(op=="presets")
   {
-   LLSD result;result["presets"]=LLSD::emptyArray();std::error_code ec;const auto dir=poseDirectory();
-   if(std::filesystem::is_directory(dir,ec) && !std::filesystem::is_symlink(dir,ec))
-    for(std::filesystem::directory_iterator it(dir,ec),end;!ec && it!=end && result["presets"].size()<256;it.increment(ec))
-    {if(it->path().extension()!=".xml" || it->is_symlink(ec) || !it->is_regular_file(ec))continue;const auto name=pathString(it->path().filename());const auto id=presetKey(name);std::string bytes,reason;Rotations rotations;const bool readable=readPreset(id,bytes,reason);const bool supported=readable && parsePreset(bytes,rotations,reason);result["presets"].append(llsd::map("id",id,"name",pathString(it->path().stem()),"revision",readable?hash(bytes):std::string(),"supported",supported,"reason",reason));}
+   LLSD result;result["presets"]=LLSD::emptyArray();NativePoseStore store;
+   if(!store.open(poseDirectory().parent_path(),false,error,true))return response.error(error);
+   for(const auto& name:store.names())
+   {const auto id=presetKey(name);std::string bytes,reason;Rotations rotations;const bool readable=store.read(name,bytes,reason);const bool supported=readable && parsePreset(bytes,rotations,reason);result["presets"].append(llsd::map("id",id,"name",pathString(std::filesystem::u8path(name).stem()),"revision",readable?hash(bytes):std::string(),"supported",supported,"reason",reason));}
    response.setResponse(result);return;
   }
   if(sReceipts.size()>=64){auto old=sReceipts.begin();while(old!=sReceipts.end() && old->first==sSession.operation)++old;if(old!=sReceipts.end())sReceipts.erase(old);}
@@ -309,13 +301,11 @@ public:
   }
   else if(op=="save")
   {
-   const auto dir=poseDirectory();std::error_code ec;
-   if(std::filesystem::is_symlink(dir,ec) || (!std::filesystem::is_directory(dir,ec) && !std::filesystem::create_directory(dir,ec)))return response.error("Native pose directory could not be created safely");
-   const auto path=dir/(request["name"].asString()+".xml");const auto bytes=prepared["preset_bytes"].asString();
-   LLFILE* file=LLFile::fopen(pathString(path),"wx");if(!file)return response.error("Preset collision or native file creation failed");
-   const bool saved=std::fwrite(bytes.data(),1,bytes.size(),file)==bytes.size();const bool closed=std::fclose(file)==0;
-   receipt.result=state();receipt.result["saved"]=saved && closed;receipt.result["preset_id"]=presetKey(pathString(path.filename()));receipt.result["preset_revision"]=hash(bytes);
-   if(!saved || !closed)receipt.result["uncertain"]=true;
+   NativePoseStore store;if(!store.open(poseDirectory().parent_path(),true,error))return response.error(error);
+   const auto name=request["name"].asString()+".xml",bytes=prepared["preset_bytes"].asString();
+   const auto saved=store.writeNew(name,bytes,error);if(!saved.created)return response.error(error);
+   receipt.result=state();receipt.result["saved"]=saved.saved;receipt.result["preset_id"]=presetKey(name);receipt.result["preset_revision"]=hash(bytes);
+   if(!saved.saved){receipt.result["uncertain"]=true;receipt.result["reason"]=error;}
   }
   else if(op=="stop")
   {sAnimator.stopAssistantPose(gAgentAvatarp,sSession.motion);sSession.active=false;sSession.task.reset();sSession.stopped="Stopped by this source";receipt.result=state();}
