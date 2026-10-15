@@ -37,6 +37,10 @@
 #include "llrender2dutils.h"
 #include "fseventapibridge.h"
 #include "fssessionassistant.h"
+#include "fspanelpreferencelocalassistant.h"
+#include "llprocess.h"
+#include "llsdjson.h"
+#include <boost/json.hpp>
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
 #include "llagent.h"
@@ -214,6 +218,7 @@ struct Worker : LLIMSessionObserver
     bool economyTrimmed = false, recoveryShown = false;
     bool assistantHold=false;
     std::string assistantProfile;
+    LLProcessPtr assistantCheck;Message assistantCheckRequest;LLFrameTimer assistantCheckTimer;std::string assistantCheckOutput,assistantCheckSession;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
     bool permitVoice = false, muteBackground = true, hostUI = false, chatBlocked = false, shortcuts = false, shellShortcuts = false;
@@ -509,6 +514,43 @@ struct Worker : LLIMSessionObserver
         else LLIMModel::sendMessage(request.text, session->mSessionID, session->mOtherParticipantID, session->mType);
         // Accepted by native transport, not proof of remote delivery. Never retry.
         reply(request);
+    }
+    Message assistantStatus(const Message& request) const
+    {
+        auto& bridge=FSEventAPIBridge::instance();const auto snapshot=bridge.getStatusSnapshot();
+        auto response=status(request);
+        response.width=(snapshot.enabled?AssistantEnabled:0u)|(snapshot.ready?AssistantReady:0u)|(assistantHold?AssistantPaused:0u)|
+            (FSPanelPreferenceLocalAssistant::sessionScoped()?AssistantSessionOnly:0u);
+        response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
+        response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);response.event=snapshot.approvalRevision;
+        response.text=snapshot.ready?bridge.sessionReference():std::string();response.detail=boundedText(snapshot.error,118);
+        response.title=snapshot.pendingApprovalSummary.empty()?"Local Assistant":"Local Assistant: "+snapshot.pendingApprovalSummary;
+        response.sender="Read: "+FSEventAPIBridge::getPermissionLevel("read")+"; Edit: "+FSEventAPIBridge::getPermissionLevel("edit")+"; Wear/create-item: native viewer";
+        return response;
+    }
+    void pollAssistantCheck()
+    {
+        if(!assistantCheck)return;
+        auto& output=assistantCheck->getReadPipe(LLProcess::STDOUT);auto& errors=assistantCheck->getReadPipe(LLProcess::STDERR);
+        const bool stale=!ready() || assistantCheckRequest.generation!=generation || assistantCheckRequest.account!=gAgentID.asString() ||
+            assistantCheckRequest.grid!=loginGrid || assistantCheckSession!=FSEventAPIBridge::instance().sessionReference();
+        if(stale || output.size()+assistantCheckOutput.size()>8192 || errors.size()>8192 || assistantCheckTimer.getElapsedTimeF32()>5.f)
+        {reply(assistantCheckRequest,stale?"Character or assistant connection changed during check":"Connection check timed out or returned invalid output");assistantCheck.reset();return;}
+        assistantCheckOutput+=output.read(output.size());errors.read(errors.size());
+        if(assistantCheck->isRunning())return;
+        bool passed=false;std::string stage;
+        try
+        {
+            const auto data=LlsdFromJson(boost::json::parse(assistantCheckOutput));stage=data["stage"].asString();
+            passed=data["ok"].asBoolean() && data["pid"].asInteger()==LLApp::getPid() &&
+                assistantCheck->getStatus().mState==LLProcess::EXITED && assistantCheck->getStatus().mData==0;
+        }
+        catch(const std::exception&){}
+        auto response=assistantStatus(assistantCheckRequest);
+        response.text=passed?"Connection verified for this exact character login.":stage=="discovery"?"Discovery unavailable. Enable Local Assistant and check its registry.":
+            stage=="session_changed"?"Assistant login changed. Check again.":stage=="authorization"?"Local Assistant access was refused.":
+            stage=="timeout"?"Connection check timed out.":"Local Assistant connection check failed.";
+        pipe.send(response);assistantCheck.reset();
     }
     void releaseInput()
     {
@@ -810,30 +852,45 @@ struct Worker : LLIMSessionObserver
         { reply(request, "Session changed; action was not applied."); return; }
         switch (request.kind)
         {
+        case Kind::AssistantPause:
+        {
+            // Runtime transport ownership belongs to this authenticated worker,
+            // including its login screen. No account data/action is accessed.
+            if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
+            assistantHold=request.width!=0;
+            auto& bridge=FSEventAPIBridge::instance();
+            bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+            pipe.send(assistantStatus(request));break;
+        }
         case Kind::AssistantInfo:
         case Kind::AssistantConfigure:
-        case Kind::AssistantPause:
         case Kind::AssistantReview:
         {
-            if(!ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
+            if((request.kind==Kind::AssistantInfo && request.unread>2) || !ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
             {reply(request,"Local Assistant login changed or is unavailable.");break;}
             auto& bridge=FSEventAPIBridge::instance();
             if(request.kind==Kind::AssistantConfigure)
             {
                 auto control=gSavedSettings.getControl("EnableLocalEventAPIBridge");
-                if(request.width>1 || !control || control->hasUnsavedValue() || LLFloaterReg::instanceVisible("preferences") ||
+                if(request.width>1 || !control || FSPanelPreferenceLocalAssistant::sessionScoped() || LLFloaterReg::instanceVisible("preferences") ||
                     request.cursor!=static_cast<std::uint64_t>(FSEventAPIBridge::getPolicyGeneration()) || request.height!=(control->getValue().asBoolean()?1u:0u))
                 {reply(request,"Local Assistant settings changed or have an open/session-only draft. Use native Preferences.");break;}
                 control->setValue(LLSD(request.width!=0),true);
                 const auto file=gSavedSettings.getString("ClientSettingsFile");
-                if(file.empty() || !gSavedSettings.saveToFile(file,true))
-                {reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
-            }
-            else if(request.kind==Kind::AssistantPause)
-            {
-                if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
-                assistantHold=request.width!=0;
-                bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+                // saveToFile returns a control count: a valid empty/default-only
+                // file also returns zero. Verify the persisted enable choice.
+                if(!file.empty())gSavedSettings.saveToFile(file,true);
+                std::string bytes;LLSD persisted;bool saved=false;
+                if(!file.empty() && readProfileFile(std::filesystem::path(ll_convert_string_to_wide(file,file.size(),CP_UTF8)),bytes))
+                {
+                    std::istringstream input(bytes);
+                    if(LLSDSerialize::fromXML(persisted,input,false)>0 && (persisted.isMap() || persisted.isUndefined()))
+                    {
+                        const LLSD stored=persisted.has("EnableLocalEventAPIBridge")?persisted["EnableLocalEventAPIBridge"]["Value"]:control->getDefault();
+                        saved=stored.asBoolean()==control->getSaveValue().asBoolean();
+                    }
+                }
+                if(!saved){reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
             }
             else if(request.kind==Kind::AssistantReview)
             {
@@ -843,19 +900,27 @@ struct Worker : LLIMSessionObserver
                 if(request.unread)LLFloaterReg::showInstance("preferences",llsd::map("tab","local_assistant"),true);
                 else bridge.reviewPending();
             }
-            if(!request.title.empty())assistantProfile=boundedText(request.title,128);
+            if(request.kind==Kind::AssistantInfo && request.unread==0 && !request.title.empty())assistantProfile=boundedText(request.title,128);
             bridge.refreshSession();
-            const auto snapshot=bridge.getStatusSnapshot();
-            auto response=status(request);
-            auto control=gSavedSettings.getControl("EnableLocalEventAPIBridge");
-            response.width=(snapshot.enabled?AssistantEnabled:0u)|(snapshot.ready?AssistantReady:0u)|(assistantHold?AssistantPaused:0u)|
-                (control && control->hasUnsavedValue()?AssistantSessionOnly:0u);
-            response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
-            response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);
-            response.event=static_cast<std::uint64_t>(snapshot.approvalRevision);
-            response.text=bridge.getStatusSnapshot().ready?bridge.sessionReference():std::string();
-            response.detail=boundedText(snapshot.error,118);
-            response.title="Local Assistant";
+            if(request.kind==Kind::AssistantInfo && request.unread==2)
+            {
+                if(assistantCheck){reply(request,"A connection check is already running.");break;}
+                LLProcess::Params params;params.executable=FSPanelPreferenceLocalAssistant::installedSidecar();
+                params.args.add("--diagnose").add("--viewer-pid").add(std::to_string(LLApp::getPid()))
+                    .add("--discovery").add(bridge.discoveryDirectory()).add("--viewer-session").add(bridge.sessionReference());
+                params.files.add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe"));
+                params.attached=true;params.autokill=true;params.desc="Hosted Local Assistant connection check";
+                assistantCheckRequest=request;assistantCheckOutput.clear();assistantCheckSession=bridge.sessionReference();assistantCheckTimer.reset();
+                assistantCheck=LLProcess::create(params);
+                if(!assistantCheck)reply(request,"Unable to start the matching MCP sidecar.");
+                break;
+            }
+            auto response=assistantStatus(request);
+            if(request.kind==Kind::AssistantInfo && request.unread==1)
+            {
+                std::string error;response.text=FSPanelPreferenceLocalAssistant::hostConfiguration(request.text,error);
+                if(!error.empty() || response.text.size()>3071){reply(request,error.empty()?"MCP configuration is too large":error);break;}
+            }
             pipe.send(response);break;
         }
         case Kind::Poll: reply(request); break;
@@ -1038,6 +1103,7 @@ bool FSSessionWorker::initialize()
     const auto lease = env(L"FOLDERSTORM_SESSION_LOCK");
     const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
     const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
+    const auto assistantPause=env(L"FOLDERSTORM_SESSION_ASSISTANT_PAUSE");
     const auto settingsSource = env(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE",32768);
     const auto profileSource = env(L"FOLDERSTORM_SESSION_PROFILE_SOURCE",32768);
     const auto toolbarSource = env(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE",32768);
@@ -1048,18 +1114,20 @@ bool FSSessionWorker::initialize()
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ASSISTANT_PAUSE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PROFILE_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_COPY_GROUPS", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty() && profileSource.empty() && toolbarSource.empty() && copyGroups.empty() && !explicitCopy) return true;
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty() && profileSource.empty() && toolbarSource.empty() && copyGroups.empty() && !explicitCopy && assistantPause.empty()) return true;
     if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
     if ((explicitCopy && (copyGroups.empty() || profileSource.empty() || !settingsSource.empty())) ||
         (!profileSource.empty() && !explicitCopy) ||
         (!settingsSource.empty() && !std::filesystem::path(settingsSource).is_absolute()) ||
         (!profileSource.empty() && !std::filesystem::path(profileSource).is_absolute()) ||
         (!toolbarSource.empty() && !std::filesystem::path(toolbarSource).is_absolute())) return false;
-    auto value = std::make_unique<Worker>();
+    if(!assistantPause.empty() && assistantPause!=L"0" && assistantPause!=L"1")return false;
+    auto value = std::make_unique<Worker>();value->assistantHold=assistantPause==L"1";
     for (std::size_t i = 0; i < 16; ++i)
     {
         const auto digit = [](wchar_t c) -> int { return c >= L'0' && c <= L'9' ? c - L'0' : c >= L'a' && c <= L'f' ? c - L'a' + 10 : -1; };
@@ -1098,6 +1166,7 @@ bool FSSessionWorker::managed() { return worker && !worker->detached; }
 LLSD FSSessionWorker::assistantIdentity()
 {
     if(!worker)return LLSD::emptyMap();
+    if(worker->detached)return llsd::map("profile",worker->assistantProfile);
     return llsd::map("worker",LLUUID(worker->id.data()).asString(),"generation",std::to_string(worker->generation),
         "profile",worker->assistantProfile,"name",worker->loginName,"grid",worker->loginGrid);
 }
@@ -1105,7 +1174,8 @@ bool FSSessionWorker::assistantPaused() {return managed() && worker->assistantHo
 bool FSSessionWorker::assistantActiveAllowed()
 {
     if(!managed())return true;
-    return worker->ready() && worker->inputGranted && worker->mode==Mode::Active && !worker->promoting && !worker->demoting &&
+    const HWND popup=worker->window?GetLastActivePopup(worker->window):nullptr;
+    return !(popup && popup!=worker->window && IsWindowVisible(popup)) && worker->ready() && worker->inputGranted && worker->mode==Mode::Active && !worker->promoting && !worker->demoting &&
         !worker->transition.active() && !gTeleportDisplay && !gFocusMgr.focusLocked() && !LLFloaterReg::instanceVisible("preferences");
 }
 void FSSessionWorker::importProfileSettings()
@@ -1370,6 +1440,7 @@ void FSSessionWorker::tick()
     if (!managed()) return;
     auto& value = *worker;
     ++value.maintenance;
+    value.pollAssistantCheck();
     if (gViewerWindow && gViewerWindow->getWindow()) value.window = static_cast<HWND>(gViewerWindow->getWindow()->getPlatformWindow());
     if (value.session != gAgentSessionID)
     {

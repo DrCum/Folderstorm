@@ -1,6 +1,6 @@
 # MCP for hosted character sessions
 
-Status: implementation in progress; exact-session routing checkpoint implemented. Managed enablement and host UI follow in dependent checkpoints.
+Status: implementation checkpoints #42–#44 published as stacked drafts. Requested senior review and revisions completed; native Windows build/runtime acceptance pending.
 Reviewed 2026-10-15 against PR #41 head `41a694f9be`.
 
 ## Recommended design
@@ -52,7 +52,8 @@ Continue using the owning viewer's permission classes, restrictions and native v
 | Operation | Initial managed behavior |
 | --- | --- |
 | Inventory reads/searches and outfit/worn-item reads | Available on a ready Warm/Economy character when its policy permits them. |
-| Inventory edits/copy/move/Trash and appearance changes | Available where the existing native operation is background-safe, with the same permissions, restrictions, server confirmation and approval rules. Audit each path before enabling it. |
+| Inventory edits/copy/move/Trash | Available on audited paths, with the same permissions, restrictions, server confirmation and approval rules. |
+| Outfit wear/detach and create-item native helpers | Managed MCP refuses these initial paths: their native callbacks initiate further copy/wear/default-permission/UI work without a durable execution guard. Use the character’s native viewer. Outfit reads and folder creation remain available. |
 | Workspace/layout list, status and fitted preview | Available without activating the character; return account-local data only. |
 | Camera state read | Available when ready and native restrictions permit it; report stored camera state without implying a freshly rendered frame. |
 | Camera changes, snapshots and workspace/layout application | Initially require the explicitly targeted character to be active, ready and outside a conflicting transition/modal/Preferences transaction. Return a clear `requires_active_character` or busy result before side effects. |
@@ -125,3 +126,21 @@ Managed viewers can opt in through their existing native preference. They publis
 Focused discovery/HTTP/sidecar tests passed again, including metadata bounds and exact targeting. Strict portable assistant/session tests passed for active-operation classification, stale account/generation status, bounded approval metadata and new command encoding. Diff hygiene passed. Windows ACLs, compilation, background inventory behavior, hidden approval focus and permission revocation during native callbacks remain native acceptance items.
 
 Windows checkpoint: enable two profiles using their native Local Assistant page; list and explicitly target each login. Exercise permitted reads in Warm/Economy, refuse background camera changes, enqueue an Ask on the inactive account with Viewer Notifications hidden, then Review through Attention. Deny, time out, revoke and disconnect while queued. No old reference should work after re-enable, logout or detach. Native Allow/Deny is the only approval path.
+
+## Checkpoint 3 actual validation
+
+Added Character settings → Local Assistant: per-profile enable draft, live credential-free status/permission summary, native Permissions/Review, Codex/Claude/Cursor configuration copy and an exact-login authenticated sidecar health check. Apply queues only edited accounts, refuses stale/session-only drafts and reports independent worker failures. Cancel discards unpublished settings. Pause all is runtime-only, revokes pending/advertised access, preserves saved preferences and is inherited by new workers before bridge startup. Native setup and diagnostics use the actual hosted registry rather than a private profile's ordinary discovery directory. The copied configuration remains bound to the matching installation, contains no token and may need recopying when moving development build directories.
+
+Focused Go checks passed for discover, viewerapi, mcptools, diagnose and the diagnostic CLI. New diagnostic coverage rejects missing/stale managed references before HTTP and mismatched authenticated identities. Strict C++ assistant-session tests cover touched versus untouched account drafts, disconnect/login changes, session-only refusal, protocol encoding and active eligibility. The first new draft assertion exposed a missing test-fixture enable value; correcting that fixture retained the intended refusal checks. Diff hygiene passed. No viewer/host/broad/packaging/GitHub build ran.
+
+Windows acceptance: matching protocol-16 host/viewer/sidecar; test Apply/Cancel for each profile, native Preferences external/session-only edits, connection checks with enable Off/On/paused and absent sidecar, token-free client config, two/five-character routing, Attention Review with chat categories hidden, native permission revocation/timeout, and active-only camera/workspace refusal. Pause/resume must invalidate old references; a new login while paused must stay unadvertised; detach must invalidate managed work and restore a fresh ordinary binding. Actual Windows compilation, ACL behavior, focus and native UI remain unverified here.
+
+
+## Senior review and follow-up corrections
+
+Requested gpt-6.1-sol at Extra High reviewed the combined stack read-only. Verified findings led to: authenticated pre-login runtime pause (before login permission), explicit refusal of unmanaged async appearance/create-item helper chains in managed MCP, retirement of assistant-owned bulk previews/history/undo and epoch checks for copy continuations on connection rotation, and generated setup scopes covering simultaneous ordinary and managed viewers. Native-only bulk records remain intact. HTTP entry now refreshes credentials before authentication and ACL validation precedes socket creation. Approval Attention adds a bounded action summary. Legacy/custom discovery overrides are not silently broadened; explicit setup copying uses known bounded ordinary directories plus the hosted registry when no override exists.
+
+Regression checks cover pre-login pause eligibility, guarded versus unsupported operation families, scope deduplication/bounds, and retiring assistant state while preserving native records. Native builds and acceptance remain pending. Review revisions are included in #44; use that full matching stack for final native acceptance.
+
+
+Final reviewer assessment: Sol 6.1 Extra High re-reviewed through `c8064e9c23` and found no remaining verified blockers. It independently passed strict assistant-session, inventory bulk-model and permission/approval policy checks; the final small persistence/configuration follow-up passed source review and diff hygiene. All three PRs are attached to this chat; none merged. Test the latest #44 matching binaries. The managed asynchronous-operation exclusions above remain explicit product limitations, not claims of native acceptance.

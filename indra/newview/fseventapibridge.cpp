@@ -56,6 +56,7 @@
 #include "fsassistantdiscovery.h"
 #include "llsdutil.h"
 #include <filesystem>
+#include <cstdlib>
 #include "llagent.h"
 #include "llagentui.h"
 #include "llstartup.h"
@@ -404,6 +405,7 @@ public:
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
             LLSD health=mIdentity;
             health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
+            health["managed_async_appearance_writes"]=false;health["managed_create_item"]=false;
             health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1);
             response->extendedResult(HTTP_OK,to_json(health),json_headers());
 
@@ -411,6 +413,8 @@ public:
         }
         if(mIdentity["managed"].asBoolean())
         {
+            if(!fs_assistant::managedOperationSupported(api,op))
+            {fail_response(response,HTTP_FORBIDDEN,"This native operation has asynchronous callbacks that cannot yet honor managed-session revocation; use this character’s native viewer",llsd::map("error_code","unsupported_managed_operation"));return;}
             if(!mIdentity["ready"].asBoolean())
             {fail_response(response,HTTP_FORBIDDEN,"Character is not ready",llsd::map("error_code","not_ready"));return;}
             if(fs_assistant::needsActiveCharacter(api,op) && !FSSessionWorker::assistantActiveAllowed())
@@ -488,7 +492,9 @@ public:
         if (api == "LLInventory" && (op == "previewBatchRename" || op == "previewBatchMove" || op == "previewBulkUndo" || op == "bulkHistory"))
         {
             std::string error;
-            LLSD result = op == "bulkHistory" ? FSInventoryBulk::history(input, error) : FSInventoryBulk::preview(input, error);
+            LLSD scoped=input;scoped["__assistant_epoch"]=mIdentity["viewer_session"];
+            LLSD result = op == "bulkHistory" ? FSInventoryBulk::history(scoped, error) : FSInventoryBulk::preview(scoped, error);
+            result["viewer_session"]=mIdentity["viewer_session"];
             if (!error.empty()) fail_response(response, HTTP_BAD_REQUEST, error);
             else response->extendedResult(HTTP_OK, to_json(result), json_headers());
             return;
@@ -533,6 +539,7 @@ public:
     void disable()
     {
         mEnabled = false;
+        FSInventoryBulk::retireAssistant();
         ++mSessionGeneration;
         denyQueuedAsks(ERR_DENIED);
         for (auto& pending : mPending)
@@ -593,6 +600,7 @@ public:
         result.policyGeneration = gPolicyGeneration;
         result.pendingApprovals = static_cast<int>(mAsks.size());
         result.approvalRevision=mApprovalRevision;
+        if(!mAskOrder.empty()){const auto found=mAsks.find(mAskOrder.front());if(found!=mAsks.end())result.pendingApprovalSummary=(found->second.api+" / "+found->second.op).substr(0,100);}
         result.lastExternalRequestAt = mLastExternalRequestAt;
         result.lastDiagnosticAt = mLastDiagnosticAt;
         result.lastExternalApi = mLastExternalApi;
@@ -683,6 +691,7 @@ private:
                           FSAssistantPreparedOperation& prepared, std::string& error)
     {
         prepared.request = input;
+        prepared.request["__assistant_epoch"]=mIdentity["viewer_session"];
         prepared.requiredClasses = classes;
         if (input["api"].asString() == "LLWorkspace") return fs_prepare_workspace(prepared, error);
         const std::string op = input["op"].asString();
@@ -696,7 +705,7 @@ private:
                 if (!error.empty()) return false;
                 prepared.requiredClasses = {required};
             }
-            else if (!FSInventoryBulk::prepareLegacy(input, plan_id, error)) return false;
+            else if (!FSInventoryBulk::prepareLegacy(prepared.request, plan_id, error)) return false;
             prepared.validation["bulk_plan_id"] = plan_id;
             prepared.summary = FSInventoryBulk::summary(plan_id, error);
             return error.empty() && FSInventoryBulk::validate(plan_id, error);
@@ -1154,6 +1163,9 @@ public:
 
     void post(ResponsePtr response, const LLSD& context, const LLSD& input) const override
     {
+        // Rotate stale login credentials before authorization, including legacy
+        // ordinary clients that do not yet send an expected session reference.
+        FSEventAPIBridge::instance().refreshSession();
         if (!mState->authorize(context))
         {
             fail_response(response, HTTP_UNAUTHORIZED, "Unauthorized");
@@ -1289,12 +1301,6 @@ bool FSEventAPIBridge::bindOnce()
     }
 
     auto state = std::make_shared<State>(std::move(token));
-    U16 port = 0;
-    LLHTTPNode& root = LLIOHTTPServer::create(
-        gAPRPoolp, *mPump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port, 75.f);
-    root.addNode(BRIDGE_PATH, new Node(state));
-    mPort = port;
-
     const std::string filename =
         "fs-mcp-" + std::to_string(LLApp::getPid()) + ".json";
     mDiscoveryPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, filename);
@@ -1307,6 +1313,12 @@ bool FSEventAPIBridge::bindOnce()
         mDiscoveryPath=ll_convert<std::string>((std::filesystem::path(directory)/ll_convert<std::wstring>(filename)).wstring());
     }
 #endif
+    U16 port = 0;
+    LLHTTPNode& root = LLIOHTTPServer::create(
+        gAPRPoolp, *mPump, LLSocket::PORT_EPHEMERAL, "127.0.0.1", port, 75.f);
+    root.addNode(BRIDGE_PATH, new Node(state));
+    mPort = port;
+
     mState = std::move(state);
     mSessionKey.clear();refreshSession();
     if (!writeDiscovery())
@@ -1438,6 +1450,39 @@ int FSEventAPIBridge::getPort() const
 const std::string& FSEventAPIBridge::getDiscoveryPath() const
 {
     return mDiscoveryPath;
+}
+
+std::string FSEventAPIBridge::discoveryDirectory() const
+{
+#if LL_WINDOWS
+    if(mHostedRegistry || FSSessionWorker::managed())return ll_convert<std::string>(fs_assistant::managedDiscoveryDirectory());
+#endif
+    return gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "");
+}
+
+std::string FSEventAPIBridge::configurationDiscovery() const
+{
+    std::vector<std::string> roots{gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "")};
+#if LL_WINDOWS
+    // Generated setup connects ordinary viewers and private hosted profiles.
+    // Deliberate external overrides are kept exactly as provided.
+    const DWORD overrideSize=GetEnvironmentVariableW(L"FIRESTORM_MCP_DISCOVERY",nullptr,0);
+    if(overrideSize>32768)return {};
+    if(overrideSize){std::vector<wchar_t> value(overrideSize);const DWORD read=GetEnvironmentVariableW(L"FIRESTORM_MCP_DISCOVERY",value.data(),overrideSize);if(!read || read>=overrideSize)return {};return ll_convert<std::string>(std::wstring(value.data(),read));}
+    roots.push_back(ll_convert<std::string>(fs_assistant::managedDiscoveryDirectory()));
+    PWSTR roaming=nullptr;
+    if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData,0,nullptr,&roaming)))
+    {
+        const std::filesystem::path base(roaming);CoTaskMemFree(roaming);
+        for(const auto* name:{L"Folderstorm_x64",L"FolderstormOS_x64",L"Folderstorm",L"FolderstormOS",L"Firestorm_x64",L"FirestormOS_x64",L"Firestorm",L"FirestormOS"})
+            roots.push_back(ll_convert<std::string>((base/name/L"user_settings").wstring()));
+    }
+    return fs_assistant::discoveryScope(roots,';');
+#else
+    const auto* overrideValue=std::getenv("FIRESTORM_MCP_DISCOVERY");
+    if(overrideValue && *overrideValue)return overrideValue;
+    return fs_assistant::discoveryScope(roots,':');
+#endif
 }
 
 FSEventAPIBridge::StatusSnapshot FSEventAPIBridge::getStatusSnapshot() const

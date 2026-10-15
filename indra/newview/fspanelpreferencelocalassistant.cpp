@@ -379,7 +379,9 @@ void FSPanelPreferenceLocalAssistant::refreshLocalAssistantStatus()
     getChild<LLTextBox>("bridge_details")->setText(details);
 }
 
-std::string FSPanelPreferenceLocalAssistant::sidecarPath() const
+std::string FSPanelPreferenceLocalAssistant::sidecarPath() const {return installedSidecar();}
+
+std::string FSPanelPreferenceLocalAssistant::installedSidecar()
 {
 #if LL_WINDOWS
     // GetModuleFileNameW preserves the logical current path; grow the buffer
@@ -404,6 +406,47 @@ std::string FSPanelPreferenceLocalAssistant::sidecarPath() const
     if (root.filename() == "bin") root = root.parent_path();
     return (root / "fs-mcp").string();
 #endif
+}
+
+bool FSPanelPreferenceLocalAssistant::sessionScoped()
+{
+    auto access=gSavedSettings.getControl("EnableLocalEventAPIBridge");
+    auto permissions=gSavedSettings.getControl("LocalEventAPIPermissionClasses");
+    return (sAssistantScope.initialized && sAssistantScope.session) || (access && access->hasUnsavedValue()) ||
+        (permissions && permissions->hasUnsavedValue());
+}
+
+std::string FSPanelPreferenceLocalAssistant::hostConfiguration(const std::string& client, std::string& error)
+{
+    error.clear();
+    if(client!="codex" && client!="claude" && client!="cursor"){error="Unknown MCP client";return {};}
+    const auto path=installedSidecar();
+    if(!LLFile::isfile(path)){error="The matching fs-mcp sidecar is missing";return {};}
+    std::string command = path;
+    bool cursor_adapter = false;
+#if LL_WINDOWS
+    // A saved configuration must remain bound to this installation, even if
+    // another channel changes the legacy ProgramData alias after it is copied.
+    std::string package_id = LL_TO_STRING(LL_VIEWER_CHANNEL);
+    if (package_id.rfind("Folderstorm", 0) == 0) package_id.erase(0, 10);
+#ifdef OPENSIM
+    package_id = "FolderstormOS" + package_id;
+#else
+    package_id = "Folderstorm" + package_id;
+#endif
+    package_id.erase(std::remove_if(package_id.begin(), package_id.end(),
+        [](unsigned char c) { return std::isspace(c); }), package_id.end());
+    const auto& version = LLVersionInfo::instance();
+    const std::string package_version = version.getShortVersion() + "-" + version.getBuildVersion();
+    const auto launch = FSAssistantLaunchPath::resolve(std::filesystem::path(ll_convert<std::wstring>(path)),
+                                                       package_id, package_version);
+    command = ll_convert<std::string>(launch.command.wstring());
+    if(!launch.canCopy()){error="Viewer update in progress; finish updating first";return {};}
+    cursor_adapter=client=="cursor" && command.find(' ')!=std::string::npos;
+#endif
+    const auto discovery=FSEventAPIBridge::instance().configurationDiscovery();
+    if(discovery.empty()){error="Assistant discovery is unavailable";return {};}
+    return FSAssistantConfiguration::generate(client,command,discovery,cursor_adapter);
 }
 
 void FSPanelPreferenceLocalAssistant::refreshConfiguration()
@@ -453,7 +496,9 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     }
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;
 #endif
-    const std::string discovery = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "");
+    const std::string discovery = FSEventAPIBridge::instance().configurationDiscovery();
+    if(discovery.empty())
+    {mConfiguration.clear();getChild<LLButton>("copy_configuration")->setEnabled(false);getChild<LLTextEditor>("configuration")->setText(LLStringExplicit(""));getChild<LLTextBox>("sidecar_status")->setText(getString("discovery_unavailable"));return;}
     mConfiguration = FSAssistantConfiguration::generate(client, command, discovery, cursor_adapter);
     getChild<LLTextEditor>("configuration")->setText(mConfiguration);
 }
@@ -473,7 +518,8 @@ void FSPanelPreferenceLocalAssistant::checkConnection()
     LLProcess::Params params;
     params.executable = sidecarPath();
     params.args.add("--diagnose").add("--viewer-pid").add(std::to_string(LLApp::getPid()))
-        .add("--discovery").add(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, ""));
+        .add("--discovery").add(FSEventAPIBridge::instance().discoveryDirectory())
+        .add("--viewer-session").add(FSEventAPIBridge::instance().sessionReference());
     params.files.add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe"));
     params.attached = true;
     params.autokill = true;

@@ -26,7 +26,7 @@ type Result struct {
 
 var versionPattern = regexp.MustCompile(`^[0-9]+([.][0-9]+)*$`)
 
-func Run(ctx context.Context, pid int, directory string) Result {
+func Run(ctx context.Context, pid int, directory string, expectedSession ...string) Result {
 	result := Result{PID: pid, Stage: "discovery"}
 	if pid <= 0 || directory == "" {
 		return result
@@ -47,6 +47,14 @@ func Run(ctx context.Context, pid int, directory string) Result {
 	if selected == nil {
 		return result
 	}
+	if len(expectedSession) > 0 && expectedSession[0] != "" && selected.ViewerSession != expectedSession[0] {
+		result.Stage = "session_changed"
+		return result
+	}
+	if selected.Managed && (len(expectedSession) == 0 || expectedSession[0] == "") {
+		result.Stage = "session_required"
+		return result
+	}
 	client := viewerapi.New(*selected)
 	client.HTTPClient = &http.Client{
 		Timeout:       4 * time.Second,
@@ -64,6 +72,9 @@ func Run(ctx context.Context, pid int, directory string) Result {
 		return result
 	}
 	var health struct {
+		ViewerSession    string          `json:"viewer_session"`
+		Account          string          `json:"account"`
+		Grid             string          `json:"grid"`
 		BridgeReady      bool            `json:"bridge_ready"`
 		APIVersion       json.RawMessage `json:"api_version"`
 		PolicyGeneration int             `json:"policy_generation"`
@@ -71,6 +82,14 @@ func Run(ctx context.Context, pid int, directory string) Result {
 	}
 	result.Stage = "bridge"
 	if len(body) > 8192 || json.Unmarshal(body, &health) != nil || !health.BridgeReady {
+		return result
+	}
+	if selected.ViewerSession != "" && health.ViewerSession != selected.ViewerSession {
+		result.Stage = "session_changed"
+		return result
+	}
+	if selected.Managed && (health.Account != selected.Account || health.Grid != selected.Grid) {
+		result.Stage = "session_changed"
 		return result
 	}
 	// Keep even a faulty/mismatched bridge from echoing arbitrary strings into output.

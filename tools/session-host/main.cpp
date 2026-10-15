@@ -206,7 +206,7 @@ struct ProfileSetupScope
     ProfileSetupScope(const ProfileSetupScope&) = delete;
     ProfileSetupScope& operator=(const ProfileSetupScope&) = delete;
 };
-std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id, const ProfileCopyRequest& copy)
+std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pipe, HANDLE lease, HANDLE frames, HANDLE frameMutex, const WorkerId& id, const ProfileCopyRequest& copy, bool pauseAssistant)
 {
     // Preserve proxy/trust/runtime variables. Read only to form the child block;
     // never log the block or mutate this controller's environment.
@@ -225,6 +225,7 @@ std::vector<wchar_t> environment(const std::filesystem::path& profile, HANDLE pi
     entries[L"FOLDERSTORM_SESSION_PIPE"] = hexHandle(pipe);
     entries[L"FOLDERSTORM_SESSION_LOCK"] = hexHandle(lease);
     entries[L"FOLDERSTORM_SESSION_ID"] = hexId(id);
+    entries[L"FOLDERSTORM_SESSION_ASSISTANT_PAUSE"] = pauseAssistant?L"1":L"0";
     entries[L"FOLDERSTORM_SESSION_FRAMES"] = hexHandle(frames);
     entries[L"FOLDERSTORM_SESSION_FRAME_MUTEX"] = hexHandle(frameMutex);
     entries.erase(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE");
@@ -319,7 +320,7 @@ struct Slot
     std::uint64_t nextSequence = 0;
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
-    Message assistant;
+    Message assistant;std::wstring assistantDiagnostic;bool assistantPauseFailed=false,assistantPauseAck=false;std::uint64_t assistantEditRevision=0;
     ULONGLONG assistantAt=0,assistantSince=0;
     std::string reservation;
     bool waiting = false, detached = false, soundPrepared = false;
@@ -445,7 +446,8 @@ struct Host
     std::filesystem::path viewer, profiles;
     ChoiceAutosave autosave;
     std::wstring saveError;
-    bool preferencesOpen=false;
+    bool preferencesOpen=false,pauseAllAssistant=false;
+    std::function<void()> refreshAssistantEditor;
     unsigned int preferencesPage=0;
     std::uint64_t autosaveAt=0;
     ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); for (auto& monitor : monitors) if (monitor.font) DeleteObject(monitor.font); }
@@ -490,7 +492,7 @@ struct Host
         return -1;
     }
     enum PreferencePage : unsigned int { PrefLayout,PrefAppearance,PrefCharacter,PrefSounds,PrefViewer,PrefSession,
-        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefDiagnostics,PrefRecovery };
+        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefDiagnostics,PrefRecovery,PrefAssistant };
     void editPreferences(unsigned int page=~0u,int target=-1)
     {
         if(preferencesOpen)return;
@@ -501,7 +503,7 @@ struct Host
             Message source;bool ready=false,imported=false,attention=true;
             std::wstring label,alias;unsigned int color=0,categories=0;Mode mode=Mode::Warm;
             std::string asset,soundName;WavSound wav;
-            CharacterAppearance originalAppearance;CharacterSound originalSound;
+            CharacterAppearance originalAppearance;CharacterSound originalSound;AssistantPreferenceDraft assistant;bool assistantPending=false;std::uint64_t assistantRevision=0;
         };
         std::array<ProfileDraft,MaxCharacters> people;
         auto originalLabels=chatPreferences.profileNames;auto originalModes=standby;auto draftOrder=experience.order;
@@ -510,6 +512,7 @@ struct Host
         {
             auto& p=people[i];p.attention=(experience.accountMask&(1u<<i))!=0;p.label=wide(chatPreferences.profileNames[i]);p.mode=standby[i];names.push_back(characterName(i));
             p.ready=slots[i] && slots[i]->snapshot.state==State::Ready;
+            if(p.ready){p.assistant.capture(slots[i]->assistant,slots[i]->snapshot);p.assistantRevision=slots[i]->assistantEditRevision;}
             if(p.ready){p.source=slots[i]->snapshot;p.originalAppearance=appearance(i);p.originalSound=characterSound(i);p.alias=wide(p.originalAppearance.alias);p.color=p.originalAppearance.color;p.categories=p.originalSound.categories;p.asset=p.originalSound.asset;p.soundName=p.originalSound.name;}
         }
         int selected=validSlot(target)?target:lifecycle.selection();if(!validSlot(selected))selected=0;
@@ -529,7 +532,8 @@ struct Host
             {4,L"Switching & monitors",L"Monitors",L"Read-only views of inactive characters. These choices set defaults for new monitors."},
             {5,L"Controls",L"Quick actions",L"Quick actions add buttons to the host toolbar. Choose actions below, then click their buttons during play."},
             {5,L"Controls",L"Keyboard shortcuts",L""},
-            {6,L"Advanced",L"Diagnostics",L""},{6,L"Advanced",L"Files & recovery",L""}};
+            {6,L"Advanced",L"Diagnostics",L""},{6,L"Advanced",L"Files & recovery",L""},
+            {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."}};
         const auto chromeField=add(PrefLayout,{L"Character controls",std::to_wstring(chrome==2?1:chrome),FieldType::Choice,{L"Expanded",L"Condensed"}});
         const auto areaField=add(PrefLayout,{L"Docked controls area",std::to_wstring(experience.dockedArea),FieldType::Choice,{L"Automatic",L"Full window",L"Left half",L"Right half",L"Left third",L"Middle third",L"Right third"}});
         fields[areaField].help=L"Automatic uses the right half for a broad two-monitor span and the middle third for three. Explicit choices override detection; this moves host controls only.";
@@ -585,6 +589,21 @@ struct Host
         const auto restartField=add(PrefSession,{L"Restart",L"Restart character…",FieldType::Action});fields[restartField].action=[&](HWND owner){queueAction(owner,240);};
         const auto cancelRestartField=add(PrefSession,{L"Pending restart",L"Cancel restart",FieldType::Action});fields[cancelRestartField].action=[&](HWND owner){queueAction(owner,241);};
         const auto logoutField=add(PrefSession,{L"Logout",L"Log out character…",FieldType::Action});fields[logoutField].action=[&](HWND owner){queueAction(owner,202);};
+        const auto assistantEnableField=add(PrefAssistant,{L"Enable Local Assistant",L"0",FieldType::Check});
+        fields[assistantEnableField].help=L"Uses this profile's native Local Assistant setting. Apply sends only edited accounts; native session-only drafts are preserved.";
+        const auto assistantStatusField=add(PrefAssistant,{L"",L"Log in to configure Local Assistant.",FieldType::Note});fields[assistantStatusField].rowHeight=90;
+        const auto assistantPermissionsField=add(PrefAssistant,{L"Permissions",L"Open native permissions…",FieldType::Action});
+        fields[assistantPermissionsField].help=L"Activates this character and opens its native Local Assistant permissions. This never grants access or approves a request.";
+        fields[assistantPermissionsField].action=[&](HWND owner){queueAction(owner,3901);};
+        const auto assistantReviewField=add(PrefAssistant,{L"Pending requests",L"Review in viewer…",FieldType::Action});
+        fields[assistantReviewField].action=[&](HWND owner){queueAction(owner,3902);};
+        const auto assistantClientField=add(PrefAssistant,{L"MCP client",L"0",FieldType::Choice,{L"Codex",L"Claude Desktop",L"Cursor"}});fields[assistantClientField].transient=true;
+        const auto assistantCopyField=add(PrefAssistant,{L"Configuration",L"Copy MCP configuration",FieldType::Action});
+        fields[assistantCopyField].help=L"Copies a token-free entry for the matching installed sidecar and stable hosted registry. Each managed tool call must use its exact viewer_session.";
+        const auto assistantCheckField=add(PrefAssistant,{L"Connection",L"Check connection",FieldType::Action});
+        fields[assistantCheckField].help=L"Runs a bounded authenticated sidecar health check for this exact login. No inventory data or tool actions are requested.";
+        const auto assistantPauseField=add(PrefAssistant,{L"Pause all MCP access",pauseAllAssistant?L"1":L"0",FieldType::Check});
+        fields[assistantPauseField].help=L"Runtime only. Apply revokes access and pending work in managed viewers; saved enable choices and permissions stay intact. Resume creates fresh connections. Newly launched characters inherit the pause.";
         const auto showStart=fields.size();
         for(const auto* name:{L"Nearby Chat",L"Direct IMs",L"Group Chats",L"Conferences",L"Viewer Notifications"})
             add(PrefConversations,{name,(chatPreferences.showMask&(1u<<static_cast<unsigned int>(fields.size()-showStart)))?L"1":L"0",FieldType::Check});
@@ -669,9 +688,46 @@ struct Host
             if(field.type==FieldType::Color)return field.value;
             std::vector<wchar_t> text(static_cast<std::size_t>(GetWindowTextLengthW(field.control))+1);GetWindowTextW(field.control,text.data(),static_cast<int>(text.size()));return std::wstring(text.data());
         };
+        const auto assistantAction=[&](unsigned int operation)
+        {
+            if(!people[selected].ready || !slots[selected] || !ChatKey{people[selected].source.worker,people[selected].source.generation,people[selected].source.account,people[selected].source.grid,{}}.owns(slots[selected]->snapshot) || slots[selected]->hasPendingAction)
+            {message(L"Local Assistant source changed or another action is pending. Try again.");return;}
+            auto action=people[selected].source;action.kind=Kind::AssistantInfo;action.unread=operation;
+            const auto client=static_cast<unsigned int>(std::wcstoul(readField(assistantClientField).c_str(),nullptr,10));
+            action.text=client==1?"claude":client==2?"cursor":"codex";
+            slots[selected]->pendingAction=action;slots[selected]->hasPendingAction=true;
+            message(operation==1?L"Preparing token-free MCP configuration…":L"Checking Local Assistant connection…");
+        };
+        fields[assistantCopyField].action=[&](HWND){assistantAction(1);};
+        fields[assistantCheckField].action=[&](HWND){assistantAction(2);};
+        const auto refreshAssistant=[&]()
+        {
+            auto& p=people[selected];auto* slot=slots[selected].get();
+            const bool owned=p.ready && slot && slot->running() && slot->pipe.alive() && !slot->detached && assistantInfoOwned(slot->assistant,p.source) && assistantInfoOwned(slot->assistant,slot->snapshot);
+            if(owned && p.assistantRevision!=slot->assistantEditRevision){p.assistant={};p.assistantPending=false;p.assistantRevision=slot->assistantEditRevision;}
+            if(owned && p.assistant.capture(slot->assistant,p.source))
+            {fields[assistantEnableField].value=p.assistant.enabled?L"1":L"0";if(fields[assistantEnableField].control)SendMessageW(fields[assistantEnableField].control,BM_SETCHECK,p.assistant.enabled?BST_CHECKED:BST_UNCHECKED,0);}
+            const bool editable=owned && !p.assistantPending && p.assistant.known && !(p.assistant.original.width&AssistantSessionOnly);
+            fields[assistantEnableField].enabled=editable;if(fields[assistantEnableField].control)EnableWindow(fields[assistantEnableField].control,editable);
+            for(const auto at:{assistantPermissionsField,assistantCopyField,assistantCheckField,assistantReviewField})
+            {fields[at].enabled=owned && (at!=assistantReviewField || slot->assistant.unread>0);if(fields[at].control)EnableWindow(fields[at].control,fields[at].enabled);}
+            std::wstring text=L"Log in and wait for Local Assistant status.";
+            if(owned)
+            {
+                const auto& info=slot->assistant;text=(info.width&AssistantPaused)?L"Paused":(info.width&AssistantReady)?L"Ready":(info.width&AssistantEnabled)?L"Enabled · unavailable":L"Off";
+                if(((info.width&AssistantPaused)!=0)!=pauseAllAssistant)text+=L" · pause change pending";
+                text+=L" · "+wide(p.source.name)+L" · "+wide(p.source.grid)+L"\n"+wide(info.sender);
+                if(info.width&AssistantSessionOnly)text+=L" · session-only settings; edit in viewer";
+                if(info.unread)text+=L"\n"+std::to_wstring(info.unread)+L" pending request(s)";
+                if(!info.detail.empty())text+=L"\n"+wide(info.detail);
+                if(!slot->assistantDiagnostic.empty())text+=L"\n"+slot->assistantDiagnostic;
+            }
+            fields[assistantStatusField].value=text;if(fields[assistantStatusField].control)SetWindowTextW(fields[assistantStatusField].control,text.c_str());
+        };
         const auto remember=[&](bool controls)
         {
             auto& p=people[selected];const auto value=[&](std::size_t i){return controls?readField(i):fields[i].value;};
+            if(p.assistant.known)p.assistant.enabled=value(assistantEnableField)==L"1";
             p.attention=value(accountField)==L"1";p.label=value(labelField);p.alias=value(aliasField);p.color=static_cast<unsigned int>(std::wcstoul(value(colorField).c_str(),nullptr,10));p.mode=value(modeField)==L"1"?Mode::Economy:Mode::Warm;
             p.categories=0;for(unsigned int i=0;i<4;++i)if(value(soundStart+i)==L"1")p.categories|=1u<<i;
         };
@@ -679,6 +735,7 @@ struct Host
         {
             EditorUpdate update(owner);
             const auto& p=people[selected];const auto set=[&](std::size_t at,const std::wstring& value){auto& field=fields[at];field.value=value;if(!field.control)return;if(field.type==FieldType::Check)SendMessageW(field.control,BM_SETCHECK,number(field)?BST_CHECKED:BST_UNCHECKED,0);else if(field.type==FieldType::Choice)SendMessageW(field.control,CB_SETCURSEL,number(field),0);else if(field.type==FieldType::Color)InvalidateRect(field.control,nullptr,TRUE);else SetWindowTextW(field.control,value.c_str());};
+            set(assistantEnableField,p.assistant.enabled?L"1":L"0");
             set(profileField,std::to_wstring(selected));set(positionField,std::to_wstring(std::find(draftOrder.begin(),draftOrder.end(),static_cast<unsigned int>(selected))-draftOrder.begin()));set(accountField,p.attention?L"1":L"0");set(labelField,p.label);set(aliasField,p.alias);set(colorField,std::to_wstring(p.color));set(modeField,p.mode==Mode::Economy?L"1":L"0");
             for(unsigned int i=0;i<4;++i){set(soundStart+i,p.categories&(1u<<i)?L"1":L"0");fields[soundStart+i].enabled=p.ready;if(fields[soundStart+i].control)EnableWindow(fields[soundStart+i].control,p.ready);}
             for(const auto at:{aliasField,colorField,wavField,previewField,resetSoundField}){fields[at].enabled=p.ready;if(fields[at].control)EnableWindow(fields[at].control,p.ready);}
@@ -695,7 +752,7 @@ struct Host
                 if(fields[at].control)EnableWindow(fields[at].control,fields[at].enabled);
             }
         };
-        fields[profileField].changed=[&](HWND owner){const int next=static_cast<int>(SendMessageW(fields[profileField].control,CB_GETCURSEL,0,0));remember(true);if(validSlot(next))selected=next;showPerson(owner);};
+        fields[profileField].changed=[&](HWND owner){const int next=static_cast<int>(SendMessageW(fields[profileField].control,CB_GETCURSEL,0,0));remember(true);if(validSlot(next))selected=next;showPerson(owner);refreshAssistant();};
         fields[positionField].changed=[&](HWND owner)
         {
             remember(true);const auto position=static_cast<std::size_t>(SendMessageW(fields[positionField].control,CB_GETCURSEL,0,0));
@@ -736,7 +793,7 @@ struct Host
             if(fields[quickPreview].control)SetWindowTextW(fields[quickPreview].control,fields[quickPreview].value.c_str());
         };
         for(unsigned int i=0;i<12;++i)fields[quickStart+i].changed=updateQuick;
-        showPerson();dependencies(nullptr);updateQuick(nullptr);HostPreferences accepted;
+        showPerson();refreshAssistant();dependencies(nullptr);updateQuick(nullptr);HostPreferences accepted;
 
         const auto validate=[&](HWND owner)
         {
@@ -753,6 +810,8 @@ struct Host
                 const auto& p=people[i];const auto label=utf8(p.label);if(label.size()>64 || (!p.label.empty()&&label.empty())){MessageBoxW(owner,L"Profile names must fit in 64 UTF-8 bytes.",L"Invalid name",MB_OK);return false;}
                 if(p.label!=wide(originalLabels[i]))next.chat.profileNames[i]=label;
                 if(p.mode!=originalModes[i])next.options.standby[i]=p.mode;
+                if(p.assistant.edited() && (!slots[i] || !p.assistant.applicable(slots[i]->snapshot) || slots[i]->hasPendingAction))
+                {MessageBoxW(owner,L"An edited Local Assistant account changed or has another action pending. Reopen Preferences before editing it.",L"Local Assistant not applied",MB_OK);return false;}
                 if(!p.ready)continue;
                 const AccountPreferenceDraft account{p.originalAppearance,{utf8(p.alias),p.color,p.originalAppearance.alerts},
                     p.originalSound,{p.categories,p.asset,p.soundName},p.imported};
@@ -785,6 +844,15 @@ struct Host
             if(error || !output || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_WRITE_THROUGH)){std::filesystem::remove(temp,error);message(L"The sound could not be saved; preferences were not applied.");return false;}
             accepted.chat.sounds[AccountKey::from(people[i].source)].asset=utf8(asset);people[i].asset=utf8(asset);people[i].imported=false;
         }
+        pauseAllAssistant=number(fields[assistantPauseField])!=0;
+        for(auto& slot:slots)if(slot)slot->assistantPauseFailed=false;
+        for(int i=0;i<MaxCharacters;++i)if(people[i].assistant.edited())
+        {
+            auto& draft=people[i].assistant;auto request=draft.request();
+            slots[i]->pendingAction=request;slots[i]->hasPendingAction=true;people[i].assistantPending=true;
+            // Queued per-worker edits are acknowledged independently; never replay them.
+            draft.original.height=draft.enabled?1u:0u;
+        }
         const bool dockChat=accepted.options.chatDetached,dockControls=accepted.options.controlsDetached;
         accepted.options.chatDetached=chatDetached;accepted.options.controlsDetached=controlsDetached;
         const auto previousChrome=chrome;saveDraft(true);applyPreferences(accepted);const auto nextChrome=chrome;chrome=previousChrome;setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(nextChrome);
@@ -799,19 +867,25 @@ struct Host
         }
         fields[profileField].choices.clear();SendMessageW(fields[profileField].control,CB_RESETCONTENT,0,0);
         for(int i=0;i<MaxCharacters;++i){fields[profileField].choices.push_back(characterName(i));SendMessageW(fields[profileField].control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(fields[profileField].choices.back().c_str()));}
-        showPerson(owner);dependencies(owner);
+        showPerson(owner);refreshAssistant();dependencies(owner);
         for(const auto pair:{std::make_pair(delayField,chatPreferences.delay),std::make_pair(durationField,presentation.duration),std::make_pair(heightField,presentation.height)})
             if(!fields[pair.first].enabled){fields[pair.first].value=std::to_wstring(pair.second);if(fields[pair.first].control)SetWindowTextW(fields[pair.first].control,fields[pair.first].value.c_str());}
         const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);return saved;
         };
-        preferencesOpen=true;
+        preferencesOpen=true;refreshAssistantEditor=refreshAssistant;
         edit(window,L"Folderstorm Host Preferences",fields,{},page,true,validate,navigation,apply,&preferencesPage,profileDialogOwner());
-        preferencesOpen=false;if(preview && preview==playbackSerial)playAlert({});
+        refreshAssistantEditor={};preferencesOpen=false;if(preview && preview==playbackSerial)playAlert({});
         if(pendingCommand)
         {
             if(slots[pendingTarget].get()!=pendingSlot || (pendingSlot && !ChatKey{pendingIdentity.worker,pendingIdentity.generation,pendingIdentity.account,pendingIdentity.grid,{}}.owns(pendingSlot->snapshot)))
             {message(L"Character changed while Preferences was open; the action was discarded.");return;}
-            sessionMenu(0,pendingCommand,pendingTarget);
+            if(pendingCommand==3901 || pendingCommand==3902)
+            {
+                if(!pendingSlot || pendingSlot->snapshot.state!=State::Ready || pendingSlot->hasPendingReview){message(L"Local Assistant Review is unavailable.");return;}
+                auto request=pendingIdentity;request.kind=Kind::AssistantReview;request.unread=pendingCommand==3901?1u:0u;
+                pendingSlot->pendingReview=request;pendingSlot->hasPendingReview=true;switchTo(pendingTarget);
+            }
+            else sessionMenu(0,pendingCommand,pendingTarget);
         }
     }
     void editHostSettings(unsigned int page=~0u) { editPreferences(page); }
@@ -1656,6 +1730,7 @@ struct Host
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
+        if(kind==Kind::AssistantPause)request.width=pauseAllAssistant?1u:0u;
         if (kind == Kind::WorkspaceInfo || kind==Kind::AssistantInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
         if(kind==Kind::AssistantInfo)request.title=utf8(profileName(index));
         if (kind == Kind::SetMode)
@@ -3087,7 +3162,7 @@ struct Host
         if (!pair.create(slot->id)) { message(L"Unable to create the private worker connection."); return; }
         if (!slot->pipe.open(pair.server.take())) { message(L"Unable to initialize asynchronous worker control."); return; }
         if (!slot->preview.create(slot->id, GetCurrentProcessId())) { message(L"Unable to create the bounded preview frame lane."); return; }
-        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id, copy);
+        auto childEnvironment = environment(profile, pair.client.value, lease.value, slot->preview.mapping(), slot->preview.mutex(), slot->id, copy, pauseAllAssistant);
         if (childEnvironment.empty()) { message(L"Unable to prepare the worker environment."); return; }
         SIZE_T attributeBytes = 0;
         InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeBytes);
@@ -3107,7 +3182,7 @@ struct Host
         if (!launched) { message(L"Unable to launch the matching viewer."); return; }
         CloseHandle(process.hThread);
         slot->process.value = process.hProcess; slot->pid = process.dwProcessId;
-        slot->snapshot.worker = slot->id;
+        slot->snapshot.worker = slot->id;slot->assistantPauseAck=pauseAllAssistant;
         slots[index] = std::move(slot);
         lifecycle.beginManagement();
         message(L"Log in a different character in each viewer. The first ready character becomes active.");
@@ -3197,6 +3272,7 @@ struct Host
             if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.soundPrepared = false; slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            slot.assistant={};slot.assistantAt=slot.assistantSince=0;slot.assistantDiagnostic.clear();slot.assistantPauseFailed=false;
             slot.alertReasons={};slot.alertAt={};slot.latestChatEvent=0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
             slot.previewWidth = slot.previewHeight = slot.previewRate = 0; slot.shortcutPolicy = -1;slot.audioPolicy=0;
@@ -3274,9 +3350,25 @@ struct Host
         if(request.kind==Kind::AssistantInfo || request.kind==Kind::AssistantConfigure || request.kind==Kind::AssistantPause || request.kind==Kind::AssistantReview)
         {
             slot.assistantAt=GetTickCount64();
+            if(request.kind==Kind::AssistantConfigure)++slot.assistantEditRevision;
+            if(request.kind==Kind::AssistantPause && (response.flags&Error))slot.assistantPauseFailed=response.generation==request.generation;
+            if(!(response.flags&Error))slot.assistantPauseAck=(response.width&AssistantPaused)!=0;
+            if(!(response.flags&Error) && request.kind==Kind::AssistantInfo && request.unread==1)
+            {
+                const auto text=wide(response.text);bool copied=false;
+                if(!text.empty() && OpenClipboard(window))
+                {
+                    const auto bytes=(text.size()+1)*sizeof(wchar_t);HGLOBAL memory=GlobalAlloc(GMEM_MOVEABLE,bytes);
+                    if(memory){if(auto* data=GlobalLock(memory)){memcpy(data,text.c_str(),bytes);GlobalUnlock(memory);if(EmptyClipboard() && SetClipboardData(CF_UNICODETEXT,memory)){copied=true;memory=nullptr;}}if(memory)GlobalFree(memory);}
+                    CloseClipboard();
+                }
+                slot.assistantDiagnostic=copied?L"MCP configuration copied. Select the exact viewer_session in your assistant.":L"Could not copy MCP configuration.";message(slot.assistantDiagnostic);
+            }
+            if(!(response.flags&Error) && request.kind==Kind::AssistantInfo && request.unread==2){slot.assistantDiagnostic=wide(response.text);message(slot.assistantDiagnostic);}
             if(!(response.flags&Error))
             {slot.assistant=response;if(response.unread){if(!slot.assistantSince)slot.assistantSince=GetTickCount64();}else slot.assistantSince=0;}
-            else {slot.assistant={};slot.assistantSince=0;message(L"Local Assistant · "+characterName(index)+L": "+wide(response.detail));}
+            else {slot.assistantDiagnostic=wide(response.detail);message(L"Local Assistant · "+characterName(index)+L": "+wide(response.detail));}
+            if(refreshAssistantEditor)refreshAssistantEditor();
         }
         if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
         if (request.kind == Kind::MonitorPolicy && !(response.flags & Error))
@@ -3464,6 +3556,8 @@ struct Host
                     }
                     else send(index, Kind::Detach);
                 }
+                else if(assistantPauseNeeded(pauseAllAssistant,slot.assistantPauseAck,slot.assistantPauseFailed,slot.snapshot.generation))
+                    send(index,Kind::AssistantPause);
                 else if (slot.restart.phase() == Restart::Phase::Queued)
                 {
                     if (!slot.restart.owns(slot.snapshot))
