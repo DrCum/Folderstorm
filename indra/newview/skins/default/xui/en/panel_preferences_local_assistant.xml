@@ -20,6 +20,7 @@
  <string name="sidecar_update_in_progress">Update in progress. Restart the viewer, then copy configuration again. Diagnostics still check this running viewer.</string>
  <string name="sidecar_found">Installed sidecar: [PATH]</string>
  <string name="sidecar_missing">Sidecar missing: [PATH]. Reinstall or build the packaged sidecar.</string>
+ <string name="discovery_unavailable">Discovery scope is unavailable or cannot be represented. Check your discovery override.</string>
  <string name="check_not_run">Connection has not been checked.</string>
  <string name="check_running">Checking this viewer…</string>
  <string name="check_launch_failed">Could not start the installed sidecar. Reinstall or check executable permissions.</string>

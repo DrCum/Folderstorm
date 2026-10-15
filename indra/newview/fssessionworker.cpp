@@ -877,8 +877,20 @@ struct Worker : LLIMSessionObserver
                 {reply(request,"Local Assistant settings changed or have an open/session-only draft. Use native Preferences.");break;}
                 control->setValue(LLSD(request.width!=0),true);
                 const auto file=gSavedSettings.getString("ClientSettingsFile");
-                if(file.empty() || !gSavedSettings.saveToFile(file,true))
-                {reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
+                // saveToFile returns a control count: a valid empty/default-only
+                // file also returns zero. Verify the persisted enable choice.
+                if(!file.empty())gSavedSettings.saveToFile(file,true);
+                std::string bytes;LLSD persisted;bool saved=false;
+                if(!file.empty() && readProfileFile(std::filesystem::path(ll_convert_string_to_wide(file,file.size(),CP_UTF8)),bytes))
+                {
+                    std::istringstream input(bytes);
+                    if(LLSDSerialize::fromXML(persisted,input,false)>0 && persisted.isMap())
+                    {
+                        const LLSD stored=persisted.has("EnableLocalEventAPIBridge")?persisted["EnableLocalEventAPIBridge"]["Value"]:control->getDefault();
+                        saved=stored.asBoolean()==control->getSaveValue().asBoolean();
+                    }
+                }
+                if(!saved){reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
             }
             else if(request.kind==Kind::AssistantReview)
             {

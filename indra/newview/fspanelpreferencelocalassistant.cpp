@@ -497,6 +497,8 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;
 #endif
     const std::string discovery = FSEventAPIBridge::instance().configurationDiscovery();
+    if(discovery.empty())
+    {mConfiguration.clear();getChild<LLButton>("copy_configuration")->setEnabled(false);getChild<LLTextEditor>("configuration")->setText(LLStringExplicit(""));getChild<LLTextBox>("sidecar_status")->setText(getString("discovery_unavailable"));return;}
     mConfiguration = FSAssistantConfiguration::generate(client, command, discovery, cursor_adapter);
     getChild<LLTextEditor>("configuration")->setText(mConfiguration);
 }
