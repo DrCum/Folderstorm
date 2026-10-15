@@ -6,6 +6,15 @@
 int main()
 {
  using namespace fs_content;using namespace fs_assistant;
+ // Hidden, pristine source does not imply dormant ownership: an include fetch
+ // or external watcher can still submit the old buffer later.
+ NativeSourceOwner dormant;assert(!nativeSourceBusy(dormant));
+ auto native=dormant;native.includeFetch=true;assert(nativeSourceBusy(native));
+ native=dormant;native.externalWatcher=true;assert(nativeSourceBusy(native));
+ native=dormant;native.preprocessing=true;assert(nativeSourceBusy(native));
+ native=dormant;native.forcedSave=true;assert(nativeSourceBusy(native));
+ native=dormant;native.pendingUploads=true;assert(nativeSourceBusy(native));
+ assert(!nativeSourceBusy(dormant)); // cached editor is usable after work ends
  const std::string stages[]={"queue","prepare","dequeued","capability","capability_result","source","source_result","commit"};
  for(unsigned cancel=0;cancel<8;++cancel)
  {

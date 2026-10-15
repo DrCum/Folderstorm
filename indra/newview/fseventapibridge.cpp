@@ -1288,7 +1288,16 @@ private:
         found->second.sent = true;
         LLSD body = reply;
         body["viewer_session"]=mIdentity["viewer_session"];
-        if(found->second.async){if(reply.has("error"))found->second.async->cancel("native_operation_failed");found->second.async->seal();body["operation_id"]=request_id;body["operation"]=asyncStatus(request_id);}
+        if(found->second.async)
+        {
+            if(reply.has("error"))found->second.async->cancel("native_operation_failed");
+            found->second.async->seal();
+            // A domain receipt may identify an earlier write being queried.
+            // Keep its stable ID; expose this request's transport receipt separately.
+            if(!body.has("operation_id"))body["operation_id"]=request_id;
+            body["bridge_operation_id"]=request_id;
+            body["operation"]=asyncStatus(request_id);
+        }
         if (found->second.api == "LLInventory" && found->second.op == "status" && body.isMap())
         {
             body["permissions"] = effective_permissions();

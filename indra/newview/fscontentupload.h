@@ -3,6 +3,16 @@
 #define FS_CONTENT_UPLOAD_H
 #include <string>
 namespace fs_content {
+struct NativeSourceOwner
+{
+    bool missingCore=false, pendingUploads=false, dirty=false, externalWatcher=false;
+    bool forcedSave=false, saveDialog=false, preprocessing=false, includeFetch=false;
+};
+inline bool nativeSourceBusy(const NativeSourceOwner& owner)
+{
+    return owner.missingCore || owner.pendingUploads || owner.dirty || owner.externalWatcher ||
+        owner.forcedSave || owner.saveDialog || owner.preprocessing || owner.includeFetch;
+}
 inline constexpr int uploadRetryLimit(bool assistantOwned){return assistantOwned?0:2;}
 // Shared by the live assistant uploader and portable boundary tests. A stage
 // may submit only once, including after a lost result or an authority rebound.

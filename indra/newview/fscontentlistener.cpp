@@ -69,6 +69,7 @@ bool editorBusy(const LLUUID& id,bool notecard,const LLResourceUploadInfo* own=n
     else
     {
         auto* script=LLFloaterReg::findTypedInstance<LLPreviewLSL>("preview_script",id);
+        if(script && script->assistantSourceBusy())return true;
         preview=script;if(script)editor=script->getEditor();
     }
     // Visible editors can have pending external/preprocessor save state that
@@ -85,7 +86,7 @@ bool invalidateHiddenEditor(const std::shared_ptr<Write>& write)
         return !preview || preview->invalidateAssistantSource(preview->getEditor());
     }
     auto* preview=LLFloaterReg::findTypedInstance<LLPreviewLSL>("preview_script",id);
-    return !preview || preview->invalidateAssistantSource(preview->getEditor());
+    return !preview || (!preview->assistantSourceBusy() && preview->invalidateAssistantSource(preview->getEditor()));
 }
 bool target(const LLSD& request,bool& notecard,LLViewerInventoryItem*& item,std::string& error)
 {
@@ -171,7 +172,11 @@ void complete(const std::shared_ptr<Write>& write,const LLSD& result,bool succes
     receipt["state"]=outcome.state;receipt["source_saved"]=outcome.sourceSaved;
     receipt["source_saved_known"]=outcome.sourceSavedKnown;
     receipt["uncertain"]=outcome.uncertain;receipt["reason"]=excerpt(reason,1024);
-    if(asset.notNull()){receipt["asset_id"]=asset;if(write->task->guard())write->task->guard()->acknowledge(asset.asString());}
+    if(asset.notNull())receipt["asset_id"]=asset;
+    // The server may rewrite rich notecard inventory. Discard the submitted
+    // cache bytes even after a late/revoked result; the next read uses the
+    // confirmed server revision. This performs no fetch or simulator write.
+    if(confirmed && write->notecard)LLFileSystem::removeFile(asset,LLAssetType::AT_NOTECARD);
     if(!write->notecard)
     {
         receipt["compiled_known"]=confirmed && result["compiled"].isBoolean();
