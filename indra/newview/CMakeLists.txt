@@ -1024,6 +1024,7 @@ set(viewer_HEADER_FILES
     fsassistantsocialmodel.h
     fsgesturelistener.h
     fsassistantgesturemodel.h
+    fsassistantassetfetch.h
     fscontentlistener.h
     fscontentupload.h
     fscontentreadpolicy.h
