@@ -418,6 +418,11 @@ void LLViewerInventoryItem::cloneViewerItem(LLPointer<LLViewerInventoryItem>& ne
 
 void LLViewerInventoryItem::updateServer(bool is_new) const
 {
+    updateServer(is_new, {});
+}
+
+void LLViewerInventoryItem::updateServer(bool is_new, const std::shared_ptr<void>& source_owner) const
+{
     if(!fs_assistant::asyncAllowed())return;
     if(!mIsComplete)
     {
@@ -463,7 +468,10 @@ void LLViewerInventoryItem::updateServer(bool is_new) const
             updates["hash_id"] = getTransactionID();
         }
     }
-    AISAPI::completion_t cr = boost::bind(&doInventoryCb, (LLPointer<LLInventoryCallback>)NULL, _1);
+    // Keep the source writer alive through queued and suspended AIS work, not
+    // merely through the asset-storage callback which schedules this PATCH.
+    AISAPI::completion_t cr = [source_owner](LLUUID id)
+    { doInventoryCb(LLPointer<LLInventoryCallback>(), id); };
     AISAPI::UpdateItem(getUUID(), updates, cr);
     // <FS:Ansariel> [UDP-Msg]
     }
@@ -479,7 +487,15 @@ void LLViewerInventoryItem::updateServer(bool is_new) const
         msg->addU32Fast(_PREHASH_CallbackID, 0);
         packMessage(msg);
         if (!fs_assistant::asyncSubmit()) return;
-        gAgent.sendReliableMessage();
+        if(source_owner && !gDisconnected && gAgent.getRegion())
+        {
+            auto* pending=new std::shared_ptr<void>(source_owner);
+            const auto sent=msg->sendReliable(gAgent.getRegionHost(),LL_DEFAULT_RELIABLE_RETRIES,true,
+                LL_PING_BASED_TIMEOUT_DUMMY,[](void** raw,S32)
+                {delete reinterpret_cast<std::shared_ptr<void>*>(raw);},reinterpret_cast<void**>(pending));
+            if(!sent)delete pending; // No circuit/packet was queued.
+        }
+        else gAgent.sendReliableMessage();
     }
     // </FS:Ansariel> [UDP-Msg]
 }

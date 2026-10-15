@@ -23,7 +23,10 @@ class ContentBoundaries(unittest.TestCase):
         self.assertIn("std::shared_ptr<void> mPendingSource", context)
         self.assertIn("LLViewerAssetUpload::trackLegacyInventoryUpload(item_id)", context)
         completion = card[card.index("void LLPreviewNotecard::onSaveComplete"):card.index("bool LLPreviewNotecard::handleSaveChangesDialog")]
-        self.assertLess(completion.index("updateServer(false)"), completion.index("delete info"))
+        self.assertLess(completion.index("updateServer(false,info->mPendingSource)"), completion.index("delete info"))
+        inventory = (ROOT / "llviewerinventory.cpp").read_text()
+        self.assertIn("AISAPI::completion_t cr = [source_owner]", inventory)
+        self.assertIn("new std::shared_ptr<void>(source_owner)", inventory)
         uploads = (ROOT / "llviewerassetupload.cpp").read_text()
         self.assertIn("if(sPendingLegacyInventoryUploads.has(itemId))return true", uploads)
 
