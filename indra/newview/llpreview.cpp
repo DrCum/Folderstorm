@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreview.h"
+#include "fscontentpolicy.h"
+#include "lltexteditor.h"
 
 #include "lllineeditor.h"
 #include "llinventorydefines.h"
@@ -410,6 +412,14 @@ bool LLPreview::handleHover(S32 x, S32 y, MASK mask)
         }
     }
     return LLFloater::handleHover(x,y,mask);
+}
+
+bool LLPreview::invalidateAssistantSource(LLTextEditor* editor)
+{
+    if(!editor || !fs_content::canInvalidateHiddenSource(editor->hasAncestor(this),getVisible(),
+        editor->isPristine(),mAssetStatus==PREVIEW_ASSET_LOADING))return false;
+    mAssetStatus=PREVIEW_ASSET_UNLOADED;
+    return true;
 }
 
 void LLPreview::onOpen(const LLSD& key)

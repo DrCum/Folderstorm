@@ -82,6 +82,21 @@ public:
     U32                 getEveryonePerms() const { return mEveryonePerms; };
     S32                 getExpectedUploadCost() const { return mExpectedUploadCost; };
 
+    // Opt-in provenance for assistant-owned uploads. Ordinary native uploads
+    // retain their existing retry and UI behavior. Captured closures must not
+    // rely on a thread-local scope across coroutine suspension.
+    struct AssistantHooks
+    {
+        std::function<bool(const std::string&,bool)> before;
+        std::function<void(const LLSD&,const std::string&)> stopped;
+    };
+    void setAssistantHooks(AssistantHooks hooks) { mAssistantHooks=std::move(hooks); }
+    bool assistantOwned() const { return static_cast<bool>(mAssistantHooks.before); }
+    bool assistantCheck(const std::string& stage,bool submit=false)
+    { return !assistantOwned() || mAssistantHooks.before(stage,submit); }
+    void assistantStopped(const LLSD& result,const std::string& stage)
+    { if(mAssistantHooks.stopped)mAssistantHooks.stopped(result,stage); }
+
     virtual bool        showUploadDialog() const { return true; }
     virtual bool        showInventoryPanel() const { return mShowInventory; }
 
@@ -124,6 +139,7 @@ protected:
     void                setAssetId(LLUUID assetId) { mAssetId = assetId; }
 
 private:
+    AssistantHooks      mAssistantHooks;
     LLTransactionID     mTransactionId;
     LLAssetType::EType  mAssetType;
     std::string         mName;
@@ -283,6 +299,11 @@ private:
 class LLViewerAssetUpload
 {
 public:
+    static bool hasPendingInventoryUpload(const LLUUID& itemId, const LLResourceUploadInfo* except = nullptr);
+    // Legacy asset-storage callbacks can outlive the native editor. The lease
+    // prevents another source writer until that callback has finished.
+    static std::shared_ptr<void> trackLegacyInventoryUpload(const LLUUID& itemId);
+
     static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo);
 
     static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo);

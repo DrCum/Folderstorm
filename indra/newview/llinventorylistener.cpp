@@ -1732,13 +1732,9 @@ std::vector<LLUUID> uuid_list(const LLSD& value)
 
 std::string capped_text(const char* data, S32 length, bool& truncated)
 {
-    truncated = false;
-    if (length < 0)
-    {
-        length = 0;
-    }
-    truncated = static_cast<std::size_t>(length) > kTextCap;
-    return fs_content::excerpt(std::string(data, data + length), kTextCap);
+    const std::string text(data,static_cast<std::size_t>(std::max(0,length)));
+    truncated=text.size()>kTextCap;
+    return fs_content::excerpt(text,kTextCap);
 }
 
 struct AssetRead
@@ -1835,7 +1831,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     reply["truncated"] = truncated;
     reply["stale"] = false;
     reply["complete"] = !truncated;
-    reply["content_hash"] = truncated?std::string():fs_content::hash(complete_text);
+    reply["content_hash"] = truncated?std::string():fs_content::hash(request->notecard?raw_content:complete_text);
     reply["native_readable"] = true;
     reply["native_writable"] = fs_content::writable(item,request->notecard);
     sendReply(reply, request->request);

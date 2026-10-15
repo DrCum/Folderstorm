@@ -53,8 +53,9 @@ inline LLSD evidence(const LLViewerInventoryItem* item)
     LLSD result=identity();
     if(item){result["item_id"]=item->getUUID();result["asset_id"]=item->getAssetUUID();
         result["owner"]=item->getPermissions().getOwner();result["parent_id"]=item->getParentUUID();
-        result["type"]=static_cast<S32>(item->getType());result["permissions"]=item->getPermissions().getMaskOwner();
-        result["group_permissions"]=item->getPermissions().getMaskGroup();result["everyone_permissions"]=item->getPermissions().getMaskEveryone();}
+        result["group"]=item->getPermissions().getGroup();result["base_permissions"]=LLSD::Integer(item->getPermissions().getMaskBase());
+        result["type"]=static_cast<S32>(item->getType());result["permissions"]=LLSD::Integer(item->getPermissions().getMaskOwner());
+        result["group_permissions"]=LLSD::Integer(item->getPermissions().getMaskGroup());result["everyone_permissions"]=LLSD::Integer(item->getPermissions().getMaskEveryone());}
     return result;
 }
 }
