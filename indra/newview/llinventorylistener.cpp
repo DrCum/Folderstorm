@@ -57,6 +57,8 @@
 #include "llcameralistener.h"
 #include "fssnapshotupload.h"
 #include "fsassistantoperation.h"
+#include "fscontentpermissions.h"
+#include "fscontentpolicy.h"
 #include "fseventapibridge.h"
 #include "fslinkreplacement.h"
 #include "llsdutil.h"
@@ -1749,13 +1751,23 @@ struct AssetRead
     LLUUID item_id;
     LLUUID asset_id;
     bool notecard = false;
+    LLSD evidence;
+    fs_assistant::AsyncTaskPtr task;
 };
 
 void finish_asset_read(AssetRead* raw, S32 status)
 {
     std::unique_ptr<AssetRead> request(raw);
+    fs_assistant::AsyncScope scope(request->task->guard());
+    if(!request->task->claim("asset_read"))return;
     LLViewerInventoryItem* item = gInventory.getItem(request->item_id);
-    const bool stale = !item || item->getAssetUUID() != request->asset_id;
+    const bool stale = !fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(request->request) ||
+        !fs_content::readable(item,request->notecard) || fs_content::evidence(item)!=request->evidence;
+    if(stale)
+    {
+        sendReply(llsd::map("error","Content authority or item revision changed; read again","id",request->item_id),request->request);
+        return;
+    }
     if (status != 0)
     {
         sendReply(llsd::map(
@@ -1769,10 +1781,10 @@ void finish_asset_read(AssetRead* raw, S32 status)
     const LLAssetType::EType type = request->notecard ? LLAssetType::AT_NOTECARD : LLAssetType::AT_LSL_TEXT;
     LLFileSystem file(request->asset_id, type);
     const S32 file_length = file.getSize();
-    if (file_length <= 0)
+    if (file_length < 0 || static_cast<std::size_t>(file_length)>fs_content::assetLimit)
     {
         sendReply(llsd::map(
-            "error", "Asset file was empty",
+            "error", "Asset exceeds the bounded content read limit",
             "id", request->item_id,
             "asset_id", request->asset_id,
             "stale", true), request->request);
@@ -1780,12 +1792,16 @@ void finish_asset_read(AssetRead* raw, S32 status)
     }
 
     std::vector<char> buffer(file_length + 1, 0);
-    file.read(reinterpret_cast<U8*>(&buffer[0]), file_length);
+    if(file_length && !file.read(reinterpret_cast<U8*>(&buffer[0]), file_length))
+    {sendReply(llsd::map("error","Asset read was incomplete"),request->request);return;}
+    std::string raw_content(buffer.data(),file_length);
+    if(!raw_content.empty() && raw_content.back()=='\0')raw_content.pop_back();
     bool truncated = false;
+    std::string complete_text;
     std::string text;
     if (request->notecard)
     {
-        std::stringstream stream(std::string(buffer.data(), buffer.data() + file_length));
+        std::stringstream stream(raw_content);
         LLNotecard notecard;
         if (!notecard.importStream(stream))
         {
@@ -1796,20 +1812,32 @@ void finish_asset_read(AssetRead* raw, S32 status)
                 "stale", true), request->request);
             return;
         }
-        text = capped_text(notecard.getText().data(), static_cast<S32>(notecard.getText().size()), truncated);
+        complete_text=notecard.getText();
+        std::string prefix,suffix;
+        const auto end=stream.tellg();
+        if(end<0 || !fs_content::notecardLayout(raw_content,complete_text,static_cast<std::size_t>(end),prefix,suffix))
+        {sendReply(llsd::map("error","Notecard is malformed or has an unsupported legacy format"),request->request);return;}
+        text = capped_text(complete_text.data(), static_cast<S32>(complete_text.size()), truncated);
     }
     else
     {
-        text = capped_text(buffer.data(), file_length, truncated);
+        complete_text=raw_content;
+        text = capped_text(complete_text.data(),static_cast<S32>(complete_text.size()),truncated);
     }
 
+    if(!fs_content::utf8(complete_text))
+    {sendReply(llsd::map("error","Asset is not valid UTF-8 text"),request->request);return;}
     LLSD reply;
     reply["ok"] = true;
     reply["id"] = request->item_id;
     reply["asset_id"] = request->asset_id;
     reply["text"] = text;
     reply["truncated"] = truncated;
-    reply["stale"] = stale;
+    reply["stale"] = false;
+    reply["complete"] = !truncated;
+    reply["content_hash"] = truncated?std::string():fs_content::hash(complete_text);
+    reply["native_readable"] = true;
+    reply["native_writable"] = fs_content::writable(item,request->notecard);
     sendReply(reply, request->request);
 }
 
@@ -3087,38 +3115,26 @@ void LLInventoryListener::readNotecard(LLSD const& data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
-    LLViewerInventoryItem* item = gInventory.getItem(data["id"].asUUID());
-    if (!item || item->getType() != LLAssetType::AT_NOTECARD)
-    {
-        Response response(LLSD(), data);
-        return response.error(item ? "Item is not a notecard" : "Inventory item was not found");
-    }
-    if (!gAssetStorage)
-    {
-        Response response(LLSD(), data);
-        return response.error("Asset storage is not available");
-    }
-    auto* request = new AssetRead{data, item->getUUID(), item->getAssetUUID(), true};
-    gAssetStorage->getAssetData(item->getAssetUUID(), LLAssetType::AT_NOTECARD, on_asset_read, request);
+    fs_assistant::AsyncScope scope(fs_assistant_async_context(data));
+    auto* item=gInventory.getItem(data["id"].asUUID());
+    if(!fs_content::readable(item,true) || !gAssetStorage)
+    {Response response(LLSD(),data);return response.error("Native COPY permission and an exact readable notecard item are required");}
+    auto* request=new AssetRead{data,item->getUUID(),item->getAssetUUID(),true,fs_content::evidence(item),fs_assistant::asyncTask()};
+    gAssetStorage->getInvItemAsset(LLHost(),gAgent.getID(),gAgent.getSessionID(),item->getPermissions().getOwner(),
+        LLUUID::null,item->getUUID(),item->getAssetUUID(),item->getType(),on_asset_read,request,true);
 }
 
 void LLInventoryListener::readScript(LLSD const& data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
-    LLViewerInventoryItem* item = gInventory.getItem(data["id"].asUUID());
-    if (!item || item->getType() != LLAssetType::AT_LSL_TEXT)
-    {
-        Response response(LLSD(), data);
-        return response.error(item ? "Item is not a script" : "Inventory item was not found");
-    }
-    if (!gAssetStorage)
-    {
-        Response response(LLSD(), data);
-        return response.error("Asset storage is not available");
-    }
-    auto* request = new AssetRead{data, item->getUUID(), item->getAssetUUID(), false};
-    gAssetStorage->getAssetData(item->getAssetUUID(), LLAssetType::AT_LSL_TEXT, on_asset_read, request);
+    fs_assistant::AsyncScope scope(fs_assistant_async_context(data));
+    auto* item=gInventory.getItem(data["id"].asUUID());
+    if(!fs_content::readable(item,false) || !gAssetStorage)
+    {Response response(LLSD(),data);return response.error("Native COPY+MODIFY permission (Library COPY exception) and an exact script item are required");}
+    auto* request=new AssetRead{data,item->getUUID(),item->getAssetUUID(),false,fs_content::evidence(item),fs_assistant::asyncTask()};
+    gAssetStorage->getInvItemAsset(LLHost(),gAgent.getID(),gAgent.getSessionID(),item->getPermissions().getOwner(),
+        LLUUID::null,item->getUUID(),item->getAssetUUID(),item->getType(),on_asset_read,request,true);
 }
 
 void LLInventoryListener::landmark(LLSD const& data)
