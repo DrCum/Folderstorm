@@ -48,6 +48,7 @@
 #include "fssessionexperience.h"
 #include "fssessiontoolbarlayout.h"
 #include "fssessionattentionnav.h"
+#include "fssessionassistant.h"
 #include "fssessionsets.h"
 #include "theme.h"
 #include "tooltips.h"
@@ -318,6 +319,8 @@ struct Slot
     std::uint64_t nextSequence = 0;
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
+    Message assistant;
+    ULONGLONG assistantAt=0,assistantSince=0;
     std::string reservation;
     bool waiting = false, detached = false, soundPrepared = false;
     std::string lastImportReport;
@@ -1225,6 +1228,13 @@ struct Host
         }
         for(auto it=unreadSince.begin();it!=unreadSince.end();)if(!liveUnread.count(it->first))it=unreadSince.erase(it);else ++it;
         for(const auto& item:attention.entries){const int i=sourceSlot(item);if(i>=0 && slots[i]->running() && !slots[i]->detached && slots[i]->pipe.alive() && slots[i]->snapshot.state==State::Ready && !(slots[i]->snapshot.flags&ChatRestricted) && (experience.accountMask&(1u<<i)) && (chatPreferences.attentionMask&attentionCategoryMask(item)))rows.push_back(item);}
+        for(int i=0;i<MaxCharacters;++i)if(slots[i])
+        {
+            const auto& slot=*slots[i];
+            if(slot.running() && slot.pipe.alive() && !slot.detached && (experience.accountMask&(1u<<i)) &&
+                slot.snapshot.state==State::Ready && assistantInfoOwned(slot.assistant,slot.snapshot) && slot.assistant.unread)
+            {auto item=assistantAttention(slot.assistant);item.eventAt=slot.assistantSince;item.cursor=slot.assistant.event;if(!attention.hiddenUnread(item))rows.push_back(item);}
+        }
         attentionNavigation.update(std::move(rows),experience.oldestFirst);return attentionNavigation.rows;
     }
     void editAttentionFilters() { editChatSettings(1); }
@@ -1280,7 +1290,7 @@ struct Host
         collectAttention();const auto* found=attentionNavigation.step(direction);
         if(!found){message(L"No attention matches the current filters.");return;}
         const auto item=*found;const int index=sourceSlot(item);
-        if(index<0 || !slots[index] || (slots[index]->snapshot.flags&ChatRestricted))return;
+        if(index<0 || !slots[index] || (item.conversation!=AssistantAttentionId && (slots[index]->snapshot.flags&ChatRestricted)))return;
         if(item.eventType==EventType::Conversation)
         {
             const auto conversationIt=slots[index]->chat.conversations.find(item.conversation);
@@ -1343,11 +1353,13 @@ struct Host
         }
         if (busy()) { message(L"Finish the current switch before reviewing attention."); return; }
         if (slots[index]->hasPendingReview) { message(L"This character already has a pending Review action."); return; }
-        if (slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready || (slots[index]->snapshot.flags & ChatRestricted))
+        const bool assistantRequest=item.conversation==AssistantAttentionId;
+        if (slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready || (!assistantRequest && (slots[index]->snapshot.flags & ChatRestricted)))
         { message(L"This character's attention is unavailable. Review its native viewer."); return; }
         if (item.eventType == EventType::Attention)
         {
-            auto action = item; action.kind = Kind::ReviewAttention;
+            auto action = item; action.kind = assistantRequest?Kind::AssistantReview:Kind::ReviewAttention;
+            if(assistantRequest)action.unread=0;
             slots[index]->pendingReview = action; slots[index]->hasPendingReview = true;
             switchTo(index);
         }
@@ -1644,7 +1656,8 @@ struct Host
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
-        if (kind == Kind::WorkspaceInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
+        if (kind == Kind::WorkspaceInfo || kind==Kind::AssistantInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
+        if(kind==Kind::AssistantInfo)request.title=utf8(profileName(index));
         if (kind == Kind::SetMode)
         {
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
@@ -1660,7 +1673,7 @@ struct Host
         if (kind == Kind::ShortcutPolicy) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; request.unread = shortcutPolicy(); }
         if (kind == Kind::AudioPolicy) request.unread = audioPolicyFor(index);
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
-        if ((kind == Kind::ReviewChat || kind == Kind::ReviewAttention) && foregroundPid == GetCurrentProcessId()) AllowSetForegroundWindow(slot.pid);
+        if ((kind == Kind::ReviewChat || kind == Kind::ReviewAttention || kind==Kind::AssistantReview) && foregroundPid == GetCurrentProcessId()) AllowSetForegroundWindow(slot.pid);
         if ((kind == Kind::Focus || (kind == Kind::SetMode && mode == Mode::Active)) && GetForegroundWindow() == window)
             AllowSetForegroundWindow(slot.pid);
         if (kind == Kind::PermitLogin || kind == Kind::DenyLogin) { request.grid = slot.snapshot.grid; request.name = slot.snapshot.name; }
@@ -3258,6 +3271,13 @@ struct Host
             }
         }
         if (request.kind == Kind::ShortcutPolicy && !(response.flags & Error)) slot.shortcutPolicy = static_cast<int>(request.unread);
+        if(request.kind==Kind::AssistantInfo || request.kind==Kind::AssistantConfigure || request.kind==Kind::AssistantPause || request.kind==Kind::AssistantReview)
+        {
+            slot.assistantAt=GetTickCount64();
+            if(!(response.flags&Error))
+            {slot.assistant=response;if(response.unread){if(!slot.assistantSince)slot.assistantSince=GetTickCount64();}else slot.assistantSince=0;}
+            else {slot.assistant={};slot.assistantSince=0;message(L"Local Assistant · "+characterName(index)+L": "+wide(response.detail));}
+        }
         if (request.kind == Kind::AudioPolicy && !(response.flags & Error)) slot.audioPolicy = request.unread;
         if (request.kind == Kind::MonitorPolicy && !(response.flags & Error))
         { slot.previewWidth = request.width; slot.previewHeight = request.height; slot.previewRate = request.unread; }
@@ -3522,6 +3542,7 @@ struct Host
                     const auto pending = slot.pendingTyping; slot.hasPendingTyping = false;
                     if (send(index, Kind::Typing, Mode::Warm, 0, &pending)) slot.typingAt = GetTickCount64();
                 }
+                else if(slot.snapshot.state==State::Ready && GetTickCount64()-slot.assistantAt>=1000)send(index,Kind::AssistantInfo);
                 else if (pollContacts(index)) {}
                 else if (automaticRead(index)) {}
                 else

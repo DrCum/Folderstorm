@@ -106,6 +106,7 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
     bool shortened = false;
     const auto format = [&shortened](const LLSD& value) { return display(value, shortened); };
     std::ostringstream text;
+    if(summary.has("actor_name"))text << format(summary["actor_name"]) << " · " << format(summary["actor_grid"]) << "\n" << format(summary["actor_account"]) << "\n\n";
     if (summary.has("target")) text << getString("target") << format(summary["target"]) << "\n";
     if (summary.has("destination")) text << getString("destination") << format(summary["destination"]) << "\n";
     if (summary.has("source")) text << getString("source") << format(summary["source"]) << "\n";

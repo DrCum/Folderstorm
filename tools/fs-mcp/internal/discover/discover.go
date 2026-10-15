@@ -30,6 +30,8 @@ var pidFromName = regexp.MustCompile(`(?i)^fs-mcp-(\d+)\.json$`)
 // Instance is one discovered viewer Event API bridge.
 type Instance struct {
 	ViewerSession string `json:"viewer_session,omitempty"`
+	DisplayName   string `json:"display_name,omitempty"`
+	Active        bool   `json:"active,omitempty"`
 	Managed       bool   `json:"managed,omitempty"`
 	Account       string `json:"account,omitempty"`
 	Grid          string `json:"grid,omitempty"`
@@ -227,6 +229,8 @@ func LoadFile(path string) (Instance, error) {
 }
 
 type wireDiscovery struct {
+	DisplayName     string          `json:"display_name"`
+	Active          bool            `json:"active"`
 	ViewerSession   string          `json:"viewer_session"`
 	Managed         bool            `json:"managed"`
 	Account         string          `json:"account"`
@@ -256,7 +260,7 @@ func Parse(data []byte) (Instance, error) {
 		return Instance{}, err
 	}
 	inst := Instance{
-		ViewerSession: w.ViewerSession, Managed: w.Managed, Account: w.Account, Grid: w.Grid, Name: w.Name, Profile: w.Profile, Ready: w.Ready,
+		DisplayName: w.DisplayName, Active: w.Active, ViewerSession: w.ViewerSession, Managed: w.Managed, Account: w.Account, Grid: w.Grid, Name: w.Name, Profile: w.Profile, Ready: w.Ready,
 		Token:      firstNonEmpty(w.Token, w.BearerToken, w.AuthToken),
 		Host:       w.Host,
 		Path:       w.Path,
@@ -265,7 +269,7 @@ func Parse(data []byte) (Instance, error) {
 		Viewer:     w.Viewer,
 		APIVersion: stringifyRaw(firstRaw(w.APIVersion, w.APIVersionCamel)),
 	}
-	if len(inst.ViewerSession) > 128 || len(inst.Account) > 64 || len(inst.Grid) > 512 || len(inst.Name) > 255 || len(inst.Profile) > 255 || (inst.Managed && inst.ViewerSession == "") {
+	if len(inst.ViewerSession) > 128 || len(inst.Account) > 64 || len(inst.Grid) > 512 || len(inst.DisplayName) > 255 || len(inst.Name) > 255 || len(inst.Profile) > 255 || (inst.Managed && inst.ViewerSession == "") {
 		return Instance{}, fmt.Errorf("invalid session discovery")
 	}
 	if pid, err := intFromRaw(w.PID); err == nil {

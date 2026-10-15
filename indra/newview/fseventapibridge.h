@@ -44,10 +44,13 @@ public:
     // not unbind the socket.
     bool applyEnabled(bool enabled);
     void refreshSession(); // Main-thread login/connection identity; revokes old work.
+    void reviewPending(); // Presents native approval only on the active owner.
+    static bool requestAllowed(const LLSD& request);
     void stop();
     bool isRunning() const;
     int getPort() const;
     const std::string& getDiscoveryPath() const;
+    const std::string& sessionReference() const {return mViewerSession;}
 
     struct StatusSnapshot
     {
@@ -56,6 +59,7 @@ public:
         int port = 0;
         int policyGeneration = 0;
         int pendingApprovals = 0;
+        U64 approvalRevision = 0;
         F64 lastExternalRequestAt = 0.0;
         F64 lastDiagnosticAt = 0.0;
         std::string lastExternalApi;
@@ -85,6 +89,7 @@ private:
     int mPort = 0;
     std::string mLastError;
     std::string mSessionKey, mViewerSession;
+    bool mHostedRegistry=false;
 };
 
 #endif

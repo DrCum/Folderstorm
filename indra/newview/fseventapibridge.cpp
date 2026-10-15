@@ -53,6 +53,9 @@
 #include "fssnapshotupload.h"
 #include "llagentbenefits.h"
 #include "fsassistantsession.h"
+#include "fsassistantdiscovery.h"
+#include "llsdutil.h"
+#include <filesystem>
 #include "llagent.h"
 #include "llagentui.h"
 #include "llstartup.h"
@@ -406,6 +409,13 @@ public:
 
             return;
         }
+        if(mIdentity["managed"].asBoolean())
+        {
+            if(!mIdentity["ready"].asBoolean())
+            {fail_response(response,HTTP_FORBIDDEN,"Character is not ready",llsd::map("error_code","not_ready"));return;}
+            if(fs_assistant::needsActiveCharacter(api,op) && !FSSessionWorker::assistantActiveAllowed())
+            {fail_response(response,HTTP_FORBIDDEN,"Activate this character and finish its transition/dialog first",llsd::map("error_code","requires_active_character"));return;}
+        }
         mLastExternalRequestAt = now_seconds();
         mLastExternalApi = api.substr(0, 64);
         mLastExternalOp = op.substr(0, 64);
@@ -540,6 +550,22 @@ public:
     bool enabled() const { return mEnabled; }
     void identity(const LLSD& value) { mIdentity=value; }
     const LLSD& identity() const { return mIdentity; }
+    bool requestAllowed(const LLSD& request) const
+    {
+        if(!request.has("__assistant_guard"))return true;
+        const auto found=mPending.find(request["__assistant_guard"].asUUID());
+        return found!=mPending.end() && postedAllowed(found->second);
+    }
+    void maintenance()
+    {
+        for(auto it=mPending.begin();it!=mPending.end();)
+        {
+            if(!postedAllowed(it->second))
+            {fail_response(it->second.response,HTTP_FORBIDDEN,"Assistant request expired or its session/permission changed",llsd::map("error_code","session_changed"));it=mPending.erase(it);}
+            else ++it;
+        }
+    }
+    void review() {showFront();}
     void setToken(std::string token) { mToken = std::move(token); }
     const std::string& token() const { return mToken; }
 
@@ -566,6 +592,7 @@ public:
         result.ready = mEnabled;
         result.policyGeneration = gPolicyGeneration;
         result.pendingApprovals = static_cast<int>(mAsks.size());
+        result.approvalRevision=mApprovalRevision;
         result.lastExternalRequestAt = mLastExternalRequestAt;
         result.lastDiagnosticAt = mLastDiagnosticAt;
         result.lastExternalApi = mLastExternalApi;
@@ -580,7 +607,17 @@ private:
         std::string api;
         std::string op;
         bool sent = false;
+        LLUUID login,account;
+        F64 deadline=0;
+        U64 generation=0;
+        std::shared_ptr<fs_assistant::ExecutionGate> gate;
     };
+    bool postedAllowed(const Posted& posted) const
+    {
+        return mEnabled && !posted.sent && !gDisconnected && posted.generation==mSessionGeneration && posted.login==gAgent.getSessionID() &&
+            posted.account==gAgentID && now_seconds()<posted.deadline && posted.gate && posted.gate->allowed() &&
+            (!mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(posted.api,posted.op) || FSSessionWorker::assistantActiveAllowed());
+    }
 
     struct Ask
     {
@@ -775,11 +812,20 @@ private:
         }
         const LLUUID request_id = LLUUID::generateNewID();
         request["reqid"] = request_id;
+        request["__assistant_guard"]=request_id;
         request["reply"] = mReplyPump.getName();
         Posted posted;
         posted.response = response;
         posted.api = api;
         posted.op = op;
+        if(mPending.size()>=64){fail_response(response,HTTP_SERVICE_UNAVAILABLE,"Too many pending assistant operations");return;}
+        posted.login=gAgent.getSessionID();posted.account=gAgentID;posted.generation=mSessionGeneration;
+        posted.deadline=deadline>0.0?deadline:now_seconds()+CHAIN_GUARD_SECONDS;
+        std::vector<std::string> required=prepared?prepared->requiredClasses:std::vector<std::string>{};
+        if(required.empty())if(const auto* def=find_def(classify(api,op)))required.push_back(def->id);
+        posted.gate=std::make_shared<fs_assistant::ExecutionGate>(required);
+        mExecutions.erase(std::remove_if(mExecutions.begin(),mExecutions.end(),[](const auto& gate){return gate.expired();}),mExecutions.end());
+        mExecutions.emplace_back(posted.gate);
         mPending.emplace(request_id, posted);
 
         if (!LLEventAPI::getInstance(api))
@@ -804,10 +850,11 @@ private:
             std::weak_ptr<State> weak = weak_from_this();
             FSAssistantExecutionContext context;
             context.deadline = deadline > 0.0 ? deadline : now_seconds() + CHAIN_GUARD_SECONDS;
-            context.allowed = [weak, classes, generation, gate]()
+            context.allowed = [weak, classes, generation, gate, account=gAgentID, login=gAgent.getSessionID(), api, op]()
             {
                 auto self = weak.lock();
-                return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation &&
+                return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation && !gDisconnected && account==gAgentID && login==gAgent.getSessionID() &&
+                    (!self->mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(api,op) || FSSessionWorker::assistantActiveAllowed()) &&
                     fs_assistant::decide(effective_levels(classes)) != fs_assistant::Decision::Deny;
             };
             if (api == "LLWorkspace")
@@ -850,6 +897,8 @@ private:
 
     void enqueueAsk(FSAssistantPreparedOperation prepared, ResponsePtr response, const std::string& api, const std::string& op)
     {
+        if(mAsks.size()>=32){fail_response(response,HTTP_SERVICE_UNAVAILABLE,"Too many pending assistant approvals");return;}
+        prepared.summary["actor_name"]=mIdentity["name"];prepared.summary["actor_account"]=mIdentity["account"];prepared.summary["actor_grid"]=mIdentity["grid"];
         Ask ask;
         ask.key = LLUUID::generateNewID();
         ask.response = response;
@@ -861,6 +910,7 @@ private:
         ask.chainDeadline = ask.enqueuedAt + CHAIN_GUARD_SECONDS;
         mAskOrder.push_back(ask.key);
         mAsks.emplace(ask.key, std::move(ask));
+        ++mApprovalRevision;
         ensureTicker();
         scheduleShow();
     }
@@ -940,11 +990,22 @@ private:
             return;
         }
         auto found = mAsks.find(mAskOrder.front());
-        if (found == mAsks.end() || found->second.gate.finished() || found->second.dialogPosted)
+        if (found == mAsks.end() || found->second.gate.finished())
         {
             return;
         }
         Ask& ask = found->second;
+        const bool canPresent=!FSSessionWorker::managed() || FSSessionWorker::assistantActiveAllowed();
+        if(ask.dialogPosted)
+        {
+            if(auto* dialog=ask.dialog.get())
+            {
+                if(!canPresent)dialog->setVisible(false);
+                else if(!dialog->getVisible()){dialog->setVisible(true);dialog->setFocus(true);}
+            }
+            return;
+        }
+        if(!canPresent)return;
         if (fs_assistant::decide(effective_levels(ask.prepared.requiredClasses)) == fs_assistant::Decision::Deny)
         {
             resolveAsk(ask.key, false, ERR_NOT_ALLOWED, false);
@@ -1004,11 +1065,12 @@ private:
         }
         const bool expired = now_seconds() >= (found->second.dialogPosted ? found->second.dialogDeadline : found->second.chainDeadline);
         const auto outcome = found->second.gate.finish(allow,
-            effective_levels(found->second.prepared.requiredClasses), mEnabled, expired);
+            effective_levels(found->second.prepared.requiredClasses), mEnabled && (!FSSessionWorker::managed() || FSSessionWorker::assistantActiveAllowed()), expired);
         Ask ask = found->second;
         // Remove the terminal request before dismissing any UI: close callbacks
         // and old Yes callbacks cannot find or resurrect it.
         mAsks.erase(found);
+        ++mApprovalRevision;
         mAskOrder.erase(std::remove(mAskOrder.begin(), mAskOrder.end(), key), mAskOrder.end());
         if (!fromDialog)
             if (auto dialog = dynamic_cast<FSAssistantApproval*>(ask.dialog.get())) dialog->dismiss();
@@ -1042,6 +1104,8 @@ private:
         {
             return false;
         }
+        if(!postedAllowed(found->second))
+        {fail_response(found->second.response,HTTP_FORBIDDEN,"Assistant response belongs to an expired request",llsd::map("error_code","session_changed"));mPending.erase(found);return true;}
         found->second.sent = true;
         LLSD body = reply;
         body["viewer_session"]=mIdentity["viewer_session"];
@@ -1065,6 +1129,7 @@ private:
     std::deque<LLUUID> mAskOrder;
     std::vector<std::weak_ptr<fs_assistant::ExecutionGate>> mExecutions;
     U64 mSessionGeneration = 1;
+    U64 mApprovalRevision=0;
     F64 mLastExternalRequestAt = 0.0;
     F64 mLastDiagnosticAt = 0.0;
     std::string mLastExternalApi;
@@ -1164,9 +1229,9 @@ bool FSEventAPIBridge::start(LLPumpIO& pump)
 
 bool FSEventAPIBridge::applyEnabled(bool enabled)
 {
-    if (enabled && FSSessionWorker::managed())
+    if (enabled && FSSessionWorker::assistantPaused())
     {
-        mLastError = "The local assistant is unavailable in managed character prototype sessions";
+        mLastError = "Local Assistant access is paused by the host";
         return false;
     }
     if (!mPump)
@@ -1233,6 +1298,15 @@ bool FSEventAPIBridge::bindOnce()
     const std::string filename =
         "fs-mcp-" + std::to_string(LLApp::getPid()) + ".json";
     mDiscoveryPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, filename);
+#if LL_WINDOWS
+    mHostedRegistry=mHostedRegistry || FSSessionWorker::managed();
+    if(mHostedRegistry)
+    {
+        const auto directory=fs_assistant::managedDiscoveryDirectory();
+        if(directory.empty()){mLastError="Unable to protect managed assistant discovery";state->disable();return false;}
+        mDiscoveryPath=ll_convert<std::string>((std::filesystem::path(directory)/ll_convert<std::wstring>(filename)).wstring());
+    }
+#endif
     mState = std::move(state);
     mSessionKey.clear();refreshSession();
     if (!writeDiscovery())
@@ -1254,6 +1328,7 @@ bool FSEventAPIBridge::writeDiscovery()
         return false;
     }
     const std::string temporary = mDiscoveryPath + ".tmp";
+    if(mHostedRegistry && !mState->identity()["ready"].asBoolean()){removeDiscoveryFile();return true;}
     LLSD discovery = llsd::map(
         "api_version", 1,
         "apiVersion", API_VERSION,
@@ -1268,6 +1343,10 @@ bool FSEventAPIBridge::writeDiscovery()
     const std::string payload = to_json(discovery);
 
     LLFILE* file = LLFile::fopen(temporary, "wb");
+#if LL_WINDOWS
+    if(mHostedRegistry && file && !fs_assistant::protectDiscoveryPath(ll_convert<std::wstring>(temporary)))
+    {LLFile::close(file);LLFile::remove(temporary,ENOENT);return false;}
+#endif
     const bool write_ok =
         file && std::fwrite(payload.data(), 1, payload.size(), file) == payload.size();
     const bool close_ok = !file || LLFile::close(file) == 0;
@@ -1299,21 +1378,39 @@ void FSEventAPIBridge::removeDiscoveryFile()
 void FSEventAPIBridge::refreshSession()
 {
     if(!mState || !mState->enabled())return;
+    mState->maintenance();
     const bool ready=LLStartUp::getStartupState()==STATE_STARTED && !gDisconnected;
     const bool managed=FSSessionWorker::managed();
     const auto grid=LLGridManager::instance().getGrid();
     const auto key=gAgentID.asString()+":"+gAgent.getSessionID().asString()+":"+grid+":"+(managed?"managed":"standalone")+":"+(ready?"ready":"offline");
-    if(key==mSessionKey)return;
+    std::string name;LLAgentUI::buildFullname(name);
+    auto identity=llsd::map("viewer_session",mViewerSession,"managed",managed,"account",gAgentID.asString(),"grid",grid,"name",name,"ready",ready);
+    identity["display_name"]=name;
+    identity["active"]=!managed || FSSessionWorker::assistantActiveAllowed();
+    const auto workerInfo=FSSessionWorker::assistantIdentity();
+    for(auto it=workerInfo.beginMap();it!=workerInfo.endMap();++it)if(!it->second.asString().empty())identity[it->first]=it->second;
+    if(key==mSessionKey)
+    {
+        if(!llsd_equals(mState->identity(),identity)){mState->identity(identity);if(!writeDiscovery()){mState->disable();removeDiscoveryFile();}}
+        return;
+    }
     mState->disable();
     mSessionKey=key;mViewerSession=LLUUID::generateNewID().asString();
     const auto token=make_token();
     if(token.empty()){removeDiscoveryFile();mLastError="Unable to refresh the assistant connection";return;}
     mState->setToken(token);
-    std::string name;LLAgentUI::buildFullname(name);
-    mState->identity(llsd::map("viewer_session",mViewerSession,"managed",managed,"account",gAgentID.asString(),"grid",grid,"name",name,"ready",ready));
+    identity["viewer_session"]=mViewerSession;mState->identity(identity);
     mState->enable();
     if(!writeDiscovery()){mState->disable();removeDiscoveryFile();mLastError="Unable to update assistant discovery";}
 }
+
+void FSEventAPIBridge::reviewPending() {if(mState && FSSessionWorker::assistantActiveAllowed())mState->review();}
+bool FSEventAPIBridge::requestAllowed(const LLSD& request)
+{
+    if(!request.has("__assistant_guard"))return true;
+    return instanceExists() && instance().mState && instance().mState->requestAllowed(request);
+}
+bool fs_assistant_request_allowed(const LLSD& request) {return FSEventAPIBridge::requestAllowed(request);}
 
 void FSEventAPIBridge::stop()
 {

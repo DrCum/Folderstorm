@@ -24,6 +24,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsassistantoperation.h"
 
 #include "llappearancelistener.h"
 
@@ -148,6 +149,8 @@ bool LLAppearanceListener::rlvAllows(const LLUUID& item_id, bool detach, std::st
 
 void LLAppearanceListener::wearOutfit(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -176,6 +179,8 @@ void LLAppearanceListener::wearOutfit(LLSD const &data)
 
 void LLAppearanceListener::wearItems(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -210,6 +215,8 @@ void LLAppearanceListener::wearItems(LLSD const &data)
 
 void LLAppearanceListener::detachItems(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -244,6 +251,8 @@ void LLAppearanceListener::detachItems(LLSD const &data)
 
 void LLAppearanceListener::getOutfitsList(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     const LLUUID outfits_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_MY_OUTFITS);
 
@@ -260,6 +269,8 @@ void LLAppearanceListener::getOutfitsList(LLSD const &data)
 
 void LLAppearanceListener::getOutfitItems(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     LLUUID outfit_id(data["outfit_id"].asUUID());
     LLViewerInventoryCategory *cat = gInventory.getCategory(outfit_id);
@@ -287,6 +298,8 @@ void LLAppearanceListener::getOutfitItems(LLSD const &data)
 
 void LLAppearanceListener::worn(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!gInventory.isInventoryUsable())
     {

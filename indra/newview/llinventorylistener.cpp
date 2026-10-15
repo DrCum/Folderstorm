@@ -334,6 +334,8 @@ void add_objects_info(LLEventAPI::Response& response, LLInventoryModel::cat_arra
 
 void LLInventoryListener::getItemsInfo(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     uuid_vec_t ids = LLSDParam<uuid_vec_t>(data["item_ids"]);
     for (auto &it : ids)
@@ -356,22 +358,30 @@ void LLInventoryListener::getItemsInfo(LLSD const &data)
 
 void LLInventoryListener::getFolderTypeNames(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(llsd::map("names", LLFolderType::getTypeNames()), data);
 }
 
 void LLInventoryListener::getAssetTypeNames(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(llsd::map("names", LLAssetType::getTypeNames()), data);
 }
 
 void LLInventoryListener::getBasicFolderID(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(llsd::map("id", gInventory.findCategoryUUIDForType(LLFolderType::lookup(data["ft_name"].asString()))), data);
 }
 
 
 void LLInventoryListener::getDirectDescendants(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     LLUUID folder_id(data["folder_id"].asUUID());
     LLViewerInventoryCategory* cat = gInventory.getCategory(folder_id);
@@ -479,6 +489,8 @@ struct LLFilteredCollector : public LLInventoryCollectFunctor
 
 void LLInventoryListener::collectDescendantsIf(LLSD const &data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     LLUUID folder_id(data["folder_id"].asUUID());
     LLViewerInventoryCategory *cat = gInventory.getCategory(folder_id);
@@ -770,6 +782,8 @@ LLSD object_summary(const LLInventoryObject* object)
 
 void LLInventoryListener::status(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     ensureObserving();
     LLInventoryModelBackgroundFetch& fetch = LLInventoryModelBackgroundFetch::instance();
     const LLUUID root = gInventory.getRootFolderID();
@@ -793,6 +807,8 @@ void LLInventoryListener::status(LLSD const& data)
 
 void LLInventoryListener::get(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     if (!gInventory.isInventoryUsable())
     {
         Response response(LLSD(), data);
@@ -822,6 +838,8 @@ void LLInventoryListener::get(LLSD const& data)
 
 void LLInventoryListener::list(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     if (!gInventory.isInventoryUsable())
     {
         Response response(LLSD(), data);
@@ -839,11 +857,15 @@ void LLInventoryListener::list(LLSD const& data)
 
 void LLInventoryListener::listAfterFetch(LLSD data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     getDirectDescendants(data);
 }
 
 void LLInventoryListener::search(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     if (!gInventory.isInventoryUsable())
     {
         Response response(LLSD(), data);
@@ -864,6 +886,7 @@ void LLInventoryListener::search(LLSD const& data)
     auto timer = std::make_shared<LLFrameTimer>();
     doOnIdleRepeating([this, data, folder_id, timer]()
     {
+        if(!fs_assistant_request_allowed(data))return true;
         if (inventory_tree_complete(folder_id))
         {
             searchAfterFetch(data);
@@ -882,6 +905,8 @@ void LLInventoryListener::search(LLSD const& data)
 
 void LLInventoryListener::searchAfterFetch(LLSD data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     LLUUID folder_id = data["folder_id"].asUUID();
     if (folder_id.isNull())
@@ -929,6 +954,8 @@ void LLInventoryListener::searchAfterFetch(LLSD data)
 
 void LLInventoryListener::systemFolder(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     std::string name = data["ft_name"].asString();
     LLStringUtil::trim(name);
     LLStringUtil::toLower(name);
@@ -987,6 +1014,8 @@ bool LLInventoryListener::validateDestination(const LLUUID& id, std::string& err
 
 void LLInventoryListener::createFolder(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     std::string error;
     const LLUUID parent_id = data["parent_id"].asUUID();
     std::string name = data["name"].asString();
@@ -1018,6 +1047,8 @@ void LLInventoryListener::createFolder(LLSD const& data)
 
 void LLInventoryListener::move(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     std::string error;
     const LLUUID id = data["id"].asUUID();
     LLUUID destination_id = data["parent_id"].asUUID();
@@ -1084,6 +1115,8 @@ void LLInventoryListener::move(LLSD const& data)
 
 void LLInventoryListener::rename(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     std::string name = data["name"].asString();
     LLStringUtil::trim(name);
@@ -1151,16 +1184,18 @@ public:
         const std::vector<LLInventoryListener::NoCopyMove>&,
         const std::vector<std::string>&)>;
 
-    FSInventoryCopyOperation(Complete complete, bool include_no_copy)
+    FSInventoryCopyOperation(Complete complete, bool include_no_copy, std::function<bool()> allowRequest)
         : mComplete(std::move(complete)),
-          mIncludeNoCopy(include_no_copy)
+          mIncludeNoCopy(include_no_copy),mAllowed(std::move(allowRequest))
     {
     }
 
+    bool allowed() const {return mSession==gAgent.getSessionID() && (!mAllowed || mAllowed());}
     void startFolder(LLViewerInventoryCategory* source,
                      const LLUUID& destination_parent,
                      const std::string& new_name)
     {
+        if(!allowed()){mErrors.push_back("Copy cancelled; submitted changes may already exist");mComplete(mDestinationRoot,mNoCopyMoves,mErrors);return;}
         scheduleCategory(source, destination_parent,
                          new_name.empty() ? source->getName() : new_name,
                          true);
@@ -1172,6 +1207,7 @@ private:
                           const std::string& name,
                           bool root)
     {
+        if(!allowed()){mErrors.push_back("Copy session/permission changed; submitted changes may already exist");return;}
         ++mPending;
         const LLUUID source_id = source->getUUID();
         gInventory.createNewCategory(
@@ -1193,7 +1229,7 @@ private:
                     {
                         self->mDestinationRoot = new_id;
                     }
-                    self->scheduleContents(source_id, new_id);
+                    if(self->allowed())self->scheduleContents(source_id, new_id);
                 }
                 self->taskDone();
             });
@@ -1201,6 +1237,7 @@ private:
 
     void scheduleContents(const LLUUID& source_id, const LLUUID& destination_id)
     {
+        if(!allowed()){mErrors.push_back("Copy session/permission changed; submitted changes may already exist");return;}
         LLInventoryModel::cat_array_t* categories = nullptr;
         LLInventoryModel::item_array_t* items = nullptr;
         gInventory.getDirectDescendentsOf(source_id, categories, items);
@@ -1238,6 +1275,7 @@ private:
 
     void scheduleItem(LLViewerInventoryItem* item, const LLUUID& destination_id)
     {
+        if(!allowed()){mErrors.push_back("Copy session/permission changed; submitted changes may already exist");return;}
         ++mPending;
         const LLUUID source_id = item->getUUID();
         LLPointer<LLInventoryCallback> callback =
@@ -1262,6 +1300,7 @@ private:
 
     void scheduleLink(LLViewerInventoryItem* item, const LLUUID& destination_id)
     {
+        if(!allowed()){mErrors.push_back("Copy session/permission changed; submitted changes may already exist");return;}
         ++mPending;
         const LLUUID source_id = item->getUUID();
         LLPointer<LLInventoryCallback> callback =
@@ -1288,6 +1327,8 @@ private:
 
     Complete mComplete;
     bool mIncludeNoCopy;
+    std::function<bool()> mAllowed;
+    const LLUUID mSession=gAgent.getSessionID();
     S32 mPending = 0;
     LLUUID mDestinationRoot;
     std::map<LLUUID, LLUUID> mFolderMap;
@@ -1319,6 +1360,8 @@ LLSD no_copy_moves_to_llsd(
 
 void LLInventoryListener::copy(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     pruneCopyPlans();
     const LLUUID source_id = data["id"].asUUID();
     LLUUID destination_id = data["parent_id"].asUUID();
@@ -1367,6 +1410,7 @@ void LLInventoryListener::copy(LLSD const& data)
         {
             CopyPlan plan;
             plan.id.generate();
+                    plan.session=gAgent.getSessionID();
             plan.source_id = source_id;
             plan.destination_root_id = destination_id;
             plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;
@@ -1412,6 +1456,7 @@ void LLInventoryListener::copy(LLSD const& data)
 
     auto begin_copy = [this, data, source_id, destination_id, policy]()
     {
+        if(!fs_assistant_request_allowed(data)){sendReply(llsd::map("error","Assistant copy expired"),data);return;}
         LLViewerInventoryCategory* category = gInventory.getCategory(source_id);
         if (!category || !inventory_tree_complete(source_id))
         {
@@ -1450,6 +1495,7 @@ void LLInventoryListener::copy(LLSD const& data)
                 const std::vector<NoCopyMove>& moves,
                 const std::vector<std::string>& errors)
             {
+                if(!fs_assistant_request_allowed(data)){sendReply(llsd::map("error","Assistant copy session changed; inspect submitted changes"),data);return;}
                 LLSD reply;
                 reply["new_id"] = new_root;
                 reply["ok"] = errors.empty();
@@ -1461,6 +1507,7 @@ void LLInventoryListener::copy(LLSD const& data)
                 {
                     CopyPlan plan;
                     plan.id.generate();
+                    plan.session=gAgent.getSessionID();
                     plan.source_id = source_id;
                     plan.destination_root_id = new_root;
                     plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;
@@ -1474,7 +1521,7 @@ void LLInventoryListener::copy(LLSD const& data)
                 }
                 sendReply(reply, data);
             },
-            include_no_copy);
+            include_no_copy,[data](){return fs_assistant_request_allowed(data);});
         operation->startFolder(
             category, destination_id, data["new_name"].asString());
     };
@@ -1489,6 +1536,7 @@ void LLInventoryListener::copy(LLSD const& data)
     auto timer = std::make_shared<LLFrameTimer>();
     doOnIdleRepeating([begin_copy, source_id, data, timer]()
     {
+        if(!fs_assistant_request_allowed(data))return true;
         if (inventory_tree_complete(source_id))
         {
             begin_copy();
@@ -1505,10 +1553,12 @@ void LLInventoryListener::copy(LLSD const& data)
 
 void LLInventoryListener::confirmCopy(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     pruneCopyPlans();
     const LLUUID plan_id = data["plan_id"].asUUID();
     auto found = mCopyPlans.find(plan_id);
-    if (found == mCopyPlans.end())
+    if (found == mCopyPlans.end() || found->second.session!=gAgent.getSessionID())
     {
         Response response(LLSD(), data);
         return response.error("Copy plan is missing or expired");
@@ -1573,7 +1623,7 @@ bool LLInventoryListener::prepareAssistantCopyConfirmation(const LLSD& data,
 {
     const LLUUID plan_id = data["plan_id"].asUUID();
     auto found = mCopyPlans.find(plan_id);
-    if (found == mCopyPlans.end() || found->second.expires_at <= LLDate::now().secondsSinceEpoch())
+    if (found == mCopyPlans.end() || found->second.session!=gAgent.getSessionID() || found->second.expires_at <= LLDate::now().secondsSinceEpoch())
     {
         error = "Copy plan is missing or expired";
         return false;
@@ -1626,7 +1676,7 @@ void LLInventoryListener::pruneCopyPlans()
     const F64 now = LLDate::now().secondsSinceEpoch();
     for (auto it = mCopyPlans.begin(); it != mCopyPlans.end();)
     {
-        if (it->second.expires_at <= now)
+        if (it->second.expires_at <= now || it->second.session != gAgent.getSessionID())
         {
             it = mCopyPlans.erase(it);
         }
@@ -1815,6 +1865,8 @@ bool LLInventoryListener::requireConfirm(LLSD const& data, Response& response) c
 
 void LLInventoryListener::types(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(llsd::map(
         "folder_types", LLFolderType::getTypeNames(),
         "asset_types", LLAssetType::getTypeNames()), data);
@@ -1822,6 +1874,8 @@ void LLInventoryListener::types(LLSD const& data)
 
 void LLInventoryListener::getMany(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     if (!gInventory.isInventoryUsable())
     {
         Response response(LLSD(), data);
@@ -1844,6 +1898,8 @@ void LLInventoryListener::getMany(LLSD const& data)
 
 void LLInventoryListener::resolvePath(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!gInventory.isInventoryUsable())
     {
@@ -1935,6 +1991,8 @@ void LLInventoryListener::resolvePath(LLSD const& data)
 
 void LLInventoryListener::protectedFolders(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     ensureObserving();
     Response response(LLSD(), data);
     const LLSD stored = gSavedPerAccountSettings.getLLSD("FSProtectedFolders");
@@ -1958,6 +2016,8 @@ void LLInventoryListener::protectedFolders(LLSD const& data)
 
 void LLInventoryListener::setDescription(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     LLInventoryObject* object = gInventory.getObject(id);
     if (!object || !object_is_agent_inventory(id))
@@ -2001,6 +2061,8 @@ void LLInventoryListener::setDescription(LLSD const& data)
 
 void LLInventoryListener::setThumbnail(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     LLInventoryObject* object = gInventory.getObject(id);
     if (!object || !object_is_agent_inventory(id))
@@ -2180,6 +2242,8 @@ void snapshot_texture_legacy_callback(const LLUUID& asset_id, void* user_data, S
 
 void LLInventoryListener::snapshotUpload(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     snapshotUploadWithContext(data, nullptr);
 }
 
@@ -2339,6 +2403,8 @@ void LLInventoryListener::snapshotUploadWithContext(LLSD const& data, const FSAs
 
 void LLInventoryListener::setFavorite(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     const LLUUID id = data["id"].asUUID();
     if (!gInventory.getObject(id) || !object_is_agent_inventory(id))
@@ -2357,6 +2423,8 @@ void LLInventoryListener::setFavorite(LLSD const& data)
 
 void LLInventoryListener::link(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     LLUUID parent_id = data["parent_id"].asUUID();
     std::string error;
@@ -2640,6 +2708,8 @@ void LLInventoryListener::dispatchPreparedLinkReplacement(const LLSD& data,
 
 void LLInventoryListener::replaceLinks(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     auto selection = std::make_shared<FSLinkReplacementSelection>();
     std::string error;
     if (!prepareLinkReplacement(data, *selection, error))
@@ -2652,6 +2722,8 @@ void LLInventoryListener::replaceLinks(LLSD const& data)
 
 void LLInventoryListener::createItem(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     std::string type_name = data["type"].asString();
     LLStringUtil::trim(type_name);
     LLStringUtil::toLower(type_name);
@@ -2709,6 +2781,8 @@ void LLInventoryListener::createItem(LLSD const& data)
 
 void LLInventoryListener::batchMove(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     const std::vector<LLUUID> ids = uuid_list(data["ids"]);
     if (ids.empty() || static_cast<S32>(ids.size()) > kBatchLimit)
@@ -2764,6 +2838,8 @@ void LLInventoryListener::batchMove(LLSD const& data)
 
 void LLInventoryListener::batchRename(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     if (!data["items"].isArray() || data["items"].size() < 1 || data["items"].size() > kBatchLimit)
     {
@@ -2815,6 +2891,8 @@ void LLInventoryListener::batchRename(LLSD const& data)
 
 void LLInventoryListener::batchCopy(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     const std::vector<LLUUID> ids = uuid_list(data["ids"]);
     if (ids.empty() || static_cast<S32>(ids.size()) > kBatchLimit)
@@ -2860,6 +2938,7 @@ void LLInventoryListener::batchCopy(LLSD const& data)
         {
             CopyPlan plan;
             plan.id.generate();
+                    plan.session=gAgent.getSessionID();
             plan.source_id = id;
             plan.destination_root_id = destination_id;
             plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;
@@ -2887,6 +2966,8 @@ void LLInventoryListener::batchCopy(LLSD const& data)
 
 void LLInventoryListener::trash(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID trash_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
     if (trash_id.isNull())
     {
@@ -2900,6 +2981,8 @@ void LLInventoryListener::trash(LLSD const& data)
 
 void LLInventoryListener::restore(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     LLFolderType::EType preferred = LLFolderType::FT_NONE;
     if (LLViewerInventoryItem* item = gInventory.getItem(id))
@@ -2930,6 +3013,8 @@ void LLInventoryListener::restore(LLSD const& data)
 
 void LLInventoryListener::emptyTrash(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     if (!data["confirm"].asBoolean())
     {
         Response response(LLSD(), data);
@@ -2956,6 +3041,8 @@ void LLInventoryListener::emptyTrash(LLSD const& data)
 
 void LLInventoryListener::purge(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     const LLUUID id = data["id"].asUUID();
     LLInventoryObject* object = gInventory.getObject(id);
     if (!object || !object_is_agent_inventory(id))
@@ -2984,6 +3071,8 @@ void LLInventoryListener::purge(LLSD const& data)
 
 void LLInventoryListener::readNotecard(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     LLViewerInventoryItem* item = gInventory.getItem(data["id"].asUUID());
     if (!item || item->getType() != LLAssetType::AT_NOTECARD)
     {
@@ -3001,6 +3090,8 @@ void LLInventoryListener::readNotecard(LLSD const& data)
 
 void LLInventoryListener::readScript(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     LLViewerInventoryItem* item = gInventory.getItem(data["id"].asUUID());
     if (!item || item->getType() != LLAssetType::AT_LSL_TEXT)
     {
@@ -3018,6 +3109,8 @@ void LLInventoryListener::readScript(LLSD const& data)
 
 void LLInventoryListener::landmark(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     LLViewerInventoryItem* item = gInventory.getItem(data["id"].asUUID());
     if (!item || item->getType() != LLAssetType::AT_LANDMARK)
     {
@@ -3050,6 +3143,8 @@ void LLInventoryListener::landmark(LLSD const& data)
 
 void LLInventoryListener::changes(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     ensureObserving();
     Response response(LLSD(), data);
     const S32 since = data["since"].asInteger();
