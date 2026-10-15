@@ -26,6 +26,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloateravatarpicker.h"
+#include "fsavatarpickersearchlease.h"
 
 // Viewer includes
 #include "llagent.h"
@@ -715,6 +716,13 @@ void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUI
 /*static*/
 void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std::string name)
 {
+    const auto searchLease=fs_assistant_social::AvatarPickerSearchLease::acquire();
+    if(!searchLease)
+    {
+        if(auto* floater=LLFloaterReg::findTypedInstance<LLFloaterAvatarPicker>("avatar_picker",name))
+        {LLSD result;result["failure_reason"]="A resident search is still running. Try again shortly.";floater->processResponse(queryID,result);}
+        return;
+    }
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("findByNameCoro", httpPolicy);

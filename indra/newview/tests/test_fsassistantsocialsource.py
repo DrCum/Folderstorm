@@ -109,6 +109,21 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         self.assertIn('event["data"]=name=="chat"?publicChatRow(entry.value):entry.value', text)
         self.assertIn('auto row=publicChatRow(entry.value)', text)
 
+    def test_resident_search_transport_admission_is_shared_with_host_and_picker(self):
+        text = source("fsassistantsocial.cpp")
+        search = text[text.index("void search(const LLSD& request"):text.index("class SocialListener")]
+        worker = source("fssessionworker.cpp")
+        host = worker[worker.index("if(request.kind==Kind::ContactSearch)"):worker.index("else if(request.kind==Kind::OpenIM)")]
+        picker = source("llfloateravatarpicker.cpp")
+        native = picker[picker.index("void LLFloaterAvatarPicker::findByNameCoro("):picker.index("void LLFloaterAvatarPicker::find()")]
+        for transport in (search, host, native):
+            self.assertLess(transport.index("AvatarPickerSearchLease::acquire()"), transport.index("getAndSuspend("))
+            self.assertIn("still running. Try again shortly.", transport) if transport is not search else self.assertIn("busy:", transport)
+        self.assertIn("[weak,lease,response,request,url,captured,task,guard]", search)
+        self.assertIn("[result,url,searchLease]", host)
+        self.assertIn("floater->processResponse(queryID,result)", native)
+        self.assertNotIn("AsyncScope", native)
+
 
 if __name__ == "__main__":
     unittest.main()

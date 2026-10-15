@@ -3,6 +3,7 @@
 #include "fsassistantsocial.h"
 #include "fsassistantsocialmodel.h"
 #include "fsassistantnearbychatpolicy.h"
+#include "fsavatarpickersearchlease.h"
 #include "fsassistantfeature.h"
 #include "fseventapibridge.h"
 #include "lleventapi.h"
@@ -181,8 +182,6 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     struct PendingProfile {LLUUID target;LLSD request;Guard guard;fs_assistant::AsyncTaskPtr task;std::shared_ptr<Response> response;F64 deadline;};
     std::shared_ptr<PendingProfile> profile;
     F64 profileBusyUntil=0;
-    struct Search {bool pending=true;};
-    static std::weak_ptr<Search> runningSearch;
     State(){LLAvatarTracker::instance().addObserver(this);}
     ~State(){LLAvatarTracker::instance().removeObserver(this);cancelProfile("session_changed");}
     bool current()const{return ready() && account==gAgentID && login==gAgent.getSessionID() && grid==LLGridManager::getInstance()->getGrid() && !viewerSession.empty() && viewerSession==bridgeReference();}
@@ -440,16 +439,17 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         }
         if(request["offset"].asInteger()!=0){response->error("snapshot_required: retain the first search response snapshot_id");return;}
         if(searchSnapshots.size()>=16){response->error("capacity: resident search snapshot capacity reached");return;}
-        if(const auto running=runningSearch.lock();running && running->pending){response->error("busy: a native resident search is still running");return;}
+        const auto lease=fs_assistant_social::AvatarPickerSearchLease::acquire();if(!lease){response->error("busy: a native resident search is still running");return;}
         auto* region=gAgent.getRegion();auto url=region?region->getCapability("AvatarPickerSearch"):std::string();
         if(url.empty()){response->error("unsupported_feature: AvatarPickerSearch unavailable");return;}
         auto query=request["query"].asString();std::replace(query.begin(),query.end(),'.',' ');if(url.back()!='/')url+='/';url+="?page_size=100&names="+LLURI::escape(query);
-        auto running=std::make_shared<Search>();runningSearch=running;const auto captured=publicSource();std::weak_ptr<State> weak=shared_from_this();auto task=fs_assistant::asyncTask();
-        LLCoros::instance().launch("AssistantResidentSearch",[weak,running,response,request,url,captured,task,guard]()
+        const auto captured=publicSource();std::weak_ptr<State> weak=shared_from_this();auto task=fs_assistant::asyncTask();
+        LLCoros::instance().launch("AssistantResidentSearch",[weak,lease,response,request,url,captured,task,guard]()
         {
-            if(!guard || !guard->allowed() || !fs_assistant::asyncTaskSubmit(task)){running->pending=false;response->error("expired_or_not_permitted");return;}
+            (void)lease;
+            if(!guard || !guard->allowed() || !fs_assistant::asyncTaskSubmit(task)){response->error("expired_or_not_permitted");return;}
             auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("AssistantResidentSearch",LLCore::HttpRequest::DEFAULT_POLICY_ID);auto http=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();options->setTimeout(20);
-            const LLSD data=adapter->getAndSuspend(http,url,options);running->pending=false;const auto self=weak.lock();
+            const LLSD data=adapter->getAndSuspend(http,url,options);const auto self=weak.lock();
             if(!self || !self->current() || !visible() || self->publicSource()!=captured || !guard->allowed()){response->error("expired_or_not_permitted");return;}
             const auto status=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(data[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
             if(!status || !data["agents"].isArray()){response->error("viewer_error: resident search failed");return;}
@@ -463,7 +463,6 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         });
     }
 };
-std::weak_ptr<FSAssistantSocial::State::Search> FSAssistantSocial::State::runningSearch;
 
 namespace
 {
