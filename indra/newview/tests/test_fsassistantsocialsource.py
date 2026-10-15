@@ -66,8 +66,19 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         self.assertIn('arg["ingress_sequence"] = std::to_string(live_sequence)', text)
         adapter = source("fsassistantsocial.cpp")
         self.assertIn('data["login_id"].asUUID()!=self->login', adapter)
-        self.assertIn("fs_assistant_social::reopens", adapter)
-        self.assertIn('closed[id]=LLIMModel::assistantLiveSequence()', adapter)
+        self.assertIn("closed.observeIncoming(session->mSessionID.asString(),ingress,sender.notNull() && sender!=gAgentID)", adapter)
+        self.assertIn('closed.hide(id,LLIMModel::assistantLiveSequence())', adapter)
+
+    def test_close_hides_all_retained_delivery_surfaces(self):
+        text = source("fsassistantsocial.cpp")
+        row_check = text[text.index("bool rowAllowed("):text.index("LLSD conversation(")]
+        self.assertIn('if(!closed.visible(row["conversation_id"].asString()))return false', row_check)
+        self.assertIn('closed.visible(entry.first.asString())', text)
+        self.assertIn('name=="chat" && !rowAllowed(entry.value)', text)
+        self.assertIn('if(!rowAllowed(entry.value)', text)
+        # Canonical UUID keys prevent alternate UUID casing bypassing visibility.
+        self.assertIn('id=conversationKey(request["conversation_id"].asString())', text)
+        self.assertIn('conversationID=conversationKey(request["conversation_id"].asString())', text)
 
     def test_no_chatbar_commands_or_notification_responses(self):
         text = source("fsassistantsocial.cpp")

@@ -22,6 +22,18 @@ int main()
     Draft draft;assert(setDraft(draft,0,"typing"));assert(!setDraft(draft,0,"overwrite"));assert(draft.text=="typing" && draft.revision==1);
     assert(!liveMessage(true,1,true) && !liveMessage(true,2,true) && !liveMessage(false,0,false) && !liveMessage(false,0,true) && liveMessage(true,0,true));
     assert(!reopens(true,8,9) && !reopens(true,9,9) && reopens(true,10,9) && !reopens(false,10,9));
+    ConversationVisibility visibility;
+    assert(visibility.visible("conversation"));assert(visibility.hide("conversation",20));
+    // Catalog reads, outgoing echoes, and translated messages whose native
+    // ingress predates close never reopen any assistant delivery surface.
+    assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",21,false);assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",19,true);assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",20,true);assert(!visibility.visible("conversation"));
+    assert(visibility.hide("conversation",18)); // stale native watermark cannot lower fence
+    visibility.observeIncoming("conversation",19,true);assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",22,true);assert(visibility.visible("conversation"));
+    assert(visibility.hide("conversation",23));visibility.open("conversation");assert(visibility.visible("conversation"));
     assert(validText("hello") && !validText("") && !validText(std::string(1024,'x')) && !validText(std::string("x\0y",3)));
     Cursors cursors;Reader reader;reader.binding="viewer-login-grid";reader.epoch=3;reader.topics={"chat"};reader.positions["chat"]=8;
     cursors.save("opaque-a",reader,0);Reader output;

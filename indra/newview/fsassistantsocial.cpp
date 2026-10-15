@@ -122,6 +122,8 @@ int limit(const LLSD& request,int fallback=50){return request.has("limit")?reque
 bool validPage(const LLSD& request,std::string& error)
 {if(limit(request)<1 || limit(request)>100 || request["offset"].asInteger()<0 || request["offset"].asInteger()>2048){error="invalid_args: limit must be 1..100 and offset 0..2048";return false;}return true;}
 bool isSend(const std::string& op){return op=="sendNearby" || op=="sendIM" || op=="sendGroup" || op=="sendConference";}
+std::string conversationKey(const std::string& value)
+{return value=="nearby" || !LLUUID::validate(value)?value:LLUUID(value).asString();}
 std::string notificationCategory(const std::string& name)
 {
     if(name=="TeleportOffered" || name=="TeleportOffered_SLUrl" || name=="TeleportOffered_MaturityExceeded" || name=="TeleportOffered_MaturityExceeded_SLUrl" || name=="TeleportOffered_MaturityBlocked" || name=="TeleportOffered_MaturityBlocked_SLUrl")return "Teleport offer";
@@ -171,7 +173,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     std::map<std::string,fs_assistant_social::Draft> drafts;
     struct AppliedDraft{std::string conversation;std::uint64_t revision;F64 until;};
     std::map<std::string,AppliedDraft> appliedDrafts;
-    std::map<std::string,std::uint64_t> closed;
+    fs_assistant_social::ConversationVisibility closed;
     struct Receipt{LLSD value;F64 until;};
     std::map<std::string,Receipt> receipts;
     std::set<std::string> submittedIDs; // bounded login tombstones; never replay uncertain sends
@@ -213,8 +215,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
             if(!session || !conversationAllowed(*session) || (sender.notNull() && sender!=gAgentID && !RlvActions::canReceiveIM(sender)))return;
             LLSD row;row["conversation_id"]=session->mSessionID;row["topic"]=topic(*session);row["sender_id"]=sender;row["sender_name"]=bounded(data["from"].asString(),255);row["text"]=bounded(data["message"].asString(),4095);row["time"]=data["time"];row["kind"]="message";
             const auto id=self->streams["chat"].append(row,encodedBytes(row)+128);
-            const auto fence=self->closed.find(session->mSessionID.asString());
-            if(fence!=self->closed.end() && fs_assistant_social::reopens(sender.notNull() && sender!=gAgentID,ingress,fence->second))self->closed.erase(fence);
+            self->closed.observeIncoming(session->mSessionID.asString(),ingress,sender.notNull() && sender!=gAgentID);
             (void)id;
         });
         if(auto channel=LLNotifications::instance().getChannel("Visible"))notificationConnection=channel->connectChanged([weak](const LLSD&){if(auto self=weak.lock())self->noticesDirty=true;return false;});
@@ -289,6 +290,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     bool rowAllowed(const LLSD& row)const
     {
         if(!current() || !visible())return false;
+        if(!closed.visible(row["conversation_id"].asString()))return false;
         if(row["topic"].asString()=="nearby")return nearbyAllowed(row);
         const LLUUID sender=row["sender_id"].asUUID();if(sender.notNull() && sender!=gAgentID && !RlvActions::canReceiveIM(sender))return false;
         const auto* session=LLIMModel::instance().findIMSession(row["conversation_id"].asUUID());return session && conversationAllowed(*session);
@@ -299,7 +301,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     }
     bool chatEvidence(const LLSD& request,LLSD& evidence,std::string& error)const
     {
-        const auto op=request["op"].asString(),id=request["conversation_id"].asString();
+        const auto op=request["op"].asString(),id=conversationKey(request["conversation_id"].asString());
         if(op=="open")
         {
             if(request["grid"].asString()!=grid || !residentAllowed(request["resident_id"].asUUID())){error="invalid_target: resident/grid unavailable or restricted";return false;}
@@ -339,13 +341,13 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     LLSD writeChat(const LLSD& request,std::string& error)
     {
         LLSD evidence;if(!chatEvidence(request,evidence,error))return LLSD();
-        const auto op=request["op"].asString(),id=request["conversation_id"].asString();LLSD result;
+        const auto op=request["op"].asString(),id=conversationKey(request["conversation_id"].asString());LLSD result;
         if(op=="open")
         {
             const auto resident=request["resident_id"].asUUID();const auto name=contact(resident)["display_name"].asString();
             if(!fs_assistant::asyncSubmit()){error="expired_or_not_permitted";return LLSD();}
             const auto native=gIMMgr->addSession(name,IM_NOTHING_SPECIAL,resident);if(native.isNull()){error="viewer_error: native IM could not be opened";return LLSD();}
-            closed.erase(native.asString());result["conversation_id"]=native;result["state"]="opened";return result;
+            closed.open(native.asString());result["conversation_id"]=native;result["state"]="opened";return result;
         }
         if(op=="draftGet" || op=="draftSet")
         {
@@ -361,8 +363,8 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         }
         if(op=="close")
         {
-            if(closed.size()>=2048 && !closed.count(id)){error="capacity: assistant closed conversation limit reached";return LLSD();}
-            closed[id]=LLIMModel::assistantLiveSequence();result["state"]="hidden_from_assistant";result["native_conversation_preserved"]=true;return result;
+            if(!closed.hide(id,LLIMModel::assistantLiveSequence())){error="capacity: assistant closed conversation limit reached";return LLSD();}
+            result["state"]="hidden_from_assistant";result["native_conversation_preserved"]=true;return result;
         }
         if(!isSend(op)){error="unsupported_operation";return LLSD();}
         const auto client=request["client_request_id"].asString();
@@ -412,10 +414,10 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         if(op=="conversations")
         {
             LLSD nearby;nearby["conversation_id"]="nearby";nearby["topic"]="nearby";nearby["name"]="Nearby";rows.push_back(nearby);
-            for(const auto& entry:LLIMModel::instance().mId2SessionMap)if(rows.size()<2048 && entry.second && !closed.count(entry.first.asString()) && conversationAllowed(*entry.second))rows.push_back(conversation(*entry.second));
+            for(const auto& entry:LLIMModel::instance().mId2SessionMap)if(rows.size()<2048 && entry.second && closed.visible(entry.first.asString()) && conversationAllowed(*entry.second))rows.push_back(conversation(*entry.second));
             auto result=page(rows,request);result["source"]=publicSource();return result;
         }
-        const auto conversationID=request["conversation_id"].asString();auto query=request["query"].asString();LLStringUtil::toLower(query);
+        const auto conversationID=conversationKey(request["conversation_id"].asString());auto query=request["query"].asString();LLStringUtil::toLower(query);
         if((op=="history" && conversationID.empty()) || (!conversationID.empty() && conversationID!="nearby" && !LLUUID::validate(conversationID))){error="invalid_args: exact native conversation_id is required";return LLSD();}
         if(op=="search" && (query.empty() || query.size()>127)){error="invalid_args: query must be 1..127 UTF-8 bytes";return LLSD();}
         for(const auto& entry:streams["chat"].entries())
