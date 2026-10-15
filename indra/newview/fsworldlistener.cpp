@@ -269,7 +269,9 @@ void media(LLSD& result, double radius, int limit)
         result["stream"]["state"] = playing == LLAudioEngine::AUDIO_PLAYING ? "playing" :
             playing == LLAudioEngine::AUDIO_PAUSED ? "paused" : "stopped";
         result["stream"]["source_configured"] = !url.empty();
-        result["stream"]["matches_agent_parcel_music"] = parcelKnown && !url.empty() && url == parcel->getMusicURL();
+        if (parcelKnown && !url.empty())
+            result["stream"]["matches_agent_parcel_music"] = url == parcel->getMusicURL();
+        else result["stream"]["parcel_music_comparison"] = "unknown";
         result["stream"]["provenance"] = "native_streaming_audio_state";
     }
     else result["stream"]["reason"] = "streaming_audio_unavailable";
