@@ -53,6 +53,7 @@
 #include "theme.h"
 #include "tooltips.h"
 #include "fssessionlifecycle.h"
+#include "controller_pipe.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -290,6 +291,7 @@ public:
 struct Slot
 {
     Restart restart;
+    std::string controllerViewerSession; ChatKey controllerSessionSource;
     PeriodicPoller periodic;
     FrameLane preview;
     std::uint32_t previewWidth = 0, previewHeight = 0, previewRate = 0;
@@ -450,7 +452,25 @@ struct Host
     std::function<void()> refreshAssistantEditor;
     unsigned int preferencesPage=0;
     std::uint64_t autosaveAt=0;
+    fs_controller::Config controllerConfig;
+    fs_controller::Operations controllerOperations;
+    fs_controller::Endpoint controllerEndpoint;
+    std::array<std::string,MaxCharacters> controllerNativeRequests{};
+    std::string controllerHandoffRequest;
+    bool controllerApproving=false,controllerCycleOwned=false;
+    std::uint64_t controllerCyclePolicy=0;
+    std::vector<fs_controller::Source> controllerCycleSources;
     ~Host() { PlaySoundW(nullptr,nullptr,0); if (font) DeleteObject(font); if (chatFont) DeleteObject(chatFont); if (controlsFont) DeleteObject(controlsFont); if (attentionFont) DeleteObject(attentionFont); for (auto& monitor : monitors) if (monitor.font) DeleteObject(monitor.font); }
+
+    std::string controllerScreenStamp() const
+    {
+        RECT rect{};if(!GetWindowRect(window,&rect))return {};
+        const POINT point{rect.left+(rect.right-rect.left)/2,rect.top+(rect.bottom-rect.top)/2};
+        MONITORINFO screen{};screen.cbSize=sizeof(screen);if(!GetMonitorInfoW(MonitorFromPoint(point,MONITOR_DEFAULTTONEAREST),&screen))return {};
+        return std::to_string(rect.left)+":"+std::to_string(rect.top)+":"+std::to_string(rect.right)+":"+std::to_string(rect.bottom)+":"+
+            std::to_string(screen.rcWork.left)+":"+std::to_string(screen.rcWork.top)+":"+std::to_string(screen.rcWork.right)+":"+std::to_string(screen.rcWork.bottom)+":"+std::to_string(dpi);
+    }
+    #include "controller_host.inc"
 
     bool saveStore(const wchar_t* filename,const std::string& data)
     {
@@ -492,7 +512,7 @@ struct Host
         return -1;
     }
     enum PreferencePage : unsigned int { PrefLayout,PrefAppearance,PrefCharacter,PrefSounds,PrefViewer,PrefSession,
-        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefDiagnostics,PrefRecovery,PrefAssistant };
+        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController };
     void editPreferences(unsigned int page=~0u,int target=-1)
     {
         if(preferencesOpen)return;
@@ -533,7 +553,17 @@ struct Host
             {5,L"Controls",L"Quick actions",L"Quick actions add buttons to the host toolbar. Choose actions below, then click their buttons during play."},
             {5,L"Controls",L"Keyboard shortcuts",L""},
             {6,L"Advanced",L"Diagnostics",L""},{6,L"Advanced",L"Files & recovery",L""},
-            {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."}};
+            {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."},
+            {7,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."}};
+        auto controllerDraft=controllerConfig;auto controllerCapturedRevision=controllerConfig.revision;
+        const auto controllerEnableField=add(PrefController,{L"Enable controller MCP",controllerConfig.enabled?L"1":L"0",FieldType::Check});
+        fields[controllerEnableField].help=L"Off by default. A private current-user connection controls only explicitly opted-in profiles. Apply or OK accepts; Cancel discards.";
+        const auto controllerMetadataField=add(PrefController,{L"Allow profile and monitor metadata",controllerConfig.levels[0]==fs_controller::Level::Allow?L"1":L"0",FieldType::Check});
+        std::array<std::size_t,7> controllerPermissionFields{};
+        const wchar_t* controllerPermissionLabels[]={L"Activate characters",L"Change background mode",L"Manage monitor previews",L"Open login windows",L"Restart characters",L"Log out characters",L"Stop managing characters"};
+        for(unsigned int i=0;i<7;++i)controllerPermissionFields[i]=add(PrefController,{controllerPermissionLabels[i],std::to_wstring(static_cast<unsigned int>(controllerConfig.levels[i+1])),FieldType::Choice,{L"Never",L"Ask",L"Allow"}});
+        std::array<std::size_t,MaxCharacters> controllerProfileFields{};
+        for(int i=0;i<MaxCharacters;++i)controllerProfileFields[i]=add(PrefController,{L"Allow controller access: "+profileName(i),controllerConfig.profiles[i].enabled?L"1":L"0",FieldType::Check});
         const auto chromeField=add(PrefLayout,{L"Character controls",std::to_wstring(chrome==2?1:chrome),FieldType::Choice,{L"Expanded",L"Condensed"}});
         const auto areaField=add(PrefLayout,{L"Docked controls area",std::to_wstring(experience.dockedArea),FieldType::Choice,{L"Automatic",L"Full window",L"Left half",L"Right half",L"Left third",L"Middle third",L"Right third"}});
         fields[areaField].help=L"Automatic uses the right half for a broad two-monitor span and the middle third for three. Explicit choices override detection; this moves host controls only.";
@@ -829,6 +859,12 @@ struct Host
             }
             std::set<unsigned int> used;for(unsigned int i=0;i<12;++i)if(n(quickStart+i) && !used.insert(n(quickStart+i)).second)return error(quickStart+i,L"This action already has a toolbar position.");
             if(next.encode().empty())return error(labelField,L"Check character names and account choices. Names must fit in 64 UTF-8 bytes.");
+            if(controllerConfig.revision!=controllerCapturedRevision){MessageBoxW(owner,L"Controller permissions changed. Cancel and reopen Preferences.",L"Controller changed",MB_OK);return false;}
+            controllerDraft=controllerConfig;controllerDraft.enabled=n(controllerEnableField)!=0;
+            controllerDraft.levels[0]=n(controllerMetadataField)?fs_controller::Level::Allow:fs_controller::Level::Deny;
+            for(unsigned int i=0;i<7;++i)controllerDraft.levels[i+1]=static_cast<fs_controller::Level>(n(controllerPermissionFields[i]));
+            for(int i=0;i<MaxCharacters;++i)controllerDraft.profiles[i].enabled=n(controllerProfileFields[i])!=0;
+            if(controllerDraft.encode().empty())return false;
             accepted=std::move(next);return true;
         };
         const auto apply=[&](HWND owner)->bool
@@ -844,7 +880,10 @@ struct Host
             if(error || !output || !MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_WRITE_THROUGH)){std::filesystem::remove(temp,error);message(L"The sound could not be saved; preferences were not applied.");return false;}
             accepted.chat.sounds[AccountKey::from(people[i].source)].asset=utf8(asset);people[i].asset=utf8(asset);people[i].imported=false;
         }
-        pauseAllAssistant=number(fields[assistantPauseField])!=0;
+        controllerApply(controllerDraft);controllerCapturedRevision=controllerConfig.revision;
+        const bool nextAssistantPause=number(fields[assistantPauseField])!=0;
+        if(nextAssistantPause&&!pauseAllAssistant)controllerOperations.revoke("controller_paused");
+        pauseAllAssistant=nextAssistantPause;
         for(auto& slot:slots)if(slot)slot->assistantPauseFailed=false;
         for(int i=0;i<MaxCharacters;++i)if(people[i].assistant.edited())
         {
@@ -1715,6 +1754,7 @@ struct Host
         if (!validSlot(index) || !slots[index]) return false;
         auto& slot = *slots[index];
         if (slot.waiting || !slot.pipe.alive() || slot.pipe.writing()) return false;
+        if(!controllerTransportAllowed(index,kind))return false;
         Message request;
         if (bound)
         {
@@ -1753,6 +1793,7 @@ struct Host
             AllowSetForegroundWindow(slot.pid);
         if (kind == Kind::PermitLogin || kind == Kind::DenyLogin) { request.grid = slot.snapshot.grid; request.name = slot.snapshot.name; }
         if (!slot.pipe.send(request)) return false;
+        controllerTransportSubmitted(index,kind);
         slot.request = request; slot.waiting = true; slot.sentAt = GetTickCount64();
         return true;
     }
@@ -1782,7 +1823,7 @@ struct Host
             const auto backup=profiles/(readPreferences(target,prior)?L"host-preferences.dat.bak":L"host-preferences.dat.invalid");
             if(!CopyFileW(target.c_str(),backup.c_str(),FALSE))return fail();
         }
-        if(!saveStore(L"host-preferences.dat",data))return fail();
+        if(!saveStore(L"host-preferences.dat",data)||!saveStore(L"host-controller.dat",controllerConfig.encode()))return fail();
         autosave.committed(data);saveError.clear();
         SetWindowTextW(window,(L"Folderstorm · "+std::to_wstring(MaxCharacters)+L" character slots").c_str());
         if(announce)message(L"Host preferences saved automatically. Character data remains in its private profile.");
@@ -2260,7 +2301,12 @@ struct Host
         s.openIMOrigin=p.monitor;s.pendingAction=request;s.hasPendingAction=true;
     }
     bool cycleEligible(int index) const
-    {return index!=active && contactsLive(index) && !(slots[index]->snapshot.flags&(PreviewUnavailable|Promoting));}
+    {
+        if(index==active||!contactsLive(index)||(slots[index]->snapshot.flags&(PreviewUnavailable|Promoting)))return false;
+        if(!controllerCycleOwned)return true;
+        if(!controllerConfig.enabled||controllerCyclePolicy!=controllerConfig.revision||pauseAllAssistant||!controllerOpted(index))return false;
+        const auto source=controllerSource(index);for(const auto& allowed:controllerCycleSources)if(allowed==source)return true;return false;
+    }
     void selectCycle(int target)
     {
         if(!cycleEligible(target))return;
@@ -2282,6 +2328,7 @@ struct Host
     }
     void cycleCommand(int command)
     {
+        controllerCycleOwned=false;
         if(!cycleOpen)return;
         if(command==CyclePlay)
         {
@@ -2309,7 +2356,7 @@ struct Host
     {
         if(!cycleOpen)return;
         cycler.seconds=experience.cycleSeconds;
-        if(busy() || menuOpen || preferencesOpen || monitors[CyclingView].conversationChoice.open){if(cycler.playing)cycler.play(GetTickCount64());return;}
+        if(busy() || menuOpen || preferencesOpen || controllerApproving || monitors[CyclingView].conversationChoice.open){if(cycler.playing)cycler.play(GetTickCount64());return;}
         const auto& b=monitorSet.bindings[CyclingView];
         const bool invalid=!b.enabled || !cycleEligible(b.slot) || !b.key.owns(slots[b.slot]->snapshot);
         auto& m=monitors[CyclingView];
@@ -2347,23 +2394,23 @@ struct Host
         if(!probe)return 0;
         const UINT result=getDpi(probe);DestroyWindow(probe);return result>=96?result:0;
     }
-    void arrangeMonitors(POINT point,bool row)
+    bool arrangeMonitors(POINT point,bool row)
     {
-        MONITORINFO info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(MonitorFromPoint(point,MONITOR_DEFAULTTONEAREST),&info))return;
+        MONITORINFO info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(MonitorFromPoint(point,MONITOR_DEFAULTTONEAREST),&info))return false;
         std::vector<int> ids;for(int id=0;id<MonitorViews;++id)if(monitors[id].window && IsWindowVisible(monitors[id].window) && (monitorSet.bindings[id].enabled || (id==CyclingView && cycleOpen)))ids.push_back(id);
-        if(ids.empty()){message(L"Open a monitor before arranging windows.");return;}
+        if(ids.empty()){message(L"Open a monitor before arranging windows.");return false;}
         const auto& r=info.rcWork;const auto tiles=monitorTiles({static_cast<int>(r.left),static_cast<int>(r.top),static_cast<int>(r.right-r.left),static_cast<int>(r.bottom-r.top)},static_cast<unsigned int>(ids.size()),row);
         UINT fallback=96;for(const auto id:ids)fallback=(std::max)(fallback,monitors[id].dpi);
         const UINT targetDpi=tileDestinationDpi(r,fallback);
-        if(!targetDpi){message(L"Unable to determine this screen's scaling; monitors were left in place.");return;}
+        if(!targetDpi){message(L"Unable to determine this screen's scaling; monitors were left in place.");return false;}
         std::vector<MonitorMinimum> minimums;for(const auto id:ids)minimums.push_back(monitorMinimumFor(id,targetDpi));
         if(!tilesRespectMinimums(tiles,minimums))
-        {message(L"These monitors cannot fit on this screen at the current scaling.");return;}
+        {message(L"These monitors cannot fit on this screen at the current scaling.");return false;}
         // Place outer rectangles in the invoked screen’s work area without
         // changing each monitor’s preview size, rate, source or pin.
         tilingMonitors=true;
         for(std::size_t i=0;i<tiles.size();++i){const auto& t=tiles[i];ShowWindow(monitors[ids[i]].window,SW_SHOWNOACTIVATE);SetWindowPos(monitors[ids[i]].window,nullptr,t.x,t.y,t.width,t.height,SWP_NOZORDER|SWP_NOACTIVATE);}
-        tilingMonitors=false;
+        tilingMonitors=false;return true;
     }
     void clearMonitor(int id)
     {
@@ -2445,7 +2492,7 @@ struct Host
         else if (choice == 22)
         {monitorSize=current.size;monitorRate=current.rate;message(L"Monitor defaults updated; host preferences save automatically.");}
     }
-    void openMonitor(int index,bool cycle=false)
+    void openMonitor(int index,bool cycle=false,bool controller=false)
     {
         if (!validSlot(index) || !slots[index] || !slots[index]->running() || slots[index]->detached || !slots[index]->pipe.alive() || slots[index]->snapshot.state != State::Ready)
         { message(L"Log in this character before opening its read-only monitor."); return; }
@@ -2465,7 +2512,7 @@ struct Host
         if (windowDpi) monitor.dpi = (std::max)(96u, windowDpi(monitor.window));
         if (newMonitor) { installPanelMenu(monitor.window); restorePlacement(monitor.window,id==CyclingView?8u:static_cast<unsigned int>(id)+3,monitor.dpi); }
         createMonitorChat(id); layoutMonitorChat(id);
-        pinWindow(monitor.window,false);theme.window(monitor.window);ShowWindow(monitor.window, SW_SHOWNORMAL); updateMonitors();
+        pinWindow(monitor.window,false);theme.window(monitor.window);ShowWindow(monitor.window,controller?SW_SHOWNOACTIVATE:SW_SHOWNORMAL); updateMonitors();
     }
     void finishMonitorExchange(bool success)
     {
@@ -3121,7 +3168,7 @@ struct Host
         const int answer=MessageBoxW(profileDialogOwner(),L"Copy settings from your main installation before opening this character's login?\n\nYes: choose settings to copy. No: keep existing settings/defaults. Cancel: do not open login.\n\nThis choice is offered once per profile. You can copy later through Characters or Settings.",title.c_str(),MB_YESNOCANCEL|MB_ICONQUESTION);
         return answer==IDYES?1:answer==IDNO?2:0;
     }
-    void launch(int index, const ProfileCopyRequest& requested = {})
+    void launch(int index, const ProfileCopyRequest& requested = {}, const std::string& controllerRequest = {})
     {
         if (!validSlot(index) || busy() || closing) { message(L"Finish the current switch or close action before launching."); return; }
         if (slots[index] && slots[index]->running()) { message(L"This slot still has a viewer open. Close that viewer before relaunching."); return; }
@@ -3158,6 +3205,8 @@ struct Host
         if (busy() || closing || epoch != profileSetupEpoch ||
             (openingToken && !setOpen.owns(openingToken,GetTickCount64())) || (slots[index] && slots[index]->running()))
         { message(L"Profile setup cancelled because the host or character state changed."); return; }
+        if(!controllerRequest.empty())
+        {auto* receipt=controllerOperations.find(controllerRequest);if(!receipt||!controllerAllowed(*receipt,receipt->request.op==fs_controller::Op::Restart))return;}
         PipePair pair;
         if (!pair.create(slot->id)) { message(L"Unable to create the private worker connection."); return; }
         if (!slot->pipe.open(pair.server.take())) { message(L"Unable to initialize asynchronous worker control."); return; }
@@ -3175,7 +3224,9 @@ struct Host
         STARTUPINFOEXW startup{}; startup.StartupInfo.cb = sizeof(startup); startup.lpAttributeList = list;
         PROCESS_INFORMATION process{};
         std::wstring command = L"\"" + viewer.wstring() + L"\"";
-        const bool launched = attributesReady && CreateProcessW(viewer.c_str(), command.data(), nullptr, nullptr, TRUE,
+        const auto* controllerReceipt=controllerRequest.empty()?nullptr:controllerOperations.find(controllerRequest);
+        const bool controllerReady=controllerRequest.empty()||(controllerReceipt&&controllerAllowed(*controllerOperations.find(controllerRequest),controllerReceipt->request.op==fs_controller::Op::Restart));
+        const bool launched = controllerReady && attributesReady && CreateProcessW(viewer.c_str(), command.data(), nullptr, nullptr, TRUE,
             EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, childEnvironment.data(), viewer.parent_path().c_str(),
             &startup.StartupInfo, &process) != FALSE;
         DeleteProcThreadAttributeList(list);
@@ -3272,6 +3323,7 @@ struct Host
             if (slot.restart.phase() != Restart::Phase::Idle && !slot.restart.owns(response))
             { slot.restart.cancel(); message(L"Login changed; restart cancelled without replaying a close on the new session."); }
             slot.soundPrepared = false; slot.autoReadAt = 0; slot.hasPendingSend = slot.hasPendingTyping = false; slot.catalogIndex = 0; slot.catalogAt = slot.eventsAt = 0;
+            slot.controllerViewerSession.clear();slot.controllerSessionSource={};
             slot.assistant={};slot.assistantAt=slot.assistantSince=0;slot.assistantDiagnostic.clear();slot.assistantPauseFailed=false;
             slot.alertReasons={};slot.alertAt={};slot.latestChatEvent=0;
             slot.hasPendingAction = false; slot.hasPendingReview = false; slot.workspace.clear(); slot.workspaceModified = slot.preferencesOpen = false; slot.workspaceAt = 0;
@@ -3350,6 +3402,8 @@ struct Host
         if(request.kind==Kind::AssistantInfo || request.kind==Kind::AssistantConfigure || request.kind==Kind::AssistantPause || request.kind==Kind::AssistantReview)
         {
             slot.assistantAt=GetTickCount64();
+            if(request.kind==Kind::AssistantInfo && request.unread==0 && !(response.flags&Error))
+            {const bool opaque=!response.text.empty()&&response.text.size()<=128&&std::all_of(response.text.begin(),response.text.end(),[](unsigned char c){return c>=33&&c<=126;});slot.controllerViewerSession=opaque?response.text:std::string();slot.controllerSessionSource=monitorIdentity(response);}
             if(request.kind==Kind::AssistantConfigure)++slot.assistantEditRevision;
             if(request.kind==Kind::AssistantPause && (response.flags&Error))slot.assistantPauseFailed=response.generation==request.generation;
             if(!(response.flags&Error))slot.assistantPauseAck=(response.width&AssistantPaused)!=0;
@@ -3432,7 +3486,7 @@ struct Host
                 }
                 message(wide(response.detail));
             }
-            return;
+            controllerReply(index,request,response);return;
         }
         if (request.kind == Kind::SetMode && handoff.step() != Handoff::Step::Idle)
         {
@@ -3455,6 +3509,7 @@ struct Host
             }
             else active = -1; // Old input owner has explicitly acknowledged revoke.
         }
+        controllerReply(index,request,response);
     }
     void describe(int index)
     {
@@ -3487,6 +3542,7 @@ struct Host
     }
     void tick()
     {
+        controllerTick();
         autosaveChoices();
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
         bool ownForeground = foregroundPid == GetCurrentProcessId();
@@ -3508,8 +3564,19 @@ struct Host
             const auto tag = static_cast<std::uintptr_t>(slot.restart.sequence());
             const bool cancelHint = slot.restart.phase() == Restart::Phase::Waiting && slot.surface() &&
                 GetPropW(slot.surface(), L"FolderstormRestartCancelled") == reinterpret_cast<HANDLE>(tag ? tag : 1);
-            const auto restartResult = lifecycle.pollRestart(slot.restart, slot.running(), cancelHint, GetTickCount64(), !busy());
-            if (restartResult == Restart::Result::Launch) { launch(index); continue; }
+            const auto restartResult = lifecycle.pollRestart(slot.restart, slot.running(), cancelHint, GetTickCount64(), !busy()&&!controllerDetachApprovalPending(index));
+            if (restartResult == Restart::Result::Launch)
+            {
+                const auto id=controllerNativeRequests[index];
+                if(controllerRestartLaunch(index))
+                {
+                    launch(index,{},id);
+                    if(auto* receipt=controllerOperations.find(id)){receipt->state=slots[index]&&slots[index]->running()?"completed":"uncertain";if(receipt->state=="uncertain")receipt->error="native_login_cancelled_or_unavailable";}
+                }
+                controllerNativeRequests[index].clear();continue;
+            }
+            if(restartResult==Restart::Result::Cancelled||restartResult==Restart::Result::TimedOut)
+            {if(auto* receipt=controllerOperations.find(controllerNativeRequests[index])){receipt->state=restartResult==Restart::Result::Cancelled?"refused":"uncertain";receipt->error=restartResult==Restart::Result::Cancelled?"native_close_cancelled":"native_close_timeout";}controllerNativeRequests[index].clear();}
             if (restartResult == Restart::Result::Cancelled) message(L"Native close cancelled; restart stopped. The old viewer remains available.");
             if (restartResult == Restart::Result::TimedOut) message(L"Restart stopped waiting. Finish closing the old viewer, then choose +; no forced termination or automatic retry.");
             Message response;
@@ -3694,6 +3761,7 @@ struct Host
     void detach(bool close, bool logout = false)
     {
         ++profileSetupEpoch;
+        controllerOperations.revoke("stop_managing");controllerEndpoint.stop();controllerHandoffRequest.clear();controllerNativeRequests={};controllerCycleOwned=false;
         setOpen.cancel();
         for (auto& slot : slots) if (slot) slot->hasPendingReview = false;
         lifecycle.stopManaging(slots);
@@ -4593,6 +4661,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     {state.saveError=L"Saved host preferences could not be read. Earlier settings loaded; the invalid file will be retained.";}
     upgradeHostToolbar(state.experience);
     state.pins.restore(state.presentation.pins);
+    state.controllerLoad();
     host = &state;
     const auto icon = static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_SESSION_HOST),IMAGE_ICON,
         GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED));
@@ -4618,6 +4687,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     const auto windowDpi = reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
     if (windowDpi) { state.updateDpi(windowDpi(window)); state.layout(); }
     state.restorePlacement(window,0,state.dpi);
+    if(state.controllerConfig.enabled&&!state.controllerEndpoint.start())state.message(L"Controller MCP could not start; viewer permissions remain separate.");
     ShowWindow(window, show); UpdateWindow(window);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
