@@ -37,11 +37,12 @@ func diagnosticMain(args []string, output io.Writer) int {
 	check := flags.Bool("diagnose", false, "check one viewer and exit")
 	pid := flags.Int("viewer-pid", 0, "viewer process ID")
 	directory := flags.String("discovery", "", "viewer discovery directory")
+	session := flags.String("viewer-session", "", "exact viewer login reference")
 	if flags.Parse(args) != nil || !*check || *pid <= 0 || *directory == "" || flags.NArg() != 0 {
 		_ = json.NewEncoder(output).Encode(diagnose.Result{Stage: "arguments"})
 		return 2
 	}
-	result := diagnose.Run(context.Background(), *pid, *directory)
+	result := diagnose.Run(context.Background(), *pid, *directory, *session)
 	if json.NewEncoder(output).Encode(result) != nil {
 		return 2
 	}

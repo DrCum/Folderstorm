@@ -23,8 +23,18 @@ int main()
     using namespace fs_session;
     Message source;source.worker[0]=1;source.generation=7;source.state=State::Ready;
     source.account="01234567-89ab-cdef-0123-456789abcdef";source.grid="secondlife";source.sequence=1;
-    auto info=source;info.kind=Kind::Status;info.width=AssistantEnabled|AssistantReady;info.unread=2;info.event=9;
+    auto info=source;info.kind=Kind::Status;info.width=AssistantEnabled|AssistantReady;info.unread=2;info.event=9;info.height=1;
     assert(assistantInfoOwned(info,source));
+    AssistantPreferenceDraft draft;assert(draft.capture(info,source));assert(!draft.edited());
+    auto disconnected=source;disconnected.state=State::Disconnected;
+    assert(draft.applicable(disconnected)); // Untouched account never blocks global edits.
+    assert(!assistantInfoOwned(info,disconnected));
+    draft.enabled=false;assert(draft.edited() && draft.applicable(source));
+    assert(!draft.applicable(disconnected));
+    auto changed=source;changed.generation++;assert(!draft.applicable(changed));
+    const auto configure=draft.request();assert(configure.kind==Kind::AssistantConfigure && configure.width==0 && configure.height==info.height && configure.cursor==info.cursor);
+    auto sessionOnly=info;sessionOnly.width|=AssistantSessionOnly;AssistantPreferenceDraft runtime;
+    assert(runtime.capture(sessionOnly,source));runtime.enabled=false;assert(!runtime.applicable(source));
     const auto attention=assistantAttention(info);
     assert(attention.conversation==AssistantAttentionId && attention.unread==2 && attention.event==9);
     assert(attention.eventType==EventType::Attention && attention.title.find("2")!=std::string::npos);

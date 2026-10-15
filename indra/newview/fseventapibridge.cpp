@@ -1440,6 +1440,14 @@ const std::string& FSEventAPIBridge::getDiscoveryPath() const
     return mDiscoveryPath;
 }
 
+std::string FSEventAPIBridge::discoveryDirectory() const
+{
+#if LL_WINDOWS
+    if(mHostedRegistry || FSSessionWorker::managed())return ll_convert<std::string>(fs_assistant::managedDiscoveryDirectory());
+#endif
+    return gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "");
+}
+
 FSEventAPIBridge::StatusSnapshot FSEventAPIBridge::getStatusSnapshot() const
 {
     StatusSnapshot result = mState ? mState->snapshot() : StatusSnapshot();

@@ -50,6 +50,7 @@ public:
     bool isRunning() const;
     int getPort() const;
     const std::string& getDiscoveryPath() const;
+    std::string discoveryDirectory() const;
     const std::string& sessionReference() const {return mViewerSession;}
 
     struct StatusSnapshot
