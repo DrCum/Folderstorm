@@ -1,0 +1,13 @@
+# Guarded native creation and appearance operations
+
+Follow-up above #44. Three stacked checkpoints; preserve history, do not merge.
+
+1. Durable, viewer-owned execution authority survives the HTTP response. It binds actual login/account/grid/bridge generation, permission revocation and deadline; cancellation is latched. Bounded receipts distinguish pending, submitted, partially submitted and cancelled-before-submission outcomes. No uncertain replay or automatic rollback. Existing managed exclusions remain at this checkpoint.
+2. Propagate authority through native item creation, including template copies, permission/content follow-ups, wearables, environments and landmarks. Assistant creation must not activate gestures or open editors. Restore managed createItem only after its supported paths are covered.
+3. Propagate the same authority through outfit/item wear and detach, inventory/library fetch/copy, COF updates, wearable loading, attachment confirmations, deferred callbacks and destructor callbacks. Preserve ordinary native/manual behavior and all native restrictions. Restore managed appearance writes only after the whole chain is covered.
+
+Use operation-scoped context and captured callback leases; never leave a sticky global guard on unrelated viewer work. Check ownership, deadline, permissions and native restrictions before further side effects. Already submitted simulator changes may complete; continue ordinary native reconciliation, retain known result IDs, and report uncertainty. Bound work, receipt retention and callback bookkeeping. Apply/Cancel, existing policies, microphone/input ownership and background render modes stay intact. No host pipe protocol change is expected.
+
+Focused checks: delayed callback pause/revoke/re-enable, ownership changes and detach, duplicate deliveries, expired work, destructor/deferred work, partial submission and independent concurrent operations. Native Windows acceptance: each supported item type and template path; own/library outfits; append/replace; attachment and wearable restrictions; Warm/Economy, two/five characters, ordinary viewer regression and no unexpected UI/focus. No broad/native builds, packaging, GitHub builds or unrelated tests during implementation. Senior review follows the completed stack.
+
+Checkpoint 1 actual checks: strict portable C++17 durable-lifetime/latched-cancellation/scope-restoration/duplicate-delivery tests passed. Affected Go MCP-tool tests passed, including tool schema coverage for the new source-bound assistant_operation_status tool. Diff hygiene passed. Native compilation/runtime remains pending.

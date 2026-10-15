@@ -9,6 +9,7 @@
 #include "llsd.h"
 
 #if LL_WINDOWS
+#include <algorithm>
 #include "fssessionpipe.h"
 #include "fssessionchatmodel.h"
 #include "fssessioncontacts.h"
@@ -1167,7 +1168,9 @@ LLSD FSSessionWorker::assistantIdentity()
 {
     if(!worker)return LLSD::emptyMap();
     if(worker->detached)return llsd::map("profile",worker->assistantProfile);
-    return llsd::map("worker",LLUUID(worker->id.data()).asString(),"generation",std::to_string(worker->generation),
+    LLUUID workerId;
+    std::copy(worker->id.begin(), worker->id.end(), workerId.mData);
+    return llsd::map("worker",workerId.asString(),"generation",std::to_string(worker->generation),
         "profile",worker->assistantProfile,"name",worker->loginName,"grid",worker->loginGrid);
 }
 bool FSSessionWorker::assistantPaused() {return managed() && worker->assistantHold;}
