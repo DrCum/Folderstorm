@@ -36,7 +36,7 @@ struct Draft { std::string text;std::uint64_t revision=0; };
 inline bool setDraft(Draft& draft,std::uint64_t expected,const std::string& text)
 {if(expected!=draft.revision)return false;draft.text=text;++draft.revision;return true;}
 inline bool liveMessage(bool hasHistory,int history,bool currentLogin)
-{return currentLogin && (!hasHistory || history==0);}
+{return currentLogin && hasHistory && history==0;}
 inline bool reopens(bool incoming,std::uint64_t ingress,std::uint64_t closedAt)
 {return incoming && ingress>closedAt;}
 // Frozen native inputs include exact text and participants. Map comparison in

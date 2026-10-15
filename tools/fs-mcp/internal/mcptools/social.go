@@ -111,6 +111,7 @@ type socialSearchArgs struct {
 	ConversationID string `json:"conversation_id,omitempty" jsonschema:"optional exact conversation filter for chat search"`
 	Limit          int    `json:"limit,omitempty"`
 	Offset         int    `json:"offset,omitempty"`
+	SnapshotID     string `json:"snapshot_id,omitempty" jsonschema:"resident search continuation snapshot_id from first response; repeat the same query"`
 }
 type socialResidentArgs struct {
 	ViewerSession string `json:"viewer_session" jsonschema:"exact login reference from viewer_list"`
@@ -211,6 +212,12 @@ func (s *Server) residentSearch(ctx context.Context, _ *mcp.CallToolRequest, a s
 		return errorResult("invalid_args", "resident search requires 2..127 UTF-8 bytes and valid page bounds", nil)
 	}
 	p["query"] = a.Query
+	if len(a.SnapshotID) > 128 || (a.Offset > 0 && a.SnapshotID == "") {
+		return errorResult("invalid_args", "resident search continuation requires first response snapshot_id", nil)
+	}
+	if a.SnapshotID != "" {
+		p["snapshot_id"] = a.SnapshotID
+	}
 	return s.socialCall(ctx, a.ViewerSession, a.ViewerPID, "FSContacts", "search", []string{"resident_search"}, p)
 }
 func (s *Server) residentProfile(ctx context.Context, _ *mcp.CallToolRequest, a socialResidentArgs) (*mcp.CallToolResult, any, error) {

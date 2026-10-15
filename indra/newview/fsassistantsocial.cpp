@@ -129,6 +129,8 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     std::map<std::string,Stream> streams;
     struct FriendSnapshot{std::vector<LLSD> rows;F64 until;};
     std::map<std::string,FriendSnapshot> friendSnapshots;
+    struct SearchSnapshot{std::vector<LLSD> rows;std::string query;F64 until;};
+    std::map<std::string,SearchSnapshot> searchSnapshots;
     fs_assistant_social::Cursors cursors;
     std::map<LLUUID,LLSD> notices;
     bool noticesDirty=true,noticesTruncated=false;F64 noticesChecked=0;
@@ -150,7 +152,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     bool current()const{return ready() && account==gAgentID && login==gAgent.getSessionID() && grid==LLGridManager::getInstance()->getGrid();}
     LLSD source()const{LLSD s;s["account_id"]=account;s["login_id"]=login;s["grid"]=grid;s["privacy_epoch"]=std::to_string(privacyEpoch);return s;}
     void flush()
-    {++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");}
+    {++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();searchSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");}
     void sync()
     {
         const bool changed=account!=gAgentID || login!=gAgent.getSessionID() || grid!=LLGridManager::getInstance()->getGrid();
@@ -377,7 +379,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
             auto result=page(rows,request);result["source"]=source();return result;
         }
         const auto conversationID=request["conversation_id"].asString();auto query=request["query"].asString();LLStringUtil::toLower(query);
-        if(op=="history" && conversationID.empty()){error="invalid_args: conversation_id is required";return LLSD();}
+        if((op=="history" && conversationID.empty()) || (!conversationID.empty() && conversationID!="nearby" && !LLUUID::validate(conversationID))){error="invalid_args: exact native conversation_id is required";return LLSD();}
         if(op=="search" && (query.empty() || query.size()>127)){error="invalid_args: query must be 1..127 UTF-8 bytes";return LLSD();}
         for(const auto& entry:streams["chat"].entries())
         {
@@ -389,6 +391,16 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     }
     void search(const LLSD& request,const Guard& guard,const std::shared_ptr<Response>& response)
     {
+        for(auto it=searchSnapshots.begin();it!=searchSnapshots.end();)if(now()>it->second.until)it=searchSnapshots.erase(it);else ++it;
+        const auto snapshot=request["snapshot_id"].asString();
+        if(!snapshot.empty())
+        {
+            const auto found=searchSnapshots.find(snapshot);if(found==searchSnapshots.end() || found->second.query!=request["query"].asString()){response->error("snapshot_expired: restart resident search");return;}
+            for(const auto& row:found->second.rows)if(!residentAllowed(row["resident_id"].asUUID())){searchSnapshots.erase(found);response->error("snapshot_visibility_changed: restart resident search");return;}
+            auto result=page(found->second.rows,request);result["snapshot_id"]=snapshot;result["source"]=source();result["query"]=request["query"];if(guard && guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;
+        }
+        if(request["offset"].asInteger()!=0){response->error("snapshot_required: retain the first search response snapshot_id");return;}
+        if(searchSnapshots.size()>=16){response->error("capacity: resident search snapshot capacity reached");return;}
         if(const auto running=runningSearch.lock();running && running->pending){response->error("busy: a native resident search is still running");return;}
         auto* region=gAgent.getRegion();auto url=region?region->getCapability("AvatarPickerSearch"):std::string();
         if(url.empty()){response->error("unsupported_feature: AvatarPickerSearch unavailable");return;}
@@ -408,7 +420,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
                 const auto id=item["id"].asUUID();if(id.isNull() || !residentAllowed(id) || !seen.insert(id).second)continue;
                 LLSD row=contact(id);row["display_name"]=bounded(item["display_name"].asString(),255);row["username"]=bounded(item["username"].asString(),127);rows.push_back(row);if(rows.size()==100)break;
             }
-            std::sort(rows.begin(),rows.end(),contactLess);auto result=page(rows,request);result["source"]=self->source();result["query"]=request["query"];response->setResponse(result);
+            std::sort(rows.begin(),rows.end(),contactLess);const auto snapshot=LLUUID::generateNewID().asString();self->searchSnapshots[snapshot]={rows,request["query"].asString(),now()+60};auto result=page(rows,request);result["snapshot_id"]=snapshot;result["source"]=self->source();result["query"]=request["query"];response->setResponse(result);
         });
     }
 };
@@ -479,7 +491,14 @@ public:
         mState->sync();if(!mState->current() || !visible()){response->error("source_unavailable_or_restricted");return;}
         const auto op=request["op"].asString();std::string error;if(!validPage(request,error)){response->error(error);return;}
         if(getName()=="FSChat")
-        {const auto result=(op=="conversations" || op=="history" || op=="search")?mState->readChat(request,error):mState->writeChat(request,error);if(!error.empty())response->error(error);else if(guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;}
+        {
+            const auto result=(op=="conversations" || op=="history" || op=="search")?mState->readChat(request,error):mState->writeChat(request,error);
+            if(!error.empty())
+            {if(isSend(op))(*response)["state"]=guard->submitted()?"uncertain":"refused";response->error(error);}
+            else if(guard->allowed())response->setResponse(result);
+            else{if(isSend(op))(*response)["state"]=guard->submitted()?"uncertain":"refused";response->error("expired_or_not_permitted");}
+            return;
+        }
         if(getName()=="FSEvents")
         {const auto result=mState->readEvents(request,error);if(!error.empty()){if(op=="poll"){(*response)["gap"]=true;(*response)["reconcile"]="refresh requested snapshots, then start now or retained";}response->error(error);}else if(guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;}
         if(op=="search"){mState->search(request,guard,response);return;}
