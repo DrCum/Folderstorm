@@ -11,6 +11,9 @@ surfaces, lavender and violet accents, off-white text and warm gold highlights.
 violet buttons, lime list/menu selections and small patterned frame accents.
 Inventory uses a darker green selection so library entries, links and favorite
 text remain readable; those entries have separate foreground-color rules.
+Electric Jungle also uses dark green unread-message highlights and dark magenta
+mention highlights in conversation tabs and rows, keeping their pale labels
+readable while flashing and after the flash stops.
 
 Each palette uses the selected skin's existing layout, language files and
 icons. They supply colors and chrome for windows, navigation, buttons, tabs,
