@@ -57,6 +57,11 @@ func contentRegisteredClient(t *testing.T, state *Server) *mcp.ClientSession {
 func contentEditInput() map[string]any {
 	return map[string]any{"id": contentItem, "expected_asset_id": contentAsset, "content_hash": strings.Repeat("a", 64), "text": "changed 😀\n"}
 }
+func contentScriptInput() map[string]any {
+	args := contentEditInput()
+	args["compiler"] = "mono"
+	return args
+}
 func TestContentRegisteredDispatch(t *testing.T) {
 	tests := []struct {
 		name, op string
@@ -65,6 +70,7 @@ func TestContentRegisteredDispatch(t *testing.T) {
 		{"inventory_content_get", "get", map[string]any{"id": contentItem}},
 		{"inventory_content_preview", "preview", contentEditInput()},
 		{"inventory_update_notecard", "saveNotecard", contentEditInput()},
+		{"inventory_save_compile_script", "saveScript", contentScriptInput()},
 		{"inventory_content_operation_status", "get", map[string]any{"operation_id": contentOperation}},
 	}
 	for _, tt := range tests {
@@ -182,3 +188,47 @@ func TestContentConfirmedReceiptIsPreserved(t *testing.T) {
 }
 
 var _ API = (*contentTestAPI)(nil)
+
+func TestContentCompileFailurePreservesSavedSource(t *testing.T) {
+	api := &contentTestAPI{fakeAPI: fakeAPI{status: contentTestPolicy("allow", "ask", 1)}, result: json.RawMessage(`{"source_saved":true,"source_saved_known":true,"compiled":false,"compiled_known":true,"asset_id":"22222222-2222-2222-2222-222222222222","diagnostics":[{"line":4,"column":7,"message":"syntax error"}],"state":"server_confirmed"}`)}
+	args := contentEditArgs{ID: contentItem, ExpectedAssetID: contentAsset, ContentHash: strings.Repeat("a", 64), Text: "default { broken }", Compiler: "mono", ViewerPID: 11}
+	result, _, _ := reviewServer(api).contentScript(context.Background(), nil, args)
+	body := textOf(result)
+	if result.IsError || !strings.Contains(body, `"source_saved":true`) || !strings.Contains(body, `"compiled":false`) || !contains(api.opsCopy(), "FSContent.saveScript") {
+		t.Fatalf("compile failure lost source save: %s", body)
+	}
+	count := 0
+	for _, op := range api.opsCopy() {
+		if op == "FSContent.saveScript" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatal("script was resent")
+	}
+}
+func TestContentScriptCompilerIsExplicit(t *testing.T) {
+	for _, compiler := range []string{"", "lsl2", "preprocess"} {
+		api := &contentTestAPI{fakeAPI: fakeAPI{status: contentTestPolicy("allow", "allow", 1)}}
+		result, _, _ := reviewServer(api).contentScript(context.Background(), nil, contentEditArgs{ID: contentItem, ExpectedAssetID: contentAsset, ContentHash: strings.Repeat("a", 64), Text: "source", Compiler: compiler, ViewerPID: 11})
+		if !result.IsError || contains(api.opsCopy(), "FSContent.saveScript") {
+			t.Fatalf("implicit/unsupported compiler accepted %s", compiler)
+		}
+	}
+}
+func TestContentUnknownScriptOutcomeIsNotRetried(t *testing.T) {
+	api := &contentTestAPI{fakeAPI: fakeAPI{status: contentTestPolicy("allow", "allow", 1)}, result: json.RawMessage(`{"source_saved":false,"source_saved_known":false,"compiled_known":false,"uncertain":true,"state":"submitted_unknown"}`)}
+	result, _, _ := reviewServer(api).contentScript(context.Background(), nil, contentEditArgs{ID: contentItem, ExpectedAssetID: contentAsset, ContentHash: strings.Repeat("a", 64), Text: "default {}", Compiler: "mono", ViewerPID: 11})
+	if result.IsError || !strings.Contains(textOf(result), `"source_saved_known":false`) {
+		t.Fatal("unknown outcome was changed")
+	}
+	count := 0
+	for _, op := range api.opsCopy() {
+		if op == "FSContent.saveScript" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatal("unknown outcome was replayed")
+	}
+}

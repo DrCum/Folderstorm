@@ -2,6 +2,7 @@
 #ifndef FS_CONTENT_POLICY_H
 #define FS_CONTENT_POLICY_H
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -50,6 +51,14 @@ inline bool preserveEmbedded(const std::string& before,const std::string& after)
     std::vector<std::uint32_t> a,b;
     return utf8(before,&a) && utf8(after,&b) && a==b;
 }
+inline bool validEmbeddedReferences(const std::string& text,std::size_t itemCount)
+{
+    if(itemCount>65536)return false;
+    std::vector<std::uint32_t> markers;
+    if(!utf8(text,&markers))return false;
+    for(const auto marker:markers)if(marker-0x100000>=itemCount)return false;
+    return true;
+}
 inline std::string replaceNotecard(const std::string& prefix,const std::string& suffix,const std::string& text)
 {return prefix+"Text length "+std::to_string(text.size())+"\n"+text+suffix;}
 inline std::string excerpt(const std::string& text,std::size_t limit)
@@ -57,6 +66,23 @@ inline std::string excerpt(const std::string& text,std::size_t limit)
     auto end=std::min(text.size(),limit);
     while(end<text.size() && end && (static_cast<unsigned char>(text[end])&0xc0)==0x80)--end;
     return text.substr(0,end);
+}
+inline bool sameSourceEpoch(const std::string& saved,const std::string& current)
+{return !saved.empty() && saved==current;}
+inline bool canInvalidateHiddenSource(bool belongs,bool visible,bool pristine,bool loading)
+{return belongs && !visible && pristine && !loading;}
+struct DiagnosticLocation {int line=0,column=0;bool known=false;};
+inline DiagnosticLocation diagnosticLocation(const std::string& message)
+{
+    DiagnosticLocation result;
+    if(message.empty() || message.front()!='(')return result;
+    const char* end=message.data()+message.size();
+    const auto line=std::from_chars(message.data()+1,end,result.line);
+    if(line.ec!=std::errc() || line.ptr==end || *line.ptr!=',' || result.line<0)return result;
+    auto next=line.ptr+1;while(next<end && *next==' ')++next;
+    const auto column=std::from_chars(next,end,result.column);
+    result.known=column.ec==std::errc() && column.ptr<end && *column.ptr==')' && result.column>=0;
+    return result;
 }
 struct Diff {std::size_t prefix=0,removed=0,added=0;std::string before,after;bool truncated=false;};
 inline Diff diff(const std::string& before,const std::string& after,std::size_t limit=4096)

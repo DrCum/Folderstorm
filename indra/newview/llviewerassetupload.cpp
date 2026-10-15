@@ -43,6 +43,7 @@
 #include "llsdutil.h"
 #include "llviewerassetupload.h"
 #include "fscontentupload.h"
+#include <map>
 #include "llappviewer.h"
 #include "llviewerstats.h"
 #include "llfilesystem.h"
@@ -65,19 +66,19 @@ void dialog_refresh_all();
 
 static const U32 LL_ASSET_UPLOAD_TIMEOUT_SEC = 60;
 namespace {
-std::map<const LLResourceUploadInfo*,LLUUID> sPendingInventoryUploads;
+std::map<const LLResourceUploadInfo*,std::pair<LLUUID,unsigned>> sPendingInventoryUploads;
 struct PendingInventoryUpload
 {
     explicit PendingInventoryUpload(const LLResourceUploadInfo::ptr_t& upload):info(upload.get())
-    {sPendingInventoryUploads[info]=upload->getItemId();}
-    ~PendingInventoryUpload(){sPendingInventoryUploads.erase(info);}
+    {auto& entry=sPendingInventoryUploads[info];entry.first=upload->getItemId();++entry.second;}
+    ~PendingInventoryUpload(){const auto found=sPendingInventoryUploads.find(info);if(found!=sPendingInventoryUploads.end() && !--found->second.second)sPendingInventoryUploads.erase(found);}
     const LLResourceUploadInfo* info;
 };
 }
 bool LLViewerAssetUpload::hasPendingInventoryUpload(const LLUUID& itemId,const LLResourceUploadInfo* except)
 {
     for(const auto& upload:sPendingInventoryUploads)
-        if(upload.first!=except && upload.second==itemId)return true;
+        if(upload.first!=except && upload.second.first==itemId)return true;
     return false;
 }
 
@@ -907,7 +908,7 @@ LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const
     LLUUID queueId = LLCoprocedureManager::instance().enqueueCoprocedure("Upload",
         procName + LLAssetType::lookup(uploadInfo->getAssetType()) + ")",
         [url,uploadInfo,pending](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID& id)
-        { LLViewerAssetUpload::AssetInventoryUploadCoproc(adapter,id,url,uploadInfo); });
+        { (void)pending;LLViewerAssetUpload::AssetInventoryUploadCoproc(adapter,id,url,uploadInfo); });
 
     return queueId;
 }

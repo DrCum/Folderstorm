@@ -22,6 +22,7 @@ func registerContent(server *mcp.Server, state *Server, readOnly, mutating *mcp.
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_content_get", Description: "Read complete UTF-8 source and a versioned edit snapshot from an exact native-readable agent inventory or Library notecard/script item. Resolve links first. Native COPY is required; scripts also require MODIFY except in Library. Returns complete/truncated, content_hash and asset_id. Requires Read and content_editing version 1.", Annotations: withTitle(readOnly, "Read inventory source")}, state.contentGet)
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_content_preview", Description: "Preview a bounded source diff using expected_asset_id and content_hash from a complete inventory_content_get. Text only, at most 65536 UTF-8 bytes. Preserve embedded notecard markers. Scripts require compiler=mono. No file or URL inputs. Requires Read and content_editing version 1.", Annotations: withTitle(readOnly, "Preview source changes")}, state.contentPreview)
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_update_notecard", Description: "Replace text in an existing owned agent-inventory notecard, preserving embedded inventory losslessly. Requires a complete inventory_content_get snapshot, expected_asset_id, content_hash, native COPY+MODIFY, Read and Content Edit. Close native editors and wait for uploads. Viewer owns Ask. Revision checks are best-effort; the server has no atomic expected-revision capability. No automatic retry or rollback on uncertain outcomes.", Annotations: withTitle(mutating, "Save notecard source")}, state.contentNotecard)
+	mcp.AddTool(server, &mcp.Tool{Name: "inventory_save_compile_script", Description: "Save raw UTF-8 LSL source to an existing owned agent-inventory script and compile with explicit compiler=mono. Requires a complete inventory_content_get snapshot, expected_asset_id, content_hash, native COPY+MODIFY, Read and Content Edit. Viewer owns Ask. Source can be saved even when compilation fails: inspect source_saved and compiled separately. Diagnostics are bounded. No task inventory, execution, preprocessing, file access, retry or rollback. Server revision checks are best-effort.", Annotations: withTitle(mutating, "Save and compile script")}, state.contentScript)
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_content_operation_status", Description: "Read source-bound content operation details after a save or timeout. Includes confirmed versus unknown source save and compiler outcomes when known. Use operation_id returned by the same viewer connection. Requires Read and current native content read eligibility; no retry is performed.", Annotations: withTitle(readOnly, "Content operation status")}, state.contentStatus)
 }
 
@@ -115,4 +116,12 @@ func (s *Server) contentStatus(ctx context.Context, _ *mcp.CallToolRequest, args
 		return errorResult("invalid_args", "operation_id must be the content operation UUID from this viewer connection", nil)
 	}
 	return s.contentCall(ctx, args.ViewerPID, "get", map[string]any{"operation_id": args.OperationID}, false)
+}
+
+func (s *Server) contentScript(ctx context.Context, _ *mcp.CallToolRequest, args contentEditArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
+	if !validContentEdit(args) || args.Compiler != "mono" {
+		return errorResult("invalid_args", "Raw LSL script save requires a complete snapshot, bounded UTF-8 text and explicit compiler=mono", nil)
+	}
+	return s.contentCall(ctx, args.ViewerPID, "saveScript", contentParams(args), true)
 }

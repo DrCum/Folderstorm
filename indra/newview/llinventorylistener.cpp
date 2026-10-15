@@ -1732,17 +1732,9 @@ std::vector<LLUUID> uuid_list(const LLSD& value)
 
 std::string capped_text(const char* data, S32 length, bool& truncated)
 {
-    truncated = false;
-    if (length < 0)
-    {
-        length = 0;
-    }
-    if (static_cast<std::size_t>(length) > kTextCap)
-    {
-        length = static_cast<S32>(kTextCap);
-        truncated = true;
-    }
-    return std::string(data, data + length);
+    const std::string text(data,static_cast<std::size_t>(std::max(0,length)));
+    truncated=text.size()>kTextCap;
+    return fs_content::excerpt(text,kTextCap);
 }
 
 struct AssetRead
@@ -1815,7 +1807,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
         complete_text=notecard.getText();
         std::string prefix,suffix;
         const auto end=stream.tellg();
-        if(end<0 || !fs_content::notecardLayout(raw_content,complete_text,static_cast<std::size_t>(end),prefix,suffix))
+        if(end<0 || !fs_content::validEmbeddedReferences(complete_text,notecard.getItems().size()) || !fs_content::notecardLayout(raw_content,complete_text,static_cast<std::size_t>(end),prefix,suffix))
         {sendReply(llsd::map("error","Notecard is malformed or has an unsupported legacy format"),request->request);return;}
         text = capped_text(complete_text.data(), static_cast<S32>(complete_text.size()), truncated);
     }

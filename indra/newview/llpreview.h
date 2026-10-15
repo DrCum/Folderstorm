@@ -38,6 +38,7 @@
 class LLInventoryItem;
 class LLViewerObject;
 class LLLineEditor;
+class LLTextEditor;
 class LLRadioGroup;
 class LLPreview;
 
@@ -96,6 +97,9 @@ public:
 
     virtual void loadAsset() { mAssetStatus = PREVIEW_ASSET_LOADED; }
     virtual EAssetStatus getAssetStatus() { return mAssetStatus;}
+    // Invalidate only a pristine hidden source cache. The next explicit native
+    // onOpen loads the new asset; this never edits text or starts a fetch.
+    bool invalidateAssistantSource(LLTextEditor* editor);
 
     // Why is this at the LLPreview level?  JC
     void setNotecardInfo(const LLUUID& notecard_inv_id, const LLUUID& object_id);
