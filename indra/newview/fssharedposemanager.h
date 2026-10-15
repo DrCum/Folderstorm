@@ -23,7 +23,10 @@
 #include "llsd.h"
 #include "fsposeranimator.h"
 #include "fssharedposemodel.h"
+#include "fsassistantfeature.h"
+#include "fsposepolicy.h"
 #include <deque>
+#include <boost/signals2/connection.hpp>
 #include <functional>
 
 class FSSharedPoseManager : public LLSingleton<FSSharedPoseManager>
@@ -49,15 +52,22 @@ public:
     void bridgeReady();
     void receive(const LLUUID& owner, const LLUUID& object, const std::string& packet);
     std::string status() const { return mStatus; }
+    // Typed assistant adapter: native owner grants remain private and can only
+    // originate from the ordinary FSSharedPoseRequest notification flow.
+    bool prepareAssistantPose(FSAssistantPreparedOperation& operation,std::string& error) const;
+    bool validateAssistantPose(const FSAssistantPreparedOperation& operation,std::string& error) const;
+    LLSD executeAssistantPose(const LLSD& request,const fs_assistant::AsyncTaskPtr& task,std::string& error);
+    LLSD assistantSnapshot(const LLUUID& target) const;
 private:
     struct Remote
     {
-        LLUUID session;
+        LLUUID session,generation=LLUUID::generateNewID();
         FSSharedPose::Pose pose;
+        std::map<std::string,U32> jointRevisions;
         U32 revision = 0;
         double seen = 0., requestedSnapshot = -100.;
     };
-    struct Approval { LLUUID session, token; double seen = 0., heartbeat = 0.; bool undo = false, redo = false; };
+    struct Approval { LLUUID session, token; double seen = 0., heartbeat = 0.; bool undo = false, redo = false; LLUUID generation=LLUUID::generateNewID(); };
     struct Request { LLUUID id; double expires = 0.; };
     struct Work
     {
@@ -70,11 +80,31 @@ private:
         int history = 0;
         U32 sequence = 0;
     };
-    struct Queued { LLUUID target; std::deque<std::string> packets; bool control = false, started = false; LLSD data; };
+    struct AssistantWork
+    {
+        LLUUID operation,prepared,target,session,token,lease,generation,grantGeneration,nativeMotionGeneration;
+        fs_pose::Rotations rotations;
+        std::map<std::string,U32> expected;
+        FSSharedPose::Pose before;
+        LLSD binding,result;
+        std::string epoch;
+        fs_assistant::AsyncTaskPtr task;
+        double started=0.,renewed=-100.;
+        bool granted=false,sourceSubmitted=false,finished=false,publishing=false,cleanup=false,publicationStop=false;
+    };
+    struct Queued { LLUUID target; std::deque<std::string> packets; bool control = false, started = false; LLSD data; std::shared_ptr<AssistantWork> assistant; };
     struct Deferred { LLUUID avatar; FSSharedPose::JointSet joints; std::function<void()> action; };
     static void onIdle(void* data);
     void tick();
-    void send(const LLUUID& target, const LLSD& message, bool control = true);
+    void tickAssistant();
+    bool handleAssistant(const LLUUID& sender,const LLSD& data);
+    bool assistantNativeValid(const std::shared_ptr<AssistantWork>& work) const;
+    bool assistantAllowed(const std::shared_ptr<AssistantWork>& work,bool submission=false) const;
+    void finishAssistant(const std::shared_ptr<AssistantWork>& work,const std::string& state,const std::string& reason);
+    void sendAssistant(const std::shared_ptr<AssistantWork>& work,const LLSD& data,bool control=true);
+    bool assistantJointAllowed(const LLUUID& target,const std::string& joint,const FSSharedPose::Pose& pose) const;
+    void endAssistantPublishing(const std::string& reason);
+    void send(const LLUUID& target, const LLSD& message, bool control = true,const std::shared_ptr<AssistantWork>& assistant = {});
     void handle(const LLUUID& sender, const LLSD& message);
     void publish();
     void snapshot(const LLUUID& target);
@@ -86,10 +116,15 @@ private:
     void accept(const LLUUID& editor, const LLUUID& request);
     LLSD workMessage(const Work& work, const std::string& type) const;
     bool nearby(const LLUUID& avatar) const;
+    boost::signals2::scoped_connection mSharingConnection;
     FSPoserAnimator mAnimator;
     FSSharedPose::OwnerSession mOwner;
     FSSharedPose::Assembler mAssembler;
     std::map<LLUUID, Remote> mRemotes;
+    std::map<LLUUID,std::shared_ptr<AssistantWork>> mAssistantWorks;
+    std::shared_ptr<AssistantWork> mAssistantPublishing;
+    std::map<LLUUID,bool> mTypedPeers;
+    LLUUID mPublicGeneration=LLUUID::generateNewID();
     std::map<LLUUID, Approval> mApprovals;
     std::map<LLUUID, Request> mRequests, mOutgoingRequests;
     std::map<LLUUID, double> mLastRequests;

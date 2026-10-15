@@ -228,15 +228,19 @@ std::function<bool()> timedAuthority(const LLSD& request,const fs_assistant::Asy
    fs_assistant::asyncTaskAllowed(task);
  };
 }
+bool sharedOperation(const std::string& op)
+{return op=="sharedSessions" || op=="sharedGrants" || op=="sharedEdit" || op=="startSharing" || op=="stopSharing";}
 class FSPoseListener : public LLEventAPI,public FSAssistantFeature
 {
 public:
  FSPoseListener():LLEventAPI("FSPose","Bounded local rotation transactions and native shared consent")
- {gIdleCallbacks.addFunction([](void*){fs_pose_tick();});for(const char* op:{"status","joints","presets","start","update","undo","reset","stop","load","save"})add(op,"Pose tools",&FSPoseListener::dispatch);}
+ {gIdleCallbacks.addFunction([](void*){fs_pose_tick();});for(const char* op:{"status","joints","presets","start","update","undo","reset","stop","load","save","sharedSessions","sharedGrants","sharedEdit","startSharing","stopSharing"})add(op,"Pose tools",&FSPoseListener::dispatch);}
  const char* assistantCapability() const override{return "pose_tools";}
+ LLSD assistantCapabilities() const override{return llsd::map("pose_tools",1,"shared_pose_tools",1);}
  LLSD assistantLimits() const override{return llsd::map("rotation_joints",64,"preset_bytes",65536,"presets",256,"history",20,"reference_frame","local","rotation_only",true,"visibility","local_viewer","overwrite_presets",false,"requires_live_operation_authority",true);}
  bool prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error) const override
  {
+  if(sharedOperation(operation.request["op"].asString()))return FSSharedPoseManager::instance().prepareAssistantPose(operation,error);
   operation.validation=evidence(operation.request,error);if(!error.empty())return false;
   const auto op=operation.request["op"].asString();if(op=="status" || op=="joints" || op=="presets")return true;
   if(std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"pose_read")==operation.requiredClasses.end())operation.requiredClasses.push_back("pose_read");
@@ -255,14 +259,21 @@ public:
   operation.summary["subject_count"]=operation.summary["subjects"].size();
   operation.summary["consequences"].append("pose_local_rotations");return true;
  }
- bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error) const override{return validate(operation,error);}
+ bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error) const override
+ {return sharedOperation(operation.request["op"].asString())?FSSharedPoseManager::instance().validateAssistantPose(operation,error):validate(operation,error);}
  void dispatch(const LLSD& request)
  {
   Response response(LLSD(),request);
   if(!fs_assistant_request_allowed(request))return response.error("Assistant request/session/permission changed");
   fs_assistant::AsyncScope scope(fs_assistant_async_context(request));
   if(!fs_assistant::AsyncScope::current())return response.error("Pose tools require captured durable authority");
-  std::string error;const auto prepared=evidence(request,error);if(!error.empty())return response.error(error);
+  std::string error;
+  if(sharedOperation(request["op"].asString()))
+  {
+   const auto result=FSSharedPoseManager::instance().executeAssistantPose(request,fs_assistant::asyncTask(),error);
+   if(!error.empty())return response.error(error);response.setResponse(result);return;
+  }
+  const auto prepared=evidence(request,error);if(!error.empty())return response.error(error);
   const auto op=request["op"].asString();
   if(op=="status")
   {

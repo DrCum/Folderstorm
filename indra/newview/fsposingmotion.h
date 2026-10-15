@@ -82,6 +82,7 @@ public:
     // original channels, restoration and undo behavior.
     void configureAssistantRotations(std::function<bool()> allowed,std::function<void(bool)> stopped);
     bool setAssistantRotations(const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);
+    LLUUID activationGeneration() const{return mActivationGeneration;}
     bool assistantRotationOnly() const{return mAssistantRotationOnly;}
     bool assistantAuthorityValid();
     bool assistantRestorationComplete() const{return mAssistantRestorationComplete;}
@@ -205,6 +206,7 @@ public:
     bool motionAnimatesJoints(const std::vector<S32>& recapturedJointNumbers);
 
 private:
+    LLUUID mActivationGeneration;
     bool mAssistantRotationOnly=false;
     std::function<bool()> mAssistantAllowed;
     std::function<void(bool)> mAssistantStopped;

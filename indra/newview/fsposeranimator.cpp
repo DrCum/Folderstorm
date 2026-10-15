@@ -27,6 +27,7 @@
 #include <boost/algorithm/string.hpp>
 #include "fsposeranimator.h"
 #include "fsposepolicy.h"
+#include "fssharedposepolicy.h"
 #include "llcharacter.h"
 #include "llagent.h"
 #include "llvoavatarself.h"
@@ -137,6 +138,9 @@ FSSharedPose::Pose FSPoserAnimator::captureAssistantPose(LLVOAvatar* avatar,cons
     return result;
 }
 
+LLUUID FSPoserAnimator::nativePoseGeneration(LLVOAvatar* avatar) const
+{auto* motion=getPosingMotion(avatar);return motion && !motion->isStopped()?motion->activationGeneration():LLUUID::null;}
+
 FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
 {
     FSSharedPose::Pose result;
@@ -161,6 +165,29 @@ FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
         result.emplace(definition.jointName(), value);
     }
     return result;
+}
+
+bool FSPoserAnimator::applyAssistantSharedRotations(LLVOAvatar* avatar,const FSSharedPose::Pose& before,
+    const fs_pose::Rotations& rotations,const std::function<bool()>& allowed)
+{
+    if(!avatar || avatar->isControlAvatar() || !isAvatarSafeToUse(avatar) || !isPosingAvatar(avatar) ||
+       !allowed || !allowed() || before.size()!=rotations.size() || !fs_pose::valid(rotations))return false;
+    auto* motion=getPosingMotion(avatar);if(!motion)return false;
+    const auto current=captureSharedPose(avatar);
+    for(const auto& rotation:rotations)
+    {
+        const auto snapshot=before.find(rotation.first),live=current.find(rotation.first);
+        auto* joint=motion->getJointPoseByJointName(rotation.first);
+        if(snapshot==before.end() || live==current.end() || !fs_pose::sameSharedJoint(snapshot->second,live->second) || !joint ||
+           !live->second.enabled || live->second.mirrored || live->second.worldLocked)return false;
+    }
+    for(const auto& rotation:rotations)
+    {
+        if(!allowed())return false;
+        const auto& q=rotation.second;
+        motion->getJointPoseByJointName(rotation.first)->setAssistantTargetRotation(LLQuaternion(q[0],q[1],q[2],q[3]));
+    }
+    return true;
 }
 
 void FSPoserAnimator::applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose)

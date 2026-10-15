@@ -807,6 +807,11 @@ public:
     bool stopAssistantPose(LLVOAvatar* avatar,const LLUUID& motion);
     FSSharedPose::Pose captureAssistantPose(LLVOAvatar* avatar,const LLUUID& motion) const;
 
+    // Typed native shared edits use only this rotation setter, preserving the
+    // native joint's base, undo, priority, enable, position, scale and flags.
+    bool applyAssistantSharedRotations(LLVOAvatar* avatar,const FSSharedPose::Pose& before,
+        const fs_pose::Rotations& rotations,const std::function<bool()>& allowed);
+    LLUUID nativePoseGeneration(LLVOAvatar* avatar) const;
     FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
     void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
     FSSharedPose::JointSet sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,

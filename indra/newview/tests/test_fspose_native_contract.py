@@ -71,6 +71,53 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("avatar->LLCharacter::stopMotion(id,true)", function("fsposeranimator.cpp", "bool FSPoserAnimator::stopAssistantPose"))
         authority = function("fsposingmotion.cpp", "bool FSPosingMotion::assistantAuthorityValid")
         self.assertIn("mAssistantRevoked=true", authority)
+    def test_shared_typed_service_preserves_native_consent_and_channels(self):
+        prepare = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::prepareAssistantPose")
+        execute = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::executeAssistantPose")
+        self.assertIn('source["can_edit"].asBoolean()', prepare)
+        self.assertIn('request["session_generation"]', prepare)
+        self.assertIn('source["joints"][joint.first]["revision"]', prepare)
+        for forbidden in ("requestPermission(", "accept(", "LLNotificationsUtil", "setBOOL(", "edit(", "stopAll(", "history("):
+            self.assertNotIn(forbidden, execute)
+        rotation = function("fsposeranimator.cpp", "bool FSPoserAnimator::applyAssistantSharedRotations")
+        self.assertIn("sameSharedJoint", rotation)
+        self.assertIn("if(!allowed())return false", rotation)
+        self.assertIn("setAssistantTargetRotation", rotation)
+        for forbidden in ("applySharedTransform", "setPosition", "setScale", "setPriority", "addJointToState", "tryPosingAvatar", "addStateToUndo"):
+            self.assertNotIn(forbidden, rotation)
+    def test_shared_queue_rechecks_at_actual_post_without_retry_or_tls_suspend(self):
+        transport = function("fslslbridge.cpp", "bool FSLSLBridge::sharedPoseToLSLGuarded")
+        post = transport.index("postAndSuspend")
+        for required in ('transport->claim("post")', "!bound()", "!nativeAuthority(false)", "!nativeAuthority(true)", "asyncTaskSubmit(transport)", "options->setRetries(0)", "options->setFollowRedirects(false)"):
+            self.assertLess(transport.index(required), post)
+        self.assertNotIn("AsyncScope ", transport)
+        for binding in ("gAgent.getSessionID()==login", "getGrid()==grid", "assistantIdentity()==worker", "getRegionID()==region", "getAttachedID()==bridge", "mCurrentURL==url"):
+            self.assertIn(binding, transport)
+        queue = function("fssharedposemanager.cpp", "void FSSharedPoseManager::tick()")
+        self.assertIn("sharedPoseToLSLGuarded", queue)
+        self.assertIn("submit && edit", queue)
+        self.assertIn("entry.packets.pop_front()", queue)
+    def test_shared_duplicate_reservation_and_private_payload_gates(self):
+        callback = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::handleAssistant")
+        self.assertLess(callback.index("if(work->granted)return true"), callback.index('message("edit"'))
+        self.assertIn("work->binding!=assistantBinding()", callback)
+        self.assertIn("work->sourceSubmitted", callback)
+        self.assertIn("fs_pose::rotationResult", callback)
+        read = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::executeAssistantPose")
+        self.assertLess(read.index("!assistantReadable()"), read.index("return found->second->result"))
+        self.assertIn("found->second->epoch!=epoch", read)
+        self.assertIn("found->second->binding!=assistantBinding()", read)
+        native = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::assistantNativeValid")
+        self.assertIn("approval->second.generation!=work->grantGeneration", native)
+        self.assertIn("remote->second.generation!=work->generation", native)
+        self.assertIn("nativePoseGeneration(avatarFor(gAgentID))!=work->nativeMotionGeneration", native)
+        self.assertIn("mActivationGeneration=LLUUID::generateNewID()", function("fsposingmotion.cpp", "bool FSPosingMotion::onActivate"))
+        snapshot = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::assistantSnapshot")
+        for forbidden in ('["token"]', '["login"]', '["simulator_session"]'):
+            self.assertNotIn(forbidden, snapshot)
+        ctor = function("fssharedposemanager.cpp", "FSSharedPoseManager::FSSharedPoseManager()")
+        self.assertIn('getControl("FSSharedPosingEnabled")', ctor)
+        self.assertIn('cancel("native_sharing_disabled")', ctor)
     def test_file_load_uses_bounded_parser_and_confined_store(self):
         source = (ROOT / "indra/newview/fsposelistener.cpp").read_text()
         self.assertNotIn("loadPoseFromXml", source)

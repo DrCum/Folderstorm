@@ -29,6 +29,10 @@
 
 #include "fscommon.h"
 #include "fslslbridge.h"
+#include "fssessionworker.h"
+#include "llviewernetwork.h"
+#include "llcoproceduremanager.h"
+#include "llcorehttputil.h"
 #include "fslslbridgerequest.h"
 #include "fssharedposemanager.h"
 
@@ -594,6 +598,43 @@ bool FSLSLBridge::viewerToLSL(std::string_view message, Callback_t aCallback)
     LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(mCurrentURL, LLSD(message.data()), pCallback, FSLSLBridgeRequest_Failure);
 
     return true;
+}
+
+bool FSLSLBridge::sharedPoseToLSLGuarded(const std::string& message,const fs_assistant::AsyncTaskPtr& task,
+    std::function<bool(bool)> nativeAuthority,std::function<void(bool,bool)> completion)
+{
+    if((message.rfind("SharedPoseSend|",0)!=0 && message.rfind("SharedPoseBroadcast|",0)!=0) ||
+       message.size()>1024 || !task || !task->guard() || !fs_assistant::asyncTaskAllowed(task) ||
+       !nativeAuthority || !nativeAuthority(false) || !canUseBridge())return false;
+    const auto url=mCurrentURL,grid=LLGridManager::instance().getGrid();
+    const auto account=gAgentID,login=gAgent.getSessionID(),bridge=getAttachedID();
+    const auto region=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;
+    const auto worker=FSSessionWorker::assistantIdentity();
+    auto transport=std::make_shared<fs_assistant::AsyncTask>(task->guard());
+    const auto queued=LLCoprocedureManager::instance().enqueueCoprocedure("General","FSLSLBridge guarded shared pose",
+        [url,grid,account,login,bridge,region,worker,message,transport,nativeAuthority,completion]
+        (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID&)
+    {
+        const auto bound=[&]()
+        {
+            return FSLSLBridge::instanceExists() && gAgentID==account && gAgent.getSessionID()==login &&
+                LLGridManager::instance().getGrid()==grid && FSSessionWorker::assistantIdentity()==worker &&
+                gAgent.getRegion() && gAgent.getRegion()->getRegionID()==region &&
+                FSLSLBridge::instance().getAttachedID()==bridge && FSLSLBridge::instance().mCurrentURL==url &&
+                FSLSLBridge::instance().canUseBridge();
+        };
+        if(!transport->claim("post") || !bound() || !fs_assistant::asyncTaskAllowed(transport) || !nativeAuthority(false) ||
+           !fs_assistant::asyncTaskSubmit(transport) || !nativeAuthority(true))
+        {if(completion)completion(false,false);return;}
+        auto request=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();
+        options->setRetries(0);options->setFollowRedirects(false);options->setTimeout(15);
+        // No thread-local assistant scope spans the coroutine suspension.
+        const auto response=adapter->postAndSuspend(request,url,LLSD(message),options);
+        const auto status=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+        const bool accepted=static_cast<bool>(status) && bound();
+        if(completion)completion(true,accepted);
+    });
+    return queued.notNull();
 }
 
 bool FSLSLBridge::updateBoolSettingValue(const std::string& msgVal)
