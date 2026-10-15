@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llpreviewanim.h"
 #include "llbutton.h"
@@ -127,6 +128,9 @@ void LLPreviewAnim::play(const LLSD& param)
             }
             else
             {
+                // Local previews bypass LLAgent's outbound request boundary.
+                // Claim the native/manual intent before starting this motion.
+                fs_assistant_animation_request(itemID);
                 gAgentAvatarp->startMotion(item->getAssetUUID());
             }
 

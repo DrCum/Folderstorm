@@ -376,6 +376,10 @@ public:
     // add extra methods to handle metadata
 
 protected:
+    // Optional viewer-owned authority for item-bound reads. The common layer
+    // knows neither assistant permissions nor viewer sessions. Implementations
+    // may wrap delivery and supply an exact check at the UDP send boundary.
+    virtual std::function<bool()> captureAssetReadGuard(LLGetAssetCallback&) { return {}; }
     void _cleanupRequests(bool all, S32 error);
     void _callUploadCallbacks(const LLUUID &uuid, const LLAssetType::EType asset_type, bool success, LLExtStat ext_status);
 

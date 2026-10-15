@@ -158,6 +158,8 @@ public:
     bool    serialize(LLDataPacker& dp) const;
     bool    deserialize(LLDataPacker& dp, const LLUUID& asset_id, bool allow_invalid_joints = true);
     bool    isLoaded() { return mJointMotionList != NULL; }
+    // Read-only inspection of the actual shared motion data used onActivate.
+    bool    hasEmbeddedEmote() const;
     bool    dumpToFile(const std::string& name);
 
 
@@ -451,6 +453,7 @@ public:
 
     static void addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList*);
     static LLKeyframeMotion::JointMotionList* getKeyframeData(const LLUUID& id);
+    static bool hasEmbeddedEmote(const LLUUID& id);
 
     static void removeKeyframeData(const LLUUID& id);
 

@@ -8,10 +8,12 @@
 #include "fsassetblacklist.h"
 #include "fsnearbychathub.h"
 #include "llagent.h"
+#include "llanimationstates.h"
 #include "llaudioengine.h"
 #include "llassetstorage.h"
 #include "llfilesystem.h"
 #include "llgesturemgr.h"
+#include "llkeyframemotion.h"
 #include "llmultigesture.h"
 #include "llstartup.h"
 #include "lltimer.h"
@@ -25,15 +27,18 @@
 #include <deque>
 #include <map>
 #include <set>
+#include <boost/signals2/connection.hpp>
 
 namespace {
 using namespace fs_assistant_gesture;
 using Response=LLEventAPI::Response;
 FSGestureListener* listener=nullptr;
+RegionEpoch regionEpoch;
 double now(){return LLTimer::getTotalSeconds();}
 bool ready(){return !gDisconnected && LLStartUp::getStartupState()==STATE_STARTED &&
     gAgent.getID().notNull() && gAgent.getSessionID().notNull() && gAgent.getRegion();}
-LLSD source(){auto result=fs_content::identity();result["region"]=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;return result;}
+LLSD source(){auto result=fs_content::identity();result["region"]=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;
+    result["region_generation"]=std::to_string(regionEpoch.generation());return result;}
 bool readable(const LLViewerInventoryItem* item)
 {
     return ready() && item && item->isFinished() && !item->getIsLinkType() &&
@@ -46,13 +51,29 @@ LLSD evidence(const LLViewerInventoryItem* item)
     auto result=fs_content::evidence(item);
     if(item)
     {result["name"]=item->getName();result["group_id"]=item->getPermissions().getGroup();
-        result["base_permissions"]=item->getPermissions().getMaskBase();result["next_owner_permissions"]=item->getPermissions().getMaskNextOwner();
+        result["base_permissions"]=static_cast<S32>(item->getPermissions().getMaskBase());
+        result["next_owner_permissions"]=static_cast<S32>(item->getPermissions().getMaskNextOwner());
         result["item_flags"]=static_cast<S32>(item->getFlags());result["inventory_type"]=static_cast<S32>(item->getInventoryType());}
     return result;
+}
+bool cachedAnimationAllowed(const LLUUID& id,std::string& error)
+{
+    // A loaded motion can retain a different JointMotionList from the current
+    // disk asset/cache entry. Inspect both references without changing either.
+    const bool globalEmote=LLKeyframeDataCache::hasEmbeddedEmote(id);
+    auto* motion=isAgentAvatarValid()?gAgentAvatarp->findMotion(id):nullptr;
+    auto* keyframe=dynamic_cast<LLKeyframeMotion*>(motion);
+    const bool unclassified=motion && !keyframe;
+    if(!animationCacheAllowed(globalEmote,keyframe && keyframe->hasEmbeddedEmote(),unclassified))
+    {error=unclassified?"unsupported_native_animation_motion_type":"unsupported_cached_animation_emote";return false;}
+    return true;
 }
 bool nativeAllowed(const Plan& plan,std::string& error)
 {
     if(!ready() || !isAgentAvatarValid()){error="native_avatar_unavailable";return false;}
+    // Built-in motion states can invoke AFK/sit, flight or agent-control paths.
+    // They need separate authority beyond approval of an animation UUID.
+    if(!animationPolicy(plan,[](const std::string& id){return gAnimLibrary.animStateToString(LLUUID(id))!=nullptr;},error))return false;
     if(!FSSessionWorker::assistantActiveAllowed()){error="requires_active_character";return false;}
     if(!gSavedPerAccountSettings.getBOOL("FSGesturesEnabled") || !RlvActions::canPlayGestures())
     {error="native_gestures_disabled_or_restricted";return false;}
@@ -65,6 +86,7 @@ bool nativeAllowed(const Plan& plan,std::string& error)
     {error="native_sound_muted_or_unavailable";return false;}
     for(const auto& step:plan.steps)
     {
+        if((step.effect==Effect::AnimationStart || step.effect==Effect::AnimationStop) && !cachedAnimationAllowed(LLUUID(step.value),error))return false;
         if(step.effect==Effect::Chat && wstring_to_utf8str(utf8str_to_wstring(step.value))!=step.value)
         {error="invalid_chat_utf8";return false;}
         if((step.effect==Effect::AnimationStart || step.effect==Effect::Sound) &&
@@ -114,7 +136,9 @@ bool arguments(const LLSD& request,std::string& error)
 }
 
 struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener::State> {
-    struct Cached {LLSD evidence;Plan plan;std::string hash;double until=0;};
+    struct AnimationInspection {std::string hash;S32 bytes=0;};
+    struct Cached {LLSD evidence;Plan plan;std::string hash;double until=0;
+        std::map<LLUUID,AnimationInspection> animations;std::size_t animationBytes=0;};
     struct Playback {
         LLUUID id,item;std::string client;LLSD identity;Cached frozen;fs_assistant::AsyncTaskPtr task;
         Timeline timeline;std::map<LLUUID,std::uint64_t> animations;std::set<LLUUID> signaled;
@@ -124,21 +148,77 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
             task(fs_assistant::asyncTask()),timeline(material.plan.steps,now()){}
     };
     struct Load {std::weak_ptr<State> owner;LLSD request,itemEvidence,identity;LLUUID item,asset;
-        fs_assistant::AsyncTaskPtr task;double until=0;std::shared_ptr<Response> response;};
+        fs_assistant::AsyncTaskPtr task;double until=0;std::shared_ptr<Response> response;
+        Cached material;std::vector<std::string> references;std::size_t nextAnimation=0;};
     LLSD identity;std::map<LLUUID,Cached> cache;std::unique_ptr<Playback> playing;AnimationLeases leases;
     std::map<std::string,LLSD> receipts;std::deque<std::string> receiptOrder;
+    boost::signals2::scoped_connection regionConnection;
     static std::map<std::uintptr_t,std::shared_ptr<Load>>& loads(){static std::map<std::uintptr_t,std::shared_ptr<Load>> value;return value;}
     static std::uintptr_t token(){static std::uintptr_t value=0;return ++value;}
+    static LLSD animationAssets(const Cached& material)
+    {
+        LLSD result=LLSD::emptyArray();
+        for(const auto& entry:material.animations)
+            result.append(llsd::map("asset_id",entry.first,"asset_hash",entry.second.hash,"size_bytes",entry.second.bytes,
+                "header_version","1.0","emote_name","","inspection_scope","bounded_header_and_empty_emote"));
+        return result;
+    }
+    static bool inspectionsComplete(const Cached& material,std::string& error)
+    {
+        std::vector<std::string> referenced;
+        if(!animationReferences(material.plan,referenced,error))return false;
+        if(referenced.size()!=material.animations.size()){error="referenced_animations_not_inspected";return false;}
+        for(const auto& id:referenced)if(!material.animations.count(LLUUID(id)))
+        {error="referenced_animation_not_inspected";return false;}
+        return true;
+    }
+    static bool animationMaterial(const Cached& material,const LLUUID& id,std::string& error)
+    {
+        if(!cachedAnimationAllowed(id,error))return false;
+        const auto found=material.animations.find(id);
+        if(found==material.animations.end()){error="referenced_animation_not_inspected";return false;}
+        LLFileSystem file(id,LLAssetType::AT_ANIMATION);const auto size=file.getSize();
+        if(size<=0 || size!=found->second.bytes || size>static_cast<S32>(maxAnimationAssetBytes))
+        {error="animation_material_unavailable_or_changed";return false;}
+        std::string bytes(size,'\0');
+        if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size || fs_content::hash(bytes)!=found->second.hash)
+        {error="animation_material_hash_conflict";return false;}
+        return animationHeader(bytes,error);
+    }
+    static bool loadAllowed(const std::shared_ptr<Load>& load)
+    {
+        auto* item=gInventory.getItem(load->item);
+        return now()<load->until && fs_assistant::asyncTaskAllowed(load->task) &&
+            fs_assistant_request_allowed(load->request) && load->identity==source() &&
+            readable(item) && evidence(item)==load->itemEvidence;
+    }
     void sync()
     {
         if(identity!=source())
         {
             auto previous=identity,current=source();previous.erase("region");current.erase("region");
+            previous.erase("region_generation");current.erase("region_generation");
             const bool newLogin=previous!=current;
             finish("login_or_region_changed");identity=source();cache.clear();leases.clear();
             if(newLogin){receipts.clear();receiptOrder.clear();}
         }
         for(auto it=cache.begin();it!=cache.end();)if(now()>it->second.until)it=cache.erase(it);else ++it;
+    }
+    void regionChanged()
+    {
+        // The native signal is observed even for A->B->A between ticks. Advance
+        // before cleanup: ownership from an older generation cannot send to the
+        // current region, even when its UUID happens to match again.
+        regionEpoch.changed();
+        if(playing && playing->task->guard())playing->task->guard()->cancel("region_changed");
+        for(auto it=loads().begin();it!=loads().end();)
+        {
+            const auto load=it->second;
+            if(load->owner.lock().get()!=this){++it;continue;}
+            if(load->task->guard())load->task->guard()->cancel("region_changed");
+            load->response->error("gesture_region_changed");it=loads().erase(it);
+        }
+        sync();
     }
     LLSD row(const LLUUID& id)
     {
@@ -150,6 +230,7 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         if(found==cache.end() || found->second.evidence!=evidence(item))result["status"]="not_inspected";
         else {result["status"]="inspected";result["asset_hash"]=found->second.hash;result["hash_algorithm"]="sha256_raw_asset";
             result["effects"]=effects(found->second.plan);result["trigger"]=found->second.plan.trigger;
+            result["animation_assets"]=animationAssets(found->second);result["animation_asset_bytes"]=static_cast<S32>(found->second.animationBytes);
             result["chat_requires_permission"]="chat_send_nearby";std::string reason;result["playable_now"]=nativeAllowed(found->second.plan,reason);if(!reason.empty())result["play_refusal"]=reason;}
         result["execution"]="simulator_visible_guarded_timeline";result["sound_delivery"]="submitted_only_not_audibility";
         if(playing && playing->item==id)result["assistant_playback"]=receipt(*playing,"pending");
@@ -162,6 +243,7 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         LLSD result;result["state"]=state;result["playback_id"]=play.id;result["item_id"]=play.item;
         result["asset_id"]=play.frozen.evidence["asset_id"];result["asset_hash"]=play.frozen.hash;
         result["effects"]=effects(play.frozen.plan);result["step_index"]=static_cast<S32>(play.timeline.index());
+        result["animation_assets"]=animationAssets(play.frozen);
         result["submitted_effects"]=static_cast<S32>(play.submitted);result["sound_triggers_submitted"]=static_cast<S32>(play.sounds);
         result["chat_messages_submitted"]=static_cast<S32>(play.chats);result["cleanup_complete"]=!play.incomplete;
         result["cleanup_scope"]="assistant_owned_animation_contributions_only";
@@ -219,11 +301,16 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         const bool start=step.effect==Effect::AnimationStart;
         if(start || step.effect==Effect::AnimationStop)
         {
+            // The gesture's immutable reference alone is insufficient: custom
+            // animation headers can recursively start an emote. Verify the
+            // inspected bytes again immediately before this native effect.
+            if(!animationMaterial(play.frozen,id,error)){play.failure=error;return false;}
             const auto current=play.animations.find(id);
             if(current!=play.animations.end() && !owned(play,id,current->second))
             {play.incomplete=true;play.failure="animation_ownership_superseded";return false;}
             if(start && current==play.animations.end() &&
-                (foreign(id) || gAgentAvatarp->mSignaledAnimations.count(id) || gAgentAvatarp->mPlayingAnimations.count(id)))
+                !animationAvailable(foreign(id),gAgentAvatarp->mSignaledAnimations.count(id),
+                    gAgentAvatarp->mPlayingAnimations.count(id),gAgentAvatarp->isMotionActive(id)))
             {play.failure="animation_already_owned_by_native_or_foreign_source";return false;}
             if(!start && current==play.animations.end()){play.failure="animation_stop_not_owned";return false;}
             if(!fs_assistant::asyncTaskSubmit(play.task))return false;
@@ -270,34 +357,77 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         const auto load=found->second;loads().erase(found); // duplicate callbacks are tombstoned by never-reused tokens
         const auto self=load->owner.lock();if(!self){load->response->error("gesture_service_unavailable");return;}
         fs_assistant::AsyncScope scope(load->task->guard());
-        auto* item=gInventory.getItem(load->item);
-        if(!load->task->claim("gesture_asset") || !fs_assistant::asyncTaskAllowed(load->task) ||
-           !fs_assistant_request_allowed(load->request) || load->identity!=source() ||
-           !readable(item) || evidence(item)!=load->itemEvidence)
+        if(!load->task->claim("gesture_asset") || !loadAllowed(load))
         {load->response->error("gesture_read_authority_or_native_revision_changed");return;}
         if(status!=0 || asset!=load->asset || type!=LLAssetType::AT_GESTURE)
         {load->response->error("gesture_asset_download_failed");return;}
         LLFileSystem file(load->asset,LLAssetType::AT_GESTURE);const auto size=file.getSize();
         if(size<=0 || size>static_cast<S32>(maxAssetBytes)){load->response->error("gesture_asset_size_out_of_bounds");return;}
-        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size))
+        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size)
         {load->response->error("gesture_asset_read_incomplete");return;}
-        Cached entry;std::string error;
+        auto& entry=load->material;std::string error;
         if(!decode(bytes,entry.plan,error)){load->response->error("gesture_asset_unsupported: "+error);return;}
-        entry.evidence=load->itemEvidence;entry.hash=fs_content::hash(bytes);entry.until=now()+120;
-        if(self->cache.size()>=32)self->cache.erase(self->cache.begin());
-        self->cache[load->item]=std::move(entry);
-        load->response->setResponse(self->row(load->item));
+        if(!animationPolicy(entry.plan,[](const std::string& id){return gAnimLibrary.animStateToString(LLUUID(id))!=nullptr;},error) ||
+           !animationReferences(entry.plan,load->references,error))
+        {load->response->error("gesture_asset_unsupported: "+error);return;}
+        entry.evidence=load->itemEvidence;entry.hash=fs_content::hash(bytes);
+        nextAnimation(load);
+    }
+    static void nextAnimation(const std::shared_ptr<Load>& load)
+    {
+        const auto self=load->owner.lock();
+        if(!self || !loadAllowed(load)){load->response->error("gesture_read_authority_or_native_revision_changed");return;}
+        if(load->nextAnimation>=load->references.size())
+        {
+            std::string error;
+            if(!inspectionsComplete(load->material,error)){load->response->error(error);return;}
+            load->material.until=now()+120;
+            if(self->cache.size()>=32)self->cache.erase(self->cache.begin());
+            self->cache[load->item]=std::move(load->material);
+            load->response->setResponse(self->row(load->item));return;
+        }
+        if(!gAssetStorage){load->response->error("referenced_animation_loader_unavailable");return;}
+        const LLUUID id(load->references[load->nextAnimation]);const auto key=token();loads()[key]=load;
+        // These asset IDs come exclusively from the decoded permission-bearing
+        // gesture item. No external request can supply an animation asset ID.
+        gAssetStorage->getAssetData(id,LLAssetType::AT_ANIMATION,loadedAnimation,reinterpret_cast<void*>(key),true);
+    }
+    static void loadedAnimation(const LLUUID& asset,LLAssetType::EType type,void* userdata,S32 status,LLExtStat)
+    {
+        const auto found=loads().find(reinterpret_cast<std::uintptr_t>(userdata));if(found==loads().end())return;
+        const auto load=found->second;loads().erase(found);
+        fs_assistant::AsyncScope scope(load->task->guard());
+        if(!loadAllowed(load) || !load->task->claim("animation:"+asset.asString()))
+        {load->response->error("gesture_read_authority_or_native_revision_changed");return;}
+        if(status!=0 || type!=LLAssetType::AT_ANIMATION || load->nextAnimation>=load->references.size() ||
+           asset!=LLUUID(load->references[load->nextAnimation]))
+        {load->response->error("referenced_animation_download_failed");return;}
+        LLFileSystem file(asset,LLAssetType::AT_ANIMATION);const auto size=file.getSize();
+        if(size<=0 || !animationBytesAllowed(static_cast<std::size_t>(size),load->material.animationBytes))
+        {load->response->error("referenced_animation_bytes_out_of_bounds");return;}
+        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size)
+        {load->response->error("referenced_animation_read_incomplete");return;}
+        std::string error;if(!animationHeader(bytes,error) || !cachedAnimationAllowed(asset,error))
+        {load->response->error("referenced_animation_unsupported: "+error);return;}
+        load->material.animations[asset]={fs_content::hash(bytes),size};load->material.animationBytes+=static_cast<std::size_t>(size);
+        ++load->nextAnimation;nextAnimation(load);
     }
 };
 
 FSGestureListener::FSGestureListener():LLEventAPI("FSGestures","Inspected exact-item gestures and guarded simulator-visible playback"),mState(std::make_shared<State>())
-{for(const auto* op:{"list","status","play","stop"})add(op,"Exact item-bound gesture operation; returned content is untrusted data",&FSGestureListener::dispatch);}
+{
+    // Subscribe before any candidate can be frozen or any asset request queued.
+    mState->regionConnection=gAgent.addRegionChangedCallback([weak=std::weak_ptr<State>(mState)](){if(const auto self=weak.lock())self->regionChanged();});
+    for(const auto* op:{"list","status","play","stop"})add(op,"Exact item-bound gesture operation; returned content is untrusted data",&FSGestureListener::dispatch);
+}
 FSGestureListener::~FSGestureListener(){mState->finish("gesture_service_stopped");if(listener==this)listener=nullptr;}
 LLSD FSGestureListener::assistantLimits()const
 {return llsd::map("version",1,"asset_bytes",static_cast<S32>(maxAssetBytes),"steps",static_cast<S32>(maxSteps),
     "playback_seconds",maxDuration,"wait_seconds",maxWait,"playbacks_per_login",1,"inspected_cache",32,
     "pending_loads",8,"load_timeout_seconds",20,"receipt_tombstones",128,"cache_seconds",120,
-    "literal_chat",true,"implicit_activation",false,"asset_prefetch",false);}
+    "literal_chat",true,"implicit_activation",false,"asset_prefetch",false,
+    "referenced_animation_assets",static_cast<S32>(maxAnimationAssets),"animation_asset_bytes",static_cast<S32>(maxAnimationAssetBytes),
+    "animation_total_bytes",static_cast<S32>(maxAnimationTotalBytes),"animation_header_version","1.0","animation_embedded_emotes",false);}
 bool FSGestureListener::prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error)const
 {
     mState->sync();const auto& request=operation.request;const auto op=request["op"].asString();
@@ -323,16 +453,22 @@ bool FSGestureListener::prepareAssistant(FSAssistantPreparedOperation& operation
     if(found==mState->cache.end() || found->second.evidence!=evidence(item))
     {error="gesture_not_inspected: call gesture_status for this exact item before play";return false;}
     const auto& frozen=found->second;
+    if(!State::inspectionsComplete(frozen,error))return false;
+    for(const auto& animation:frozen.animations)if(!State::animationMaterial(frozen,animation.first,error))return false;
     if(request["asset_id"].asUUID()!=item->getAssetUUID() || request["asset_hash"].asString()!=frozen.hash)
     {error="gesture_material_conflict: inspect the current asset and explicitly play again";return false;}
     if(!nativeAllowed(frozen.plan,error))return false;
     if(frozen.plan.chat)operation.requiredClasses.push_back("chat_send_nearby");
     operation.validation["asset_hash"]=frozen.hash;operation.validation["effects"]=effects(frozen.plan);
+    operation.validation["animation_assets"]=State::animationAssets(frozen);
     operation.summary["subjects"]=LLSD::emptyArray();LLSD subject;
     subject["name"]=item->getName();subject["id"]=item->getUUID();subject["after_name"]="Asset "+item->getAssetUUID().asString()+" SHA256 "+frozen.hash;
     operation.summary["subjects"].append(subject);
     for(const auto& step:frozen.plan.steps)
     {LLSD row;row["name"]=effectName(step.effect);row["after_name"]=step.value.empty()?std::to_string(step.seconds)+" seconds":step.value;operation.summary["subjects"].append(row);}
+    for(const auto& animation:frozen.animations)
+    {LLSD row;row["name"]="Inspected animation "+animation.first.asString();
+        row["after_name"]="SHA256 "+animation.second.hash+"; version 1.0 header with empty embedded emote";operation.summary["subjects"].append(row);}
     operation.summary["subject_count"]=operation.summary["subjects"].size();operation.summary["effects"]=effects(frozen.plan);
     return true;
 }
@@ -349,7 +485,8 @@ bool FSGestureListener::validateAssistant(const FSAssistantPreparedOperation& op
     const auto found=mState->cache.find(item->getUUID());
     const auto* frozen=mState->playing && mState->playing->client==request["client_request_id"].asString()?
         &mState->playing->frozen:found!=mState->cache.end()?&found->second:nullptr;
-    if(!frozen || frozen->hash!=operation.validation["asset_hash"].asString() ||
+    if(!frozen || !State::inspectionsComplete(*frozen,error) || frozen->hash!=operation.validation["asset_hash"].asString() ||
+       State::animationAssets(*frozen)!=operation.validation["animation_assets"] ||
        effects(frozen->plan)!=operation.validation["effects"])
     {error="gesture_frozen_material_expired";return false;}
     return nativeAllowed(frozen->plan,error);
@@ -377,7 +514,11 @@ void FSGestureListener::dispatch(const LLSD& request)
     if(!readable(item)){response->error("exact_native_copyable_gesture_required");return;}
     if(op=="status")
     {
-        auto result=mState->row(id);if(result["status"].asString()=="inspected"){response->setResponse(result);return;}
+        auto result=mState->row(id);const auto cached=mState->cache.find(id);bool materialCurrent=true;
+        if(cached!=mState->cache.end())for(const auto& animation:cached->second.animations)
+            if(!State::animationMaterial(cached->second,animation.first,error)){materialCurrent=false;break;}
+        if(result["status"].asString()=="inspected" && materialCurrent){response->setResponse(result);return;}
+        mState->cache.erase(id);
         if(!gAssetStorage || State::loads().size()>=8){response->error("gesture_asset_loader_unavailable_or_busy");return;}
         auto load=std::make_shared<State::Load>();load->owner=mState;load->request=request;load->itemEvidence=evidence(item);
         load->identity=source();load->item=id;load->asset=item->getAssetUUID();load->task=fs_assistant::asyncTask();load->until=now()+20;load->response=response;

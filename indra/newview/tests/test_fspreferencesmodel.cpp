@@ -30,7 +30,7 @@ struct CameraCallbacks
 {
     std::map<std::string,Layers> values {{"camera",{1,1,1,false,true}},
         {"label",{10,10,0,false,true}}, {"type",{0,0,0,false,true}}};
-    bool writing = false;
+    bool writing = false, constructed = true;
     std::set<std::string> owned;
     std::vector<std::string> writes;
     Layers read(const std::string& key) const { return values.at(key); }
@@ -53,7 +53,7 @@ struct CameraCallbacks
         {
             if (!fs_preferences::dependentPreviewWrite(writing,owned.count("label") != 0,0.,
                 [this](double label,bool persist){write("label",label,persist);})) write("label",0,true);
-            populatePresetCombo();
+            if (constructed) populatePresetCombo();
         }
     }
 };
@@ -210,4 +210,59 @@ int main()
     cleanup = cameraTx.accept(source(),"camera-accept",cameraTx.revision(),95,cameraRead,cameraWrite); camera.writing = false;
     check(cleanup.state == "accepted" && camera.read("camera").saved == 2 && camera.read("label").saved == 0);
     check(camera.read("type").saved == 3 && camera.read("type").effective == 3 && !camera.read("type").unsaved);
+
+    // A previously unconstructed camera floater can open after the write scope.
+    // Its first native populate must see the restored label, never the draft.
+    camera = CameraCallbacks{}; camera.constructed = false;
+    check(cameraTx.begin(source(),"camera-first-open",cameraTx.revision(),100,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead); camera.writing = false;
+    check(camera.read("label").effective == 0 && camera.read("type").saved == 0 && camera.read("type").effective == 0);
+    const auto openCameraUI = [&](bool cameraTouched)
+    {
+        const bool cancelled = cancelForCameraUI(camera.writing,cameraTx.busy(),cameraTouched,[&]()
+        {
+            camera.scope(cameraTx.owned(cameraRead));
+            cleanup = cameraTx.cancel(source(),cameraRead,cameraWrite,allowed);
+            camera.writing = false;
+        });
+        camera.constructed = true;
+        camera.populatePresetCombo();
+        return cancelled;
+    };
+    check(openCameraUI(true));
+    check(!cameraTx.busy() && cleanup.state == "cancelled" && camera.read("camera").saved == 1 && camera.read("camera").effective == 1);
+    check(camera.read("label").saved == 10 && camera.read("label").effective == 10 && !camera.read("label").unsaved);
+    check(camera.read("type").saved == 0 && camera.read("type").effective == 0 && !camera.read("type").unsaved);
+
+    // Reopening an existing hidden floater also cancels before native populate.
+    check(cameraTx.begin(source(),"camera-reopen",cameraTx.revision(),101,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead); camera.writing = false;
+    check(camera.read("type").saved == 0 && camera.read("type").effective == 3);
+    check(openCameraUI(true) && !cameraTx.busy());
+    check(camera.read("type").saved == 0 && camera.read("type").effective == 0 && camera.read("label").effective == 10);
+
+    // Opening synchronously inside our native write callbacks keeps the runtime
+    // scope and its ownership. No cancellation/reentrant restore is performed.
+    camera = CameraCallbacks{}; camera.constructed = false;
+    check(cameraTx.begin(source(),"camera-build-callback",cameraTx.revision(),102,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false);
+    check(!openCameraUI(true) && cameraTx.busy() && camera.writing);
+    cameraTx.remember(cameraRead); camera.writing = false;
+    check(camera.read("type").saved == 0 && camera.read("type").effective == 3 && camera.read("type").unsaved);
+    check(openCameraUI(true) && !cameraTx.busy() && camera.read("type").saved == 0);
+
+    // A manual mode change remains external through cancellation on open.
+    check(cameraTx.begin(source(),"camera-manual-open",cameraTx.revision(),103,300,cameraKeys,cameraRead));
+    camera.scope(cameraKeys); camera.write("camera",2,false); cameraTx.remember(cameraRead); camera.writing = false;
+    camera.write("type",4,true); cameraTx.changed("type");
+    check(openCameraUI(true) && cleanup.state == "partially_restored");
+    check(camera.read("type").saved == 4 && camera.read("type").effective == 4 && !camera.read("type").unsaved);
+
+    // Non-camera previews retain their owner when the camera floater opens.
+    camera = CameraCallbacks{}; camera.values["other"] = {0,0,0,false,true};
+    check(cameraTx.begin(source(),"other-preview",cameraTx.revision(),104,300,{"other"},cameraRead));
+    camera.scope({"other"}); camera.write("other",1,false); cameraTx.remember(cameraRead); camera.writing = false;
+    check(!openCameraUI(false) && cameraTx.busy());
+    check(camera.read("other").saved == 0 && camera.read("other").effective == 1 && camera.read("type").saved == 0);
+    camera.scope(cameraTx.owned(cameraRead)); cameraTx.cancel(source(),cameraRead,cameraWrite,allowed); camera.writing = false;
 }

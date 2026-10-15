@@ -27,6 +27,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llagentlistener.h"
 
@@ -724,6 +725,7 @@ void LLAgentListener::playAnimation(LLSD const &event_data)
         }
         else
         {
+            fs_assistant_animation_request(item->getAssetUUID());
             gAgentAvatarp->startMotion(item->getAssetUUID());
         }
     }

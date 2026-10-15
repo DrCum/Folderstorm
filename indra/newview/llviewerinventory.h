@@ -128,6 +128,7 @@ public:
     // virtual methods
     virtual void updateParentOnServer(bool restamp) const;
     virtual void updateServer(bool is_new) const;
+    void updateServer(bool is_new, const std::shared_ptr<void>& source_owner) const;
     void fetchFromServer(void) const;
 
     virtual void packMessage(LLMessageSystem* msg) const;

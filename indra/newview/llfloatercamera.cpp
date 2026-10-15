@@ -526,6 +526,7 @@ LLFloaterCamera* LLFloaterCamera::findSmallInstance()
 
 void LLFloaterCamera::onOpen(const LLSD& key)
 {
+    fs_preferences_camera_ui_opening();
     LLFirstUse::viewPopup();
 
     mZoom->onOpen(key);
@@ -583,6 +584,7 @@ LLFloaterCamera::LLFloaterCamera(const LLSD& val)
 // virtual
 bool LLFloaterCamera::postBuild()
 {
+    fs_preferences_camera_ui_opening();
     mControls = getChild<LLPanel>("controls");
     mAgentCameraInfo = getChild<LLPanel>("agent_camera_info");
     mViewerCameraInfo = getChild<LLPanel>("viewer_camera_info");
