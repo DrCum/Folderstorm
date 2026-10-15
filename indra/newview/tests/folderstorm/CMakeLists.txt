@@ -21,6 +21,7 @@ endfunction()
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
+folderstorm_check(world_observation ../test_fsworldobservation.cpp)
 folderstorm_check(assistant_policy ../../fsassistantpolicy_test.cpp)
 folderstorm_check(world_view_geometry ../test_fsworldviewgeometry.cpp)
 folderstorm_check(link_replacement

@@ -35,6 +35,7 @@
 #include "fslinkreplacement.h"
 #include "fsinventorybulk.h"
 #include "fsworkspacelistener.h"
+#include "fsworldlistener.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -370,6 +371,7 @@ public:
           mEnabled(true)
     {
         fs_initialize_workspace_api();
+        fs_initialize_world_api();
     }
 
     bool authorize(const LLSD& context) const
