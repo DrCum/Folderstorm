@@ -14,6 +14,7 @@
 #include "llsdserialize.h"
 #include "llsdutil.h"
 #include "llstartup.h"
+#include "llstring.h"
 #include "llviewerregion.h"
 #include "llviewernetwork.h"
 #include "llvoavatarself.h"
@@ -109,7 +110,15 @@ LLSD state()
 }
 std::string pathString(const std::filesystem::path& path)
 {const auto bytes=path.u8string();return std::string(reinterpret_cast<const char*>(bytes.data()),bytes.size());}
-std::filesystem::path poseDirectory(){return std::filesystem::u8path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"poses"));}
+std::filesystem::path poseDirectory()
+{
+ const auto directory=gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"poses");
+#if LL_WINDOWS
+ return std::filesystem::path(ll_convert_string_to_wide(directory,directory.size(),CP_UTF8));
+#else
+ return std::filesystem::path(directory);
+#endif
+}
 std::string presetKey(const std::string& name){return "preset-"+hash(name);}
 bool readPreset(const std::string& id,std::string& bytes,std::string& error)
 {
@@ -241,8 +250,15 @@ public:
   if(op=="save" && std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"pose_save")==operation.requiredClasses.end())operation.requiredClasses.push_back("pose_save");
   operation.summary=llsd::map("op",std::string("pose_")+op,"subject_count",1,"subjects",LLSD::emptyArray(),"consequences",LLSD::emptyArray(),"visibility","local_viewer","reference_frame","local","rotations",operation.validation["effect_rotations"]);
   operation.summary["subjects"].append(llsd::map("id",gAgentID,"name","Your avatar","after_name",op=="save"?"Save a new rotation-only native preset":"Change only this source's private joint rotations"));
-  for(const auto& joint:llsd::inMap(operation.validation["effect_rotations"]))
-   operation.summary["subjects"].append(llsd::map("name",joint.first,"after_name",ll_pretty_print_sd(joint.second)));
+  const auto rotations=op=="save"?rotationValue(sSession.transaction.rotations()):operation.validation["effect_rotations"];
+  for(const auto& joint:llsd::inMap(rotations))
+  {
+   std::ostringstream shown;shown<<"local [";
+   for(int axis=0;axis<4;++axis){if(axis)shown<<", ";shown<<joint.second[axis].asReal();}
+   shown<<"]";operation.summary["subjects"].append(llsd::map("name",joint.first,"after_name",shown.str()));
+  }
+  if(op=="save" || op=="load")
+   operation.summary["subjects"].append(llsd::map("name","Native pose preset","after_name",op=="save"?operation.request["name"].asString()+".xml (new file only)":operation.request["preset_id"].asString()+" revision "+operation.request["preset_revision"].asString()));
   operation.summary["subject_count"]=operation.summary["subjects"].size();
   operation.summary["consequences"].append("pose_local_rotations");return true;
  }
