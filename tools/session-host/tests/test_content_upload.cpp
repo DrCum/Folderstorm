@@ -24,6 +24,8 @@ int main()
   const auto outcome=progress.outcome(false,false);assert(!outcome.sourceSaved);assert(outcome.sourceSavedKnown==(cancel<=5));
   assert(outcome.state==(cancel>5?"submitted_unknown":"cancelled_before_source_submission"));
  }
+ UploadProgress handshakeOnly;assert(handshakeOnly.before("capability",true,[](){return true;},[](){return true;}));
+ assert(!handshakeOnly.before("commit",false,[](){return true;},[](){return true;}));
  UploadProgress completed;unsigned calls=0;
  for(const auto& stage:stages)assert(completed.before(stage,stage=="capability" || stage=="source",[](){return true;},[&](){++calls;return true;}));
  assert(calls==2);assert(!completed.before("source",true,[](){return true;},[&](){++calls;return true;}));assert(calls==2);

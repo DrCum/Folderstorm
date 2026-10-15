@@ -164,7 +164,7 @@ void complete(const std::shared_ptr<Write>& write,const LLSD& result,bool succes
 {
     if(!write->progress.finish())return;
     const LLUUID asset=result["new_asset"].asUUID();
-    const bool confirmed=asset.notNull() && result["state"].asString()=="complete";
+    const bool confirmed=write->progress.sourceSubmitted() && asset.notNull() && result["state"].asString()=="complete";
     auto& receipt=write->receipt;
     const auto outcome=write->progress.outcome(confirmed,success);
     receipt["state"]=outcome.state;receipt["source_saved"]=outcome.sourceSaved;

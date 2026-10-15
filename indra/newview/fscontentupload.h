@@ -13,6 +13,7 @@ public:
     bool before(const std::string& stage,bool submission,Allowed allowed,Submit submit)
     {
         if(mFinished || mStopped || !allowed()){mStopped=true;return false;}
+        if(stage=="commit" && !mSourceSubmitted){mStopped=true;return false;}
         if(submission)
         {
             if((stage=="capability" && mHandshakeSubmitted) ||
