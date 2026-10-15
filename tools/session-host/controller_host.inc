@@ -144,7 +144,7 @@ std::string controllerDispatch(const fs_controller::Request& request)
     {
         if(!request.profile.empty()||request.revision||!request.worker.empty()||request.generation||!request.viewerSession.empty())return errorJSON("invalid_global_target");
         if(request.op==Op::MonitorOpenAll||request.op==Op::CycleConfigure||request.op==Op::CycleNext)
-        {for(int i=0;i<MaxCharacters;++i)if(i!=active&&contactsLive(i)&&!(slots[i]->snapshot.flags&(PreviewUnavailable|Promoting))&&controllerOpted(i)&&!add(i))return errorJSON("session_changed");}
+        {for(int i=0;i<MaxCharacters;++i)if(monitorEligible(i)&&controllerOpted(i)&&!add(i))return errorJSON("session_changed");}
         if(request.op==Op::MonitorArrange&&cycleOpen&&!monitorSet.bindings[CyclingView].enabled&&monitors[CyclingView].window&&IsWindowVisible(monitors[CyclingView].window))return errorJSON("monitor_unbound");
         if(request.op==Op::MonitorArrange||request.op==Op::CyclePause||request.op==Op::CycleNext)
         {for(int i=0;i<MonitorViews;++i){const auto& b=monitorSet.bindings[i];if(b.enabled&&!add(b.slot))return errorJSON("monitor_profile_not_opted_in");}}
@@ -259,7 +259,7 @@ void controllerExecute(fs_controller::Receipt& r)
     case Op::MonitorOpenAll:
     {
         auto staged=monitorSet;
-        for(const auto& source:r.sources){const int target=controllerProfile(source.profile);if(!cycleEligible(target)){fail("source_changed");return;}if(staged.open(target,slots[target]->snapshot,monitorSize,monitorRate)<0){fail("monitor_capacity");return;}}
+        for(const auto& source:r.sources){const int target=controllerProfile(source.profile);if(!monitorEligible(target)){fail("source_changed");return;}if(staged.open(target,slots[target]->snapshot,monitorSize,monitorRate)<0){fail("monitor_capacity");return;}}
         for(const auto& source:r.sources)
         {
             const int target=controllerProfile(source.profile);if(!controllerAllowed(r))return;openMonitor(target,false,true);

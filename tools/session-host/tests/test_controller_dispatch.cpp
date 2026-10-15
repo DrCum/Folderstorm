@@ -13,7 +13,7 @@
 using namespace fs_session;
 using HWND=void*;using DWORD=unsigned long;using Kind=fs_session::Kind;
 struct RECT{long left=0,top=0,right=800,bottom=600;};struct POINT{long x=0,y=0;};
-constexpr int CB_SETCURSEL=1,MB_YESNO=2,MB_ICONQUESTION=4,MB_DEFBUTTON2=8,IDYES=6;
+constexpr int CB_SETCURSEL=1,MB_YESNO=2,MB_ICONQUESTION=4,MB_DEFBUTTON2=8,IDYES=6,SW_HIDE=0;
 static std::function<int()> approval;
 static std::uint64_t now=1800000000000ULL;
 inline std::uint64_t GetTickCount64(){return now;}
@@ -21,6 +21,7 @@ inline DWORD GetCurrentProcessId(){return 1;}
 inline HWND GetForegroundWindow(){return reinterpret_cast<HWND>(1);}
 inline void GetWindowThreadProcessId(HWND,DWORD* owner){*owner=1;}
 inline bool IsWindowVisible(HWND h){return h!=nullptr;}
+inline void ShowWindow(HWND,int){}
 inline int SendMessageW(HWND,int,int,int){return 0;}
 inline int GetWindowRect(HWND,RECT*){return 1;}
 inline int MessageBoxW(HWND,const wchar_t*,const wchar_t*,int){return approval?approval():IDYES;}
@@ -46,7 +47,7 @@ struct Slot
     std::uint64_t pollAt=now,sampleAt=0;double fps=0,loops=0;
     bool running()const{return alive;}
 };
-struct Monitor{HWND window=nullptr;unsigned int dpi=96;};
+struct Monitor{HWND window=nullptr;unsigned int dpi=96;bool dirty=false;};
 struct Host
 {
     fs_controller::Config controllerConfig;fs_controller::Operations controllerOperations;fs_controller::Endpoint controllerEndpoint;
@@ -64,18 +65,18 @@ struct Host
     void message(const std::wstring&){}bool saveStore(const wchar_t*,const std::string&){return true;}
     bool busy()const{if(profileSetupOpen||detaching||handoff.step()!=Handoff::Step::Idle)return true;for(const auto& s:slots)if(s&&s->running()&&s->restart.phase()!=Restart::Phase::Idle)return true;return false;}
     bool contactsLive(int index)const{return validSlot(index)&&slots[index]&&slots[index]->running()&&slots[index]->pipe.alive()&&!slots[index]->detached&&slots[index]->snapshot.state==State::Ready;}
-    bool cycleEligible(int index)const{return index!=active&&contactsLive(index);}
     void failHandoff(int,const std::wstring&){handoff.cancel();}
     void switchTo(int index){handoff.begin(active,index,active>=0?slots[active]->snapshot.generation:0,slots[index]->snapshot.generation);}
     void launch(int,const struct ProfileCopyRequest& ={},const std::string& ={}){}
     void restartCharacter(int index){slots[index]->restart.begin(slots[index]->snapshot,now);}
-    void stopMonitor(int index,bool=false){monitorSet.stop(index);}
     void openMonitor(int index,bool cycle=false,bool=false){++mutations;if(cycle)monitorSet.cycle(index,slots[index]->snapshot,monitorSize,monitorRate);else monitorSet.open(index,slots[index]->snapshot,monitorSize,monitorRate);}
     void refreshMonitorChat(int){}void selectCycle(int index){monitorSet.cycle(index,slots[index]->snapshot,monitorSize,monitorRate);}
     bool arrangeMonitors(POINT,bool){++moves;return true;}
     bool send(int index,Kind kind,Mode=Mode::Warm,std::uint64_t=0,const Message* =nullptr)
     {if(!controllerTransportAllowed(index,kind))return false;++mutations;controllerTransportSubmitted(index,kind);return true;}
     std::string controllerScreenStamp()const{return "screen-1";}
+    void clearMonitor(int){}
+    #include "../monitor_control.inc"
     #include "../controller_host.inc"
 };
 int main()
@@ -103,4 +104,38 @@ int main()
     r=h.controllerOperations.find(q.id);assert(r&&r->state=="completed"&&h.slots[0]->restart.phase()==Restart::Phase::Idle&&restart->state=="cancelled");
     const auto before=h.mutations;const auto duplicate=h.controllerDispatch(q);h.controllerTick();assert(duplicate.find("completed")!=std::string::npos&&h.mutations==before);
     h.controllerConfig.levels[0]=Level::Deny;Request list;list.op=Op::List;list.instance=h.controllerEndpoint.instance;assert(h.controllerDispatch(list).find("metadata_denied")!=std::string::npos);
+    // Use the production native entry points: frozen controller-cycle sources
+    // must not narrow a fresh fixed-monitor operation after another login.
+    Host previews;previews.controllerConfig.enabled=true;
+    previews.controllerConfig.levels[static_cast<unsigned int>(Permission::Monitors)]=Level::Allow;
+    for(int i=0;i<MaxCharacters;++i){auto& p=previews.controllerConfig.profiles[i];p.id=std::string(31,'e')+static_cast<char>('0'+i);p.enabled=true;}
+    const auto readySlot=[](unsigned char worker)
+    {
+        auto s=std::make_unique<Slot>();s->id[0]=worker;s->snapshot.worker=s->id;s->snapshot.generation=1;s->snapshot.pid=worker;
+        s->snapshot.account="account-"+std::to_string(worker);s->snapshot.grid="grid";s->snapshot.state=State::Ready;
+        s->controllerViewerSession="login-"+std::to_string(worker);s->controllerSessionSource=monitorIdentity(s->snapshot);return s;
+    };
+    previews.slots[0]=readySlot(51);
+    Request cycle;cycle.instance=previews.controllerEndpoint.instance;cycle.op=Op::CycleConfigure;cycle.id=std::to_string(now)+"-"+std::string(32,'3');
+    previews.controllerDispatch(cycle);previews.controllerTick();
+    assert(previews.controllerOperations.find(cycle.id)->state=="completed"&&previews.controllerCycleOwned&&previews.controllerCycleSources.size()==1);
+    previews.slots[1]=readySlot(52);
+    assert(previews.monitorEligible(1)&&!previews.cycleEligible(1)); // continuation stays frozen
+    previews.openAllMonitors(); // native Open All includes the newly ready login
+    assert(previews.monitorSet.find(0)>=0&&previews.monitorSet.find(1)>=0&&previews.controllerCycleOwned);
+    previews.stopMonitor(previews.monitorSet.find(1));assert(previews.controllerCycleOwned);
+    Request all;all.instance=cycle.instance;all.op=Op::MonitorOpenAll;all.id=std::to_string(now)+"-"+std::string(32,'4');
+    previews.controllerDispatch(all);previews.controllerTick();
+    assert(previews.controllerOperations.find(all.id)->state=="completed"&&previews.monitorSet.find(1)>=0);
+    assert(previews.controllerCycleOwned&&!previews.cycleEligible(1)); // fresh fixed previews grant no cycle authority
+    previews.slots[0]->alive=false;previews.stopMonitor(CyclingView,true);
+    assert(!previews.controllerCycleOwned&&previews.controllerCycleSources.empty()&&!previews.controllerCyclePolicy);
+    previews.openCycler();assert(previews.monitorSet.bindings[CyclingView].slot==1&&!previews.controllerCycleOwned);
+    // Native Open Cycling also takes ownership without an intervening close.
+    previews.stopMonitor(CyclingView);previews.slots[0]->alive=true;previews.slots[1]->snapshot.state=State::Disconnected;
+    cycle.id=std::to_string(now)+"-"+std::string(32,'5');previews.controllerDispatch(cycle);previews.controllerTick();
+    assert(previews.controllerOperations.find(cycle.id)->state=="completed"&&previews.controllerCycleOwned);
+    previews.slots[0]->alive=false;previews.slots[1]->snapshot.state=State::Ready;
+    assert(!previews.cycleEligible(1));previews.openCycler();
+    assert(!previews.controllerCycleOwned&&previews.controllerCycleSources.empty()&&previews.monitorSet.bindings[CyclingView].slot==1);
 }

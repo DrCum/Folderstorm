@@ -2300,13 +2300,7 @@ struct Host
         auto request=contactRequest(p.slot,Kind::OpenIM);request.width=p.searching?1u:0u;request.event=p.token;request.recipient=selected.id;
         s.openIMOrigin=p.monitor;s.pendingAction=request;s.hasPendingAction=true;
     }
-    bool cycleEligible(int index) const
-    {
-        if(index==active||!contactsLive(index)||(slots[index]->snapshot.flags&(PreviewUnavailable|Promoting)))return false;
-        if(!controllerCycleOwned)return true;
-        if(!controllerConfig.enabled||controllerCyclePolicy!=controllerConfig.revision||pauseAllAssistant||!controllerOpted(index))return false;
-        const auto source=controllerSource(index);for(const auto& allowed:controllerCycleSources)if(allowed==source)return true;return false;
-    }
+    #include "monitor_control.inc"
     void selectCycle(int target)
     {
         if(!cycleEligible(target))return;
@@ -2320,15 +2314,9 @@ struct Host
         monitorSet.cycle(target,slots[target]->snapshot,b.enabled?b.size:monitorSize,b.enabled?b.rate:monitorRate);m.dirty=true;
         refreshMonitorChat(CyclingView);layoutMonitorChat(CyclingView);
     }
-    void openCycler()
-    {
-        if(busy())return;const int target=cycler.next(-1,1,experience.order,[this](int i){return cycleEligible(i);});
-        if(target<0){message(L"Log in an inactive character before opening a cycling monitor.");return;}
-        cycleOpen=true;cycler.seconds=experience.cycleSeconds;cycler.play(GetTickCount64());openMonitor(target,true);
-    }
     void cycleCommand(int command)
     {
-        controllerCycleOwned=false;
+        releaseControllerCycle();
         if(!cycleOpen)return;
         if(command==CyclePlay)
         {
@@ -2378,8 +2366,6 @@ struct Host
             if(next>=0)selectCycle(next);else{m.editor.releaseFocus(m.window);clearMonitor(CyclingView);monitorSet.stop(CyclingView);m.frame={};m.dirty=true;refreshMonitorChat(CyclingView);}
         }
     }
-    void openAllMonitors()
-    {for(const auto i:experience.order)if(cycleEligible(static_cast<int>(i)))openMonitor(static_cast<int>(i));}
     MonitorMinimum monitorMinimumFor(int id,UINT targetDpi) const
     {return monitorMinimum(monitors[id].showChat,id==CyclingView,static_cast<unsigned int>(theme.uiDpi(targetDpi)));}
     UINT tileDestinationDpi(const RECT& work,UINT fallback) const
@@ -2416,14 +2402,6 @@ struct Host
     {
         auto& monitor = monitors[id];
         if (!monitor.pixels.empty()) { monitor.pixels.clear(); monitor.dirty = true; }
-    }
-    void stopMonitor(int id, bool hide = false)
-    {
-        if (id < 0 || id >= MonitorViews) return;
-        if(id==CyclingView){cycleOpen=false;cycler.pause();}
-        monitorSet.stop(id); clearMonitor(id); monitors[id].dirty = true;
-        refreshMonitorChat(id);
-        if (hide && monitors[id].window) ShowWindow(monitors[id].window, SW_HIDE);
     }
     void stopMonitors()
     { for (int i = 0; i < MonitorViews; ++i) stopMonitor(i, true); }
