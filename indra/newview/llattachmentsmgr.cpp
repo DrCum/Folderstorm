@@ -79,6 +79,18 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
 // [/RLVa:KB]
 {
     if(!fs_assistant::asyncAllowed())return;
+    // An unsent, stopped request must not swallow a newer assistant/manual
+    // intent through the native recent-request debounce.
+    for (auto it = mPendingAttachments.begin(); it != mPendingAttachments.end();)
+    {
+        if (it->mItemID == item_id && it->mAssistantTask && !it->mAssistantTask->guard()->allowed())
+        {
+            mAttachmentRequests.removeTime(item_id);
+            mAssistantOrigins.erase(item_id); // No packet was submitted for this entry.
+            it = mPendingAttachments.erase(it);
+        }
+        else ++it;
+    }
     if(fs_assistant::AsyncScope::current())
     {
         if(!mAssistantOrigins.count(item_id) && mAssistantOrigins.size()>=512)
@@ -94,6 +106,10 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
 
     if (mAttachmentRequests.wasRequestedRecently(item_id))
     {
+        const auto current = fs_assistant::AsyncScope::current();
+        const auto origin = mAssistantOrigins.find(item_id);
+        if (current && (origin == mAssistantOrigins.end() || origin->second.guard.lock() != current))
+            current->cancel("attachment_request_already_pending");
         LL_DEBUGS("Avatar") << "ATT not adding attachment to mPendingAttachments, recent request is already pending: "
                             << (item ? item->getName() : "UNKNOWN") << " id " << item_id << LL_ENDL;
         return;
@@ -344,7 +360,7 @@ void LLAttachmentsMgr::linkRecentlyArrivedAttachments()
         }
         if (ids_to_link.size())
         {
-            LLPointer<LLInventoryCallback> cb = new LLRegisterAttachmentCallback();
+            LLPointer<LLInventoryCallback> cb;
             for (const LLUUID& id_item: ids_to_link)
             {
                 if (std::find(mPendingAttachLinks.begin(), mPendingAttachLinks.end(), id_item) == mPendingAttachLinks.end())
@@ -357,7 +373,11 @@ void LLAttachmentsMgr::linkRecentlyArrivedAttachments()
                         LLPointer<LLInventoryCallback> scoped=new LLRegisterAttachmentCallback(id_item);
                         LLAppearanceMgr::instance().addCOFItemLink(id_item,scoped);origin->second.pending.reset();
                     }
-                    else LLAppearanceMgr::instance().addCOFItemLink(id_item, cb);
+                    else
+                    {
+                        if (cb.isNull()) cb = new LLRegisterAttachmentCallback();
+                        LLAppearanceMgr::instance().addCOFItemLink(id_item, cb);
+                    }
                     mPendingAttachLinks.insert(id_item);
                 }
             }

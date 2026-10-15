@@ -81,6 +81,11 @@ public:
 private:AsyncGuard mGuard;std::set<std::string> mSeen;
 };
 using AsyncTaskPtr=std::shared_ptr<AsyncTask>;
+// Coroutine/network boundaries use captured authority without installing TLS.
+inline bool asyncTaskAllowed(const AsyncTaskPtr& task)
+{return !task || !task->guard() || task->guard()->allowed();}
+inline bool asyncTaskSubmit(const AsyncTaskPtr& task)
+{return !task || !task->guard() || task->guard()->submit();}
 struct AsyncOrigin {std::weak_ptr<AsyncOperation> guard;AsyncTaskPtr pending;};
 inline bool asyncOriginAllowed(const AsyncOrigin& origin)
 {const auto guard=origin.guard.lock();return guard && guard->allowed();}

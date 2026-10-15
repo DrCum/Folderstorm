@@ -1082,6 +1082,17 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
                                            inventory_func_type callback,
                                            const LLUUID& thumbnail_id)
 {
+    if (!fs_assistant::asyncAllowed()) { if (callback) callback(LLUUID::null); return; }
+    const auto task = fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr;
+    if (task && callback)
+    {
+        const auto nativeCallback = callback;
+        callback = [task, nativeCallback](const LLUUID& id)
+        {
+            fs_assistant::asyncDeliver(task, id.isNull() ? std::string() : id.asString(),
+                [&](bool allowed) { nativeCallback(allowed ? id : LLUUID::null); });
+        };
+    }
     LL_DEBUGS(LOG_INV) << "Create '" << pname << "' in '" << make_inventory_path(parent_id) << "'" << LL_ENDL;
     if (!isInventoryUsable())
     {
@@ -1190,7 +1201,7 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
 
         LL_DEBUGS(LOG_INV) << "Creating category via request: " << ll_pretty_print_sd(request) << LL_ENDL;
         LLCoros::instance().launch("LLInventoryModel::createNewCategoryCoro",
-            boost::bind(&LLInventoryModel::createNewCategoryCoro, this, url, body, callback));
+            boost::bind(&LLInventoryModel::createNewCategoryCoro, this, url, body, callback, task, gAgent.getSessionID()));
         return;
     }
 
@@ -1200,7 +1211,8 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
     }
 }
 
-void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback)
+void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback,
+    fs_assistant::AsyncTaskPtr task, LLUUID loginSession)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1213,7 +1225,19 @@ void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inv
 
     LL_INFOS("HttpCoroutineAdapter", "genericPostCoro") << "Generic POST for " << url << LL_ENDL;
 
+    if (task && (gDisconnected || gAgent.getSessionID() != loginSession || !fs_assistant::asyncTaskSubmit(task)))
+    {
+        if (callback) callback(LLUUID::null);
+        return;
+    }
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+    if (task && (gDisconnected || gAgent.getSessionID() != loginSession))
+    {
+        task->guard()->cancel("session_changed");
+        if (callback) callback(LLUUID::null);
+        return;
+    }
+
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

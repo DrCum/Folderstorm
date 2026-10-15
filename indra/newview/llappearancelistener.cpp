@@ -82,7 +82,7 @@ bool LLAppearanceListener::requireConfirm(LLSD const& data, Response& response) 
     return false;
 }
 
-bool LLAppearanceListener::rlvAllows(const LLUUID& item_id, bool detach, std::string& error) const
+bool LLAppearanceListener::rlvAllows(const LLUUID& item_id, bool detach, std::string& error)
 {
     if (!RlvActions::isRlvEnabled())
     {

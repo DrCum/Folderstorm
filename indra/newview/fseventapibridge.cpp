@@ -501,7 +501,7 @@ public:
             const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses));
             if(decision==fs_assistant::Decision::Deny){fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,policy_error_details(op,prepared.requiredClasses));return;}
             if(decision==fs_assistant::Decision::Ask)enqueueAsk(std::move(prepared),response,api,op);
-            else postEvent(prepared.request,response,api,op,false,&prepared);
+            else postEvent(prepared.request,response,api,op,op_needs_confirm(op),&prepared);
             return;
         }
         if (api == "LLInventory" && (op == "previewBatchRename" || op == "previewBatchMove" || op == "previewBulkUndo" || op == "bulkHistory"))
@@ -1171,7 +1171,15 @@ private:
             return false;
         }
         if(!postedAllowed(found->second))
-        {fail_response(found->second.response,HTTP_FORBIDDEN,"Assistant response belongs to an expired request",llsd::map("error_code","session_changed"));mPending.erase(found);return true;}
+        {
+            if (found->second.async) found->second.async->seal();
+            auto receipt = asyncStatus(request_id);
+            receipt["error_code"] = "session_changed";
+            fail_response(found->second.response, HTTP_FORBIDDEN,
+                "Assistant response belongs to an expired request", receipt);
+            mPending.erase(found);
+            return true;
+        }
         found->second.sent = true;
         LLSD body = reply;
         body["viewer_session"]=mIdentity["viewer_session"];
