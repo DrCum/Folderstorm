@@ -1784,7 +1784,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     }
 
     std::vector<char> buffer(file_length + 1, 0);
-    if(file_length && !file.read(reinterpret_cast<U8*>(&buffer[0]), file_length))
+    if(file_length && (!file.read(reinterpret_cast<U8*>(&buffer[0]), file_length) || file.getLastBytesRead()!=file_length))
     {sendReply(llsd::map("error","Asset read was incomplete"),request->request);return;}
     std::string raw_content(buffer.data(),file_length);
     if(!raw_content.empty() && raw_content.back()=='\0')raw_content.pop_back();

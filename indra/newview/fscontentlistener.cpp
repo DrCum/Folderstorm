@@ -227,7 +227,7 @@ void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat
     if(size<0 || static_cast<std::size_t>(size)>assetLimit)
     {sendReply(llsd::map("error","Asset exceeds the bounded content read limit"),read->request);return;}
     Snapshot snapshot;snapshot.authority=read->authority;snapshot.epoch=read->request["__assistant_epoch"];snapshot.notecard=read->notecard;snapshot.raw.resize(size);
-    if(size && !file.read(reinterpret_cast<U8*>(&snapshot.raw[0]),size))
+    if(size && (!file.read(reinterpret_cast<U8*>(&snapshot.raw[0]),size) || file.getLastBytesRead()!=size))
     {sendReply(llsd::map("error","Incomplete asset read"),read->request);return;}
     if(!snapshot.raw.empty() && snapshot.raw.back()=='\0')snapshot.raw.pop_back();
     if(read->notecard)

@@ -5,6 +5,16 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 class ContentBoundaries(unittest.TestCase):
+    def test_content_snapshots_require_the_complete_native_read(self):
+        # LLFileSystem::read returns true for any nonzero fread result. A
+        # concurrent truncate must not become a zero-padded editable snapshot.
+        service = (ROOT / "fscontentlistener.cpp").read_text()
+        self.assertIn("file.getLastBytesRead()!=size", service)
+        self.assertLess(service.index("file.getLastBytesRead()!=size"), service.index("snapshot.hash=hash(snapshot.raw)"))
+        inventory = (ROOT / "llinventorylistener.cpp").read_text()
+        self.assertIn("file.getLastBytesRead()!=file_length", inventory)
+        self.assertLess(inventory.index("file.getLastBytesRead()!=file_length"), inventory.index("std::string raw_content(buffer.data(),file_length)"))
+
     def test_native_editors_retain_pending_source_ownership(self):
         script = (ROOT / "llpreviewscript.cpp").read_text()
         body = script[script.index("bool LLPreviewLSL::assistantSourceBusy()"):script.index("void LLPreviewLSL::saveIfNeeded")]
