@@ -82,6 +82,25 @@ class PreferencesNativeBoundaryTests(unittest.TestCase):
         self.assertIn('if (!writing) return false', helper)
         self.assertIn('if (owned) write(value,false)', helper)
 
+    def test_camera_build_and_open_cancel_before_native_callbacks(self):
+        camera = source("llfloatercamera.cpp")
+        for signature in ('void LLFloaterCamera::onOpen(const LLSD& key)', 'bool LLFloaterCamera::postBuild()'):
+            body = camera[camera.index(signature):]
+            self.assertRegex(body, re.escape(signature) + r'\s*\{\s*fs_preferences_camera_ui_opening\(\);')
+        opening = camera[camera.index('void LLFloaterCamera::onOpen('):camera.index('void LLFloaterCamera::onClose(')]
+        self.assertLess(opening.index('fs_preferences_camera_ui_opening()'), opening.index('populatePresetCombo()'))
+        building = camera[camera.index('bool LLFloaterCamera::postBuild()'):camera.index('void LLFloaterCamera::populatePresetCombo()')]
+        self.assertLess(building.index('fs_preferences_camera_ui_opening()'), building.index('setPresetListChangeCameraCallback('))
+        self.assertLess(building.index('fs_preferences_camera_ui_opening()'), building.index('mPresetCombo ='))
+        adapter = source("fspreferenceslistener.cpp")
+        hook = adapter[adapter.index('void fs_preferences_camera_ui_opening()'):]
+        self.assertIn('cancelForCameraUI(self.writing,self.transaction.busy(),self.cameraTouched', hook)
+        self.assertLess(hook.index('self.observe()'), hook.index('self.cancel("native_camera_ui_opened")'))
+        self.assertNotIn('accept(', hook)
+        model = source("fspreferencesmodel.h")
+        guard = model[model.index('bool cancelForCameraUI('):model.index('template<class Value, class Equal> class Transaction')]
+        self.assertLess(guard.index('if (writing || !previewActive || !cameraTouched) return false'), guard.index('cancel()'))
+
     def test_runtime_native_ownership_guards_and_no_audio_input_writes(self):
         adapter = source("fspreferenceslistener.cpp")
         for guard in ("FSSessionWorker::assistantActiveAllowed()", "FSWorkspaceContext::cameraAllowed()", "RLV_BHVR_SHOWNAMES", "RlvActions::canShowNearbyAgents()", "userAutoTuneEnabled", 'instanceVisible("preferences")', "preferencesBusy()", "getPolicyGeneration() != policyGeneration"):

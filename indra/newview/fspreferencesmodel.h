@@ -98,6 +98,12 @@ template<class Value, class Write> bool dependentPreviewWrite(bool writing, bool
     if (owned) write(value,false);
     return true;
 }
+template<class Cancel> bool cancelForCameraUI(bool writing, bool previewActive, bool cameraTouched, Cancel cancel)
+{
+    if (writing || !previewActive || !cameraTouched) return false;
+    cancel();
+    return true;
+}
 
 template<class Value, class Equal> class Transaction
 {
