@@ -7,6 +7,10 @@ static void check(bool value) { if (!value) throw std::runtime_error("World obse
 int main()
 {
     using namespace fs_world;
+    check(parcelCurrent(1,"region-b","region-b"));
+    check(!parcelCurrent(1,"region-a","region-b"));
+    check(!parcelCurrent(0,"region-b","region-b"));
+    check(!parcelCurrent(1,"",""));
     for (const auto* op : {"location", "parcel", "avatars", "objects", "audio", "media"})
     {
         check(operation(op));

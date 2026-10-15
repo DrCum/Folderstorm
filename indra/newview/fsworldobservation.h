@@ -29,6 +29,8 @@ inline bool bounds(double radius, int limit)
     return std::isfinite(radius) && radius >= 1. && radius <= MAX_RADIUS &&
         limit >= 1 && limit <= MAX_ROWS;
 }
+inline bool parcelCurrent(int localID,const std::string& parcelRegion,const std::string& currentRegion)
+{return localID>0 && !currentRegion.empty() && parcelRegion==currentRegion;}
 inline bool visible(const std::string& op, bool location, bool names, bool nearby)
 {
     // Refuse the whole observation when safe masking is not established.

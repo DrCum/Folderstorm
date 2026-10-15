@@ -132,7 +132,8 @@ void location(LLSD& result)
 void parcel(LLSD& result)
 {
     const LLParcel* parcel = LLViewerParcelMgr::instance().getAgentParcel();
-    if (!parcel || parcel->getLocalID() <= 0) return unavailable(result, "agent_parcel_not_loaded");
+    if (!parcel || !fs_world::parcelCurrent(parcel->getLocalID(), parcel->getRegionID().asString(), gAgent.getRegion()->getRegionID().asString()))
+        return unavailable(result, "current_region_parcel_not_loaded");
     result["region_id"] = gAgent.getRegion()->getRegionID();
     result["parcel_local_id"] = parcel->getLocalID();
     result["name"] = utf8str_truncate(parcel->getName(), 256);
@@ -241,7 +242,7 @@ void media(LLSD& result, double radius, int limit)
     result["urls"] = "omitted";
     result["audibility"] = "unknown";
     const LLParcel* parcel = LLViewerParcelMgr::instance().getAgentParcel();
-    const bool parcelKnown = parcel && parcel->getLocalID() > 0;
+    const bool parcelKnown = parcel && fs_world::parcelCurrent(parcel->getLocalID(), parcel->getRegionID().asString(), gAgent.getRegion()->getRegionID().asString());
     result["parcel"]["status"] = parcelKnown ? "observed" : "unavailable";
     if (parcelKnown)
     {
@@ -251,7 +252,7 @@ void media(LLSD& result, double radius, int limit)
         result["parcel"]["media_configured"] = !parcel->getMediaURL().empty();
         result["parcel"]["provenance"] = "current_agent_parcel_configuration";
     }
-    else result["parcel"]["reason"] = "agent_parcel_not_loaded";
+    else result["parcel"]["reason"] = "current_region_parcel_not_loaded";
     auto* stream = gAudiop ? gAudiop->getStreamingAudioImpl() : nullptr;
     result["stream"]["status"] = stream ? "observed" : "unavailable";
     if (stream)
