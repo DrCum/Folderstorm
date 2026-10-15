@@ -4,6 +4,7 @@
 #include <functional>
 #include <algorithm>
 #include <memory>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -95,6 +96,28 @@ struct AsyncOrigin {std::weak_ptr<AsyncOperation> guard;AsyncTaskPtr pending;};
 inline bool asyncOriginAllowed(const AsyncOrigin& origin)
 {const auto guard=origin.guard.lock();return guard && guard->allowed();}
 inline AsyncTaskPtr asyncTask(){return std::make_shared<AsyncTask>();}
+// Per-item load generations prevent an old callback from completing or
+// clearing a newer native/assistant request for the same inventory item.
+template<typename Key> class AsyncLoads
+{
+public:
+    AsyncTaskPtr begin(const Key& key)
+    {
+        auto task=asyncTask();
+        mLoads[key]=task;
+        return task;
+    }
+    bool finish(const Key& key,const AsyncTaskPtr& task)
+    {
+        const auto found=mLoads.find(key);
+        if(found==mLoads.end() || found->second!=task)return false;
+        mLoads.erase(found);
+        return true;
+    }
+    void erase(const Key& key){mLoads.erase(key);}
+private:
+    std::map<Key,AsyncTaskPtr> mLoads;
+};
 template<typename Function> void asyncDeliver(const AsyncTaskPtr& task,const std::string& key,Function function)
 {
     AsyncScope scope(task?task->guard():AsyncGuard());

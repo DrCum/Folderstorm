@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "llassetstorage.h" // LLAssetType
+#include "fsassistantasync.h"
 #include "llinventoryobserver.h"
 #include "llsingleton.h"
 #include "llviewerinventory.h"
@@ -180,6 +181,7 @@ private:
     // there is a gesture with that item_id, but the asset data
     // is still on its way down from the server.
     item_map_t mActive;
+    fs_assistant::AsyncLoads<LLUUID> mPendingLoads;
 
     S32 mLoadingCount;
     std::string mDeactivateSimilarNames;
