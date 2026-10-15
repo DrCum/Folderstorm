@@ -18,6 +18,8 @@ function(folderstorm_check name)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+folderstorm_check(shared_pose ../test_fssharedpose.cpp)
+
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)

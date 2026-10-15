@@ -30,8 +30,100 @@
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "fsposingmotion.h"
+#include "fssharedposemanager.h"
 
 std::map<LLUUID, LLAssetID> FSPoserAnimator::sAvatarIdToRegisteredAnimationId;
+
+FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
+{
+    FSSharedPose::Pose result;
+    auto* motion = getPosingMotion(avatar);
+    if (!motion) return result;
+    for (const auto& definition : PoserJoints)
+    {
+        auto* joint = motion->getJointPoseByJointName(definition.jointName());
+        if (!joint) continue;
+        const auto rotation = joint->getTargetRotation();
+        const auto position = joint->getTargetPosition();
+        const auto scale = joint->getTargetScale();
+        FSSharedPose::Joint value;
+        value.transform = {{rotation.mQ[0], rotation.mQ[1], rotation.mQ[2], rotation.mQ[3],
+                            position.mV[0], position.mV[1], position.mV[2], scale.mV[0], scale.mV[1], scale.mV[2]}};
+        // The motion's default priority is used when a joint has no explicit priority.
+        const S32 priority = joint->getJointState()->getPriority();
+        value.priority = static_cast<std::uint8_t>(priority < 0 ? motion->getPriority() : priority);
+        value.enabled = motion->currentlyPosingJoint(joint);
+        value.worldLocked = joint->getWorldRotationLockState();
+        value.mirrored = joint->getRotationMirrorState();
+        result.emplace(definition.jointName(), value);
+    }
+    return result;
+}
+
+void FSPoserAnimator::applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose)
+{
+    if (!isAvatarSafeToUse(avatar) || avatar->isControlAvatar()) return;
+    if (!isPosingAvatar(avatar)) tryPosingAvatar(avatar);
+    auto* motion = getPosingMotion(avatar);
+    if (!motion) return;
+    for (const auto& item : pose)
+    {
+        if (!getPoserJointByName(item.first)) continue;
+        auto* joint = motion->getJointPoseByJointName(item.first);
+        if (!joint) continue;
+        if (motion->currentlyPosingJoint(joint) != item.second.enabled)
+        {
+            if (item.second.enabled) motion->addJointToState(joint);
+            else motion->removeJointFromState(joint);
+        }
+        joint->applySharedTransform(item.second);
+    }
+}
+
+FSSharedPose::JointSet FSPoserAnimator::sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,
+                                                      E_BoneDeflectionStyles style, bool position) const
+{
+    FSSharedPose::JointSet result;
+    auto* motion = getPosingMotion(avatar);
+    if (!motion) return result;
+    if (!joint)
+    {
+        for (const auto& item : captureSharedPose(avatar)) result.insert(item.first);
+        return result;
+    }
+    result.insert(joint->jointName());
+    if (style != NONE && style != DELTAMODE && !joint->mirrorJointName().empty())
+        result.insert(joint->mirrorJointName());
+    if (position)
+    {
+        if (auto* bone = avatar->getJoint(joint->jointName()))
+        {
+            auto* parent = bone->getParent();
+            for (int i = 0; parent && i < 2; ++i, parent = parent->getParent())
+                if (getPoserJointByName(parent->getName())) result.insert(parent->getName());
+        }
+    }
+    const auto roots = result;
+    for (const auto& definition : PoserJoints)
+    {
+        auto* state = motion->getJointPoseByJointName(definition.jointName());
+        if (!state || !state->getWorldRotationLockState()) continue;
+        for (auto* ancestor = state->getJointState()->getJoint()->getParent(); ancestor; ancestor = ancestor->getParent())
+            if (roots.count(ancestor->getName())) { result.insert(definition.jointName()); break; }
+    }
+    for (auto it = result.begin(); it != result.end();)
+        if (!motion->getJointPoseByJointName(*it)) it = result.erase(it); else ++it;
+    return result;
+}
+
+bool FSPoserAnimator::routeSharedEdit(LLVOAvatar* avatar, const FSPoserJoint* joint, E_BoneDeflectionStyles style,
+                                     bool position, std::function<void()> action)
+{
+    if (!isAvatarSafeToUse(avatar) || avatar->isControlAvatar()) return false;
+    auto& manager = FSSharedPoseManager::instance();
+    if (!manager.isShared(avatar->getID()) || manager.isApplying()) return false;
+    return manager.edit(avatar->getID(), sharedEditJoints(avatar, joint, style, position), std::move(action));
+}
 
 bool FSPoserAnimator::isPosingAvatarJoint(LLVOAvatar* avatar, const FSPoserJoint& joint)
 {
@@ -73,6 +165,9 @@ bool FSPoserAnimator::hasJointBeenChanged(LLVOAvatar* avatar, const FSPoserJoint
 
 void FSPoserAnimator::setPosingAvatarJoint(LLVOAvatar* avatar, const FSPoserJoint& joint, bool shouldPose)
 {
+    if (routeSharedEdit(avatar, &joint, NONE, false,
+        [this, avatar, joint, shouldPose] { setPosingAvatarJoint(avatar, joint, shouldPose); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -99,6 +194,9 @@ void FSPoserAnimator::setPosingAvatarJoint(LLVOAvatar* avatar, const FSPoserJoin
 
 void FSPoserAnimator::undoLastJointChange(LLVOAvatar* avatar, const FSPoserJoint& joint, E_BoneDeflectionStyles style)
 {
+    if (avatar && !FSSharedPoseManager::instance().isApplying() &&
+        FSSharedPoseManager::instance().history(avatar->getID(), false)) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -151,6 +249,9 @@ void FSPoserAnimator::undoLastJointChange(LLVOAvatar* avatar, const FSPoserJoint
 
 void FSPoserAnimator::resetJoint(LLVOAvatar* avatar, const FSPoserJoint& joint, E_BoneDeflectionStyles style)
 {
+    if (routeSharedEdit(avatar, &joint, style, true,
+        [this, avatar, joint, style] { resetJoint(avatar, joint, style); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -179,6 +280,9 @@ void FSPoserAnimator::resetJoint(LLVOAvatar* avatar, const FSPoserJoint& joint, 
 
 bool FSPoserAnimator::canRedoOrUndoJointChange(LLVOAvatar* avatar, const FSPoserJoint& joint, bool canUndo)
 {
+    if (avatar && FSSharedPoseManager::instance().isShared(avatar->getID()))
+        return FSSharedPoseManager::instance().canHistory(avatar->getID(), !canUndo);
+
     if (!isAvatarSafeToUse(avatar))
         return false;
 
@@ -201,6 +305,9 @@ bool FSPoserAnimator::canRedoOrUndoJointChange(LLVOAvatar* avatar, const FSPoser
 
 void FSPoserAnimator::redoLastJointChange(LLVOAvatar* avatar, const FSPoserJoint& joint, E_BoneDeflectionStyles style)
 {
+    if (avatar && !FSSharedPoseManager::instance().isApplying() &&
+        FSSharedPoseManager::instance().history(avatar->getID(), true)) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -254,6 +361,9 @@ LLVector3 FSPoserAnimator::getJointPosition(LLVOAvatar* avatar, const FSPoserJoi
 void FSPoserAnimator::setJointPosition(LLVOAvatar* avatar, const FSPoserJoint* joint, const LLVector3& position, E_PoserReferenceFrame frame,
                                        E_BoneDeflectionStyles style)
 {
+    if (routeSharedEdit(avatar, joint, style, false,
+        [this, avatar, joint, position, frame, style] { setJointPosition(avatar, joint, position, frame, style); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
     if (!joint)
@@ -331,6 +441,9 @@ bool FSPoserAnimator::getRotationIsMirrored(LLVOAvatar* avatar, const FSPoserJoi
 
 void FSPoserAnimator::setRotationIsMirrored(LLVOAvatar* avatar, const FSPoserJoint& joint, bool newState)
 {
+    if (routeSharedEdit(avatar, &joint, NONE, false,
+        [this, avatar, joint, newState] { setRotationIsMirrored(avatar, joint, newState); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -363,6 +476,9 @@ bool FSPoserAnimator::getRotationIsWorldLocked(LLVOAvatar* avatar, const FSPoser
 
 void FSPoserAnimator::setRotationIsWorldLocked(LLVOAvatar* avatar, const FSPoserJoint& joint, bool newState)
 {
+    if (routeSharedEdit(avatar, &joint, NONE, false,
+        [this, avatar, joint, newState] { setRotationIsWorldLocked(avatar, joint, newState); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -439,6 +555,9 @@ bool FSPoserAnimator::allBaseRotationsAreZero(LLVOAvatar* avatar) const
 
 void FSPoserAnimator::setAllAvatarStartingRotationsToZero(LLVOAvatar* avatar)
 {
+    if (routeSharedEdit(avatar, nullptr, NONE, false,
+        [this, avatar] { setAllAvatarStartingRotationsToZero(avatar); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -466,6 +585,9 @@ void FSPoserAnimator::setAllAvatarStartingRotationsToZero(LLVOAvatar* avatar)
 
 void FSPoserAnimator::recaptureJoint(LLVOAvatar* avatar, const FSPoserJoint& joint)
 {
+    if (routeSharedEdit(avatar, &joint, NONE, false,
+        [this, avatar, joint] { recaptureJoint(avatar, joint); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -485,6 +607,9 @@ void FSPoserAnimator::updateJointFromManip(LLVOAvatar* avatar, const FSPoserJoin
                                            E_BoneDeflectionStyles style, E_PoserReferenceFrame frame, const LLQuaternion& rotation,
                                            const LLVector3& position, const LLVector3& scale)
 {
+    if (routeSharedEdit(avatar, joint, style, !position.isExactlyZero(),
+        [this, avatar, joint, resetBaseRotationToZero, style, frame, rotation, position, scale] { updateJointFromManip(avatar, joint, resetBaseRotationToZero, style, frame, rotation, position, scale); })) return;
+
     if (!position.isExactlyZero())
         updateJointPositionFromManip(avatar, joint, resetBaseRotationToZero, style, position);
     else
@@ -846,6 +971,9 @@ void FSPoserAnimator::setJointRotation(LLVOAvatar* avatar, const FSPoserJoint* j
                                        E_BoneAxisTranslation translation, S32 negation, bool resetBaseRotationToZero,
                                        E_RotationStyle rotationStyle)
 {
+    if (routeSharedEdit(avatar, joint, style, false,
+        [this, avatar, joint, absRotation, deltaRotation, style, frame, translation, negation, resetBaseRotationToZero, rotationStyle] { setJointRotation(avatar, joint, absRotation, deltaRotation, style, frame, translation, negation, resetBaseRotationToZero, rotationStyle); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
     if (!joint)
@@ -938,6 +1066,9 @@ void FSPoserAnimator::setJointRotation(LLVOAvatar* avatar, const FSPoserJoint* j
 
 void FSPoserAnimator::reflectJoint(LLVOAvatar* avatar, const FSPoserJoint* joint)
 {
+    if (routeSharedEdit(avatar, joint, MIRROR, false,
+        [this, avatar, joint] { reflectJoint(avatar, joint); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -964,6 +1095,9 @@ void FSPoserAnimator::reflectJoint(LLVOAvatar* avatar, const FSPoserJoint* joint
 
 void FSPoserAnimator::symmetrizeLeftToRightOrRightToLeft(LLVOAvatar* avatar, bool rightToLeft)
 {
+    if (routeSharedEdit(avatar, nullptr, NONE, false,
+        [this, avatar, rightToLeft] { symmetrizeLeftToRightOrRightToLeft(avatar, rightToLeft); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -1003,6 +1137,9 @@ void FSPoserAnimator::symmetrizeLeftToRightOrRightToLeft(LLVOAvatar* avatar, boo
 
 void FSPoserAnimator::flipEntirePose(LLVOAvatar* avatar)
 {
+    if (routeSharedEdit(avatar, nullptr, NONE, false,
+        [this, avatar] { flipEntirePose(avatar); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
 
@@ -1207,6 +1344,9 @@ LLVector3 FSPoserAnimator::getJointScale(LLVOAvatar* avatar, const FSPoserJoint&
 void FSPoserAnimator::setJointScale(LLVOAvatar* avatar, const FSPoserJoint* joint, const LLVector3& scale, E_PoserReferenceFrame frame,
                                     E_BoneDeflectionStyles style)
 {
+    if (routeSharedEdit(avatar, joint, style, false,
+        [this, avatar, joint, scale, frame, style] { setJointScale(avatar, joint, scale, frame, style); })) return;
+
     if (!isAvatarSafeToUse(avatar))
         return;
     if (!joint)
@@ -1295,6 +1435,9 @@ bool FSPoserAnimator::tryGetJointSaveVectors(LLVOAvatar* avatar, const FSPoserJo
 
 void FSPoserAnimator::loadJointRotation(LLVOAvatar* avatar, const FSPoserJoint* joint, bool setBaseToZero, bool userSetBaseToZero, LLVector3 rotation)
 {
+    if (routeSharedEdit(avatar, joint, NONE, false,
+        [this, avatar, joint, setBaseToZero, userSetBaseToZero, rotation] { loadJointRotation(avatar, joint, setBaseToZero, userSetBaseToZero, rotation); })) return;
+
     if (!isAvatarSafeToUse(avatar) || !joint)
         return;
 
@@ -1314,6 +1457,9 @@ void FSPoserAnimator::loadJointRotation(LLVOAvatar* avatar, const FSPoserJoint* 
 
 void FSPoserAnimator::loadJointPosition(LLVOAvatar* avatar, const FSPoserJoint* joint, bool loadPositionAsDelta, LLVector3 position)
 {
+    if (routeSharedEdit(avatar, joint, NONE, false,
+        [this, avatar, joint, loadPositionAsDelta, position] { loadJointPosition(avatar, joint, loadPositionAsDelta, position); })) return;
+
     if (!isAvatarSafeToUse(avatar) || !joint)
         return;
 
@@ -1336,6 +1482,9 @@ void FSPoserAnimator::loadJointPosition(LLVOAvatar* avatar, const FSPoserJoint* 
 
 void FSPoserAnimator::loadJointScale(LLVOAvatar* avatar, const FSPoserJoint* joint, bool loadScaleAsDelta, LLVector3 scale)
 {
+    if (routeSharedEdit(avatar, joint, NONE, false,
+        [this, avatar, joint, loadScaleAsDelta, scale] { loadJointScale(avatar, joint, loadScaleAsDelta, scale); })) return;
+
     if (!isAvatarSafeToUse(avatar) || !joint)
         return;
 
@@ -1359,6 +1508,9 @@ void FSPoserAnimator::loadJointScale(LLVOAvatar* avatar, const FSPoserJoint* joi
 
 bool FSPoserAnimator::loadPosingState(LLVOAvatar* avatar, bool ignoreOwnership, LLSD pose)
 {
+    if (routeSharedEdit(avatar, nullptr, NONE, false,
+        [this, avatar, ignoreOwnership, pose] { loadPosingState(avatar, ignoreOwnership, pose); })) return true;
+
     if (!isAvatarSafeToUse(avatar))
         return false;
 
@@ -1484,6 +1636,9 @@ bool FSPoserAnimator::tryPosingAvatar(LLVOAvatar* avatar)
 
 void FSPoserAnimator::updatePosingState(LLVOAvatar* avatar, const std::vector<FSPoserAnimator::FSPoserJoint*>& jointsRecaptured)
 {
+    if (routeSharedEdit(avatar, nullptr, NONE, false,
+        [this, avatar, jointsRecaptured] { updatePosingState(avatar, jointsRecaptured); })) return;
+
     if (!avatar)
         return;
 
@@ -1506,6 +1661,12 @@ void FSPoserAnimator::updatePosingState(LLVOAvatar* avatar, const std::vector<FS
 
 void FSPoserAnimator::stopPosingAvatar(LLVOAvatar* avatar)
 {
+    if (avatar && !FSSharedPoseManager::instance().isApplying() && FSSharedPoseManager::instance().isShared(avatar->getID()))
+    {
+        FSSharedPoseManager::instance().leave(avatar->getID());
+        return;
+    }
+
     if (!avatar || avatar->isDead())
         return;
 

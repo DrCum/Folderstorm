@@ -36,6 +36,7 @@
 class FSVirtualTrackpad;
 class LLButton;
 class LLCheckBoxCtrl;
+class LLComboBox;
 class LLLineEditor;
 class LLScrollListCtrl;
 class LLSliderCtrl;
@@ -88,7 +89,13 @@ public:
     bool canUndo() const override { return true; }
     void redo() override { onRedoLastChange(); };
     bool canRedo() const override { return true; }
+    void refreshSharedControls();
  private:
+    LLComboBox* mSharedEditors = nullptr;
+    LLUUID mLastSharedAvatar;
+    bool mLastSharedPermission = false, mLastSharedPosing = false;
+    std::string mSharedEditorList;
+    F64 mLastSharedRefresh = 0.;
     // Helper function to encapsualte save logic
     void doPoseSave(LLVOAvatar* avatar, const std::string& filename);
     bool postBuild() override;
