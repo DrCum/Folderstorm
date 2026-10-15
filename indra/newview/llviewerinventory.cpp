@@ -471,7 +471,7 @@ void LLViewerInventoryItem::updateServer(bool is_new, const std::shared_ptr<void
     // Keep the source writer alive through queued and suspended AIS work, not
     // merely through the asset-storage callback which schedules this PATCH.
     AISAPI::completion_t cr = [source_owner](LLUUID id)
-    { doInventoryCb(LLPointer<LLInventoryCallback>(), id); };
+    { (void)source_owner; doInventoryCb(LLPointer<LLInventoryCallback>(), id); };
     AISAPI::UpdateItem(getUUID(), updates, cr);
     // <FS:Ansariel> [UDP-Msg]
     }
@@ -493,7 +493,7 @@ void LLViewerInventoryItem::updateServer(bool is_new, const std::shared_ptr<void
             const auto sent=msg->sendReliable(gAgent.getRegionHost(),LL_DEFAULT_RELIABLE_RETRIES,true,
                 LL_PING_BASED_TIMEOUT_DUMMY,[](void** raw,S32)
                 {delete reinterpret_cast<std::shared_ptr<void>*>(raw);},reinterpret_cast<void**>(pending));
-            if(!sent)delete pending; // No circuit/packet was queued.
+            if(!sent){msg->clearMessage();delete pending;} // No circuit/packet was queued.
         }
         else gAgent.sendReliableMessage();
     }
