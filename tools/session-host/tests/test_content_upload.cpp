@@ -10,6 +10,12 @@ int main()
  legacy.begin("item");legacy.begin("item");assert(legacy.has("item"));
  legacy.end("item");assert(legacy.has("item")); // another callback still owns it
  legacy.end("item");assert(!legacy.has("item"));
+ legacy.begin("deferred");
+ std::shared_ptr<void> source(new int(0),[&](void* p){delete static_cast<int*>(p);legacy.end("deferred");});
+ std::function<void()> queuedAIS=[source](){(void)source;};
+ source.reset();assert(legacy.has("deferred")); // native asset callback ended
+ auto suspendedAIS=queuedAIS;queuedAIS={};assert(legacy.has("deferred"));
+ suspendedAIS={};assert(!legacy.has("deferred")); // last transport owner ended
  // Hidden, pristine source does not imply dormant ownership: an include fetch
  // or external watcher can still submit the old buffer later.
  NativeSourceOwner dormant;assert(!nativeSourceBusy(dormant));
