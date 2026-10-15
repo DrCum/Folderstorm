@@ -26,7 +26,7 @@ struct Snapshot
 {
     LLSD authority,epoch;
     std::string text,raw,prefix,suffix,hash;
-    bool notecard=false;
+    bool notecard=false,editable=true;
 };
 struct Write
 {
@@ -110,6 +110,7 @@ bool baseSnapshot(const LLSD& request,Snapshot*& snapshot,LLViewerInventoryItem*
        found->second.hash!=request["content_hash"].asString() || item->getAssetUUID()!=request["expected_asset_id"].asUUID())
     {error="Revision conflict or snapshot expired; obtain a fresh complete inventory_content_get";return false;}
     snapshot=&found->second;
+    if(!snapshot->editable){error="Version 1 notecard reading is supported; lossless legacy editing is unavailable";return false;}
     if(notecard && !preserveEmbedded(snapshot->text,request["text"].asString()))
     {error="Embedded inventory markers must be preserved in their original order";return false;}
     if(notecard && replaceNotecard(snapshot->prefix,snapshot->suffix,request["text"].asString()).size()>assetLimit)
@@ -226,10 +227,11 @@ void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat
     if(read->notecard)
     {
         LLNotecard card;std::stringstream stream(snapshot.raw);
-        if(!card.importStream(stream) || stream.tellg()<0 || !validEmbeddedReferences(card.getText(),card.getItems().size()) ||
-           !notecardLayout(snapshot.raw,card.getText(),static_cast<std::size_t>(stream.tellg()),snapshot.prefix,snapshot.suffix))
-        {sendReply(llsd::map("error","Malformed, truncated or unsupported legacy notecard; no editable snapshot was retained"),read->request);return;}
-        snapshot.text=card.getText();
+        if(!card.importStream(stream) || stream.tellg()<0 ||
+           !notecardLayout(snapshot.raw,card.getText(),static_cast<std::size_t>(stream.tellg()),snapshot.prefix,snapshot.suffix,card.getVersion()) ||
+           !notecardReadText(card.getText(),card.getVersion(),card.getItems().size(),snapshot.text))
+        {sendReply(llsd::map("error","Malformed or truncated notecard; no editable snapshot was retained"),read->request);return;}
+        snapshot.editable=card.getVersion()==2;
     }
     else snapshot.text=snapshot.raw;
     if(!utf8(snapshot.text))
@@ -238,6 +240,8 @@ void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat
     LLSD reply=llsd::map("ok",true,"id",item->getUUID(),"asset_id",item->getAssetUUID(),
         "kind",read->notecard?"notecard":"script","text",excerpt(snapshot.text,textLimit),"complete",full,"truncated",!full,
         "content_hash",full?snapshot.hash:std::string(),"native_readable",true,"native_writable",writable(item,read->notecard));
+    reply["editable"]=full && snapshot.editable && writable(item,read->notecard);
+    if(!snapshot.editable)reply["edit_unavailable_reason"]="Version 1 notecard reading is supported; lossless legacy editing is unavailable";
     reply["embedded_inventory"]=read->notecard && snapshot.raw.find("count 0\n")==std::string::npos;
     if(full)
     {
