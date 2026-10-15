@@ -18,6 +18,7 @@
 #include "llstartup.h"
 #include "lltimer.h"
 #include "llsdutil.h"
+#include "llsdjson.h"
 #include "lluri.h"
 #include "llviewerregion.h"
 #include "llviewernetwork.h"
@@ -44,6 +45,7 @@ using Stream=fs_assistant_social::Stream<LLSD>;
 F64 now(){return LLTimer::getTotalSeconds();}
 std::string bounded(const std::string& value,std::size_t bytes)
 {return utf8str_truncate(value,static_cast<S32>(bytes));}
+std::size_t encodedBytes(const LLSD& value){return boost::json::serialize(LlsdToJson(value)).size();}
 bool visible(){return !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES) && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC);}
 bool ready(){return !gDisconnected && gAgentID.notNull() && gAgent.getRegion() && LLStartUp::getStartupState()==STATE_STARTED;}
 bool residentAllowed(const LLUUID& id)
@@ -56,7 +58,7 @@ LLSD participants(const LLIMModel::LLIMSession& session)
     if(session.isP2PSessionType())ids.insert(session.mOtherParticipantID);
     else if(session.isAdHocSessionType())
     {
-        ids.insert(session.mInitialTargetIDs.begin(),session.mInitialTargetIDs.end());
+        if(session.mType!=IM_SESSION_INVITE)ids.insert(session.mInitialTargetIDs.begin(),session.mInitialTargetIDs.end());
         if(session.mSpeakers){LLSpeakerMgr::speaker_list_t speakers;session.mSpeakers->getSpeakerList(&speakers,true);for(const auto& speaker:speakers)ids.insert(speaker->mID);}
     }
     LLSD result=LLSD::emptyArray();for(const auto& id:ids)if(id.notNull() && id!=gAgentID)result.append(id);return result;
@@ -113,7 +115,7 @@ LLSD page(const std::vector<LLSD>& rows,const LLSD& request)
 {
     LLSD result;result["entries"]=LLSD::emptyArray();const int begin=request["offset"].asInteger();int end=(std::min)(begin,static_cast<int>(rows.size()));std::size_t bytes=0;
     while(end<static_cast<int>(rows.size()) && end<begin+limit(request))
-    {const auto rowBytes=rows[end]["text"].asString().size()+rows[end]["description"].asString().size()+768;if(bytes+rowBytes>64*1024)break;result["entries"].append(rows[end++]);bytes+=rowBytes;}
+    {const auto rowBytes=encodedBytes(rows[end])+1;if(bytes+rowBytes>60*1024)break;result["entries"].append(rows[end++]);bytes+=rowBytes;}
     result["next_offset"]=end<static_cast<int>(rows.size())?end:0;result["has_more"]=end<static_cast<int>(rows.size());result["retained_count"]=static_cast<S32>(rows.size());return result;
 }
 }
@@ -171,7 +173,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
             std::uint64_t ingress=0;if(!revision(data["ingress_sequence"],ingress) || ingress==0)return;
             if(!session || !conversationAllowed(*session) || (sender.notNull() && sender!=gAgentID && !RlvActions::canReceiveIM(sender)))return;
             LLSD row;row["conversation_id"]=session->mSessionID;row["topic"]=topic(*session);row["sender_id"]=sender;row["sender_name"]=bounded(data["from"].asString(),255);row["text"]=bounded(data["message"].asString(),4095);row["time"]=data["time"];row["kind"]="message";
-            const auto id=self->streams["chat"].append(row,row["text"].asString().size()+512);
+            const auto id=self->streams["chat"].append(row,encodedBytes(row)+128);
             const auto fence=self->closed.find(session->mSessionID.asString());
             if(fence!=self->closed.end() && fs_assistant_social::reopens(sender.notNull() && sender!=gAgentID,ingress,fence->second))self->closed.erase(fence);
             (void)id;
@@ -192,7 +194,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         if(auto channel=LLNotifications::instance().getChannel("Visible"))channel->forEachNotification([&](LLNotificationPtr native)
         {const auto row=notice(native);if(row.isUndefined())return;if(active.size()>=128){noticesTruncated=true;return;}active[native->getID()]=row;});
         for(const auto& old:notices)if(!active.count(old.first)){LLSD event;event["kind"]="notification_removed";event["notification_id"]=old.first;streams["notifications"].append(event,128);}
-        for(const auto& entry:active)if(!notices.count(entry.first) || notices[entry.first]!=entry.second){auto event=entry.second;event["kind"]="notification_changed";streams["notifications"].append(event,entry.second["description"].asString().size()+512);}
+        for(const auto& entry:active)if(!notices.count(entry.first) || notices[entry.first]!=entry.second){auto event=entry.second;event["kind"]="notification_changed";streams["notifications"].append(event,encodedBytes(event)+128);}
         notices=std::move(active);noticesDirty=false;noticesChecked=now();
     }
     LLSD readEvents(const LLSD& request,std::string& error)
@@ -236,7 +238,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
                 if(name=="chat" && !rowAllowed(entry.value)){position=entry.id;continue;}
                 if(name=="notifications" && entry.value["kind"].asString()!="notification_removed")
                 {const auto sender=entry.value["sender_id"].asUUID();if(!notices.count(entry.value["notification_id"].asUUID()) || (sender.notNull() && !RlvActions::canReceiveIM(sender))){position=entry.id;continue;}}
-                if(result["events"].size()>=limit(request) || bytes+entry.bytes>64*1024){full=true;break;}
+                if(result["events"].size()>=limit(request) || bytes+entry.bytes>60*1024){full=true;break;}
                 LLSD event;event["topic"]=name;event["event_id"]=name+":"+std::to_string(entry.id);event["data"]=entry.value;result["events"].append(event);position=entry.id;bytes+=entry.bytes;
             }
             if(full)break;
@@ -343,7 +345,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         else
         {const auto* session=LLIMModel::instance().findIMSession(LLUUID(id));LLIMModel::sendMessage(request["text"].asString(),session->mSessionID,session->mOtherParticipantID,session->mType);}
         // Native may echo its own outgoing line; we never synthesize delivery.
-        LLSD event=result;event["kind"]="operation_result";streams["operations"].append(event,512);return result;
+        LLSD event=result;event["kind"]="operation_result";streams["operations"].append(event,encodedBytes(event)+128);return result;
     }
     void changed(U32)override
     {sync();if(!restricted){LLSD row;row["kind"]="friends_changed";row["reconcile"]="friends_list";streams["contacts"].append(row,128);}}
@@ -501,7 +503,9 @@ public:
                 std::sort(rows.begin(),rows.end(),contactLess);token=LLUUID::generateNewID().asString();mState->friendSnapshots[token]={std::move(rows),now()+60};
             }
             const auto found=mState->friendSnapshots.find(token);if(found==mState->friendSnapshots.end()){response->error("snapshot_expired: refresh friends");return;}
-            auto result=page(found->second.rows,request);LLSD visibleRows=LLSD::emptyArray();for(const auto& row:llsd::inArray(result["entries"]))if(residentAllowed(row["resident_id"].asUUID()) && LLAvatarTracker::instance().isBuddy(row["resident_id"].asUUID()))visibleRows.append(row);result["entries"]=visibleRows;
+            for(const auto& row:found->second.rows)if(!residentAllowed(row["resident_id"].asUUID()) || !LLAvatarTracker::instance().isBuddy(row["resident_id"].asUUID()))
+            {mState->friendSnapshots.erase(found);response->error("snapshot_visibility_changed: refresh friends");return;}
+            auto result=page(found->second.rows,request);
             result["source"]=mState->source();result["snapshot_id"]=token;result["truncated"]=found->second.rows.size()==2048;if(guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;
         }
         response->error("unsupported_operation");
@@ -525,5 +529,5 @@ void FSAssistantSocial::nearbyMessage(const LLChat& message)
 {
     mState->sync();if(mState->restricted || message.mChatStyle!=CHAT_STYLE_NORMAL || message.mMuted)return;
     if(message.mFromID.notNull() && message.mFromID!=gAgentID && !RlvActions::canReceiveIM(message.mFromID))return;
-    LLSD row;row["kind"]="message";row["topic"]="nearby";row["conversation_id"]="nearby";row["sender_id"]=message.mFromID;row["sender_name"]=bounded(message.mFromName,255);row["text"]=bounded(message.mText,4095);mState->streams["chat"].append(row,row["text"].asString().size()+512);
+    LLSD row;row["kind"]="message";row["topic"]="nearby";row["conversation_id"]="nearby";row["sender_id"]=message.mFromID;row["sender_name"]=bounded(message.mFromName,255);row["text"]=bounded(message.mText,4095);mState->streams["chat"].append(row,encodedBytes(row)+128);
 }
