@@ -1,4 +1,9 @@
-/** SPDX-License-Identifier: LGPL-2.1-or-later */
+/**
+ * $LicenseInfo:firstyear=2026&license=viewerlgpl$
+ * Copyright (c) 2026 Folderstorm contributors.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * $/LicenseInfo$
+ */
 #include "../controls_model.h"
 #include <cassert>
 int main()

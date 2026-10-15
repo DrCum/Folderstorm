@@ -2379,6 +2379,7 @@ add_executable(${VIEWER_BINARY_NAME}
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
   target_include_directories(folderstorm-session-host PRIVATE

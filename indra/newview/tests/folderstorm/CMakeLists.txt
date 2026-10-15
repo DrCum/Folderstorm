@@ -63,7 +63,8 @@ endif()
 # Native HWND/accessibility checks run only on Windows; portable UI models above
 # remain available without Win32 headers or the viewer.
 if(WIN32)
-  add_executable(session_native_controls ../../../../tools/session-host/tests/test_native_controls.cpp)
+  add_executable(session_native_controls ../../../../tools/session-host/tests/test_native_controls.cpp
+    ../../../../tools/session-host/accessibility.cpp)
   target_include_directories(session_native_controls PRIVATE ../..)
   target_compile_definitions(session_native_controls PRIVATE UNICODE _UNICODE)
   if(MSVC)
