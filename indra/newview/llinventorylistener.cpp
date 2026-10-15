@@ -1835,7 +1835,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     reply["truncated"] = truncated;
     reply["stale"] = false;
     reply["complete"] = !truncated;
-    reply["content_hash"] = truncated?std::string():fs_content::hash(complete_text);
+    reply["content_hash"] = truncated?std::string():fs_content::hash(request->notecard?raw_content:complete_text);
     reply["native_readable"] = true;
     reply["native_writable"] = fs_content::writable(item,request->notecard);
     sendReply(reply, request->request);
