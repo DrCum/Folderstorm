@@ -28,12 +28,6 @@ inline bool needsActiveCharacter(const std::string& api,const std::string& op)
     return (api=="LLCamera" && op!="get") || (api=="LLInventory" && op=="snapshotUpload") ||
         (api=="LLWorkspace" && (op=="apply" || op=="previous"));
 }
-inline bool managedOperationSupported(const std::string& api,const std::string& op)
-{
-    // These native helpers schedule further copy/wear/default-permission/UI
-    // callbacks without an execution context. Do not dispatch them in a
-    // managed viewer until the whole native chain can honor revocation.
-    return !(api=="LLAppearance" && (op=="wearOutfit" || op=="wearItems" || op=="detachItems"));
-}
+
 }
 #endif

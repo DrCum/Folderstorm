@@ -1407,6 +1407,7 @@ void link_inventory_array(const LLUUID& category,
              LLInventoryObject::const_object_list_t& baseobj_array,
              LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncSubmit())return;
 #ifndef LL_RELEASE_FOR_DOWNLOAD
     const LLViewerInventoryCategory *cat = gInventory.getCategory(category);
     const std::string cat_name = cat ? cat->getName() : "CAT NOT FOUND";
@@ -1551,6 +1552,7 @@ void update_inventory_item(
     LLViewerInventoryItem *update_item,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncSubmit())return;
     const LLUUID& item_id = update_item->getUUID();
 
     // <FS:Ansariel> [UDP-Msg]
@@ -1616,6 +1618,7 @@ void update_inventory_item(
     const LLSD& updates,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncSubmit())return;
     // <FS:Ansariel> [UDP-Msg]
     if (AISAPI::isAvailable())
     {
@@ -1725,6 +1728,7 @@ void remove_inventory_item(
     LLPointer<LLInventoryCallback> cb,
     bool immediate_delete)
 {
+    if(!fs_assistant::asyncSubmit())return;
     LLPointer<LLInventoryObject> obj = gInventory.getItem(item_id);
     if (obj)
     {
@@ -1741,6 +1745,7 @@ void remove_inventory_item(
     LLPointer<LLInventoryCallback> cb,
     bool immediate_delete)
 {
+    if(!fs_assistant::asyncSubmit())return;
     if(obj)
     {
         const LLUUID item_id(obj->getUUID());
@@ -1820,6 +1825,7 @@ void remove_inventory_category(
     const LLUUID& cat_id,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncSubmit())return;
     LL_DEBUGS(LOG_INV) << "cat_id: [" << cat_id << "] " << LL_ENDL;
     LLPointer<LLViewerInventoryCategory> obj = gInventory.getCategory(cat_id);
     if(obj)
@@ -2188,6 +2194,7 @@ void slam_inventory_folder(const LLUUID& folder_id,
                            const LLSD& contents,
                            LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncSubmit())return;
     // <FS:Ansariel> [UDP-Msg]
     if (AISAPI::isAvailable())
     {

@@ -61,6 +61,7 @@ public:
                                 LLInventoryModel::item_array_t& obj_items_new,
                                 LLInventoryModel::item_array_t& gest_items_new,
                                 bool append=false, const LLUUID& idOutfit=LLUUID::null, LLPointer<LLInventoryCallback> link_waiter = NULL);
+    bool assistantAppearanceIntent();
     void wearInventoryCategory(LLInventoryCategory* category, bool copy, bool append);
     void wearInventoryCategoryOnAvatar(LLInventoryCategory* category, bool append);
     void wearCategoryFinal(const LLUUID& cat_id, bool copy_items, bool append);
@@ -264,7 +265,9 @@ public:
 // [/SL:KB]
 
 private:
-    void serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter);
+    std::weak_ptr<fs_assistant::AsyncOperation> mAssistantAppearance;
+    fs_assistant::AsyncTaskPtr mAssistantBakeTask;
+    void serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,fs_assistant::AsyncTaskPtr task=nullptr);
 
 // [SL:KB] - Patch: Appearance-Misc
     void syncCofVersionAndRefreshCoro();

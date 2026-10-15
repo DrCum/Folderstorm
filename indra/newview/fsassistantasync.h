@@ -22,8 +22,10 @@ public:
         if(!mStopped.empty())return false;
         const auto reason=mAuthority?mAuthority():std::string("missing_authority");
         if(!reason.empty())cancel(reason);
+        if(mStopped.empty())for(const auto& check:mChecks){const auto failure=check();if(!failure.empty()){cancel(failure);break;}}
         return mStopped.empty();
     }
+    void checkWith(Authority check){if(mChecks.size()<8)mChecks.push_back(std::move(check));else cancel("validation_capacity");}
     void cancel(const std::string& reason){if(mStopped.empty())mStopped=reason.empty()?"cancelled":reason;}
     bool submit(){if(!allowed())return false;++mSubmitted;return true;}
     void acknowledge(const std::string& id)
@@ -44,7 +46,7 @@ public:
     unsigned int submitted() const{return mSubmitted;}
     const std::vector<std::string>& ids() const{return mIds;}
 private:
-    Authority mAuthority;std::string mStopped;std::vector<std::string> mIds;
+    Authority mAuthority;std::vector<Authority> mChecks;std::string mStopped;std::vector<std::string> mIds;
     unsigned int mPending=0,mSubmitted=0;bool mSealed=false;
 };
 using AsyncGuard=std::shared_ptr<AsyncOperation>;
@@ -79,6 +81,9 @@ public:
 private:AsyncGuard mGuard;std::set<std::string> mSeen;
 };
 using AsyncTaskPtr=std::shared_ptr<AsyncTask>;
+struct AsyncOrigin {std::weak_ptr<AsyncOperation> guard;AsyncTaskPtr pending;};
+inline bool asyncOriginAllowed(const AsyncOrigin& origin)
+{const auto guard=origin.guard.lock();return guard && guard->allowed();}
 inline AsyncTaskPtr asyncTask(){return std::make_shared<AsyncTask>();}
 template<typename Function> void asyncDeliver(const AsyncTaskPtr& task,const std::string& key,Function function)
 {

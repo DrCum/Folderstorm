@@ -36,5 +36,16 @@ int main()
  asyncDeliver(createReply,"new-item",callback);asyncDeliver(createReply,"new-item",callback);
  assert(cleanups==1 && permissionWrites==0 && creation->ids().front()=="new-item");
  assert(!AsyncScope::current());createReply.reset();assert(creation->pending()==0);
+ bool restricted=false;auto outfit=std::make_shared<AsyncOperation>([](){return std::string();});
+ outfit->checkWith([&](){return restricted?std::string("restriction_changed"):std::string();});
+ AsyncOrigin origin;AsyncTaskPtr libraryCopy;
+ {AsyncScope scope(outfit);libraryCopy=asyncTask();origin={outfit,asyncTask()};assert(asyncSubmit());}
+ restricted=true;int wears=0;
+ asyncDeliver(libraryCopy,"copied-outfit",[&](bool allowed){if(allowed && asyncSubmit())++wears;});
+ restricted=false;assert(wears==0 && !outfit->allowed() && !asyncOriginAllowed(origin));
+ libraryCopy.reset();origin.pending.reset();outfit.reset();assert(!asyncOriginAllowed(origin)); // Expired provenance must never become native/unscoped.
+ auto other=std::make_shared<AsyncOperation>([](){return std::string();});
+ {AsyncScope scope(other);assert(asyncSubmit());}assert(other->submitted()==1);
+ assert(!AsyncScope::current()); // No source scope crosses a coroutine yield.
  std::cout<<"Durable assistant async guard checks passed\n";
 }

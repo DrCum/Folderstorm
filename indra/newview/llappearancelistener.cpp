@@ -151,6 +151,7 @@ void LLAppearanceListener::wearOutfit(LLSD const &data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
+    fs_assistant::AsyncScope operationScope(fs_assistant_async_context(data));
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -166,11 +167,28 @@ void LLAppearanceListener::wearOutfit(LLSD const &data)
         return response.error("Outfit folder is locked");
     }
 
-    bool append = data.has("append") ? data["append"].asBoolean() : false;
-    if (!LLAppearanceMgr::instance().wearOutfit(data, append))
+    if(const auto guard=fs_assistant::AsyncScope::current())
     {
-        return response.error("Failed to wear outfit");
+        const auto folder=data["folder_id"].asUUID();
+        guard->checkWith([folder]() -> std::string
+        {
+            if(RlvActions::isRlvEnabled() && RlvFolderLocks::instance().isLockedFolder(folder,RLV_LOCK_ADD))return "restriction_changed";
+            LLInventoryModel::cat_array_t cats;LLInventoryModel::item_array_t items;
+            gInventory.collectDescendents(folder,cats,items,LLInventoryModel::EXCLUDE_TRASH);
+            for(const auto& item:items)if(item->getType()==LLAssetType::AT_CLOTHING || item->getType()==LLAssetType::AT_BODYPART || item->getType()==LLAssetType::AT_OBJECT)
+            {std::string error;if(!rlvAllows(item->getUUID(),false,error))return "restriction_changed";}
+            return {};
+        });
     }
+    bool append = data.has("append") ? data["append"].asBoolean() : false;
+    if(fs_assistant::AsyncScope::current())
+    {
+        auto* category=gInventory.getCategory(data["folder_id"].asUUID());
+        if(!category || !fs_assistant::asyncAllowed())return response.error("Outfit changed or is restricted");
+        const bool copy=gInventory.isObjectDescendentOf(category->getUUID(),gInventory.getLibraryRootFolderID());
+        LLAppearanceMgr::instance().wearInventoryCategory(category,copy,append);
+    }
+    else if (!LLAppearanceMgr::instance().wearOutfit(data, append))return response.error("Failed to wear outfit");
     response["ok"] = true;
     response["folder_id"] = data["folder_id"];
     response["append"] = append;
@@ -181,6 +199,7 @@ void LLAppearanceListener::wearItems(LLSD const &data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
+    fs_assistant::AsyncScope operationScope(fs_assistant_async_context(data));
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -207,6 +226,11 @@ void LLAppearanceListener::wearItems(LLSD const &data)
             return response.error(rlv_error);
         }
     }
+    if(const auto guard=fs_assistant::AsyncScope::current())
+    {
+        guard->checkWith([ids]() -> std::string {for(const auto& id:ids){std::string error;if(!rlvAllows(id,false,error))return "restriction_changed";}return {};});
+    }
+    if(!fs_assistant::asyncAllowed())return response.error("Appearance source or restriction changed");
     LLAppearanceMgr::instance().wearItemsOnAvatar(ids, true, data["replace"].asBoolean());
     response["ok"] = true;
     response["count"] = (S32)ids.size();
@@ -217,6 +241,7 @@ void LLAppearanceListener::detachItems(LLSD const &data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
+    fs_assistant::AsyncScope operationScope(fs_assistant_async_context(data));
     Response response(LLSD(), data);
     if (!requireConfirm(data, response))
     {
@@ -243,6 +268,11 @@ void LLAppearanceListener::detachItems(LLSD const &data)
             return response.error(rlv_error);
         }
     }
+    if(const auto guard=fs_assistant::AsyncScope::current())
+    {
+        guard->checkWith([ids]() -> std::string {for(const auto& id:ids){std::string error;if(!rlvAllows(id,true,error))return "restriction_changed";}return {};});
+    }
+    if(!fs_assistant::asyncAllowed())return response.error("Appearance source or restriction changed");
     LLAppearanceMgr::instance().removeItemsFromAvatar(ids);
     response["ok"] = true;
     response["count"] = (S32)ids.size();

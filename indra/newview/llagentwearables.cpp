@@ -1101,6 +1101,7 @@ void LLAgentWearables::removeWearableFinal(const LLWearableType::EType type, boo
 void LLAgentWearables::setWearableOutfit(const LLInventoryItem::item_array_t& items,
                                          const std::vector< LLViewerWearable* >& wearables)
 {
+    if(!fs_assistant::asyncSubmit())return;
     LL_INFOS() << "setWearableOutfit() start" << LL_ENDL;
 
     auto count = wearables.size();
@@ -1538,6 +1539,7 @@ std::vector<LLViewerObject*> LLAgentWearables::getTempAttachments()
 
 void LLAgentWearables::userRemoveMultipleAttachments(llvo_vec_t& objects_to_remove)
 {
+    if(!fs_assistant::asyncSubmit())return;
     if (!isAgentAvatarValid()) return;
 
 // [RLVa:KB] - Checked: 2010-03-04 (RLVa-1.2.0)
@@ -1595,6 +1597,7 @@ void LLAgentWearables::userRemoveMultipleAttachments(llvo_vec_t& objects_to_remo
 
 void LLAgentWearables::userAttachMultipleAttachments(LLInventoryModel::item_array_t& obj_item_array)
 {
+    if(!fs_assistant::asyncSubmit())return;
     // Build a compound message to send all the objects that need to be rezzed.
     auto obj_count = obj_item_array.size();
     if (obj_count > 0)
