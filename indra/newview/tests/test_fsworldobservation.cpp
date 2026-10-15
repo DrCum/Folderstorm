@@ -11,6 +11,8 @@ int main()
     check(!parcelCurrent(1,"region-a","region-b"));
     check(!parcelCurrent(0,"region-b","region-b"));
     check(!parcelCurrent(1,"",""));
+    check(!parcelCurrent(1,"region-b","region-b",true));
+    check(!parcelCurrent(1,"region-b","region-b",false,false));
     for (const auto* op : {"location", "parcel", "avatars", "objects", "audio", "media"})
     {
         check(operation(op));

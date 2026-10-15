@@ -129,10 +129,17 @@ void location(LLSD& result)
     result["orientation"] = llsd::array(quat.mQ[0], quat.mQ[1], quat.mQ[2], quat.mQ[3]);
     result["orientation_format"] = "quaternion_xyzw";
 }
+bool currentParcel(const LLParcel* parcel)
+{
+    auto& manager=LLViewerParcelMgr::instance();
+    return parcel && fs_world::parcelCurrent(parcel->getLocalID(),parcel->getRegionID().asString(),
+        gAgent.getRegion()->getRegionID().asString(),manager.getTeleportInProgress(),
+        manager.inAgentParcel(gAgent.getPositionGlobal()));
+}
 void parcel(LLSD& result)
 {
     const LLParcel* parcel = LLViewerParcelMgr::instance().getAgentParcel();
-    if (!parcel || !fs_world::parcelCurrent(parcel->getLocalID(), parcel->getRegionID().asString(), gAgent.getRegion()->getRegionID().asString()))
+    if (!currentParcel(parcel))
         return unavailable(result, "current_region_parcel_not_loaded");
     result["region_id"] = gAgent.getRegion()->getRegionID();
     result["parcel_local_id"] = parcel->getLocalID();
@@ -242,7 +249,7 @@ void media(LLSD& result, double radius, int limit)
     result["urls"] = "omitted";
     result["audibility"] = "unknown";
     const LLParcel* parcel = LLViewerParcelMgr::instance().getAgentParcel();
-    const bool parcelKnown = parcel && fs_world::parcelCurrent(parcel->getLocalID(), parcel->getRegionID().asString(), gAgent.getRegion()->getRegionID().asString());
+    const bool parcelKnown = currentParcel(parcel);
     result["parcel"]["status"] = parcelKnown ? "observed" : "unavailable";
     if (parcelKnown)
     {
