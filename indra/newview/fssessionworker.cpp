@@ -525,7 +525,7 @@ struct Worker : LLIMSessionObserver
             (FSPanelPreferenceLocalAssistant::sessionScoped()?AssistantSessionOnly:0u);
         response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
         response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);response.event=snapshot.approvalRevision;
-        response.text=snapshot.ready?bridge.sessionReference():std::string();response.detail=boundedText(snapshot.error,118);
+        response.text=bridge.controllerLoginReference();response.detail=boundedText(snapshot.error,118);
         response.title=snapshot.pendingApprovalSummary.empty()?"Local Assistant":"Local Assistant: "+snapshot.pendingApprovalSummary;
         response.sender="Read: "+FSEventAPIBridge::getPermissionLevel("read")+"; Edit: "+FSEventAPIBridge::getPermissionLevel("edit")+"; Wear: "+FSEventAPIBridge::getPermissionLevel("wear")+"; Create: "+FSEventAPIBridge::getPermissionLevel("create");
         return response;

@@ -57,6 +57,8 @@ public:
     std::string discoveryDirectory() const;
     std::string configurationDiscovery() const;
     const std::string& sessionReference() const {return mViewerSession;}
+    // Credential-free host binding; does not start or enable worker MCP.
+    std::string controllerLoginReference();
 
     struct StatusSnapshot
     {
@@ -96,6 +98,7 @@ private:
     int mPort = 0;
     std::string mLastError;
     std::string mSessionKey, mViewerSession;
+    std::string mControllerLoginKey, mControllerLoginReference;
     bool mHostedRegistry=false;
 };
 
