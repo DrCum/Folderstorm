@@ -57,6 +57,10 @@
 #include "llviewernetwork.h"
 #endif
 
+namespace {
+const std::string ASSISTANT_POSE_HTTP_POOL="FSAssistantSharedPoseHTTP";
+constexpr std::size_t ASSISTANT_POSE_HTTP_QUEUE=16,ASSISTANT_POSE_HTTP_LIMIT=8;
+}
 static const std::string FS_BRIDGE_FOLDER = "#LSL Bridge";
 static const std::string FS_BRIDGE_CONTAINER_FOLDER = "Landscaping";
 static const U32 FS_BRIDGE_MAJOR_VERSION = 2;
@@ -100,6 +104,10 @@ FSLSLBridge::FSLSLBridge():
                     mFinishCreation(false),
                     mTimerResult(FSLSLBridge::NO_TIMER)
 {
+    // This is an LLCoprocedureManager pool, not LL::ThreadPool's General.
+    // The manager owns the one bounded pool through shutdown and closes it in
+    // its destructor. Bridge recreation can safely reuse that existing pool.
+    LLCoprocedureManager::instance().initializePool(ASSISTANT_POSE_HTTP_POOL,ASSISTANT_POSE_HTTP_QUEUE);
     LL_INFOS("FSLSLBridge") << "Constructing FSLSLBridge" << LL_ENDL;
     mCurrentFullName = llformat("%s%d.%d", FS_BRIDGE_NAME.c_str(), FS_BRIDGE_MAJOR_VERSION, FS_BRIDGE_MINOR_VERSION);
 
@@ -108,6 +116,9 @@ FSLSLBridge::FSLSLBridge():
 
 FSLSLBridge::~FSLSLBridge()
 {
+    // Invalidate queued callbacks before this singleton's storage disappears.
+    // Do not close a manager-owned pool needed by a replacement bridge.
+    mAssistantPoseLifetime.setNull();
     gIdleCallbacks.deleteFunction(onIdle, this);
 }
 
@@ -605,21 +616,28 @@ bool FSLSLBridge::sharedPoseToLSLGuarded(const std::string& message,const fs_ass
 {
     if((message.rfind("SharedPoseSend|",0)!=0 && message.rfind("SharedPoseBroadcast|",0)!=0) ||
        message.size()>1024 || !task || !task->guard() || !fs_assistant::asyncTaskAllowed(task) ||
-       !nativeAuthority || !nativeAuthority(false) || !canUseBridge())return false;
+       !nativeAuthority || !nativeAuthority(false) || !canUseBridge() || mAssistantPoseLifetime.isNull() ||
+       !LLCoprocedureManager::instanceExists())return false;
+    auto& pool=LLCoprocedureManager::instance();
+    // The buffered channel fatals on overflow; bound active + pending before
+    // enqueue, leaving room below the dedicated channel's physical capacity.
+    if(pool.count(ASSISTANT_POSE_HTTP_POOL)>=ASSISTANT_POSE_HTTP_LIMIT)return false;
+    const auto lifetime=mAssistantPoseLifetime;
     const auto url=mCurrentURL,grid=LLGridManager::instance().getGrid();
     const auto account=gAgentID,login=gAgent.getSessionID(),bridge=getAttachedID();
     const auto region=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;
     const auto worker=FSSessionWorker::assistantIdentity();
     const auto regionGeneration=FSSharedPoseManager::instance().assistantRegionGeneration();if(!regionGeneration)return false;
     auto transport=std::make_shared<fs_assistant::AsyncTask>(task->guard());
-    const auto queued=LLCoprocedureManager::instance().enqueueCoprocedure("General","FSLSLBridge guarded shared pose",
-        [url,grid,account,login,bridge,region,regionGeneration,worker,message,transport,nativeAuthority,completion]
+    const auto queued=pool.enqueueCoprocedure(ASSISTANT_POSE_HTTP_POOL,"FSLSLBridge guarded shared pose",
+        [lifetime,url,grid,account,login,bridge,region,regionGeneration,worker,message,transport,nativeAuthority,completion]
         (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID&)
     {
         const auto bound=[&]()
         {
             return FSLSLBridge::instanceExists() && FSSharedPoseManager::instanceExists() &&
-                FSSharedPoseManager::instance().assistantRegionGeneration()==regionGeneration && gAgentID==account && gAgent.getSessionID()==login &&
+                FSSharedPoseManager::instance().assistantRegionGeneration()==regionGeneration &&
+                FSLSLBridge::instance().mAssistantPoseLifetime==lifetime && gAgentID==account && gAgent.getSessionID()==login &&
                 LLGridManager::instance().getGrid()==grid && FSSessionWorker::assistantIdentity()==worker &&
                 gAgent.getRegion() && gAgent.getRegion()->getRegionID()==region &&
                 FSLSLBridge::instance().getAttachedID()==bridge && FSLSLBridge::instance().mCurrentURL==url &&

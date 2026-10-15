@@ -110,6 +110,14 @@ class PoseNativeContract(unittest.TestCase):
         for required in ('transport->claim("post")', "!bound()", "!nativeAuthority(false)", "!nativeAuthority(true)", "asyncTaskSubmit(transport)", "options->setRetries(0)", "options->setFollowRedirects(false)"):
             self.assertLess(transport.index(required), post)
         self.assertNotIn("AsyncScope ", transport)
+        self.assertNotIn('enqueueCoprocedure("General"', transport)
+        self.assertIn("pool.enqueueCoprocedure(ASSISTANT_POSE_HTTP_POOL", transport)
+        self.assertLess(transport.index("pool.count(ASSISTANT_POSE_HTTP_POOL)>=ASSISTANT_POSE_HTTP_LIMIT"), transport.index("enqueueCoprocedure"))
+        self.assertIn("mAssistantPoseLifetime==lifetime", transport)
+        constructor = function("fslslbridge.cpp", "FSLSLBridge::FSLSLBridge()")
+        self.assertIn("initializePool(ASSISTANT_POSE_HTTP_POOL,ASSISTANT_POSE_HTTP_QUEUE)", constructor)
+        destructor = function("fslslbridge.cpp", "FSLSLBridge::~FSLSLBridge()")
+        self.assertIn("mAssistantPoseLifetime.setNull()", destructor)
         for binding in ("gAgent.getSessionID()==login", "getGrid()==grid", "assistantIdentity()==worker", "getRegionID()==region", "getAttachedID()==bridge", "mCurrentURL==url"):
             self.assertIn(binding, transport)
         queue = function("fssharedposemanager.cpp", "void FSSharedPoseManager::tick()")

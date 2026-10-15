@@ -125,6 +125,7 @@ private:
 
     bool                    mIsFirstCallDone; //initialization conversation
     bool                    mSharedPoseReady = false;
+    LLUUID                  mAssistantPoseLifetime=LLUUID::generateNewID();
 
     uuid_vec_t              mAllowedDetachables;
 
