@@ -77,6 +77,27 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         self.assertIn('operation.requiredClasses.push_back("notifications_read")', text)
         self.assertIn('operation.requiredClasses.push_back("chat_read")', text)
 
+    def test_nearby_rechecks_native_receive_policy_before_every_delivery(self):
+        text = source("fsassistantsocial.cpp")
+        policy = text[text.index("bool nearbyAllowed("):text.index("LLSD publicChatRow(")]
+        for behaviour in ("RECVCHAT", "RECVCHATFROM", "RECVEMOTE", "RECVEMOTEFROM"):
+            self.assertIn("gRlvHandler.hasBehaviour(RLV_BHVR_" + behaviour + ")", policy)
+            self.assertIn("gRlvHandler.isException(RLV_BHVR_" + behaviour + ",sender)", policy)
+        self.assertIn("nearbyReceiveAllowed(nearbyOrigin(row),policy)", policy)
+        enqueue = text[text.index("void FSAssistantSocial::nearbyMessage("):]
+        self.assertLess(enqueue.index("if(!nearbyAllowed(row))return"), enqueue.index('streams["chat"].append'))
+        for field in ("source_type", "type", "emote", "owned_attachment"):
+            self.assertIn('row["__nearby"]["' + field + '"]', enqueue)
+        self.assertIn("message.mChatStyle==CHAT_STYLE_IRC || RlvUtil::isEmote(message.mText)", enqueue)
+        delivery = text[text.index("bool rowAllowed("):text.index("LLSD conversation(")]
+        self.assertIn('if(row["topic"].asString()=="nearby")return nearbyAllowed(row)', delivery)
+        self.assertLess(delivery.index("nearbyAllowed(row)"), delivery.index("canReceiveIM"))
+        self.assertIn('name=="chat" && !rowAllowed(entry.value)', text)
+        self.assertIn('if(!rowAllowed(entry.value)', text)
+        self.assertIn('result.erase("__nearby")', text)
+        self.assertIn('event["data"]=name=="chat"?publicChatRow(entry.value):entry.value', text)
+        self.assertIn('auto row=publicChatRow(entry.value)', text)
+
 
 if __name__ == "__main__":
     unittest.main()

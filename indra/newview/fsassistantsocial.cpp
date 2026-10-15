@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsassistantsocial.h"
 #include "fsassistantsocialmodel.h"
+#include "fsassistantnearbychatpolicy.h"
 #include "fsassistantfeature.h"
 #include "fseventapibridge.h"
 #include "lleventapi.h"
@@ -23,6 +24,8 @@
 #include "lluri.h"
 #include "llviewerregion.h"
 #include "llviewernetwork.h"
+#include "llviewerobject.h"
+#include "llviewerobjectlist.h"
 #include "llnotifications.h"
 #include "llfloaterreg.h"
 #include "llfocusmgr.h"
@@ -50,6 +53,34 @@ std::string bounded(const std::string& value,std::size_t bytes)
 {return utf8str_truncate(value,static_cast<S32>(bytes));}
 std::size_t encodedBytes(const LLSD& value){return boost::json::serialize(LlsdToJson(value)).size();}
 bool visible(){return !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES) && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC);}
+bool ownedAttachment(const LLUUID& sender)
+{const auto* object=gObjectList.findObject(sender);return object && object->isAttachment() && object->permYouOwner();}
+fs_assistant_social::NearbyOrigin nearbyOrigin(const LLSD& row)
+{
+    using namespace fs_assistant_social;NearbyOrigin origin;
+    const auto& metadata=row["__nearby"];
+    switch(metadata["source_type"].asInteger())
+    {case CHAT_SOURCE_AGENT:origin.source=NearbySource::Agent;break;case CHAT_SOURCE_OBJECT:origin.source=NearbySource::Object;break;case CHAT_SOURCE_SYSTEM:origin.source=NearbySource::System;break;default:break;}
+    const auto type=metadata["type"].asInteger();
+    origin.type=(type==CHAT_TYPE_START || type==CHAT_TYPE_STOP || type==CHAT_TYPE_IM || type==CHAT_TYPE_IM_GROUP || type==CHAT_TYPE_RADAR)?NearbyType::NonText:type==CHAT_TYPE_OWNER?NearbyType::Owner:type==CHAT_TYPE_DIRECT?NearbyType::Direct:NearbyType::Text;
+    origin.self=row["sender_id"].asUUID()==gAgentID;
+    origin.emote=metadata["emote"].asBoolean();
+    origin.ownedAttachment=metadata["owned_attachment"].asBoolean() && ownedAttachment(row["sender_id"].asUUID());
+    return origin;
+}
+bool nearbyAllowed(const LLSD& row)
+{
+    if(!row["__nearby"].isMap())return false;
+    fs_assistant_social::NearbyReceivePolicy policy;const auto sender=row["sender_id"].asUUID();
+    policy.enabled=rlv_handler_t::isEnabled();
+    policy.recvChat=gRlvHandler.hasBehaviour(RLV_BHVR_RECVCHAT);policy.recvChatException=gRlvHandler.isException(RLV_BHVR_RECVCHAT,sender);
+    policy.recvChatFrom=gRlvHandler.hasBehaviour(RLV_BHVR_RECVCHATFROM);policy.recvChatFromMatch=gRlvHandler.isException(RLV_BHVR_RECVCHATFROM,sender);
+    policy.recvEmote=gRlvHandler.hasBehaviour(RLV_BHVR_RECVEMOTE);policy.recvEmoteException=gRlvHandler.isException(RLV_BHVR_RECVEMOTE,sender);
+    policy.recvEmoteFrom=gRlvHandler.hasBehaviour(RLV_BHVR_RECVEMOTEFROM);policy.recvEmoteFromMatch=gRlvHandler.isException(RLV_BHVR_RECVEMOTEFROM,sender);
+    return fs_assistant_social::nearbyReceiveAllowed(nearbyOrigin(row),policy);
+}
+LLSD publicChatRow(const LLSD& retained)
+{auto result=retained;result.erase("__nearby");return result;}
 bool ready(){return !gDisconnected && gAgentID.notNull() && gAgent.getRegion() && LLStartUp::getStartupState()==STATE_STARTED;}
 bool residentAllowed(const LLUUID& id)
 {return id.notNull() && RlvActions::canReceiveIM(id) && RlvActions::canSendIM(id) && RlvActions::canStartIM(id) && FSData::instance().canSendToIMContact(IM_NOTHING_SPECIAL,gAgentID,id);}
@@ -247,7 +278,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
                 if(name=="notifications" && entry.value["kind"].asString()!="notification_removed")
                 {const auto sender=entry.value["sender_id"].asUUID();if(!notices.count(entry.value["notification_id"].asUUID()) || (sender.notNull() && !RlvActions::canReceiveIM(sender))){position=entry.id;continue;}}
                 if(result["events"].size()>=limit(request) || bytes+entry.bytes>60*1024){full=true;break;}
-                LLSD event;event["topic"]=name;event["event_id"]=name+":"+std::to_string(entry.id);event["data"]=entry.value;result["events"].append(event);position=entry.id;bytes+=entry.bytes;
+                LLSD event;event["topic"]=name;event["event_id"]=name+":"+std::to_string(entry.id);event["data"]=name=="chat"?publicChatRow(entry.value):entry.value;result["events"].append(event);position=entry.id;bytes+=entry.bytes;
             }
             if(full)break;
         }
@@ -258,8 +289,8 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     bool rowAllowed(const LLSD& row)const
     {
         if(!current() || !visible())return false;
+        if(row["topic"].asString()=="nearby")return nearbyAllowed(row);
         const LLUUID sender=row["sender_id"].asUUID();if(sender.notNull() && sender!=gAgentID && !RlvActions::canReceiveIM(sender))return false;
-        if(row["topic"].asString()=="nearby")return true;
         const auto* session=LLIMModel::instance().findIMSession(row["conversation_id"].asUUID());return session && conversationAllowed(*session);
     }
     LLSD conversation(const LLIMModel::LLIMSession& session)const
@@ -391,7 +422,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         {
             if(!rowAllowed(entry.value) || (!conversationID.empty() && entry.value["conversation_id"].asString()!=conversationID))continue;
             auto text=entry.value["text"].asString();LLStringUtil::toLower(text);if(op=="search" && text.find(query)==std::string::npos)continue;
-            auto row=entry.value;row["message_id"]=std::to_string(entry.id);rows.push_back(row);
+            auto row=publicChatRow(entry.value);row["message_id"]=std::to_string(entry.id);rows.push_back(row);
         }
         auto result=page(rows,request);result["source"]=publicSource();result["history_source"]="live_callback_since_service_start";result["truncated"]=true;result["gap_before_window"]=true;result["reconcile"]="only live callback messages retained; older native/disk transcripts are outside this surface";result["disk_history_included"]=false;if(!rows.empty()){result["retained_first_message_id"]=rows.front()["message_id"];result["retained_latest_message_id"]=rows.back()["message_id"];}return result;
     }
@@ -552,7 +583,13 @@ void FSAssistantSocial::tick(){mState->sync();if(mState->noticesDirty && now()-m
 void FSAssistantSocial::privacyChanged(){mState->flush();}
 void FSAssistantSocial::nearbyMessage(const LLChat& message)
 {
-    mState->sync();if(mState->restricted || message.mChatStyle!=CHAT_STYLE_NORMAL || message.mMuted)return;
-    if(message.mFromID.notNull() && message.mFromID!=gAgentID && !RlvActions::canReceiveIM(message.mFromID))return;
-    LLSD row;row["kind"]="message";row["topic"]="nearby";row["conversation_id"]="nearby";row["sender_id"]=message.mFromID;row["sender_name"]=bounded(message.mFromName,255);row["text"]=bounded(message.mText,4095);mState->streams["chat"].append(row,encodedBytes(row)+128);
+    mState->sync();if(mState->restricted || (message.mChatStyle!=CHAT_STYLE_NORMAL && message.mChatStyle!=CHAT_STYLE_IRC) || message.mMuted)return;
+    LLSD row;row["kind"]="message";row["topic"]="nearby";row["conversation_id"]="nearby";row["sender_id"]=message.mFromID;row["sender_name"]=bounded(message.mFromName,255);row["text"]=bounded(message.mText,4095);
+    // Preserve native source/type and pretranslation emote classification for
+    // later policy checks. Never reconstruct an original from native redaction.
+    row["__nearby"]["source_type"]=static_cast<S32>(message.mSourceType);row["__nearby"]["type"]=static_cast<S32>(message.mChatType);
+    row["__nearby"]["emote"]=message.mChatStyle==CHAT_STYLE_IRC || RlvUtil::isEmote(message.mText);
+    row["__nearby"]["owned_attachment"]=ownedAttachment(message.mFromID);
+    if(!nearbyAllowed(row))return;
+    mState->streams["chat"].append(row,encodedBytes(row)+128);
 }
