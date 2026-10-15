@@ -11,6 +11,8 @@ public:
     virtual ~FSAssistantFeature() = default;
     virtual const char* assistantCapability() const = 0;
     virtual LLSD assistantLimits() const = 0;
+    virtual LLSD assistantCapabilities() const
+    { LLSD result=LLSD::emptyMap(); result[assistantCapability()]=1; return result; }
     // Freeze targets/material inputs before native Ask; additional required
     // permission classes may be appended. Never perform a mutation here.
     virtual bool prepareAssistant(FSAssistantPreparedOperation& operation, std::string& error) const = 0;

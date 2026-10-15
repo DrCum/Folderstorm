@@ -2,6 +2,7 @@
 #ifndef FS_ASSISTANT_SESSION_H
 #define FS_ASSISTANT_SESSION_H
 #include <string>
+#include "fsassistantfeatures.h"
 #include <vector>
 #include <algorithm>
 namespace fs_assistant
@@ -25,6 +26,7 @@ inline bool sessionMatches(bool managed,const std::string& current,const std::st
 }
 inline bool needsActiveCharacter(const std::string& api,const std::string& op)
 {
+    if(const auto* feature=featureOperation(api,op))return feature->active;
     return (api=="LLCamera" && op!="get") || (api=="LLInventory" && op=="snapshotUpload") ||
         (api=="LLWorkspace" && (op=="apply" || op=="previous"));
 }

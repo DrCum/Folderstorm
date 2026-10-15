@@ -47,6 +47,7 @@ const (
 // Present is false when the status payload has no permissions object,
 // which is an older viewer.
 type StatusPolicy struct {
+	Capabilities        map[string]int
 	Present             bool
 	Generation          int
 	Levels              map[string]string
@@ -127,10 +128,16 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 	if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
 		return StatusPolicy{}, false
 	}
+	featureVersions := map[string]int{}
 	socialChat, socialContacts, socialEvents, world := 0, 0, 0, 0
 	bulkVersion := 0
 	workspaceVersion := 0
 	if capabilities, ok := payload["capabilities"].(map[string]any); ok {
+		for _, key := range []string{"social_chat", "social_contacts", "social_events", "world_observation", "gesture_tools", "pose_tools", "shared_pose_tools", "content_editing", "preferences_tools"} {
+			if version, ok := capabilities[key].(float64); ok && version == 1 {
+				featureVersions[key] = 1
+			}
+		}
 		if v, ok := capabilities["social_chat"].(float64); ok && v == 1 {
 			socialChat = 1
 		}
@@ -152,11 +159,11 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 	}
 	perms, ok := payload["permissions"]
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion, SocialChat: socialChat, SocialContacts: socialContacts, SocialEvents: socialEvents, WorldObservation: world}, true
+		return StatusPolicy{Capabilities: featureVersions, Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion, SocialChat: socialChat, SocialContacts: socialContacts, SocialEvents: socialEvents, WorldObservation: world}, true
 	}
 	obj, ok := perms.(map[string]any)
 	if !ok {
-		return StatusPolicy{Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion, SocialChat: socialChat, SocialContacts: socialContacts, SocialEvents: socialEvents, WorldObservation: world}, true
+		return StatusPolicy{Capabilities: featureVersions, Levels: map[string]string{}, BulkInventoryReview: bulkVersion, WorkspaceTools: workspaceVersion, SocialChat: socialChat, SocialContacts: socialContacts, SocialEvents: socialEvents, WorldObservation: world}, true
 	}
 	levels := map[string]string{}
 	for _, def := range classDefaults {
@@ -167,6 +174,7 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 		}
 	}
 	return StatusPolicy{
+		Capabilities:        featureVersions,
 		Present:             true,
 		Generation:          generationFrom(payload["policy_generation"]),
 		Levels:              levels,
