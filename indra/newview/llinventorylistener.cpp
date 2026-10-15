@@ -1815,8 +1815,12 @@ void finish_asset_read(AssetRead* raw, S32 status)
         complete_text=notecard.getText();
         std::string prefix,suffix;
         const auto end=stream.tellg();
-        if(end<0 || !fs_content::notecardLayout(raw_content,complete_text,static_cast<std::size_t>(end),prefix,suffix))
-        {sendReply(llsd::map("error","Notecard is malformed or has an unsupported legacy format"),request->request);return;}
+        if(end<0 || !fs_content::notecardLayout(raw_content,complete_text,static_cast<std::size_t>(end),prefix,suffix,notecard.getVersion()))
+        {sendReply(llsd::map("error","Notecard is malformed or incomplete"),request->request);return;}
+        std::string display_text;
+        if(!fs_content::notecardReadText(complete_text,notecard.getVersion(),notecard.getItems().size(),display_text))
+        {sendReply(llsd::map("error","Notecard text or embedded inventory references are malformed"),request->request);return;}
+        complete_text=std::move(display_text);
         text = capped_text(complete_text.data(), static_cast<S32>(complete_text.size()), truncated);
     }
     else

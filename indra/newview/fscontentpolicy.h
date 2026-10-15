@@ -31,9 +31,9 @@ inline bool utf8(const std::string& text,std::vector<std::uint32_t>* embedded=nu
 // extent, declared length and closing structure (which the native parser omits).
 // Keep the original inventory prefix byte-for-byte, including ext-char indices.
 inline bool notecardLayout(const std::string& raw,const std::string& text,std::size_t textEnd,
-                           std::string& prefix,std::string& suffix)
+                           std::string& prefix,std::string& suffix,int version=2)
 {
-    if(raw.find('\0')!=std::string::npos || !utf8(text) || textEnd<text.size() || textEnd>raw.size())return false;
+    if((version!=1 && version!=2) || raw.find('\0')!=std::string::npos || (version==2 && !utf8(text)) || textEnd<text.size() || textEnd>raw.size())return false;
     const auto start=textEnd-text.size();
     if(raw.compare(start,text.size(),text)!=0 || start==0)return false;
     const auto field=raw.rfind("\nText length ",start-1);
@@ -42,8 +42,35 @@ inline bool notecardLayout(const std::string& raw,const std::string& text,std::s
     if(raw.substr(field+1,start-field-1)!="Text length "+length+"\n")return false;
     suffix=raw.substr(textEnd);
     if(suffix!="}\n" && suffix!="}")return false;
-    if(raw.rfind("Linden text version 2\n{\n",0)!=0)return false;
+    if(raw.rfind("Linden text version "+std::to_string(version)+"\n{\n",0)!=0)return false;
     prefix=raw.substr(0,field+1);return true;
+}
+// Version 1 uses ASCII plus one-byte embedded-item indices, as native
+// LLViewerTextEditor::setASCIIEmbeddedText does. Publish stable UTF-8 markers;
+// keep the original serialized bytes for hashing. Editing legacy assets remains
+// a separately unsupported format conversion.
+inline bool notecardReadText(const std::string& source,int version,std::size_t itemCount,std::string& text)
+{
+    text.clear();
+    if(version==2)
+    {
+        std::vector<std::uint32_t> markers;
+        if(itemCount>65536 || !utf8(source,&markers))return false;
+        for(const auto marker:markers)if(marker-0x100000>=itemCount)return false;
+        text=source;return true;
+    }
+    if(version!=1 || itemCount>65536)return false;
+    for(unsigned char byte:source)
+    {
+        if(!byte)return false;
+        if(byte<0x80){text+=static_cast<char>(byte);continue;}
+        const std::uint32_t index=byte-0x80;
+        if(index>=itemCount)return false;
+        const std::uint32_t cp=0x100000+index;
+        text+=static_cast<char>(0xf0|(cp>>18));text+=static_cast<char>(0x80|((cp>>12)&63));
+        text+=static_cast<char>(0x80|((cp>>6)&63));text+=static_cast<char>(0x80|(cp&63));
+    }
+    return true;
 }
 inline bool preserveEmbedded(const std::string& before,const std::string& after)
 {
