@@ -168,17 +168,20 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         result["submitted_sounds_cannot_be_recalled"]=play.sounds>0;result["submitted_chat_cannot_be_recalled"]=play.chats>0;
         result["sound_delivery"]="submitted_only_not_audibility";result["delivery"]="not_confirmed";
         result["authority_duration"]="bridge_request_deadline_may_cancel_before_120_seconds";
-        if(!play.failure.empty())result["reason"]=play.failure;return result;
+        if(!play.failure.empty())result["reason"]=play.failure;
+        return result;
     }
     void remember(const std::string& client,LLSD result)
     {
-        if(!receipts.count(client))receiptOrder.push_back(client);receipts[client]=std::move(result);
+        if(!receipts.count(client))receiptOrder.push_back(client);
+        receipts[client]=std::move(result);
     }
     bool owned(Playback& play,const LLUUID& id,std::uint64_t lease)
     {return cleanupAllowed(ready() && play.identity==source(),leases.owns(id.asString(),lease),foreign(id));}
     void finish(const std::string& reason)
     {
-        if(!playing)return;auto& play=*playing;play.failure=reason;
+        if(!playing)return;
+        auto& play=*playing;play.failure=reason;
         // Cleanup is authority-independent but remains pinned to the original
         // login/region and exact unsuperseded animation contribution.
         for(const auto& entry:play.animations)
@@ -229,7 +232,10 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
             else {play.animations.erase(id);leases.release(id.asString());}
         }
         else if(step.effect==Effect::Sound)
-        {if(!fs_assistant::asyncTaskSubmit(play.task))return false;send_sound_trigger(id,1.f);++play.sounds;}
+        {
+            if(!fs_assistant::asyncTaskSubmit(play.task))return false;
+            send_sound_trigger(id,1.f);++play.sounds;
+        }
         else if(step.effect==Effect::Chat)
         {
             if(!fs_assistant::asyncTaskSubmit(play.task))return false;
@@ -251,7 +257,8 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
             if(now()>=load->until || !fs_assistant::asyncTaskAllowed(load->task))
             {load->response->error("asset_load_expired_or_authority_revoked");it=loads().erase(it);}else ++it;
         }
-        if(!playing)return;auto& play=*playing;fs_assistant::AsyncScope scope(play.task->guard());
+        if(!playing)return;
+        auto& play=*playing;fs_assistant::AsyncScope scope(play.task->guard());
         play.timeline.tick(now(),[&](){std::string error;return fs_assistant::asyncTaskAllowed(play.task) &&
             play.identity==source() && nativeAllowed(play.frozen.plan,error) && leasesIntact(play);},
             [&](){return pendingAnimations(play);},[&](const Step& step){return apply(play,step);});
@@ -277,7 +284,8 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         Cached entry;std::string error;
         if(!decode(bytes,entry.plan,error)){load->response->error("gesture_asset_unsupported: "+error);return;}
         entry.evidence=load->itemEvidence;entry.hash=fs_content::hash(bytes);entry.until=now()+120;
-        if(self->cache.size()>=32)self->cache.erase(self->cache.begin());self->cache[load->item]=std::move(entry);
+        if(self->cache.size()>=32)self->cache.erase(self->cache.begin());
+        self->cache[load->item]=std::move(entry);
         load->response->setResponse(self->row(load->item));
     }
 };
