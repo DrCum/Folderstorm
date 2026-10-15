@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsassistantasync.h"
 
 #include "llagent.h"
 #include "llagentcamera.h"
@@ -531,10 +532,12 @@ void LLViewerWearable::addToBakedTextureHash(LLMD5& hash) const
 struct LLWearableSaveData
 {
     LLWearableType::EType mType;
+    fs_assistant::AsyncTaskPtr mAssistantTask=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
 };
 
 void LLViewerWearable::saveNewAsset() const
 {
+    if(!fs_assistant::asyncAllowed())return;
 //  LL_INFOS() << "LLViewerWearable::saveNewAsset() type: " << getTypeName() << LL_ENDL;
     //LL_INFOS() << *this << LL_ENDL;
 
@@ -546,7 +549,8 @@ void LLViewerWearable::saveNewAsset() const
 
         LLSD args;
         args["NAME"] = mName;
-        LLNotificationsUtil::add("CannotSaveWearableOutOfSpace", args);
+        if(const auto guard=fs_assistant::AsyncScope::current())guard->cancel("asset_export_failed");
+        else LLNotificationsUtil::add("CannotSaveWearableOutOfSpace", args);
         return;
     }
 
@@ -578,6 +582,7 @@ void LLViewerWearable::saveNewAsset() const
          */
          LLWearableSaveData* data = new LLWearableSaveData;
          data->mType = mType;
+         if(!fs_assistant::asyncSubmit()){delete data;return;}
          gAssetStorage->storeAssetData(filename, mTransactionID, getAssetType(),
                                      &LLViewerWearable::onSaveNewAssetComplete,
                                      (void*)data);
@@ -588,6 +593,7 @@ void LLViewerWearable::saveNewAsset() const
 void LLViewerWearable::onSaveNewAssetComplete(const LLUUID& new_asset_id, void* userdata, S32 status, LLExtStat ext_status) // StoreAssetData callback (fixed)
 {
     LLWearableSaveData* data = (LLWearableSaveData*)userdata;
+    fs_assistant::AsyncScope operationScope(data->mAssistantTask?data->mAssistantTask->guard():fs_assistant::AsyncGuard());
     const std::string& type_name = LLWearableType::getInstance()->getTypeName(data->mType);
     if(0 == status)
     {
@@ -596,11 +602,12 @@ void LLViewerWearable::onSaveNewAssetComplete(const LLUUID& new_asset_id, void* 
     }
     else
     {
+        if(const auto guard=fs_assistant::AsyncScope::current())guard->cancel("asset_upload_failed");
         std::string buffer = llformat("Unable to save %s to central asset store.", type_name.c_str());
         LL_WARNS() << buffer << " Status: " << status << LL_ENDL;
         LLSD args;
         args["NAME"] = type_name;
-        LLNotificationsUtil::add("CannotSaveToAssetStore", args);
+        if(fs_assistant::asyncAllowed() && !fs_assistant::AsyncScope::current())LLNotificationsUtil::add("CannotSaveToAssetStore", args);
     }
 
     // Delete temp file

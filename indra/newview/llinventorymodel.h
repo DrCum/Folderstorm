@@ -557,7 +557,8 @@ protected:
     void addCategory(LLViewerInventoryCategory* category);
     void addItem(LLViewerInventoryItem* item);
 
-    void createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback);
+    void createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback,
+        fs_assistant::AsyncTaskPtr task, LLUUID loginSession);
 
 /**                    Mutators
  **                                                                            **

@@ -10,6 +10,11 @@
 
 namespace fs_assistant
 {
+inline bool requiresAsyncAuthority(const std::string& api, const std::string& op, bool readOnly)
+{
+    return (api == "LLAppearance" && !readOnly) ||
+        (api == "LLInventory" && (op == "createItem" || op == "createFolder"));
+}
 // Viewer-main-thread state. Authority is supplied by the owning bridge, never
 // deserialized from a tool request. A failed check permanently stops this work.
 class AsyncOperation
@@ -22,13 +27,15 @@ public:
         if(!mStopped.empty())return false;
         const auto reason=mAuthority?mAuthority():std::string("missing_authority");
         if(!reason.empty())cancel(reason);
+        if(mStopped.empty())for(const auto& check:mChecks){const auto failure=check();if(!failure.empty()){cancel(failure);break;}}
         return mStopped.empty();
     }
+    void checkWith(Authority check){if(mChecks.size()<8)mChecks.push_back(std::move(check));else cancel("validation_capacity");}
     void cancel(const std::string& reason){if(mStopped.empty())mStopped=reason.empty()?"cancelled":reason;}
     bool submit(){if(!allowed())return false;++mSubmitted;return true;}
     void acknowledge(const std::string& id)
     {if(!id.empty() && mIds.size()<128 && std::find(mIds.begin(),mIds.end(),id)==mIds.end())mIds.push_back(id);}
-    void begin(){++mPending;}
+    void begin(){if(++mPending>512)cancel("callback_capacity");}
     void end(){if(mPending)--mPending;}
     void seal(){mSealed=true;}
     std::string state()
@@ -44,7 +51,7 @@ public:
     unsigned int submitted() const{return mSubmitted;}
     const std::vector<std::string>& ids() const{return mIds;}
 private:
-    Authority mAuthority;std::string mStopped;std::vector<std::string> mIds;
+    Authority mAuthority;std::vector<Authority> mChecks;std::string mStopped;std::vector<std::string> mIds;
     unsigned int mPending=0,mSubmitted=0;bool mSealed=false;
 };
 using AsyncGuard=std::shared_ptr<AsyncOperation>;
@@ -73,11 +80,28 @@ public:
     ~AsyncTask(){if(mGuard)mGuard->end();}
     const AsyncGuard& guard() const{return mGuard;}
     bool claim(const std::string& key)
-    {return !mGuard || (mSeen.size()<128 && mSeen.insert(key).second);}
+    {if(!mGuard)return true;
+        if(mSeen.size()>=128){mGuard->cancel("callback_capacity");return false;}
+        return mSeen.insert(key).second;}
 private:AsyncGuard mGuard;std::set<std::string> mSeen;
 };
 using AsyncTaskPtr=std::shared_ptr<AsyncTask>;
+// Coroutine/network boundaries use captured authority without installing TLS.
+inline bool asyncTaskAllowed(const AsyncTaskPtr& task)
+{return !task || !task->guard() || task->guard()->allowed();}
+inline bool asyncTaskSubmit(const AsyncTaskPtr& task)
+{return !task || !task->guard() || task->guard()->submit();}
+struct AsyncOrigin {std::weak_ptr<AsyncOperation> guard;AsyncTaskPtr pending;};
+inline bool asyncOriginAllowed(const AsyncOrigin& origin)
+{const auto guard=origin.guard.lock();return guard && guard->allowed();}
 inline AsyncTaskPtr asyncTask(){return std::make_shared<AsyncTask>();}
+template<typename Function> void asyncDeliver(const AsyncTaskPtr& task,const std::string& key,Function function)
+{
+    AsyncScope scope(task?task->guard():AsyncGuard());
+    if(task && !task->claim(key))return;
+    if(task && task->guard())task->guard()->acknowledge(key);
+    function(asyncAllowed()); // Failure still reaches cleanup under stopped scope.
+}
 template<typename Function> auto asyncDeferred(Function function)
 {
     auto task=asyncTask();

@@ -33,8 +33,7 @@ inline bool managedOperationSupported(const std::string& api,const std::string& 
     // These native helpers schedule further copy/wear/default-permission/UI
     // callbacks without an execution context. Do not dispatch them in a
     // managed viewer until the whole native chain can honor revocation.
-    return !(api=="LLAppearance" && (op=="wearOutfit" || op=="wearItems" || op=="detachItems")) &&
-        !(api=="LLInventory" && op=="createItem");
+    return !(api=="LLAppearance" && (op=="wearOutfit" || op=="wearItems" || op=="detachItems"));
 }
 }
 #endif

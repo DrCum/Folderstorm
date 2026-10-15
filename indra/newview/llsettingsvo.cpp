@@ -172,6 +172,7 @@ void LLSettingsVOBase::createInventoryItem(const LLSettingsBase::ptr_t &settings
 
 void LLSettingsVOBase::onInventoryItemCreated(const LLUUID &inventoryId, LLSettingsBase::ptr_t settings, inventory_result_fn callback)
 {
+    if(!fs_assistant::asyncAllowed() || inventoryId.isNull()){if(callback)callback(LLUUID::null,LLUUID::null,LLUUID::null,LLSD());return;}
     LLViewerInventoryItem *pitem = gInventory.getItem(inventoryId);
     if (pitem)
     {
