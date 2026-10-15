@@ -25,6 +25,7 @@
 #include "fssharedposemodel.h"
 #include "fsassistantfeature.h"
 #include "fsposepolicy.h"
+#include "fssharedposepolicy.h"
 #include <deque>
 #include <boost/signals2/connection.hpp>
 #include <functional>
@@ -58,6 +59,7 @@ public:
     bool validateAssistantPose(const FSAssistantPreparedOperation& operation,std::string& error) const;
     LLSD executeAssistantPose(const LLSD& request,const fs_assistant::AsyncTaskPtr& task,std::string& error);
     LLSD assistantSnapshot(const LLUUID& target) const;
+    std::uint64_t assistantRegionGeneration() const{return mAssistantRegionGeneration.value();}
 private:
     struct Remote
     {
@@ -116,7 +118,8 @@ private:
     void accept(const LLUUID& editor, const LLUUID& request);
     LLSD workMessage(const Work& work, const std::string& type) const;
     bool nearby(const LLUUID& avatar) const;
-    boost::signals2::scoped_connection mSharingConnection;
+    boost::signals2::scoped_connection mSharingConnection,mAssistantRegionConnection;
+    fs_pose::RegionGeneration mAssistantRegionGeneration;
     FSPoserAnimator mAnimator;
     FSSharedPose::OwnerSession mOwner;
     FSSharedPose::Assembler mAssembler;

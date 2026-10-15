@@ -104,6 +104,12 @@ struct Applying
 FSSharedPoseManager::FSSharedPoseManager()
 {
  gIdleCallbacks.addFunction(onIdle,this);
+ mAssistantRegionConnection=gAgent.addRegionChangedCallback([this]()
+ {
+  mAssistantRegionGeneration.advance();
+  for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_region_changed");
+  endAssistantPublishing("Native region changed");
+ });
  if(LLControlVariable* control=gSavedSettings.getControl("FSSharedPosingEnabled"))
   mSharingConnection=control->getSignal()->connect([this](LLControlVariable*,const LLSD& value,const LLSD&)
   {
@@ -114,7 +120,8 @@ FSSharedPoseManager::FSSharedPoseManager()
    endAssistantPublishing("Native shared posing was disabled");
   });
 }
-FSSharedPoseManager::~FSSharedPoseManager() { gIdleCallbacks.deleteFunction(onIdle, this); }
+FSSharedPoseManager::~FSSharedPoseManager()
+{mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
 void FSSharedPoseManager::onIdle(void* data) { static_cast<FSSharedPoseManager*>(data)->tick(); }
 
 bool FSSharedPoseManager::available() const
@@ -851,11 +858,11 @@ namespace {
 LLSD assistantBinding()
 {
  return llsd::map("account",gAgentID,"login",gAgent.getSessionID(),"grid",LLGridManager::instance().getGrid(),
-  "region",gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null,"bridge",FSLSLBridge::instance().getAttachedID(),
+  "region",gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null,"region_generation",std::to_string(FSSharedPoseManager::instance().assistantRegionGeneration()),"bridge",FSLSLBridge::instance().getAttachedID(),
   "worker",FSSessionWorker::assistantIdentity());
 }
 bool assistantReadable()
-{return !gDisconnected && !LLApp::isExiting() && LLStartUp::getStartupState()==STATE_STARTED && gAgentID.notNull() && gAgent.getRegion();}
+{return !gDisconnected && !LLApp::isExiting() && LLStartUp::getStartupState()==STATE_STARTED && gAgentID.notNull() && gAgent.getRegion() && FSSharedPoseManager::instance().assistantRegionGeneration()!=0;}
 bool assistantActive()
 {return assistantReadable() && gAgent.getTeleportState()==LLAgent::TELEPORT_NONE && FSSessionWorker::assistantActiveAllowed() && !FSSessionWorker::assistantPaused();}
 LLSD revisionData(const std::map<std::string,U32>& revisions)

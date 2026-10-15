@@ -3,7 +3,19 @@
 #define FS_SHARED_POSE_POLICY_H
 #include "fsposepolicy.h"
 #include "fssharedposemodel.h"
+#include <cstdint>
 namespace fs_pose {
+// IDs may return to their previous values before an idle/HTTP callback runs.
+// This synchronous region epoch never returns to a captured value. Exhaustion
+// leaves zero permanently invalid instead of permitting wraparound reuse.
+class RegionGeneration
+{
+ std::uint64_t mValue=1;
+public:
+ std::uint64_t value() const{return mValue;}
+ void advance(){if(mValue)++mValue;}
+ bool matches(std::uint64_t expected) const{return expected && expected==mValue;}
+};
 inline FSSharedPose::Joint rotationJoint(const FSSharedPose::Joint& fresh,const Rotation& rotation)
 {auto result=fresh;for(unsigned i=0;i<4;++i)result.transform[i]=static_cast<float>(rotation[i]);return result;}
 inline bool sameSharedJoint(const FSSharedPose::Joint& a,const FSSharedPose::Joint& b)

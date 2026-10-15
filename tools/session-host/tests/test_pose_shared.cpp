@@ -59,6 +59,14 @@ int main()
  cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
  using namespace fs_assistant;bool active=true,nativeGrant=true;auto guard=std::make_shared<AsyncOperation>([&](){return active && nativeGrant?std::string():std::string("authority_changed");});
  auto task=std::make_shared<AsyncTask>(guard);assert(asyncTaskAllowed(task));nativeGrant=false;assert(!asyncTaskAllowed(task));nativeGrant=true;assert(!asyncTaskAllowed(task));
+ // A -> B -> A with identical current region/URL IDs still invalidates a
+ // captured queued transport. The production synchronous signal advances this
+ // epoch and cancels captured guards before idle or the HTTP pool can observe.
+ RegionGeneration region;const auto capturedRegion=region.value();assert(region.matches(capturedRegion));
+ auto regionGuard=std::make_shared<AsyncOperation>([&](){return region.matches(capturedRegion)?std::string():std::string("native_region_changed");});
+ auto regionTask=std::make_shared<AsyncTask>(regionGuard);assert(asyncTaskAllowed(regionTask));
+ region.advance();regionGuard->cancel("native_region_changed");region.advance();
+ assert(!region.matches(capturedRegion) && !asyncTaskAllowed(regionTask));assert(region.matches(region.value()));
  auto observer=std::make_shared<AsyncOperation>([](){return std::string();});observer->cancel("native_sharing_disabled");assert(!observer->allowed());
  std::cout<<"native shared-pose rotation, revision, lease and authority checks passed\n";
 }

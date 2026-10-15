@@ -610,14 +610,16 @@ bool FSLSLBridge::sharedPoseToLSLGuarded(const std::string& message,const fs_ass
     const auto account=gAgentID,login=gAgent.getSessionID(),bridge=getAttachedID();
     const auto region=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;
     const auto worker=FSSessionWorker::assistantIdentity();
+    const auto regionGeneration=FSSharedPoseManager::instance().assistantRegionGeneration();if(!regionGeneration)return false;
     auto transport=std::make_shared<fs_assistant::AsyncTask>(task->guard());
     const auto queued=LLCoprocedureManager::instance().enqueueCoprocedure("General","FSLSLBridge guarded shared pose",
-        [url,grid,account,login,bridge,region,worker,message,transport,nativeAuthority,completion]
+        [url,grid,account,login,bridge,region,regionGeneration,worker,message,transport,nativeAuthority,completion]
         (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID&)
     {
         const auto bound=[&]()
         {
-            return FSLSLBridge::instanceExists() && gAgentID==account && gAgent.getSessionID()==login &&
+            return FSLSLBridge::instanceExists() && FSSharedPoseManager::instanceExists() &&
+                FSSharedPoseManager::instance().assistantRegionGeneration()==regionGeneration && gAgentID==account && gAgent.getSessionID()==login &&
                 LLGridManager::instance().getGrid()==grid && FSSessionWorker::assistantIdentity()==worker &&
                 gAgent.getRegion() && gAgent.getRegion()->getRegionID()==region &&
                 FSLSLBridge::instance().getAttachedID()==bridge && FSLSLBridge::instance().mCurrentURL==url &&
