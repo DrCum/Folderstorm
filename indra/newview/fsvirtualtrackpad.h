@@ -32,6 +32,8 @@
 
 #include "lluictrl.h"
 #include "llpanel.h"
+#include <functional>
+#include <utility>
 
 class FSVirtualTrackpad
     : public LLUICtrl
@@ -56,6 +58,8 @@ public:
     bool handleRightMouseUp(S32 x, S32 y, MASK mask) override;
     bool handleRightMouseDown(S32 x, S32 y, MASK mask) override;
     bool handleScrollWheel(S32 x, S32 y, S32 clicks) override;
+    void onMouseCaptureLost() override;
+    void setDragEndCallback(std::function<void()> callback) { mDragEndCallback = std::move(callback); }
     void draw() override;
     void setValue(const LLSD& value) override;
 
@@ -104,6 +108,7 @@ protected:
     LLViewBorder* mBorder{ nullptr };
 
 private:
+    std::function<void()> mDragEndCallback;
     const F32 ThirdAxisQuantization = 0.001f; // To avoid quantizing the third axis as we add integer wheel clicks, use this to preserve some precision as int.
     const S32 WheelClickQuanta = 10; // each click of the wheel moves the third axis by this normalized amount.
 

@@ -23,8 +23,10 @@
 #include "llsd.h"
 #include "fsposeranimator.h"
 #include "fssharedposemodel.h"
+#include "fssharedposeeditqueue.h"
 #include <deque>
 #include <functional>
+#include <set>
 
 class FSSharedPoseManager : public LLSingleton<FSSharedPoseManager>
 {
@@ -38,6 +40,7 @@ public:
     bool isApplying() const { return mApplying; }
     bool hasSessions() const { return mOwner.active() || !mApprovals.empty(); }
     bool edit(const LLUUID& avatar, const FSSharedPose::JointSet& joints, std::function<void()> action);
+    void finishEdit(const LLUUID& avatar);
     bool history(const LLUUID& avatar, bool redo);
     bool canHistory(const LLUUID& avatar, bool redo) const;
     void shareSelf();
@@ -59,19 +62,14 @@ private:
     };
     struct Approval { LLUUID session, token; double seen = 0., heartbeat = 0.; bool undo = false, redo = false; };
     struct Request { LLUUID id; double expires = 0.; };
-    struct Work
+    struct Work : FSSharedPose::EditGesture
     {
         LLUUID avatar, session, token, lease;
-        FSSharedPose::JointSet joints;
-        std::vector<std::function<void()>> actions;
-        FSSharedPose::Pose latest, lastSent;
         double requested = 0., sent = -100., renewed = -100.;
-        bool asked = false, granted = false, finished = false, forceFinish = false;
         int history = 0;
         U32 sequence = 0;
     };
     struct Queued { LLUUID target; std::deque<std::string> packets; bool control = false, started = false; LLSD data; };
-    struct Deferred { LLUUID avatar; FSSharedPose::JointSet joints; std::function<void()> action; };
     static void onIdle(void* data);
     void tick();
     void send(const LLUUID& target, const LLSD& message, bool control = true);
@@ -80,8 +78,9 @@ private:
     void snapshot(const LLUUID& target);
     void apply(const LLUUID& avatar, const FSSharedPose::Pose& pose);
     void stopRemote(const LLUUID& avatar);
-    void grantWork(const LLUUID& avatar, const FSSharedPose::Pose& pose);
+    bool grantWork(const LLUUID& avatar, const FSSharedPose::Pose& pose);
     void execute(Work& work);
+    void restorePreviews(const LLUUID& avatar);
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
     LLSD workMessage(const Work& work, const std::string& type) const;
@@ -94,10 +93,10 @@ private:
     std::map<LLUUID, Request> mRequests, mOutgoingRequests;
     std::map<LLUUID, double> mLastRequests;
     std::map<LLUUID, double> mLastIncomingRequests, mPeers;
-    std::map<LLUUID, Work> mWorks;
+    std::map<LLUUID, std::deque<Work>> mWorks;
+    std::set<LLUUID> mBlockedEdits;
     std::map<LLUUID, std::pair<LLUUID, double>> mClosed;
     std::deque<Queued> mQueue;
-    std::deque<Deferred> mDeferred;
     FSSharedPose::Pose mPublished;
     U32 mPublishedRevision = 0;
     LLUUID mRegion, mBridge;
