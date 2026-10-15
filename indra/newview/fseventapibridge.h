@@ -51,6 +51,7 @@ public:
     int getPort() const;
     const std::string& getDiscoveryPath() const;
     std::string discoveryDirectory() const;
+    std::string configurationDiscovery() const;
     const std::string& sessionReference() const {return mViewerSession;}
 
     struct StatusSnapshot
@@ -61,6 +62,7 @@ public:
         int policyGeneration = 0;
         int pendingApprovals = 0;
         U64 approvalRevision = 0;
+        std::string pendingApprovalSummary;
         F64 lastExternalRequestAt = 0.0;
         F64 lastDiagnosticAt = 0.0;
         std::string lastExternalApi;

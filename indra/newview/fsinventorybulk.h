@@ -40,6 +40,7 @@ void execute(const std::string& plan_id, const FSAssistantExecutionContext& cont
 // That button is one-request consent for Ask, never a saved permission change.
 void executeNative(const std::string& plan_id, std::function<void(const LLSD&)> completed);
 void clear();
+void retireAssistant();
 void stop(const std::string& operation_id);
 void permissionsChanged();
 // Internal legacy adapter: prepares the exact same frozen plan without Read

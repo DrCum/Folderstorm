@@ -20,7 +20,20 @@ int main()
     assert(needsActiveCharacter("LLWorkspace","previous"));
     assert(needsActiveCharacter("LLCamera","snapshot"));
     assert(needsActiveCharacter("LLInventory","snapshotUpload"));
+    assert(!managedOperationSupported("LLAppearance","wearOutfit"));
+    assert(!managedOperationSupported("LLAppearance","wearItems"));
+    assert(!managedOperationSupported("LLInventory","createItem"));
+    assert(managedOperationSupported("LLAppearance","getOutfit"));
+    assert(managedOperationSupported("LLInventory","rename"));
+    assert(discoveryScope({"ordinary","hosted","ordinary"},';')=="ordinary;hosted");
+    assert(discoveryScope({"bad;path","hosted"},';').empty());
+    assert(discoveryScope(std::vector<std::string>(17,"path"),';').empty());
     using namespace fs_session;
+    assert(!assistantPauseNeeded(true,false,false,0)); // Wait for first worker identity.
+    assert(assistantPauseNeeded(true,false,false,1)); // Includes login-screen workers.
+    assert(!assistantPauseNeeded(true,true,false,1));
+    assert(assistantPauseNeeded(false,true,false,1));
+    assert(!assistantPauseNeeded(true,false,true,1)); // Explicit failure needs user retry.
     Message source;source.worker[0]=1;source.generation=7;source.state=State::Ready;
     source.account="01234567-89ab-cdef-0123-456789abcdef";source.grid="secondlife";source.sequence=1;
     auto info=source;info.kind=Kind::Status;info.width=AssistantEnabled|AssistantReady;info.unread=2;info.event=9;info.height=1;

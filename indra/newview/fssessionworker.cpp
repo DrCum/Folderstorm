@@ -524,8 +524,8 @@ struct Worker : LLIMSessionObserver
         response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
         response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);response.event=snapshot.approvalRevision;
         response.text=snapshot.ready?bridge.sessionReference():std::string();response.detail=boundedText(snapshot.error,118);
-        response.title="Local Assistant";
-        response.sender="Read: "+FSEventAPIBridge::getPermissionLevel("read")+"; Edit: "+FSEventAPIBridge::getPermissionLevel("edit")+"; Wear: "+FSEventAPIBridge::getPermissionLevel("wear");
+        response.title=snapshot.pendingApprovalSummary.empty()?"Local Assistant":"Local Assistant: "+snapshot.pendingApprovalSummary;
+        response.sender="Read: "+FSEventAPIBridge::getPermissionLevel("read")+"; Edit: "+FSEventAPIBridge::getPermissionLevel("edit")+"; Wear/create-item: native viewer";
         return response;
     }
     void pollAssistantCheck()
@@ -852,12 +852,21 @@ struct Worker : LLIMSessionObserver
         { reply(request, "Session changed; action was not applied."); return; }
         switch (request.kind)
         {
+        case Kind::AssistantPause:
+        {
+            // Runtime transport ownership belongs to this authenticated worker,
+            // including its login screen. No account data/action is accessed.
+            if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
+            assistantHold=request.width!=0;
+            auto& bridge=FSEventAPIBridge::instance();
+            bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+            pipe.send(assistantStatus(request));break;
+        }
         case Kind::AssistantInfo:
         case Kind::AssistantConfigure:
-        case Kind::AssistantPause:
         case Kind::AssistantReview:
         {
-            if(!ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
+            if((request.kind==Kind::AssistantInfo && request.unread>2) || !ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
             {reply(request,"Local Assistant login changed or is unavailable.");break;}
             auto& bridge=FSEventAPIBridge::instance();
             if(request.kind==Kind::AssistantConfigure)
@@ -871,12 +880,6 @@ struct Worker : LLIMSessionObserver
                 if(file.empty() || !gSavedSettings.saveToFile(file,true))
                 {reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
             }
-            else if(request.kind==Kind::AssistantPause)
-            {
-                if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
-                assistantHold=request.width!=0;
-                bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
-            }
             else if(request.kind==Kind::AssistantReview)
             {
                 if(request.unread>1 || !FSSessionWorker::assistantActiveAllowed())
@@ -885,7 +888,7 @@ struct Worker : LLIMSessionObserver
                 if(request.unread)LLFloaterReg::showInstance("preferences",llsd::map("tab","local_assistant"),true);
                 else bridge.reviewPending();
             }
-            if(!request.title.empty())assistantProfile=boundedText(request.title,128);
+            if(request.kind==Kind::AssistantInfo && request.unread==0 && !request.title.empty())assistantProfile=boundedText(request.title,128);
             bridge.refreshSession();
             if(request.kind==Kind::AssistantInfo && request.unread==2)
             {

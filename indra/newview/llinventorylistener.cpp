@@ -54,6 +54,7 @@
 #include "llcameralistener.h"
 #include "fssnapshotupload.h"
 #include "fsassistantoperation.h"
+#include "fseventapibridge.h"
 #include "fslinkreplacement.h"
 #include "llsdutil.h"
 #include "llfloatersimplesnapshot.h"
@@ -1410,7 +1411,8 @@ void LLInventoryListener::copy(LLSD const& data)
         {
             CopyPlan plan;
             plan.id.generate();
-                    plan.session=gAgent.getSessionID();
+            plan.session=gAgent.getSessionID();
+            if(data.has("__assistant_guard"))plan.assistantSession=FSEventAPIBridge::instance().sessionReference();
             plan.source_id = source_id;
             plan.destination_root_id = destination_id;
             plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;
@@ -1508,6 +1510,7 @@ void LLInventoryListener::copy(LLSD const& data)
                     CopyPlan plan;
                     plan.id.generate();
                     plan.session=gAgent.getSessionID();
+                    if(data.has("__assistant_guard"))plan.assistantSession=FSEventAPIBridge::instance().sessionReference();
                     plan.source_id = source_id;
                     plan.destination_root_id = new_root;
                     plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;
@@ -1623,7 +1626,7 @@ bool LLInventoryListener::prepareAssistantCopyConfirmation(const LLSD& data,
 {
     const LLUUID plan_id = data["plan_id"].asUUID();
     auto found = mCopyPlans.find(plan_id);
-    if (found == mCopyPlans.end() || found->second.session!=gAgent.getSessionID() || found->second.expires_at <= LLDate::now().secondsSinceEpoch())
+    if (found == mCopyPlans.end() || found->second.session!=gAgent.getSessionID() || (!found->second.assistantSession.empty() && found->second.assistantSession!=FSEventAPIBridge::instance().sessionReference()) || found->second.expires_at <= LLDate::now().secondsSinceEpoch())
     {
         error = "Copy plan is missing or expired";
         return false;
@@ -1676,7 +1679,7 @@ void LLInventoryListener::pruneCopyPlans()
     const F64 now = LLDate::now().secondsSinceEpoch();
     for (auto it = mCopyPlans.begin(); it != mCopyPlans.end();)
     {
-        if (it->second.expires_at <= now || it->second.session != gAgent.getSessionID())
+        if (it->second.expires_at <= now || it->second.session != gAgent.getSessionID() || (!it->second.assistantSession.empty() && it->second.assistantSession!=FSEventAPIBridge::instance().sessionReference()))
         {
             it = mCopyPlans.erase(it);
         }
@@ -2938,7 +2941,8 @@ void LLInventoryListener::batchCopy(LLSD const& data)
         {
             CopyPlan plan;
             plan.id.generate();
-                    plan.session=gAgent.getSessionID();
+            plan.session=gAgent.getSessionID();
+            if(data.has("__assistant_guard"))plan.assistantSession=FSEventAPIBridge::instance().sessionReference();
             plan.source_id = id;
             plan.destination_root_id = destination_id;
             plan.expires_at = LLDate::now().secondsSinceEpoch() + 600.0;

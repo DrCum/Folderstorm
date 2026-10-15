@@ -170,7 +170,7 @@ std::shared_ptr<History> Store::claim(const std::string& id, const std::string& 
     { error = "Bulk inventory execution capacity is busy"; return nullptr; }
     auto entry = std::make_shared<History>();
     entry->id = operation_id;
-    entry->session = mSession;
+    entry->session = mSession;entry->assistant=prepared->assistant;
     entry->inverse_of = prepared->inverse_of;
     entry->kind = prepared->kind;
     entry->started = now;
@@ -203,7 +203,7 @@ bool Store::previewUndo(const std::string& operation_id, const std::vector<std::
     if (ids.size() > MAX_ROWS || selected.size() != ids.size()) { error = "Undo selection must contain at most 50 unique UUIDs"; return false; }
     auto inverse = std::make_shared<Plan>();
     inverse->id = plan_id;
-    inverse->session = mSession;
+    inverse->session = mSession;inverse->assistant=entry->assistant;
     inverse->kind = entry->kind;
     inverse->inverse_of = entry->id;
     for (std::size_t i = 0; i < entry->rows.size(); ++i)
@@ -255,6 +255,14 @@ void Store::clear()
     mHistory.clear();
     mPlans.clear();
     mLastWriter.clear();
+}
+void Store::retireAssistant()
+{
+    for(auto it=mPlans.begin();it!=mPlans.end();)
+        if(it->second->assistant)it=mPlans.erase(it);else ++it;
+    for(auto it=mHistory.begin();it!=mHistory.end();)
+        if(it->second->assistant){it->second->visible=false;it=mHistory.erase(it);}else ++it;
+    for(auto& entry:mActive)if(entry.second->assistant)entry.second->cancelled=true;
 }
 void Store::stop(const std::string& id)
 {

@@ -52,7 +52,8 @@ Continue using the owning viewer's permission classes, restrictions and native v
 | Operation | Initial managed behavior |
 | --- | --- |
 | Inventory reads/searches and outfit/worn-item reads | Available on a ready Warm/Economy character when its policy permits them. |
-| Inventory edits/copy/move/Trash and appearance changes | Available where the existing native operation is background-safe, with the same permissions, restrictions, server confirmation and approval rules. Audit each path before enabling it. |
+| Inventory edits/copy/move/Trash | Available on audited paths, with the same permissions, restrictions, server confirmation and approval rules. |
+| Outfit wear/detach and create-item native helpers | Managed MCP refuses these initial paths: their native callbacks initiate further copy/wear/default-permission/UI work without a durable execution guard. Use the character’s native viewer. Outfit reads and folder creation remain available. |
 | Workspace/layout list, status and fitted preview | Available without activating the character; return account-local data only. |
 | Camera state read | Available when ready and native restrictions permit it; report stored camera state without implying a freshly rendered frame. |
 | Camera changes, snapshots and workspace/layout application | Initially require the explicitly targeted character to be active, ready and outside a conflicting transition/modal/Preferences transaction. Return a clear `requires_active_character` or busy result before side effects. |
@@ -133,3 +134,10 @@ Added Character settings → Local Assistant: per-profile enable draft, live cre
 Focused Go checks passed for discover, viewerapi, mcptools, diagnose and the diagnostic CLI. New diagnostic coverage rejects missing/stale managed references before HTTP and mismatched authenticated identities. Strict C++ assistant-session tests cover touched versus untouched account drafts, disconnect/login changes, session-only refusal, protocol encoding and active eligibility. The first new draft assertion exposed a missing test-fixture enable value; correcting that fixture retained the intended refusal checks. Diff hygiene passed. No viewer/host/broad/packaging/GitHub build ran.
 
 Windows acceptance: matching protocol-16 host/viewer/sidecar; test Apply/Cancel for each profile, native Preferences external/session-only edits, connection checks with enable Off/On/paused and absent sidecar, token-free client config, two/five-character routing, Attention Review with chat categories hidden, native permission revocation/timeout, and active-only camera/workspace refusal. Pause/resume must invalidate old references; a new login while paused must stay unadvertised; detach must invalidate managed work and restore a fresh ordinary binding. Actual Windows compilation, ACL behavior, focus and native UI remain unverified here.
+
+
+## Senior review and follow-up corrections
+
+Requested gpt-6.1-sol at Extra High reviewed the combined stack read-only. Verified findings led to: authenticated pre-login runtime pause (before login permission), explicit refusal of unmanaged async appearance/create-item helper chains in managed MCP, retirement of assistant-owned bulk previews/history/undo and epoch checks for copy continuations on connection rotation, and generated setup scopes covering simultaneous ordinary and managed viewers. Native-only bulk records remain intact. HTTP entry now refreshes credentials before authentication and ACL validation precedes socket creation. Approval Attention adds a bounded action summary. Legacy/custom discovery overrides are not silently broadened; explicit setup copying uses known bounded ordinary directories plus the hosted registry when no override exists.
+
+Regression checks cover pre-login pause eligibility, guarded versus unsupported operation families, scope deduplication/bounds, and retiring assistant state while preserving native records. Native builds and acceptance remain pending. Review revisions are included in #44; use that full matching stack for final native acceptance.

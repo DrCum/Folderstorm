@@ -320,7 +320,7 @@ struct Slot
     std::uint64_t nextSequence = 0;
     ULONGLONG sentAt = 0, pollAt = 0, sampleAt = 0;
     Message snapshot, request, sample;
-    Message assistant;std::wstring assistantDiagnostic;bool assistantPauseFailed=false;std::uint64_t assistantEditRevision=0;
+    Message assistant;std::wstring assistantDiagnostic;bool assistantPauseFailed=false,assistantPauseAck=false;std::uint64_t assistantEditRevision=0;
     ULONGLONG assistantAt=0,assistantSince=0;
     std::string reservation;
     bool waiting = false, detached = false, soundPrepared = false;
@@ -1730,6 +1730,7 @@ struct Host
             request.account = slot.snapshot.account; request.grid = slot.snapshot.grid;
             request.cursor = kind == Kind::Events ? slot.chat.cursor : slot.catalogIndex;
         }
+        if(kind==Kind::AssistantPause)request.width=pauseAllAssistant?1u:0u;
         if (kind == Kind::WorkspaceInfo || kind==Kind::AssistantInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
         if(kind==Kind::AssistantInfo)request.title=utf8(profileName(index));
         if (kind == Kind::SetMode)
@@ -3181,7 +3182,7 @@ struct Host
         if (!launched) { message(L"Unable to launch the matching viewer."); return; }
         CloseHandle(process.hThread);
         slot->process.value = process.hProcess; slot->pid = process.dwProcessId;
-        slot->snapshot.worker = slot->id;
+        slot->snapshot.worker = slot->id;slot->assistantPauseAck=pauseAllAssistant;
         slots[index] = std::move(slot);
         lifecycle.beginManagement();
         message(L"Log in a different character in each viewer. The first ready character becomes active.");
@@ -3350,7 +3351,8 @@ struct Host
         {
             slot.assistantAt=GetTickCount64();
             if(request.kind==Kind::AssistantConfigure)++slot.assistantEditRevision;
-            if(request.kind==Kind::AssistantPause && (response.flags&Error))slot.assistantPauseFailed=true;
+            if(request.kind==Kind::AssistantPause && (response.flags&Error))slot.assistantPauseFailed=response.generation==request.generation;
+            if(!(response.flags&Error))slot.assistantPauseAck=(response.width&AssistantPaused)!=0;
             if(!(response.flags&Error) && request.kind==Kind::AssistantInfo && request.unread==1)
             {
                 const auto text=wide(response.text);bool copied=false;
@@ -3554,6 +3556,8 @@ struct Host
                     }
                     else send(index, Kind::Detach);
                 }
+                else if(assistantPauseNeeded(pauseAllAssistant,slot.assistantPauseAck,slot.assistantPauseFailed,slot.snapshot.generation))
+                    send(index,Kind::AssistantPause);
                 else if (slot.restart.phase() == Restart::Phase::Queued)
                 {
                     if (!slot.restart.owns(slot.snapshot))
@@ -3608,9 +3612,6 @@ struct Host
                     send(index, Kind::AudioPolicy);
                 else if (slot.snapshot.state == State::Ready && slot.shortcutPolicy != static_cast<int>(shortcutPolicy()))
                     send(index,Kind::ShortcutPolicy);
-                else if(slot.snapshot.state==State::Ready && assistantInfoOwned(slot.assistant,slot.snapshot) &&
-                    ((slot.assistant.width&AssistantPaused)!=0)!=pauseAllAssistant && !slot.assistantPauseFailed)
-                {auto request=slot.snapshot;request.width=pauseAllAssistant?1u:0u;send(index,Kind::AssistantPause,Mode::Warm,0,&request);}
                 else if (slot.hasPendingReview && index == active && !busy())
                 {
                     const auto action = slot.pendingReview; slot.hasPendingReview = false;

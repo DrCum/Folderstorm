@@ -214,10 +214,25 @@ void retentionAndSessionBoundaries()
     Snapshot a,b;a.id=b.id="item";a.revision=1;b.revision=2;
     expect(!(a==b),"known intervening native write revision prevents ABA inverse");
 }
+void assistantBindingRetirement()
+{
+    Fixture f;std::string error;
+    f.prepare("native",1,"native-item");
+    auto native=f.store->claim("native","native-op",1,error);expect(bool(native),"native history exists");
+    auto preview=f.prepare("assistant",1,"assistant-item");preview->assistant=true;
+    auto old=f.store->claim("assistant","assistant-op",1,error);expect(old && old->assistant,"assistant scope follows execution");
+    auto unused=f.prepare("assistant-unconsumed",1,"unused");unused->assistant=true;
+    f.store->retireAssistant();
+    expect(!f.store->plan("assistant",1) && !f.store->plan("assistant-unconsumed",1),"old assistant previews cannot execute after binding rotation");
+    expect(!f.store->record("assistant-op",1) && old->cancelled && !old->visible,"assistant history/undo is retired and outstanding work cancelled");
+    expect(!f.store->previewUndo("assistant-op",{},"stale-undo",1,error),"new binding cannot preview an old assistant undo");
+    expect(bool(f.store->plan("native",1)) && bool(f.store->record("native-op",1)) && !native->cancelled && native->visible,"native-only plans and history survive assistant retirement");
+}
+
 }
 int main()
 {
-    try { displayPrivacyBounds(); preparationAndConsumption(); consumedPlansDoNotExhaustPreviewCapacity(); callbackOrderingAndConcurrency();preflightIsNotSubmission();uncertainLateAndClear();clearCannotBypassCapacity();cancellationAndValidation();clearThenStop();limitedUndo();interveningNativeWriteBeforeConfirmation();retentionAndSessionBoundaries(); }
+    try { assistantBindingRetirement(); displayPrivacyBounds(); preparationAndConsumption(); consumedPlansDoNotExhaustPreviewCapacity(); callbackOrderingAndConcurrency();preflightIsNotSubmission();uncertainLateAndClear();clearCannotBypassCapacity();cancellationAndValidation();clearThenStop();limitedUndo();interveningNativeWriteBeforeConfirmation();retentionAndSessionBoundaries(); }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 1; }
     std::cout<<"Inventory bulk model checks passed\n";
 }

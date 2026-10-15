@@ -444,7 +444,7 @@ std::string FSPanelPreferenceLocalAssistant::hostConfiguration(const std::string
     if(!launch.canCopy()){error="Viewer update in progress; finish updating first";return {};}
     cursor_adapter=client=="cursor" && command.find(' ')!=std::string::npos;
 #endif
-    const auto discovery=FSEventAPIBridge::instance().discoveryDirectory();
+    const auto discovery=FSEventAPIBridge::instance().configurationDiscovery();
     if(discovery.empty()){error="Assistant discovery is unavailable";return {};}
     return FSAssistantConfiguration::generate(client,command,discovery,cursor_adapter);
 }
@@ -496,7 +496,7 @@ void FSPanelPreferenceLocalAssistant::refreshConfiguration()
     }
     cursor_adapter = client == "cursor" && command.find(' ') != std::string::npos;
 #endif
-    const std::string discovery = FSEventAPIBridge::instance().discoveryDirectory();
+    const std::string discovery = FSEventAPIBridge::instance().configurationDiscovery();
     mConfiguration = FSAssistantConfiguration::generate(client, command, discovery, cursor_adapter);
     getChild<LLTextEditor>("configuration")->setText(mConfiguration);
 }

@@ -11,8 +11,12 @@ inline bool assistantInfoOwned(const Message& info,const Message& source)
 inline Message assistantAttention(const Message& info)
 {
     auto item=info;item.eventType=EventType::Attention;item.topic=Topic::Notice;item.conversation=AssistantAttentionId;
-    item.title="Local Assistant requests ("+std::to_string(info.unread)+")";return item;
+    item.title="Local Assistant requests ("+std::to_string(info.unread)+")";
+    if(info.title.rfind("Local Assistant: ",0)==0)item.title+=" · "+info.title.substr(17,100);
+    return item;
 }
+inline bool assistantPauseNeeded(bool requested,bool acknowledged,bool failed,std::uint64_t generation)
+{return generation!=0 && requested!=acknowledged && !failed;}
 struct AssistantPreferenceDraft
 {
     Message original;bool known=false,enabled=false;
