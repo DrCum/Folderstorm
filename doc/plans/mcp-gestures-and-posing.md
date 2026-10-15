@@ -33,3 +33,23 @@ Root implements gesture playback ownership and Poser extraction sequentially bec
 Test cold/cached gesture assets, wait/revoke/re-enable, duplicate callbacks, superseded manual play, shared animation IDs, gesture-disabled/RLV refusal and command-bearing gestures (including configurable commands). Test private versus public effects and transport receipts. For posing: self-target enforcement, bounded joints, manual conflicts, undo/reset, revoked reservations and stale target/session.
 
 Windows: ordinary native gestures/Poser, no stuck animation or unwanted chat, muted/background behavior, self-pose restoration after interruptions; shared posing requires two real viewers, explicit owner grants, competing editors, revocation and disconnect. Do not mark E10 complete until its native dependency and acceptance path exist.
+
+## Delivered gesture checkpoint
+
+`gesture_list`, `gesture_status`, `gesture_play` and `gesture_stop` are registered behind `gesture_tools=1`. Reads require opt-in Gesture read; playback additionally requires Gesture play, active-character ownership and native approval. Literal gesture Chat also requires Nearby send. The sender bypasses command interpretation; configurable viewer commands are never executed.
+
+Inspection freezes the exact COPY-permitted inventory item, asset UUID, SHA256 bytes, decoded effects and referenced animation bytes. Bounds are 16 KiB/64 gesture steps, 16 referenced animations, 1 MiB per animation and 4 MiB total. Native built-in animation states, nonempty embedded emotes, incompatible cached motion data and unsupported formats are refused. At most one assistant playback runs per login, for at most 120 seconds; its original bridge deadline may cancel it sooner.
+
+Timed effects retain source/permission authority. Asset reads retain it through queued HTTP/UDP submission, callback delivery and cache publication, including region-generation changes. Native duplicate consumers are preserved. Manual animation ownership is never assumed: ambiguous ownership preserves the animation and reports incomplete cleanup. Submitted one-shot sound and Chat cannot be recalled. Native gesture activation is not changed.
+
+Portable gesture/asset-authority checks, registered Go tool tests and native-boundary source checks pass. Independent Extra High review is recorded on the checkpoint PR. Native Windows compilation and runtime acceptance remain pending; the available environment has no CMake executable, so direct strict portable compilation was used.
+
+Windows acceptance:
+
+- Inspect cold/cached exact items, then play the returned revision; reject changed bytes, unsupported states and restricted/non-COPY items.
+- Exercise waits while pausing access, revoking permissions, changing regions and switching characters. No later effect or stale asset publication should occur.
+- Repeat native manual playback/local preview during assistant playback, including the same animation ID. Cleanup must preserve newer or uncertain native ownership.
+- Verify literal Chat does not invoke viewer commands; denied Nearby send refuses the entire Chat-bearing gesture.
+- Check native muted/background audio behavior, explicit stop, receipt outcomes and incomplete-cleanup reporting. Do not replay uncertain sends.
+
+Own and shared posing remain separately reviewed checkpoints described above.
