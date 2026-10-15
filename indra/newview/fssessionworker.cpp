@@ -884,7 +884,7 @@ struct Worker : LLIMSessionObserver
                 if(!file.empty() && readProfileFile(std::filesystem::path(ll_convert_string_to_wide(file,file.size(),CP_UTF8)),bytes))
                 {
                     std::istringstream input(bytes);
-                    if(LLSDSerialize::fromXML(persisted,input,false)>0 && persisted.isMap())
+                    if(LLSDSerialize::fromXML(persisted,input,false)>0 && (persisted.isMap() || persisted.isUndefined()))
                     {
                         const LLSD stored=persisted.has("EnableLocalEventAPIBridge")?persisted["EnableLocalEventAPIBridge"]["Value"]:control->getDefault();
                         saved=stored.asBoolean()==control->getSaveValue().asBoolean();
