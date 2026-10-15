@@ -45,7 +45,7 @@ inline constexpr std::array<FeatureOperation, 54> featureOperations {{
     {"FSPose","reset","pose_tools","pose_edit",false,true,"pose_read"},
     {"FSPose","stop","pose_tools","pose_edit",false,true,"pose_read"},
     {"FSPose","load","pose_tools","pose_edit",false,true,"pose_read"},
-    {"FSPose","save","pose_tools","pose_edit",false,true,"pose_read"},
+    {"FSPose","save","pose_tools","pose_save",false,true,"pose_read"},
     {"FSPose","sharedSessions","shared_pose_tools","pose_read",true,false,"pose_read"},
     {"FSPose","sharedGrants","shared_pose_tools","pose_read",true,false,"pose_read"},
     {"FSPose","sharedEdit","shared_pose_tools","pose_share",false,true,"pose_read"},

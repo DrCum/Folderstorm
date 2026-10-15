@@ -24,6 +24,7 @@ int main()
  for(const char* api:{"LLAgent","LLViewerControl","UI","LLWindow"})assert(!featureAPI(api));
  for(const char* op:{"requestTeleport","startAutoPilot","requestSit","requestTouch","set","toggle","execute"})assert(!featureOperation("FSWorld",op));
  assert(std::string(featureOperation("FSChat","draftGet")->permission)=="chat_read");
+ assert(std::string(featureOperation("FSPose","save")->permission)=="pose_save");
  assert(std::string(featureOperation("FSPose","sharedEdit")->capability)=="shared_pose_tools");
  assert(std::string(featureOperation("FSContent","saveScript")->receiptRead)=="read");
  assert(std::string(featureOperation("FSEvents","reviewNotification")->receiptRead)=="notifications_read");
