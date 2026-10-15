@@ -176,8 +176,10 @@ void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequestMessage(const LLUUI
 void LLAvatarPropertiesProcessor::initAgentProfileCapRequest(const LLUUID& avatar_id, const std::string& cap_url, EAvatarProcessorType type)
 {
     addPendingRequest(avatar_id, type);
+    const auto task=fs_assistant::asyncTask();
+    const auto account=gAgentID,login=gAgent.getSessionID();
     LLCoros::instance().launch("requestAgentUserInfoCoro",
-        [cap_url, avatar_id, type]() { requestAvatarPropertiesCoro(cap_url, avatar_id, type); });
+        [cap_url, avatar_id, type, task, account, login]() { requestAvatarPropertiesCoro(cap_url, avatar_id, type, task, account, login); });
 }
 void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequest(const LLUUID& avatar_id)
 {
@@ -307,7 +309,8 @@ bool LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(const LLAvatarData* avata
 }
 
 // static
-void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type)
+void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type,
+    fs_assistant::AsyncTaskPtr task, LLUUID account, LLUUID login)
 {
     LLAvatarPropertiesProcessor& inst = instance();
 
@@ -319,13 +322,17 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
 
     LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
     httpOpts->setFollowRedirects(true);
+    httpOpts->setTimeout(20);
 
     std::string finalUrl = cap_url + "/" + avatar_id.asString();
 
+    if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskSubmit(task))
+    {inst.removePendingRequest(avatar_id,type);return;}
     LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
 
     // Response is being processed, no longer pending is required
     inst.removePendingRequest(avatar_id, type);
+    if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskAllowed(task))return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -420,8 +427,9 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
     }
 
     LLAppViewer::instance()->postToMainCoro(
-        [avatar_id, avatar_data, type]()
+        [avatar_id, avatar_data, type, task, account, login]()
         {
+            if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskAllowed(task))return;
             LLAvatarPropertiesProcessor::instance().notifyObservers(avatar_id, (void*) &avatar_data, type);
         });
 }
