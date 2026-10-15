@@ -1209,7 +1209,7 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
     LLGestureMgr& self = LLGestureMgr::instance();
     if (!self.mPendingLoads.finish(item_id, task)) return;
     if (self.mLoadingCount > 0) --self.mLoadingCount;
-    if (!fs_assistant::asyncAllowed())
+    const auto discardPlaceholder = [&]()
     {
         // Only discard this load's placeholder. A later activation/replacement
         // has its own generation and must survive an obsolete callback.
@@ -1220,6 +1220,10 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
             gInventory.addChangedMask(LLInventoryObserver::LABEL, item_id);
             self.notifyObservers();
         }
+    };
+    if (!fs_assistant::asyncAllowed())
+    {
+        discardPlaceholder();
         return;
     }
 
@@ -1241,6 +1245,12 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
 
         if (ok)
         {
+            if (!fs_assistant::asyncAllowed())
+            {
+                delete gesture;
+                discardPlaceholder();
+                return;
+            }
             if (deactivate_similar)
             {
                 self.deactivateSimilarGestures(gesture, item_id);
@@ -1268,6 +1278,12 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
                 self.startFetch();
             }
 
+            if (!fs_assistant::asyncAllowed())
+            {
+                delete gesture;
+                discardPlaceholder();
+                return;
+            }
             item_map_t::iterator it = self.mActive.find(item_id);
             if (it == self.mActive.end())
             {
