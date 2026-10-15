@@ -31,6 +31,7 @@
 #include "fsposestate.h"
 #include "llvoavatar.h"
 #include "fsmaniprotatejoint.h"
+#include <functional>
 
 /// <summary>
 /// Describes how we will cluster the joints/bones/thingos.
@@ -793,6 +794,13 @@ public:
     /// Required after restoring a diff. The base rotations will be in their original arrangment.
     /// </remarks>
     void applyJointMirrorToBaseRotations(FSPosingMotion* posingMotion);
+
+    FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
+    void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
+    FSSharedPose::JointSet sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,
+                                          E_BoneDeflectionStyles style = NONE, bool position = false) const;
+    bool routeSharedEdit(LLVOAvatar* avatar, const FSPoserJoint* joint, E_BoneDeflectionStyles style,
+                         bool position, std::function<void()> action);
 
   private:
     /// <summary>

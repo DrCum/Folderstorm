@@ -26,10 +26,12 @@
  */
 
 #include <string>
+#include <sstream>
 
 #include "linden_common.h"
 
 #include "../llbase64.h"
+#include "../llsdserialize.h"
 #include "../lluuid.h"
 
 #include "../test/lltut.h"
@@ -38,6 +40,21 @@ namespace tut
 {
     struct base64_data
     {
+        LLSD roundTripMessage(const LLSD& message)
+        {
+            std::ostringstream output;
+            LLSDSerialize::toBinary(message, output);
+            const std::string wire = output.str();
+            const std::string encoded = LLBase64::encode(reinterpret_cast<const U8*>(wire.data()), wire.size());
+            const std::string decoded = LLBase64::decodeAsString(encoded);
+            ensure_equals("preserve binary LLSD bytes", decoded, wire);
+
+            std::istringstream input(decoded);
+            LLSD result;
+            ensure("parse decoded binary LLSD",
+                   LLSDSerialize::fromBinary(result, input, static_cast<llssize>(decoded.size()), 12) != LLSDParser::PARSE_FAILURE);
+            return result;
+        }
     };
     typedef test_group<base64_data> base64_test;
     typedef base64_test::object base64_object;
@@ -72,6 +89,42 @@ namespace tut
         result = LLBase64::encode(&blob[0], 40);
         ensure("encode 40 bytes",
                 (result == "c9+s/4xGMX3smy3HZRGkg+YTUEBwNYdi7QwaSH4OkY92xAuxhKnDhg==") );
+    }
+
+    template<> template<>
+    void base64_object::test<3>()
+    {
+        ensure_equals("decode nothing", LLBase64::decodeAsString(""), std::string());
+        ensure_equals("decode text", LLBase64::decodeAsString("aGVsbG8="), std::string("hello"));
+
+        const U8 bytes[] = {0, 1, 0, 128, 255, 0};
+        const std::string expected(reinterpret_cast<const char*>(bytes), sizeof(bytes));
+        ensure_equals("decode leading, embedded and trailing zero bytes", LLBase64::decodeAsString("AAEAgP8A"), expected);
+        ensure_equals("decode blank uuid", LLBase64::decodeAsString("AAAAAAAAAAAAAAAAAAAAAA=="), std::string(UUID_BYTES, '\0'));
+    }
+
+    template<> template<>
+    void base64_object::test<4>()
+    {
+        LLSD discovery = LLSD::emptyMap();
+        discovery["t"] = "capable";
+        discovery["s"] = "";
+        discovery["v"] = 1;
+        const LLSD peer = roundTripMessage(discovery);
+        ensure_equals("discovery type", peer["t"].asString(), std::string("capable"));
+        ensure_equals("discovery version", peer["v"].asInteger(), 1);
+
+        LLSD snapshot = LLSD::emptyMap();
+        snapshot["t"] = "snapshot";
+        snapshot["s"] = "11111111-2222-3333-4444-555555555555";
+        snapshot["r"] = 0;
+        snapshot["p"] = LLSD::Binary{0, 0, 128, 63, 0, 0, 0, 0, 255, 0};
+        const LLSD pose = roundTripMessage(snapshot);
+        ensure_equals("snapshot type", pose["t"].asString(), std::string("snapshot"));
+        ensure_equals("snapshot session", pose["s"].asString(), snapshot["s"].asString());
+        ensure_equals("snapshot revision", pose["r"].asInteger(), 0);
+        ensure("snapshot binary type", pose["p"].isBinary());
+        ensure("snapshot binary payload", pose["p"].asBinary() == snapshot["p"].asBinary());
     }
 
 }

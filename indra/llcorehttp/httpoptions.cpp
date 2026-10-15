@@ -35,6 +35,7 @@ namespace LLCore
     bool HttpOptions::sDefaultVerifyPeer = false;
 
 HttpOptions::HttpOptions() :
+    mPrivateLocalRequest(false),
     mWantHeaders(false),
     mTracing(HTTP_TRACE_OFF),
     mTimeout(HTTP_REQUEST_TIMEOUT_DEFAULT),

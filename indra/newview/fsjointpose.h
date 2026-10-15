@@ -31,6 +31,7 @@
 // Header files
 //-----------------------------------------------------------------------------
 #include "llmotion.h"
+#include "fssharedposemodel.h"
 
 /// <summary>
 /// Describes the kind of pose-change.
@@ -266,6 +267,9 @@ class FSJointPose
     LLQuaternion getTargetRotation() const { return mCurrentState.getTargetRotation(); }
     LLVector3    getTargetPosition() const { return mCurrentState.getTargetPosition(); }
     LLVector3    getTargetScale() const { return mCurrentState.getTargetScale(); }
+
+    // Network state must not enter the local joint undo queue.
+    void applySharedTransform(const FSSharedPose::Joint& state);
 
     /// <summary>
     /// Gets the pointer to the jointstate for the joint this represents.

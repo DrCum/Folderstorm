@@ -63,3 +63,7 @@ All selected items have concrete scope, implementation stages, code touchpoints,
 ## Multi-character sessions
 
 [Multi-character sessions plan](multi-character-sessions.md) describes one interface with isolated viewer workers, warm/economy standby, account-bound shared chat, safe foreground/microphone handoff, workspace/lifecycle integration and a later optional low-resolution 1 FPS monitor. Checkpoint 1 source is implemented on `feat/multi-character-prototype` in [PR #10](https://github.com/DrCum/Folderstorm/pull/10), targeting main after PR #9 merged, with two-character warm standby and an optional native-window hosting experiment. [Usage](../../tools/session-host/README.md) and [validation/native gates](multi-character-validation.md) distinguish the portable checks from the pending Windows feasibility tests and checkpoints 2–6.
+
+## Session host accessible controls
+
+[Session host accessible controls and audio states](session-host-accessible-controls.md) implements the UI/UX follow-up on top of PR #47: resize repaint handling, changing Lucide toggle icons, BG Audio and Voice follows active, acknowledged voice ownership, independent toolbar/quick-action labels, shared Accessibility settings and host/Windows contrast controls. Includes revision 2 interactive mockups. [Focused validation and Windows acceptance](session-host-accessible-controls-validation.md) distinguish completed checks from remaining native runtime checks.
