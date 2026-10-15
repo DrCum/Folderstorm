@@ -90,6 +90,11 @@ func TestSocialDraftGetNeedsOriginatingRead(t *testing.T) {
 	if !r.IsError || contains(api.opsCopy(), "FSChat.draftGet") {
 		t.Fatal("draft disclosed through state permission")
 	}
+	api = &fakeAPI{status: socialStatus(`{"chat_state":"deny","chat_read":"allow"}`, 1)}
+	r, _, _ = socialTestServer(api).chatDraftGet(context.Background(), nil, socialConversationArgs{ViewerSession: "social-login", ConversationID: "nearby"})
+	if r.IsError || !contains(api.opsCopy(), "FSChat.draftGet") {
+		t.Fatal("private draft read incorrectly requires mutation permission")
+	}
 }
 func TestSocialRegisteredAdapters(t *testing.T) {
 	api := &fakeAPI{status: socialStatus(`{"chat_read":"allow","chat_state":"allow","chat_send_im":"allow","chat_send_group":"allow","chat_send_conference":"allow","chat_send_nearby":"allow","friends_read":"allow","resident_search":"allow","profile_read":"allow","notifications_read":"allow","notification_review":"allow"}`, 1)}

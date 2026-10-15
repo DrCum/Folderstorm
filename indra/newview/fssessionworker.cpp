@@ -7,6 +7,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fssessionworker.h"
 #include "llsd.h"
+#include "fsavatarpickersearchlease.h"
 
 #if LL_WINDOWS
 #include <algorithm>
@@ -773,11 +774,14 @@ struct Worker : LLIMSessionObserver
             if(const auto running=runningContactSearch.lock();running && running->pending){reply(request,"A resident search is still running. Try again shortly.");return;}
             auto* region=gAgent.getRegion();auto url=region?region->getCapability("AvatarPickerSearch"):std::string{};
             if(url.empty()){reply(request,"Resident search is unavailable on this region. Friends remain available.");return;}
+            const auto searchLease=fs_assistant_social::AvatarPickerSearchLease::acquire();
+            if(!searchLease){reply(request,"A resident search is still running. Try again shortly.");return;}
             if(!url.empty() && url.back()!='/')url+='/';
             auto query=request.text;std::replace(query.begin(),query.end(),'.',' ');url+="?page_size=100&names="+LLURI::escape(query);
             auto result=std::make_shared<SearchResult>();result->source=identity;result->login=gAgent.getSessionID();result->token=request.event;contactSearch=result;runningContactSearch=result;
-            LLCoros::instance().launch("FolderstormContactSearch",[result,url]()
+            LLCoros::instance().launch("FolderstormContactSearch",[result,url,searchLease]()
             {
+                (void)searchLease;
                 auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("FolderstormContactSearch",LLCore::HttpRequest::DEFAULT_POLICY_ID);
                 auto http=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();options->setTimeout(20);
                 const LLSD data=adapter->getAndSuspend(http,url,options);

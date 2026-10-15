@@ -282,7 +282,7 @@ static std::string appendTime()
 void FSFloaterNearbyChat::addMessage(const LLChat& chat,bool archive,const LLSD &args)
 {
     if (archive) FSSessionWorker::nearbyMessage(chat);
-    if (archive && chat.mChatStyle==CHAT_STYLE_NORMAL && FSEventAPIBridge::instanceExists())
+    if (archive && (chat.mChatStyle==CHAT_STYLE_NORMAL || chat.mChatStyle==CHAT_STYLE_IRC) && FSEventAPIBridge::instanceExists())
         FSEventAPIBridge::instance().nearbyMessage(chat);
     LLChat& tmp_chat = const_cast<LLChat&>(chat);
     bool use_plain_text_chat_history = gSavedSettings.getBOOL("PlainTextChatHistory");

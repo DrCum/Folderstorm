@@ -44,6 +44,34 @@ inline bool liveMessage(bool hasHistory,int history,bool currentLogin)
 {return currentLogin && hasHistory && history==0;}
 inline bool reopens(bool incoming,std::uint64_t ingress,std::uint64_t closedAt)
 {return incoming && ingress>closedAt;}
+class PrivacyIngressFence
+{
+public:
+    void advance(std::uint64_t imIngress,double nearbyCaptureTime)
+    {mIM=(std::max)(mIM,imIngress);mNearby=(std::max)(mNearby,nearbyCaptureTime);}
+    bool allowsIM(std::uint64_t ingress)const{return ingress>mIM;}
+    bool allowsNearby(double captureTime)const{return captureTime>0 && captureTime>mNearby;}
+private:std::uint64_t mIM=0;double mNearby=0;
+};
+class ConversationVisibility
+{
+public:
+    static constexpr std::size_t Capacity=2048;
+    void clear(){mClosed.clear();}
+    bool visible(const std::string& id)const{return !mClosed.count(id);}
+    bool hide(const std::string& id,std::uint64_t ingress)
+    {
+        if(mClosed.size()>=Capacity && !mClosed.count(id))return false;
+        auto& fence=mClosed[id];fence=(std::max)(fence,ingress);return true;
+    }
+    void open(const std::string& id){mClosed.erase(id);}
+    void observeIncoming(const std::string& id,std::uint64_t ingress,bool incoming)
+    {
+        const auto found=mClosed.find(id);
+        if(found!=mClosed.end() && reopens(incoming,ingress,found->second))mClosed.erase(found);
+    }
+private:std::map<std::string,std::uint64_t> mClosed;
+};
 // Frozen native inputs include exact text and participants. Map comparison in
 // the adapter additionally binds login, grid, native session type and readiness.
 inline bool validText(const std::string& text)
