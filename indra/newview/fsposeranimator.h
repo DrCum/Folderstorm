@@ -109,7 +109,7 @@ class FSPoserAnimator
 public:
     FSPoserAnimator() = default;
 
-    virtual ~FSPoserAnimator() = default;
+    virtual ~FSPoserAnimator();
 
     /// <summary>
     /// A class encapsulating 'metadata' for a joint, such as its catagory and its opposite joint name.
@@ -797,7 +797,10 @@ public:
 
     // Private rotation-only motion. These never use the native UI's registered
     // motion or FSPoseState, and can stop only the returned owned motion.
-    LLUUID startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void()> stopped);
+    LLUUID startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void(bool)> stopped);
+    void tickAssistantPoses(LLVOAvatar* avatar);
+    static void invalidateAssistantPose(LLVOAvatar* avatar);
+    bool assistantRestorationComplete(LLVOAvatar* avatar,const LLUUID& motion) const;
     bool assistantPoseActive(LLVOAvatar* avatar,const LLUUID& motion) const;
     bool updateAssistantPose(LLVOAvatar* avatar,const LLUUID& motion,
         const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);

@@ -69,7 +69,7 @@ LLMotion::LLMotionInitStatus FSPosingMotion::onInitialize(LLCharacter* character
     return STATUS_SUCCESS;
 }
 
-void FSPosingMotion::configureAssistantRotations(std::function<bool()> allowed,std::function<void()> stopped)
+void FSPosingMotion::configureAssistantRotations(std::function<bool()> allowed,std::function<void(bool)> stopped)
 {
     mAssistantRotationOnly=true;mAssistantAllowed=std::move(allowed);mAssistantStopped=std::move(stopped);
     for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);
@@ -77,17 +77,49 @@ void FSPosingMotion::configureAssistantRotations(std::function<bool()> allowed,s
 
 bool FSPosingMotion::setAssistantRotations(const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed)
 {
-    if(!mAssistantRotationOnly || !allowed || !allowed())return false;
+    if(!mAssistantRotationOnly || mAssistantRevoked || !allowed || !allowed())return false;
     for(const auto& entry:rotations)if(!getJointPoseByJointName(entry.first))return false;
     mAssistantAllowed=std::move(allowed);
     for(auto& joint:mJointPoses)
     {
         const auto found=rotations.find(joint.jointName());
-        setJointState(joint.getJointState()->getJoint(),found==rotations.end()?0:LLJointState::ROT);
-        if(found!=rotations.end())joint.setAssistantTargetRotation(found->second);
+        if(found==rotations.end()){releaseAssistantJoint(joint);continue;}
+        auto* native=joint.getJointState()->getJoint();
+        if(!mAssistantOwned.count(joint.jointName()))
+        {
+            const auto q=native->getRotation();fs_pose::OwnedRotation owned;
+            owned.original={{q.mQ[0],q.mQ[1],q.mQ[2],q.mQ[3]}};mAssistantOwned[joint.jointName()]=owned;
+        }
+        setJointState(native,LLJointState::ROT);joint.setAssistantTargetRotation(found->second);
     }
     return true;
 }
+
+bool FSPosingMotion::assistantAuthorityValid()
+{
+    if(!mAssistantRotationOnly)return true;
+    if(!mAssistantRevoked && (!mAssistantAllowed || !mAssistantAllowed()))mAssistantRevoked=true;
+    return !mAssistantRevoked;
+}
+void FSPosingMotion::releaseAssistantJoint(FSJointPose& joint)
+{
+    auto* native=joint.getJointState()->getJoint();
+    const auto owned=mAssistantOwned.find(joint.jointName());
+    if(native && owned!=mAssistantOwned.end())
+    {
+        const auto q=native->getRotation();const fs_pose::Rotation current{{q.mQ[0],q.mQ[1],q.mQ[2],q.mQ[3]}};
+        if(owned->second.restore(current))
+        {
+            const auto& original=owned->second.original;
+            native->setRotation(LLQuaternion(original[0],original[1],original[2],original[3]));
+        }
+        else if(!owned->second.complete(current))mAssistantRestorationComplete=false;
+        mAssistantOwned.erase(owned);
+    }
+    setJointState(native,0);
+}
+void FSPosingMotion::releaseAssistantRotations()
+{for(auto& joint:mJointPoses)releaseAssistantJoint(joint);}
 
 bool FSPosingMotion::onActivate()
 {
@@ -96,8 +128,14 @@ bool FSPosingMotion::onActivate()
 
 bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)
 {
-    if(mAssistantRotationOnly && (!mAssistantAllowed || !mAssistantAllowed()))
-    {for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);return false;}
+    if(mAssistantRotationOnly && !assistantAuthorityValid())
+    {
+        releaseAssistantRotations();
+        // Returning false routes through LLVOAvatarSelf::requestStopMotion and
+        // sends a simulator STOP for this private UUID. The independent idle
+        // tick removes this local motion instead. Revocation remains sticky.
+        return true;
+    }
     LLQuaternion targetRotation;
     LLQuaternion currentRotation;
     LLVector3 currentPosition;
@@ -116,10 +154,10 @@ bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)
             if(!(jointPose.getJointState()->getUsage() & LLJointState::ROT))continue;
             // Authority is checked at the actual timed write, without a TLS
             // scope spanning a viewer frame or coroutine yield.
-            if(!mAssistantAllowed || !mAssistantAllowed())
-            {for(auto& state:mJointPoses)setJointState(state.getJointState()->getJoint(),0);return false;}
+            if(!assistantAuthorityValid()){releaseAssistantRotations();return true;}
             const auto rotation=slerp(mInterpolationTime,joint->getRotation(),jointPose.getTargetRotation());
             jointPose.getJointState()->setRotation(rotation);
+            auto& owned=mAssistantOwned.at(jointPose.jointName());owned.expected={{rotation.mQ[0],rotation.mQ[1],rotation.mQ[2],rotation.mQ[3]}};owned.wrote=true;
             continue;
         }
         currentRotation = joint->getRotation();
@@ -155,8 +193,8 @@ void FSPosingMotion::onDeactivate()
 {
     if(mAssistantRotationOnly)
     {
-        for(auto& joint:mJointPoses)setJointState(joint.getJointState()->getJoint(),0);
-        mAssistantAllowed={};if(mAssistantStopped){auto stopped=std::move(mAssistantStopped);stopped();}return;
+        releaseAssistantRotations();mAssistantRevoked=true;
+        mAssistantAllowed={};if(mAssistantStopped){auto stopped=std::move(mAssistantStopped);stopped(mAssistantRestorationComplete);}return;
     }
     revertJointsAndCollisionVolumes();
 }

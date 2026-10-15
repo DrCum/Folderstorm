@@ -31,7 +31,7 @@ struct Session
  LLUUID id=LLUUID::generateNewID(),motion,operation;
  LLSD authority;Transaction transaction;
  fs_assistant::AsyncTaskPtr task;
- bool active=false;std::string stopped;
+ bool active=false,restorationComplete=true;std::string stopped;
 };
 Session sSession;
 struct Receipt {LLSD identity,request,result;std::string signature;};
@@ -53,7 +53,7 @@ void syncSession(const LLSD& request)
  {
   // Discard private snapshots without performing a mutation during Ask
   // preparation. The old motion's nonce-bound per-frame authority now fails
-  // and releases only its own ROT channel at the next native update.
+  // and the independent idle tick releases only its owned rotations.
   sSession=Session();sReceipts.clear();
  }
 }
@@ -98,6 +98,7 @@ std::map<std::string,LLQuaternion> nativeRotations(const Rotations& rotations)
 }
 void reconcile()
 {
+ if(sSession.active)sSession.restorationComplete=sAnimator.assistantRestorationComplete(gAgentAvatarp,sSession.motion);
  if(sSession.active && !sAnimator.assistantPoseActive(gAgentAvatarp,sSession.motion))
  {sSession.active=false;sSession.stopped="Owned rotation motion stopped or its authority changed";sSession.task.reset();}
 }
@@ -106,7 +107,7 @@ LLSD state()
  reconcile();return llsd::map("target",gAgentID,"pose_session",sSession.id,"revision",static_cast<S32>(sSession.transaction.revision()),
   "active",sSession.active,"native_poser_active",isAgentAvatarValid() && sAnimator.isPosingAvatar(gAgentAvatarp),
   "self_shared",FSSharedPoseManager::instance().isShared(gAgentID),"rotation_only",true,"reference_frame","local",
-  "visibility","local_viewer","can_undo",sSession.transaction.canUndo(),"owned_joints",rotationValue(sSession.transaction.rotations()),"stop_reason",sSession.stopped);
+  "visibility","local_viewer","restoration_complete",sSession.restorationComplete,"can_undo",sSession.transaction.canUndo(),"owned_joints",rotationValue(sSession.transaction.rotations()),"stop_reason",sSession.stopped);
 }
 std::string pathString(const std::filesystem::path& path)
 {const auto bytes=path.u8string();return std::string(reinterpret_cast<const char*>(bytes.data()),bytes.size());}
@@ -239,7 +240,7 @@ class FSPoseListener : public LLEventAPI,public FSAssistantFeature
 {
 public:
  FSPoseListener():LLEventAPI("FSPose","Bounded local rotation transactions and native shared consent")
- {for(const char* op:{"status","joints","presets","start","update","undo","reset","stop","load","save"})add(op,"Pose tools",&FSPoseListener::dispatch);}
+ {gIdleCallbacks.addFunction([](void*){fs_pose_tick();});for(const char* op:{"status","joints","presets","start","update","undo","reset","stop","load","save"})add(op,"Pose tools",&FSPoseListener::dispatch);}
  const char* assistantCapability() const override{return "pose_tools";}
  LLSD assistantLimits() const override{return llsd::map("rotation_joints",64,"preset_bytes",65536,"presets",256,"history",20,"reference_frame","local","rotation_only",true,"visibility","local_viewer","overwrite_presets",false,"requires_live_operation_authority",true);}
  bool prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error) const override
@@ -298,11 +299,11 @@ public:
   auto task=fs_assistant::asyncTask();
   if(op=="start")
   {
-   sSession.id=LLUUID::generateNewID();sSession.authority=identity(request);sSession.transaction=Transaction();sSession.active=true;sSession.stopped.clear();
+   sSession.id=LLUUID::generateNewID();sSession.authority=identity(request);sSession.transaction=Transaction();sSession.active=true;sSession.restorationComplete=true;sSession.stopped.clear();
    receipt.result["pose_session"]=sSession.id;
    const auto session=sSession.id;
-   sSession.motion=sAnimator.startAssistantPose(gAgentAvatarp,timedAuthority(request,task),[session]()
-   {if(sSession.id==session){sSession.active=false;sSession.task.reset();sSession.stopped="Owned rotation authority ended or native ownership changed";}});
+   sSession.motion=sAnimator.startAssistantPose(gAgentAvatarp,timedAuthority(request,task),[session](bool complete)
+   {if(sSession.id==session){sSession.restorationComplete=complete;sSession.active=false;sSession.task.reset();sSession.stopped="Owned rotation authority ended or native ownership changed";}});
    if(sSession.motion.isNull()){sSession.active=false;receipt.result=state();return response.error("Private rotation motion could not start");}
    sSession.task=task;sSession.operation=request["reqid"].asUUID();
   }
@@ -333,3 +334,4 @@ public:
 };
 }
 void fs_initialize_pose_api(){static FSPoseListener listener;}
+void fs_pose_tick(){sAnimator.tickAssistantPoses(gAgentAvatarp);reconcile();}

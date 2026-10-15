@@ -2,6 +2,7 @@
 #ifndef FS_POSE_POLICY_H
 #define FS_POSE_POLICY_H
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <set>
@@ -23,6 +24,21 @@ inline bool normalize(Rotation& rotation)
  if(rotation[3]<0)for(auto& value:rotation)value=-value;
  return true;
 }
+// The blender seeds an unanimated channel from the current LLJoint value.
+// Removing a state alone therefore cannot undo our rotation. Restore only a
+// channel still equal to our last proposed full-weight rotation (q == -q).
+inline bool sameRotation(const Rotation& a,const Rotation& b)
+{
+ double direct=0.,opposite=0.;
+ for(unsigned i=0;i<4;++i){if(!std::isfinite(a[i]) || !std::isfinite(b[i]))return false;direct=std::max(direct,std::abs(a[i]-b[i]));opposite=std::max(opposite,std::abs(a[i]+b[i]));}
+ return std::min(direct,opposite)<=1e-5;
+}
+struct OwnedRotation
+{
+ Rotation original{{0,0,0,1}},expected{{0,0,0,1}};bool wrote=false;
+ bool restore(const Rotation& current) const{return wrote && sameRotation(current,expected);}
+ bool complete(const Rotation& current) const{return !wrote || sameRotation(current,original) || restore(current);}
+};
 inline bool valid(const Rotations& rotations)
 {
  if(rotations.empty() || rotations.size()>jointLimit)return false;

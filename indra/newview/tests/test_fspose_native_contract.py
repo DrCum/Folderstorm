@@ -35,7 +35,7 @@ class PoseNativeContract(unittest.TestCase):
     def test_actual_timed_write_rechecks_authority_and_only_rotates(self):
         update = function("fsposingmotion.cpp", "bool FSPosingMotion::onUpdate")
         branch = update[update.index("if(mAssistantRotationOnly)"):update.index("currentRotation = joint->getRotation();")]
-        self.assertLess(branch.index("!mAssistantAllowed()"), branch.index("setRotation(rotation)"))
+        self.assertLess(branch.index("!assistantAuthorityValid()"), branch.index("setRotation(rotation)"))
         self.assertNotIn("setPosition", branch)
         self.assertNotIn("setScale", branch)
         self.assertIn("LLJointState::ROT", branch)
@@ -50,6 +50,27 @@ class PoseNativeContract(unittest.TestCase):
         self.assertNotIn("setPosition", own)
         self.assertNotIn("setScale", own)
         self.assertIn("return;", own)
+    def test_owned_cleanup_restores_blender_seed_without_overwriting_others(self):
+        release = function("fsposingmotion.cpp", "void FSPosingMotion::releaseAssistantJoint")
+        self.assertLess(release.index("owned->second.restore(current)"), release.index("native->setRotation("))
+        self.assertLess(release.index("native->setRotation("), release.index("setJointState(native,0)"))
+        self.assertIn("mAssistantRestorationComplete=false", release)
+        removed = function("fsposingmotion.cpp", "bool FSPosingMotion::setAssistantRotations")
+        self.assertIn("found==rotations.end()){releaseAssistantJoint(joint)", removed)
+        self.assertIn("releaseAssistantRotations()", function("fsposingmotion.cpp", "void FSPosingMotion::onDeactivate"))
+    def test_idle_tick_and_native_takeover_prevent_masked_motion_resume(self):
+        source = (ROOT / "indra/newview/fsposelistener.cpp").read_text()
+        self.assertIn("gIdleCallbacks.addFunction([](void*){fs_pose_tick();})", source)
+        tick = function("fsposeranimator.cpp", "void FSPoserAnimator::tickAssistantPoses")
+        self.assertIn("!motion->assistantAuthorityValid()", tick)
+        self.assertIn("stopAssistantPose", tick)
+        takeover = function("fsposeranimator.cpp", "bool FSPoserAnimator::tryPosingAvatar")
+        self.assertLess(takeover.index("invalidateAssistantPose(avatar)"), takeover.index("findOrCreatePosingMotion(avatar)"))
+        update = function("fsposingmotion.cpp", "bool FSPosingMotion::onUpdate")
+        self.assertNotIn("return false", update)
+        self.assertIn("avatar->LLCharacter::stopMotion(id,true)", function("fsposeranimator.cpp", "bool FSPoserAnimator::stopAssistantPose"))
+        authority = function("fsposingmotion.cpp", "bool FSPosingMotion::assistantAuthorityValid")
+        self.assertIn("mAssistantRevoked=true", authority)
     def test_file_load_uses_bounded_parser_and_confined_store(self):
         source = (ROOT / "indra/newview/fsposelistener.cpp").read_text()
         self.assertNotIn("loadPoseFromXml", source)
