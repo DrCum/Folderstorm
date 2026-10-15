@@ -239,8 +239,11 @@ public:
   const auto op=operation.request["op"].asString();if(op=="status" || op=="joints" || op=="presets")return true;
   if(std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"pose_read")==operation.requiredClasses.end())operation.requiredClasses.push_back("pose_read");
   if(op=="save" && std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"pose_save")==operation.requiredClasses.end())operation.requiredClasses.push_back("pose_save");
-  operation.summary=llsd::map("op",op,"subject_count",1,"subjects",LLSD::emptyArray(),"consequences",LLSD::emptyArray(),"visibility","local_viewer","reference_frame","local","rotations",operation.validation["effect_rotations"]);
+  operation.summary=llsd::map("op",std::string("pose_")+op,"subject_count",1,"subjects",LLSD::emptyArray(),"consequences",LLSD::emptyArray(),"visibility","local_viewer","reference_frame","local","rotations",operation.validation["effect_rotations"]);
   operation.summary["subjects"].append(llsd::map("id",gAgentID,"name","Your avatar","after_name",op=="save"?"Save a new rotation-only native preset":"Change only this source's private joint rotations"));
+  for(const auto& joint:llsd::inMap(operation.validation["effect_rotations"]))
+   operation.summary["subjects"].append(llsd::map("name",joint.first,"after_name",ll_pretty_print_sd(joint.second)));
+  operation.summary["subject_count"]=operation.summary["subjects"].size();
   operation.summary["consequences"].append("pose_local_rotations");return true;
  }
  bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error) const override{return validate(operation,error);}

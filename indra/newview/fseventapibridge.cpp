@@ -40,6 +40,7 @@
 #include "fscontentlistener.h"
 #include "fsgesturelistener.h"
 #include "fspreferenceslistener.h"
+#include "fsposelistener.h"
 
 #include "llapr.h"
 #include "llapp.h"
@@ -379,6 +380,7 @@ public:
         fs_initialize_content_api();
         fs_initialize_gesture_api();
         fs_initialize_preferences_api();
+        fs_initialize_pose_api();
         mSocial=std::make_shared<FSAssistantSocial>();
         refreshSocialPrivacy();
     }
