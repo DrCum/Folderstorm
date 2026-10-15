@@ -12,6 +12,8 @@ void file(const fs::path& path,const std::string& bytes){std::ofstream out(path,
 int main()
 {
  using fs_pose::NativePoseStore;
+ const std::string unicodeName="caf\xc3\xa9.xml";
+ assert(fs_pose::pathUTF8(fs_pose::pathFromUTF8(unicodeName))==unicodeName);
 #ifndef _WIN32
  char pattern[]="/tmp/pose-store-test-XXXXXX";const auto root=fs::path(::mkdtemp(pattern));assert(!root.empty());
  const auto settings=root/"settings",outside=root/"outside";fs::create_directory(settings);fs::create_directory(outside);

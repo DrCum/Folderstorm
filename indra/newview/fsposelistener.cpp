@@ -282,7 +282,7 @@ public:
    LLSD result;result["presets"]=LLSD::emptyArray();NativePoseStore store;
    if(!store.open(poseDirectory().parent_path(),false,error,true))return response.error(error);
    for(const auto& name:store.names())
-   {const auto id=presetKey(name);std::string bytes,reason;Rotations rotations;const bool readable=store.read(name,bytes,reason);const bool supported=readable && parsePreset(bytes,rotations,reason);result["presets"].append(llsd::map("id",id,"name",pathString(std::filesystem::u8path(name).stem()),"revision",readable?hash(bytes):std::string(),"supported",supported,"reason",reason));}
+   {const auto id=presetKey(name);std::string bytes,reason;Rotations rotations;const bool readable=store.read(name,bytes,reason);const bool supported=readable && parsePreset(bytes,rotations,reason);result["presets"].append(llsd::map("id",id,"name",pathString(pathFromUTF8(name).stem()),"revision",readable?hash(bytes):std::string(),"supported",supported,"reason",reason));}
    response.setResponse(result);return;
   }
   if(sReceipts.size()>=64){auto old=sReceipts.begin();while(old!=sReceipts.end() && old->first==sSession.operation)++old;if(old!=sReceipts.end())sReceipts.erase(old);}

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 #ifdef _WIN32
@@ -21,6 +22,20 @@
 namespace fs_pose {
 inline std::string pathUTF8(const std::filesystem::path& path)
 {const auto bytes=path.u8string();return std::string(reinterpret_cast<const char*>(bytes.data()),bytes.size());}
+inline std::filesystem::path pathFromUTF8(const std::string& bytes)
+{
+#ifdef _WIN32
+ if(bytes.empty() || bytes.size()>static_cast<std::size_t>((std::numeric_limits<int>::max)()))return {};
+ const auto length=static_cast<int>(bytes.size());
+ const auto count=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,bytes.data(),length,nullptr,0);
+ if(count<=0)return {};
+ std::wstring wide(static_cast<std::size_t>(count),L'\0');
+ if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,bytes.data(),length,wide.data(),count)!=count)return {};
+ return std::filesystem::path(wide);
+#else
+ return std::filesystem::path(bytes);
+#endif
+}
 inline bool presetFileName(const std::string& name)
 {return name.size()>4 && name.size()<=255 && name.substr(name.size()-4)==".xml" && name.find_first_of("/\\:\0",0,4)==std::string::npos;}
 // All I/O is relative to pinned non-symlink directories on POSIX. Windows has
@@ -112,7 +127,7 @@ public:
   if(mMissing)return false;
   if(!mOpen)return true;
 #ifdef _WIN32
-  return GetFileAttributesW(nativePath(mPath/std::filesystem::u8path(name)).c_str())!=INVALID_FILE_ATTRIBUTES;
+  return GetFileAttributesW(nativePath(mPath/pathFromUTF8(name)).c_str())!=INVALID_FILE_ATTRIBUTES;
 #else
   struct stat info{};return ::fstatat(mDirectory,name.c_str(),&info,AT_SYMLINK_NOFOLLOW)==0 || errno!=ENOENT;
 #endif
@@ -147,7 +162,7 @@ public:
  {
   if(!mOpen || !presetFileName(name)){error="Preset is outside the native pose store";return false;}
 #ifdef _WIN32
-  const auto file=CreateFileW(nativePath(mPath/std::filesystem::u8path(name)).c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+  const auto file=CreateFileW(nativePath(mPath/pathFromUTF8(name)).c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
 #else
   const auto file=::openat(mDirectory,name.c_str(),O_RDONLY|O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC);
 #endif
@@ -170,7 +185,7 @@ public:
  {
   Write result;if(!mOpen || !presetFileName(name) || bytes.empty() || bytes.size()>presetLimit){error="Preset save is outside the bounded native store";return result;}
 #ifdef _WIN32
-  const auto file=CreateFileW(nativePath(mPath/std::filesystem::u8path(name)).c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+  const auto file=CreateFileW(nativePath(mPath/pathFromUTF8(name)).c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
 #else
   const auto file=::openat(mDirectory,name.c_str(),O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600);
 #endif
