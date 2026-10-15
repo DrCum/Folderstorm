@@ -26,6 +26,7 @@
 #include <vector>
 
 struct FSLinkReplacementSelection;
+bool fs_assistant_request_allowed(const LLSD& request);
 
 struct FSAssistantExecutionContext
 {

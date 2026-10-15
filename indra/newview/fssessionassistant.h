@@ -1,0 +1,17 @@
+/** SPDX-License-Identifier: LGPL-2.1-or-later */
+#ifndef FS_SESSION_ASSISTANT_H
+#define FS_SESSION_ASSISTANT_H
+#include "fssessionchatmodel.h"
+namespace fs_session
+{
+constexpr const char* AssistantAttentionId="00000000-0000-4000-8000-000000000016";
+enum AssistantFlag : unsigned int {AssistantEnabled=1,AssistantReady=2,AssistantPaused=4,AssistantSessionOnly=8};
+inline bool assistantInfoOwned(const Message& info,const Message& source)
+{return info.state==State::Ready && !(info.flags&Error) && ChatKey{source.worker,source.generation,source.account,source.grid,{}}.owns(info);}
+inline Message assistantAttention(const Message& info)
+{
+    auto item=info;item.eventType=EventType::Attention;item.topic=Topic::Notice;item.conversation=AssistantAttentionId;
+    item.title="Local Assistant requests ("+std::to_string(info.unread)+")";return item;
+}
+}
+#endif

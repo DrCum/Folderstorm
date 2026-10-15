@@ -6,6 +6,7 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fssessionworker.h"
+#include "llsd.h"
 
 #if LL_WINDOWS
 #include "fssessionpipe.h"
@@ -35,6 +36,7 @@
 #include "llrender.h"
 #include "llrender2dutils.h"
 #include "fseventapibridge.h"
+#include "fssessionassistant.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
 #include "llagent.h"
@@ -210,6 +212,8 @@ struct Worker : LLIMSessionObserver
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false, recoveryShown = false;
+    bool assistantHold=false;
+    std::string assistantProfile;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
     bool permitVoice = false, muteBackground = true, hostUI = false, chatBlocked = false, shortcuts = false, shellShortcuts = false;
@@ -622,7 +626,7 @@ struct Worker : LLIMSessionObserver
         releaseInput();
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
-        detached = true;contactSearch.reset();friendSnapshot.clear();friendToken=0;
+        detached = true;assistantHold=false;contactSearch.reset();friendSnapshot.clear();friendToken=0;
         toolbarImport.clear(); accountImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); disconnectSessionObserver(); events.clear();
@@ -806,6 +810,54 @@ struct Worker : LLIMSessionObserver
         { reply(request, "Session changed; action was not applied."); return; }
         switch (request.kind)
         {
+        case Kind::AssistantInfo:
+        case Kind::AssistantConfigure:
+        case Kind::AssistantPause:
+        case Kind::AssistantReview:
+        {
+            if(!ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
+            {reply(request,"Local Assistant login changed or is unavailable.");break;}
+            auto& bridge=FSEventAPIBridge::instance();
+            if(request.kind==Kind::AssistantConfigure)
+            {
+                auto control=gSavedSettings.getControl("EnableLocalEventAPIBridge");
+                if(request.width>1 || !control || control->hasUnsavedValue() || LLFloaterReg::instanceVisible("preferences") ||
+                    request.cursor!=static_cast<std::uint64_t>(FSEventAPIBridge::getPolicyGeneration()) || request.height!=(control->getValue().asBoolean()?1u:0u))
+                {reply(request,"Local Assistant settings changed or have an open/session-only draft. Use native Preferences.");break;}
+                control->setValue(LLSD(request.width!=0),true);
+                const auto file=gSavedSettings.getString("ClientSettingsFile");
+                if(file.empty() || !gSavedSettings.saveToFile(file,true))
+                {reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
+            }
+            else if(request.kind==Kind::AssistantPause)
+            {
+                if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
+                assistantHold=request.width!=0;
+                bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+            }
+            else if(request.kind==Kind::AssistantReview)
+            {
+                if(request.unread>1 || !FSSessionWorker::assistantActiveAllowed())
+                {reply(request,"Activate this character and close conflicting dialogs before reviewing.");break;}
+                SetForegroundWindow(window);
+                if(request.unread)LLFloaterReg::showInstance("preferences",llsd::map("tab","local_assistant"),true);
+                else bridge.reviewPending();
+            }
+            if(!request.title.empty())assistantProfile=boundedText(request.title,128);
+            bridge.refreshSession();
+            const auto snapshot=bridge.getStatusSnapshot();
+            auto response=status(request);
+            auto control=gSavedSettings.getControl("EnableLocalEventAPIBridge");
+            response.width=(snapshot.enabled?AssistantEnabled:0u)|(snapshot.ready?AssistantReady:0u)|(assistantHold?AssistantPaused:0u)|
+                (control && control->hasUnsavedValue()?AssistantSessionOnly:0u);
+            response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
+            response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);
+            response.event=static_cast<std::uint64_t>(snapshot.approvalRevision);
+            response.text=bridge.getStatusSnapshot().ready?bridge.sessionReference():std::string();
+            response.detail=boundedText(snapshot.error,118);
+            response.title="Local Assistant";
+            pipe.send(response);break;
+        }
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
@@ -1043,6 +1095,19 @@ bool FSSessionWorker::initialize()
     return true;
 }
 bool FSSessionWorker::managed() { return worker && !worker->detached; }
+LLSD FSSessionWorker::assistantIdentity()
+{
+    if(!worker)return LLSD::emptyMap();
+    return llsd::map("worker",LLUUID(worker->id.data()).asString(),"generation",std::to_string(worker->generation),
+        "profile",worker->assistantProfile,"name",worker->loginName,"grid",worker->loginGrid);
+}
+bool FSSessionWorker::assistantPaused() {return managed() && worker->assistantHold;}
+bool FSSessionWorker::assistantActiveAllowed()
+{
+    if(!managed())return true;
+    return worker->ready() && worker->inputGranted && worker->mode==Mode::Active && !worker->promoting && !worker->demoting &&
+        !worker->transition.active() && !gTeleportDisplay && !gFocusMgr.focusLocked() && !LLFloaterReg::instanceVisible("preferences");
+}
 void FSSessionWorker::importProfileSettings()
 {
     if (!managed()) return;
@@ -1675,6 +1740,9 @@ void FSSessionWorker::shutdown()
 #else
 bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
+LLSD FSSessionWorker::assistantIdentity() {return LLSD::emptyMap();}
+bool FSSessionWorker::assistantPaused() {return false;}
+bool FSSessionWorker::assistantActiveAllowed() {return true;}
 bool FSSessionWorker::nativeChatReadAllowed() { return true; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}

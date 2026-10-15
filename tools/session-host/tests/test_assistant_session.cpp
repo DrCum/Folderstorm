@@ -1,5 +1,6 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #include "fsassistantsession.h"
+#include "fssessionassistant.h"
 #include <cassert>
 #include <iostream>
 int main()
@@ -19,5 +20,18 @@ int main()
     assert(needsActiveCharacter("LLWorkspace","previous"));
     assert(needsActiveCharacter("LLCamera","snapshot"));
     assert(needsActiveCharacter("LLInventory","snapshotUpload"));
+    using namespace fs_session;
+    Message source;source.worker[0]=1;source.generation=7;source.state=State::Ready;
+    source.account="01234567-89ab-cdef-0123-456789abcdef";source.grid="secondlife";source.sequence=1;
+    auto info=source;info.kind=Kind::Status;info.width=AssistantEnabled|AssistantReady;info.unread=2;info.event=9;
+    assert(assistantInfoOwned(info,source));
+    const auto attention=assistantAttention(info);
+    assert(attention.conversation==AssistantAttentionId && attention.unread==2 && attention.event==9);
+    assert(attention.eventType==EventType::Attention && attention.title.find("2")!=std::string::npos);
+    info.generation++;assert(!assistantInfoOwned(info,source));info=source;
+    info.account="11234567-89ab-cdef-0123-456789abcdef";assert(!assistantInfoOwned(info,source));
+    info=source;info.flags=Error;assert(!assistantInfoOwned(info,source));
+    for(const auto command:{Kind::AssistantInfo,Kind::AssistantConfigure,Kind::AssistantReview,Kind::AssistantPause})
+    {auto request=source;request.kind=command;Frame wire{};Message roundtrip;assert(encode(request,wire) && decode(wire,roundtrip) && roundtrip.kind==command);}
     std::cout<<"Assistant session targeting and active-character eligibility passed.\n";
 }

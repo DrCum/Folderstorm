@@ -123,6 +123,7 @@ public:
         LLUUID id;
         LLUUID source_id;
         LLUUID destination_root_id;
+        LLUUID session;
         F64 expires_at;
         std::vector<NoCopyMove> moves;
     };

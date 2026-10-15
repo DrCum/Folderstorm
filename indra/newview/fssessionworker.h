@@ -7,12 +7,16 @@
 #ifndef FS_SESSION_WORKER_H
 #define FS_SESSION_WORKER_H
 #include <string>
+class LLSD;
 class FSSessionWorker
 {
 public:
     enum class LoginGate { Allow, Wait, Deny };
     static bool initialize(); // Valid inherited capability or ordinary viewer.
     static bool managed();
+    static LLSD assistantIdentity();
+    static bool assistantPaused();
+    static bool assistantActiveAllowed();
     static void configure(); // Temporary settings only, after command line.
     static void importProfileSettings(); // Explicit host choice; before UI/login, native backup eligibility.
     static void importProfileAccountSettings(); // First successful account only; reviewed controls, not account contents.

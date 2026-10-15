@@ -4,6 +4,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsassistantoperation.h"
 
 #include "llcameralistener.h"
 
@@ -242,11 +243,15 @@ bool fs_capture_snapshot_image(const FSSnapshotFrame& frame, LLPointer<LLImageRa
 
 void LLCameraListener::get(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(camera_state(), data);
 }
 
 void LLCameraListener::setPose(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     std::string preset = data["preset"].asString();
     LLStringUtil::trim(preset);
@@ -284,6 +289,8 @@ void LLCameraListener::setPose(LLSD const& data)
 
 void LLCameraListener::set(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     LLVector3 position;
     LLVector3 focus;
@@ -304,6 +311,8 @@ void LLCameraListener::set(LLSD const& data)
 
 void LLCameraListener::reset(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     gAgentCamera.changeCameraToDefault();
     response["ok"] = true;
@@ -312,6 +321,8 @@ void LLCameraListener::reset(LLSD const& data)
 
 void LLCameraListener::snapshot(LLSD const& data)
 {
+    if(!fs_assistant_request_allowed(data))
+    {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
     Response response(LLSD(), data);
     FSSnapshotFrame frame;
     std::string error;
