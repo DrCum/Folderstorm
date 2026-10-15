@@ -93,6 +93,12 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         # Canonical UUID keys prevent alternate UUID casing bypassing visibility.
         self.assertIn('id=conversationKey(request["conversation_id"].asString())', text)
         self.assertIn('conversationID=conversationKey(request["conversation_id"].asString())', text)
+        flush = text[text.index("void flush()"):text.index("void sync()")]
+        self.assertNotIn("closed.clear()", flush)
+        sync = text[text.index("void sync()"):text.index("void connect()")]
+        self.assertIn("if(changed){flush();closed.clear();", sync)
+        bridge_change = sync[sync.index("else if(bindingChanged)"):]
+        self.assertNotIn("closed.clear()", bridge_change)
 
     def test_privacy_flush_fences_pre_revocation_translations(self):
         text = source("fsassistantsocial.cpp")

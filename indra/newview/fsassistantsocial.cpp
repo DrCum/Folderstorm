@@ -195,14 +195,16 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
         // delivered under a later permission/bridge epoch. Nearby mTime uses
         // this exact frame clock at simulator ingress, before translation.
         privacyIngress.advance(LLIMModel::assistantLiveSequence(),LLFrameTimer::getElapsedSeconds());
-        ++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();searchSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");
+        // Closed IDs/fences express local visibility intent and contain no
+        // retained content. Preserve them across same-login authority changes.
+        ++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();searchSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();receipts.clear();cancelProfile("privacy_changed");
     }
     void sync()
     {
         const bool changed=account!=gAgentID || login!=gAgent.getSessionID() || grid!=LLGridManager::getInstance()->getGrid();
         const auto opaque=bridgeReference();const bool bindingChanged=viewerSession!=opaque;
         const bool blocked=!ready() || !visible() || opaque.empty();
-        if(changed){flush();streams.clear();receipts.clear();submittedIDs.clear();sends.clear();account=gAgentID;login=gAgent.getSessionID();grid=LLGridManager::getInstance()->getGrid();viewerSession=opaque;}
+        if(changed){flush();closed.clear();streams.clear();receipts.clear();submittedIDs.clear();sends.clear();account=gAgentID;login=gAgent.getSessionID();grid=LLGridManager::getInstance()->getGrid();viewerSession=opaque;}
         else if(bindingChanged){flush();viewerSession=opaque;}
         else if(blocked!=restricted)flush();restricted=blocked;
         for(auto it=appliedDrafts.begin();it!=appliedDrafts.end();)if(now()>it->second.until)it=appliedDrafts.erase(it);else ++it;

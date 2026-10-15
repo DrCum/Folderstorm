@@ -43,6 +43,14 @@ int main()
     visibility.observeIncoming("conversation",19,true);assert(!visibility.visible("conversation"));
     visibility.observeIncoming("conversation",22,true);assert(visibility.visible("conversation"));
     assert(visibility.hide("conversation",23));visibility.open("conversation");assert(visibility.visible("conversation"));
+    assert(visibility.hide("conversation",24));
+    privacyFence.advance(24,11); // same-login revoke/re-enable preserves local close intent
+    privacyFence.advance(25,12); // bridge reference replacement likewise preserves it
+    assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",24,true);assert(!visibility.visible("conversation"));
+    visibility.observeIncoming("conversation",26,true);assert(visibility.visible("conversation"));
+    assert(visibility.hide("conversation",27));visibility.clear(); // actual native login replacement
+    assert(visibility.visible("conversation"));
     assert(validText("hello") && !validText("") && !validText(std::string(1024,'x')) && !validText(std::string("x\0y",3)));
     Cursors cursors;Reader reader;reader.binding="viewer-login-grid";reader.epoch=3;reader.topics={"chat"};reader.positions["chat"]=8;
     cursors.save("opaque-a",reader,0);Reader output;
