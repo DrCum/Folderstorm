@@ -3,6 +3,7 @@
 #define FS_HOST_CONTROLLER_MODEL_H
 #include "fssessionstorecodec.h"
 #include "fssessionregistry.h"
+#include <limits>
 #include <map>
 #include <set>
 #include <vector>
@@ -116,13 +117,27 @@ class Operations
 {
 public:
     std::map<std::string,Receipt> receipts;
-    std::uint64_t admissionHighWater=0;
+    std::uint64_t admissionHighWater=0,admissionMonotonic=0;
+    bool admissionAnchored=false;
     Receipt* find(const std::string& id){const auto it=receipts.find(id);return it==receipts.end()?nullptr:&it->second;}
     // Duplicate lookup precedes fresh admission; never replay a submitted ID.
     Receipt* admit(const Request& request,const std::vector<Source>& sources,std::uint64_t policy,std::uint64_t now,std::string& error,std::uint64_t monotonicNow=0)
     {
-        if(auto* old=find(request.id)){if(old->request.encode(false)!=request.encode(false)){error="request_id_conflict";return nullptr;}return old;}
+        // Advance UTC's admission floor through idle time before retention can
+        // evict a tombstone. Observed wall time alone can roll back near its ID.
+        if(monotonicNow)
+        {
+            if(admissionAnchored&&monotonicNow>=admissionMonotonic)
+            {
+                const auto elapsed=monotonicNow-admissionMonotonic;
+                const auto maximum=(std::numeric_limits<std::uint64_t>::max)();
+                admissionHighWater=elapsed>maximum-admissionHighWater?maximum:admissionHighWater+elapsed;
+            }
+            if(!admissionAnchored||monotonicNow>=admissionMonotonic)admissionMonotonic=monotonicNow;
+            admissionAnchored=true;
+        }
         admissionHighWater=(std::max)(admissionHighWater,now);
+        if(auto* old=find(request.id)){if(old->request.encode(false)!=request.encode(false)){error="request_id_conflict";return nullptr;}return old;}
         if(!freshRequest(request.id,admissionHighWater)){error="request_expired";return nullptr;}
         const auto retentionNow=monotonicNow?monotonicNow:admissionHighWater;
         for(auto it=receipts.begin();it!=receipts.end();)if(it->second.terminal()&&retentionNow>it->second.created+600000)it=receipts.erase(it);else ++it;

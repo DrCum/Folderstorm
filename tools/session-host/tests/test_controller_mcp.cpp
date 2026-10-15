@@ -55,5 +55,17 @@ int main()
     assert(!clocks.allowed(*timed,config,71000,lookup)&&timed->error=="deadline_expired");
     q.id=std::to_string(now+700000)+"-"+std::string(32,'e');
     assert(clocks.admit(q,{source},config.revision,now+700000,error,1100)&&clocks.receipts.size()==2); // wall-clock jumps do not shorten receipt retention
+    // Idle past retention, then roll UTC back near a completed request. A new
+    // ID must not evict its tombstone while the old timestamp is fresh again.
+    Operations idle;auto original=q;original.id=std::to_string(now)+"-"+std::string(32,'6');
+    auto* completed=idle.admit(original,{source},config.revision,now,error,1000);assert(completed);completed->state="completed";
+    auto rolledBack=original;rolledBack.id=std::to_string(now+1000)+"-"+std::string(32,'7');
+    assert(!idle.admit(rolledBack,{source},config.revision,now+1000,error,702000)&&error=="request_expired");
+    assert(idle.find(original.id)==completed);
+    // A request fresh against elapsed monotonic time may now evict the old
+    // receipt. Its original ID remains expired even while UTC stays rolled back.
+    auto fresh=original;fresh.id=std::to_string(now+701001)+"-"+std::string(32,'8');
+    assert(idle.admit(fresh,{source},config.revision,now+1000,error,702001)&&!idle.find(original.id));
+    assert(!idle.admit(original,{source},config.revision,now+1000,error,702002)&&error=="request_expired");
     return 0;
 }
