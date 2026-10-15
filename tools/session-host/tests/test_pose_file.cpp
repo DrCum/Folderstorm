@@ -15,7 +15,10 @@ int main()
  const std::string unicodeName="caf\xc3\xa9.xml";
  assert(fs_pose::pathUTF8(fs_pose::pathFromUTF8(unicodeName))==unicodeName);
 #ifndef _WIN32
- char pattern[]="/tmp/pose-store-test-XXXXXX";const auto root=fs::path(::mkdtemp(pattern));assert(!root.empty());
+ char pattern[]="/tmp/pose-store-test-XXXXXX";const auto* made=::mkdtemp(pattern);assert(made);
+ // macOS /tmp is a symlink. Resolve only this test fixture; production
+ // preset I/O must continue to reject every symlink ancestor.
+ const auto root=fs::canonical(fs::path(made));assert(!root.empty());
  const auto settings=root/"settings",outside=root/"outside";fs::create_directory(settings);fs::create_directory(outside);
  std::string error,bytes;NativePoseStore absent;assert(absent.open(settings,false,error,true));assert(!absent.exists("new.xml"));
  NativePoseStore store;assert(store.open(settings,true,error));assert(store.writeNew("my_pose.xml","original",error).saved);
