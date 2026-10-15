@@ -5,11 +5,13 @@
 #include <windowsx.h>
 #include "fssessiondialoglayout.h"
 #include "lucide.h"
+#include "accessibility.h"
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <optional>
 namespace fs_host_ui
 {
 inline void setNativeFont(HWND child,HFONT font)
@@ -36,8 +38,10 @@ class Theme
 {
 public:
     COLORREF background=0,panel=0,text=0,muted=0,accent=0,border=0,input=0;
-    HBRUSH backBrush=nullptr,panelBrush=nullptr,inputBrush=nullptr;
-    bool highContrast=false,dark=true;
+    HBRUSH backBrush=nullptr,panelBrush=nullptr,inputBrush=nullptr,selectionBrush=nullptr;
+    COLORREF selectionText=0;
+    bool highContrast=false,systemHighContrast=false,dark=true;
+    AccessibleNames accessible;
     IconCache icons;
     unsigned int textPercent=100;
     int uiDpi(unsigned int dpi) const {return MulDiv(static_cast<int>(dpi),static_cast<int>(textPercent),100);}
@@ -46,6 +50,8 @@ public:
     Theme(const Theme&)=delete;Theme& operator=(const Theme&)=delete;
     static LRESULT CALLBACK hoverProc(HWND child,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR)
     {
+        if(message==WM_SIZE || message==WM_SETFONT || message==WM_ENABLE || message==WM_SETTEXT)
+        {const auto result=DefSubclassProc(child,message,wp,lp);InvalidateRect(child,nullptr,TRUE);return result;}
         if(message==WM_MOUSEMOVE && !GetPropW(child,L"FolderstormHover"))
         {SetPropW(child,L"FolderstormHover",reinterpret_cast<HANDLE>(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,child,0};TrackMouseEvent(&track);InvalidateRect(child,nullptr,FALSE);}
         if(message==WM_MOUSELEAVE){RemovePropW(child,L"FolderstormHover");InvalidateRect(child,nullptr,FALSE);}
@@ -55,29 +61,32 @@ public:
     void selection(const DRAWITEMSTRUCT& d) const
     {
         const bool selected=(d.itemState&ODS_SELECTED)!=0 && !(d.itemState&ODS_COMBOBOXEDIT);
-        FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected?panelBrush:inputBrush);
-        SetTextColor(d.hDC,(d.itemState&ODS_DISABLED)?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
+        FillRect(d.hDC,&d.rcItem,selected?selectionBrush:inputBrush);
+        SetTextColor(d.hDC,(d.itemState&ODS_DISABLED)?muted:selected?selectionText:text);
     }
     void selectionFocus(const DRAWITEMSTRUCT& d) const
     {
         if(!highContrast){if((d.itemState&(ODS_SELECTED|ODS_FOCUS)) && !(d.itemState&ODS_COMBOBOXEDIT)){const HBRUSH line=CreateSolidBrush(accent);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);}}
         else if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
     }
-    void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);backBrush=panelBrush=inputBrush=nullptr;}
-    void set(unsigned int choice)
+    void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);if(selectionBrush)DeleteObject(selectionBrush);backBrush=panelBrush=inputBrush=selectionBrush=nullptr;}
+    void set(unsigned int choice,bool forceContrast=false)
     {
         icons.clear();
         DWORD percent=100,bytes=sizeof(percent);
         RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Accessibility",L"TextScaleFactor",RRF_RT_REG_DWORD,nullptr,&percent,&bytes);
         textPercent=(std::max)(100u,(std::min)(225u,static_cast<unsigned int>(percent)));
-        HIGHCONTRASTW hc{};hc.cbSize=sizeof(hc);highContrast=SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(hc),&hc,0) && (hc.dwFlags&HCF_HIGHCONTRASTON);
+        HIGHCONTRASTW hc{};hc.cbSize=sizeof(hc);systemHighContrast=SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(hc),&hc,0) && (hc.dwFlags&HCF_HIGHCONTRASTON);highContrast=systemHighContrast || forceContrast;
         DWORD light=1,size=sizeof(light);if(choice==2)RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
         dark=choice==0 || (choice==2 && light==0);
         background=dark?RGB(17,16,22):RGB(247,245,251);panel=dark?RGB(26,25,33):RGB(255,255,255);
         text=dark?RGB(245,243,250):RGB(33,26,43);muted=dark?RGB(173,169,186):RGB(97,86,111);
         accent=dark?RGB(191,164,252):RGB(108,63,168);border=dark?RGB(115,103,135):RGB(137,125,157);input=background;
-        if(highContrast){background=panel=GetSysColor(COLOR_BTNFACE);input=GetSysColor(COLOR_WINDOW);text=GetSysColor(COLOR_WINDOWTEXT);muted=GetSysColor(COLOR_GRAYTEXT);accent=GetSysColor(COLOR_HIGHLIGHT);border=text;}
+        if(systemHighContrast){background=panel=GetSysColor(COLOR_BTNFACE);input=GetSysColor(COLOR_WINDOW);text=GetSysColor(COLOR_WINDOWTEXT);muted=GetSysColor(COLOR_GRAYTEXT);accent=GetSysColor(COLOR_HIGHLIGHT);border=text;}
+        else if(highContrast){background=input=RGB(0,0,0);panel=RGB(24,24,24);text=border=RGB(255,255,255);muted=RGB(190,190,190);accent=RGB(255,255,0);dark=true;}
         release();backBrush=CreateSolidBrush(background);panelBrush=CreateSolidBrush(panel);inputBrush=CreateSolidBrush(input);
+        selectionBrush=CreateSolidBrush(systemHighContrast?GetSysColor(COLOR_HIGHLIGHT):highContrast?accent:panel);
+        selectionText=systemHighContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):highContrast?RGB(0,0,0):text;
     }
     void paintScrollbar(HWND child,HDC dc,const RECT& rect,bool vertical,int kind) const
     {
@@ -278,23 +287,37 @@ public:
         const auto& theme=*reinterpret_cast<const Theme*>(data);
         if(message==WM_NCDESTROY)
         {
-            removeScroll(child);RemoveWindowSubclass(child,controlProc,4);return DefSubclassProc(child,message,wp,lp);
+            RemovePropW(child,L"FolderstormToggleControl");removeScroll(child);RemoveWindowSubclass(child,controlProc,4);return DefSubclassProc(child,message,wp,lp);
         }
-        if(!theme.highContrast && scrollDrag(child))
+        if(GetPropW(child,L"FolderstormToggleControl") && (message==WM_SETFOCUS || message==WM_KILLFOCUS || message==BM_SETSTATE || message==BM_SETCHECK || message==WM_UPDATEUISTATE))
+        {const auto result=DefSubclassProc(child,message,wp,lp);InvalidateRect(child,nullptr,TRUE);return result;}
+        if(GetPropW(child,L"FolderstormToggleControl") && (message==WM_PAINT || message==WM_PRINTCLIENT))
+        {
+            PAINTSTRUCT paint{};const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):BeginPaint(child,&paint);
+            if(dc)
+            {
+                DRAWITEMSTRUCT item{};item.CtlType=ODT_BUTTON;item.hwndItem=child;item.hDC=dc;GetClientRect(child,&item.rcItem);
+                if(GetFocus()==child)item.itemState|=ODS_FOCUS;if(!IsWindowEnabled(child))item.itemState|=ODS_DISABLED;
+                if(SendMessageW(child,BM_GETSTATE,0,0)&BST_PUSHED)item.itemState|=ODS_SELECTED;
+                theme.button(item);
+            }
+            if(message!=WM_PRINTCLIENT)EndPaint(child,&paint);return 0;
+        }
+        if(!theme.systemHighContrast && scrollDrag(child))
         {bool handled=false;const auto result=scrollControl(child,message,wp,lp,handled);if(handled)return result;}
-        if(!theme.highContrast && (message==WM_SETFOCUS || message==WM_KILLFOCUS || message==WM_ENABLE || message==CB_SETCURSEL || message==CB_SHOWDROPDOWN))
+        if(!theme.systemHighContrast && (message==WM_SETFOCUS || message==WM_KILLFOCUS || message==WM_ENABLE || message==CB_SETCURSEL || message==CB_SHOWDROPDOWN))
         {wchar_t klass[32]{};GetClassNameW(child,klass,32);if(!_wcsicmp(klass,L"COMBOBOX")){const auto result=DefSubclassProc(child,message,wp,lp);InvalidateRect(child,nullptr,FALSE);return result;}}
-        if(!theme.highContrast && message==WM_NCPAINT)
+        if(!theme.systemHighContrast && message==WM_NCPAINT)
         {theme.paintNonClient(child);return 0;}
-        if(!theme.highContrast && (message==WM_PAINT || message==WM_PRINTCLIENT))
+        if(!theme.systemHighContrast && (message==WM_PAINT || message==WM_PRINTCLIENT))
         {
             wchar_t klass[32]{};GetClassNameW(child,klass,32);
             if(_wcsicmp(klass,L"COMBOBOX") && _wcsicmp(klass,L"BUTTON") && _wcsicmp(klass,WC_TABCONTROLW) && _wcsicmp(klass,L"SCROLLBAR")){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
             PAINTSTRUCT paint{};const HDC dc=message==WM_PRINTCLIENT?reinterpret_cast<HDC>(wp):BeginPaint(child,&paint);
             if(dc)theme.paintControl(child,dc,klass);if(message!=WM_PRINTCLIENT)EndPaint(child,&paint);return 0;
         }
-        if(!theme.highContrast && (message==WM_VSCROLL || message==WM_HSCROLL)){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
-        if(!theme.highContrast && GetPropW(child,L"FolderstormNativeScroll") &&
+        if(!theme.systemHighContrast && (message==WM_VSCROLL || message==WM_HSCROLL)){const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
+        if(!theme.systemHighContrast && GetPropW(child,L"FolderstormNativeScroll") &&
            (message==WM_WINDOWPOSCHANGED || message==WM_SHOWWINDOW || message==WM_SIZE || message==WM_NCACTIVATE ||
             message==WM_MOUSEMOVE || message==WM_NCMOUSEMOVE || message==WM_MOUSEWHEEL))
         {const auto result=DefSubclassProc(child,message,wp,lp);theme.paintNonClient(child);return result;}
@@ -307,7 +330,7 @@ public:
         {
             const auto& t=*reinterpret_cast<const Theme*>(arg);
             wchar_t name[32]{};GetClassNameW(child,name,32);
-            if(!t.highContrast)SetWindowTheme(child,L"",L"");else SetWindowTheme(child,nullptr,nullptr);
+            if(!t.systemHighContrast)SetWindowTheme(child,L"",L"");else SetWindowTheme(child,nullptr,nullptr);
             if(_wcsicmp(name,L"BUTTON")==0)
             {
                 const auto style=GetWindowLongPtrW(child,GWL_STYLE);const auto kind=style&BS_TYPEMASK;
@@ -315,11 +338,11 @@ public:
                 if(kind==BS_PUSHBUTTON || kind==BS_DEFPUSHBUTTON || kind==BS_OWNERDRAW)SetWindowSubclass(child,hoverProc,2,0);
             }
             if(!_wcsicmp(name,L"SCROLLBAR"))
-                installScroll(child,false,t.highContrast);
-            if(!_wcsicmp(name,L"LISTBOX"))installScroll(child,true,t.highContrast);
+                installScroll(child,false,t.systemHighContrast);
+            if(!_wcsicmp(name,L"LISTBOX"))installScroll(child,true,t.systemHighContrast);
             const auto controlStyle=GetWindowLongPtrW(child,GWL_STYLE);const auto checkboxKind=controlStyle&BS_TYPEMASK;
             if(!_wcsicmp(name,L"COMBOBOX"))
-            {COMBOBOXINFO combo{};combo.cbSize=sizeof(combo);if(GetComboBoxInfo(child,&combo) && combo.hwndList){SetWindowTheme(combo.hwndList,t.highContrast?nullptr:L"",t.highContrast?nullptr:L"");installScroll(combo.hwndList,true,t.highContrast);SetWindowSubclass(combo.hwndList,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));}}
+            {COMBOBOXINFO combo{};combo.cbSize=sizeof(combo);if(GetComboBoxInfo(child,&combo) && combo.hwndList){SetWindowTheme(combo.hwndList,t.systemHighContrast?nullptr:L"",t.systemHighContrast?nullptr:L"");installScroll(combo.hwndList,true,t.systemHighContrast);SetWindowSubclass(combo.hwndList,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));}}
             if((controlStyle&(WS_HSCROLL|WS_VSCROLL)) || !_wcsicmp(name,L"LISTBOX") || !_wcsicmp(name,L"COMBOBOX") || !_wcsicmp(name,WC_TABCONTROLW) || !_wcsicmp(name,L"SCROLLBAR") ||
                (!_wcsicmp(name,L"BUTTON") && (checkboxKind==BS_AUTOCHECKBOX || checkboxKind==BS_CHECKBOX)))
                 SetWindowSubclass(child,controlProc,4,reinterpret_cast<DWORD_PTR>(&t));
@@ -355,15 +378,36 @@ public:
         }
         selectionFocus(d);return true;
     }
+    void checkButton(HWND child,std::optional<bool> checked) const
+    {
+        if(!child)return;
+        const bool prior=GetPropW(child,L"FolderstormToggleControl")!=nullptr;
+        if(prior!=checked.has_value())
+        {
+            auto style=GetWindowLongPtrW(child,GWL_STYLE);
+            style=(style&~(BS_TYPEMASK|BS_PUSHLIKE))|(checked?(BS_CHECKBOX|BS_PUSHLIKE):BS_OWNERDRAW);
+            SetWindowLongPtrW(child,GWL_STYLE,style);
+            if(checked)SetPropW(child,L"FolderstormToggleControl",reinterpret_cast<HANDLE>(1));else RemovePropW(child,L"FolderstormToggleControl");
+            if(!checked)RemoveWindowSubclass(child,controlProc,4);
+            RemovePropW(child,L"FolderstormToggle");InvalidateRect(child,nullptr,TRUE);
+        }
+        if(checked)
+        {
+            SetWindowSubclass(child,controlProc,4,reinterpret_cast<DWORD_PTR>(this));SetWindowSubclass(child,hoverProc,2,0);
+            const auto value=*checked?BST_CHECKED:BST_UNCHECKED;
+            if(SendMessageW(child,BM_GETCHECK,0,0)!=value){SendMessageW(child,BM_SETCHECK,value,0);InvalidateRect(child,nullptr,TRUE);}
+        }
+    }
     bool button(const DRAWITEMSTRUCT& d) const
     {
         if(d.CtlType!=ODT_BUTTON)return false;
-        const bool selected=(d.itemState&ODS_SELECTED)!=0 || GetPropW(d.hwndItem,L"FolderstormToggle"),disabled=(d.itemState&ODS_DISABLED)!=0;
+        const bool selected=(d.itemState&ODS_SELECTED)!=0 || (GetPropW(d.hwndItem,L"FolderstormToggleControl")?SendMessageW(d.hwndItem,BM_GETCHECK,0,0)==BST_CHECKED:GetPropW(d.hwndItem,L"FolderstormToggle")!=nullptr),disabled=(d.itemState&ODS_DISABLED)!=0;
         const bool hovered=GetPropW(d.hwndItem,L"FolderstormHover")!=nullptr;
-        FillRect(d.hDC,&d.rcItem,selected && highContrast?GetSysColorBrush(COLOR_HIGHLIGHT):selected || hovered?panelBrush:backBrush);
+        const int savedDC=SaveDC(d.hDC);
+        FillRect(d.hDC,&d.rcItem,selected?selectionBrush:hovered?panelBrush:backBrush);
         const HBRUSH line=CreateSolidBrush((d.itemState&ODS_FOCUS) || hovered?accent:border);FrameRect(d.hDC,&d.rcItem,line);DeleteObject(line);
         wchar_t label[256]{};GetWindowTextW(d.hwndItem,label,256);RECT r=d.rcItem;InflateRect(&r,-5,-2);
-        SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected && highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):text);
+        SetBkMode(d.hDC,TRANSPARENT);SetTextColor(d.hDC,disabled?muted:selected?selectionText:text);
         const auto old=SelectObject(d.hDC,reinterpret_cast<HFONT>(SendMessageW(d.hwndItem,WM_GETFONT,0,0)));
         const auto icon=buttonIcon(d.hwndItem);const bool withLabel=GetPropW(d.hwndItem,L"FolderstormIconLabel")!=nullptr;
         using WindowDpi=UINT(WINAPI*)(HWND);static const auto windowDpi=reinterpret_cast<WindowDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"),"GetDpiForWindow"));
@@ -375,7 +419,12 @@ public:
         const bool painted=icon!=Icon::None && icons.draw(d.hDC,icon,x,(static_cast<int>(d.rcItem.top+d.rcItem.bottom)-size)/2,size,GetTextColor(d.hDC));
         if(painted && withLabel)r.left=x+size+6;
         if(!painted || withLabel)DrawTextW(d.hDC,label,-1,&r,DT_SINGLELINE|(painted?DT_LEFT:DT_CENTER)|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);if(old)SelectObject(d.hDC,old);
-        if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}return true;
+        if(GetPropW(d.hwndItem,L"FolderstormToggleControl") && SendMessageW(d.hwndItem,BM_GETCHECK,0,0)==BST_CHECKED)
+        {
+            const HPEN pen=CreatePen(PS_SOLID,1,GetTextColor(d.hDC));const auto previous=SelectObject(d.hDC,pen);
+            const int right=static_cast<int>(d.rcItem.right)-2;MoveToEx(d.hDC,right-7,d.rcItem.top+4,nullptr);LineTo(d.hDC,right-5,d.rcItem.top+6);LineTo(d.hDC,right-1,d.rcItem.top+2);SelectObject(d.hDC,previous);DeleteObject(pen);
+        }
+        if(d.itemState&ODS_FOCUS){InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}if(savedDC)RestoreDC(d.hDC,savedDC);return true;
     }
 };
 inline Theme* dialogTheme=nullptr;

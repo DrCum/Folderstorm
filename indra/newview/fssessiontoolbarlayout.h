@@ -38,19 +38,20 @@ struct ToolbarGroups
     int selector=0,mainCount=4,leftEnd=0,rightStart=0,centerStart=0,centerAvailable=0;
     bool mainOverflow=false;
 };
-inline ToolbarGroups toolbarGroups(int width,bool quick,bool pinned=false)
+inline ToolbarGroups toolbarGroups(int width,bool quick,bool pinned=false,const std::vector<int>& mainWidths={})
 {
     width=(std::max)(0,width);
     ToolbarGroups g;const int end=(std::max)(0,width-4),right=pinned?92:60;
     g.rightStart=(std::max)(4,end-right);g.selector=(std::max)(0,(std::min)(180,g.rightStart-12));
     const int reserve=quick?28:0;
-    const auto left=[&](){return 4+g.selector+(g.mainCount+(g.mainOverflow?1:0))*32;};
+    const auto buttons=[&](){int size=g.mainOverflow?32:0;for(int i=0;i<g.mainCount;++i)size+=i<static_cast<int>(mainWidths.size())?(std::max)(1,mainWidths[static_cast<std::size_t>(i)]):32;return size;};
+    const auto left=[&](){return 4+g.selector+buttons();};
     while(g.mainCount>0 && left()+reserve+16>g.rightStart)
     {
-        if(g.selector>80)g.selector=(std::max)(80,g.rightStart-reserve-16-4-g.mainCount*32);
+        if(g.selector>80)g.selector=(std::max)(80,g.rightStart-reserve-16-4-buttons());
         else {--g.mainCount;g.mainOverflow=true;}
     }
-    if(left()+reserve+16>g.rightStart)g.selector=(std::max)(0,g.rightStart-reserve-16-4-(g.mainOverflow?32:0));
+    if(left()+reserve+16>g.rightStart)g.selector=(std::max)(0,g.rightStart-reserve-16-4-buttons());
     g.leftEnd=(std::min)(g.rightStart,left());g.centerStart=g.leftEnd+8;
     g.centerAvailable=(std::max)(0,g.rightStart-8-g.centerStart);
     return g;
