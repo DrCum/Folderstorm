@@ -385,6 +385,10 @@ void LLTransferManager::processTransferInfo(LLMessageSystem *msgp, void **)
         }
 
         LLTSCode ret_code = ttp->dataCallback(packet_id, tmp_data, size);
+        // An optional target read guard can reject a delayed packet after its
+        // source authority changed. Finish immediately instead of waiting for
+        // the sender's final packet and retaining an unauthorized transfer.
+        if(ret_code==LLTS_INSUFFICIENT_PERMISSIONS)status=ret_code;
         if (ret_code == LLTS_OK)
         {
             ttp->setLastPacketID(packet_id);
@@ -509,6 +513,7 @@ void LLTransferManager::processTransferPacket(LLMessageSystem *msgp, void **)
     while (!done)
     {
         LLTSCode ret_code = ttp->dataCallback(packet_id, tmp_data, size);
+        if(ret_code==LLTS_INSUFFICIENT_PERMISSIONS)status=ret_code;
         if (ret_code == LLTS_OK)
         {
             ttp->setLastPacketID(packet_id);

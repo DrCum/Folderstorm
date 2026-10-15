@@ -671,7 +671,21 @@ void LLViewerAssetStorage::assetRequestCoro(
             // Set our destination file, and the completion callback.
             LLTransferTargetParamsVFile tpvf;
             tpvf.setAsset(uuid, atype);
-            tpvf.setCallback(downloadCompleteCallback, *req);
+            if(assistant)
+            {
+                tpvf.setReadGuard([assistant](){return assistant->allowed();});
+                tpvf.setCallback([this,assistant](S32 result,const LLUUID& file_id,LLAssetType::EType type,
+                    LLBaseDownloadRequest* request,LLExtStat ext)
+                {
+                    if(!assistant->allowed())
+                    {
+                        if(assistant->source->alive && gAssetStorage==this)dropDeniedAssistantRequests(file_id,type);
+                        return;
+                    }
+                    downloadCompleteCallback(result,file_id,type,request,ext);
+                },*req);
+            }
+            else tpvf.setCallback(downloadCompleteCallback,*req);
 
             LL_DEBUGS("ViewerAsset") << "Starting transfer for " << uuid << LL_ENDL;
             LLTransferTargetChannel *ttcp = gTransferManager.getTargetChannel(mUpstreamHost, LLTCT_ASSET);

@@ -76,7 +76,12 @@ bool LLTransferTargetParamsVFile::unpackParams(LLDataPacker& dp)
         dp.unpackUUID(dummy_id, "OwnerID");
         dp.unpackUUID(dummy_id, "TaskID");
         dp.unpackUUID(dummy_id, "ItemID");
-        dp.unpackUUID(mAssetID, "AssetID");
+        LLUUID received_asset;
+        dp.unpackUUID(received_asset, "AssetID");
+        // Assistant item reads are bound to a known asset revision. Native
+        // requests with an unknown asset ID retain their resolution behavior.
+        if(mReadGuard && mAssetID.notNull() && received_asset!=mAssetID)return false;
+        mAssetID=received_asset;
         S32 dummy_type;
         dp.unpackS32(dummy_type, "AssetType");
     }
@@ -138,6 +143,7 @@ LLTSCode LLTransferTargetVFile::dataCallback(const S32 packet_id, U8 *in_datap, 
     //LL_INFOS() << "LLTransferTargetFile::dataCallback" << LL_ENDL;
     //LL_INFOS() << "Packet: " << packet_id << LL_ENDL;
 
+    if(!readAllowed())return LLTS_INSUFFICIENT_PERMISSIONS;
     LLFileSystem vf(mTempID, mParams.getAssetType(), LLFileSystem::APPEND);
     if (mNeedsCreate)
     {
@@ -158,6 +164,13 @@ LLTSCode LLTransferTargetVFile::dataCallback(const S32 packet_id, U8 *in_datap, 
 }
 
 
+bool LLTransferTargetVFile::readAllowed()
+{
+    if(mReadDenied)return false;
+    if(mParams.mReadGuard && !mParams.mReadGuard())mReadDenied=true;
+    return !mReadDenied;
+}
+
 void LLTransferTargetVFile::completionCallback(const LLTSCode status)
 {
     //LL_INFOS() << "LLTransferTargetVFile::completionCallback" << LL_ENDL;
@@ -168,9 +181,12 @@ void LLTransferTargetVFile::completionCallback(const LLTSCode status)
         return;
     }
 
+    // A response may arrive after permission/session/region revocation. Never
+    // publish its temp file under a shared asset ID before the callback checks.
+    const LLTSCode completion_status=readAllowed()?status:LLTS_INSUFFICIENT_PERMISSIONS;
     // Still need to gracefully handle error conditions.
     S32 err_code = 0;
-    switch (status)
+    switch (completion_status)
     {
       case LLTS_DONE:
         if (!mNeedsCreate)
@@ -200,7 +216,7 @@ void LLTransferTargetVFile::completionCallback(const LLTSCode status)
       break;
     }
 
-    switch (status)
+    switch (completion_status)
     {
     case LLTS_DONE:
         err_code = LL_ERR_NOERR;

@@ -922,6 +922,7 @@ void LLAssetStorage::getInvItemAsset(
             LLTransferTargetParamsVFile tpvf;
             tpvf.setAsset(asset_id, atype);
             tpvf.setCallback(downloadInvItemCompleteCallback, req);
+            tpvf.setReadGuard(read_guard);
 
             LL_DEBUGS("AssetStorage") << "Starting transfer for inventory asset "
                                       << item_id << " owned by " << owner_id << "," << task_id

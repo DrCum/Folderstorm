@@ -49,5 +49,25 @@ class AssetFetchBoundaryTests(unittest.TestCase):
         request=transfer[transfer.index("void LLTransferTargetChannel::requestTransfer("):transfer.index("void LLTransferTargetChannel::addTransferTarget(")]
         self.assertIn("sendTransferRequest(ttp, source_params, priority)",request)
         self.assertIn("gMessageSystem->sendReliable(mHost)",request)
+        self.assertIn("tpvf.setReadGuard(read_guard)",read)
+
+    def test_udp_packets_and_shared_cache_publication_recheck_captured_origin(self):
+        text=(ROOT.parent / "llmessage" / "lltransfertargetvfile.cpp").read_text()
+        data=text[text.index("LLTSCode LLTransferTargetVFile::dataCallback("):text.index("bool LLTransferTargetVFile::readAllowed()")]
+        self.assertLess(data.index("if(!readAllowed())return LLTS_INSUFFICIENT_PERMISSIONS"),data.index("LLFileSystem vf("))
+        complete=text[text.index("void LLTransferTargetVFile::completionCallback("):]
+        self.assertLess(complete.index("readAllowed()?status:LLTS_INSUFFICIENT_PERMISSIONS"),complete.index("file.rename("))
+        self.assertEqual(complete.count("switch (completion_status)"),2)
+        self.assertIn("vf.remove()",complete)
+        allowed=text[text.index("bool LLTransferTargetVFile::readAllowed()"):text.index("void LLTransferTargetVFile::completionCallback(")]
+        self.assertIn("if(mReadDenied)return false",allowed)
+        self.assertIn("mReadDenied=true",allowed)
+        manager=(ROOT.parent / "llmessage" / "lltransfermanager.cpp").read_text()
+        self.assertEqual(manager.count("if(ret_code==LLTS_INSUFFICIENT_PERMISSIONS)status=ret_code"),2)
+        viewer=source("llviewerassetstorage.cpp")
+        self.assertIn("tpvf.setReadGuard([assistant](){return assistant->allowed();})",viewer)
+        self.assertIn("else tpvf.setCallback(downloadCompleteCallback,*req)",viewer)
+        completion=viewer[viewer.index("tpvf.setCallback([this,assistant]"):viewer.index("else tpvf.setCallback(downloadCompleteCallback,*req)")]
+        self.assertLess(completion.index("dropDeniedAssistantRequests(file_id,type)"),completion.index("downloadCompleteCallback(result,file_id,type,request,ext)"))
 
 if __name__=="__main__":unittest.main()
