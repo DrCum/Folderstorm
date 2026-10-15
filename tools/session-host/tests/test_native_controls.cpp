@@ -12,7 +12,9 @@
 int main()
 {
     const auto initialized=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);assert(SUCCEEDED(initialized));
-    INITCOMMONCONTROLSEX classes{sizeof(classes),ICC_STANDARD_CLASSES|ICC_WIN95_CLASSES};assert(InitCommonControlsEx(&classes));
+    // Match the host's v5-compatible initialization; ICC_STANDARD_CLASSES
+    // requires a v6 activation context that the standalone host does not require.
+    INITCOMMONCONTROLSEX classes{sizeof(classes),ICC_WIN95_CLASSES};assert(InitCommonControlsEx(&classes));
     {
         fs_host_ui::Theme theme;
         const auto parent=CreateWindowExW(0,L"STATIC",L"Host control check",WS_OVERLAPPEDWINDOW,0,0,500,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);assert(parent);
