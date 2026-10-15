@@ -1598,5 +1598,40 @@
  <key>FSWorkspaceStartupMode</key><map><key>Comment</key><string>Startup restoration: off, named or last. Default off.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string>off</string></map>
  <key>FSWorkspaceStartupName</key><map><key>Comment</key><string>Named startup workspace, account-local.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/></map>
  <key>FSWorkspaceLastArrangement</key><map><key>Comment</key><string>Bounded supported arrangement saved before orderly quit closes windows. No conversation or Inventory contents.</string><key>Persist</key><integer>1</integer><key>Type</key><string>LLSD</string><key>Value</key><undef/></map>
+    <key>FSSquirtyIMMode</key>
+    <map>
+        <key>Comment</key><string>Squirty notifications: 0 Off, 1 All, 2 Custom.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>S32</string>
+        <key>Value</key><integer>0</integer>
+    </map>
+    <key>FSSquirtyIMResidents</key>
+    <map>
+        <key>Comment</key><string>Custom residents keyed by UUID, with names for presentation.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>LLSD</string>
+        <key>Value</key><map/>
+    </map>
+    <key>FSSquirtyOnlineMode</key>
+    <map>
+        <key>Comment</key><string>Squirty notifications: 0 Off, 1 All, 2 Custom.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>S32</string>
+        <key>Value</key><integer>0</integer>
+    </map>
+    <key>FSSquirtyOnlineResidents</key>
+    <map>
+        <key>Comment</key><string>Custom residents keyed by UUID, with names for presentation.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>LLSD</string>
+        <key>Value</key><map/>
+    </map>
+    <key>FSSquirtyIMSilence</key>
+    <map>
+        <key>Comment</key><string>Seconds since the latest incoming live IM before another squirt. Zero squirts every time.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>U32</string>
+        <key>Value</key><integer>120</integer>
+    </map>
 </map>
 </llsd>

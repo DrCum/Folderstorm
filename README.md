@@ -22,6 +22,12 @@ Login and the two-factor prompt use that same slice when it is a saved viewport.
 
 It can capture a snapshot of the world viewport and set that image on an outfit or inventory thumbnail. The default is a free thumbnail. Uploading a texture asks when it costs L$.
 
+## Shared poser
+
+The poser can share live avatar poses with nearby compatible Folderstorm users through the LSL bridge. Receiving is enabled by default; **Share my pose** starts publishing. Select another avatar and use **Request permission** to edit their pose after they allow it.
+
+Several approved editors can work on different joints together. Each adjustment temporarily reserves every joint it changes, then releases them. The owner can remove individual editors or use **Stop shared posing**. Permissions expire when a session or connection ends. Shared poses remain visual and do not move the avatar's actual position in the region.
+
 ## Also included
 
 - An opt-in migrator can copy Firestorm settings into Folderstorm.

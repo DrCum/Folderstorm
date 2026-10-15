@@ -18,6 +18,8 @@ function(folderstorm_check name)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+folderstorm_check(shared_pose ../test_fssharedpose.cpp)
+
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
@@ -59,6 +61,8 @@ if(Boost_FOUND AND TARGET Boost::fiber AND TARGET Boost::context)
   folderstorm_check(inventory_bulk_scope ../test_fsinventorybulkscope.cpp)
   target_link_libraries(inventory_bulk_scope PRIVATE Boost::fiber Boost::context Threads::Threads)
 endif()
+
+folderstorm_check(squirty_policy ../test_fssquirtypolicy.cpp)
 
 # Native HWND/accessibility checks run only on Windows; portable UI models above
 # remain available without Win32 headers or the viewer.

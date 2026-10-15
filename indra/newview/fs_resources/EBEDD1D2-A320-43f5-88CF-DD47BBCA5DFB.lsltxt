@@ -7,11 +7,16 @@
 //
 
 // Bridge platform
-string BRIDGE_VERSION = "2.29"; // This should match fslslbridge.cpp
+string BRIDGE_VERSION = "2.30"; // This should match fslslbridge.cpp
 string gLatestURL;
 integer gViewerIsFirestorm;
 integer gTryHandshakeOnce = TRUE;
 key gOwner;
+
+// Shared posing has no listener until a compatible viewer enables it.
+integer SHARED_POSE_CHANNEL = -1847659327;
+integer gSharedPoseListener;
+integer gSharedPoseEnabled;
 
 // Teleport
 float TP_TARGET_DISTANCE = 1.0; // Distance to target when move to target should stop
@@ -189,6 +194,9 @@ default
             gIsFlyingNow = -1;
             gAO_EnabledOC = FALSE;
             gAO_EnabledLM = FALSE;
+            gSharedPoseEnabled = FALSE;
+            llListenRemove(gSharedPoseListener);
+            gSharedPoseListener = 0;
 
             // Disable all secondary stateful services
             setTimerEvent2(0);
@@ -300,6 +308,9 @@ default
     {
         if (change & CHANGED_REGION)
         {
+            gSharedPoseEnabled = FALSE;
+            llListenRemove(gSharedPoseListener);
+            gSharedPoseListener = 0;
             requestBridgeURL();
         }
         else if (change & (CHANGED_INVENTORY | CHANGED_ALLOWED_DROP))
@@ -417,6 +428,35 @@ default
             // Remove the <llsd><string> ... </string></llsd> wrapper
             list commandList = llParseString2List(llGetSubString(Body, 14, llStringLength(Body) - 18), ["|"], []);
             string cmd = llList2String(commandList, 0);
+
+            if (cmd == "SharedPoseEnable")
+            {
+                gSharedPoseEnabled = gViewerIsFirestorm && llList2Integer(commandList, 1);
+                llListenRemove(gSharedPoseListener);
+                gSharedPoseListener = 0;
+                if (gSharedPoseEnabled)
+                    gSharedPoseListener = llListen(SHARED_POSE_CHANNEL, "", NULL_KEY, "");
+                llHTTPResponse(httpReqID, 200, "<llsd><string>ok</string></llsd>");
+                return;
+            }
+            if (cmd == "SharedPoseBroadcast" || cmd == "SharedPoseSend")
+            {
+                string packet = llList2String(commandList, 1);
+                key target;
+                if (cmd == "SharedPoseSend")
+                {
+                    target = llList2Key(commandList, 1);
+                    packet = llList2String(commandList, 2);
+                }
+                // Teardown packets may arrive just after the listener is disabled.
+                if (gViewerIsFirestorm && llStringLength(packet) <= 800 && llGetSubString(packet, 0, 4) == "FSP1:")
+                {
+                    if (cmd == "SharedPoseBroadcast") llRegionSay(SHARED_POSE_CHANNEL, packet);
+                    else if (target != NULL_KEY && target != gOwner) llRegionSayTo(target, SHARED_POSE_CHANNEL, packet);
+                }
+                llHTTPResponse(httpReqID, 200, "<llsd><string>ok</string></llsd>");
+                return;
+            }
 
             // Large If statement for command processing. Shame on you, LSL!
             if (cmd == "getZOffsets")
@@ -594,6 +634,16 @@ default
 
     listen(integer fromChan, string senderName, key senderID, string msg)
     {
+
+        if (fromChan == SHARED_POSE_CHANNEL && llGetSubString(msg, 0, 4) == "FSP1:")
+        {
+            if (!gSharedPoseEnabled || !gViewerIsFirestorm || llStringLength(msg) > 800 ||
+                llGetSubString(msg, 0, 4) != "FSP1:") return;
+            key peerOwner = llGetOwnerKey(senderID);
+            if (peerOwner == NULL_KEY || peerOwner == gOwner) return;
+            llOwnerSay("<sharedPose>" + (string)peerOwner + "|" + (string)senderID + "|" + msg);
+            return;
+        }
 
         // OpenCollar AO interface listen handler
         if (fromChan == gAO_ChannelOC)

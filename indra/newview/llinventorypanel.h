@@ -41,6 +41,7 @@
 #include <functional>
 #include <set>
 #include <vector>
+#include <boost/signals2/connection.hpp>
 
 class LLInvFVBridge;
 class LLInventoryFolderViewModelBuilder;
@@ -301,6 +302,10 @@ public:
     void initFolderRoot();
     void initializeViewBuilding();
 
+    // <FS:TP> [FIRE-34881] Build or tear down the Library root view live, without a restart
+    void setLibraryFolderVisible(bool visible);
+    // </FS:TP>
+
 protected:
     void openStartFolderOrMyInventory(); // open the first level of inventory
     void onItemsCompletion();           // called when selected items are complete
@@ -432,6 +437,7 @@ protected:
 
     bool                        mBuildViewsOnInit;
     EViewsInitializationState   mViewsInitialized; // Whether views have been generated
+    boost::signals2::scoped_connection mLibraryVisibilityConnection;
     F64                         mBuildViewsEndTime; // Stop building views past this timestamp
     std::deque<LLUUID>          mBuildViewsQueue;
     std::deque<LLUUID>          mBuildRootQueue;
