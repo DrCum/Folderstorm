@@ -680,6 +680,11 @@ bool LLKeyframeMotion::onActivate()
     return true;
 }
 
+bool LLKeyframeMotion::hasEmbeddedEmote() const
+{
+    return mJointMotionList && (!mJointMotionList->mEmoteName.empty() || mJointMotionList->mEmoteID.notNull());
+}
+
 //-----------------------------------------------------------------------------
 // LLKeyframeMotion::onUpdate()
 //-----------------------------------------------------------------------------
@@ -2567,6 +2572,13 @@ LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LL
         return NULL;
     }
     return found_data->second;
+}
+
+bool LLKeyframeDataCache::hasEmbeddedEmote(const LLUUID& id)
+{
+    const auto found=sKeyframeDataMap.find(id);
+    const auto* data=found==sKeyframeDataMap.end()?nullptr:found->second;
+    return data && (!data->mEmoteName.empty() || data->mEmoteID.notNull());
 }
 
 //--------------------------------------------------------------------

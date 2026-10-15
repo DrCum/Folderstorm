@@ -162,6 +162,36 @@ class GestureNativeBoundaryTests(unittest.TestCase):
         self.assertIn('load->task->guard()->cancel("region_changed")', event)
         self.assertIn("it=loads().erase(it)", event)
 
+    def test_reads_must_return_every_byte_before_hash_or_parse(self):
+        text=source("fsgesturelistener.cpp")
+        for start,end in (("static bool animationMaterial(","static bool loadAllowed("),
+                          ("static void loaded(const LLUUID&","static void nextAnimation("),
+                          ("static void loadedAnimation(","FSGestureListener::FSGestureListener()")):
+            method=text[text.index(start):text.index(end)]
+            self.assertIn("file.getLastBytesRead()!=size",method)
+            self.assertLess(method.index("file.getLastBytesRead()!=size"),method.index("fs_content::hash(bytes)"))
+        filesystem=(ROOT.parent / "llfilesystem" / "llfilesystem.cpp").read_text()
+        self.assertIn("mBytesRead = static_cast<S32>(fread(buffer, 1, bytes, file))",filesystem)
+
+    def test_both_loaded_motion_and_global_keyframe_emotes_are_read_only_checked(self):
+        text=source("fsgesturelistener.cpp")
+        check=text[text.index("bool cachedAnimationAllowed("):text.index("bool nativeAllowed(")]
+        self.assertIn("LLKeyframeDataCache::hasEmbeddedEmote(id)",check)
+        self.assertIn("gAgentAvatarp->findMotion(id)",check)
+        self.assertIn("keyframe->hasEmbeddedEmote()",check)
+        self.assertNotIn("setEmote(",check)
+        material=text[text.index("static bool animationMaterial("):text.index("static bool loadAllowed(")]
+        self.assertIn("cachedAnimationAllowed(id,error)",material)
+        native=(ROOT.parent / "llcharacter" / "llkeyframemotion.cpp").read_text()
+        live=native[native.index("bool LLKeyframeMotion::hasEmbeddedEmote()"):native.index("bool LLKeyframeMotion::hasEmbeddedEmote()")+250]
+        cache=native[native.index("bool LLKeyframeDataCache::hasEmbeddedEmote("):native.index("bool LLKeyframeDataCache::hasEmbeddedEmote(")+350]
+        self.assertIn("mJointMotionList->mEmoteName.empty()",live)
+        self.assertIn("mJointMotionList->mEmoteID.notNull()",live)
+        self.assertIn("sKeyframeDataMap.find(id)",cache)
+        self.assertIn("data->mEmoteName.empty()",cache)
+        self.assertIn("data->mEmoteID.notNull()",cache)
+        self.assertNotIn("sKeyframeDataMap[id]",cache)
+
 
 if __name__ == "__main__":
     unittest.main()

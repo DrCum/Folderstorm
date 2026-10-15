@@ -76,6 +76,9 @@ int main(int argc,char** argv)
     assert(!animationAvailable(false,false,false,true)); // local preview existed before acquisition
     assert(!animationAvailable(true,false,false,false));
     assert(!animationAvailable(false,true,false,false));assert(!animationAvailable(false,false,true,false));
+    assert(animationCacheAllowed(false,false,false));
+    assert(!animationCacheAllowed(true,false,false));assert(!animationCacheAllowed(false,true,false));
+    assert(!animationCacheAllowed(false,false,true));
     Plan builtins;builtins.steps={{Effect::AnimationStart,animation,0},{Effect::AnimationStop,animation,0}};
     assert(!animationPolicy(builtins,[&](const std::string& id){return id==animation;},error));
     builtins.steps.erase(builtins.steps.begin()); // STOP is independently checked too

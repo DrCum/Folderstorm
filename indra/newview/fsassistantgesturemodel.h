@@ -110,6 +110,8 @@ inline bool cleanupAllowed(bool sameLogin,bool owns,bool foreignSource)
 {return sameLogin && owns && !foreignSource;}
 inline bool animationAvailable(bool foreignSource,bool signaled,bool playing,bool locallyActive)
 {return !foreignSource && !signaled && !playing && !locallyActive;}
+inline bool animationCacheAllowed(bool globalEmote,bool motionEmote,bool unclassifiedMotion)
+{return !globalEmote && !motionEmote && !unclassifiedMotion;}
 template<typename Builtin> bool animationPolicy(const Plan& plan,Builtin builtin,std::string& error)
 {
     for(const auto& step:plan.steps)

@@ -13,6 +13,7 @@
 #include "llassetstorage.h"
 #include "llfilesystem.h"
 #include "llgesturemgr.h"
+#include "llkeyframemotion.h"
 #include "llmultigesture.h"
 #include "llstartup.h"
 #include "lltimer.h"
@@ -55,6 +56,18 @@ LLSD evidence(const LLViewerInventoryItem* item)
         result["item_flags"]=static_cast<S32>(item->getFlags());result["inventory_type"]=static_cast<S32>(item->getInventoryType());}
     return result;
 }
+bool cachedAnimationAllowed(const LLUUID& id,std::string& error)
+{
+    // A loaded motion can retain a different JointMotionList from the current
+    // disk asset/cache entry. Inspect both references without changing either.
+    const bool globalEmote=LLKeyframeDataCache::hasEmbeddedEmote(id);
+    auto* motion=isAgentAvatarValid()?gAgentAvatarp->findMotion(id):nullptr;
+    auto* keyframe=dynamic_cast<LLKeyframeMotion*>(motion);
+    const bool unclassified=motion && !keyframe;
+    if(!animationCacheAllowed(globalEmote,keyframe && keyframe->hasEmbeddedEmote(),unclassified))
+    {error=unclassified?"unsupported_native_animation_motion_type":"unsupported_cached_animation_emote";return false;}
+    return true;
+}
 bool nativeAllowed(const Plan& plan,std::string& error)
 {
     if(!ready() || !isAgentAvatarValid()){error="native_avatar_unavailable";return false;}
@@ -73,6 +86,7 @@ bool nativeAllowed(const Plan& plan,std::string& error)
     {error="native_sound_muted_or_unavailable";return false;}
     for(const auto& step:plan.steps)
     {
+        if((step.effect==Effect::AnimationStart || step.effect==Effect::AnimationStop) && !cachedAnimationAllowed(LLUUID(step.value),error))return false;
         if(step.effect==Effect::Chat && wstring_to_utf8str(utf8str_to_wstring(step.value))!=step.value)
         {error="invalid_chat_utf8";return false;}
         if((step.effect==Effect::AnimationStart || step.effect==Effect::Sound) &&
@@ -160,13 +174,14 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
     }
     static bool animationMaterial(const Cached& material,const LLUUID& id,std::string& error)
     {
+        if(!cachedAnimationAllowed(id,error))return false;
         const auto found=material.animations.find(id);
         if(found==material.animations.end()){error="referenced_animation_not_inspected";return false;}
         LLFileSystem file(id,LLAssetType::AT_ANIMATION);const auto size=file.getSize();
         if(size<=0 || size!=found->second.bytes || size>static_cast<S32>(maxAnimationAssetBytes))
         {error="animation_material_unavailable_or_changed";return false;}
         std::string bytes(size,'\0');
-        if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || fs_content::hash(bytes)!=found->second.hash)
+        if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size || fs_content::hash(bytes)!=found->second.hash)
         {error="animation_material_hash_conflict";return false;}
         return animationHeader(bytes,error);
     }
@@ -348,7 +363,7 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         {load->response->error("gesture_asset_download_failed");return;}
         LLFileSystem file(load->asset,LLAssetType::AT_GESTURE);const auto size=file.getSize();
         if(size<=0 || size>static_cast<S32>(maxAssetBytes)){load->response->error("gesture_asset_size_out_of_bounds");return;}
-        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size))
+        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size)
         {load->response->error("gesture_asset_read_incomplete");return;}
         auto& entry=load->material;std::string error;
         if(!decode(bytes,entry.plan,error)){load->response->error("gesture_asset_unsupported: "+error);return;}
@@ -390,9 +405,9 @@ struct FSGestureListener::State : std::enable_shared_from_this<FSGestureListener
         LLFileSystem file(asset,LLAssetType::AT_ANIMATION);const auto size=file.getSize();
         if(size<=0 || !animationBytesAllowed(static_cast<std::size_t>(size),load->material.animationBytes))
         {load->response->error("referenced_animation_bytes_out_of_bounds");return;}
-        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size))
+        std::string bytes(size,'\0');if(!file.read(reinterpret_cast<U8*>(&bytes[0]),size) || file.getLastBytesRead()!=size)
         {load->response->error("referenced_animation_read_incomplete");return;}
-        std::string error;if(!animationHeader(bytes,error))
+        std::string error;if(!animationHeader(bytes,error) || !cachedAnimationAllowed(asset,error))
         {load->response->error("referenced_animation_unsupported: "+error);return;}
         load->material.animations[asset]={fs_content::hash(bytes),size};load->material.animationBytes+=static_cast<std::size_t>(size);
         ++load->nextAnimation;nextAnimation(load);
