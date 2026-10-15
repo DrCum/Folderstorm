@@ -32,6 +32,9 @@ int main()
         theme.checkButton(button,false);VariantClear(&state);assert(SUCCEEDED(accessible->get_accState(self,&state)) && !(state.lVal&STATE_SYSTEM_CHECKED));
         // Manual checked buttons send a command without performing a second model inversion.
         SendMessageW(button,BM_CLICK,0,0);assert(SendMessageW(button,BM_GETCHECK,0,0)==BST_UNCHECKED);
+        // USER32 need not keep a paint region for an invisible window. Exercise
+        // the real visible resize path, with the pointer uninvolved.
+        ShowWindow(parent,SW_SHOWNOACTIVATE);UpdateWindow(parent);assert(IsWindowVisible(button));
         ValidateRect(button,nullptr);SendMessageW(button,WM_SIZE,SIZE_RESTORED,MAKELPARAM(120,32));
         RECT dirty{},client{};assert(GetUpdateRect(button,&dirty,FALSE));GetClientRect(button,&client);assert(EqualRect(&dirty,&client));
         theme.checkButton(button,std::nullopt);assert((GetWindowLongPtrW(button,GWL_STYLE)&BS_TYPEMASK)==BS_OWNERDRAW);
