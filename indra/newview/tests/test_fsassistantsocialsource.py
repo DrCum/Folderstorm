@@ -12,6 +12,26 @@ def source(name):
 
 
 class SocialNativeBoundaryTests(unittest.TestCase):
+    def test_external_source_uses_only_opaque_bridge_reference(self):
+        text = source("fsassistantsocial.cpp")
+        model = source("fsassistantsocialmodel.h")
+        method = text[text.index("LLSD publicSource()const"):text.index("void flush()")]
+        self.assertIn("publicSourceFields(account.asString(),viewerSession,grid,privacyEpoch)", method)
+        self.assertNotIn("login", method)
+        self.assertNotIn("getSessionID", method)
+        self.assertIn("FSEventAPIBridge::instance().sessionReference()", text)
+        self.assertIn("!viewerSession.empty() && viewerSession==bridgeReference()", text)
+        self.assertIn("else if(bindingChanged){flush();viewerSession=opaque;}", text)
+        self.assertIn('reader.binding=viewerSession+":"+grid', text)
+        self.assertNotIn("login.asString()", text)
+        # Internal live-message checks may read login_id. No external LLSD field
+        # may write any native credential, including through a renamed key.
+        self.assertNotRegex(text, r'\["(?:login_id|native_session_id|agent_session_id)"\]\s*=(?!=)')
+        self.assertNotRegex(text, r'\[[^\n]+\]\s*=\s*(?:login|gAgent\.getSessionID\(\))\s*;')
+        self.assertNotRegex(text, r'\["source"\]\s*=\s*(?!publicSource\(|self->publicSource\(|mState->publicSource\()')
+        fields = model[model.index("publicSourceFields("):model.index("template<class T> class Stream")]
+        self.assertEqual(set(re.findall(r'\{"([a-z_]+)"\s*,', fields)), {"account_id", "viewer_session", "grid", "privacy_epoch"})
+
     def test_exact_registered_native_surface_and_authority(self):
         text = source("fsassistantsocial.cpp")
         expected = {

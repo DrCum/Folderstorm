@@ -10,6 +10,11 @@
 #include <vector>
 namespace fs_assistant_social
 {
+// Only the bridge's opaque reference belongs on the external wire. Native
+// simulator login/session credentials are deliberately absent from this API.
+inline std::map<std::string,std::string> publicSourceFields(const std::string& account,
+    const std::string& viewerSession,const std::string& grid,std::uint64_t privacyEpoch)
+{return {{"account_id",account},{"viewer_session",viewerSession},{"grid",grid},{"privacy_epoch",std::to_string(privacyEpoch)}};}
 // Pure bounded storage used by the native adapter, not a second host cursor.
 template<class T> class Stream
 {

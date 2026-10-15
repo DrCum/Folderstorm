@@ -5,6 +5,10 @@
 int main()
 {
     using namespace fs_assistant_social;
+    const auto publicSource=publicSourceFields("account-uuid","opaque-bridge-reference","grid.example",7);
+    assert(publicSource.size()==4 && publicSource.at("viewer_session")=="opaque-bridge-reference");
+    assert(publicSource.at("account_id")=="account-uuid" && publicSource.at("grid")=="grid.example" && publicSource.at("privacy_epoch")=="7");
+    assert(!publicSource.count("login_id") && !publicSource.count("session_id") && !publicSource.count("native_session_id"));
     Stream<std::string> stream;
     for(int i=0;i<520;++i)stream.append(std::to_string(i),1);
     assert(stream.entries().size()==512 && stream.first()==9 && stream.latest()==520);
