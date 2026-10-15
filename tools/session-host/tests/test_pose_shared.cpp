@@ -105,6 +105,21 @@ int main()
   assert(!manualPublication.apply("remote","new-grant","old-lease",{{"mHead",changed}},true,0,true,1));
   assert(manualPublication.pose().at("mHead")==initial);
  }
+ // The owner's region signal must clear native consent even when the
+ // editor stays in A and its own source task/region never changes. No owner
+ // assistant task or idle observation is involved in this round trip.
+ OwnerSession travellingOwner;travellingOwner.start("owner","owner-in-A",{{"mHead",initial}});
+ travellingOwner.grant("stationary-editor","old-owner-grant",0);
+ assert(travellingOwner.acquire("stationary-editor","old-owner-grant","old-owner-lease",{"mHead"},0).granted);
+ RegionGeneration ownerRegion,stationaryEditorRegion;const auto unchangedEditorRegion=stationaryEditorRegion.value();
+ std::string currentOwnerRegion="A";
+ const auto ownerRegionChanged=[&](){ownerRegion.advance();travellingOwner.clear();};
+ currentOwnerRegion="B";ownerRegionChanged();currentOwnerRegion="A";ownerRegionChanged();
+ assert(currentOwnerRegion=="A" && stationaryEditorRegion.matches(unchangedEditorRegion));
+ assert(!travellingOwner.active() && !travellingOwner.authorized("stationary-editor","old-owner-grant",0));
+ assert(!travellingOwner.apply("stationary-editor","old-owner-grant","old-owner-lease",{{"mHead",changed}},true,0,true,1));
+ travellingOwner.start("owner","new-owner-in-A",{{"mHead",initial}});
+ assert(!travellingOwner.authorized("stationary-editor","old-owner-grant",0));
  // A -> B -> A with identical current region/URL IDs still invalidates a
  // captured queued transport. The production synchronous signal advances this
  // epoch and cancels captured guards before idle or the HTTP pool can observe.

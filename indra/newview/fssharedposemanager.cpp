@@ -107,8 +107,7 @@ FSSharedPoseManager::FSSharedPoseManager()
  mAssistantRegionConnection=gAgent.addRegionChangedCallback([this]()
  {
   mAssistantRegionGeneration.advance();
-  for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_region_changed");
-  endAssistantPublishing("Native region changed");
+  invalidateNativeSharing("native_region_changed");
  });
  const auto disable=[this](LLControlVariable*,const LLSD& value,const LLSD&)
  {
@@ -121,9 +120,9 @@ FSSharedPoseManager::~FSSharedPoseManager()
 {mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();mBridgeUseConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
 void FSSharedPoseManager::invalidateNativeSharing(const std::string& reason)
 {
- // A native Off/On cycle must revoke consent even when this viewer has no
- // assistant operation and the publication was started manually. Do it at the
- // synchronous control signal, not at a later available()/idle observation.
+ // Native control disable and region transitions revoke consent even when
+ // this viewer has no assistant work and publication was started manually.
+ // Run synchronously so returning to the same IDs cannot revive old consent.
  for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel(reason);
  endAssistantPublishing(reason);
  mOwner.clear();mPublicGeneration=LLUUID::generateNewID();mPublished.clear();mPublishedRevision=0;

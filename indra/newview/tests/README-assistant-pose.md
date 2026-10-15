@@ -34,7 +34,9 @@ acceptance:
    Toggle either native sharing or Use LSL Bridge Off/On before an idle tick,
    including a manually published owner with no local assistant work. Old
    grants/leases and queued source work must stay invalid; native Poser remains,
-   and publishing/editing consent requires a new explicit native flow.
+   and publishing/editing consent requires a new explicit native flow. Also
+   round-trip a manually published owner A→B→A before idle while its remote
+   editor stays in A: old owner grants/leases must remain invalid on return.
 7. Duplicate a locked reply, lose or delay a final POST/acknowledgement, and
    deliver an acknowledgement late. There is one final sequence, no uncertain
    resend, and `owner_accepted` appears only for the exact owner acknowledgement.
