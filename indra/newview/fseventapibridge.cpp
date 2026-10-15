@@ -643,10 +643,9 @@ public:
         auto& operation=*found->second;
         LLSD result=llsd::map("operation_id",id,"state",operation.state(),"submission_steps",static_cast<S32>(operation.submitted()),
             "pending_callbacks",static_cast<S32>(operation.pending()),"stop_reason",operation.reason(),"known_ids",LLSD::emptyArray());
-        bool reveal=true;
         const auto scope=mAsyncReadScopes.find(id);
-        if(scope!=mAsyncReadScopes.end())for(const auto& permission:scope->second)
-        {const auto* def=find_def(permission);if(!def || effective_level(def->kind)!="allow")reveal=false;}
+        const bool reveal=scope==mAsyncReadScopes.end() || fs_assistant::receiptVisible(scope->second,
+            [](const std::string& permission){const auto* def=find_def(permission);return def?effective_level(def->kind):std::string("deny");});
         if(reveal)for(const auto& value:operation.ids())result["known_ids"].append(value);
         else result["results_restricted"]=true;
         return result;
@@ -971,10 +970,8 @@ private:
             if(fs_assistant::featureAPI(api))
             {
                 auto& reads=mAsyncReadScopes[request_id];
-                if(api=="FSChat")reads.emplace_back("chat_read");
-                else if(api=="FSGestures")reads.emplace_back("gesture_read");
-                else if(api=="FSPose")reads.emplace_back("pose_read");
-                else if(api=="FSPreferences")reads.emplace_back("preferences_read");
+                const auto* entry=fs_assistant::featureOperation(api,op);
+                if(entry && *entry->receiptRead)reads.emplace_back(entry->receiptRead);
                 else for(const auto& permission:required)
                     if(const auto* def=find_def(permission))if(def->privateRead)reads.push_back(permission);
             }

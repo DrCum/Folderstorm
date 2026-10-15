@@ -25,6 +25,11 @@ int main()
  for(const char* op:{"requestTeleport","startAutoPilot","requestSit","requestTouch","set","toggle","execute"})assert(!featureOperation("FSWorld",op));
  assert(std::string(featureOperation("FSChat","draftGet")->permission)=="chat_read");
  assert(std::string(featureOperation("FSPose","sharedEdit")->capability)=="shared_pose_tools");
+ assert(std::string(featureOperation("FSContent","saveScript")->receiptRead)=="read");
+ assert(std::string(featureOperation("FSEvents","reviewNotification")->receiptRead)=="notifications_read");
+ assert(!receiptVisible({"read"},[](const std::string&){return std::string("deny");}));
+ assert(!receiptVisible({"chat_read","notifications_read"},[](const std::string& key){return key=="chat_read"?std::string("allow"):std::string("deny");}));
+ assert(receiptVisible({"world_read"},[](const std::string&){return std::string("allow");}));
  assert(needsActiveCharacter("FSGestures","play") && needsActiveCharacter("FSPose","update"));
  assert(!needsActiveCharacter("FSWorld","location") && !needsActiveCharacter("FSChat","sendIM"));
 }
