@@ -25,6 +25,8 @@ folderstorm_check(chrome_layout
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
 folderstorm_check(assistant_pose ../../../../tools/session-host/tests/test_pose_policy.cpp)
 target_include_directories(assistant_pose PRIVATE ../..)
+folderstorm_check(assistant_pose_shared ../../../../tools/session-host/tests/test_pose_shared.cpp)
+target_include_directories(assistant_pose_shared PRIVATE ../..)
 find_package(Threads REQUIRED)
 folderstorm_check(assistant_pose_file ../../../../tools/session-host/tests/test_pose_file.cpp)
 target_include_directories(assistant_pose_file PRIVATE ../..)

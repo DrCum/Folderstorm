@@ -877,6 +877,8 @@ bool rotationRequest(const LLSD& request,fs_pose::Rotations& rotations,std::map<
 }
 LLSD rotationData(const fs_pose::Rotations& rotations)
 {LLSD result=LLSD::emptyMap();for(const auto& item:rotations){LLSD q=LLSD::emptyArray();for(double value:item.second)q.append(value);result[item.first]=q;}return result;}
+std::string rotationLabel(const LLSD& rotation)
+{std::ostringstream text;text<<"[";for(S32 i=0;i<rotation.size();++i){if(i)text<<", ";text<<rotation[i].asReal();}text<<"]";return text.str();}
 
 }
 
@@ -1060,7 +1062,26 @@ bool FSSharedPoseManager::prepareAssistantPose(FSAssistantPreparedOperation& ope
  operation.summary=llsd::map("op",op,"subject_count",1,"subjects",LLSD::emptyArray(),"consequences",LLSD::emptyArray(),
   "reference_frame","local","rotations",operation.validation["rotations"],"visibility","native_shared_pose_peers");
  operation.summary["subjects"].append(llsd::map("id",target,"name",nameFor(target),"after_name",op=="startSharing"?
-  "Publish existing native Poser state, including its current native position/scale state":op=="stopSharing"?"End native publishing and grants while keeping the owner's pose":"Reserve exact joints and request owner-authorized rotation changes"));
+  "Publish existing native Poser state, including its current native position/scale state":op=="stopSharing"?"End native publishing and grants while keeping the owner's pose":request["cancel"].asBoolean()?"Cancel only operation "+request["operation_id"].asString():"Reserve exact joints and request owner-authorized rotation changes"));
+ operation.summary["action"]=op=="startSharing"?"Publish this existing native pose?":op=="stopSharing"?"Stop this native pose publication?":request["cancel"].asBoolean()?"Cancel this shared-pose operation?":"Request these owner-authorized rotations?";
+ for(auto joint=operation.validation["rotations"].beginMap();joint!=operation.validation["rotations"].endMap();++joint)
+  operation.summary["subjects"].append(llsd::map("name",joint->first,"before_name",rotationLabel(source["joints"][joint->first]["rotation"]),
+   "after_name",rotationLabel(joint->second)+"; local quaternion; expected joint revision "+operation.validation["expected"][joint->first].asString()));
+ if(op=="startSharing")
+ {
+  const auto pose=readPose(operation.validation["native_pose"]);if(!pose){error="Frozen native publication state is invalid";return false;}
+  for(const auto& joint:*pose)
+  {
+   std::ostringstream text;text<<"local rotation [";
+   for(unsigned i=0;i<4;++i){if(i)text<<", ";text<<joint.second.transform[i];}
+   text<<"], position [";for(unsigned i=4;i<7;++i){if(i>4)text<<", ";text<<joint.second.transform[i];}
+   text<<"], scale [";for(unsigned i=7;i<10;++i){if(i>7)text<<", ";text<<joint.second.transform[i];}
+   text<<"], priority "<<static_cast<unsigned>(joint.second.priority)<<", enabled "<<joint.second.enabled
+    <<", world lock "<<joint.second.worldLocked<<", mirror "<<joint.second.mirrored;
+   operation.summary["subjects"].append(llsd::map("name",joint.first,"after_name",text.str()));
+  }
+ }
+ operation.summary["subject_count"]=operation.summary["subjects"].size();
  operation.summary["consequences"].append("pose_native_shared_consent");return true;
 }
 bool FSSharedPoseManager::validateAssistantPose(const FSAssistantPreparedOperation& operation,std::string& error) const

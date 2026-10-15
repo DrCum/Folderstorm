@@ -12,6 +12,7 @@
  <string name="action_pose_load">Load these preset rotations?</string>
  <string name="action_pose_save">Save this rotation preset?</string>
  <string name="pose_local_rotations">This affects local joint rotations only. It does not move your character or enable shared publishing. Native or shared poser ownership takes priority.</string>
+ <string name="pose_native_shared_consent">Native owner consent and joint reservations are required separately. This approval cannot create a grant. Submitted edits may remain uncertain and are never replayed automatically. Publishing exposes the existing native pose to compatible peers; stopping publishing preserves the native pose.</string>
  <string name="action_feature">Allow this assistant action?</string>
  <string name="action_saveNotecard">Replace this notecard's source?</string>
  <string name="action_saveScript">Save and compile this inventory script?</string>

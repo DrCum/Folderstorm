@@ -17,7 +17,8 @@ acceptance:
 2. Start native Poser while the private motion is fully masked. Close native
    Poser and confirm the private motion never resumes. Verify a local stop sends
    no simulator animation STOP packet for the random private motion UUID.
-3. List/load/save a UTF-8 native preset. Try directory/file symlink or Windows
+3. List/load an existing UTF-8 native preset and save a new ASCII-named preset.
+   Try directory/file symlink or Windows
    junction/reparse substitution while opening/saving. The assistant must never
    follow the substitution or overwrite an existing file.
 4. With two updated viewers and native sharing explicitly enabled, publish an
