@@ -1,6 +1,6 @@
 # MCP for hosted character sessions
 
-Status: implementation in progress; exact-session routing checkpoint implemented. Managed enablement and host UI follow in dependent checkpoints.
+Status: implementation checkpoints #42–#44 published as stacked drafts. Requested senior review and revisions completed; native Windows build/runtime acceptance pending.
 Reviewed 2026-10-15 against PR #41 head `41a694f9be`.
 
 ## Recommended design
@@ -141,3 +141,6 @@ Windows acceptance: matching protocol-16 host/viewer/sidecar; test Apply/Cancel 
 Requested gpt-6.1-sol at Extra High reviewed the combined stack read-only. Verified findings led to: authenticated pre-login runtime pause (before login permission), explicit refusal of unmanaged async appearance/create-item helper chains in managed MCP, retirement of assistant-owned bulk previews/history/undo and epoch checks for copy continuations on connection rotation, and generated setup scopes covering simultaneous ordinary and managed viewers. Native-only bulk records remain intact. HTTP entry now refreshes credentials before authentication and ACL validation precedes socket creation. Approval Attention adds a bounded action summary. Legacy/custom discovery overrides are not silently broadened; explicit setup copying uses known bounded ordinary directories plus the hosted registry when no override exists.
 
 Regression checks cover pre-login pause eligibility, guarded versus unsupported operation families, scope deduplication/bounds, and retiring assistant state while preserving native records. Native builds and acceptance remain pending. Review revisions are included in #44; use that full matching stack for final native acceptance.
+
+
+Final reviewer assessment: Sol 6.1 Extra High re-reviewed through `c8064e9c23` and found no remaining verified blockers. It independently passed strict assistant-session, inventory bulk-model and permission/approval policy checks; the final small persistence/configuration follow-up passed source review and diff hygiene. All three PRs are attached to this chat; none merged. Test the latest #44 matching binaries. The managed asynchronous-operation exclusions above remain explicit product limitations, not claims of native acceptance.
