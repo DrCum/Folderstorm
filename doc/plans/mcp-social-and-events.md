@@ -39,3 +39,11 @@ Test exact source/schema dispatch and independent clients; duplicate names and o
 Cursor tests cover full pagination, repeated polls, retained edge, overflow, privacy flush, filtered events, changed permissions, future/cross-login cursor, independent readers, notification removal and no read-state mutation.
 
 Windows: IM/Group/Conference/Nearby under two/five characters, background modes, visible/hidden host Chat, native and MCP drafts, native restrictions, native close/removal, unsupported profile/search capabilities and disconnect during sends. Verify ordinary viewer operation and existing host Chat/sounds still work.
+
+## Implemented checkpoint
+
+E1–E3 are delivered together because live message provenance, private event cursors and close fences share native callbacks. Source reviewed independently with Sol 6.1 Max through `8c8d963baa`; all confirmed findings were corrected. Six affected portable C++ checks, ten native-boundary source checks and registered Go Social dispatch checks pass. Native Windows compile/runtime acceptance remains pending.
+
+History covers live callbacks observed by this service, never disk transcripts. Polling is immediate (`wait_ms=0`); four topic rings retain at most 512 events/512 KiB each. Cursor pages are bounded to 64 KiB; 128 opaque cursors expire after five minutes. Friend/search snapshots are source-bound and short-lived. Sends are limited to 1,023 UTF-8 bytes and report native submission, never delivery. Assistant drafts and visibility are independent of native composers. Only supported offers can be reviewed in native UI; no response is accepted automatically.
+
+The checkpoint also preserves native-readable v1 notecards, checks COPY/MODIFY and native viewing restrictions before and after content downloads, and keeps bounded returned prefixes valid UTF-8. Lossless source editing is a separate checkpoint.
