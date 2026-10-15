@@ -29,5 +29,12 @@ int main()
  auto stop=std::make_shared<AsyncOperation>([](){return std::string();});
  {AsyncScope scope(stop);auto run=asyncDeferred([&](){++calls;});stop->cancel("logout");run();}
  assert(calls==1 && !AsyncScope::current());
+ auto creation=std::make_shared<AsyncOperation>([](){return std::string();});AsyncTaskPtr createReply;
+ {AsyncScope scope(creation);createReply=asyncTask();assert(asyncSubmit());}
+ creation->seal();creation->cancel("paused");int permissionWrites=0,cleanups=0;
+ auto callback=[&](bool allowed){++cleanups;if(allowed && asyncSubmit())++permissionWrites;};
+ asyncDeliver(createReply,"new-item",callback);asyncDeliver(createReply,"new-item",callback);
+ assert(cleanups==1 && permissionWrites==0 && creation->ids().front()=="new-item");
+ assert(!AsyncScope::current());createReply.reset();assert(creation->pending()==0);
  std::cout<<"Durable assistant async guard checks passed\n";
 }

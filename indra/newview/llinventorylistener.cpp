@@ -51,6 +51,8 @@
 #include "llworldmap.h"
 #include "llviewerassetstorage.h"
 #include "llviewercontrol.h"
+#include "llenvironment.h"
+#include "llviewerregion.h"
 #include "llcameralistener.h"
 #include "fssnapshotupload.h"
 #include "fsassistantoperation.h"
@@ -2727,6 +2729,7 @@ void LLInventoryListener::createItem(LLSD const& data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
+    fs_assistant::AsyncScope operationScope(fs_assistant_async_context(data));
     std::string type_name = data["type"].asString();
     LLStringUtil::trim(type_name);
     LLStringUtil::toLower(type_name);
@@ -2748,6 +2751,7 @@ void LLInventoryListener::createItem(LLSD const& data)
 
     if (type_name == "landmark")
     {
+        if(!RlvActions::canShowLocation()){Response response(LLSD(),data);return response.error("Location is restricted");}
         const LLUUID folder_id = parent_id.notNull()
             ? parent_id : gInventory.findCategoryUUIDForType(LLFolderType::FT_LANDMARK);
         std::string name = data["name"].asString();
@@ -2765,6 +2769,10 @@ void LLInventoryListener::createItem(LLSD const& data)
 
     const LLWearableType::EType wearable = LLWearableType::getInstance()->typeNameToType(type_name);
     const bool wearable_ok = wearable >= LLWearableType::WT_SHAPE && wearable < LLWearableType::WT_COUNT;
+    if((type_name=="sky" || type_name=="water" || type_name=="daycycle") && !LLEnvironment::instance().isInventoryEnabled())
+    {Response response(LLSD(),data);return response.error("Region does not support settings inventory");}
+    if(wearable_ok && (!isAgentAvatarValid() || (wearable==LLWearableType::WT_UNIVERSAL && (!gAgent.getRegion() || !gAgent.getRegion()->bakesOnMeshEnabled()))))
+    {Response response(LLSD(),data);return response.error("Avatar or region is not ready for this wearable type");}
     const bool known = wearable_ok || type_name == "lsl" || type_name == "notecard" ||
         type_name == "gesture" || type_name == "material" || type_name == "sky" ||
         type_name == "water" || type_name == "daycycle";

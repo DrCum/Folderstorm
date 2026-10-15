@@ -22,7 +22,7 @@ int main()
     assert(needsActiveCharacter("LLInventory","snapshotUpload"));
     assert(!managedOperationSupported("LLAppearance","wearOutfit"));
     assert(!managedOperationSupported("LLAppearance","wearItems"));
-    assert(!managedOperationSupported("LLInventory","createItem"));
+    assert(managedOperationSupported("LLInventory","createItem"));
     assert(managedOperationSupported("LLAppearance","getOutfit"));
     assert(managedOperationSupported("LLInventory","rename"));
     assert(discoveryScope({"ordinary","hosted","ordinary"},';')=="ordinary;hosted");

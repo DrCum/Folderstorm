@@ -23,6 +23,9 @@
 #include "llinventoryfunctions.h"
 #include "llsdutil.h"
 #include "llviewerinventory.h"
+#include "llviewercontrol.h"
+#include "llfloaterperms.h"
+#include "llwearabletype.h"
 
 #include <set>
 
@@ -135,6 +138,24 @@ bool fs_prepare_assistant_operation(FSAssistantPreparedOperation& operation, std
             }
             summary["value"] = safe_text(request["name"].asString());
             if (op == "createItem") summary["value"] = safe_text(request["type"].asString()) + ": " + summary["value"].asString();
+            if(op=="createItem")
+            {
+                auto type=request["type"].asString();LLStringUtil::trim(type);LLStringUtil::toLower(type);request["type"]=type;
+                const std::string policy=type=="lsl"?"Scripts":type=="gesture"?"Gestures":type=="notecard"?"Notecards":type=="material"?"Materials":
+                    (type=="sky" || type=="water" || type=="daycycle")?"Settings":"Wearables";
+                summary["creation_permissions"]=llsd::map("everyone",static_cast<S32>(LLFloaterPerms::getEveryonePerms(policy)),
+                    "group",static_cast<S32>(LLFloaterPerms::getGroupPerms(policy)),"next_owner",static_cast<S32>(LLFloaterPerms::getNextOwnerPerms(policy)));
+                if(type=="lsl" && gSavedPerAccountSettings.getBOOL("FSBuildPrefs_UseCustomScript"))
+                {
+                    auto* script=gInventory.getItem(LLUUID(gSavedPerAccountSettings.getString("FSBuildPrefs_CustomScriptItem")));
+                    if(script && script->getType()==LLAssetType::AT_LSL_TEXT)
+                    {
+                        if(!script->getPermissions().allowCopyBy(gAgentID)){error="Custom script template is not copyable";return false;}
+                        add_subject(summary,script->getUUID());summary["template_asset"]=script->getAssetUUID();
+                        if(std::find(operation.requiredClasses.begin(),operation.requiredClasses.end(),"move")==operation.requiredClasses.end())operation.requiredClasses.push_back("move");
+                    }
+                }
+            }
         }
         else
         {

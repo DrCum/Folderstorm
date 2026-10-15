@@ -1711,6 +1711,7 @@ bool LLAgentWearables::moveWearable(const LLViewerInventoryItem* item, bool clos
 // static
 void LLAgentWearables::createWearable(LLWearableType::EType type, bool wear, const LLUUID& parent_id, std::function<void(const LLUUID&)> created_cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     if (type == LLWearableType::WT_INVALID || type == LLWearableType::WT_NONE) return;
 
     if (type == LLWearableType::WT_UNIVERSAL && !gAgent.getRegion()->bakesOnMeshEnabled())
@@ -1729,6 +1730,17 @@ void LLAgentWearables::createWearable(LLWearableType::EType type, bool wear, con
     else
     {
         cb = new LLBoostFuncInventoryCallback(wear_cb);
+    }
+    if(fs_assistant::AsyncScope::current())
+    {
+        const auto everyone=LLFloaterPerms::getEveryonePerms("Wearables"),group=LLFloaterPerms::getGroupPerms("Wearables");
+        cb=new LLBoostFuncInventoryCallback([everyone,group](const LLUUID& id)
+        {
+            if(id.isNull() || !fs_assistant::asyncAllowed())return;
+            auto* item=gInventory.getItem(id);if(!item)return;
+            auto perm=item->getPermissions();perm.setMaskEveryone(everyone);perm.setMaskGroup(group);
+            item->setPermissions(perm);item->updateServer(false);gInventory.updateItem(item);gInventory.notifyObservers();
+        });
     }
     if (created_cb != NULL)
     {

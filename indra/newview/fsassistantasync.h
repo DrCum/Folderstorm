@@ -28,7 +28,7 @@ public:
     bool submit(){if(!allowed())return false;++mSubmitted;return true;}
     void acknowledge(const std::string& id)
     {if(!id.empty() && mIds.size()<128 && std::find(mIds.begin(),mIds.end(),id)==mIds.end())mIds.push_back(id);}
-    void begin(){++mPending;}
+    void begin(){if(++mPending>512)cancel("callback_capacity");}
     void end(){if(mPending)--mPending;}
     void seal(){mSealed=true;}
     std::string state()
@@ -73,11 +73,20 @@ public:
     ~AsyncTask(){if(mGuard)mGuard->end();}
     const AsyncGuard& guard() const{return mGuard;}
     bool claim(const std::string& key)
-    {return !mGuard || (mSeen.size()<128 && mSeen.insert(key).second);}
+    {if(!mGuard)return true;
+        if(mSeen.size()>=128){mGuard->cancel("callback_capacity");return false;}
+        return mSeen.insert(key).second;}
 private:AsyncGuard mGuard;std::set<std::string> mSeen;
 };
 using AsyncTaskPtr=std::shared_ptr<AsyncTask>;
 inline AsyncTaskPtr asyncTask(){return std::make_shared<AsyncTask>();}
+template<typename Function> void asyncDeliver(const AsyncTaskPtr& task,const std::string& key,Function function)
+{
+    AsyncScope scope(task?task->guard():AsyncGuard());
+    if(task && !task->claim(key))return;
+    if(task && task->guard())task->guard()->acknowledge(key);
+    function(asyncAllowed()); // Failure still reaches cleanup under stopped scope.
+}
 template<typename Function> auto asyncDeferred(Function function)
 {
     auto task=asyncTask();

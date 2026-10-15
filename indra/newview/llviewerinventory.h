@@ -32,6 +32,7 @@
 #include "llwearable.h"
 #include "llinitdestroyclass.h" //for LLDestroyClass
 #include "llinventorysettings.h"
+#include "fsassistantasync.h"
 
 #include <boost/signals2.hpp>   // boost::signals2::trackable
 
@@ -258,7 +259,19 @@ protected:
 class LLInventoryCallback : public LLRefCount
 {
 public:
+    LLInventoryCallback():mAssistantTask(fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr){}
     virtual ~LLInventoryCallback() {}
+    fs_assistant::AsyncGuard assistantGuard() const{return mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard();}
+    void fireGuarded(const LLUUID& id)
+    {
+        // Deliver failure for cleanup, under the stopped scope; no later write
+        // or editor may run. Callback destruction retains the same authority.
+        fs_assistant::asyncDeliver(mAssistantTask,id.isNull()?std::string():id.asString(),
+            [this,&id](bool allowed){fire(allowed?id:LLUUID::null);});
+    }
+private:
+    fs_assistant::AsyncTaskPtr mAssistantTask;
+public:
     virtual void fire(const LLUUID& inv_item) = 0;
 };
 
@@ -325,7 +338,8 @@ public:
     // virtual
     ~LLBoostFuncInventoryCallback()
 {
-        mDestroyFunc();
+        fs_assistant::AsyncScope scope(assistantGuard());
+        if(fs_assistant::asyncAllowed() && mDestroyFunc)mDestroyFunc();
     }
 
 

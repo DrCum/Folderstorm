@@ -405,7 +405,7 @@ public:
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
             LLSD health=mIdentity;
             health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
-            health["managed_async_appearance_writes"]=false;health["managed_create_item"]=false;
+            health["managed_async_appearance_writes"]=false;health["managed_create_item"]=true;
             health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1,"async_operations",1);
             response->extendedResult(HTTP_OK,to_json(health),json_headers());
 
@@ -494,6 +494,16 @@ public:
                 extra["capabilities"] = llsd::map("bulk_inventory_review", 1, "workspace_tools", 1);
             }
             fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, extra);
+            return;
+        }
+        if(api=="LLInventory" && op=="createItem")
+        {
+            FSAssistantPreparedOperation prepared;std::string error;
+            if(!prepareOperation(input,{"create"},prepared,error)){fail_response(response,HTTP_BAD_REQUEST,error);return;}
+            const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses));
+            if(decision==fs_assistant::Decision::Deny){fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,policy_error_details(op,prepared.requiredClasses));return;}
+            if(decision==fs_assistant::Decision::Ask)enqueueAsk(std::move(prepared),response,api,op);
+            else postEvent(prepared.request,response,api,op,false,&prepared);
             return;
         }
         if (api == "LLInventory" && (op == "previewBatchRename" || op == "previewBatchMove" || op == "previewBulkUndo" || op == "bulkHistory"))
@@ -863,7 +873,7 @@ private:
         if(durable)
         {
             for(auto it=mAsync.begin();it!=mAsync.end() && mAsync.size()>=64;)
-                if(it->second->state()!="pending")it=mAsync.erase(it);else ++it;
+                if(it->second->pending()==0 && it->second->state()!="pending")it=mAsync.erase(it);else ++it;
             if(mAsync.size()>=64){fail_response(response,HTTP_SERVICE_UNAVAILABLE,"Too many active assistant operations");return;}
             std::weak_ptr<State> weak=weak_from_this();
             posted.async=std::make_shared<fs_assistant::AsyncOperation>([weak,gate=posted.gate,generation=mSessionGeneration,
