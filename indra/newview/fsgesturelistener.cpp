@@ -46,7 +46,8 @@ LLSD evidence(const LLViewerInventoryItem* item)
     auto result=fs_content::evidence(item);
     if(item)
     {result["name"]=item->getName();result["group_id"]=item->getPermissions().getGroup();
-        result["base_permissions"]=item->getPermissions().getMaskBase();result["next_owner_permissions"]=item->getPermissions().getMaskNextOwner();
+        result["base_permissions"]=static_cast<S32>(item->getPermissions().getMaskBase());
+        result["next_owner_permissions"]=static_cast<S32>(item->getPermissions().getMaskNextOwner());
         result["item_flags"]=static_cast<S32>(item->getFlags());result["inventory_type"]=static_cast<S32>(item->getInventoryType());}
     return result;
 }
