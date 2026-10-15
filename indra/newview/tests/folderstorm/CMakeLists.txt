@@ -23,6 +23,8 @@ folderstorm_check(chrome_layout
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
 folderstorm_check(assistant_social ../test_fsassistantsocialmodel.cpp)
 folderstorm_check(content_policy ../../../../tools/session-host/tests/test_content_policy.cpp)
+folderstorm_check(content_upload ../../../../tools/session-host/tests/test_content_upload.cpp)
+folderstorm_check(content_read_permissions ../../../../tools/session-host/tests/test_content_read_permissions.cpp)
 folderstorm_check(world_observation ../test_fsworldobservation.cpp)
 folderstorm_check(assistant_policy ../../fsassistantpolicy_test.cpp)
 folderstorm_check(world_view_geometry ../test_fsworldviewgeometry.cpp)
