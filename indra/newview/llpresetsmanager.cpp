@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpresetsmanager.h"
+#include "fspreferenceslistener.h"
 
 #include "lldiriterator.h"
 #include "llfloater.h"
@@ -258,12 +259,14 @@ bool LLPresetsManager::isCameraDirty()
 void LLPresetsManager::settingChanged()
 {
     setCameraDirty(true);
+    const bool preview_label_hidden = fs_preferences_preset_invalidated(true);
 
     static LLCachedControl<std::string> preset_camera_active(gSavedSettings, "PresetCameraActive", "");
     std::string preset_name = preset_camera_active;
-    if (!preset_name.empty() && !mIgnoreChangedSignal)
+    if ((!preset_name.empty() || preview_label_hidden) && !mIgnoreChangedSignal)
     {
-        gSavedSettings.setString("PresetCameraActive", "");
+        if (!fs_preferences_preset_write("PresetCameraActive", ""))
+            gSavedSettings.setString("PresetCameraActive", "");
 
         // Hack call because this is a static routine
         LLPresetsManager::getInstance()->triggerChangeCameraSignal();
@@ -735,6 +738,7 @@ void LLPresetsManager::initGraphicPresetControls()
 
 void LLPresetsManager::handleGraphicPresetControlChanged(LLControlVariablePtr control, const LLSD& new_value, const LLSD& old_value)
 {
+    fs_preferences_preset_invalidated(false);
     LL_DEBUGS() << "Handling graphic preset control change: control = " << control->getName() << " - new = " << new_value << " - old = " << old_value << LL_ENDL;
 
     if (!mIsLoadingPreset &&
@@ -743,7 +747,8 @@ void LLPresetsManager::handleGraphicPresetControlChanged(LLControlVariablePtr co
     {
         LL_DEBUGS() << "Trigger graphic preset control changed signal" << LL_ENDL;
 
-        gSavedSettings.setString("PresetGraphicActive", "");
+        if (!fs_preferences_preset_write("PresetGraphicActive", ""))
+            gSavedSettings.setString("PresetGraphicActive", "");
         triggerChangeSignal();
     }
 }

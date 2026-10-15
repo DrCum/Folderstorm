@@ -32,6 +32,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fspreferenceslistener.h"
 #include "fssessionworker.h"
 
 #include "llfloaterpreference.h"
@@ -1143,6 +1144,9 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
 
 void LLFloaterPreference::onOpen(const LLSD& key)
 {
+    // MCP previews must be discarded before any panel or saveSettings() takes
+    // the independently owned native Preferences baseline.
+    FSPreferencesNativeOpening assistant_preview;
     // this variable and if that follows it are used to properly handle do not disturb mode response message
     static bool initialized = false;
     // if user is logged in and we haven't initialized do not disturb mode response yet, do it

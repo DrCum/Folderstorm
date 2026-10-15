@@ -21,6 +21,7 @@ endfunction()
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
+folderstorm_check(assistant_preferences ../test_fspreferencesmodel.cpp)
 folderstorm_check(assistant_gestures ../test_fsassistantgesturemodel.cpp)
 target_include_directories(assistant_gestures PRIVATE ../..)
 folderstorm_check(assistant_asset_fetch ../test_fsassistantassetfetch.cpp)

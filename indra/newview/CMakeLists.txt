@@ -123,6 +123,7 @@ set(viewer_SOURCE_FILES
     fsworldlistener.cpp
     fscontentlistener.cpp
     fsgesturelistener.cpp
+    fspreferenceslistener.cpp
     fsworkspacelistener.cpp
     fsworkspacecontextadapter.cpp
     fsworkspacecontroller.cpp
@@ -1022,6 +1023,8 @@ set(viewer_HEADER_FILES
     fsworkspacecontextui.h
     fsassistantsocial.h
     fsassistantsocialmodel.h
+    fspreferenceslistener.h
+    fspreferencesmodel.h
     fsgesturelistener.h
     fsassistantgesturemodel.h
     fsassistantassetfetch.h

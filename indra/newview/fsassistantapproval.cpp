@@ -129,6 +129,7 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
         const LLSD& subject = subjects[index];
         if (subject["name_unavailable"].asBoolean()) text << getString("name_unavailable") << " ";
         text << format(subject["name"]);
+        if (subject.has("before_name")) text << " (" << format(subject["before_name"]) << ")";
         if (subject.has("after_name")) text << " → " << format(subject["after_name"]);
         text << "\n";
         if (subject.has("path")) text << "  " << format(subject["path"]) << "\n";

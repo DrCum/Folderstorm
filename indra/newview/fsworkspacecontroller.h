@@ -45,6 +45,11 @@ public:
     void cancelPreferencesSession();
     bool preview(const std::string& id);
     bool canQuickSwitch() const;
+    // Includes deferred work whose later callbacks can still change settings.
+    bool preferencesBusy() const;
+    // Discard only an untouched baseline captured by a hidden native panel.
+    // Called after assistant approval, before the first preview runtime write.
+    bool preparePreferencesPreview();
     bool quickSwitchWorkspace(const std::string& id);
     bool quickSwitchWorkspaceGroups(const std::string& id, int components, bool toolbars = false);
     bool quickSwitchLayout(const std::string& id);
@@ -159,6 +164,7 @@ private:
     void finishQuickSwitch();
     bool startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id);
     bool sameSession() const;
+    bool dormantPreferencesBaseline() const;
 
     static void lifecycleIdle(void*);
     bool rememberPrevious(const FSWorkspaceContext::Options& context = {});
