@@ -22,7 +22,7 @@ Pose transactions detect manual Poser edits and stop stale MCP edits without ove
 
 ## Shared posing prerequisite
 
-This branch's havePermissionToAnimateOtherAvatar returns false; no shared service is present here. Verify PR #35's actual reviewed service/head and coordinate with its owner. Do not bypass the floater's denial by directly calling FSPoserAnimator on another avatar, and do not merge the dependency automatically.
+The own-pose checkpoint deliberately incorporates PR #35's verified native dependency tip `071403d63e7964935bd8d633ff0b6b11881f510e`, preserving its published history. This provides the native sharing/consent service; it does not itself advertise a shared MCP provider. A separate adapter checkpoint must enforce that service's grants and reservations. Do not bypass native consent by directly calling FSPoserAnimator on another avatar.
 
 When available, add shared-session status, accepted invitation/grant listing and permitted-joint read/edit tools. Require both MCP permission and target-owner native consent, exact target/grid/native sharing-session generation, joint reservations and expected revisions. MCP cannot approve its own invitation, silently enable publishing/receiving, obtain broader joints or override another editor. Use native revocation/region/disconnect cleanup and target-visible activity. Optional publishing needs its own explicit native approval; local pose state is not proof of remote synchronization.
 
@@ -53,3 +53,23 @@ Windows acceptance:
 - Check native muted/background audio behavior, explicit stop, receipt outcomes and incomplete-cleanup reporting. Do not replay uncertain sends.
 
 Own and shared posing remain separately reviewed checkpoints described above.
+
+## Delivered own-pose checkpoint
+
+Ten typed tools provide status/joints, start/update/undo/reset/stop and preset list/load/save under `pose_tools=1`. Opt-in Pose read, Ask-capable Pose edit and separate Ask-capable Save pose preset permissions remain distinct. Mutations require this account's active self-avatar and exact pose session/revision. Another native Poser or shared self-pose owner refuses acquisition. No agent translation, position/scale, world-lock, animesh or camera controls are exposed.
+
+Private poses use a separate random local motion and at most 64 named joint rotations. Revocation checks run independently of animation-controller culling; native Poser takeover invalidates the old transaction before capture. Cancellation uses local motion removal, without a simulator animation STOP. Undo/reset/stop restore acquisition rotations only while the current joint still matches the assistant's last applied contribution; external/mixed state is preserved and incomplete restoration reported.
+
+Presets are exact, hashed IDs under the native `poses` directory, bounded to 64 KiB. Loading accepts supported native version-8 absolute local-rotation XML only, after strict complete-document/depth/shape validation; wider or relative state fails explicitly. Saving creates a new confined filename and never overwrites an existing preset. Pinned non-link directory/file handles prevent pathname replacement from redirecting I/O. Symlink/reparse/UNC settings paths intentionally refuse; UTF-8 filenames remain supported without deprecated C++20 path APIs.
+
+Independent Max source review is clean at `0e19856243`; final parent integration retains the separately reviewed gesture/content/Preferences changes. Strict portable pose/XML/file-link/race checks, registered Go pose tools and six native-boundary source checks pass. CMake registration is source-reviewed only because CMake is absent. Native Windows compilation, real animation blending and runtime acceptance remain pending.
+
+Windows acceptance:
+
+- Start an active self-pose, apply bounded rotations and exercise undo/reset/stop on animated and otherwise unanimated Bento joints. Check restoration outcomes.
+- Open native Poser during a private pose, then close it; the old assistant pose must not resume. Revoke access while the private motion is fully covered by another motion.
+- Change source/region/login or disconnect. Future effects must stop without simulator requests for the private UUID; ambiguous newer state must survive.
+- List/load/save Unicode presets, collisions, unsupported wider-state XML, trailing documents and changed file revisions. New files must stay in the native pose directory.
+- Verify default permission presets and native approval distinguish runtime posing from saving files. No operation may control another avatar or implicitly enable sharing.
+
+Shared MCP posing remains a separate checkpoint with two-viewer native consent acceptance.
