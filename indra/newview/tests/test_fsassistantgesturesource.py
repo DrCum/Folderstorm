@@ -26,13 +26,13 @@ class GestureNativeBoundaryTests(unittest.TestCase):
     def test_item_bound_load_freezes_bounded_asset_before_approval(self):
         text = source("fsgesturelistener.cpp")
         self.assertIn("getInvItemAsset(", text)
-        self.assertNotIn("getAssetData(", text)
-        self.assertLess(text.index("size>static_cast<S32>(maxAssetBytes)"), text.index("std::string bytes(size"))
+        gesture = text[text.index("static void loaded(const LLUUID&"):text.index("static void nextAnimation(")]
+        self.assertLess(gesture.index("size>static_cast<S32>(maxAssetBytes)"), gesture.index("std::string bytes(size"))
         self.assertIn("entry.hash=fs_content::hash(bytes)", text)
         self.assertIn('request["asset_hash"].asString()!=frozen.hash', text)
         self.assertIn('operation.validation["effects"]=effects(frozen.plan)', text)
-        self.assertIn("evidence(item)!=load->itemEvidence", text)
-        self.assertIn("load->identity!=source()", text)
+        self.assertIn("evidence(item)==load->itemEvidence", text)
+        self.assertIn("load->identity==source()", text)
         self.assertIn("fs_assistant::asyncTaskAllowed(load->task)", text)
         self.assertIn("loads().erase(found)", text)  # opaque never-reused token makes duplicate callback inert
         model = source("fsassistantgesturemodel.h")
@@ -109,6 +109,58 @@ class GestureNativeBoundaryTests(unittest.TestCase):
         library = (ROOT.parent / "llcharacter" / "llanimationstates.cpp").read_text()
         lookup = library[library.index("const char *LLAnimationLibrary::animStateToString"):library.index("LLUUID LLAnimationLibrary::stringToAnimState")]
         self.assertLess(lookup.index("mAnimMap.count(state)"), lookup.index("mAnimMap[state]"))
+        for state in ("AWAY", "STANDUP", "PRE_JUMP", "LAND", "MEDIUM_LAND", "STAND", "SIT_GROUND_CONSTRAINED", "DO_NOT_DISTURB", "TYPE"):
+            self.assertIn("mAnimMap[ANIM_AGENT_" + state + "]", library)
+
+    def test_referenced_animation_assets_are_guarded_and_frozen_before_play(self):
+        text = source("fsgesturelistener.cpp")
+        next_load = text[text.index("static void nextAnimation("):text.index("static void loadedAnimation(")]
+        self.assertLess(next_load.index("loadAllowed(load)"), next_load.index("gAssetStorage->getAssetData("))
+        self.assertIn("load->references[load->nextAnimation]", next_load)
+        self.assertIn("inspectionsComplete(load->material,error)", next_load)
+        self.assertLess(next_load.index("inspectionsComplete(load->material,error)"), next_load.index("self->cache[load->item]"))
+        callback = text[text.index("static void loadedAnimation("):text.index("FSGestureListener::FSGestureListener()")]
+        self.assertIn("fs_assistant::AsyncScope scope(load->task->guard())", callback)
+        self.assertIn("loadAllowed(load)", callback)
+        self.assertIn("load->task->claim", callback)
+        self.assertIn("asset!=LLUUID(load->references[load->nextAnimation])", callback)
+        self.assertIn("animationBytesAllowed(static_cast<std::size_t>(size),load->material.animationBytes)", callback)
+        self.assertIn("animationHeader(bytes,error)", callback)
+        self.assertIn("{fs_content::hash(bytes),size}", callback)
+        prep = text[text.index("bool FSGestureListener::prepareAssistant("):text.index("bool FSGestureListener::validateAssistant(")]
+        self.assertIn("State::animationMaterial(frozen,animation.first,error)", prep)
+        self.assertIn('operation.validation["animation_assets"]=State::animationAssets(frozen)', prep)
+        self.assertIn('row["after_name"]="SHA256 "+animation.second.hash', prep)
+        apply = text[text.index("bool apply(Playback& play"):text.index("    void tick()")]
+        self.assertLess(apply.index("animationMaterial(play.frozen,id,error)"), apply.index("asyncTaskSubmit(play.task)"))
+        material = text[text.index("static bool animationMaterial("):text.index("static bool loadAllowed(")]
+        self.assertIn("fs_content::hash(bytes)!=found->second.hash", material)
+        self.assertIn("return animationHeader(bytes,error)", material)
+
+    def test_animation_header_matches_native_emote_dispatch(self):
+        model = source("fsassistantgesturemodel.h")
+        header = model[model.index("inline bool animationHeader("):model.index("class Timeline")]
+        self.assertIn("u16(0)!=1 || u16(2)!=0", header)
+        self.assertIn("bytes[12]!='\\0'", header)
+        native = (ROOT.parent / "llcharacter" / "llkeyframemotion.cpp").read_text()
+        decode = native[native.index("bool LLKeyframeMotion::deserialize("):native.index("bool LLKeyframeMotion::deserialize(")+6000]
+        fields = re.findall(r'dp\.unpack(?:U16|S32|F32|String)\([^\n]*"([a-z_]+)"', decode)
+        self.assertEqual(fields[:5], ["version", "sub_version", "base_priority", "duration", "emote_name"])
+        activate = native[native.index("bool LLKeyframeMotion::onActivate()"):native.index("bool LLKeyframeMotion::onActivate()")+700]
+        self.assertIn("mCharacter->startMotion(mJointMotionList->mEmoteID)", activate)
+
+    def test_native_region_signal_prevents_region_uuid_aba(self):
+        text = source("fsgesturelistener.cpp")
+        constructor = text[text.index("FSGestureListener::FSGestureListener()"):text.index("FSGestureListener::~FSGestureListener()")]
+        self.assertLess(constructor.index("gAgent.addRegionChangedCallback("), constructor.index('for(const auto* op:'))
+        self.assertIn("self->regionChanged()", constructor)
+        self.assertIn("boost::signals2::scoped_connection regionConnection", text)
+        self.assertIn('result["region_generation"]=std::to_string(regionEpoch.generation())', text)
+        event = text[text.index("void regionChanged()"):text.index("LLSD row(")]
+        self.assertLess(event.index("regionEpoch.changed()"), event.index("sync()"))
+        self.assertIn('playing->task->guard()->cancel("region_changed")', event)
+        self.assertIn('load->task->guard()->cancel("region_changed")', event)
+        self.assertIn("it=loads().erase(it)", event)
 
 
 if __name__ == "__main__":

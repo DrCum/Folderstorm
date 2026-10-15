@@ -227,6 +227,7 @@ func TestGesturesPreserveNativePartialAndUnsupportedEvidence(t *testing.T) {
 		`{"state":"partially_submitted","cleanup_complete":false,"reason":"animation_ownership_superseded","sound_triggers_submitted":1}`,
 		`{"status":"unavailable","reason":"gesture_asset_download_failed"}`,
 		`{"state":"pending","authority_duration":"bridge_request_deadline_may_cancel_before_120_seconds"}`,
+		`{"status":"inspected","animation_assets":[{"asset_id":"22222222-2222-4222-8222-222222222222","asset_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","size_bytes":41,"header_version":"1.0","emote_name":""}]}`,
 	} {
 		fixture, state := newGestureFixture(t)
 		fixture.result = native

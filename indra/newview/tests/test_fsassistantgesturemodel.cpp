@@ -9,6 +9,13 @@ using namespace fs_assistant_gesture;
 const std::string animation="11111111-1111-4111-8111-111111111111";
 std::string asset(const std::string& count,const std::string& body)
 {return "2\n255\n0\n/trigger\n\n"+count+"\n"+body;}
+std::string animationAsset(const std::string& emote)
+{
+    std::string result(41,'\0');result[0]=1;result[4]=3;
+    const float duration=5;std::uint32_t bits;std::memcpy(&bits,&duration,sizeof(bits));
+    for(unsigned i=0;i<4;++i)result[8+i]=static_cast<char>((bits>>(i*8))&255);
+    result.insert(12,emote);return result;
+}
 int main(int argc,char** argv)
 {
     Plan plan;std::string error;
@@ -74,10 +81,32 @@ int main(int argc,char** argv)
     builtins.steps.erase(builtins.steps.begin()); // STOP is independently checked too
     assert(!animationPolicy(builtins,[&](const std::string& id){return id==animation;},error));
     assert(animationPolicy(builtins,[](const std::string&){return false;},error));
+    assert(animationHeader(animationAsset(""),error));
+    for(const auto* emote:{"away","standup","Closed_Mouth","unknown","11111111-1111-4111-8111-111111111111"})
+        assert(!animationHeader(animationAsset(emote),error));
+    auto header=animationAsset("");header[0]=0;header[2]=1;assert(!animationHeader(header,error));
+    header=animationAsset("");header[4]=static_cast<char>(0xfe);assert(!animationHeader(header,error));
+    header=animationAsset("");header[11]=static_cast<char>(0x7f);header[10]=static_cast<char>(0xc0);assert(!animationHeader(header,error));
+    assert(!animationHeader(animationAsset("").substr(0,40),error));
+    assert(!animationHeader(std::string(maxAnimationAssetBytes+1,'\0'),error));
+    assert(animationBytesAllowed(maxAnimationAssetBytes,maxAnimationTotalBytes-maxAnimationAssetBytes));
+    assert(!animationBytesAllowed(0,0));assert(!animationBytesAllowed(maxAnimationAssetBytes+1,0));
+    assert(!animationBytesAllowed(1,maxAnimationTotalBytes));
+    assert(!animationBytesAllowed(1,std::numeric_limits<std::size_t>::max()));
+    Plan referenced;for(unsigned i=0;i<17;++i)referenced.steps.push_back({Effect::AnimationStart,std::to_string(i),0});
+    std::vector<std::string> referenceIDs;assert(!animationReferences(referenced,referenceIDs,error));
+    referenced.steps.pop_back();referenced.steps.push_back(referenced.steps.front());
+    assert(animationReferences(referenced,referenceIDs,error) && referenceIDs.size()==16);
     // Manual replay claims an animation while the old timeline is waiting;
     // source/lease validation prevents its next effect and unsafe cleanup.
     const auto old=leases.acquire(animation);Timeline overlap({{Effect::WaitTime,"",5},{Effect::Chat,"stale",0}},0);
     auto ownership=[&](){return leases.owns(animation,old);};
     overlap.tick(0,ownership,none,deliver);leases.observed(animation);overlap.tick(5,ownership,none,deliver);
     assert(overlap.done() && delivered==1 && !cleanupAllowed(true,ownership(),false));
+    RegionEpoch epoch;const auto origin=epoch.generation();
+    Timeline aba({{Effect::WaitTime,"",5},{Effect::Chat,"stale region",0}},0);
+    auto sameRegion=[&](){return epoch.generation()==origin;};
+    aba.tick(0,sameRegion,none,deliver);epoch.changed();epoch.changed(); // A -> B -> A without a tick
+    aba.tick(5,sameRegion,none,deliver);assert(aba.done() && delivered==1);
+    assert(!cleanupAllowed(sameRegion(),true,false));
 }

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <set>
 #include <string>
@@ -13,7 +14,14 @@ enum class Effect { AnimationStart, AnimationStop, Sound, Chat, WaitTime, WaitAn
 struct Step { Effect effect; std::string value; double seconds=0; };
 struct Plan { std::string trigger; std::vector<Step> steps; bool chat=false, sound=false; };
 constexpr std::size_t maxSteps=64, maxAssetBytes=16384;
+constexpr std::size_t maxAnimationAssets=16, maxAnimationAssetBytes=1024*1024, maxAnimationTotalBytes=4*1024*1024;
 constexpr double maxDuration=120, maxWait=60;
+class RegionEpoch {
+public:
+    void changed(){++mGeneration;}
+    std::uint64_t generation()const{return mGeneration;}
+private:std::uint64_t mGeneration=0;
+};
 inline bool uuid(const std::string& value)
 {
     if(value.size()!=36 || value=="00000000-0000-0000-0000-000000000000")return false;
@@ -107,6 +115,35 @@ template<typename Builtin> bool animationPolicy(const Plan& plan,Builtin builtin
     for(const auto& step:plan.steps)
         if((step.effect==Effect::AnimationStart || step.effect==Effect::AnimationStop) && builtin(step.value))
         {error="unsupported_builtin_animation: native animation states can change avatar controls";return false;}
+    return true;
+}
+inline bool animationReferences(const Plan& plan,std::vector<std::string>& result,std::string& error)
+{
+    std::set<std::string> ids;
+    for(const auto& step:plan.steps)
+        if(step.effect==Effect::AnimationStart || step.effect==Effect::AnimationStop)ids.insert(step.value);
+    if(ids.size()>maxAnimationAssets){error="referenced_animation_count_out_of_bounds";return false;}
+    result.assign(ids.begin(),ids.end());return true;
+}
+inline bool animationBytesAllowed(std::size_t bytes,std::size_t accumulated)
+{return bytes>0 && bytes<=maxAnimationAssetBytes && accumulated<=maxAnimationTotalBytes && bytes<=maxAnimationTotalBytes-accumulated;}
+// LLKeyframeMotion::deserialize reads little-endian version/subversion,
+// base_priority, duration, then a NUL-terminated emote_name. Reject *every*
+// nonempty emote, including names native code normally ignores: onActivate can
+// recursively start that motion and reach avatar controls without a gesture step.
+// This inspects the header only; native code remains responsible for keyframes.
+inline bool animationHeader(const std::string& bytes,std::string& error)
+{
+    auto fail=[&](const char* reason){error=reason;return false;};
+    if(bytes.size()<41 || !animationBytesAllowed(bytes.size(),0))return fail("animation_asset_size_out_of_bounds");
+    auto u16=[&](std::size_t at){return static_cast<unsigned char>(bytes[at]) | (static_cast<unsigned char>(bytes[at+1])<<8);};
+    auto u32=[&](std::size_t at){std::uint32_t value=0;for(unsigned i=0;i<4;++i)value|=std::uint32_t(static_cast<unsigned char>(bytes[at+i]))<<(8*i);return value;};
+    if(u16(0)!=1 || u16(2)!=0)return fail("unsupported_animation_header_version");
+    const auto priority=u32(4);if(priority!=0xffffffffU && priority>7)return fail("unsupported_animation_priority");
+    const auto bits=u32(8);float duration;static_assert(sizeof(duration)==sizeof(bits),"32-bit animation float required");
+    std::memcpy(&duration,&bits,sizeof(duration));
+    if(!std::isfinite(duration) || duration<0 || duration>maxDuration)return fail("animation_duration_out_of_bounds");
+    if(bytes[12]!='\0')return fail("unsupported_animation_emote: embedded animations are not authorized gesture effects");
     return true;
 }
 class Timeline {
