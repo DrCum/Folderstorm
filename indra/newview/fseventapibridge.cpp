@@ -1577,6 +1577,22 @@ void FSEventAPIBridge::removeDiscoveryFile()
     }
 }
 
+std::string FSEventAPIBridge::controllerLoginReference()
+{
+    if(LLStartUp::getStartupState()!=STATE_STARTED || gDisconnected)
+    {mControllerLoginKey.clear();mControllerLoginReference.clear();return {};}
+    if(mState && mState->enabled())
+    {mControllerLoginKey.clear();mControllerLoginReference.clear();refreshSession();if(mState->enabled())return mViewerSession;}
+    const auto worker=FSSessionWorker::assistantIdentity();
+    // The native session UUID is only an internal invalidation key. It never
+    // leaves this process; the host receives a fresh unrelated opaque UUID.
+    const auto key=gAgentID.asString()+":"+gAgent.getSessionID().asString()+":"+LLGridManager::instance().getGrid()+":"+
+        (FSSessionWorker::managed()?"managed":"standalone")+":"+worker["worker"].asString()+":"+worker["generation"].asString()+":"+mViewerSession;
+    if(key!=mControllerLoginKey || mControllerLoginReference.empty())
+    {mControllerLoginKey=key;mControllerLoginReference=LLUUID::generateNewID().asString();}
+    return mControllerLoginReference;
+}
+
 void FSEventAPIBridge::refreshSession()
 {
     // Preview cleanup must run even while the authenticated bridge is paused.
@@ -1633,6 +1649,7 @@ void FSEventAPIBridge::stop()
     removeDiscoveryFile();
     mDiscoveryPath.clear();
     mSessionKey.clear();mViewerSession.clear();
+    mControllerLoginKey.clear();mControllerLoginReference.clear();
     mPump = nullptr;
 }
 
