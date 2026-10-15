@@ -4,6 +4,12 @@
 #include <iostream>
 int main()
 {
+    // Native v1 embedded bytes expand to four UTF-8 bytes. Both notecard and
+    // script reads must return a complete prefix at the public 64 KiB cap.
+    const std::string boundary = std::string(65535, 'x') + "\xf4\x80\x80\x80";
+    const auto boundedPrefix = fs_content::excerpt(boundary, 65536);
+    assert(boundedPrefix.size() == 65535 && fs_content::utf8(boundedPrefix));
+    assert(fs_content::excerpt(std::string(65534, 'x') + "\xe2\x82\xac", 65536).size() == 65534);
  using namespace fs_content;
  // Complete native version 1 serialization, including its closing structure.
  const std::string plain="Linden text version 1\n{\nLLEmbeddedItems version 1\n{\ncount 0\n}\nText length 12\nLegacy note!}\n";

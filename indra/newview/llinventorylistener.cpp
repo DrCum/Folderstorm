@@ -1737,12 +1737,8 @@ std::string capped_text(const char* data, S32 length, bool& truncated)
     {
         length = 0;
     }
-    if (static_cast<std::size_t>(length) > kTextCap)
-    {
-        length = static_cast<S32>(kTextCap);
-        truncated = true;
-    }
-    return std::string(data, data + length);
+    truncated = static_cast<std::size_t>(length) > kTextCap;
+    return fs_content::excerpt(std::string(data, data + length), kTextCap);
 }
 
 struct AssetRead
