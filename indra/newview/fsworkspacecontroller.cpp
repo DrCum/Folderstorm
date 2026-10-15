@@ -17,6 +17,8 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacecontroller.h"
+#include "fspreferenceslistener.h"
+#include "fspreferencesmodel.h"
 #include "fsworkspacecontextadapter.h"
 #include "llpresetsmanager.h"
 #include "llfeaturemanager.h"
@@ -335,6 +337,7 @@ void FSWorkspaceController::rememberRole(Role role)
 }
 void FSWorkspaceController::beginPreferencesSession()
 {
+    if (fs_preferences_busy()) return;
     if (mTransaction && (!sameSession() || !available())) abandon();
     // Opening Preferences during the deferred placement must capture the
     // accepted quick switch, rather than adopt its temporary rollback state.
@@ -394,7 +397,33 @@ bool FSWorkspaceController::canQuickSwitch() const
 {
     // Includes minimized Preferences: no pending settings are accepted by a
     // quick switch, and later Cancel must not undo a switch made elsewhere.
-    return available() && !LLFloaterReg::instanceVisible("preferences");
+    return available() && !LLFloaterReg::instanceVisible("preferences") && !fs_preferences_busy();
+}
+bool FSWorkspaceController::preferencesBusy() const
+{
+    return (mTransaction && !dormantPreferencesBaseline()) || mPendingPlacement || mQuickSwitch || mStartupScheduled ||
+        mDisplayPending || mHUDPreviewPending || !mPendingHUDs.empty();
+}
+bool FSWorkspaceController::dormantPreferencesBaseline() const
+{
+    const bool edited = mContextTouched || mCameraTouched || mToolbarTouched || mInboxTouched ||
+        !mTouched.empty() || !mCreated.empty() || !mRenamed.empty() || mReportPreview ||
+        std::any_of(mExtraRuntime.begin(),mExtraRuntime.end(),[](const ExtraInventoryBaseline& entry){return entry.touched;});
+    const bool deferred = mPendingPlacement || mQuickSwitch || mStartupScheduled || mDisplayPending ||
+        mHUDPreviewPending || !mPendingHUDs.empty() || !mPendingHandles.empty() || !mPendingExtraInventory.empty() ||
+        mRestoreLayout || mPreserveCoordinates;
+    return fs_preferences::dormantWorkspaceBaseline({mTransaction,available(),sameSession(),
+        LLFloaterReg::instanceVisible("preferences"),fs_preferences_native_opening_in_progress(),
+        mProfiles == gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles"),
+        mActive == gSavedPerAccountSettings.getString("FSActiveWorkspace"),edited,deferred});
+}
+bool FSWorkspaceController::preparePreferencesPreview()
+{
+    if (LLFloaterReg::instanceVisible("preferences") || fs_preferences_native_opening_in_progress()) return false;
+    // This drops snapshots only. No acceptance, setting write, restore, window
+    // placement or native button action is involved. onOpen captures afresh.
+    if (dormantPreferencesBaseline()) abandon();
+    return !preferencesBusy();
 }
 bool FSWorkspaceController::quickSwitchWorkspace(const std::string& id)
 {
@@ -582,7 +611,7 @@ bool FSWorkspaceController::remembersInventoryFolders(const std::string& name) c
 bool FSWorkspaceController::rename(const std::string& old_name, const std::string& new_name)
 {
     beginPreferencesSession();
-    if (!available() || !isCustom(old_name)) return false;
+    if (!available() || !mTransaction || !isCustom(old_name)) return false;
     std::string error;
     FSWorkspaceLayout::Workspace parsed;
     if (!FSWorkspaceLayout::isSafeProfileName(new_name) || mProfiles.has(new_name)) { mStatus = "invalid_name_or_data"; return false; }
@@ -595,7 +624,7 @@ bool FSWorkspaceController::rename(const std::string& old_name, const std::strin
 bool FSWorkspaceController::remove(const std::string& name)
 {
     beginPreferencesSession();
-    if (!available() || !isCustom(name)) return false;
+    if (!available() || !mTransaction || !isCustom(name)) return false;
     mProfiles.erase(name); if (mActive == name) mActive.clear();
     mRenamed.emplace_back("workspace:" + name, "");
     mStatus = "deleted"; ++mRevision; return true;
@@ -625,6 +654,7 @@ bool FSWorkspaceController::addInventoryWindow()
 }
 bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& workspace, const std::string& id)
 {
+    if (fs_preferences_busy()) return false;
     ++mGeneration; ++mRevision;
     mPendingPlacement = false; mPendingHandles.clear();
     mPendingExtraInventory.clear();
@@ -718,6 +748,7 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
 }
 void FSWorkspaceController::placePending(unsigned long generation, const LLUUID& account, const LLUUID& session)
 {
+    if (fs_preferences_busy()) return;
     if (generation != mGeneration || !mPendingPlacement) return;
     if (!available() || account != gAgent.getID() || session != gAgent.getSessionID()) { abandon(); return; }
     finishPlacement();
@@ -791,6 +822,7 @@ void FSWorkspaceController::applyInventoryFolder(LLFloater* floater, const FSWor
 }
 void FSWorkspaceController::finishPlacement()
 {
+    if (fs_preferences_busy()) return;
     if (!mPendingPlacement || !sameSession() || !available()) return;
     mPendingPlacement = false;
     std::vector<LLRect> placed;
@@ -1579,6 +1611,7 @@ void FSWorkspaceController::pollDisplays()
 }
 bool FSWorkspaceController::recoverWindows(bool automatic)
 {
+    if (fs_preferences_busy()) return false;
     if (!available() || !gViewerWindow) return false;
     const bool preferences_preview = !canQuickSwitch();
     if (preferences_preview)
