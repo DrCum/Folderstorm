@@ -74,6 +74,7 @@ public:
 
 // [SL:KB] - Patch: UI-FloaterSearchReplace | Checked: 2010-11-05 (Catznip-2.3.0a) | Added: Catznip-2.3.0a
     LLTextEditor* getEditor();
+    bool assistantSourceBusy() const;
 // [/SL:KB]
 
     // return true if there is any embedded inventory.

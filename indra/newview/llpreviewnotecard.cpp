@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fscontentupload.h"
 
 #include "llpreviewnotecard.h"
 #include "llnotecard.h" // <FS> Byte counter
@@ -312,6 +313,12 @@ bool LLPreviewNotecard::handleKeyHere(KEY key, MASK mask)
 }
 
 // virtual
+bool LLPreviewNotecard::assistantSourceBusy() const
+{
+    return fs_content::nativeSourceBusy({!mEditor, false, mEditor && !mEditor->isPristine(),
+        mLiveFile != nullptr, false, mSaveDialogShown, false, false});
+}
+
 bool LLPreviewNotecard::canClose()
 {
     if(mForceClose || !mEditor || mEditor->isPristine())

@@ -64,6 +64,7 @@ bool editorBusy(const LLUUID& id,bool notecard,const LLResourceUploadInfo* own=n
     if(notecard)
     {
         auto* card=LLFloaterReg::findTypedInstance<LLPreviewNotecard>("preview_notecard",id);
+        if(card && card->assistantSourceBusy())return true;
         preview=card;if(card)editor=card->getEditor();
     }
     else
@@ -83,7 +84,7 @@ bool invalidateHiddenEditor(const std::shared_ptr<Write>& write)
     if(write->notecard)
     {
         auto* preview=LLFloaterReg::findTypedInstance<LLPreviewNotecard>("preview_notecard",id);
-        return !preview || preview->invalidateAssistantSource(preview->getEditor());
+        return !preview || (!preview->assistantSourceBusy() && preview->invalidateAssistantSource(preview->getEditor()));
     }
     auto* preview=LLFloaterReg::findTypedInstance<LLPreviewLSL>("preview_script",id);
     return !preview || (!preview->assistantSourceBusy() && preview->invalidateAssistantSource(preview->getEditor()));
