@@ -1027,6 +1027,8 @@ set(viewer_HEADER_FILES
     fsassistantsocialmodel.h
     fsposelistener.h
     fsposepolicy.h
+    fsposefile.h
+    fsposexml.h
     fspreferenceslistener.h
     fspreferencesmodel.h
     fsgesturelistener.h
