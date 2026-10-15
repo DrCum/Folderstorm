@@ -17,5 +17,36 @@ inline bool rotationResult(const FSSharedPose::Joint& before,const FSSharedPose:
 {return (allowBefore && sameSharedJoint(before,after)) || sameSharedJoint(rotationJoint(before,requested),after);}
 inline bool sameSharedPose(const FSSharedPose::Pose& a,const FSSharedPose::Pose& b)
 {if(a.size()!=b.size())return false;for(const auto& joint:a){const auto other=b.find(joint.first);if(other==b.end() || !sameSharedJoint(joint.second,other->second))return false;}return true;}
+// An old final ACK can settle its operation receipt without being a snapshot
+// of the currently observed native session or grant. Keep those decisions
+// separate; cache updates need the exact still-current private native proof.
+struct SharedAcknowledgementSource
+{
+ std::string session,remoteGeneration,grantSession,grantGeneration,grantToken;
+};
+inline bool currentAcknowledgementSource(const SharedAcknowledgementSource& expected,const SharedAcknowledgementSource& current)
+{
+ return !expected.session.empty() && !expected.remoteGeneration.empty() && !expected.grantGeneration.empty() && !expected.grantToken.empty() &&
+  expected.session==expected.grantSession && current.session==current.grantSession && expected.session==current.session &&
+  expected.remoteGeneration==current.remoteGeneration && expected.grantGeneration==current.grantGeneration && expected.grantToken==current.grantToken;
+}
+inline unsigned updateAcknowledgedCache(const SharedAcknowledgementSource& expected,const SharedAcknowledgementSource& current,
+ const FSSharedPose::JointSet& requested,const FSSharedPose::Pose& acknowledged,const std::map<std::string,std::uint32_t>& acknowledgedRevisions,
+ FSSharedPose::Pose& pose,std::map<std::string,std::uint32_t>& revisions)
+{
+ if(!currentAcknowledgementSource(expected,current))return 0;
+ unsigned updated=0;
+ for(const auto& name:requested)
+ {
+  const auto joint=acknowledged.find(name);const auto live=pose.find(name);
+  const auto revision=acknowledgedRevisions.find(name);const auto cached=revisions.find(name);
+  // Never reinsert a removed joint or replace equal/newer observed content.
+  // Different joints may advance independently of the session's global r.
+  if(joint==acknowledged.end() || live==pose.end() || revision==acknowledgedRevisions.end() || cached==revisions.end() || revision->second<=cached->second)continue;
+  live->second=joint->second;cached->second=revision->second;++updated;
+ }
+ return updated;
+}
+
 }
 #endif

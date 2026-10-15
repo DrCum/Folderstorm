@@ -1224,8 +1224,25 @@ bool FSSharedPoseManager::handleAssistant(const LLUUID& sender,const LLSD& data)
     for(const auto& joint:work->before)
      if(!pose || !pose->count(joint.first) || !fs_pose::rotationResult(joint.second,pose->at(joint.first),work->rotations.at(joint.first),false))confirmed=false;
    if(!confirmed){if(!work->finished)finishAssistant(work,"submitted_unknown","Malformed or premature owner acknowledgement");return true;}
-   if(pose && mRemotes.count(sender))
-    for(const auto& joint:work->before){if(!pose->count(joint.first))continue;mRemotes[sender].pose[joint.first]=pose->at(joint.first);if(data["jr"][joint.first].isInteger())mRemotes[sender].jointRevisions[joint.first]=static_cast<U32>(std::max(0,data["jr"][joint.first].asInteger()));}
+   // Historical owner acceptance does not authorize an old session/grant to
+   // overwrite the current cache. Require exact private native provenance and
+   // monotonically advance only still-existing, explicitly requested joints.
+   unsigned updated=0;bool currentSource=false;
+   const auto remote=mRemotes.find(sender);const auto approval=mApprovals.find(sender);
+   if(pose && remote!=mRemotes.end() && approval!=mApprovals.end() && canEdit(sender))
+   {
+    const fs_pose::SharedAcknowledgementSource expected{work->session.asString(),work->generation.asString(),work->session.asString(),work->grantGeneration.asString(),work->token.asString()},
+     current{remote->second.session.asString(),remote->second.generation.asString(),approval->second.session.asString(),approval->second.generation.asString(),approval->second.token.asString()};
+    currentSource=fs_pose::currentAcknowledgementSource(expected,current);
+    FSSharedPose::JointSet requested;std::map<std::string,U32> revisions;
+    for(const auto& joint:work->before)
+    {
+     requested.insert(joint.first);const auto& revision=data["jr"][joint.first];
+     if(revision.isInteger() && revision.asInteger()>=0 && data["r"].isInteger() && data["r"].asInteger()>=revision.asInteger())revisions[joint.first]=static_cast<U32>(revision.asInteger());
+    }
+    updated=fs_pose::updateAcknowledgedCache(expected,current,requested,*pose,revisions,remote->second.pose,remote->second.jointRevisions);
+   }
+   work->result["acknowledgement_applies_to_current_session"]=currentSource;work->result["current_cache_joints_updated"]=static_cast<S32>(updated);
    work->finished=false;
    finishAssistant(work,data["ok"].asBoolean()?"owner_accepted":"owner_rejected",data["ok"].asBoolean()?"":"Owner refused final joint commit");return true;
   }

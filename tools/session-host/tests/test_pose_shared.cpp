@@ -35,6 +35,28 @@ int main()
  // changes. Cancellation does not call restore or owner.clear.
  owner.grant("source","new-token",1);assert(owner.acquire("source","new-token","source-undo",owner.historyJoints("source",false),1).granted);
  assert(owner.restore("source","new-token","source-undo",false,1));assert(owner.pose().at("mNeck")==changed);
+ // The real ACK handler delegates cache writes to this helper. Late ACKs
+ // still settle historical receipts but cannot mutate replacement sessions,
+ // regrants, removed joints, or equal/newer per-joint cache versions.
+ const SharedAcknowledgementSource oldSource{"session-a","generation-a","session-a","grant-a","private-token-a"};
+ Pose cache{{"mHead",initial},{"mNeck",changed}};std::map<std::string,std::uint32_t> cacheRevisions{{"mHead",5},{"mNeck",9}};
+ const Pose acknowledged{{"mHead",changed},{"mNeck",initial}};const JointSet ackJoints{"mHead","mNeck"};
+ for(auto replacement:{SharedAcknowledgementSource{"session-b","generation-b","session-b","grant-b","private-token-b"},
+   SharedAcknowledgementSource{"session-a","generation-a","session-a","grant-b","private-token-a"},
+   SharedAcknowledgementSource{"session-a","generation-a","session-a","grant-a","private-token-b"},
+   SharedAcknowledgementSource{"session-a","generation-b","session-a","grant-a","private-token-a"},
+   SharedAcknowledgementSource{"session-a","generation-a","session-b","grant-a","private-token-a"}})
+ {
+  const auto beforeCache=cache;const auto beforeRevisions=cacheRevisions;
+  assert(updateAcknowledgedCache(oldSource,replacement,ackJoints,acknowledged,{{"mHead",10},{"mNeck",10}},cache,cacheRevisions)==0);
+  assert(cache==beforeCache && cacheRevisions==beforeRevisions);
+ }
+ // Out-of-order replies: advance head independently, keep newer neck state.
+ assert(updateAcknowledgedCache(oldSource,oldSource,ackJoints,acknowledged,{{"mHead",6},{"mNeck",8}},cache,cacheRevisions)==1);
+ assert(cache.at("mHead")==changed && cacheRevisions.at("mHead")==6 && cache.at("mNeck")==changed && cacheRevisions.at("mNeck")==9);
+ assert(updateAcknowledgedCache(oldSource,oldSource,ackJoints,{{"mHead",initial},{"mNeck",initial}},{{"mHead",6},{"mNeck",9}},cache,cacheRevisions)==0);
+ assert(cache.at("mHead")==changed && cache.at("mNeck")==changed);
+ cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
  using namespace fs_assistant;bool active=true,nativeGrant=true;auto guard=std::make_shared<AsyncOperation>([&](){return active && nativeGrant?std::string():std::string("authority_changed");});
  auto task=std::make_shared<AsyncTask>(guard);assert(asyncTaskAllowed(task));nativeGrant=false;assert(!asyncTaskAllowed(task));nativeGrant=true;assert(!asyncTaskAllowed(task));
  auto observer=std::make_shared<AsyncOperation>([](){return std::string();});observer->cancel("native_sharing_disabled");assert(!observer->allowed());
