@@ -20,6 +20,7 @@
 #include "llspeakers.h"
 #include "llstartup.h"
 #include "lltimer.h"
+#include "llframetimer.h"
 #include "llsdutil.h"
 #include "llsdjson.h"
 #include "lluri.h"
@@ -161,6 +162,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
 {
     LLUUID account,login;std::string grid,viewerSession;bool restricted=true;
     std::uint64_t privacyEpoch=0;
+    fs_assistant_social::PrivacyIngressFence privacyIngress;
     boost::signals2::scoped_connection chatConnection;
     boost::signals2::scoped_connection notificationConnection;
     std::map<std::string,Stream> streams;
@@ -188,7 +190,13 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     LLSD publicSource()const
     {LLSD s;for(const auto& field:fs_assistant_social::publicSourceFields(account.asString(),viewerSession,grid,privacyEpoch))s[field.first]=field.second;return s;}
     void flush()
-    {++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();searchSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");}
+    {
+        // Capture native ingress before old asynchronous translations can be
+        // delivered under a later permission/bridge epoch. Nearby mTime uses
+        // this exact frame clock at simulator ingress, before translation.
+        privacyIngress.advance(LLIMModel::assistantLiveSequence(),LLFrameTimer::getElapsedSeconds());
+        ++privacyEpoch;for(auto& stream:streams)stream.second.clear();friendSnapshots.clear();searchSnapshots.clear();cursors.clear();notices.clear();noticesDirty=true;drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");
+    }
     void sync()
     {
         const bool changed=account!=gAgentID || login!=gAgent.getSessionID() || grid!=LLGridManager::getInstance()->getGrid();
@@ -210,7 +218,7 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
             // Never read mMsgs: it includes local disk and server replay history.
             if(self->restricted || data["account_id"].asUUID()!=self->account || data["login_id"].asUUID()!=self->login || !fs_assistant_social::liveMessage(data.has("is_history"),data["is_history"].asInteger(),self->current()))return;
             auto* session=LLIMModel::instance().findIMSession(data["session_id"].asUUID());const LLUUID sender=data["from_id"].asUUID();
-            std::uint64_t ingress=0;if(!revision(data["ingress_sequence"],ingress) || ingress==0)return;
+            std::uint64_t ingress=0;if(!revision(data["ingress_sequence"],ingress) || !self->privacyIngress.allowsIM(ingress))return;
             if(!session || !conversationAllowed(*session) || (sender.notNull() && sender!=gAgentID && !RlvActions::canReceiveIM(sender)))return;
             LLSD row;row["conversation_id"]=session->mSessionID;row["topic"]=topic(*session);row["sender_id"]=sender;row["sender_name"]=bounded(data["from"].asString(),255);row["text"]=bounded(data["message"].asString(),4095);row["time"]=data["time"];row["kind"]="message";
             const auto id=self->streams["chat"].append(row,encodedBytes(row)+128);
@@ -585,10 +593,11 @@ FSAssistantSocial::FSAssistantSocial():mState(std::make_shared<State>())
 FSAssistantSocial::~FSAssistantSocial()=default;
 std::vector<std::shared_ptr<LLEventAPI>> FSAssistantSocial::listeners()const{return mListeners;}
 void FSAssistantSocial::tick(){mState->sync();if(mState->noticesDirty && now()-mState->noticesChecked>=0.5)mState->refreshNotices();}
-void FSAssistantSocial::privacyChanged(){mState->flush();}
+void FSAssistantSocial::privacyChanged(){mState->sync();mState->flush();}
 void FSAssistantSocial::nearbyMessage(const LLChat& message)
 {
     mState->sync();if(mState->restricted || (message.mChatStyle!=CHAT_STYLE_NORMAL && message.mChatStyle!=CHAT_STYLE_IRC) || message.mMuted)return;
+    if(!mState->privacyIngress.allowsNearby(message.mTime))return;
     LLSD row;row["kind"]="message";row["topic"]="nearby";row["conversation_id"]="nearby";row["sender_id"]=message.mFromID;row["sender_name"]=bounded(message.mFromName,255);row["text"]=bounded(message.mText,4095);
     // Preserve native source/type and pretranslation emote classification for
     // later policy checks. Never reconstruct an original from native redaction.

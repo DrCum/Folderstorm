@@ -22,6 +22,15 @@ int main()
     Draft draft;assert(setDraft(draft,0,"typing"));assert(!setDraft(draft,0,"overwrite"));assert(draft.text=="typing" && draft.revision==1);
     assert(!liveMessage(true,1,true) && !liveMessage(true,2,true) && !liveMessage(false,0,false) && !liveMessage(false,0,true) && liveMessage(true,0,true));
     assert(!reopens(true,8,9) && !reopens(true,9,9) && reopens(true,10,9) && !reopens(false,10,9));
+    PrivacyIngressFence privacyFence;
+    const std::uint64_t oldTranslation=40;const double oldNearbyTranslation=10.25;
+    privacyFence.advance(oldTranslation,oldNearbyTranslation); // revoke
+    privacyFence.advance(41,10.5); // reenable / new bridge epoch
+    assert(!privacyFence.allowsIM(0) && !privacyFence.allowsIM(oldTranslation) && !privacyFence.allowsIM(41));
+    assert(!privacyFence.allowsNearby(0) && !privacyFence.allowsNearby(oldNearbyTranslation) && !privacyFence.allowsNearby(10.5));
+    assert(privacyFence.allowsIM(42) && privacyFence.allowsNearby(10.75));
+    privacyFence.advance(1,1); // stale source cannot weaken a privacy fence
+    assert(!privacyFence.allowsIM(oldTranslation) && !privacyFence.allowsNearby(oldNearbyTranslation));
     ConversationVisibility visibility;
     assert(visibility.visible("conversation"));assert(visibility.hide("conversation",20));
     // Catalog reads, outgoing echoes, and translated messages whose native

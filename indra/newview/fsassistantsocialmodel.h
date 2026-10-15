@@ -44,6 +44,15 @@ inline bool liveMessage(bool hasHistory,int history,bool currentLogin)
 {return currentLogin && hasHistory && history==0;}
 inline bool reopens(bool incoming,std::uint64_t ingress,std::uint64_t closedAt)
 {return incoming && ingress>closedAt;}
+class PrivacyIngressFence
+{
+public:
+    void advance(std::uint64_t imIngress,double nearbyCaptureTime)
+    {mIM=(std::max)(mIM,imIngress);mNearby=(std::max)(mNearby,nearbyCaptureTime);}
+    bool allowsIM(std::uint64_t ingress)const{return ingress>mIM;}
+    bool allowsNearby(double captureTime)const{return captureTime>0 && captureTime>mNearby;}
+private:std::uint64_t mIM=0;double mNearby=0;
+};
 class ConversationVisibility
 {
 public:

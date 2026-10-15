@@ -94,6 +94,20 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         self.assertIn('id=conversationKey(request["conversation_id"].asString())', text)
         self.assertIn('conversationID=conversationKey(request["conversation_id"].asString())', text)
 
+    def test_privacy_flush_fences_pre_revocation_translations(self):
+        text = source("fsassistantsocial.cpp")
+        flush = text[text.index("void flush()"):text.index("void sync()")]
+        self.assertIn("privacyIngress.advance(LLIMModel::assistantLiveSequence(),LLFrameTimer::getElapsedSeconds())", flush)
+        self.assertLess(flush.index("privacyIngress.advance("), flush.index("stream.second.clear()"))
+        self.assertIn("!self->privacyIngress.allowsIM(ingress)", text)
+        nearby = text[text.index("void FSAssistantSocial::nearbyMessage("):]
+        self.assertLess(nearby.index("privacyIngress.allowsNearby(message.mTime)"), nearby.index('streams["chat"].append'))
+        native = source("llviewermessage.cpp")
+        ingress = native[native.index("void process_chat_from_simulator("):native.index("void process_sound_trigger(")]
+        self.assertLess(ingress.index("chat.mTime = LLFrameTimer::getElapsedSeconds()"), ingress.index("LLTranslate::translateMessage"))
+        self.assertIn("void translateSuccess(LLChat chat,", native)
+        self.assertIn("void translateFailure(LLChat chat,", native)
+
     def test_no_chatbar_commands_or_notification_responses(self):
         text = source("fsassistantsocial.cpp")
         self.assertIn("FSNearbyChat::sendChatFromViewer(text,text,CHAT_TYPE_NORMAL,false,0)", text)
