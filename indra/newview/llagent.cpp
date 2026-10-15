@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llagent.h"
 
@@ -3898,6 +3899,7 @@ void LLAgent::sendAnimationRequests(const std::vector<LLUUID> &anim_ids, EAnimRe
     {
         if (uuid.notNull())
         {
+            fs_assistant_animation_request(uuid);
             msg->nextBlockFast(_PREHASH_AnimationList);
             msg->addUUIDFast(_PREHASH_AnimID, uuid);
             msg->addBOOLFast(_PREHASH_StartAnim, request == ANIM_REQUEST_START);
@@ -3926,6 +3928,10 @@ void LLAgent::sendAnimationRequest(const LLUUID &anim_id, EAnimRequest request)
         return;
     }
 
+    // Actual outbound boundary: all native/manual callers supersede an older
+    // assistant contribution of this ID, including requests outside gestures.
+    fs_assistant_animation_request(anim_id);
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_AgentAnimation);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -3949,6 +3955,8 @@ void LLAgent::sendAnimationStateReset()
     {
         return;
     }
+
+    fs_assistant_animation_reset();
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_AgentAnimation);

@@ -850,6 +850,13 @@ void LLAssetStorage::getInvItemAsset(
 {
     LL_DEBUGS() << "LLAssetStorage::getInvItemAsset() - " << asset_id << "," << LLAssetType::lookup(atype) << LL_ENDL;
 
+    const auto read_guard = captureAssetReadGuard(callback);
+    if (read_guard && !read_guard())
+    {
+        if (callback) callback(asset_id, atype, user_data, LL_ERR_INSUFFICIENT_PERMISSIONS, LLExtStat::REQUEST_DROPPED);
+        return;
+    }
+
     bool exists = false;
     U32 size = 0;
 
@@ -915,11 +922,17 @@ void LLAssetStorage::getInvItemAsset(
             LLTransferTargetParamsVFile tpvf;
             tpvf.setAsset(asset_id, atype);
             tpvf.setCallback(downloadInvItemCompleteCallback, req);
+            tpvf.setReadGuard(read_guard);
 
             LL_DEBUGS("AssetStorage") << "Starting transfer for inventory asset "
                                       << item_id << " owned by " << owner_id << "," << task_id
                                       << LL_ENDL;
             LLTransferTargetChannel *ttcp = gTransferManager.getTargetChannel(source_host, LLTCT_ASSET);
+            if (read_guard && !read_guard())
+            {
+                if (callback) callback(asset_id, atype, user_data, LL_ERR_INSUFFICIENT_PERMISSIONS, LLExtStat::REQUEST_DROPPED);
+                return;
+            }
             ttcp->requestTransfer(spi, tpvf, 100.f + (is_priority ? 1.f : 0.f));
         }
         else

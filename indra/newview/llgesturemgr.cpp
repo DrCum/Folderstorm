@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llgesturemgr.h"
 
@@ -576,6 +577,13 @@ void LLGestureMgr::playGesture(LLMultiGesture* gesture, bool fromKeyPress)
         return;
 // [/RLVa:KB]
 
+    // Reserve native/manual replay ownership immediately, including animation
+    // steps after waits or asset prefetch. An older assistant cancellation must
+    // never stop this newer gesture's contribution.
+    for (LLGestureStep* step : gesture->mSteps)
+        if (step->getType() == STEP_ANIMATION)
+            fs_assistant_animation_request(static_cast<LLGestureStepAnimation*>(step)->mAnimAssetID);
+
     // Reset gesture to first step
     gesture->reset();
     gesture->mTriggeredByKey = fromKeyPress;
@@ -855,6 +863,9 @@ struct IsGesturePlaying
 
 void LLGestureMgr::update()
 {
+    // Maintenance must also run while the bridge is disabled or gestures have
+    // been switched off, so revoked timelines release only their own state.
+    fs_assistant_gestures_tick();
     // <FS:PP> FIRE-36169 Gestures enable/disable switch
     if (!are_gestures_enabled())
     {
