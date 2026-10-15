@@ -1168,7 +1168,15 @@ private:
             return false;
         }
         if(!postedAllowed(found->second))
-        {fail_response(found->second.response,HTTP_FORBIDDEN,"Assistant response belongs to an expired request",llsd::map("error_code","session_changed"));mPending.erase(found);return true;}
+        {
+            if (found->second.async) found->second.async->seal();
+            auto receipt = asyncStatus(request_id);
+            receipt["error_code"] = "session_changed";
+            fail_response(found->second.response, HTTP_FORBIDDEN,
+                "Assistant response belongs to an expired request", receipt);
+            mPending.erase(found);
+            return true;
+        }
         found->second.sent = true;
         LLSD body = reply;
         body["viewer_session"]=mIdentity["viewer_session"];

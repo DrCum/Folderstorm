@@ -36,5 +36,33 @@ int main()
  asyncDeliver(createReply,"new-item",callback);asyncDeliver(createReply,"new-item",callback);
  assert(cleanups==1 && permissionWrites==0 && creation->ids().front()=="new-item");
  assert(!AsyncScope::current());createReply.reset();assert(creation->pending()==0);
+ bool restricted=false;auto outfit=std::make_shared<AsyncOperation>([](){return std::string();});
+ outfit->checkWith([&](){return restricted?std::string("restriction_changed"):std::string();});
+ AsyncOrigin origin;AsyncTaskPtr libraryCopy;
+ {AsyncScope scope(outfit);libraryCopy=asyncTask();origin={outfit,asyncTask()};assert(asyncSubmit());}
+ restricted=true;int wears=0;
+ asyncDeliver(libraryCopy,"copied-outfit",[&](bool allowed){if(allowed && asyncSubmit())++wears;});
+ restricted=false;assert(wears==0 && !outfit->allowed() && !asyncOriginAllowed(origin));
+ libraryCopy.reset();origin.pending.reset();outfit.reset();assert(!asyncOriginAllowed(origin)); // Expired provenance must never become native/unscoped.
+ auto other=std::make_shared<AsyncOperation>([](){return std::string();});
+ {AsyncScope scope(other);assert(asyncSubmit());}assert(other->submitted()==1);
+ assert(!AsyncScope::current()); // No source scope crosses a coroutine yield.
+ // Work can wait in a native transport queue after the HTTP receipt is sealed.
+ // Revocation at that boundary must not record a submission or set in-flight state.
+ bool authorized=true;auto queued=std::make_shared<AsyncOperation>([&](){return authorized?std::string():std::string("revoked");});
+ AsyncTaskPtr transport;
+ {AsyncScope scope(queued);transport=asyncTask();}
+ queued->seal();authorized=false;int packets=0,inflight=0;
+ auto send=[&](){if(!asyncTaskSubmit(transport))return;inflight=1;++packets;};
+ send();authorized=true;send();
+ assert(packets==0 && inflight==0 && queued->submitted()==0 && queued->state()=="cancelled_before_submission");
+ assert(!AsyncScope::current());transport.reset();assert(queued->pending()==0);
+ // Independent intent remains usable after a stopped queued operation.
+ auto newer=std::make_shared<AsyncOperation>([](){return std::string();});
+ auto newerTask=std::make_shared<AsyncTask>(newer);
+ assert(asyncTaskAllowed(newerTask) && asyncTaskSubmit(newerTask));
+ asyncDeliver(newerTask,"result",[&](bool allowed){assert(allowed);++packets;});
+ newer->seal();newerTask.reset();assert(packets==1 && newer->state()=="submitted");
+ assert(!AsyncScope::current());
  std::cout<<"Durable assistant async guard checks passed\n";
 }

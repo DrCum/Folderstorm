@@ -154,7 +154,7 @@ void AISAPI::CreateInventory(const LLUUID& parentId, const LLSD& newInventory, c
         (&LLCoreHttpUtil::HttpCoroutineAdapter::postAndSuspend), _1, _2, _3, _4, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, postFn, url, parentId, newInventory, callback, CREATEINVENTORY));
+        _1, postFn, url, parentId, newInventory, callback, CREATEINVENTORY, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
     EnqueueAISCommand("CreateInventory", proc);
 }
 
@@ -191,7 +191,7 @@ void AISAPI::SlamFolder(const LLUUID& folderId, const LLSD& newInventory, comple
         (&LLCoreHttpUtil::HttpCoroutineAdapter::putAndSuspend), _1, _2, _3, _4, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, putFn, url, folderId, newInventory, callback, SLAMFOLDER));
+        _1, putFn, url, folderId, newInventory, callback, SLAMFOLDER, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("SlamFolder", proc);
 }
@@ -227,7 +227,7 @@ void AISAPI::RemoveCategory(const LLUUID &categoryId, completion_t callback)
         (&LLCoreHttpUtil::HttpCoroutineAdapter::deleteAndSuspend), _1, _2, _3, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, delFn, url, categoryId, LLSD(), callback, REMOVECATEGORY));
+        _1, delFn, url, categoryId, LLSD(), callback, REMOVECATEGORY, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("RemoveCategory", proc);
 }
@@ -264,7 +264,7 @@ void AISAPI::RemoveItem(const LLUUID &itemId, completion_t callback)
         (&LLCoreHttpUtil::HttpCoroutineAdapter::deleteAndSuspend), _1, _2, _3, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, delFn, url, itemId, LLSD(), callback, REMOVEITEM));
+        _1, delFn, url, itemId, LLSD(), callback, REMOVEITEM, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("RemoveItem", proc);
 }
@@ -311,7 +311,7 @@ void AISAPI::CopyLibraryCategory(const LLUUID& sourceId, const LLUUID& destId, b
         (&LLCoreHttpUtil::HttpCoroutineAdapter::copyAndSuspend), _1, _2, _3, destination, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, copyFn, url, destId, LLSD(), callback, COPYLIBRARYCATEGORY));
+        _1, copyFn, url, destId, LLSD(), callback, COPYLIBRARYCATEGORY, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("CopyLibraryCategory", proc);
 }
@@ -348,7 +348,7 @@ void AISAPI::PurgeDescendents(const LLUUID &categoryId, completion_t callback)
         (&LLCoreHttpUtil::HttpCoroutineAdapter::deleteAndSuspend), _1, _2, _3, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, delFn, url, categoryId, LLSD(), callback, PURGEDESCENDENTS));
+        _1, delFn, url, categoryId, LLSD(), callback, PURGEDESCENDENTS, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("PurgeDescendents", proc);
 }
@@ -384,7 +384,7 @@ void AISAPI::UpdateCategory(const LLUUID &categoryId, const LLSD &updates, compl
         (&LLCoreHttpUtil::HttpCoroutineAdapter::patchAndSuspend), _1, _2, _3, _4, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, patchFn, url, categoryId, updates, callback, UPDATECATEGORY));
+        _1, patchFn, url, categoryId, updates, callback, UPDATECATEGORY, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("UpdateCategory", proc);
 }
@@ -456,7 +456,7 @@ void AISAPI::UpdateItem(const LLUUID &itemId, const LLSD &updates, completion_t 
         (&LLCoreHttpUtil::HttpCoroutineAdapter::patchAndSuspend), _1, _2, _3, _4, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, patchFn, url, itemId, updates, callback, UPDATEITEM));
+        _1, patchFn, url, itemId, updates, callback, UPDATEITEM, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("UpdateItem", proc);
 }
@@ -491,7 +491,7 @@ void AISAPI::FetchItem(const LLUUID &itemId, ITEM_TYPE type, completion_t callba
         (&LLCoreHttpUtil::HttpCoroutineAdapter::getAndSuspend), _1, _2, _3, _5, _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, getFn, url, itemId, LLSD(), callback, FETCHITEM));
+        _1, getFn, url, itemId, LLSD(), callback, FETCHITEM, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchItem", proc);
 }
@@ -542,7 +542,7 @@ void AISAPI::FetchCategoryChildren(const LLUUID &catId, ITEM_TYPE type, bool rec
     LLSD body;
     body["depth"] = depth;
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, getFn, url, catId, body, callback, FETCHCATEGORYCHILDREN));
+        _1, getFn, url, catId, body, callback, FETCHCATEGORYCHILDREN, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCategoryChildren", proc);
 }
@@ -595,7 +595,7 @@ void AISAPI::FetchCategoryChildren(const std::string &identifier, bool recursive
     LLSD body;
     body["depth"] = depth;
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, getFn, url, LLUUID::null, body, callback, FETCHCATEGORYCHILDREN));
+        _1, getFn, url, LLUUID::null, body, callback, FETCHCATEGORYCHILDREN, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCategoryChildren", proc);
 }
@@ -646,7 +646,7 @@ void AISAPI::FetchCategoryCategories(const LLUUID &catId, ITEM_TYPE type, bool r
     LLSD body;
     body["depth"] = depth;
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-        _1, getFn, url, catId, body, callback, FETCHCATEGORYCATEGORIES));
+        _1, getFn, url, catId, body, callback, FETCHCATEGORYCATEGORIES, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCategoryCategories", proc);
 }
@@ -723,7 +723,7 @@ void AISAPI::FetchCategorySubset(const LLUUID& catId,
     LLSD body;
     body["depth"] = depth;
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-                                                         _1, getFn, url, catId, body, callback, FETCHCATEGORYSUBSET));
+                                                         _1, getFn, url, catId, body, callback, FETCHCATEGORYSUBSET, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCategorySubset", proc);
 }
@@ -761,7 +761,7 @@ void AISAPI::FetchCOF(completion_t callback)
     // link with embedded outfit folder for request to parse
     body["depth"] = 0;
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro,
-                                                         _1, getFn, url, LLUUID::null, body, callback, FETCHCOF));
+                                                         _1, getFn, url, LLUUID::null, body, callback, FETCHCOF, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCOF", proc);
 }
@@ -797,7 +797,7 @@ void AISAPI::FetchCategoryLinks(const LLUUID &catId, completion_t callback)
     LLSD body;
     body["depth"] = 0;
     LLCoprocedureManager::CoProcedure_t proc(
-        boost::bind(&AISAPI::InvokeAISCommandCoro, _1, getFn, url, LLUUID::null, body, callback, FETCHCATEGORYLINKS));
+        boost::bind(&AISAPI::InvokeAISCommandCoro, _1, getFn, url, LLUUID::null, body, callback, FETCHCATEGORYLINKS, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchCategoryLinks", proc);
 }
@@ -830,7 +830,7 @@ void AISAPI::FetchOrphans(completion_t callback)
         (&LLCoreHttpUtil::HttpCoroutineAdapter::getAndSuspend) , _1 , _2 , _3 , _5 , _6);
 
     LLCoprocedureManager::CoProcedure_t proc(boost::bind(&AISAPI::InvokeAISCommandCoro ,
-                                                         _1 , getFn , url , LLUUID::null , LLSD() , callback , FETCHORPHANS));
+                                                         _1 , getFn , url , LLUUID::null , LLSD() , callback , FETCHORPHANS, fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr, gAgent.getSessionID()));
 
     EnqueueAISCommand("FetchOrphans" , proc);
 }
@@ -885,8 +885,10 @@ void AISAPI::onIdle(void *userdata)
     }
 }
 
+namespace { struct AISSessionChanged {}; }
+
 /*static*/
-void AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body)
+bool AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body, const LLUUID& loginSession)
 {
     LLTimer timer;
     if ( (type == UPDATECATEGORY || type == UPDATEITEM)
@@ -895,16 +897,34 @@ void AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD&
         dump_sequential_xml(gAgentAvatarp->getDebugName() + "_ais_update", update);
     }
 
-    AISUpdate ais_update(update, type, request_body);
-    ais_update.doUpdate(); // execute the updates in the appropriate order.
+    try
+    {
+        AISUpdate ais_update(update, type, request_body, loginSession);
+        ais_update.doUpdate(); // execute the updates in the appropriate order.
+    }
+    catch (const AISSessionChanged&)
+    {
+        return false;
+    }
     LL_DEBUGS("Inventory", "AIS3") << "Elapsed processing: " << timer.getElapsedTimeF32() << LL_ENDL;
+    return true;
 }
 
 /*static*/
 void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
         invokationFn_t invoke, std::string url,
-        LLUUID targetId, LLSD body, completion_t callback, COMMAND_TYPE type)
+        LLUUID targetId, LLSD body, completion_t callback, COMMAND_TYPE type,
+        fs_assistant::AsyncTaskPtr task, LLUUID loginSession)
 {
+    if (task && callback)
+    {
+        const auto nativeCallback = callback;
+        callback = [task, nativeCallback](const LLUUID& id)
+        {
+            fs_assistant::asyncDeliver(task, id.isNull() ? std::string() : id.asString(), [&](bool allowed)
+            { nativeCallback(allowed ? id : LLUUID::null); });
+        };
+    }
     if (gDisconnected)
     {
         if (callback)
@@ -926,7 +946,29 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     LLSD httpResults;
     LLCore::HttpStatus status;
 
+    // Explicit authority crosses the AIS queue and HTTP suspension; never keep
+    // a thread-local source scope installed while a coroutine yields.
+    if (task && task->guard())
+    {
+        const bool mutation = type == CREATEINVENTORY || type == SLAMFOLDER ||
+            type == REMOVECATEGORY || type == REMOVEITEM || type == COPYLIBRARYCATEGORY ||
+            type == PURGEDESCENDENTS || type == UPDATECATEGORY || type == UPDATEITEM;
+        if (gAgent.getSessionID() != loginSession || !task->guard()->allowed() ||
+            (mutation && !fs_assistant::asyncTaskSubmit(task)))
+        {
+            if (callback) callback(LLUUID::null);
+            return;
+        }
+    }
     result = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
+    // Submitted results may reconcile the same login even after cancellation.
+    // They must never be applied to a subsequent login's inventory.
+    if (task && (gDisconnected || gAgent.getSessionID() != loginSession))
+    {
+        if (task->guard()) task->guard()->cancel("session_changed");
+        if (callback) callback(LLUUID::null);
+        return;
+    }
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -1001,7 +1043,12 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     }
 
     LL_DEBUGS("Inventory", "AIS3") << "Result: " << result << LL_ENDL;
-    onUpdateReceived(result, type, body);
+    if (!onUpdateReceived(result, type, body, task ? loginSession : LLUUID::null))
+    {
+        if (task && task->guard()) task->guard()->cancel("session_changed");
+        if (callback) callback(LLUUID::null);
+        return;
+    }
 
     if (callback != nullptr)
     {
@@ -1095,8 +1142,8 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
 U32 AISUpdate::sBatchFrameCount = 0;
 LLTimer AISUpdate::sBatchTimer;
 
-AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body)
-: mType(type)
+AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body, const LLUUID& loginSession)
+: mLoginSession(loginSession), mType(type)
 {
     mFetch = (type == AISAPI::FETCHITEM)
         || (type == AISAPI::FETCHCATEGORYCHILDREN)
@@ -1140,8 +1187,15 @@ void AISUpdate::clearParseResults()
     mCategoryIds.clear();
 }
 
+void AISUpdate::checkSession() const
+{
+    if (mLoginSession.notNull() && (gDisconnected || gAgent.getSessionID() != mLoginSession))
+        throw AISSessionChanged();
+}
+
 void AISUpdate::checkTimeout()
 {
+    checkSession();
     if (mTaskTimer.hasExpired() || sBatchTimer.hasExpired())
     {
         // If we are taking too long, don't starve other tasks,
@@ -1150,6 +1204,7 @@ void AISUpdate::checkTimeout()
         // waking up from other suspends, before main coro had
         // a chance, so wait for a frame tick instead.
         llcoro::suspendUntilNextFrame();
+        checkSession();
         LLCoros::checkStop();
         mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
 
@@ -1687,6 +1742,7 @@ void AISUpdate::parseEmbeddedCategories(const LLSD& categories, S32 depth)
 
 void AISUpdate::doUpdate()
 {
+    checkSession();
     checkTimeout();
 
     // Do version/descendant accounting.
