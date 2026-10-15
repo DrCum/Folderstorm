@@ -1019,6 +1019,7 @@ void LLInventoryListener::createFolder(LLSD const& data)
 {
     if(!fs_assistant_request_allowed(data))
     {Response response(LLSD(),data);return response.error("Assistant request expired or its session/permission changed");}
+    fs_assistant::AsyncScope operationScope(fs_assistant_async_context(data));
     std::string error;
     const LLUUID parent_id = data["parent_id"].asUUID();
     std::string name = data["name"].asString();

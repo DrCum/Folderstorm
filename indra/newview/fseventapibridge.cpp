@@ -869,7 +869,7 @@ private:
         posted.gate=std::make_shared<fs_assistant::ExecutionGate>(required);
         mExecutions.erase(std::remove_if(mExecutions.begin(),mExecutions.end(),[](const auto& gate){return gate.expired();}),mExecutions.end());
         mExecutions.emplace_back(posted.gate);
-        const bool durable=(api=="LLAppearance" && !is_read_op(api,op)) || (api=="LLInventory" && op=="createItem");
+        const bool durable=fs_assistant::requiresAsyncAuthority(api,op,is_read_op(api,op));
         if(durable)
         {
             for(auto it=mAsync.begin();it!=mAsync.end() && mAsync.size()>=64;)
