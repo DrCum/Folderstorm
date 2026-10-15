@@ -28,6 +28,7 @@
 #include "llinventorylistener.h"
 
 #include "llappearancemgr.h"
+#include "llvoavatarself.h"
 #include "llcallbacklist.h"
 #include "llinventorycopypolicy.h"
 #include "llinventoryfunctions.h"

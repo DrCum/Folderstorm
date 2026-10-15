@@ -20,11 +20,6 @@ int main()
     assert(needsActiveCharacter("LLWorkspace","previous"));
     assert(needsActiveCharacter("LLCamera","snapshot"));
     assert(needsActiveCharacter("LLInventory","snapshotUpload"));
-    assert(!managedOperationSupported("LLAppearance","wearOutfit"));
-    assert(!managedOperationSupported("LLAppearance","wearItems"));
-    assert(managedOperationSupported("LLInventory","createItem"));
-    assert(managedOperationSupported("LLAppearance","getOutfit"));
-    assert(managedOperationSupported("LLInventory","rename"));
     assert(discoveryScope({"ordinary","hosted","ordinary"},';')=="ordinary;hosted");
     assert(discoveryScope({"bad;path","hosted"},';').empty());
     assert(discoveryScope(std::vector<std::string>(17,"path"),';').empty());

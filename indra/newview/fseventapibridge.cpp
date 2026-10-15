@@ -405,7 +405,7 @@ public:
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
             LLSD health=mIdentity;
             health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
-            health["managed_async_appearance_writes"]=false;health["managed_create_item"]=true;
+            health["managed_async_appearance_writes"]=true;health["managed_create_item"]=true;
             health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1,"async_operations",1);
             response->extendedResult(HTTP_OK,to_json(health),json_headers());
 
@@ -420,8 +420,6 @@ public:
         }
         if(mIdentity["managed"].asBoolean())
         {
-            if(!fs_assistant::managedOperationSupported(api,op))
-            {fail_response(response,HTTP_FORBIDDEN,"This native operation has asynchronous callbacks that cannot yet honor managed-session revocation; use this character’s native viewer",llsd::map("error_code","unsupported_managed_operation"));return;}
             if(!mIdentity["ready"].asBoolean())
             {fail_response(response,HTTP_FORBIDDEN,"Character is not ready",llsd::map("error_code","not_ready"));return;}
             if(fs_assistant::needsActiveCharacter(api,op) && !FSSessionWorker::assistantActiveAllowed())
@@ -496,14 +494,14 @@ public:
             fail_response(response, HTTP_FORBIDDEN, ERR_NOT_ALLOWED, extra);
             return;
         }
-        if(api=="LLInventory" && op=="createItem")
+        if((api=="LLInventory" && op=="createItem") || (api=="LLAppearance" && !is_read_op(api,op)))
         {
             FSAssistantPreparedOperation prepared;std::string error;
-            if(!prepareOperation(input,{"create"},prepared,error)){fail_response(response,HTTP_BAD_REQUEST,error);return;}
+            if(!prepareOperation(input,{find_def(kind)->id},prepared,error)){fail_response(response,HTTP_BAD_REQUEST,error);return;}
             const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses));
             if(decision==fs_assistant::Decision::Deny){fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,policy_error_details(op,prepared.requiredClasses));return;}
             if(decision==fs_assistant::Decision::Ask)enqueueAsk(std::move(prepared),response,api,op);
-            else postEvent(prepared.request,response,api,op,false,&prepared);
+            else postEvent(prepared.request,response,api,op,op_needs_confirm(op),&prepared);
             return;
         }
         if (api == "LLInventory" && (op == "previewBatchRename" || op == "previewBatchMove" || op == "previewBulkUndo" || op == "bulkHistory"))
@@ -591,7 +589,7 @@ public:
     {
         const auto found=mAsync.find(id);if(found==mAsync.end())return LLSD();
         auto& operation=*found->second;
-        LLSD result=llsd::map("operation_id",id,"state",operation.state(),"submitted",static_cast<S32>(operation.submitted()),
+        LLSD result=llsd::map("operation_id",id,"state",operation.state(),"submission_steps",static_cast<S32>(operation.submitted()),
             "pending_callbacks",static_cast<S32>(operation.pending()),"stop_reason",operation.reason(),"known_ids",LLSD::emptyArray());
         for(const auto& value:operation.ids())result["known_ids"].append(value);
         return result;
@@ -887,6 +885,11 @@ private:
                 if(!gate->allowed())return "permission_revoked";
                 return {};
             });
+            if(prepared && api=="LLAppearance")
+            {
+                const auto frozen=*prepared;
+                posted.async->checkWith([frozen](){std::string error;return fs_validate_assistant_operation(frozen,error)?std::string():std::string("appearance_source_changed");});
+            }
             mAsync.emplace(request_id,posted.async);
         }
         mPending.emplace(request_id, posted);

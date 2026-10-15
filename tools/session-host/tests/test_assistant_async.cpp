@@ -92,5 +92,31 @@ int main()
   assert(folderPosts==0 && folderReplies==1 && folder->submitted()==0 && folder->pending()==0);
   assert(folder->state()=="cancelled_before_submission" && !folder->allowed());
  }
+ // An uncached outfit gesture must not activate when its asset arrives after
+ // revocation. Load generations also protect a newer manual activation.
+ AsyncLoads<std::string> gestures;AsyncTaskPtr gestureTask;
+ bool wearAllowed=true;int activeGestures=0,activationPackets=0;bool placeholder=true;
+ auto wear=std::make_shared<AsyncOperation>([&](){return wearAllowed?std::string():std::string("revoked");});
+ {AsyncScope request(wear);gestureTask=gestures.begin("outfit-gesture");}
+ wear->seal();wearAllowed=false;
+ auto completeGesture=[&](const AsyncTaskPtr& load)
+ {
+  AsyncScope completion(load->guard());
+  if(!gestures.finish("outfit-gesture",load))return;
+  if(!asyncAllowed()){placeholder=false;return;}
+  ++activeGestures;
+  if(asyncSubmit())++activationPackets;
+ };
+ completeGesture(gestureTask);wearAllowed=true;
+ assert(!placeholder && activeGestures==0 && activationPackets==0 && !wear->allowed());
+ gestureTask.reset();assert(wear->pending()==0 && wear->state()=="cancelled_before_submission");
+ // Replace a pending stopped load with a native load, then deliver old first.
+ {AsyncScope request(wear);gestureTask=gestures.begin("outfit-gesture");}
+ gestures.erase("outfit-gesture");
+ auto manualLoad=gestures.begin("outfit-gesture");placeholder=true;
+ completeGesture(gestureTask);assert(placeholder && activeGestures==0 && activationPackets==0);
+ completeGesture(manualLoad);assert(activeGestures==1 && activationPackets==1);
+ completeGesture(manualLoad);assert(activeGestures==1 && activationPackets==1);
+ gestureTask.reset();manualLoad.reset();assert(wear->pending()==0 && !AsyncScope::current());
  std::cout<<"Durable assistant async guard checks passed\n";
 }

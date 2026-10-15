@@ -89,7 +89,7 @@ namespace
 void doAppearanceCb(LLPointer<LLInventoryCallback> cb, LLUUID id)
 {
     if (cb.notNull())
-        cb->fire(id);
+        cb->fireGuarded(id);
 }
 
 std::string self_av_string()
@@ -225,7 +225,7 @@ public:
         mOnCompletionFunc(on_completion_func),
         mOnFailureFunc(on_failure_func),
         mRetryAfter(retry_after),
-        mMaxRetries(max_retries),
+        mMaxRetries(fs_assistant::AsyncScope::current()?0:max_retries),
         mPendingRequests(0),
         mFailCount(0),
         mCompletionOrFailureCalled(false),
@@ -327,20 +327,23 @@ public:
 
     void onFailure()
     {
+        fs_assistant::AsyncScope operationScope(mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard());
         LL_INFOS() << "failed" << LL_ENDL;
         mOnFailureFunc();
     }
 
     void onCompletion()
     {
+        fs_assistant::AsyncScope operationScope(mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard());
         LL_INFOS() << "done" << LL_ENDL;
-        mOnCompletionFunc();
+        if(fs_assistant::asyncAllowed())mOnCompletionFunc();
     }
 
     // virtual
     // Will be deleted after returning true - only safe to do this if all callbacks have fired.
     bool tick()
     {
+        fs_assistant::AsyncScope operationScope(mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard());
         // mPendingRequests will be zero if all requests have been
         // responded to.  mWaitTimes.empty() will be true if we have
         // received at least one reply for each UUID.  If requests
@@ -403,6 +406,7 @@ public:
     }
 
 protected:
+    fs_assistant::AsyncTaskPtr mAssistantTask=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
     std::string mTrackingPhase;
     std::map<LLUUID,LLTimer> mWaitTimes;
     std::map<LLUUID,S32> mRetryCounts;
@@ -442,6 +446,7 @@ public:
 
     virtual bool requestOperation(const LLUUID& item_id)
     {
+        if(!fs_assistant::asyncAllowed())return false;
         LLViewerInventoryItem *item = gInventory.getItem(item_id);
         llassert(item);
         LL_DEBUGS("Avatar") << "copying item " << item_id << LL_ENDL;
@@ -479,6 +484,7 @@ public:
     // virtual
     void fire(const LLUUID& id)
     {
+        if(id.isNull()){if(const auto guard=assistantGuard())guard->cancel("library_copy_failed");return;}
         // Wear the inventory category.
         LLInventoryCategory* cat = gInventory.getCategory(id);
         LLAppearanceMgr::instance().wearInventoryCategoryOnAvatar(cat, mAppend);
@@ -503,7 +509,7 @@ public:
     {
         if (mCB)
         {
-            mCB->fire(id);
+            mCB->fireGuarded(id);
         }
     }
 
@@ -542,6 +548,8 @@ void LLUpdateAppearanceOnDestroy::fire(const LLUUID& inv_item)
 
 LLUpdateAppearanceOnDestroy::~LLUpdateAppearanceOnDestroy()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())return;
     if (!LLApp::isExiting())
     {
         // speculative fix for MAINT-1150
@@ -553,10 +561,10 @@ LLUpdateAppearanceOnDestroy::~LLUpdateAppearanceOnDestroy()
         bool force_restrictions(mEnforceItemRestrictions);
         bool enforce_ordering(mEnforceOrdering);
         nullary_func_t post_update_func(mPostUpdateFunc);
-        doOnIdleOneTime([force_restrictions,enforce_ordering,post_update_func]()
+        doOnIdleOneTime(fs_assistant::asyncDeferred([force_restrictions,enforce_ordering,post_update_func]()
         {
             LLAppearanceMgr::instance().updateAppearanceFromCOF(force_restrictions, enforce_ordering, post_update_func);
-        });
+        }));
     }
 }
 
@@ -567,6 +575,8 @@ LLUpdateAppearanceAndEditWearableOnDestroy::LLUpdateAppearanceAndEditWearableOnD
 
 LLRequestServerAppearanceUpdateOnDestroy::~LLRequestServerAppearanceUpdateOnDestroy()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())return;
     LL_DEBUGS("Avatar") << "ATT requesting server appearance update" << LL_ENDL;
     if (!LLApp::isExiting())
     {
@@ -594,8 +604,13 @@ void edit_wearable_and_customize_avatar(LLUUID item_id)
 
 LLUpdateAppearanceAndEditWearableOnDestroy::~LLUpdateAppearanceAndEditWearableOnDestroy()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())return;
     if (!LLApp::isExiting())
     {
+        if(fs_assistant::AsyncScope::current())
+            doOnIdleOneTime(fs_assistant::asyncDeferred([](){LLAppearanceMgr::instance().updateAppearanceFromCOF(true,true);}));
+        else
         LLAppearanceMgr::instance().updateAppearanceFromCOF(
             true,true,
             boost::bind(edit_wearable_and_customize_avatar, mItemID));
@@ -605,6 +620,8 @@ LLUpdateAppearanceAndEditWearableOnDestroy::~LLUpdateAppearanceAndEditWearableOn
 class LLBrokenLinkObserver : public LLInventoryObserver
 {
 public:
+    fs_assistant::AsyncTaskPtr mAssistantTask=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
+    std::shared_ptr<int> mLifetime=std::make_shared<int>(0);
     LLUUID mUUID;
     bool mEnforceItemRestrictions;
     bool mEnforceOrdering;
@@ -619,6 +636,16 @@ public:
         mEnforceOrdering(enforce_ordering),
         mPostUpdateFunc(post_update_func)
     {
+        if(mAssistantTask)
+        {
+            const std::weak_ptr<int> lifetime=mLifetime;
+            doOnIdleRepeating([this,lifetime]()
+            {
+                if(lifetime.expired())return true;
+                if(!mAssistantTask->guard()->allowed()){gInventory.removeObserver(this);delete this;return true;}
+                return false;
+            });
+        }
     }
     /* virtual */ void changed(U32 mask);
     void postProcess();
@@ -638,9 +665,10 @@ void LLBrokenLinkObserver::changed(U32 mask)
             {
                 // Might not be processed yet and it is not a
                 // good idea to update appearane here, postpone.
-                doOnIdleOneTime([this]()
+                const std::weak_ptr<int> lifetime=mLifetime;
+                doOnIdleOneTime([this,lifetime]()
                                 {
-                                    postProcess();
+                                    if(!lifetime.expired())postProcess();
                                 });
 
                 gInventory.removeObserver(this);
@@ -652,6 +680,8 @@ void LLBrokenLinkObserver::changed(U32 mask)
 
 void LLBrokenLinkObserver::postProcess()
 {
+    fs_assistant::AsyncScope operationScope(mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard());
+    if(!fs_assistant::asyncAllowed()){delete this;return;}
     LLViewerInventoryItem* item = gInventory.getItem(mUUID);
     llassert(item && !item->getIsBrokenLink()); // the whole point was to get a correct link
     if (item && item->getIsBrokenLink())
@@ -708,11 +738,13 @@ public:
     LLWearableHoldingPattern();
     ~LLWearableHoldingPattern();
 
+    fs_assistant::AsyncGuard assistantGuard() const{return mAssistantTask?mAssistantTask->guard():fs_assistant::AsyncGuard();}
     bool pollFetchCompletion();
     void onFetchCompletion();
     bool isFetchCompleted();
     bool isTimedOut();
     bool pollStopped();
+    void scheduleCleanup();
 
     void checkMissingWearables();
     bool pollMissingWearables();
@@ -734,6 +766,9 @@ public:
     S32 index() { return mIndex; }
 
 private:
+    fs_assistant::AsyncTaskPtr mAssistantTask=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
+    bool mCleanupScheduled = false;
+    std::shared_ptr<int> mLifetime = std::make_shared<int>(0);
     found_list_t mFoundList;
     LLInventoryModel::item_array_t mGestItems;
     typedef std::set<S32> type_set_t;
@@ -772,6 +807,7 @@ LLWearableHoldingPattern::LLWearableHoldingPattern():
              ++it)
         {
             (*it)->mIsMostRecent = false;
+            if(const auto guard=(*it)->assistantGuard())if(guard!=fs_assistant::AsyncScope::current())guard->cancel("appearance_superseded");
         }
 
     }
@@ -884,6 +920,9 @@ void LLWearableHoldingPattern::checkMissingWearables()
 
 void LLWearableHoldingPattern::onAllComplete()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())
+    {if(isFetchCompleted() && isMissingCompleted())delete this;else {mIsAllComplete=true;scheduleCleanup();}return;}
     if (isAgentAvatarValid())
     {
         gAgentAvatarp->outputRezTiming("Agent wearables fetch complete");
@@ -931,11 +970,13 @@ void LLWearableHoldingPattern::onAllComplete()
     {
         mIsAllComplete = true;
         handleLateArrivals();
+        scheduleCleanup();
     }
 }
 
 void LLWearableHoldingPattern::onFetchCompletion()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
     if (isMostRecent())
     {
         selfStopPhase("get_wearables_2");
@@ -947,19 +988,23 @@ void LLWearableHoldingPattern::onFetchCompletion()
         LL_WARNS() << self_av_string() << "skipping because LLWearableHolding pattern is invalid (superceded by later outfit request)" << LL_ENDL;
     }
 
-    checkMissingWearables();
+    if(fs_assistant::asyncAllowed())checkMissingWearables();
+    else scheduleCleanup();
 }
 
 // Runs as an idle callback until all wearables are fetched (or we time out).
 bool LLWearableHoldingPattern::pollFetchCompletion()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())
+    {mFired=true;scheduleCleanup();return true;}
     if (!isMostRecent())
     {
         // runway skip here?
         LL_WARNS() << self_av_string() << "skipping because LLWearableHolding pattern is invalid (superceded by later outfit request)" << LL_ENDL;
 
         // If we were signalled to stop then we shouldn't do anything else except poll for when it's safe to delete ourselves
-        doOnIdleRepeating(boost::bind(&LLWearableHoldingPattern::pollStopped, this));
+        scheduleCleanup();
         return true;
     }
 
@@ -986,6 +1031,10 @@ bool LLWearableHoldingPattern::pollFetchCompletion()
 
 void recovered_item_link_cb(const LLUUID& item_id, LLWearableType::EType type, LLViewerWearable *wearable, LLWearableHoldingPattern* holder)
 {
+    fs_assistant::AsyncScope operationScope(holder->assistantGuard());
+    if(!fs_assistant::asyncAllowed() || (holder->assistantGuard() && item_id.isNull()))
+    {holder->eraseTypeToRecover(type);holder->eraseTypeToLink(type);return;}
+
     if (!holder->isMostRecent())
     {
         LL_WARNS() << "HP " << holder->index() << " skipping because LLWearableHolding pattern is invalid (superceded by later outfit request)" << LL_ENDL;
@@ -1032,6 +1081,10 @@ void recovered_item_link_cb(const LLUUID& item_id, LLWearableType::EType type, L
 
 void recovered_item_cb(const LLUUID& item_id, LLWearableType::EType type, LLViewerWearable *wearable, LLWearableHoldingPattern* holder)
 {
+    fs_assistant::AsyncScope operationScope(holder->assistantGuard());
+    if(!fs_assistant::asyncAllowed() || (holder->assistantGuard() && item_id.isNull()))
+    {holder->eraseTypeToRecover(type);holder->eraseTypeToLink(type);return;}
+
     if (!holder->isMostRecent())
     {
         // runway skip here?
@@ -1056,6 +1109,15 @@ void recovered_item_cb(const LLUUID& item_id, LLWearableType::EType type, LLView
 
 void LLWearableHoldingPattern::recoverMissingWearable(LLWearableType::EType type)
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if (assistantGuard())
+    {
+        // Wear permission does not authorize creating replacement assets/items.
+        assistantGuard()->cancel("missing_wearable_requires_native_recovery");
+        eraseTypeToRecover(type);
+        eraseTypeToLink(type);
+        return;
+    }
     if (!isMostRecent())
     {
         // runway skip here?
@@ -1067,6 +1129,8 @@ void LLWearableHoldingPattern::recoverMissingWearable(LLWearableType::EType type
     LL_DEBUGS("Avatar") << "Wearable of type '" << LLWearableType::getInstance()->getTypeName(type)
                 << "' could not be downloaded.  Replaced inventory item with default wearable." << LL_ENDL;
     LLViewerWearable* wearable = LLWearableList::instance().createNewWearable(type, gAgentAvatarp);
+
+    if(!fs_assistant::asyncAllowed()){eraseTypeToRecover(type);eraseTypeToLink(type);return;}
 
     // Add a new one in the lost and found folder.
     const LLUUID lost_and_found_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_LOST_AND_FOUND);
@@ -1082,11 +1146,23 @@ void LLWearableHoldingPattern::recoverMissingWearable(LLWearableType::EType type
                           wearable->getType(),
                           wearable->getPermissions().getMaskNextOwner(),
                           cb);
+    if(!fs_assistant::asyncAllowed()){eraseTypeToRecover(type);eraseTypeToLink(type);}
 }
 
 bool LLWearableHoldingPattern::isMissingCompleted()
 {
     return mTypesToLink.size()==0 && mTypesToRecover.size()==0;
+}
+
+void LLWearableHoldingPattern::scheduleCleanup()
+{
+    if (mCleanupScheduled) return;
+    mCleanupScheduled = true;
+    const std::weak_ptr<int> lifetime = mLifetime;
+    doOnIdleRepeating([this, lifetime]()
+    {
+        return lifetime.expired() || pollStopped();
+    });
 }
 
 bool LLWearableHoldingPattern::pollStopped()
@@ -1102,13 +1178,16 @@ bool LLWearableHoldingPattern::pollStopped()
 
 bool LLWearableHoldingPattern::pollMissingWearables()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())
+    {mFired=true;scheduleCleanup();return true;}
     if (!isMostRecent())
     {
         // runway skip here?
         LL_WARNS() << self_av_string() << "skipping because LLWearableHolding pattern is invalid (superceded by later outfit request)" << LL_ENDL;
 
         // If we were signalled to stop then we shouldn't do anything else except poll for when it's safe to delete ourselves
-        doOnIdleRepeating(boost::bind(&LLWearableHoldingPattern::pollStopped, this));
+        scheduleCleanup();
         return true;
     }
 
@@ -1142,6 +1221,8 @@ bool LLWearableHoldingPattern::pollMissingWearables()
 // Handle wearables that arrived after the timeout period expired.
 void LLWearableHoldingPattern::handleLateArrivals()
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
+    if(!fs_assistant::asyncAllowed())return;
     // Only safe to run if we have previously finished the missing
     // wearables and other processing - otherwise we could be in some
     // intermediate state - but have not been superceded by a later
@@ -1227,12 +1308,14 @@ void LLWearableHoldingPattern::resetTime(F32 timeout)
 
 void LLWearableHoldingPattern::onWearableAssetFetch(LLViewerWearable *wearable)
 {
+    fs_assistant::AsyncScope operationScope(assistantGuard());
     if (!isMostRecent())
     {
         LL_WARNS() << self_av_string() << "skipping because LLWearableHolding pattern is invalid (superceded by later outfit request)" << LL_ENDL;
     }
 
     mResolved += 1;  // just counting callbacks, not successes.
+    if(!fs_assistant::asyncAllowed())return;
     LL_DEBUGS("Avatar") << self_av_string() << "HP " << index() << " resolved " << mResolved << "/" << getFoundList().size() << LL_ENDL;
     if (!wearable)
     {
@@ -1285,6 +1368,11 @@ void LLWearableHoldingPattern::onWearableAssetFetch(LLViewerWearable *wearable)
                     // We can't edit and do some other interactions with same asset twice, copy it
                     // Note: can't update incomplete items. Usually attached from previous viewer build, but
                     // consider adding fetch and completion callback
+                    if (assistantGuard())
+                    {
+                        assistantGuard()->cancel("duplicate_wearable_requires_native_recovery");
+                        return;
+                    }
                     LLViewerWearable* new_wearable = LLWearableList::instance().createCopy(wearable, wearable->getName());
                     data.mWearable = new_wearable;
                     data.mAssetID = new_wearable->getAssetID();
@@ -1445,6 +1533,7 @@ const LLUUID LLAppearanceMgr::getBaseOutfitUUID()
 
 void wear_on_avatar_cb(const LLUUID& inv_item, bool do_replace = false)
 {
+    if(inv_item.isNull())if(const auto guard=fs_assistant::AsyncScope::current())guard->cancel("library_copy_failed");
     if (inv_item.isNull())
         return;
 
@@ -1481,6 +1570,7 @@ void LLAppearanceMgr::wearItemsOnAvatar(const uuid_vec_t& item_ids_to_wear,
                                         bool replace,
                                         LLPointer<LLInventoryCallback> cb)
 {
+    if(!assistantAppearanceIntent())return;
     LL_DEBUGS("UIUsage") << "wearItemsOnAvatar" << LL_ENDL;
     LLUIUsage::instance().logCommand("Avatar.WearItem");
 
@@ -1625,6 +1715,14 @@ void LLAppearanceMgr::wearItemOnAvatar(const LLUUID& item_id_to_wear,
 }
 
 // Update appearance from outfit folder.
+bool LLAppearanceMgr::assistantAppearanceIntent()
+{
+    if(!fs_assistant::asyncAllowed())return false;
+    const auto current=fs_assistant::AsyncScope::current();const auto previous=mAssistantAppearance.lock();
+    if(previous && previous!=current)previous->cancel("appearance_superseded");
+    mAssistantAppearance=current;return fs_assistant::asyncAllowed();
+}
+
 void LLAppearanceMgr::changeOutfit(bool proceed, const LLUUID& category, bool append)
 {
     if (!proceed)
@@ -2211,6 +2309,7 @@ void LLAppearanceMgr::filterWearableItems(
 
 void LLAppearanceMgr::updateCOF(const LLUUID& category, bool append)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LLViewerInventoryCategory *pcat = gInventory.getCategory(category);
     if (!pcat)
     {
@@ -2235,6 +2334,7 @@ void LLAppearanceMgr::updateCOF(LLInventoryModel::item_array_t& body_items_new,
                                 bool append /*=false*/, const LLUUID& idOutfit /*=LLUUID::null*/, LLPointer<LLInventoryCallback> link_waiter /*= NULL*/)
 // [/RLVa:KB]
 {
+    if(!fs_assistant::asyncAllowed())return;
 //  LLViewerInventoryCategory *pcat = gInventory.getCategory(category);
 //  if (!pcat)
 //  {
@@ -2450,6 +2550,7 @@ void LLAppearanceMgr::createBaseOutfitLink(const LLUUID& category, LLPointer<LLI
 
 void LLAppearanceMgr::updateAgentWearables(LLWearableHoldingPattern* holder)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LL_DEBUGS("Avatar") << "updateAgentWearables()" << LL_ENDL;
     LLInventoryItem::item_array_t items;
     std::vector< LLViewerWearable* > wearables;
@@ -2688,6 +2789,7 @@ void LLAppearanceMgr::updateAppearanceFromCOF(bool enforce_item_restrictions,
                                               bool enforce_ordering,
                                               nullary_func_t post_update_func)
 {
+    if(!fs_assistant::asyncAllowed())return;
     if (mIsInUpdateAppearanceFromCOF)
     {
         LL_WARNS() << "Called updateAppearanceFromCOF inside updateAppearanceFromCOF, skipping" << LL_ENDL;
@@ -3062,6 +3164,7 @@ void LLAppearanceMgr::getUserDescendents(const LLUUID& category,
 
 void LLAppearanceMgr::wearInventoryCategory(LLInventoryCategory* category, bool copy, bool append)
 {
+    if(!assistantAppearanceIntent())return;
     if(!category) return;
 
     // <FS:Ansariel> FIRE-12004: Attachments getting lost on TP; assume we're not changing outfits
@@ -3096,7 +3199,7 @@ void LLAppearanceMgr::wearInventoryCategory(LLInventoryCategory* category, bool 
                                                     std::string("wear_inventory_category_callback"), copy_cb);
 
         AISAPI::completion_t cr = boost::bind(&doAppearanceCb, track_cb, _1);
-        AISAPI::CopyLibraryCategory(category->getUUID(), parent_id, false, cr);
+        if(fs_assistant::asyncAllowed())AISAPI::CopyLibraryCategory(category->getUUID(), parent_id, false, cr);
     }
     else
     {
@@ -3107,16 +3210,16 @@ void LLAppearanceMgr::wearInventoryCategory(LLInventoryCategory* category, bool 
             LLUUID cat_id = category->getUUID();
             LLInventoryModelBackgroundFetch::getInstance()->fetchFolderAndLinks(
                                 cat_id,
-                                [cat_id, copy, append]
+                                fs_assistant::asyncDeferred([cat_id, copy, append]
                                 {
                                     LLAppearanceMgr::instance().wearCategoryFinal(cat_id, copy, append);
-                                });
+                                }));
         }
         else
         {
-            callAfterCategoryFetch(category->getUUID(), boost::bind(&LLAppearanceMgr::wearCategoryFinal,
+            callAfterCategoryFetch(category->getUUID(), fs_assistant::asyncDeferred(boost::bind(&LLAppearanceMgr::wearCategoryFinal,
                                                                     &LLAppearanceMgr::instance(),
-                                                                    category->getUUID(), copy, append));
+                                                                    category->getUUID(), copy, append)));
         }
     }
 }
@@ -3128,6 +3231,7 @@ S32 LLAppearanceMgr::getActiveCopyOperations() const
 
 void LLAppearanceMgr::wearCategoryFinal(const LLUUID& cat_id, bool copy_items, bool append)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LL_INFOS("Avatar") << self_av_string() << "starting" << LL_ENDL;
 
     selfStopPhase("wear_inventory_category_fetch");
@@ -3175,22 +3279,24 @@ void LLAppearanceMgr::wearCategoryFinal(const LLUUID& cat_id, bool copy_items, b
             pid = gInventory.getRootFolderID();
         }
 
+        if(!fs_assistant::asyncAllowed())return;
         gInventory.createNewCategory(
             pid,
             LLFolderType::FT_NONE,
             name,
-            [cat_id, append](const LLUUID& new_cat_id)
+            [cat_id, append,task=fs_assistant::asyncTask()](const LLUUID& new_cat_id)
         {
+            fs_assistant::AsyncScope operationScope(task->guard());
+            if(task->guard() && new_cat_id.notNull())task->guard()->acknowledge(new_cat_id.asString());
+            if(!task->claim(new_cat_id.asString()) || !fs_assistant::asyncAllowed())return;
+            if(new_cat_id.isNull()){if(task->guard())task->guard()->cancel("category_copy_failed");return;}
             LLInventoryModel::cat_array_t* cats;
             LLInventoryModel::item_array_t* items;
             gInventory.getDirectDescendentsOf(cat_id, cats, items);
             // Create a CopyMgr that will copy items, manage its own destruction
             new LLCallAfterInventoryCopyMgr(
                 *items, new_cat_id, std::string("wear_inventory_category_callback"),
-                boost::bind(&LLAppearanceMgr::wearInventoryCategoryOnAvatar,
-                    LLAppearanceMgr::getInstance(),
-                    gInventory.getCategory(new_cat_id),
-                    append));
+                [new_cat_id,append](){LLAppearanceMgr::instance().wearInventoryCategoryOnAvatar(gInventory.getCategory(new_cat_id),append);});
 
             // BAP fixes a lag in display of created dir.
             gInventory.notifyObservers();
@@ -3208,6 +3314,7 @@ void LLAppearanceMgr::wearCategoryFinal(const LLUUID& cat_id, bool copy_items, b
 // *NOTE: hack to get from avatar inventory to avatar
 void LLAppearanceMgr::wearInventoryCategoryOnAvatar( LLInventoryCategory* category, bool append )
 {
+    if(!assistantAppearanceIntent())return;
     // Avoid unintentionally overwriting old wearables.  We have to do
     // this up front to avoid having to deal with the case of multiple
     // wearables being dirty.
@@ -3223,7 +3330,7 @@ void LLAppearanceMgr::wearInventoryCategoryOnAvatar( LLInventoryCategory* catego
              << "'" << LL_ENDL;
     LLUIUsage::instance().logCommand("Avatar.WearCategory");
 
-    if (gAgentCamera.cameraCustomizeAvatar())
+    if (!fs_assistant::AsyncScope::current() && gAgentCamera.cameraCustomizeAvatar())
     {
         // switching to outfit editor should automagically save any currently edited wearable
         LLFloaterSidePanelContainer::showPanel("appearance", LLSD().with("type", "edit_outfit"));
@@ -3288,9 +3395,25 @@ class LLDeferredCOFLinkObserver: public LLInventoryObserver
 public:
     LLDeferredCOFLinkObserver(const LLUUID& item_id, LLPointer<LLInventoryCallback> cb, const std::string& description):
         mItemID(item_id),
-        mCallback(cb),
-        mDescription(description)
+        mDescription(description),
+        mCallback(cb)
     {
+        if (mAssistantTask)
+        {
+            const std::weak_ptr<int> lifetime = mLifetime;
+            doOnIdleRepeating([this, lifetime]()
+            {
+                if (lifetime.expired()) return true;
+                if (!mAssistantTask->guard()->allowed())
+                {
+                    gInventory.removeObserver(this);
+                    if (mCallback) mCallback->fireGuarded(LLUUID::null);
+                    delete this;
+                    return true;
+                }
+                return false;
+            });
+        }
     }
 
     ~LLDeferredCOFLinkObserver()
@@ -3299,6 +3422,14 @@ public:
 
     /* virtual */ void changed(U32 mask)
     {
+        fs_assistant::AsyncScope scope(mAssistantTask ? mAssistantTask->guard() : fs_assistant::AsyncGuard());
+        if (!fs_assistant::asyncAllowed())
+        {
+            gInventory.removeObserver(this);
+            if (mCallback) mCallback->fireGuarded(LLUUID::null);
+            delete this;
+            return;
+        }
         const LLInventoryItem *item = gInventory.getItem(mItemID);
         if (item)
         {
@@ -3309,6 +3440,8 @@ public:
     }
 
 private:
+    fs_assistant::AsyncTaskPtr mAssistantTask = fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr;
+    std::shared_ptr<int> mLifetime = std::make_shared<int>(0);
     const LLUUID mItemID;
     std::string mDescription;
     LLPointer<LLInventoryCallback> mCallback;
@@ -3490,7 +3623,7 @@ public:
         gInventory.addChangedMask(LLInventoryObserver::LABEL, mItemID);
         if (mCB.notNull())
         {
-            mCB->fire(item_id);
+            mCB->fireGuarded(item_id);
         }
     }
 
@@ -4147,29 +4280,37 @@ void LLAppearanceMgr::onIdle(void *)
     LLAppearanceMgr* mgr = LLAppearanceMgr::getInstance();
     if (mgr->mRerequestAppearanceBake)
     {
+        fs_assistant::AsyncScope operationScope(mgr->mAssistantBakeTask?mgr->mAssistantBakeTask->guard():fs_assistant::AsyncGuard());
         mgr->requestServerAppearanceUpdate();
     }
 }
 
 void LLAppearanceMgr::requestServerAppearanceUpdate()
 {
+    if(!fs_assistant::asyncAllowed())
+    {if(mAssistantBakeTask && mAssistantBakeTask->guard()==fs_assistant::AsyncScope::current()){mRerequestAppearanceBake=false;mAssistantBakeTask.reset();}return;}
     // Workaround: we shouldn't request update from server prior to uploading all attachments, but it is
     // complicated to check for pending attachment uploads, so we are just waiting for uploads to complete
     if (!mOutstandingAppearanceBakeRequest && gAssetStorage->getNumPendingUploads() == 0)
     {
         mRerequestAppearanceBake = false;
-        LLCoprocedureManager::CoProcedure_t proc = boost::bind(&LLAppearanceMgr::serverAppearanceUpdateCoro, this, _1);
+        auto task=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
+        mAssistantBakeTask.reset();
+        LLCoprocedureManager::CoProcedure_t proc = [this,task](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID&){serverAppearanceUpdateCoro(adapter,task);};
         LLCoprocedureManager::instance().enqueueCoprocedure("AIS", "LLAppearanceMgr::serverAppearanceUpdateCoro", proc);
     }
     else
     {
         // Shedule update
         mRerequestAppearanceBake = true;
+        mAssistantBakeTask=fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr;
     }
 }
 
-void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter)
+void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,fs_assistant::AsyncTaskPtr task)
 {
+    const auto allowed=[&](){return !task || !task->guard() || task->guard()->allowed();};
+    if(!allowed())return;
     BoolSetter outstanding(mOutstandingAppearanceBakeRequest);
     if (!gAgent.getRegion())
     {
@@ -4198,7 +4339,7 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
     }
 
     llcoro::suspend();
-    if (LLApp::isExiting())
+    if (!allowed() || LLApp::isExiting() || !isAgentAvatarValid())
     {
         return;
     }
@@ -4261,11 +4402,11 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
             postData["cof_version"] = cofVersion;
         }
 
+        if(!allowed() || !fs_assistant::asyncTaskSubmit(task))return;
         gAgentAvatarp->mLastUpdateRequestCOFVersion = cofVersion;
-
         LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
 
-        if (LLApp::isExiting())
+        if (!allowed() || LLApp::isExiting())
         {
             return;
         }
@@ -4275,6 +4416,7 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
 
         if (!status || !result["success"].asBoolean())
         {
+            if(task && task->guard()){task->guard()->cancel("bake_result_unconfirmed");return;}
             std::string message = (result.has("error")) ? result["error"].asString() : status.toString();
             LL_WARNS("Avatar") << "Appearance Failure. server responded with \"" << message << "\"" << LL_ENDL;
 
@@ -4305,7 +4447,7 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
                 LL_WARNS("Avatar") << "Bake retry #" << retryCount << " in " << timeout << " seconds." << LL_ENDL;
 
                 llcoro::suspendUntilTimeout(timeout);
-                if (LLApp::isExiting())
+                if (!allowed() || LLApp::isExiting())
                 {
                     return;
                 }
@@ -4613,6 +4755,7 @@ void LLAppearanceMgr::wearBaseOutfit()
 void LLAppearanceMgr::removeItemsFromAvatar(const uuid_vec_t& ids_to_remove, nullary_func_t post_update_func, LLPointer<LLInventoryCallback> cb /*= NULL*/, bool immediate_delete /*= false*/)
 // [/SL:KB]
 {
+    if(!assistantAppearanceIntent())return;
     LL_DEBUGS("UIUsage") << "removeItemsFromAvatar" << LL_ENDL;
     LLUIUsage::instance().logCommand("Avatar.RemoveItem");
 

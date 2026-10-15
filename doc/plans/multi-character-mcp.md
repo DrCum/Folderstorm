@@ -53,7 +53,7 @@ Continue using the owning viewer's permission classes, restrictions and native v
 | --- | --- |
 | Inventory reads/searches and outfit/worn-item reads | Available on a ready Warm/Economy character when its policy permits them. |
 | Inventory edits/copy/move/Trash | Available on audited paths, with the same permissions, restrictions, server confirmation and approval rules. |
-| Outfit wear/detach and create-item native helpers | Managed MCP refuses these initial paths: their native callbacks initiate further copy/wear/default-permission/UI work without a durable execution guard. Use the character’s native viewer. Outfit reads and folder creation remain available. |
+| Outfit wear/detach and create-item native helpers | Initially refused at #44. The follow-up [guarded native operations](mcp-async-native-operations.md) stack restores creation and appearance with durable callback authority and bounded receipts; native Windows acceptance remains pending. |
 | Workspace/layout list, status and fitted preview | Available without activating the character; return account-local data only. |
 | Camera state read | Available when ready and native restrictions permit it; report stored camera state without implying a freshly rendered frame. |
 | Camera changes, snapshots and workspace/layout application | Initially require the explicitly targeted character to be active, ready and outside a conflicting transition/modal/Preferences transaction. Return a clear `requires_active_character` or busy result before side effects. |

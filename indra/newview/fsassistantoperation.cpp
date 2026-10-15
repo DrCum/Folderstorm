@@ -26,6 +26,8 @@
 #include "llviewercontrol.h"
 #include "llfloaterperms.h"
 #include "llwearabletype.h"
+#include "llinventorymodelbackgroundfetch.h"
+#include <algorithm>
 
 #include <set>
 
@@ -206,12 +208,47 @@ bool fs_prepare_assistant_operation(FSAssistantPreparedOperation& operation, std
             if (!gInventory.getCategory(folder)) { error = "Outfit folder was not found"; return false; }
             request.erase("folder_name");
             request["folder_id"] = folder;
+            if(folder==LLAppearanceMgr::instance().getCOF()){error="Choose a saved outfit, not the live Current Outfit Folder";return false;}
+            LLInventoryModel::cat_array_t categories;LLInventoryModel::item_array_t items;
+            gInventory.collectDescendents(folder,categories,items,LLInventoryModel::EXCLUDE_TRASH);
+            bool complete=gInventory.isCategoryComplete(folder);
+            for(const auto& category:categories)complete=complete && gInventory.isCategoryComplete(category->getUUID());
+            if(!complete){LLInventoryModelBackgroundFetch::instance().start(folder,true);error="Outfit contents are loading; no changes were submitted. Retry after inventory loads";return false;}
+            if(categories.size()>64 || items.size()>256){error="Outfit exceeds the bounded assistant scope (64 folders / 256 items)";return false;}
+            const bool library=gInventory.isObjectDescendentOf(folder,gInventory.getLibraryRootFolderID());
+            if(!library && !gInventory.isObjectDescendentOf(folder,gInventory.getRootFolderID())){error="Outfit is not in this character's inventory or Library";return false;}
+            summary["appearance_folders"]=LLSD::emptyMap();
+            for(const auto& category:categories)summary["appearance_folders"][category->getUUID().asString()]=subject(category->getUUID());
+            summary["appearance_source"]=LLSD::emptyMap();
+            for(const auto& item:items)
+            {
+                LLSD row=subject(item->getUUID());row["linked_id"]=item->getLinkedUUID();row["type"]=static_cast<S32>(item->getType());
+                if(library)row["asset_id"]=item->getAssetUUID();
+                summary["appearance_source"][item->getUUID().asString()]=row;
+            }
+            if(library)
+            {
+                operation.requiredClasses.push_back("create");operation.requiredClasses.push_back("move");
+                summary["source"]=folder_label(folder);summary["copy_policy"]="Copy Library outfit before wearing";
+            }
             add_subject(summary, folder);
             summary["consequences"].append(request["append"].asBoolean() ? "wear_append" : "wear_replace");
         }
         else
         {
-            const LLSD& ids = request["items_id"];
+            LLSD ids=request["items_id"];
+            if(!ids.isArray()){ids=LLSD::emptyArray();ids.append(request["items_id"]);}
+            if(ids.size()<1 || ids.size()>50){error="Choose between 1 and 50 appearance items";return false;}
+            LLSD resolved=LLSD::emptyArray();
+            for(const auto& id:llsd::inArray(ids))
+            {
+                auto* item=gInventory.getItem(id.asUUID());
+                if(!item || !item->isFinished() || item->getIsBrokenLink()){error="Appearance item is missing or still loading";return false;}
+                const LLUUID base=item->getLinkedUUID();resolved.append(base);
+                if(op=="wearItems" && gInventory.isObjectDescendentOf(base,gInventory.getLibraryRootFolderID()))
+                {operation.requiredClasses.push_back("create");operation.requiredClasses.push_back("move");}
+            }
+            request["items_id"]=resolved;ids=resolved;
             if (ids.isArray())
             {
                 for (const LLSD& id : llsd::inArray(ids)) add_subject(summary, id.asUUID());
@@ -230,6 +267,8 @@ bool fs_prepare_assistant_operation(FSAssistantPreparedOperation& operation, std
             summary["focus"] = request["focus"];
         }
     }
+    std::sort(operation.requiredClasses.begin(),operation.requiredClasses.end());
+    operation.requiredClasses.erase(std::unique(operation.requiredClasses.begin(),operation.requiredClasses.end()),operation.requiredClasses.end());
     summary["subject_count"] = std::max<S32>(1, static_cast<S32>(summary["subjects"].size()));
     operation.summary = summary;
     // Labels/paths are conservatively included: a changed identity/location or

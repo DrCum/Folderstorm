@@ -8160,6 +8160,12 @@ void rez_attachment(LLViewerInventoryItem* item, LLViewerJointAttachment* attach
         }
     }
 
+    if(const auto guard=fs_assistant::AsyncScope::current())
+    {
+        if(!fs_assistant::asyncAllowed() || !isAgentAvatarValid() || !gAgentAvatarp->canAttachMoreObjects())return;
+        LLAttachmentsMgr::instance().addAttachmentRequest(item_id,static_cast<U8>(attach_pt),!replace);
+        return; // Native MCP permission/approval already covered this exact replace/add.
+    }
     LLSD payload;
     payload["item_id"] = item_id; // Wear the base object in case this is a link.
     payload["attachment_point"] = attach_pt;
