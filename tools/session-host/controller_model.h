@@ -116,13 +116,16 @@ class Operations
 {
 public:
     std::map<std::string,Receipt> receipts;
+    std::uint64_t admissionHighWater=0;
     Receipt* find(const std::string& id){const auto it=receipts.find(id);return it==receipts.end()?nullptr:&it->second;}
     // Duplicate lookup precedes fresh admission; never replay a submitted ID.
-    Receipt* admit(const Request& request,const std::vector<Source>& sources,std::uint64_t policy,std::uint64_t now,std::string& error)
+    Receipt* admit(const Request& request,const std::vector<Source>& sources,std::uint64_t policy,std::uint64_t now,std::string& error,std::uint64_t monotonicNow=0)
     {
         if(auto* old=find(request.id)){if(old->request.encode(false)!=request.encode(false)){error="request_id_conflict";return nullptr;}return old;}
-        if(!freshRequest(request.id,now)){error="request_expired";return nullptr;}
-        for(auto it=receipts.begin();it!=receipts.end();)if(it->second.terminal()&&now>it->second.created+600000)it=receipts.erase(it);else ++it;
+        admissionHighWater=(std::max)(admissionHighWater,now);
+        if(!freshRequest(request.id,admissionHighWater)){error="request_expired";return nullptr;}
+        const auto retentionNow=monotonicNow?monotonicNow:admissionHighWater;
+        for(auto it=receipts.begin();it!=receipts.end();)if(it->second.terminal()&&retentionNow>it->second.created+600000)it=receipts.erase(it);else ++it;
         if(receipts.size()>=ReceiptCapacity){error="receipt_capacity";return nullptr;}
         for(const auto& entry:receipts)if(!entry.second.terminal())
         {
@@ -130,7 +133,7 @@ public:
             for(const auto& source:sources)for(const auto& other:entry.second.sources)if(source.profile==other.profile)
             {if(request.op==Op::Detach&&entry.second.request.op==Op::Restart)continue;error="busy";return nullptr;}
         }
-        Receipt next;next.request=request;next.request.token.clear();next.sources=sources;next.policy=policy;next.created=now;next.deadline=now+70000;
+        Receipt next;next.request=request;next.request.token.clear();next.sources=sources;next.policy=policy;next.created=retentionNow;next.deadline=(monotonicNow?monotonicNow:now)+70000;
         return &receipts.emplace(request.id,std::move(next)).first->second;
     }
     template<class SourceAt> bool allowed(Receipt& receipt,const Config& config,std::uint64_t now,SourceAt sourceAt,bool allowExited=false)

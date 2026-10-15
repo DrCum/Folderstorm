@@ -150,7 +150,7 @@ std::string controllerDispatch(const fs_controller::Request& request)
         {for(int i=0;i<MonitorViews;++i){const auto& b=monitorSet.bindings[i];if(b.enabled&&!add(b.slot))return errorJSON("monitor_profile_not_opted_in");}}
         if(sources.empty())return errorJSON("no_eligible_sources");
     }
-    std::string error;auto* receipt=controllerOperations.admit(request,sources,controllerConfig.revision,utcMilliseconds(),error);
+    std::string error;auto* receipt=controllerOperations.admit(request,sources,controllerConfig.revision,utcMilliseconds(),error,GetTickCount64());
     if(!receipt)return errorJSON(error);
     if(permission(request.op)==Permission::Monitors)receipt->nativeSnapshot=controllerMonitorSnapshot();
     if(request.op==Op::CycleNext)
@@ -167,7 +167,7 @@ bool controllerAllowed(fs_controller::Receipt& receipt,bool allowExited=false)
     if(pauseAllAssistant){receipt.state=receipt.submitted?"uncertain":"cancelled";receipt.error="controller_paused";return false;}
     const int index=controllerProfile(receipt.request.profile);
     if((receipt.request.op==fs_controller::Op::Restart||receipt.request.op==fs_controller::Op::Detach)&&validSlot(index)&&slots[index]&&slots[index]->restart.phase()!=Restart::Phase::Idle)allowExited=true;
-    return controllerOperations.allowed(receipt,controllerConfig,fs_controller::utcMilliseconds(),[this](const std::string& profile){return controllerSource(controllerProfile(profile));},allowExited);
+    return controllerOperations.allowed(receipt,controllerConfig,GetTickCount64(),[this](const std::string& profile){return controllerSource(controllerProfile(profile));},allowExited);
 }
 bool controllerTransportAllowed(int index,Kind kind)
 {
@@ -313,6 +313,7 @@ void controllerTick()
             if(receipt.request.op==fs_controller::Op::CycleNext)summary+=L"\nNext preview: "+profileName(controllerProfile(receipt.selectedTarget))+L" · "+wide(receipt.selectedTarget);
             if(receipt.request.op==fs_controller::Op::Background)summary+=receipt.request.mode?L"\nSet inactive worker to Economy.":L"\nSet inactive worker to Warm.";
             if(receipt.request.op==fs_controller::Op::CycleConfigure)summary+=L"\nCycle interval: "+std::to_wstring(receipt.request.seconds)+L" seconds; "+(receipt.request.playing?L"playing":L"paused");
+            summary+=L"\nThis approval expires after 70 seconds. Changed sources or permissions require a fresh request.";
             controllerApproving=true;const int answer=MessageBoxW(window,summary.c_str(),L"Controller MCP request",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2);controllerApproving=false;
             if(answer!=IDYES){receipt.state="refused";receipt.error="user_denied";return;}
             if(!controllerAllowed(receipt))return;

@@ -49,5 +49,11 @@ int main()
     q.id=std::to_string(now)+"-"+std::string(32,'b');assert(!bounded.admit(q,{source},config.revision,now,error)&&error=="receipt_capacity");
     q.id=std::to_string(now+700000)+"-"+std::string(32,'c');assert(bounded.admit(q,{source},config.revision,now+700000,error)&&bounded.receipts.size()==1);
     q.id=std::to_string(now)+"-"+std::string(32,'a');assert(!bounded.admit(q,{source},config.revision,now+700000,error)&&error=="request_expired");
+    assert(!bounded.admit(q,{source},config.revision,now,error)&&error=="request_expired"); // wall-clock rollback cannot revive an evicted ID
+    Operations clocks;q.id=std::to_string(now)+"-"+std::string(32,'d');
+    auto* timed=clocks.admit(q,{source},config.revision,now,error,1000);assert(timed);
+    assert(!clocks.allowed(*timed,config,71000,lookup)&&timed->error=="deadline_expired");
+    q.id=std::to_string(now+700000)+"-"+std::string(32,'e');
+    assert(clocks.admit(q,{source},config.revision,now+700000,error,1100)&&clocks.receipts.size()==2); // wall-clock jumps do not shorten receipt retention
     return 0;
 }
