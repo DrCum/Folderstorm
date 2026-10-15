@@ -43,24 +43,27 @@ func registerCamera(s *mcp.Server, state *Server, readOnly, mutating *mcp.ToolAn
 }
 
 type cameraPoseArgs struct {
-	Preset    string `json:"preset" jsonschema:"portrait, full_body, front, back, left, or right"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Preset        string `json:"preset" jsonschema:"portrait, full_body, front, back, left, or right"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type cameraSetArgs struct {
-	Position  []float64 `json:"position" jsonschema:"region position [x, y, z]"`
-	Focus     []float64 `json:"focus" jsonschema:"region focus [x, y, z]"`
-	ViewerPID int       `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Position      []float64 `json:"position" jsonschema:"region position [x, y, z]"`
+	Focus         []float64 `json:"focus" jsonschema:"region focus [x, y, z]"`
+	ViewerSession string    `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int       `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type snapshotArgs struct {
-	MaxEdge      int   `json:"max_edge,omitempty" jsonschema:"cap the long edge in pixels, default 1024"`
-	Width        *int  `json:"width,omitempty" jsonschema:"exact width in pixels when height is also set, 64 to 2048"`
-	Height       *int  `json:"height,omitempty" jsonschema:"exact height in pixels when width is also set, 64 to 2048"`
-	ViewportOnly *bool `json:"viewport_only,omitempty" jsonschema:"capture the world viewport instead of the full window, default false"`
-	ShowUI       *bool `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
-	ShowHUD      *bool `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
-	ViewerPID    int   `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	MaxEdge       int    `json:"max_edge,omitempty" jsonschema:"cap the long edge in pixels, default 1024"`
+	Width         *int   `json:"width,omitempty" jsonschema:"exact width in pixels when height is also set, 64 to 2048"`
+	Height        *int   `json:"height,omitempty" jsonschema:"exact height in pixels when width is also set, 64 to 2048"`
+	ViewportOnly  *bool  `json:"viewport_only,omitempty" jsonschema:"capture the world viewport instead of the full window, default false"`
+	ShowUI        *bool  `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
+	ShowHUD       *bool  `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func buildCameraSnapshotParams(args snapshotArgs) (map[string]any, string) {
@@ -88,6 +91,7 @@ func buildCameraSnapshotParams(args snapshotArgs) (map[string]any, string) {
 }
 
 func (s *Server) cameraGet(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
@@ -96,6 +100,7 @@ func (s *Server) cameraGet(ctx context.Context, _ *mcp.CallToolRequest, args vie
 }
 
 func (s *Server) cameraSetPose(ctx context.Context, _ *mcp.CallToolRequest, args cameraPoseArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if strings.TrimSpace(args.Preset) == "" {
 		return errorResult("invalid_args", "preset is required", nil)
 	}
@@ -107,6 +112,7 @@ func (s *Server) cameraSetPose(ctx context.Context, _ *mcp.CallToolRequest, args
 }
 
 func (s *Server) cameraSet(ctx context.Context, _ *mcp.CallToolRequest, args cameraSetArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.Position) != 3 || len(args.Focus) != 3 {
 		return errorResult("invalid_args", "position and focus must each be [x, y, z]", nil)
 	}
@@ -121,6 +127,7 @@ func (s *Server) cameraSet(ctx context.Context, _ *mcp.CallToolRequest, args cam
 }
 
 func (s *Server) cameraReset(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassCamera)
 	if errRes != nil {
 		return errRes, nil, nil
@@ -129,6 +136,7 @@ func (s *Server) cameraReset(ctx context.Context, _ *mcp.CallToolRequest, args v
 }
 
 func (s *Server) cameraSnapshot(ctx context.Context, _ *mcp.CallToolRequest, args snapshotArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	params, message := buildCameraSnapshotParams(args)
 	if message != "" {
 		return errorResult("invalid_args", message, nil)

@@ -152,3 +152,29 @@ func TestCopyAndConfirmOps(t *testing.T) {
 		t.Fatalf("ops = %v", ops)
 	}
 }
+
+type sessionTransport func(*http.Request) (*http.Response, error)
+
+func (f sessionTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestSessionReferenceCannotBeOverridden(t *testing.T) {
+	client := New(discover.Instance{PID: 1, Port: 9, Token: "secret", Managed: true, ViewerSession: "bound-login"})
+	calls := 0
+	client.HTTPClient.Transport = sessionTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["viewer_session"] != "bound-login" {
+			t.Fatal("request rebound", body)
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`)), Header: make(http.Header)}, nil
+	})
+	if _, err := client.Call(context.Background(), "get", map[string]any{"viewer_session": "other"}); err != nil {
+		t.Fatal(err)
+	}
+	client.Instance.ViewerSession = ""
+	if _, err := client.Call(context.Background(), "rename", nil); err == nil || calls != 1 {
+		t.Fatal("unbound managed call reached HTTP")
+	}
+}

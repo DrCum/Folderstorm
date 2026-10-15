@@ -52,6 +52,12 @@
 #include "llviewercontrol.h"
 #include "fssnapshotupload.h"
 #include "llagentbenefits.h"
+#include "fsassistantsession.h"
+#include "llagent.h"
+#include "llagentui.h"
+#include "llstartup.h"
+#include "llviewernetwork.h"
+#include "llappviewer.h"
 #include "llcameralistener.h"
 #include "llinventorylistener.h"
 #include "llstring.h"
@@ -374,6 +380,10 @@ public:
 
     void dispatch(const LLSD& input, ResponsePtr response)
     {
+        FSEventAPIBridge::instance().refreshSession();
+        const auto expected=input["viewer_session"].asString();
+        if(!mEnabled || !fs_assistant::sessionMatches(mIdentity["managed"].asBoolean(),mIdentity["viewer_session"].asString(),expected,input.has("viewer_session")))
+        { fail_response(response,HTTP_FORBIDDEN,"session_changed",llsd::map("error_code","session_changed"));return; }
         const std::string api = input["api"].asString();
         const std::string op = input["op"].asString();
         if (api.empty() || op.empty())
@@ -389,10 +399,11 @@ public:
             LLSD apis = LLSD::emptyMap();
             for (const char* name : {"LLInventory", "LLAppearance", "LLCamera", "LLWorkspace"})
                 apis[name] = LLEventAPI::getInstance(name) != nullptr;
-            response->extendedResult(HTTP_OK,
-                to_json(llsd::map("bridge_ready", mEnabled, "api_version", 1,
-                    "policy_generation", gPolicyGeneration, "apis_ready", apis,
-                    "capabilities", llsd::map("bulk_inventory_review", 1, "workspace_tools", 1))), json_headers());
+            LLSD health=mIdentity;
+            health["bridge_ready"]=mEnabled;health["api_version"]=1;health["policy_generation"]=gPolicyGeneration;
+            health["apis_ready"]=apis;health["capabilities"]=llsd::map("bulk_inventory_review",1,"workspace_tools",1,"managed_sessions",1);
+            response->extendedResult(HTTP_OK,to_json(health),json_headers());
+
             return;
         }
         mLastExternalRequestAt = now_seconds();
@@ -527,6 +538,8 @@ public:
 
     void enable() { mEnabled = true; ++mSessionGeneration; }
     bool enabled() const { return mEnabled; }
+    void identity(const LLSD& value) { mIdentity=value; }
+    const LLSD& identity() const { return mIdentity; }
     void setToken(std::string token) { mToken = std::move(token); }
     const std::string& token() const { return mToken; }
 
@@ -1031,6 +1044,7 @@ private:
         }
         found->second.sent = true;
         LLSD body = reply;
+        body["viewer_session"]=mIdentity["viewer_session"];
         if (found->second.api == "LLInventory" && found->second.op == "status" && body.isMap())
         {
             body["permissions"] = effective_permissions();
@@ -1043,6 +1057,7 @@ private:
     }
 
     std::string mToken;
+    LLSD mIdentity;
     LLEventStream mReplyPump;
     LLTempBoundListener mReplyConnection;
     std::map<LLUUID, Posted> mPending;
@@ -1177,6 +1192,7 @@ bool FSEventAPIBridge::applyEnabled(bool enabled)
         }
         mState->setToken(std::move(token));
         mState->enable();
+        mSessionKey.clear();refreshSession();
         if (!writeDiscovery())
         {
             mLastError = "Unable to write the local assistant connection file";
@@ -1218,6 +1234,7 @@ bool FSEventAPIBridge::bindOnce()
         "fs-mcp-" + std::to_string(LLApp::getPid()) + ".json";
     mDiscoveryPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, filename);
     mState = std::move(state);
+    mSessionKey.clear();refreshSession();
     if (!writeDiscovery())
     {
         mLastError = "Unable to write the local assistant connection file";
@@ -1232,7 +1249,7 @@ bool FSEventAPIBridge::bindOnce()
 
 bool FSEventAPIBridge::writeDiscovery()
 {
-    if (!mState || mDiscoveryPath.empty())
+    if (!mState || !mState->enabled() || mDiscoveryPath.empty())
     {
         return false;
     }
@@ -1246,6 +1263,8 @@ bool FSEventAPIBridge::writeDiscovery()
         "host", "127.0.0.1",
         "scheme", "http",
         "path", BRIDGE_PATH);
+    const auto& identity=mState->identity();
+    for(auto it=identity.beginMap();it!=identity.endMap();++it)discovery[it->first]=it->second;
     const std::string payload = to_json(discovery);
 
     LLFILE* file = LLFile::fopen(temporary, "wb");
@@ -1277,6 +1296,25 @@ void FSEventAPIBridge::removeDiscoveryFile()
     }
 }
 
+void FSEventAPIBridge::refreshSession()
+{
+    if(!mState || !mState->enabled())return;
+    const bool ready=LLStartUp::getStartupState()==STATE_STARTED && !gDisconnected;
+    const bool managed=FSSessionWorker::managed();
+    const auto grid=LLGridManager::instance().getGrid();
+    const auto key=gAgentID.asString()+":"+gAgent.getSessionID().asString()+":"+grid+":"+(managed?"managed":"standalone")+":"+(ready?"ready":"offline");
+    if(key==mSessionKey)return;
+    mState->disable();
+    mSessionKey=key;mViewerSession=LLUUID::generateNewID().asString();
+    const auto token=make_token();
+    if(token.empty()){removeDiscoveryFile();mLastError="Unable to refresh the assistant connection";return;}
+    mState->setToken(token);
+    std::string name;LLAgentUI::buildFullname(name);
+    mState->identity(llsd::map("viewer_session",mViewerSession,"managed",managed,"account",gAgentID.asString(),"grid",grid,"name",name,"ready",ready));
+    mState->enable();
+    if(!writeDiscovery()){mState->disable();removeDiscoveryFile();mLastError="Unable to update assistant discovery";}
+}
+
 void FSEventAPIBridge::stop()
 {
     if (mState)
@@ -1286,6 +1324,7 @@ void FSEventAPIBridge::stop()
     }
     removeDiscoveryFile();
     mDiscoveryPath.clear();
+    mSessionKey.clear();mViewerSession.clear();
     mPump = nullptr;
 }
 

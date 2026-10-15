@@ -421,3 +421,8 @@ Viewers advertising `capabilities.workspace_tools: 1` expose these tools:
 Each accepts an optional `viewer_pid`. Read tools require Read. Switching requires the new **Switch workspaces and layouts** permission (default Ask); workspaces with camera/HUD groups also require Camera/Wear. Any Never value blocks the compound switch, and the viewer owns approval. Changing the saved definition, resolved preset, worn HUD state or login while approval is pending invalidates it.
 
 Finish Preferences before switching. Check status after a switch: `accepted` means the viewer accepted the arrangement, while missing HUDs remain Pending until observed or timed out. Previous restores compatible settings/geometry but does not detach added HUDs. Older viewers return Unsupported; these tools never fall back to arbitrary settings writes or raw appearance operations.
+
+
+### Exact login targets
+
+`viewer_list` now returns an opaque `viewer_session` for updated viewers. Pass it to any account tool to pin the operation to that exact login. A PID can accompany the reference only when it identifies the same viewer. Missing selected viewers and changed logins fail instead of selecting the remaining viewer. Older ordinary viewers retain PID targeting; managed characters require an explicit session reference and matching managed-session capability. The first routing checkpoint keeps managed listeners disabled pending execution/approval integration.
