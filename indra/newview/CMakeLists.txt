@@ -119,6 +119,7 @@ set(viewer_SOURCE_FILES
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
     fsworkspacecontextui.cpp
+    fsassistantsocial.cpp
     fsworldlistener.cpp
     fsworkspacelistener.cpp
     fsworkspacecontextadapter.cpp
@@ -1017,6 +1018,10 @@ set(viewer_HEADER_FILES
     fsworkspacepreview.h
     fsworkspacelayout.h
     fsworkspacecontextui.h
+    fsassistantsocial.h
+    fsassistantsocialmodel.h
+    fscontentpermissions.h
+    fscontentpolicy.h
     fsworldlistener.h
     fsworldobservation.h
     fsworkspacelistener.h

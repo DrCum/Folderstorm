@@ -30,6 +30,7 @@
 #include "fsassistantapproval.h"
 #include "fsassistantoperation.h"
 #include "fsassistantfeature.h"
+#include "fsassistantsocial.h"
 #include "fsassistantfeatures.h"
 #include "fsassistantpolicy.h"
 #include "fslinkreplacement.h"
@@ -372,6 +373,8 @@ public:
     {
         fs_initialize_workspace_api();
         fs_initialize_world_api();
+        mSocial=std::make_shared<FSAssistantSocial>();
+        refreshSocialPrivacy();
     }
 
     bool authorize(const LLSD& context) const
@@ -606,6 +609,7 @@ public:
     void disable()
     {
         mEnabled = false;
+        if(mSocial)mSocial->privacyChanged();
         FSInventoryBulk::retireAssistant();
         ++mSessionGeneration;
         denyQueuedAsks(ERR_DENIED);
@@ -622,9 +626,22 @@ public:
         mAsync.clear();mAsyncReadScopes.clear();
     }
 
-    void enable() { mEnabled = true; ++mSessionGeneration; }
+    void enable() { if(mSocial)mSocial->privacyChanged();mEnabled = true; ++mSessionGeneration; }
     bool enabled() const { return mEnabled; }
-    void identity(const LLSD& value) { mIdentity=value; }
+    void identity(const LLSD& value)
+    {
+        if(mSocial && mIdentity["viewer_session"]!=value["viewer_session"])mSocial->privacyChanged();
+        mIdentity=value;
+    }
+    void nearbyMessage(const LLChat& message){if(mEnabled && mSocial)mSocial->nearbyMessage(message);}
+    void refreshSocialPrivacy()
+    {
+        LLSD next=LLSD::emptyMap();
+        for(const char* id:{"chat_read","friends_read","resident_search","profile_read","notifications_read"})
+            if(const auto* def=find_def(id))next[id]=effective_level(def->kind);
+        if(!llsd_equals(next,mSocialReadPolicy))
+        {mSocialReadPolicy=next;if(mSocial)mSocial->privacyChanged();}
+    }
     const LLSD& identity() const { return mIdentity; }
     bool requestAllowed(const LLSD& request) const
     {
@@ -652,6 +669,7 @@ public:
     }
     void maintenance()
     {
+        if(mSocial)mSocial->tick();
         for(auto it=mPending.begin();it!=mPending.end();)
         {
             if(!postedAllowed(it->second))
@@ -665,6 +683,7 @@ public:
 
     void permissionsChanged()
     {
+        refreshSocialPrivacy();
         mExecutions.erase(std::remove_if(mExecutions.begin(), mExecutions.end(), [](const auto& weak)
         {
             auto gate = weak.lock();
@@ -1280,6 +1299,8 @@ private:
     }
 
     std::string mToken;
+    std::shared_ptr<FSAssistantSocial> mSocial;
+    LLSD mSocialReadPolicy;
     LLSD mIdentity;
     LLEventStream mReplyPump;
     LLTempBoundListener mReplyConnection;
@@ -1568,6 +1589,8 @@ void FSEventAPIBridge::refreshSession()
     if(!writeDiscovery()){mState->disable();removeDiscoveryFile();mLastError="Unable to update assistant discovery";}
 }
 
+void FSEventAPIBridge::nearbyMessage(const LLChat& message)
+{if(mState && mState->enabled())mState->nearbyMessage(message);}
 void FSEventAPIBridge::reviewPending() {if(mState && FSSessionWorker::assistantActiveAllowed())mState->review();}
 bool FSEventAPIBridge::requestAllowed(const LLSD& request)
 {
