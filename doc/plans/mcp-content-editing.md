@@ -39,3 +39,11 @@ A Sol 6.1 Extra High implementation agent may own new content service/Go wrapper
 Tests: native permission eligibility, denied data after async revocation, stale asset/hash, changed Ask content, links/Library, dirty-editor conflicts, rich/truncated/malformed notecards, upload cancellation at each stage, duplicate/late callbacks, compile failure with source_saved=true, diagnostics limits and unknown outcomes without retry. Add actual dispatch/service tests, not only pure model tests.
 
 Windows: each capability path and unsupported grid, native editor coherence, embedded inventory preservation, compiler success/error, disconnect at each upload boundary and two/five private profiles. Finished code gets independent Sol 6.1 Extra High review; Max is justified for a complex multi-stage upload review. No native acceptance claim from portable checks alone.
+
+## Implemented checkpoint
+
+E6/E7 implement complete reads, bounded diffs, rich-v2 notecard text replacement and raw Mono inventory-script save/compile. V1 notecards remain readable and explicitly report lossless editing unavailable. Snapshots are limited to eight, receipts to 32, text to 65,536 UTF-8 bytes, serialized assets to 262,144 bytes and compiler diagnostics to 8,192 bytes/64 entries. Source-save and compiler results are reported separately; source contents never appear in generic operation receipts.
+
+The assistant upload path disables retries/redirects and guards queue, capability, source and commit boundaries. Native editor conflicts include hidden external watchers, preprocessing/include fetches and pending saves through asset callbacks and deferred inventory transport. Confirmed notecard cache bytes are evicted before reuse; dormant clean editors reload only on a later explicit native open. Native manual behavior remains available.
+
+Independent Sol 6.1 Max review is clean through `c9ded51686`. Four affected portable C++ checks, four native-boundary source checks, registered Go Content dispatch checks and approval XML bindings pass. Native Windows compilation, real server capabilities and graphical/editor acceptance remain pending. Local revision checks cannot provide server-side compare-and-swap or eliminate edits from another client; unknown outcomes are never replayed or rolled back automatically.

@@ -37,6 +37,8 @@ bool fs_preferences_preset_write(const std::string& control, const std::string& 
 // Only populatePresetCombo's dependent Custom-mode write uses this hook.
 // The native setting is TYPE_U32 with integer-valued LLSD representation.
 bool fs_preferences_camera_preset_type_write(S32 value);
+// Called before camera UI construction/opening can interpret a preview label.
+void fs_preferences_camera_ui_opening();
 // Native preset-control changes invalidate a preview's dependent label even
 // when it is already runtime-empty. Returns true only when a camera preview
 // hid a nonempty native label and normal native invalidation must still run.

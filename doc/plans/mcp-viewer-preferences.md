@@ -29,3 +29,21 @@ Root implements this state machine sequentially to avoid races with existing Pre
 Test schema/type/range/availability, wrong account/profile, native restriction refusal, unknown/forbidden settings, preset defaults, repeated preview, explicit accept, cancel, timeout/revocation, saved/runtime/unsaved restoration, external changes and account/worker replacement. Tests must include native transaction entry points rather than assuming generic apply means approval.
 
 Windows: OK/Cancel and reopen, renderer/audio/UI-scale effects, two/five profiles, host import/workspace interactions and manual changes during preview. Confirm saved values persist only after acceptance and no assistant permission/access settings can be changed by this API.
+
+## Delivered curated Preferences checkpoint
+
+The six tools are registered behind `preferences_tools=1`, with separate opt-in read and Ask-capable write permissions. The closed catalog exposes twelve writable choices: letter/arrow movement keys, tap-and-hold run, quick jump, mouse sensitivity/inversion, selection beam, LookAt targets, UI scale, camera FOV/offset scale and draw distance. Native dynamic availability and restrictions remain authoritative.
+
+Graphics quality and master/effects volume/mute are read-only in this checkpoint. Their existing native compound callbacks require broader side-effect ownership than a scalar setting change; audio handlers can also touch microphone state. No generic setting setter or permission/security override is exposed.
+
+A preview owns one exact login transaction and expected revision for at most 300 seconds (120 by default). Runtime previews preserve saved/unsaved layers. Explicit acceptance persists unchanged owned drafts through the normal viewer settings lifecycle; cancellation, expiry and revocation restore only still-owned values and report partial cleanup. Native Preferences opening cancels the preview before its own snapshots. Camera UI construction/opening cancels overlapping camera previews before native preset callbacks can save their derived state. Workspace ownership is respected; untouched dormant baselines can be abandoned without applying or restoring them.
+
+Independent Max source review is clean at `8b78dc359e`. Portable transaction checks, seven native-boundary source checks and registered Go Preferences tests pass. Parent gesture/content changes are integrated separately; no IPC version change is needed for this provider capability. Native Windows compilation and runtime acceptance remain pending.
+
+Windows acceptance:
+
+- Read schema availability on an ordinary viewer and two/five managed profiles. Unknown IDs, forbidden settings and restricted camera changes must refuse.
+- Preview, accept, cancel, expire and revoke changes. Reopen the viewer to verify only accepted saved values persist.
+- Edit the same setting manually during preview; cancellation must preserve the manual value and report incomplete restoration.
+- Open native Preferences or the camera controls during a preview. Verify native OK/Cancel and camera preset metadata preserve their own saved layers.
+- Exercise UI scale/draw-distance side effects and workspace/profile-import conflicts, including inactive-character refusal where active ownership is required. No tool may move the avatar or acquire voice/input ownership.

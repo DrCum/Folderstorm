@@ -519,3 +519,12 @@ bool fs_preferences_camera_preset_type_write(S32 value)
             if (auto* var = control(CAMERA_PRESET_TYPE)) var->setValue(LLSD(type),saved);
         });
 }
+void fs_preferences_camera_ui_opening()
+{
+    auto& self = service();
+    cancelForCameraUI(self.writing,self.transaction.busy(),self.cameraTouched,[&self]()
+    {
+        self.observe();
+        self.cancel("native_camera_ui_opened");
+    });
+}
