@@ -30,6 +30,8 @@ Return `source_saved`, `compiled`, bounded structured errors (line/column where 
 
 ## Async authority and validation
 
+Extract an assistant-aware upload path before reusing the native queue: AssetInventoryUploadCoproc retries failed stage-two uploads by requesting a new uploader. Disable that automatic retry for assistant-owned work; retain ordinary native behavior. Identify each irreversible submission explicitly. Native save capabilities do not provide expected-revision CAS, so local checks/dirty-editor ownership are preflight protections, not atomic protection against another server-side editor. Report this limit and post-submit conflict/uncertainty honestly, without automatic rollback.
+
 Carry the durable operation through fetch, upload queue, capability handshake, upload URL, asset transfer, inventory update, compile/result callback and destructor/deferred work. Check at actual submission boundaries and after every yield. Revocation before the next stage stops unsent work; already submitted source may have changed and must be reported honestly. Never apply an old login's callback to a newer inventory.
 
 A Sol 6.1 Extra High implementation agent may own new content service/Go wrapper/test files in a separate worktree. Root owns shared native inventory extraction, bridge/permissions and final integration. Complete notecards before scripts; do not parallelize two writers on the upload state machine.
