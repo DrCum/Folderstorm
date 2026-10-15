@@ -60,7 +60,7 @@ Ten typed tools provide status/joints, start/update/undo/reset/stop and preset l
 
 Private poses use a separate random local motion and at most 64 named joint rotations. Revocation checks run independently of animation-controller culling; native Poser takeover invalidates the old transaction before capture. Cancellation uses local motion removal, without a simulator animation STOP. Undo/reset/stop restore acquisition rotations only while the current joint still matches the assistant's last applied contribution; external/mixed state is preserved and incomplete restoration reported.
 
-Presets are exact, hashed IDs under the native `poses` directory, bounded to 64 KiB. Loading accepts supported native version-8 absolute local-rotation XML only, after strict complete-document/depth/shape validation; wider or relative state fails explicitly. Saving creates a new confined filename and never overwrites an existing preset. Pinned non-link directory/file handles prevent pathname replacement from redirecting I/O. Symlink/reparse/UNC settings paths intentionally refuse; UTF-8 filenames remain supported without deprecated C++20 path APIs.
+Presets are exact, hashed IDs under the native `poses` directory, bounded to 64 KiB. Loading accepts supported native version-8 absolute local-rotation XML only, after strict complete-document/depth/shape validation; wider or relative state fails explicitly. Saving creates a new confined filename with an ASCII letters/digits/underscore/hyphen basename and never overwrites an existing preset. Pinned non-link directory/file handles prevent pathname replacement from redirecting I/O. Symlink/reparse/UNC settings paths intentionally refuse. Existing UTF-8 filenames support listing/loading without deprecated C++20 path APIs.
 
 Independent Max source review is clean at `0e19856243`; final parent integration retains the separately reviewed gesture/content/Preferences changes. Strict portable pose/XML/file-link/race checks, registered Go pose tools and six native-boundary source checks pass. CMake registration is source-reviewed only because CMake is absent. Native Windows compilation, real animation blending and runtime acceptance remain pending.
 
@@ -69,7 +69,7 @@ Windows acceptance:
 - Start an active self-pose, apply bounded rotations and exercise undo/reset/stop on animated and otherwise unanimated Bento joints. Check restoration outcomes.
 - Open native Poser during a private pose, then close it; the old assistant pose must not resume. Revoke access while the private motion is fully covered by another motion.
 - Change source/region/login or disconnect. Future effects must stop without simulator requests for the private UUID; ambiguous newer state must survive.
-- List/load/save Unicode presets, collisions, unsupported wider-state XML, trailing documents and changed file revisions. New files must stay in the native pose directory.
+- List/load existing Unicode presets; save a new ASCII-named preset. Test collisions, unsupported wider-state XML, trailing documents and changed file revisions. New files must stay in the native pose directory.
 - Verify default permission presets and native approval distinguish runtime posing from saving files. No operation may control another avatar or implicitly enable sharing.
 
 Shared MCP posing remains a separate checkpoint with two-viewer native consent acceptance.
