@@ -191,9 +191,14 @@ void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool cont
             const auto next = readPose(data["p"]);
             if (previous && next)
             {
-                auto merged = *previous;
-                for (const auto& item : *next) merged[item.first] = item.second;
-                outgoing["p"] = poseData(merged);
+                std::map<std::string,U32> previousRevisions,nextRevisions;
+                for(const auto& joint:*previous)
+                {const auto& revision=pending->data["jr"][joint.first];if(revision.isInteger() && revision.asInteger()>=0)previousRevisions[joint.first]=static_cast<U32>(revision.asInteger());}
+                for(const auto& joint:*next)
+                {const auto& revision=data["jr"][joint.first];if(revision.isInteger() && revision.asInteger()>=0)nextRevisions[joint.first]=static_cast<U32>(revision.asInteger());}
+                const auto merged=fs_pose::coalescePoseUpdate(*previous,previousRevisions,*next,nextRevisions);
+                outgoing["p"] = poseData(merged.pose);outgoing["jr"]=LLSD::emptyMap();
+                for(const auto& joint:merged.revisions)outgoing["jr"][joint.first]=static_cast<S32>(joint.second);
                 outgoing["b"] = pending->data["b"];
             }
         }

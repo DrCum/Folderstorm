@@ -29,6 +29,22 @@ inline bool rotationResult(const FSSharedPose::Joint& before,const FSSharedPose:
 {return (allowBefore && sameSharedJoint(before,after)) || sameSharedJoint(rotationJoint(before,requested),after);}
 inline bool sameSharedPose(const FSSharedPose::Pose& a,const FSSharedPose::Pose& b)
 {if(a.size()!=b.size())return false;for(const auto& joint:a){const auto other=b.find(joint.first);if(other==b.end() || !sameSharedJoint(joint.second,other->second))return false;}return true;}
+struct CoalescedPoseUpdate
+{
+ FSSharedPose::Pose pose;std::map<std::string,std::uint32_t> revisions;
+};
+inline CoalescedPoseUpdate coalescePoseUpdate(const FSSharedPose::Pose& previous,const std::map<std::string,std::uint32_t>& previousRevisions,
+ const FSSharedPose::Pose& next,const std::map<std::string,std::uint32_t>& nextRevisions)
+{
+ CoalescedPoseUpdate result;result.pose=previous;
+ for(const auto& joint:previous){const auto revision=previousRevisions.find(joint.first);if(revision!=previousRevisions.end())result.revisions[joint.first]=revision->second;}
+ for(const auto& joint:next)
+ {
+  result.pose[joint.first]=joint.second;const auto revision=nextRevisions.find(joint.first);
+  if(revision!=nextRevisions.end())result.revisions[joint.first]=revision->second;else result.revisions.erase(joint.first);
+ }
+ return result;
+}
 // An old final ACK can settle its operation receipt without being a snapshot
 // of the currently observed native session or grant. Keep those decisions
 // separate; cache updates need the exact still-current private native proof.

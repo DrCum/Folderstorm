@@ -35,6 +35,20 @@ int main()
  // changes. Cancellation does not call restore or owner.clear.
  owner.grant("source","new-token",1);assert(owner.acquire("source","new-token","source-undo",owner.historyJoints("source",false),1).granted);
  assert(owner.restore("source","new-token","source-undo",false,1));assert(owner.pose().at("mNeck")==changed);
+ // The actual queue coalescer retains each pose entry's own revision rather
+ // than assigning the newest overall revision to all disjoint retained joints.
+ OwnerSession coalescedOwner;coalescedOwner.start("owner","coalesced",{{"mHead",initial},{"mNeck",initial}});
+ assert(coalescedOwner.acquire("owner","","head",{"mHead"},0).granted);
+ assert(coalescedOwner.apply("owner","","head",{{"mHead",changed}},true,0));
+ assert(coalescedOwner.acquire("owner","","neck",{"mNeck"},0).granted);
+ assert(coalescedOwner.apply("owner","","neck",{{"mNeck",changed}},true,0));
+ const auto merged=coalescePoseUpdate({{"mHead",changed}},{{"mHead",1}},{{"mNeck",changed}},{{"mNeck",2}});
+ assert(merged.pose==coalescedOwner.pose() && merged.revisions.at("mHead")==1 && merged.revisions.at("mNeck")==2);
+ assert(coalescedOwner.revisionsMatch(merged.revisions,{"mHead","mNeck"}));
+ const auto overlap=coalescePoseUpdate(merged.pose,merged.revisions,{{"mHead",initial}},{{"mHead",3}});
+ assert(overlap.pose.at("mHead")==initial && overlap.revisions.at("mHead")==3 && overlap.revisions.at("mNeck")==2);
+ const auto unknown=coalescePoseUpdate(merged.pose,merged.revisions,{{"mHead",initial}},{});
+ assert(!unknown.revisions.count("mHead") && unknown.revisions.at("mNeck")==2);
  // The real ACK handler delegates cache writes to this helper. Late ACKs
  // still settle historical receipts but cannot mutate replacement sessions,
  // regrants, removed joints, or equal/newer per-joint cache versions.

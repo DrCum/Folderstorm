@@ -124,6 +124,13 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("sharedPoseToLSLGuarded", queue)
         self.assertIn("submit && edit", queue)
         self.assertIn("entry.packets.pop_front()", queue)
+    def test_shared_queue_coalesces_joint_revisions_with_pose_entries(self):
+        send = function("fssharedposemanager.cpp", "void FSSharedPoseManager::send(")
+        self.assertIn("fs_pose::coalescePoseUpdate", send)
+        self.assertIn('pending->data["jr"][joint.first]', send)
+        self.assertIn('data["jr"][joint.first]', send)
+        self.assertIn('outgoing["jr"][joint.first]', send)
+        self.assertIn("poseData(merged.pose)", send)
     def test_shared_duplicate_reservation_and_private_payload_gates(self):
         callback = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::handleAssistant")
         self.assertLess(callback.index("if(work->granted)return true"), callback.index('message("edit"'))
