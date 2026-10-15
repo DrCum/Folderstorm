@@ -1,10 +1,14 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #include "fsassistantasync.h"
+#include "fsassistantpolicy.h"
 #include <cassert>
 #include <iostream>
 int main()
 {
  using namespace fs_assistant;
+ assert(requiresAsyncAuthority("LLInventory","createFolder",false));
+ assert(requiresAsyncAuthority("LLInventory","createItem",false));
+ assert(!requiresAsyncAuthority("LLInventory","get",true));
  bool live=true;auto guard=std::make_shared<AsyncOperation>([&](){return live?std::string():std::string("revoked");});
  assert(!AsyncScope::current());
  AsyncTaskPtr task;
@@ -64,5 +68,29 @@ int main()
  asyncDeliver(newerTask,"result",[&](bool allowed){assert(allowed);++packets;});
  newer->seal();newerTask.reset();assert(packets==1 && newer->state()=="submitted");
  assert(!AsyncScope::current());
+ // A createFolder request must retain Create authority while queued in AIS.
+ for (bool pauseAccess : {false,true})
+ {
+  bool paused=false;auto gate=std::make_shared<ExecutionGate>(std::vector<std::string>{"create"});
+  gate->observe({"allow"});
+  auto folder=std::make_shared<AsyncOperation>([&](){return paused || !gate->allowed()?std::string("revoked"):std::string();});
+  std::vector<std::function<void()>> aisQueue;int folderPosts=0,folderReplies=0;
+  {
+   AsyncScope request(requiresAsyncAuthority("LLInventory","createFolder",false)?folder:AsyncGuard());
+   auto queuedTask=asyncTask();
+   aisQueue.push_back([&,queuedTask]()
+   {
+    if(asyncTaskSubmit(queuedTask))++folderPosts;
+    asyncDeliver(queuedTask,"",[&](bool allowed){assert(!allowed);++folderReplies;});
+   });
+  }
+  folder->seal();
+  if(pauseAccess)paused=true;else gate->observe({"deny"});
+  for(auto& drain:aisQueue)drain();
+  aisQueue.clear();
+  paused=false;gate->observe({"allow"});
+  assert(folderPosts==0 && folderReplies==1 && folder->submitted()==0 && folder->pending()==0);
+  assert(folder->state()=="cancelled_before_submission" && !folder->allowed());
+ }
  std::cout<<"Durable assistant async guard checks passed\n";
 }
