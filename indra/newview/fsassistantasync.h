@@ -15,7 +15,7 @@ namespace fs_assistant
 inline bool requiresAsyncAuthority(const std::string& api, const std::string& op, bool readOnly)
 {
     return featureOperation(api,op) || (api == "LLAppearance" && !readOnly) ||
-        (api == "LLInventory" && (op == "createItem" || op == "createFolder"));
+        (api == "LLInventory" && (op == "createItem" || op == "createFolder" || op == "readNotecard" || op == "readScript"));
 }
 // Viewer-main-thread state. Authority is supplied by the owning bridge, never
 // deserialized from a tool request. A failed check permanently stops this work.

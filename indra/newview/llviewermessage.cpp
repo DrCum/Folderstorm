@@ -3391,9 +3391,18 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             const std::string to_lang = LLTranslate::getTranslateLanguage();
 
             LLTranslate::instance().logCharsSent(mesg.size());
+            const LLUUID source_account=gAgentID,source_login=gAgent.getSessionID();
             LLTranslate::translateMessage(from_lang, to_lang, mesg,
-                boost::bind(&translateSuccess, chat, args, mesg, from_lang, _1, _2),
-                boost::bind(&translateFailure, chat, args, _1, _2));
+                [=](const std::string& translated,const std::string& detected)
+                {
+                    if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                    translateSuccess(chat,args,mesg,from_lang,translated,detected);
+                },
+                [=](int status,const std::string& error)
+                {
+                    if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                    translateFailure(chat,args,status,error);
+                });
 
         }
         else

@@ -30,6 +30,7 @@
 #include <string>
 
 class LLPumpIO;
+class LLChat;
 
 class FSEventAPIBridge final : public LLSingleton<FSEventAPIBridge>
 {
@@ -44,6 +45,7 @@ public:
     // Disable rejects every request and deletes the discovery file. It does
     // not unbind the socket.
     bool applyEnabled(bool enabled);
+    void nearbyMessage(const LLChat& message);
     void refreshSession(); // Main-thread login/connection identity; revokes old work.
     void reviewPending(); // Presents native approval only on the active owner.
     static bool requestAllowed(const LLSD& request);

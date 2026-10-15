@@ -56,7 +56,10 @@ void FSAssistantApproval::present(const LLSD& summary, std::function<void(bool)>
     mPage = 0;
     LLStringUtil::format_map_t args;
     args["COUNT"] = summary["subject_count"].asString();
-    childSetValue("heading", getString("action_" + summary["op"].asString(), args));
+    const auto key = "action_" + summary["op"].asString();
+    bool shortened = false;
+    childSetValue("heading", summary.has("action") ? display(summary["action"], shortened) :
+        hasString(key) ? getString(key, args) : getString("action_feature", args));
     updatePage();
     openFloater();
     setFocus(true);
