@@ -4,7 +4,9 @@ These complement policy/dispatch tests; native scheduler and two-viewer consent
 acceptance still require the viewer runtime.
 """
 from pathlib import Path
+import re
 import unittest
+import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[3]
 
 def function(path, signature):
@@ -118,6 +120,14 @@ class PoseNativeContract(unittest.TestCase):
         ctor = function("fssharedposemanager.cpp", "FSSharedPoseManager::FSSharedPoseManager()")
         self.assertIn('getControl("FSSharedPosingEnabled")', ctor)
         self.assertIn('cancel("native_sharing_disabled")', ctor)
+    def test_shared_approval_consequences_have_native_strings(self):
+        prepare = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::prepareAssistantPose")
+        ui = ET.parse(ROOT / "indra/newview/skins/default/xui/en/floater_local_assistant_approval.xml")
+        available = {entry.attrib["name"] for entry in ui.getroot().findall("string")}
+        warnings = re.findall(r'\["consequences"\]\.append\("([a-zA-Z0-9_]+)"\)', prepare)
+        self.assertTrue(warnings)
+        for warning in warnings:
+            self.assertIn(warning, available, f"Missing native approval string: {warning}")
     def test_file_load_uses_bounded_parser_and_confined_store(self):
         source = (ROOT / "indra/newview/fsposelistener.cpp").read_text()
         self.assertNotIn("loadPoseFromXml", source)
