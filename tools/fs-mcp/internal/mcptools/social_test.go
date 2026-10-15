@@ -62,3 +62,31 @@ func TestSocialTypedReadValidation(t *testing.T) {
 		t.Fatal("typed material inputs changed")
 	}
 }
+
+func TestSocialSendsUseExactTypedOperationAndClass(t *testing.T) {
+	for _, topic := range []string{"im", "group", "conference", "nearby"} {
+		permissions := `{"chat_send_im":"allow","chat_send_group":"allow","chat_send_conference":"allow","chat_send_nearby":"allow"}`
+		api := &fakeAPI{status: socialStatus(permissions, 1)}
+		id := "11111111-1111-4111-8111-111111111111"
+		if topic == "nearby" {
+			id = "nearby"
+		}
+		r, _, _ := socialTestServer(api).chatSend(context.Background(), nil, socialSendArgs{ViewerSession: "social-login", ConversationID: id, Topic: topic, Text: "/20 literal data", ClientRequestID: "intent-1"})
+		op := map[string]string{"im": "sendIM", "group": "sendGroup", "conference": "sendConference", "nearby": "sendNearby"}[topic]
+		if r.IsError || !contains(api.opsCopy(), "FSChat."+op) || api.lastNamed["text"] != "/20 literal data" {
+			t.Fatalf("wrong send boundary: %s %s", topic, textOf(r))
+		}
+	}
+	api := &fakeAPI{status: socialStatus(`{"chat_send_im":"deny","chat_send_nearby":"allow"}`, 1)}
+	r, _, _ := socialTestServer(api).chatSend(context.Background(), nil, socialSendArgs{ViewerSession: "social-login", ConversationID: "11111111-1111-4111-8111-111111111111", Topic: "im", Text: "hello", ClientRequestID: "intent-2"})
+	if !r.IsError || contains(api.opsCopy(), "FSChat.sendIM") {
+		t.Fatal("IM permission bypass")
+	}
+}
+func TestSocialDraftGetNeedsOriginatingRead(t *testing.T) {
+	api := &fakeAPI{status: socialStatus(`{"chat_state":"allow","chat_read":"deny"}`, 1)}
+	r, _, _ := socialTestServer(api).chatDraftGet(context.Background(), nil, socialConversationArgs{ViewerSession: "social-login", ConversationID: "nearby"})
+	if !r.IsError || contains(api.opsCopy(), "FSChat.draftGet") {
+		t.Fatal("draft disclosed through state permission")
+	}
+}

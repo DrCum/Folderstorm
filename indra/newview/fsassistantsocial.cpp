@@ -22,6 +22,7 @@
 #include "llviewerregion.h"
 #include "llviewernetwork.h"
 #include "fsdata.h"
+#include "fsnearbychathub.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
 #include <algorithm>
@@ -77,6 +78,12 @@ bool contactLess(const LLSD& a,const LLSD& b)
 int limit(const LLSD& request,int fallback=50){return request.has("limit")?request["limit"].asInteger():fallback;}
 bool validPage(const LLSD& request,std::string& error)
 {if(limit(request)<1 || limit(request)>100 || request["offset"].asInteger()<0 || request["offset"].asInteger()>2048){error="invalid_args: limit must be 1..100 and offset 0..2048";return false;}return true;}
+bool isSend(const std::string& op){return op=="sendNearby" || op=="sendIM" || op=="sendGroup" || op=="sendConference";}
+bool revision(const LLSD& value,std::uint64_t& result)
+{
+    const auto text=value.asString();if(text.empty() || text.size()>19 || text.find_first_not_of("0123456789")!=std::string::npos)return false;
+    try{result=std::stoull(text);return true;}catch(...){return false;}
+}
 LLSD page(const std::vector<LLSD>& rows,const LLSD& request)
 {
     LLSD result;result["entries"]=LLSD::emptyArray();const int begin=request["offset"].asInteger();const int end=(std::min)(static_cast<int>(rows.size()),begin+limit(request));
@@ -92,7 +99,12 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     boost::signals2::scoped_connection chatConnection;
     std::map<std::string,Stream> streams;
     std::map<std::string,fs_assistant_social::Draft> drafts;
+    std::map<std::string,std::pair<std::string,std::uint64_t>> appliedDrafts;
     std::map<std::string,std::uint64_t> closed;
+    struct Receipt{LLSD value;F64 until;};
+    std::map<std::string,Receipt> receipts;
+    std::set<std::string> submittedIDs; // bounded login tombstones; never replay uncertain sends
+    std::deque<F64> sends;
     struct PendingProfile {LLUUID target;LLSD request;Guard guard;fs_assistant::AsyncTaskPtr task;std::shared_ptr<Response> response;F64 deadline;};
     std::shared_ptr<PendingProfile> profile;
     F64 profileBusyUntil=0;
@@ -103,12 +115,12 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     bool current()const{return ready() && account==gAgentID && login==gAgent.getSessionID() && grid==LLGridManager::getInstance()->getGrid();}
     LLSD source()const{LLSD s;s["account_id"]=account;s["login_id"]=login;s["grid"]=grid;s["privacy_epoch"]=std::to_string(privacyEpoch);return s;}
     void flush()
-    {++privacyEpoch;for(auto& stream:streams)stream.second.clear();drafts.clear();closed.clear();cancelProfile("privacy_changed");}
+    {++privacyEpoch;for(auto& stream:streams)stream.second.clear();drafts.clear();appliedDrafts.clear();closed.clear();receipts.clear();cancelProfile("privacy_changed");}
     void sync()
     {
         const bool changed=account!=gAgentID || login!=gAgent.getSessionID() || grid!=LLGridManager::getInstance()->getGrid();
         const bool blocked=!ready() || !visible();
-        if(changed){flush();streams.clear();account=gAgentID;login=gAgent.getSessionID();grid=LLGridManager::getInstance()->getGrid();}
+        if(changed){flush();streams.clear();receipts.clear();submittedIDs.clear();sends.clear();account=gAgentID;login=gAgent.getSessionID();grid=LLGridManager::getInstance()->getGrid();}
         else if(blocked!=restricted)flush();restricted=blocked;
         if(profile && (now()>profile->deadline || !profile->guard || !profile->guard->allowed() || !current()))cancelProfile("expired_or_not_permitted");
     }
@@ -139,6 +151,95 @@ struct FSAssistantSocial::State : LLAvatarPropertiesObserver, LLFriendObserver, 
     LLSD conversation(const LLIMModel::LLIMSession& session)const
     {
         LLSD row;row["conversation_id"]=session.mSessionID;row["topic"]=topic(session);row["name"]=bounded(session.mName,255);row["participants"]=participants(session);row["unread"]=session.mNumUnread;row["ready"]=session.mSessionInitialized && session.mTextIMPossible;return row;
+    }
+    bool chatEvidence(const LLSD& request,LLSD& evidence,std::string& error)const
+    {
+        const auto op=request["op"].asString(),id=request["conversation_id"].asString();
+        if(op=="open")
+        {
+            if(request["grid"].asString()!=grid || !residentAllowed(request["resident_id"].asUUID())){error="invalid_target: resident/grid unavailable or restricted";return false;}
+            evidence["resident_id"]=request["resident_id"];evidence["grid"]=grid;return true;
+        }
+        const bool nearby=id=="nearby";
+        if(id.empty() || (nearby && (op=="close" || (isSend(op) && op!="sendNearby")))){error="invalid_target: use an exact native conversation; nearby cannot close";return false;}
+        if(nearby)evidence["conversation_id"]="nearby";
+        else
+        {
+            const auto* session=LLIMModel::instance().findIMSession(LLUUID(id));
+            if(!session || !conversationAllowed(*session,isSend(op))){error="conversation_ended_or_restricted";return false;}
+            if(isSend(op) && (!session->mSessionInitialized || !session->mTextIMPossible ||
+                !FSData::instance().canSendToIMContact(session->mType,gAgentID,session->mOtherParticipantID))){error="conversation_not_ready_or_support_contact_restricted";return false;}
+            const auto expected=op=="sendIM"?"im":op=="sendGroup"?"group":op=="sendConference"?"conference":"";
+            if(isSend(op) && (op=="sendNearby" || topic(*session)!=expected)){error="conversation_type_changed";return false;}
+            evidence["conversation_id"]=session->mSessionID;evidence["type"]=static_cast<S32>(session->mType);evidence["participants"]=participants(*session);evidence["other_participant_id"]=session->mOtherParticipantID;
+        }
+        if(op=="draftSet")
+        {
+            const auto found=drafts.find(id);const auto actual=found==drafts.end()?0:found->second.revision;std::uint64_t expected=0;
+            const auto applied=appliedDrafts.find(request["__social_draft_claim"].asString());
+            const bool own=applied!=appliedDrafts.end() && applied->second.first==id && applied->second.second==actual && found!=drafts.end() && found->second.text==request["text"].asString();
+            if(!revision(request["expected_revision"],expected) || (expected!=actual && !(own && expected+1==actual))){error="draft_conflict: refresh the assistant draft before replacing it";return false;}
+            if(request["text"].asString().size()>1023){error="invalid_args: draft is at most 1023 UTF-8 bytes";return false;}
+            evidence["draft_revision"]=std::to_string(expected);
+        }
+        if(isSend(op))
+        {
+            const auto text=request["text"].asString(),client=request["client_request_id"].asString();
+            if(!fs_assistant_social::validText(text) || wstring_to_utf8str(utf8str_to_wstring(text))!=text || client.empty() || client.size()>128){error="invalid_args: explicit text of 1..1023 UTF-8 bytes and unique client_request_id required";return false;}
+            if(nearby && (gRlvHandler.hasBehaviour(RLV_BHVR_SENDCHAT) || gRlvHandler.hasBehaviour(RLV_BHVR_REDIRCHAT) || gRlvHandler.hasBehaviour(RLV_BHVR_REDIREMOTE))){error="nearby_sending_restricted";return false;}
+            evidence["text"]=text;evidence["client_request_id"]=client;
+        }
+        return true;
+    }
+    LLSD writeChat(const LLSD& request,std::string& error)
+    {
+        LLSD evidence;if(!chatEvidence(request,evidence,error))return LLSD();
+        const auto op=request["op"].asString(),id=request["conversation_id"].asString();LLSD result;
+        if(op=="open")
+        {
+            const auto resident=request["resident_id"].asUUID();const auto name=contact(resident)["display_name"].asString();
+            if(!fs_assistant::asyncSubmit()){error="expired_or_not_permitted";return LLSD();}
+            const auto native=gIMMgr->addSession(name,IM_NOTHING_SPECIAL,resident);if(native.isNull()){error="viewer_error: native IM could not be opened";return LLSD();}
+            closed.erase(native.asString());result["conversation_id"]=native;result["state"]="opened";return result;
+        }
+        if(op=="draftGet" || op=="draftSet")
+        {
+            if(!drafts.count(id) && drafts.size()>=128){error="capacity: assistant draft limit reached";return LLSD();}
+            auto& draft=drafts[id];if(op=="draftSet")
+            {std::uint64_t expected=0;revision(request["expected_revision"],expected);if(appliedDrafts.size()>=128){error="capacity: assistant draft operation limit reached";return LLSD();}if(!fs_assistant::asyncSubmit()){error="expired_or_not_permitted";return LLSD();}if(!fs_assistant_social::setDraft(draft,expected,request["text"].asString())){error="draft_conflict";return LLSD();}appliedDrafts[request["__social_draft_claim"].asString()]={id,draft.revision};}
+            result["revision"]=std::to_string(draft.revision);if(op=="draftGet")result["text"]=draft.text;result["draft_scope"]="assistant_only";return result;
+        }
+        if(op=="markRead")
+        {
+            if(id!="nearby"){if(!fs_assistant::asyncSubmit()){error="expired_or_not_permitted";return LLSD();}LLIMModel::instance().sendNoUnreadMessages(LLUUID(id));}
+            result["state"]=id=="nearby"?"no_assistant_unread_state":"marked_read";return result;
+        }
+        if(op=="close")
+        {
+            if(closed.size()>=2048 && !closed.count(id)){error="capacity: assistant closed conversation limit reached";return LLSD();}
+            closed[id]=streams["chat"].latest();result["state"]="hidden_from_assistant";result["native_conversation_preserved"]=true;return result;
+        }
+        if(!isSend(op)){error="unsupported_operation";return LLSD();}
+        const auto client=request["client_request_id"].asString();
+        for(auto it=receipts.begin();it!=receipts.end();)if(now()>it->second.until)it=receipts.erase(it);else ++it;
+        const auto existing=receipts.find(client);
+        if(existing!=receipts.end())
+        {if(existing->second.value["material"]!=evidence){error="duplicate_request_changed: inspect original outcome";return LLSD();}result=existing->second.value;result.erase("material");result["duplicate"]=true;return result;}
+        if(submittedIDs.count(client)){error="outcome_expired: inspect native conversation; never retry uncertain sends";return LLSD();}
+        if(submittedIDs.size()>=4096 || receipts.size()>=128){error="capacity: send receipt capacity reached";return LLSD();}
+        while(!sends.empty() && now()-sends.front()>60)sends.pop_front();
+        if(sends.size()>=6 || (!sends.empty() && now()-sends.back()<1)){error="rate_limited: at most one message per second and six per minute";return LLSD();}
+        // All material inputs and native restrictions are checked again at the
+        // last synchronous boundary. No queue or replay path follows this call.
+        if(!fs_assistant::asyncSubmit()){error="expired_or_not_permitted";return LLSD();}
+        submittedIDs.insert(client);sends.push_back(now());result["operation_id"]=LLUUID::generateNewID();result["client_request_id"]=client;result["state"]="submitted";result["recipient_delivery"]="unknown";
+        auto stored=result;stored["material"]=evidence;receipts[client]={stored,now()+300};
+        if(op=="sendNearby")
+        {const auto text=utf8str_to_wstring(request["text"].asString());FSNearbyChat::sendChatFromViewer(text,text,CHAT_TYPE_NORMAL,false,0);}
+        else
+        {const auto* session=LLIMModel::instance().findIMSession(LLUUID(id));LLIMModel::sendMessage(request["text"].asString(),session->mSessionID,session->mOtherParticipantID,session->mType);}
+        // Native may echo its own outgoing line; we never synthesize delivery.
+        LLSD event=result;event["kind"]="operation_result";streams["operations"].append(event,512);return result;
     }
     void changed(U32)override
     {sync();if(!restricted){LLSD row;row["kind"]="friends_changed";row["reconcile"]="friends_list";streams["contacts"].append(row,128);}}
@@ -222,18 +323,27 @@ public:
         if(std::find(mOps.begin(),mOps.end(),op)==mOps.end()){error="unsupported_operation";return false;}
         if(!mState->current() || !visible()){error="not_permitted: social source unavailable or names/locations restricted";return false;}
         if(!validPage(request,error))return false;
+        if(getName()=="FSChat" && op=="draftSet")operation.request["__social_draft_claim"]=LLUUID::generateNewID();
         if(getName()=="FSContacts")
         {
             if(op=="search" && (request["query"].asString().size()<2 || request["query"].asString().size()>127 || wstring_to_utf8str(utf8str_to_wstring(request["query"].asString()))!=request["query"].asString())){error="invalid_args: resident search needs 2..127 UTF-8 bytes";return false;}
             if(op=="profile" && (!residentAllowed(request["resident_id"].asUUID()) || request["grid"].asString()!=mState->grid)){error="invalid_target: exact resident_id and current grid are required";return false;}
         }
         operation.validation=mState->source();operation.validation["request"]=request;
-        operation.summary["action"]="Read social data";return true;
+        if(getName()=="FSChat" && op!="conversations" && op!="history" && op!="search")
+        {
+            LLSD evidence;if(!mState->chatEvidence(request,evidence,error))return false;operation.validation["native"]=evidence;
+            operation.summary["action"]=isSend(op)?"Send chat message":op=="draftSet"?"Replace assistant draft":op=="open"?"Open exact resident IM":op=="close"?"Hide assistant conversation":"Change assistant chat state";
+            operation.summary["subjects"]=LLSD::emptyArray();LLSD subject;subject["name"]=op=="open"?request["resident_id"].asString():request["conversation_id"].asString();subject["after_name"]=request["text"];operation.summary["subjects"].append(subject);operation.summary["subject_count"]=1;
+            if(op=="draftGet")operation.requiredClasses.push_back("chat_read");
+        }
+        else operation.summary["action"]="Read social data";return true;
     }
     bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error)const override
     {
         if(!mState->current() || !visible() || operation.validation["request"]!=operation.request){error="session_or_material_inputs_changed";return false;}
-        auto source=operation.validation;source.erase("request");if(source!=mState->source()){error="privacy_changed";return false;}return true;
+        auto source=operation.validation;source.erase("request");source.erase("native");if(source!=mState->source()){error="privacy_changed";return false;}
+        if(operation.validation.has("native")){LLSD evidence;if(!mState->chatEvidence(operation.request,evidence,error))return false;if(evidence!=operation.validation["native"]){error="native_target_or_draft_changed";return false;}}return true;
     }
     void dispatch(const LLSD& request)
     {
@@ -244,7 +354,7 @@ public:
         mState->sync();if(!mState->current() || !visible()){response->error("source_unavailable_or_restricted");return;}
         const auto op=request["op"].asString();std::string error;if(!validPage(request,error)){response->error(error);return;}
         if(getName()=="FSChat")
-        {const auto result=mState->readChat(request,error);if(!error.empty())response->error(error);else if(guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;}
+        {const auto result=(op=="conversations" || op=="history" || op=="search")?mState->readChat(request,error):mState->writeChat(request,error);if(!error.empty())response->error(error);else if(guard->allowed())response->setResponse(result);else response->error("expired_or_not_permitted");return;}
         if(op=="search"){mState->search(request,guard,response);return;}
         if(op=="profile")
         {
@@ -268,7 +378,7 @@ private:
 FSAssistantSocial::FSAssistantSocial():mState(std::make_shared<State>())
 {
     mState->sync();mState->connect();
-    mListeners.push_back(std::make_shared<SocialListener>(mState,"FSChat","social_chat",std::vector<std::string>{"conversations","history","search"}));
+    mListeners.push_back(std::make_shared<SocialListener>(mState,"FSChat","social_chat",std::vector<std::string>{"conversations","history","search","open","draftGet","draftSet","sendNearby","sendIM","sendGroup","sendConference","markRead","close"}));
     mListeners.push_back(std::make_shared<SocialListener>(mState,"FSContacts","social_contacts",std::vector<std::string>{"friends","search","profile"}));
 }
 FSAssistantSocial::~FSAssistantSocial()=default;
