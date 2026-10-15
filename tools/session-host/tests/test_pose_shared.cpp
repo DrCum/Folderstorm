@@ -59,6 +59,21 @@ int main()
  cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
  using namespace fs_assistant;bool active=true,nativeGrant=true;auto guard=std::make_shared<AsyncOperation>([&](){return active && nativeGrant?std::string():std::string("authority_changed");});
  auto task=std::make_shared<AsyncTask>(guard);assert(asyncTaskAllowed(task));nativeGrant=false;assert(!asyncTaskAllowed(task));nativeGrant=true;assert(!asyncTaskAllowed(task));
+ // Publication authority retains its original native-session task while
+ // independently approved peer edits and short-lived receipts come and go.
+ OwnerSession publication;publication.start("owner","published",{{"mHead",initial},{"mNeck",initial}});
+ const auto publishedSession=publication.session();
+ auto originalAuthority=std::make_shared<AsyncOperation>([&](){return publication.session()==publishedSession?std::string():std::string("publication_replaced");});
+ auto publicationTask=std::make_shared<AsyncTask>(originalAuthority);
+ publication.grant("peer-a","grant-a",0);publication.grant("peer-b","grant-b",0);
+ for(const auto& peer:std::vector<std::array<std::string,3>>{{"peer-a","grant-a","mHead"},{"peer-b","grant-b","mNeck"}})
+ {
+  auto editReceipt=std::make_shared<AsyncOperation>([](){return std::string();});
+  assert(publication.acquire(peer[0],peer[1],peer[0],{peer[2]},0).granted);
+  assert(publication.apply(peer[0],peer[1],peer[0],{{peer[2],changed}},true,0,true,1));
+  editReceipt->cancel("receipt_pruned");editReceipt.reset();assert(asyncTaskAllowed(publicationTask));
+ }
+ assert(publication.authorized("peer-a","grant-a",0) && publication.authorized("peer-b","grant-b",0));
  // A -> B -> A with identical current region/URL IDs still invalidates a
  // captured queued transport. The production synchronous signal advances this
  // epoch and cancels captured guards before idle or the HTTP pool can observe.

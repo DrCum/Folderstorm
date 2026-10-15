@@ -237,10 +237,23 @@ void FSSharedPoseManager::receive(const LLUUID& owner, const LLUUID& object, con
     handle(owner, data);
 }
 
-void FSSharedPoseManager::shareSelf()
+void FSSharedPoseManager::shareSelf(){ensureSharedSelf(true);}
+void FSSharedPoseManager::ensureSharedSelf(bool nativeTakeover)
 {
     if (!available() || !nearby(gAgentID)) { mStatus = "Shared posing needs the LSL bridge"; return; }
-    if (mOwner.active()) return;
+    if (mOwner.active())
+    {
+        if(nativeTakeover && mAssistantPublishing)
+        {
+            // An explicit native Share action takes over the same native
+            // publication, preserving its session, grants, leases and Poser.
+            // Old MCP cleanup can no longer own or stop that publication.
+            const auto previous=mAssistantPublishing;mAssistantPublishing.reset();mPublicGeneration=LLUUID::generateNewID();
+            mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& queued){return queued.assistant==previous;}),mQueue.end());
+            finishAssistant(previous,"native_publication_takeover","The native owner took over publishing");snapshot(LLUUID::null);
+        }
+        return;
+    }
     mAnimator.tryPosingAvatar(avatarFor(gAgentID));
     const auto pose = mAnimator.captureSharedPose(avatarFor(gAgentID));
     mOwner.start(gAgentID.asString(), uuid(), pose);mPublicGeneration=LLUUID::generateNewID();
@@ -274,7 +287,7 @@ void FSSharedPoseManager::accept(const LLUUID& editor, const LLUUID& request)
     if (!available() || !nearby(editor) || found == mRequests.end() || found->second.id != request ||
         found->second.expires <= now()) return;
     mRequests.erase(found);
-    shareSelf();
+    ensureSharedSelf(false);
     if (!mOwner.active()) return;
     const LLUUID token = LLUUID::generateNewID();
     mOwner.grant(editor.asString(), token.asString(), now());
@@ -943,13 +956,10 @@ bool FSSharedPoseManager::assistantNativeValid(const std::shared_ptr<AssistantWo
  {
   if(!mOwner.active() || mOwner.session()!=work->session.asString() || mPublicGeneration!=work->generation ||
      work->nativeMotionGeneration.isNull() || mAnimator.nativePoseGeneration(avatarFor(gAgentID))!=work->nativeMotionGeneration)return false;
-  if(work->publishing)
-  {
-   if(mOwner.pose()!=work->before)return false;const auto current=mAnimator.captureSharedPose(avatarFor(gAgentID));if(current.size()!=work->before.size())return false;
-   for(const auto& joint:work->before){const auto found=current.find(joint.first);fs_pose::Rotation rotation{{joint.second.transform[0],joint.second.transform[1],joint.second.transform[2],joint.second.transform[3]}};
-    if(found==current.end() || !fs_pose::rotationResult(joint.second,found->second,rotation,false))return false;}
-   return true;
-  }
+  // Initial Ask/submission freezes exact native bytes. Once published, the
+  // native owner and explicitly granted peers may keep editing that same
+  // publication. Its original source task owns only its session/motion life.
+  if(work->publishing)return mAssistantPublishing==work;
  }
  else
  {
@@ -1010,7 +1020,7 @@ void FSSharedPoseManager::endAssistantPublishing(const std::string& reason)
 }
 void FSSharedPoseManager::tickAssistant()
 {
- if(mAssistantPublishing && !assistantAllowed(mAssistantPublishing))endAssistantPublishing("Publishing authority, native pose or sharing session changed");
+ if(mAssistantPublishing && !assistantAllowed(mAssistantPublishing))endAssistantPublishing("Publishing authority, native motion or sharing session changed");
  std::vector<std::shared_ptr<AssistantWork>> works;
  for(const auto& entry:mAssistantWorks)if((!entry.second->publishing || entry.second->cleanup) && !entry.second->finished)works.push_back(entry.second);
  for(const auto& work:works)
@@ -1208,7 +1218,6 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
   if(!mOwner.apply(gAgentID.asString(),"",work->lease.asString(),changes,true,now(),true,1)){finishAssistant(work,"owner_rejected","Owner reservation/revision refused");return work->result;}
   if(!mAnimator.applyAssistantSharedRotations(avatarFor(gAgentID),work->before,work->rotations,[&](){return assistantAllowed(work);}))
   {finishAssistant(work,"submitted_unknown","Native joint ownership changed after the owner model accepted the edit");return work->result;}
-  if(mAssistantPublishing && mAssistantPublishing->epoch==epoch){mAssistantPublishing->before=mOwner.pose();mAssistantPublishing->task=task;}
   finishAssistant(work,"owner_accepted","");return work->result;
  }
  LLSD acquire=message("acquire",work->session.asString());acquire["g"]=work->token;acquire["l"]=work->lease;acquire["a"]=true;acquire["e"]=revisionData(work->expected);

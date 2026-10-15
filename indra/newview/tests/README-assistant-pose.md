@@ -37,9 +37,13 @@ acceptance:
 8. Cancel an unsubmitted operation: only its own lease may be released or
    allowed to expire. Cancel after submission: report uncertainty, retain native
    manual work, and perform no global refresh/undo/stop.
-9. End publishing, revoke its source, or change its native pose. Only the exact
-   publishing/consent session ends; the native Poser motion remains. Remote
-   synchronization is unconfirmed until the peer receives the stop or times out.
+9. Continue native owner and granted-peer edits after publication; they must
+   preserve that publication and its grants. Initial Ask still freezes exact
+   native pose bytes. End publishing or revoke its original source: only its
+   exact publishing/consent session ends and the native Poser remains. An
+   explicit native Share takeover/restart detaches old MCP ownership, so later
+   cleanup cannot end the newer native publication. Remote synchronization is
+   unconfirmed until the peer receives the stop or times out.
 
 The typed protocol extends the existing native consent/reservation model. Both
 native peers must advertise typed-rotation support. Ordinary native UI packet

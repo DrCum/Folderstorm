@@ -116,6 +116,7 @@ private:
     void execute(Work& work);
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
+    void ensureSharedSelf(bool nativeTakeover);
     LLSD workMessage(const Work& work, const std::string& type) const;
     bool nearby(const LLUUID& avatar) const;
     boost::signals2::scoped_connection mSharingConnection,mAssistantRegionConnection;

@@ -87,6 +87,23 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("setAssistantTargetRotation", rotation)
         for forbidden in ("applySharedTransform", "setPosition", "setScale", "setPriority", "addJointToState", "tryPosingAvatar", "addStateToUndo"):
             self.assertNotIn(forbidden, rotation)
+    def test_publication_keeps_original_authority_across_native_edits(self):
+        native = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::assistantNativeValid")
+        self.assertIn("if(work->publishing)return mAssistantPublishing==work", native)
+        self.assertNotIn("mOwner.pose()!=work->before", native)
+        execute = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::executeAssistantPose")
+        self.assertNotIn("mAssistantPublishing->task=task", execute)
+        self.assertNotIn("mAssistantPublishing->before=", execute)
+        validate = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::validateAssistantPose")
+        self.assertIn('operation.validation["native_pose"]', validate)
+        takeover = function("fssharedposemanager.cpp", "void FSSharedPoseManager::ensureSharedSelf")
+        branch = takeover[takeover.index("if (mOwner.active())"):takeover.index("mAnimator.tryPosingAvatar")]
+        self.assertIn("nativeTakeover && mAssistantPublishing", branch)
+        self.assertIn("mAssistantPublishing.reset()", branch)
+        self.assertNotIn("mOwner.clear()", branch)
+        self.assertNotIn("stopPosingAvatar", branch)
+        accept = function("fssharedposemanager.cpp", "void FSSharedPoseManager::accept")
+        self.assertIn("ensureSharedSelf(false)", accept)
     def test_shared_queue_rechecks_at_actual_post_without_retry_or_tls_suspend(self):
         transport = function("fslslbridge.cpp", "bool FSLSLBridge::sharedPoseToLSLGuarded")
         post = transport.index("postAndSuspend")
