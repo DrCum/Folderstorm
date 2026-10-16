@@ -1198,8 +1198,8 @@ bool FSSharedPoseManager::assistantJointAllowed(const LLUUID& target,const std::
   found==pose.end() || !found->second.enabled || found->second.worldLocked || found->second.mirrored)return false;
  for(const auto& item:pose)
  {
-  if(!item.second.worldLocked)continue;const auto* joint=avatar->getJoint(item.first);if(!joint)continue;
-  for(const auto* parent=joint->getParent();parent;parent=parent->getParent())if(parent->getName()==name)return false;
+  if(!item.second.worldLocked)continue;auto* joint=avatar->getJoint(item.first);if(!joint)continue;
+  for(auto* parent=joint->getParent();parent;parent=parent->getParent())if(parent->getName()==name)return false;
  }
  return true;
 }
@@ -1388,7 +1388,7 @@ bool FSSharedPoseManager::prepareAssistantPose(FSAssistantPreparedOperation& ope
    operation.summary["subjects"].append(llsd::map("name",joint.first,"after_name",text.str()));
   }
  }
- operation.summary["subject_count"]=operation.summary["subjects"].size();
+ operation.summary["subject_count"]=static_cast<S32>(operation.summary["subjects"].size());
  operation.summary["consequences"].append("pose_native_shared_consent");return true;
 }
 bool FSSharedPoseManager::validateAssistantPose(const FSAssistantPreparedOperation& operation,std::string& error) const

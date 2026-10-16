@@ -291,7 +291,7 @@ void media(LLSD& result, double radius, int limit)
             if (facesScanned++ >= fs_world::MAX_SCAN) { scanTruncated = true; break; }
             const auto* te = object->getTE(face);
             const auto* entry = te ? te->getMediaData() : nullptr;
-            const auto impl = volume->getMediaImpl(face);
+            auto impl = volume->getMediaImpl(face);
             if (!entry && !impl && !(te && te->hasMedia())) continue;
             LLSD row = llsd::map("object_id", object->getID(), "face", face,
                 "region_id", object->getRegion()->getRegionID(), "provenance", "loaded_object_face_media");

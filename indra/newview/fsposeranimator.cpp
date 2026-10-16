@@ -197,7 +197,7 @@ bool FSPoserAnimator::applyAssistantSharedRotations(LLVOAvatar* avatar,const FSS
     {
         if(!allowed())return false;
         const auto& q=rotation.second;
-        motion->getJointPoseByJointName(rotation.first)->setAssistantTargetRotation(LLQuaternion(q[0],q[1],q[2],q[3]));
+        motion->getJointPoseByJointName(rotation.first)->setAssistantTargetRotation(LLQuaternion(static_cast<F32>(q[0]),static_cast<F32>(q[1]),static_cast<F32>(q[2]),static_cast<F32>(q[3])));
     }
     return true;
 }
