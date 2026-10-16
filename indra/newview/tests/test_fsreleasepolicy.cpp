@@ -1,8 +1,14 @@
 #include "fsreleasepolicy.h"
+#include "../../llcorehttp/httpbodylimit.h"
 #include <cassert>
 using namespace fs_release;
 int main()
 {
+    assert(LLCore::bodyChunkFits(0,1,MaxFeedBytes,MaxFeedBytes));
+    assert(!LLCore::bodyChunkFits(MaxFeedBytes,1,1,MaxFeedBytes));
+    assert(!LLCore::bodyChunkFits(MaxFeedBytes-4,1,5,MaxFeedBytes));
+    assert(LLCore::bodyChunkFits(0,1,MaxFeedBytes+1,0));
+    assert(!LLCore::bodyChunkFits(0,2,std::numeric_limits<std::size_t>::max(),0));
     assert(Version::parse("7.2.5.82125") && !Version::parse("7.2.5") && !Version::parse("07.2.5.1"));
     assert(!Version::parse("7.2.5.18446744073709551616") && !Version::parse("7.2.5.1junk"));
     assert(*Version::parse("7.2.5.9")<*Version::parse("7.2.5.10"));

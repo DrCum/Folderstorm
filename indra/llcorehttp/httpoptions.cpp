@@ -40,6 +40,7 @@ HttpOptions::HttpOptions() :
     mTracing(HTTP_TRACE_OFF),
     mTimeout(HTTP_REQUEST_TIMEOUT_DEFAULT),
     mTransferTimeout(HTTP_REQUEST_XFER_TIMEOUT_DEFAULT),
+    mMaxResponseBytes(0),
     mRetries(HTTP_RETRY_COUNT_DEFAULT),
     mMinRetryBackoff(HTTP_RETRY_BACKOFF_MIN_DEFAULT),
     mMaxRetryBackoff(HTTP_RETRY_BACKOFF_MAX_DEFAULT),

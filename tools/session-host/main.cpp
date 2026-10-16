@@ -4479,7 +4479,6 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         AppendMenuW(system, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(system, MF_STRING, 0xA100, L"Expanded character controls");
         AppendMenuW(system, MF_STRING, 0xA110, L"Condensed character controls");
-        AppendMenuW(system, MF_STRING, 0xA170, L"Check for updates…");
 
 
         host->recoveryMenu(window); host->tray(true);

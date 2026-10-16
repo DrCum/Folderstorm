@@ -35,6 +35,8 @@ void FSReleaseViewer::check(bool manual)
             LLCoreHttpUtil::HttpCoroutineAdapter adapter("FolderstormReleaseCheck",LLCore::HttpRequest::DEFAULT_POLICY_ID);
             auto request=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();
             options->setTimeout(15);options->setTransferTimeout(20);options->setFollowRedirects(false);
+            options->setMaxResponseBytes(fs_release::MaxFeedBytes);options->setRetries(0);
+            options->setSSLVerifyPeer(true);options->setSSLVerifyHost(true);
             auto headers=std::make_shared<LLCore::HttpHeaders>();headers->append("Accept","application/json");
             const auto response=adapter.getRawAndSuspend(request,fs_release::FeedUrl,options,headers);
             if(!LLApp::isExiting())
@@ -62,7 +64,10 @@ void FSReleaseViewer::check(bool manual)
             result.state==fs_release::State::Current?"You're up to date for this channel.":
             result.state==fs_release::State::Available?"Folderstorm "+result.release.version+" is available.":
             "A newer release exists, but has no matching download for this installation.";
-        ++revision;if(show)LLFloaterReg::showInstance("folderstorm_updates");
+        ++revision;
+        // A visible floater owns an Apply/Cancel draft. Do not run onOpen again.
+        const auto floater=LLFloaterReg::findInstance("folderstorm_updates");
+        if(show && (!floater || !floater->getVisible()))LLFloaterReg::showInstance("folderstorm_updates");
     });
 }
 void FSReleaseViewer::startup(){if(!FSSessionWorker::managed())check(false);}
