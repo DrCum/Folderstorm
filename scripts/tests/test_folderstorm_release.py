@@ -69,7 +69,7 @@ class ReleasePublishing(unittest.TestCase):
         with zipfile.ZipFile(package,"w") as archive:
             archive.writestr("lib/app/folderstorm-bundle.json",json.dumps({"schema":1,"protocol":16,"version":self.data["version"],"commit":self.data["commit"],"app_id":identity,"installer":"velopack"}))
             archive.writestr("lib/app/folderstorm-session-viewer.txt","Folderstorm.exe\n")
-            for name in ("Folderstorm.exe","folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe"):
+            for name in ("Folderstorm.exe","folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","fs-mcp-launcher-maintenance.exe"):
                 archive.writestr("lib/app/"+name,b"fixture")
         raw=package.read_bytes()
         catalog={"Assets":[{"PackageId":identity,"Version":"7.2.5-82125","Type":"Full","FileName":package.name,"Size":len(raw),"SHA1":hashlib.sha1(raw).hexdigest(),"SHA256":hashlib.sha256(raw).hexdigest()}]}

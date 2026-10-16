@@ -87,7 +87,7 @@ def update_package(entry, data, input_path, base):
         viewer = archive.read(guide).decode("utf-8").strip()
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}\.exe", viewer):
             raise ValueError("Invalid packaged viewer name")
-        for component in (viewer,"folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","folderstorm-session-viewer.txt"):
+        for component in (viewer,"folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","fs-mcp-launcher-maintenance.exe","folderstorm-session-viewer.txt"):
             info = by_name.get("lib/app/"+component)
             if info is None or info.is_dir() or info.file_size <= 0:
                 raise ValueError("Full package is missing a nonempty app component")

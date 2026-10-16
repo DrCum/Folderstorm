@@ -19,8 +19,11 @@ bool enter()
     {
         // During replacement sq.version/bundle may temporarily disappear. Stable
         // root coordination files must still gate those partially copied apps.
-        const auto current=binary.parent_path(),candidate=current.parent_path();
-        if(current.filename()!=L"current" || (GetFileAttributesW((candidate/L".folderstorm-update-pending").c_str())==INVALID_FILE_ATTRIBUTES && GetFileAttributesW((candidate/L".folderstorm-update.lock").c_str())==INVALID_FILE_ATTRIBUTES))return true;
+        std::error_code resolutionError;
+        const auto current=std::filesystem::canonical(binary.parent_path(),resolutionError);
+        if(resolutionError){error="The application directory is unavailable. Finish its update before launching.";return false;}
+        const auto candidate=current.parent_path();
+        if(CompareStringOrdinal(current.filename().c_str(),-1,L"current",-1,TRUE)!=CSTR_EQUAL || (GetFileAttributesW((candidate/L".folderstorm-update-pending").c_str())==INVALID_FILE_ATTRIBUTES && GetFileAttributesW((candidate/L".folderstorm-update.lock").c_str())==INVALID_FILE_ATTRIBUTES))return true;
         root=candidate;
     }
     // A new target may clear its completed transaction after Update.exe exits.

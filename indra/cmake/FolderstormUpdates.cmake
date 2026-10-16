@@ -1,4 +1,8 @@
 include_guard()
+string(LENGTH "${FS_SOURCE_COMMIT}" source_length)
+if(USE_VELOPACK AND NOT source_length EQUAL 40)
+  message(FATAL_ERROR "Velopack bundles need an exact FS_SOURCE_COMMIT for update identity")
+endif()
 configure_file(fsupdateconfig.h.in ${CMAKE_CURRENT_BINARY_DIR}/fsupdateconfig.h @ONLY)
 set_source_files_properties(fsupdate.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/fssessionprotocol.h" session_protocol)

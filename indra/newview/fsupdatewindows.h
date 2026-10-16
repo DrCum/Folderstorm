@@ -35,7 +35,7 @@ inline bool under(const std::filesystem::path& file,const std::filesystem::path&
 inline std::filesystem::path installation(const std::filesystem::path& binary)
 {
     std::error_code error;const auto current=std::filesystem::canonical(binary.parent_path(),error);
-    if(error || current.filename()!=L"current" || !regular(current/L"sq.version") || !regular(current/L"folderstorm-bundle.json"))return {};
+    if(error || CompareStringOrdinal(current.filename().c_str(),-1,L"current",-1,TRUE)!=CSTR_EQUAL || !regular(current/L"sq.version") || !regular(current/L"folderstorm-bundle.json"))return {};
     const auto root=current.parent_path();
     return regular(root/L"Update.exe")?root:std::filesystem::path{};
 }

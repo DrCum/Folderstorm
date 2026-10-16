@@ -15,7 +15,7 @@ class Bundle(unittest.TestCase):
             identity={"schema":1,"version":"7.2.5.123","commit":"a"*40,"installer":"velopack","protocol":16,"app_id":"Folderstorm.opensim.nightly.x86_64.avx2"}
             (root/"folderstorm-bundle.json").write_text(json.dumps(identity))
             (root/"folderstorm-session-viewer.txt").write_text("Folderstorm.exe\n")
-            for name in ("Folderstorm.exe","folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe"):(root/name).write_bytes(b"fixture")
+            for name in ("Folderstorm.exe","folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","fs-mcp-launcher-maintenance.exe"):(root/name).write_bytes(b"fixture")
             command=pack.command(root,root.parent/"output")
             self.assertEqual("7.2.5-123",command[command.index("--packVersion")+1])
             self.assertEqual(identity["app_id"],command[command.index("--packId")+1])

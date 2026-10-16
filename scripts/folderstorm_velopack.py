@@ -23,7 +23,7 @@ def command(bundle_dir, output):
     guide = (bundle_dir / "folderstorm-session-viewer.txt").read_text(encoding="utf-8").strip()
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}\.exe", guide):
         raise ValueError("Invalid packaged viewer filename")
-    for name in (guide, "folderstorm-session-host.exe", "fs-mcp.exe", "folderstorm-update.exe", "migrate-settings.exe"):
+    for name in (guide, "folderstorm-session-host.exe", "fs-mcp.exe", "folderstorm-update.exe", "migrate-settings.exe", "fs-mcp-launcher-maintenance.exe"):
         path = bundle_dir / name
         if not path.is_file() or not path.stat().st_size:
             raise ValueError(f"Missing bundle component: {name}")
