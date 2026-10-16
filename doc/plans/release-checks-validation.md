@@ -93,3 +93,11 @@ The GitHub feed is empty until a maintainer publishes a prepared release.
 5. Test DPI, screen readers and the host's detached/monitor system menus. Close
    during a check: no completion touches a destroyed HWND. Host shutdown may wait
    for its bounded in-flight network worker, and no viewer is logged out.
+
+Independent Sol 6.1 Extra High source review completed at `1290e57e04`.
+Its findings were corrected: dynamically resolve TaskDialogIndirect, cap each
+HTTP body chunk before buffering (including chunked/overflow cases), explicitly
+verify TLS, preserve visible Preferences drafts, revalidate queued host results
+against current channel/skip choices and remove the duplicate system-menu item.
+Correction review found no remaining actionable finding. Release-policy CTest
+and five publisher tests pass after corrections. Native compilation is pending.
