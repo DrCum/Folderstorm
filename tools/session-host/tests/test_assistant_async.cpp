@@ -3,8 +3,59 @@
 #include "fsassistantpolicy.h"
 #include <cassert>
 #include <iostream>
+#include <tuple>
+
+// Exercise the production load-generation tracker with the same captured
+// (resident, request type, authority) key as AgentProfile's pending fetches.
+void checkProfileRequestOwnership()
+{
+ using namespace fs_assistant;
+ using Key=std::tuple<std::string,int,AsyncGuard>;
+ for(bool nativeFirst:{false,true})for(bool nativeReplyFirst:{false,true})
+ {
+  bool permitted=true;
+  auto authority=std::make_shared<AsyncOperation>([&](){return permitted?std::string():std::string("revoked");});
+  const Key nativeKey{"resident",1,{}},assistantKey{"resident",1,authority};
+  AsyncLoads<Key> loads;std::map<Key,bool> pending;
+  auto begin=[&](const Key& key)
+  {
+   AsyncScope scope(std::get<2>(key));
+   assert(pending.emplace(key,true).second);
+   return loads.begin(key);
+  };
+  AsyncTaskPtr assistant,native;
+  if(nativeFirst){native=begin(nativeKey);assistant=begin(assistantKey);}
+  else {assistant=begin(assistantKey);native=begin(nativeKey);}
+  assert(pending.size()==2 && !native->guard() && assistant->guard()==authority);
+  // Duplicate native requests still deduplicate in their own domain.
+  assert(pending.count(nativeKey)==1);
+  permitted=false;unsigned nativeResults=0,assistantResults=0;
+  auto finish=[&](const Key& key,const AsyncTaskPtr& task)
+  {
+   // Completion runs outside the initiating scope. It must use the captured
+   // key rather than clearing another caller's null/native pending entry.
+   assert(!AsyncScope::current());
+   if(!loads.finish(key,task))return;
+   assert(pending.erase(key)==1);
+   if(!asyncTaskAllowed(task))return;
+   ++nativeResults;
+   if(asyncTaskAllowed(assistant))++assistantResults;
+  };
+  if(nativeReplyFirst){finish(nativeKey,native);assert(pending.count(assistantKey)==1);finish(assistantKey,assistant);}
+  else {finish(assistantKey,assistant);assert(pending.count(nativeKey)==1);finish(nativeKey,native);}
+  assert(nativeResults==1 && assistantResults==0 && pending.empty());
+  finish(nativeKey,native);finish(assistantKey,assistant); // duplicate completions stay inert
+  assert(nativeResults==1 && assistantResults==0);
+  // A late expired native fetch cannot consume a replacement generation.
+  auto old=begin(nativeKey);auto replacement=loads.begin(nativeKey);
+  finish(nativeKey,old);assert(pending.count(nativeKey)==1);
+  finish(nativeKey,replacement);assert(nativeResults==2 && pending.empty());
+ }
+ assert(!fs_assistant::AsyncScope::current());
+}
 int main()
 {
+ checkProfileRequestOwnership();
  using namespace fs_assistant;
  assert(requiresAsyncAuthority("LLInventory","createFolder",false));
  assert(requiresAsyncAuthority("LLInventory","createItem",false));

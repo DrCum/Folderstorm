@@ -118,21 +118,35 @@ func TestCopyContinuationCannotChangeLogin(t *testing.T) {
 }
 
 func TestEveryToolKeepsExplicitSessionInSchema(t *testing.T) {
+	// Host commands use a separate authority from any selected viewer. Keep an
+	// explicit set so a new tool cannot silently bypass either targeting rule.
+	controllerTools := map[string]bool{
+		"sessions_list": true, "session_status": true, "controller_operation_status": true,
+		"session_activate": true, "session_background_mode": true, "session_open_login": true,
+		"session_restart": true, "session_logout": true, "session_detach": true,
+		"monitor_open": true, "monitor_close": true, "monitor_list": true,
+		"monitors_open_all": true, "monitors_arrange": true, "monitor_cycle_configure": true,
+		"monitor_cycle_pause": true, "monitor_cycle_next": true,
+	}
 	cs := connect(t, New(), nil)
 	list, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range list.Tools {
-		if tool.Name == "viewer_list" {
+		if tool.Name == "viewer_list" || tool.Name == "controller_list" {
 			continue
+		}
+		target := "viewer_session"
+		if controllerTools[tool.Name] {
+			target = "controller_instance"
 		}
 		raw, _ := json.Marshal(tool.InputSchema)
 		var schema struct {
 			Properties map[string]any `json:"properties"`
 		}
-		if json.Unmarshal(raw, &schema) != nil || schema.Properties["viewer_session"] == nil {
-			t.Errorf("%s lacks session target", tool.Name)
+		if json.Unmarshal(raw, &schema) != nil || schema.Properties[target] == nil {
+			t.Errorf("%s lacks %s", tool.Name, target)
 		}
 	}
 }
