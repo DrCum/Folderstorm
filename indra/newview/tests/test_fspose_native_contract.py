@@ -151,6 +151,9 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("gRlvHandler.setBehaviourCallback", constructor)
         self.assertIn('cancel("native_privacy_restricted")', constructor)
         self.assertIn("mAssistantPrivacyGeneration=LLUUID::generateNewID()", constructor)
+        self.assertIn("FSEventAPIBridge::noteSharedPosePrivacyChanged()", constructor)
+        self.assertLess(constructor.index("mAssistantPrivacyGeneration=LLUUID::generateNewID()"), constructor.index("FSEventAPIBridge::noteSharedPosePrivacyChanged()"))
+        self.assertLess(constructor.index("FSEventAPIBridge::noteSharedPosePrivacyChanged()"), constructor.index('cancel("native_privacy_restricted")'))
         self.assertIn("mAssistantPrivacyConnection.disconnect()", function("fssharedposemanager.cpp", "FSSharedPoseManager::~FSSharedPoseManager()"))
         for normal in ("bool FSSharedPoseManager::available()", "void FSSharedPoseManager::handle(", "void FSSharedPoseManager::shareSelf()"):
             self.assertNotIn("assistantPrivacyAllowed()", function("fssharedposemanager.cpp", normal))

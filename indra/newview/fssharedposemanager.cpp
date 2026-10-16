@@ -18,6 +18,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fssharedposemanager.h"
 #include "fssharedposepolicy.h"
+#include "fseventapibridge.h"
 #include "fslslbridge.h"
 #include "fssessionworker.h"
 #include "llviewernetwork.h"
@@ -115,6 +116,7 @@ FSSharedPoseManager::FSSharedPoseManager()
  {
   if(type!=RLV_TYPE_ADD || (behaviour!=RLV_BHVR_SHOWLOC && behaviour!=RLV_BHVR_SHOWNAMES && behaviour!=RLV_BHVR_SHOWNEARBY))return;
   mAssistantPrivacyGeneration=LLUUID::generateNewID();
+  FSEventAPIBridge::noteSharedPosePrivacyChanged();
   for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_privacy_restricted");
   // Only captured assistant authority ends. Native/manual sharing consent and
   // preferences remain on the ordinary UI path.
