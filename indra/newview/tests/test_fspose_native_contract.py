@@ -131,6 +131,15 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn('data["jr"][joint.first]', send)
         self.assertIn('outgoing["jr"][joint.first]', send)
         self.assertIn("poseData(merged.pose)", send)
+    def test_shared_ask_validates_selected_material_without_disjoint_conflicts(self):
+        validate = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::validateAssistantPose")
+        self.assertIn("fs_pose::preparedSharedEditCurrent", validate)
+        self.assertIn("preparedJoints(source,requested)", validate)
+        self.assertIn("preparedJoints(current,requested)", validate)
+        self.assertNotIn('assistantSnapshot(request["target"].asUUID())!=operation.validation["source"]', validate)
+        self.assertIn('if(op=="startSharing")', validate)
+        self.assertIn('operation.validation["native_pose"]', validate)
+        self.assertIn("found->second->epoch", validate)
     def test_shared_assistant_privacy_gates_all_private_delivery_and_deferred_work(self):
         privacy = function("fssharedposemanager.cpp", "bool assistantPrivacyAllowed()")
         for native in ("RLV_BHVR_SHOWLOC", "RLV_BHVR_SHOWNAMES", "RlvActions::canShowNearbyAgents()"):

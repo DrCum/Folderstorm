@@ -85,6 +85,16 @@ int main()
  assert(updateAcknowledgedCache(oldSource,oldSource,ackJoints,{{"mHead",initial},{"mNeck",initial}},{{"mHead",6},{"mNeck",9}},cache,cacheRevisions)==0);
  assert(cache.at("mHead")==changed && cache.at("mNeck")==changed);
  cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
+ // An Ask freezes the exact selected joint, not unrelated joint/global
+ // updates. Native/session/grant identity and selected reservation remain exact.
+ PreparedSharedSource prepared{"target","session","grant","motion",true,true,true,true,false};
+ std::map<std::string,PreparedSharedJoint> preparedState{{"mHead",{}},{"mNeck",{}}};preparedState["mHead"].editable=true;preparedState["mNeck"].editable=true;
+ auto currentPrepared=preparedState;currentPrepared["mNeck"].rotation=requested;currentPrepared["mNeck"].revision=7;currentPrepared["mNeck"].reserved=true;
+ assert(preparedSharedEditCurrent(prepared,prepared,{"mHead"},preparedState,currentPrepared));
+ currentPrepared["mHead"].revision=1;assert(!preparedSharedEditCurrent(prepared,prepared,{"mHead"},preparedState,currentPrepared));
+ currentPrepared=preparedState;currentPrepared["mHead"].rotation=requested;assert(!preparedSharedEditCurrent(prepared,prepared,{"mHead"},preparedState,currentPrepared));
+ currentPrepared=preparedState;currentPrepared["mHead"].reservationKnown=true;assert(!preparedSharedEditCurrent(prepared,prepared,{"mHead"},preparedState,currentPrepared));
+ auto changedProof=prepared;changedProof.grantGeneration="new-grant";assert(!preparedSharedEditCurrent(prepared,changedProof,{"mHead"},preparedState,preparedState));
  // ACK head2 can overtake a globally older broadcast head1/neck1. The real
  // ingestion helper preserves head2 for cache and display while accepting the
  // disjoint neck, even when an unrelated frame already advanced global r.

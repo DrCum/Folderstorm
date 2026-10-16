@@ -935,6 +935,24 @@ LLSD assistantDelivery(const LLSD& result,std::string& error)
 {if(!assistantReadable()){error="Native privacy or connection changed before shared-pose delivery";return LLSD();}return result;}
 bool assistantActive()
 {return assistantReadable() && gAgent.getTeleportState()==LLAgent::TELEPORT_NONE && FSSessionWorker::assistantActiveAllowed() && !FSSessionWorker::assistantPaused();}
+fs_pose::PreparedSharedSource preparedSource(const LLSD& source)
+{
+ return {source["target"].asUUID().asString(),source["session_generation"].asUUID().asString(),source["grant_generation"].asUUID().asString(),source["native_pose_generation"].asUUID().asString(),
+  source["available"].asBoolean(),source["shared"].asBoolean(),source["can_edit"].asBoolean(),source["typed_rotation_protocol"].asBoolean(),source["can_publish"].asBoolean()};
+}
+std::map<std::string,fs_pose::PreparedSharedJoint> preparedJoints(const LLSD& source,const FSSharedPose::JointSet& requested)
+{
+ std::map<std::string,fs_pose::PreparedSharedJoint> result;
+ for(const auto& name:requested)
+ {
+  const auto& joint=source["joints"][name];const auto& rotation=joint["rotation"];
+  if(!joint.isMap() || !rotation.isArray() || rotation.size()!=4 || !joint["revision"].isInteger() || joint["revision"].asInteger()<0)continue;
+  fs_pose::PreparedSharedJoint value;for(unsigned i=0;i<4;++i)value.rotation[i]=rotation[i].asReal();value.revision=static_cast<U32>(joint["revision"].asInteger());
+  value.editable=joint["editable"].asBoolean();value.reservationKnown=source["reservation_authority"].asString()=="owner_current" || joint["reservation_known"].asBoolean();value.reserved=joint["reserved"].asBoolean();
+  result[name]=value;
+ }
+ return result;
+}
 LLSD revisionData(const std::map<std::string,U32>& revisions)
 {LLSD result=LLSD::emptyMap();for(const auto& item:revisions)result[item.first]=static_cast<S32>(item.second);return result;}
 bool rotationRequest(const LLSD& request,fs_pose::Rotations& rotations,std::map<std::string,U32>& expected,std::string& error)
@@ -1170,10 +1188,29 @@ bool FSSharedPoseManager::validateAssistantPose(const FSAssistantPreparedOperati
   {
    if(assistantNativeValid(entry.second))return true;error="Shared pose native authority changed";return false;
   }
- if(!assistantActive() || !available() || assistantSnapshot(request["target"].asUUID())!=operation.validation["source"])
- {error="Shared pose session, grant, reservations or joint revisions changed before submission";return false;}
- if(op=="startSharing" && poseData(mAnimator.captureSharedPose(avatarFor(gAgentID)))!=operation.validation["native_pose"])
- {error="Native pose changed before publication approval";return false;}
+ if(!assistantActive() || !available()){error="Shared pose active/native authority changed before submission";return false;}
+ const auto current=assistantSnapshot(request["target"].asUUID());const auto& source=operation.validation["source"];
+ if(op=="startSharing")
+ {
+  if(current!=source || poseData(mAnimator.captureSharedPose(avatarFor(gAgentID)))!=operation.validation["native_pose"])
+  {error="Native pose changed before publication approval";return false;}
+  return true;
+ }
+ if(!(preparedSource(source)==preparedSource(current)))
+ {error="Shared pose target, session, grant, native motion or typed capability changed before submission";return false;}
+ if(op=="sharedEdit" && !request["cancel"].asBoolean())
+ {
+  FSSharedPose::JointSet requested;for(auto joint=operation.validation["rotations"].beginMap();joint!=operation.validation["rotations"].endMap();++joint)requested.insert(joint->first);
+  if(!fs_pose::preparedSharedEditCurrent(preparedSource(source),preparedSource(current),requested,preparedJoints(source,requested),preparedJoints(current,requested)))
+  {error="Selected shared joint state, revision or reservation changed before submission";return false;}
+ }
+ if(op=="sharedEdit" && request["cancel"].asBoolean())
+ {
+  const auto found=mAssistantWorks.find(request["operation_id"].asUUID());
+  if(found==mAssistantWorks.end() || found->second->target!=request["target"].asUUID() || found->second->epoch!=request["__assistant_epoch"].asString() || found->second->binding!=assistantBinding() ||
+     found->second->generation!=source["session_generation"].asUUID())
+  {error="The exact source-owned cancellation operation changed";return false;}
+ }
  return true;
 }
 LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assistant::AsyncTaskPtr& task,std::string& error)

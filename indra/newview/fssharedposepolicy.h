@@ -65,6 +65,28 @@ inline CoalescedPoseUpdate coalescePoseUpdate(const FSSharedPose::Pose& previous
  }
  return result;
 }
+struct PreparedSharedSource
+{
+ std::string target,sessionGeneration,grantGeneration,nativeMotionGeneration;
+ bool available=false,shared=false,canEdit=false,typed=false,canPublish=false;
+ bool operator==(const PreparedSharedSource& other) const
+ {return target==other.target && sessionGeneration==other.sessionGeneration && grantGeneration==other.grantGeneration && nativeMotionGeneration==other.nativeMotionGeneration &&
+  available==other.available && shared==other.shared && canEdit==other.canEdit && typed==other.typed && canPublish==other.canPublish;}
+};
+struct PreparedSharedJoint
+{
+ Rotation rotation{{0,0,0,1}};std::uint32_t revision=0;bool editable=false,reservationKnown=false,reserved=false;
+ bool operator==(const PreparedSharedJoint& other) const
+ {return rotation==other.rotation && revision==other.revision && editable==other.editable && reservationKnown==other.reservationKnown && (!reservationKnown || reserved==other.reserved);}
+};
+inline bool preparedSharedEditCurrent(const PreparedSharedSource& expected,const PreparedSharedSource& current,const FSSharedPose::JointSet& requested,
+ const std::map<std::string,PreparedSharedJoint>& before,const std::map<std::string,PreparedSharedJoint>& now)
+{
+ if(!(expected==current) || requested.empty() || requested.size()>jointLimit)return false;
+ for(const auto& name:requested)
+ {const auto old=before.find(name),live=now.find(name);if(old==before.end() || live==now.end() || !(old->second==live->second))return false;}
+ return true;
+}
 struct ObservedPoseFrame {bool accepted=false;FSSharedPose::Pose display;};
 inline ObservedPoseFrame ingestObservedPose(const FSSharedPose::Pose& incoming,const std::map<std::string,std::uint32_t>& incomingRevisions,
  std::uint32_t incomingGlobal,bool snapshot,bool newSession,FSSharedPose::Pose& pose,std::map<std::string,std::uint32_t>& revisions,std::uint32_t& global)
