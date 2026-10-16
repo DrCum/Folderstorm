@@ -78,6 +78,10 @@ public:
     }
 
     // Default:  0
+    // Trusted loopback requests bypass all proxies and credential trace logging.
+    void setPrivateLocalRequest(bool value) { mPrivateLocalRequest = value; }
+    bool getPrivateLocalRequest() const { return mPrivateLocalRequest; }
+
     void                setTrace(int long);
     int                 getTrace() const
     {
@@ -192,6 +196,7 @@ public:
     static void         setDefaultSSLVerifyPeer(bool verify);
 
 protected:
+    bool                mPrivateLocalRequest;
     bool                mWantHeaders;
     int                 mTracing;
     unsigned int        mTimeout;

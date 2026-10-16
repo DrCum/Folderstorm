@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="squirty_notes" title="Squirty Notes" width="640" height="570" layout="topleft" can_resize="false" save_rect="true">
+    <floater.string name="NotTested">Connection not tested</floater.string>
+    <floater.string name="Sending">Connecting...</floater.string>
+    <floater.string name="Connected">Connected to Squirty Notes</floater.string>
+    <floater.string name="Queued">Squirt accepted and queued</floater.string>
+    <floater.string name="BadToken">Token rejected. Copy the current token from Squirty Notes.</floater.string>
+    <floater.string name="Unavailable">Squirty Notes is unavailable. Check that its API is enabled.</floater.string>
+    <floater.string name="Paused">Squirty Notes reminders are paused</floater.string>
+    <floater.string name="Busy">Squirty Notes is busy. Try again shortly.</floater.string>
+    <floater.string name="Failed">Squirty Notes could not accept the request</floater.string>
+    <floater.string name="SetupNeeded">Paste the API token from Squirty Notes before enabling squirts.</floater.string>
+    <floater.string name="Saved">Settings saved</floater.string>
+
+    <text name="setup" left="16" top="14" width="608" height="32" wrap="true">Enable API + MCP in Squirty Notes, copy its token, and keep the app running.</text>
+    <text name="port_label" left="16" top="54" width="40" height="20">Port</text>
+    <spinner name="port" left="60" top="50" width="120" height="23" min_val="1024" max_val="65535" initial_val="47831" increment="1" decimal_digits="0" />
+    <text name="token_label" left="16" top="88" width="40" height="20">Token</text>
+    <line_editor name="token" left="60" top="84" width="564" height="23" max_length_bytes="256" is_password="true" />
+    <button name="check" left="16" top="118" width="150" height="23" label="Check connection" />
+    <button name="test" left="176" top="118" width="120" height="23" label="Test squirt" />
+    <text name="status" left="16" top="150" width="608" height="32" wrap="true" />
+
+    <text name="im_label" left="16" top="190" width="285" height="20">Incoming IMs</text>
+    <text name="online_label" left="330" top="190" width="294" height="20">Friend comes online</text>
+    <combo_box name="im_mode" left="16" top="216" width="285" height="23">
+        <combo_box.item label="Off" value="0" />
+        <combo_box.item label="All" value="1" />
+        <combo_box.item label="Custom" value="2" />
+    </combo_box>
+    <combo_box name="online_mode" left="330" top="216" width="294" height="23">
+        <combo_box.item label="Off" value="0" />
+        <combo_box.item label="All" value="1" />
+        <combo_box.item label="Custom" value="2" />
+    </combo_box>
+    <scroll_list name="im_residents" left="16" top="252" width="285" height="150" multi_select="true" draw_border="true">
+        <scroll_list.columns name="name" label="Residents" width="265" />
+    </scroll_list>
+    <scroll_list name="online_residents" left="330" top="252" width="294" height="150" multi_select="true" draw_border="true">
+        <scroll_list.columns name="name" label="Friends" width="274" />
+    </scroll_list>
+    <line_editor name="im_name" left="16" top="411" width="200" height="23" max_length_bytes="128" label="Resident name" />
+    <button name="im_add" left="226" top="411" width="75" height="23" label="Add..." />
+    <line_editor name="online_name" left="330" top="411" width="209" height="23" max_length_bytes="128" label="Friend name" />
+    <button name="online_add" left="549" top="411" width="75" height="23" label="Add..." />
+    <button name="im_remove" left="16" top="443" width="110" height="23" label="Remove" />
+    <button name="online_remove" left="330" top="443" width="110" height="23" label="Remove" />
+
+    <spinner name="silence" left="16" top="480" width="340" height="23" label="Squirt again after silence (seconds)" label_width="230" min_val="0" max_val="86400" initial_val="120" increment="1" decimal_digits="0" />
+    <text name="silence_help" left="16" top="511" width="430" height="20">Each incoming IM resets that resident's timer. 0 squirts every time.</text>
+    <button name="apply" left="454" top="538" width="80" height="23" label="Apply" />
+    <button name="cancel" left="544" top="538" width="80" height="23" label="Close" />
+</floater>

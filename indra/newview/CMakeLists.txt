@@ -232,6 +232,8 @@ set(viewer_SOURCE_FILES
     omnifilter.cpp
     omnifilterengine.cpp
     fsprimfeedconnect.cpp
+    fssquirtynotes.cpp
+    fsfloatersquirtynotes.cpp
     fsfloaterprimfeed.cpp
     llpanelopenregionsettings.cpp
     # <FS:Ansariel> [Legacy Bake]
@@ -1131,6 +1133,7 @@ set(viewer_HEADER_FILES
     fspose.h
     fssharedposemanager.h
     fssharedposemodel.h
+    fssharedposeeditqueue.h
     fsposeranimator.h
 	fsposestate.h
     fsposingmotion.h
@@ -1155,6 +1158,9 @@ set(viewer_HEADER_FILES
     llflickrconnect.h
     llfloaterflickr.h
     fsprimfeedconnect.h
+    fssquirtynotes.h
+    fssquirtypolicy.h
+    fsfloatersquirtynotes.h
     fsfloaterprimfeed.h
     # <FS:Ansariel> [Legacy Bake]
     llagentwearablesfetch.h
