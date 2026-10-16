@@ -1,12 +1,29 @@
 # MCP expansion roadmap
 
-Status: implementation plans, not implemented features. Prepared 2026-10-15 against MCP head `d9dc2ed33a`. The user explicitly authorized writing these plans and then implementing them. The planning checkpoint itself changes no runtime source.
+Status: E0–E10 implemented in the draft checkpoint stack; native build/runtime acceptance remains pending. These plans were prepared 2026-10-15 against MCP head `d9dc2ed33a`, then implemented after user authorization. The original planning checkpoint changed no runtime source.
+
+## Delivered checkpoints
+
+| Draft PR | Implementation |
+| --- | --- |
+| [#51](https://github.com/DrCum/Folderstorm/pull/51) | Plans, permissions, source contracts and capability foundation |
+| [#52](https://github.com/DrCum/Folderstorm/pull/52) | Read-only world observations |
+| [#53](https://github.com/DrCum/Folderstorm/pull/53) | Chat, contacts, resident profiles and incremental events |
+| [#54](https://github.com/DrCum/Folderstorm/pull/54) | Guarded agent-inventory notecard/script editing |
+| [#55](https://github.com/DrCum/Folderstorm/pull/55) | Guarded gesture playback |
+| [#56](https://github.com/DrCum/Folderstorm/pull/56) | Curated Preferences transactions |
+| [#57](https://github.com/DrCum/Folderstorm/pull/57) | Own joint rotations and pose presets |
+| [#58](https://github.com/DrCum/Folderstorm/pull/58) | Separate authenticated host controller and monitor tools |
+| [#59](https://github.com/DrCum/Folderstorm/pull/59) | Exact content-read and missing-cache correction |
+| This follow-up above #59 | Shared posing through native consent and joint reservations |
+
+The stack preserves its declared dependencies and has not been merged by this implementation task. Independent Sol 6.1 Extra High/Max review and focused portable/native-boundary checks cover the changed code; those checks do not establish a successful native viewer/host build or live acceptance. See the delivered sections in each domain plan and [pose acceptance checklist](../../indra/newview/tests/README-assistant-pose.md).
 
 ## Scope and existing work
 
 Cover Chat, friends/resident lookup, events/notifications, character/session controls, read-only world context, gestures/own and shared posing, agent-inventory notecard/script editing, and curated viewer preferences. Navigation and building are excluded. This also excludes indirect teleport/autopilot/sit/touch/agent movement, task-inventory writes, object transforms/material edits, arbitrary viewer commands, input injection and raw Event API forwarding. Existing camera and workspace tools remain available under their own rules.
 
-Inventory, appearance, camera and saved workspace tools already exist. Notecard/script reads already exist; improve their native permission checks rather than duplicate them. Shared posing is a prerequisite-dependent feature: this branch denies other-avatar posing, so verify the reviewed PR #35 service before claiming support. Preserve published #42–#47 history; UI #50 is separately owned.
+Inventory, appearance, camera and saved workspace tools already exist. Notecard/script reads were hardened rather than duplicated. Shared posing uses the verified native PR #35 service, whose reviewed dependency history is retained; MCP editing requires typed-rotation support from both peers and ordinary native owner consent. Published #42–#47 history is preserved; UI #50 is separately owned.
 
 ## Shared contract: checkpoint E0
 
