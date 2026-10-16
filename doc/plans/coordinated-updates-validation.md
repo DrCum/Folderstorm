@@ -116,3 +116,9 @@ a prepared install. The updateguard test passes, and affected MCP, migrator,
 maintenance and guard Windows test executables cross-compile successfully; this
 is not a native C++/SDK runtime build. All affected Go binaries rebuild when their
 shared guard changes through explicit CMake dependencies.
+
+Independent Sol 6.1 Extra High review and two correction reviews completed through
+`07256febb1`; no actionable finding remained in the final source review. The final
+pass closes uppercase/aliased launch paths during missing metadata and requires
+the launcher-maintenance helper in both package validators. Native acceptance is
+still outstanding; these source/portable checks do not establish Windows behavior.
