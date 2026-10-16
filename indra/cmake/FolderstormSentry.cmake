@@ -35,8 +35,21 @@ if(FS_ENABLE_SENTRY)
   FetchContent_Declare(folderstorm_sentry_native
     URL https://github.com/getsentry/sentry-native/releases/download/0.17.3/sentry-native.zip
     URL_HASH SHA256=930039d20b8f7d5520c8cb1d9911d63ce8a9e0635b56ae08256936d1f45b66ac)
+  # The viewer inherits /TP and C++-only switches. Do not force SDK C or
+  # Crashpad MASM sources through that language or pass C++ flags to ml64.
+  get_directory_property(viewer_compile_options COMPILE_OPTIONS)
+  get_directory_property(viewer_link_options LINK_OPTIONS)
+  set(sdk_compile_options)
+  foreach(flag IN LISTS viewer_compile_options)
+    list(APPEND sdk_compile_options "$<$<COMPILE_LANGUAGE:CXX>:${flag}>")
+  endforeach()
+  set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "${sdk_compile_options}")
+  add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:/Z7>")
+  add_link_options(/DEBUG)
   # SDK source and vendored Crashpad are pinned by the archive hash.
   FetchContent_MakeAvailable(folderstorm_sentry_native)
+  set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "${viewer_compile_options}")
+  set_property(DIRECTORY PROPERTY LINK_OPTIONS "${viewer_link_options}")
   set(licenses "${CMAKE_CURRENT_BINARY_DIR}/sentry-licenses")
   file(MAKE_DIRECTORY "${licenses}")
   file(GLOB_RECURSE sentry_notices RELATIVE "${folderstorm_sentry_native_SOURCE_DIR}"
@@ -57,6 +70,8 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/fscrashconfig.h.in" "${CMAKE_CURRENT
 function(folderstorm_crash_target target)
   target_sources(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fscrash.cpp")
   if(FS_ENABLE_SENTRY)
+    target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/Z7>")
+    target_link_options(${target} PRIVATE /DEBUG)
     target_link_libraries(${target} PRIVATE sentry)
     add_dependencies(${target} crashpad_handler)
     add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different

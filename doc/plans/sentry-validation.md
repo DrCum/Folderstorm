@@ -79,3 +79,8 @@ crashes with correct PDB frames/tags, five separate databases, Apply/Cancel,
 revoke while running, consent changes during initialization, restart without old
 crash replay, missing handler/DSN, ordinary issue form, installer license/handler
 staging and inherited native diagnostic behavior when Off.
+
+Independent Sol 6.1 Extra High review found two enabled-build issues, corrected:
+SDK C/MASM sources now avoid inherited viewer C++ language flags, and optimized
+Release viewer/host/SDK/handler targets explicitly generate debug information and
+linked PDBs. Neither correction was verified with a native Windows build here.
