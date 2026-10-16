@@ -137,7 +137,7 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("if(!nativeWorkCurrent(found->second))", native)
         self.assertLess(native.index("nativeWorkCurrent(found->second)"), native.index("approval.undo="))
         self.assertIn("fs_pose::updateAcknowledgedCache", native)
-        self.assertIn('if(type=="locked" && work.granted)return', native)
+        self.assertIn('if(type=="locked" && (work.granted || work.awaitingLegacySnapshot))return', native)
         self.assertNotIn("mRemotes.at(sender).pose[item.first] =", handle)
         proof = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::nativeWorkCurrent")
         for field in ("work.generation", "work.grantGeneration", "approval->second.generation", "remote->second.generation", "approval->second.token"):
@@ -150,6 +150,25 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("fs_pose::observedWorkPose", complete)
         execute = function("fssharedposemanager.cpp", "void FSSharedPoseManager::execute(Work&")
         self.assertLess(execute.index("nativeWorkCurrent(work)"), execute.index("for (const auto& action"))
+    def test_legacy_native_lock_waits_for_observed_selected_baseline(self):
+        handle = function("fssharedposemanager.cpp", "void FSSharedPoseManager::handle(")
+        legacy = handle[handle.index('if(type=="locked" && pose && !data["jr"].isMap())'):handle.index('// Native UI replies obey')]
+        self.assertIn("work.legacyLockedPose=subset(*pose,work.joints)", legacy)
+        self.assertIn("work.awaitingLegacySnapshot=true", legacy)
+        self.assertLess(legacy.index("fs_pose::legacyLockMatches"), legacy.index("grantWork(sender,"))
+        self.assertIn('workMessage(work,"renew")', legacy)
+        self.assertIn('message("hello")', legacy)
+        self.assertNotIn("updateAcknowledgedCache", legacy)
+        ingestion = handle[handle.index("const auto observed=fs_pose::ingestObservedPose"):handle.index('if (type == "locked" || type == "busy" || type == "ack")')]
+        self.assertLess(ingestion.index("nativeWorkCurrent(pending->second)"), ingestion.index("grantWork(sender,"))
+        self.assertLess(ingestion.index("fs_pose::legacyLockMatches"), ingestion.index("grantWork(sender,"))
+        self.assertLess(ingestion.index("grantWork(sender,"), ingestion.index("display.erase(joint)"))
+        grant = function("fssharedposemanager.cpp", "void FSSharedPoseManager::grantWork")
+        self.assertLess(grant.index("fs_pose::legacyLockMatches"), grant.index("apply(id,observed)"))
+        self.assertLess(grant.index("work.awaitingLegacySnapshot=false"), grant.index("execute(work)"))
+        tick = function("fssharedposemanager.cpp", "void FSSharedPoseManager::tick()")
+        self.assertIn("(work.granted || work.awaitingLegacySnapshot) && work.renewed", tick)
+        self.assertIn("if (!work.granted) { if (work.requested + 20. < time)", tick)
     def test_shared_ask_validates_selected_material_without_disjoint_conflicts(self):
         validate = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::validateAssistantPose")
         self.assertIn("fs_pose::preparedSharedEditCurrent", validate)

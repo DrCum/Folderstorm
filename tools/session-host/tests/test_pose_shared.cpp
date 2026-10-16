@@ -96,6 +96,28 @@ int main()
  auto duplicateSnapshot=ingestObservedPose({{"mHead",changed}},{{"mHead",2}},2,true,false,nativeCache,nativeRevisions,nativeGlobal);
  assert(duplicateSnapshot.display.at("mHead")==changed && nativeCache.at("mHead")==changed && nativeRevisions.at("mHead")==2);
  assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},{{"mHead",initial}},{},nativeCache,nativeRevisions)==0); // unversioned native reply never invents a revision
+ // A legacy owner's fresh locked reply can overtake its snapshot/broadcast.
+ // Hold the position-only action until observation confirms the lease-local
+ // baseline; applying the stale cached full Joint would overwrite its rotation.
+ Pose legacyCache{{"mHead",initial},{"mNeck",initial}},legacyLock{{"mHead",changed}};
+ std::map<std::string,std::uint32_t> legacyRevisions{{"mHead",0},{"mNeck",0}};std::uint32_t legacyGlobal=0;
+ unsigned nativeActions=0;
+ assert(!legacyLockMatches(legacyCache,legacyLock,{"mHead"}));
+ assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},legacyLock,{},legacyCache,legacyRevisions)==0);
+ assert(legacyCache.at("mHead")==initial && legacyRevisions.at("mHead")==0 && nativeActions==0);
+ assert(ingestObservedPose({{"mHead",changed},{"mNeck",initial}},{{"mHead",1},{"mNeck",1}},1,true,false,
+  legacyCache,legacyRevisions,legacyGlobal).accepted); // actual legacy whole-map revision fallback
+ assert(legacyLockMatches(legacyCache,legacyLock,{"mHead"}));
+ auto nativePositionAction=observedWorkPose(legacyCache,{"mHead"});nativePositionAction.at("mHead").transform[4]=.75f;++nativeActions;
+ assert(nativeActions==1 && nativePositionAction.at("mHead").transform[4]==.75f);
+ for(unsigned i=0;i<4;++i)assert(nativePositionAction.at("mHead").transform[i]==changed.transform[i]);
+ OwnerSession legacyOwner;legacyOwner.start("owner","legacy",{{"mHead",changed}});legacyOwner.grant("editor","grant",0);
+ assert(legacyOwner.acquire("editor","grant","lease",{"mHead"},0).granted);
+ assert(legacyOwner.apply("editor","grant","lease",nativePositionAction,true,0));
+ for(unsigned i=0;i<4;++i)assert(legacyOwner.pose().at("mHead").transform[i]==changed.transform[i]);
+ legacyCache["mNeck"]=changed;assert(legacyLockMatches(legacyCache,legacyLock,{"mHead"})); // disjoint updates are irrelevant
+ assert(!legacyLockMatches(legacyCache,legacyLock,{"mHead","mNeck"}));
+ legacyCache["mHead"]=initial;assert(!legacyLockMatches(legacyCache,legacyLock,{"mHead"})); // a mismatching newer observation never runs old actions
  // An Ask freezes the exact selected joint, not unrelated joint/global
  // updates. Native/session/grant identity and selected reservation remain exact.
  PreparedSharedSource prepared{"target","session","grant","motion",true,true,true,true,false};

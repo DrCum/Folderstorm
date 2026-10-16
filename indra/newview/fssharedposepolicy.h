@@ -67,6 +67,11 @@ inline CoalescedPoseUpdate coalescePoseUpdate(const FSSharedPose::Pose& previous
 }
 inline FSSharedPose::Pose observedWorkPose(const FSSharedPose::Pose& cache,const FSSharedPose::JointSet& requested)
 {FSSharedPose::Pose result;for(const auto& name:requested){const auto found=cache.find(name);if(found!=cache.end())result.emplace(*found);}return result;}
+// Legacy native locked replies have authoritative lease-local bytes but no
+// revision. Never assign them a cache version: wait until an ordinary observed
+// frame confirms the exact selected baseline before running buffered actions.
+inline bool legacyLockMatches(const FSSharedPose::Pose& cache,const FSSharedPose::Pose& baseline,const FSSharedPose::JointSet& requested)
+{return !requested.empty() && baseline.size()==requested.size() && sameSharedPose(observedWorkPose(cache,requested),baseline);}
 struct PreparedSharedSource
 {
  std::string target,sessionGeneration,grantGeneration,nativeMotionGeneration;

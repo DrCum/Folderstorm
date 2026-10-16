@@ -78,9 +78,9 @@ private:
         LLUUID avatar, session, token, lease,generation,grantGeneration;
         FSSharedPose::JointSet joints;
         std::vector<std::function<void()>> actions;
-        FSSharedPose::Pose latest, lastSent;
+        FSSharedPose::Pose latest, lastSent, legacyLockedPose;
         double requested = 0., sent = -100., renewed = -100.;
-        bool asked = false, granted = false, finished = false, forceFinish = false;
+        bool asked = false, granted = false, finished = false, forceFinish = false, awaitingLegacySnapshot = false;
         int history = 0;
         U32 sequence = 0;
     };

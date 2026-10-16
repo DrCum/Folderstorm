@@ -43,6 +43,10 @@ acceptance:
 7. Duplicate a locked reply, lose or delay a final POST/acknowledgement, and
    deliver an acknowledgement late. There is one final sequence, no uncertain
    resend, and `owner_accepted` appears only for the exact owner acknowledgement.
+   With an older native owner, delay its broadcast behind a fresh unversioned
+   locked reply. A position/scale-only native action must wait for the requested
+   snapshot and preserve that owner's fresh rotation. Missing/mismatching
+   snapshots must time out without running the buffered action.
 8. Cancel an unsubmitted operation: only its own lease may be released or
    allowed to expire. Cancel after submission: report uncertainty, retain native
    manual work, and perform no global refresh/undo/stop.

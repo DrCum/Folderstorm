@@ -471,10 +471,12 @@ void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     auto& work = found->second;
     if(work.granted)return; // duplicate locked replies cannot rewind an active drag
     if(!nativeWorkCurrent(work)){complete(id,false);return;}
+    if(work.awaitingLegacySnapshot && !fs_pose::legacyLockMatches(mRemotes.at(id).pose,work.legacyLockedPose,work.joints))return;
     const auto observed=id==gAgentID?subset(pose,work.joints):fs_pose::observedWorkPose(mRemotes.at(id).pose,work.joints);
     if (observed.size() != work.joints.size()) { complete(id, false); return; }
     apply(id,observed);
     work.lastSent=observed;
+    work.awaitingLegacySnapshot=false;
     work.granted = true;
     mStatus = "Editing pose";
     work.renewed = now();
@@ -667,6 +669,10 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
             remote.pose,remote.jointRevisions,remote.revision);
         if(!observed.accepted)return;
         auto display=observed.display;
+        const auto pending=mWorks.find(sender);
+        if(pending!=mWorks.end() && pending->second.awaitingLegacySnapshot && nativeWorkCurrent(pending->second) &&
+           fs_pose::legacyLockMatches(remote.pose,pending->second.legacyLockedPose,pending->second.joints))
+            grantWork(sender,pending->second.legacyLockedPose);
         const auto work = mWorks.find(sender);
         if (work != mWorks.end() && work->second.granted)
             for (const auto& joint : work->second.joints) display.erase(joint);
@@ -680,9 +686,26 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         if(!nativeWorkCurrent(found->second)){complete(sender,false);return;}
         if (type == "busy") { complete(sender, false); mStatus = "Joint reserved by " + nameFor(data["by"].asUUID()); return; }
         auto& work=found->second;
-        if(type=="locked" && work.granted)return;
+        if(type=="locked" && (work.granted || work.awaitingLegacySnapshot))return;
         const auto pose = readPose(data["p"]);
         auto& remote=mRemotes.at(sender);auto& approval=mApprovals.at(sender);
+        if(type=="locked" && pose && !data["jr"].isMap())
+        {
+            work.legacyLockedPose=subset(*pose,work.joints);
+            if(work.legacyLockedPose.size()!=work.joints.size()){complete(sender,false);return;}
+            work.awaitingLegacySnapshot=true;
+            if(fs_pose::legacyLockMatches(remote.pose,work.legacyLockedPose,work.joints))grantWork(sender,work.legacyLockedPose);
+            else
+            {
+                // The lock may overtake its broadcast. Keep only this exact
+                // lease alive while requesting a revisioned native snapshot;
+                // neither its unversioned bytes nor stale cache may run actions.
+                send(sender,workMessage(work,"renew"));work.renewed=time;
+                send(sender,message("hello"));remote.requestedSnapshot=time;
+                mStatus="Waiting for the reserved pose snapshot";
+            }
+            return;
+        }
         if(pose)
         {
             // Native UI replies obey the same cache invariant as MCP replies.
@@ -881,7 +904,7 @@ void FSSharedPoseManager::tick()
                 send(entry.first, data);
             }
         }
-        if (work.granted && work.renewed + 1. <= time)
+        if ((work.granted || work.awaitingLegacySnapshot) && work.renewed + 1. <= time)
         {
             if (entry.first == gAgentID) mOwner.renew(gAgentID.asString(), "", work.lease.asString(), time);
             else send(entry.first, workMessage(work, "renew"));
