@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssquirtynotes.h"
 
 #include "llcallingcard.h"
 
@@ -807,6 +808,7 @@ void LLAvatarTracker::processNotify(LLMessageSystem* msg, bool online)
             if(info)
             {
                 setBuddyOnline(agent_id,online);
+                FSSquirtyNotes::onFriendStatus(agent_id, online);
             }
             else
             {

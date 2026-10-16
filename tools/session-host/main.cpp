@@ -51,6 +51,7 @@
 #include "fssessionassistant.h"
 #include "fssessionsets.h"
 #include "theme.h"
+#include "controls_model.h"
 #include "tooltips.h"
 #include "fssessionlifecycle.h"
 #include "controller_pipe.h"
@@ -449,6 +450,10 @@ struct Host
     ChoiceAutosave autosave;
     std::wstring saveError;
     bool preferencesOpen=false,pauseAllAssistant=false;
+    std::optional<HostExperience> visualPreview;
+    HWND voiceStatusControl=nullptr,detachedVoiceStatus=nullptr;
+    std::wstring voiceText,voiceName,voiceDescription;
+    const HostExperience& visualOptions() const {return visualPreview?*visualPreview:experience;}
     std::function<void()> refreshAssistantEditor;
     unsigned int preferencesPage=0;
     std::uint64_t autosaveAt=0;
@@ -481,7 +486,7 @@ struct Host
     }
     void applyTheme()
     {
-        theme.set(experience.theme);fs_host_ui::dialogTheme=&theme;
+        theme.set(visualOptions().theme,visualOptions().hostContrast!=0);fs_host_ui::dialogTheme=&theme;
         for(HWND panel:{window,chatWindow,controlsWindow,attentionWindow})theme.window(panel);
         if(sharedFriends.window){friendsFont(sharedFriends);layoutFriends(sharedFriends);}
         for(auto& m:monitors)if(m.window){if(m.friends.window){friendsFont(m.friends);layoutFriends(m.friends);}theme.window(m.window);m.dirty=true;}
@@ -512,7 +517,7 @@ struct Host
         return -1;
     }
     enum PreferencePage : unsigned int { PrefLayout,PrefAppearance,PrefCharacter,PrefSounds,PrefViewer,PrefSession,
-        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController };
+        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefAccessibility,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController };
     void editPreferences(unsigned int page=~0u,int target=-1)
     {
         if(preferencesOpen)return;
@@ -552,9 +557,10 @@ struct Host
             {4,L"Switching & monitors",L"Monitors",L"Read-only views of inactive characters. These choices set defaults for new monitors."},
             {5,L"Controls",L"Quick actions",L"Quick actions add buttons to the host toolbar. Choose actions below, then click their buttons during play."},
             {5,L"Controls",L"Keyboard shortcuts",L""},
-            {6,L"Advanced",L"Diagnostics",L""},{6,L"Advanced",L"Files & recovery",L""},
+            {6,L"Accessibility",L"Accessibility",L"Shared display and keyboard choices. Original settings remain in their usual tabs."},
+            {7,L"Advanced",L"Diagnostics",L""},{7,L"Advanced",L"Files & recovery",L""},
             {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."},
-            {7,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."}};
+            {8,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."}};
         auto controllerDraft=controllerConfig;auto controllerCapturedRevision=controllerConfig.revision;
         const auto controllerEnableField=add(PrefController,{L"Enable controller MCP",controllerConfig.enabled?L"1":L"0",FieldType::Check});
         fields[controllerEnableField].help=L"Off by default. A private current-user connection controls only explicitly opted-in profiles. Apply or OK accepts; Cancel discards.";
@@ -574,7 +580,9 @@ struct Host
         const auto themeField=add(PrefAppearance,{L"Theme",std::to_wstring(experience.theme),FieldType::Choice,{L"Folderstorm Midnight",L"Folderstorm Daylight",L"Follow Windows"}});
         const auto densityField=add(PrefAppearance,{L"Button spacing",std::to_wstring(experience.density),FieldType::Choice,{L"Compact",L"Comfortable"}});
         const auto cardsField=add(PrefAppearance,{L"Character cards in Expanded mode",experience.cards?L"1":L"0",FieldType::Check});
-        const auto labelsField=add(PrefQuick,{L"Button display",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text only",L"Icons only"}});
+        const auto toolbarLabelsField=add(PrefAppearance,{L"Toolbar button labels",std::to_wstring(experience.toolbarLabels),FieldType::Choice,{L"Icon and text",L"Text only",L"Icons only"}});
+        fields[toolbarLabelsField].help=L"Login, Chat, Monitors and Preferences. Independent of optional quick-action labels.";
+        const auto labelsField=add(PrefQuick,{L"Quick action labels",std::to_wstring(experience.labels),FieldType::Choice,{L"Icon and text",L"Text only",L"Icons only"}});
         fields[labelsField].help=L"Docked quick actions share the toolbar row. Labels collapse as space runs out; Attention becomes its count.";
         const auto profileField=add(PrefCharacter,{L"Character",std::to_wstring(selected),FieldType::Choice,names});
         fields[profileField].fixed=true;fields[profileField].transient=true;
@@ -649,10 +657,10 @@ struct Host
         const auto activeReadField=add(PrefReading,{L"Auto-read active character",chatPreferences.activeRead?L"1":L"0",FieldType::Check});
         const auto delayField=add(PrefReading,{L"Read delay (seconds)",std::to_wstring(chatPreferences.delay),FieldType::Number,{},5,3600});
         fields[activeReadField].help=L"Mark eligible chats read after playing the active character for this interval. This never accepts offers or permissions.";
-        const auto voiceField=add(PrefAudio,{L"Voice follows active character",voice?L"1":L"0",FieldType::Check});
+        const auto voiceField=add(PrefAudio,{L"Voice follows active",voice?L"1":L"0",FieldType::Check});
         fields[voiceField].help=L"Only the active character owns the microphone. Native voice preferences and restrictions still apply.";
-        const auto muteField=add(PrefAudio,{L"Mute background world audio",muteBackground?L"1":L"0",FieldType::Check});
-        fields[muteField].help=L"Mute inactive characters' world, UI and media audio. Host notification alerts use their own volume and character choices.";
+        const auto muteField=add(PrefAudio,{L"BG Audio",muteBackground?L"0":L"1",FieldType::Check});
+        fields[muteField].help=L"Allow inactive characters' world, UI and media audio. Native mute choices still apply. Host alerts have separate settings.";
         const auto volumeField=add(PrefAudio,{L"Alert volume (%)",std::to_wstring(presentation.volume),FieldType::Number,{},0,100});
         const auto soundStart=fields.size();
         for(const auto* name:{L"Direct IM alerts",L"Group chat alerts",L"Conference alerts",L"Notification alerts"})add(PrefSounds,{name,L"0",FieldType::Check});
@@ -694,6 +702,24 @@ struct Host
             unsigned int choice=0;if(i<experience.quick.size())for(std::size_t j=0;j<quickChoices.size();++j)if(quickChoices[j]->id==experience.quick[i])choice=static_cast<unsigned int>(j)+1;
             const auto field=add(PrefQuick,{L"Position "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,commands});fields[field].rowHeight=28;
         }
+        const auto stateTextField=add(PrefAccessibility,{L"Show text states on audio buttons",experience.audioStateText?L"1":L"0",FieldType::Check});
+        fields[stateTextField].help=L"Add On/Off/Muted when audio quick-action labels are shown. Accessible toggle state is always available.";
+        const auto contrastField=add(PrefAccessibility,{L"Host contrast",std::to_wstring(experience.hostContrast),FieldType::Choice,{L"Follow Windows",L"Always high contrast"}});
+        fields[contrastField].help=L"Only host windows. Windows High Contrast takes precedence; your normal host theme is retained.";
+        const auto windowsContrastField=add(PrefAccessibility,{L"Windows contrast",L"Windows contrast settings…",FieldType::Action});
+        fields[windowsContrastField].action=[](HWND owner)
+        {
+            if(reinterpret_cast<INT_PTR>(ShellExecuteW(owner,L"open",L"ms-settings:easeofaccess-highcontrast",nullptr,nullptr,SW_SHOWNORMAL))<=32)
+                MessageBoxW(owner,L"Open Windows Settings → Accessibility → Contrast themes (High Contrast on Windows 10).",L"Windows settings could not open",MB_OK|MB_ICONINFORMATION);
+        };
+        const auto mirror=[&](std::size_t source,unsigned int page)
+        {
+            auto field=fields[source];field.mirror=source;field.page=page;
+            field.help+=page==PrefAccessibility?L" Shared with the original settings tab.":L" Shared with Accessibility.";
+            fields.push_back(std::move(field));
+        };
+        for(const auto source:{toolbarLabelsField,labelsField,densityField,transitionField,shortcutField})mirror(source,PrefAccessibility);
+        mirror(labelsField,PrefAppearance);
         const auto cycleLockField=add(PrefDiagnostics,{L"Require pause to chat",experience.requirePauseToChat?L"1":L"0",FieldType::Check});fields[cycleLockField].help=L"Cycling monitors disable Chat until paused. When unchecked, focusing the composer pauses before typing; Play resumes explicitly.";
         const auto diagnosticsField=add(PrefDiagnostics,{L"Show diagnostics",experience.diagnostics?L"1":L"0",FieldType::Check});
         const auto chatReportField=add(PrefDiagnostics,{L"Chat and alerts",L"Show report…",FieldType::Action});
@@ -823,16 +849,24 @@ struct Host
             if(fields[quickPreview].control)SetWindowTextW(fields[quickPreview].control,fields[quickPreview].value.c_str());
         };
         for(unsigned int i=0;i<12;++i)fields[quickStart+i].changed=updateQuick;
+        const auto previewAppearance=[&](HWND owner)
+        {
+            auto draft=experience;const auto value=[&](std::size_t at){return static_cast<unsigned int>(std::wcstoul(readField(at).c_str(),nullptr,10));};
+            draft.theme=value(themeField);draft.density=value(densityField);draft.labels=value(labelsField);
+            draft.toolbarLabels=value(toolbarLabelsField);draft.hostContrast=value(contrastField);draft.audioStateText=value(stateTextField)!=0;
+            visualPreview=std::move(draft);applyTheme();layout();if(owner)theme.window(owner);
+        };
+        for(const auto source:{themeField,densityField,labelsField,toolbarLabelsField,contrastField,stateTextField})fields[source].changed=previewAppearance;
         showPerson();refreshAssistant();dependencies(nullptr);updateQuick(nullptr);HostPreferences accepted;
 
         const auto validate=[&](HWND owner)
         {
             remember(false);auto next=preferences();const auto n=[&](std::size_t at){return number(fields[at]);};
             next.options.chrome=n(minimalField)?2:n(chromeField);next.options.hosted=n(hostedField)!=0;next.options.chat=n(chatField)!=0;next.options.chatDetached=n(chatField)==0?chatDetached:n(chatField)==2;next.options.controlsDetached=n(controlsDetachedField)!=0;
-            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.diagnostics=n(diagnosticsField)!=0;next.experience.dockedArea=n(areaField);next.experience.cycleSeconds=n(cycleSecondsField);next.experience.requirePauseToChat=n(cycleLockField)!=0;
+            next.experience.order=draftOrder;next.experience.theme=n(themeField);next.experience.density=n(densityField);next.experience.cards=n(cardsField)!=0;next.experience.labels=n(labelsField);next.experience.toolbarLabels=n(toolbarLabelsField);next.experience.hostContrast=n(contrastField);next.experience.audioStateText=n(stateTextField)!=0;next.experience.diagnostics=n(diagnosticsField)!=0;next.experience.dockedArea=n(areaField);next.experience.cycleSeconds=n(cycleSecondsField);next.experience.requirePauseToChat=n(cycleLockField)!=0;
             next.chat.haveCategories=true;next.chat.showMask=next.chat.attentionMask=0;for(unsigned int i=0;i<5;++i)if(n(showStart+i))next.chat.showMask|=1u<<i;for(unsigned int i=0;i<8;++i)if(n(attentionStart+i))next.chat.attentionMask|=1u<<i;
             next.chat.visibleRead=n(visibleReadField)!=0;next.chat.activeRead=n(activeReadField)!=0;next.chat.delay=n(activeReadField)?n(delayField):chatPreferences.delay;next.experience.oldestFirst=n(oldestField)!=0;next.experience.accountMask=0;for(unsigned int i=0;i<MaxCharacters;++i)if(people[i].attention)next.experience.accountMask|=1u<<i;
-            next.options.voice=n(voiceField)!=0;next.options.muteBackground=n(muteField)!=0;next.presentation.volume=n(volumeField);next.presentation.transition=n(transitionField);next.presentation.duration=n(transitionField)?n(durationField):presentation.duration;next.presentation.height=n(transitionField)==1?n(heightField):presentation.height;next.options.previewSize=n(sizeField);next.options.previewRate=n(rateField);next.options.cinematic=next.presentation.transition==1;
+            next.options.voice=n(voiceField)!=0;next.options.muteBackground=n(muteField)==0;next.presentation.volume=n(volumeField);next.presentation.transition=n(transitionField);next.presentation.duration=n(transitionField)?n(durationField):presentation.duration;next.presentation.height=n(transitionField)==1?n(heightField):presentation.height;next.options.previewSize=n(sizeField);next.options.previewRate=n(rateField);next.options.cinematic=next.presentation.transition==1;
             next.presentation.shortcuts=n(shortcutField)!=0;next.experience.viewerShellKeys=n(viewerKeysField)!=0;for(unsigned int i=0;i<7;++i){const auto key=keys[n(keysStart+i)];next.presentation.bindings[i]={key,key!=presentation.bindings[i].key || n(modifierField)!=modifier?modifiers[n(modifierField)]:presentation.bindings[i].modifiers};}for(unsigned int i=0;i<3;++i){const auto key=keys[n(keysStart+7+i)];next.experience.keys[i]={key,key!=experience.keys[i].key || n(modifierField)!=modifier?modifiers[n(modifierField)]:experience.keys[i].modifiers};}
             next.experience.quick.clear();for(unsigned int i=0;i<12;++i)if(n(quickStart+i))next.experience.quick.push_back(quickChoices[n(quickStart+i)-1]->id);
             for(int i=0;i<MaxCharacters;++i)
@@ -894,7 +928,7 @@ struct Host
         }
         const bool dockChat=accepted.options.chatDetached,dockControls=accepted.options.controlsDetached;
         accepted.options.chatDetached=chatDetached;accepted.options.controlsDetached=controlsDetached;
-        const auto previousChrome=chrome;saveDraft(true);applyPreferences(accepted);const auto nextChrome=chrome;chrome=previousChrome;setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(nextChrome);
+        const auto previousChrome=chrome;saveDraft(true);applyPreferences(accepted);visualPreview.reset();const auto nextChrome=chrome;chrome=previousChrome;setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(nextChrome);
         SendMessageW(embedControl,BM_SETCHECK,embedding?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(showChatControl,BM_SETCHECK,showChat?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(voiceControl,BM_SETCHECK,voice?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(muteControl,BM_SETCHECK,muteBackground?BST_CHECKED:BST_UNCHECKED,0);
         for(int i=0;i<MaxCharacters;++i){SendMessageW(standbyControl[i],CB_SETCURSEL,standby[i]==Mode::Economy?1:0,0);if(slots[i])slots[i]->soundPrepared=false;}
         activeReadClock={};applyTheme();refreshChat(true,true);refreshCharacters();updateMonitors();refreshAttention();refreshPins();layout();
@@ -913,7 +947,7 @@ struct Host
         };
         preferencesOpen=true;refreshAssistantEditor=refreshAssistant;
         edit(window,L"Folderstorm Host Preferences",fields,{},page,true,validate,navigation,apply,&preferencesPage,profileDialogOwner());
-        refreshAssistantEditor={};preferencesOpen=false;if(preview && preview==playbackSerial)playAlert({});
+        refreshAssistantEditor={};preferencesOpen=false;visualPreview.reset();applyTheme();layout();if(preview && preview==playbackSerial)playAlert({});
         if(pendingCommand)
         {
             if(slots[pendingTarget].get()!=pendingSlot || (pendingSlot && !ChatKey{pendingIdentity.worker,pendingIdentity.generation,pendingIdentity.account,pendingIdentity.grid,{}}.owns(pendingSlot->snapshot)))
@@ -935,7 +969,7 @@ struct Host
         if(toggle)experience.pinned[id]=!experience.pinned[id];
         SetWindowPos(panel,experience.pinned[id]?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE);
         CheckMenuItem(GetSystemMenu(panel,FALSE),0xA160,MF_BYCOMMAND|(experience.pinned[id]?MF_CHECKED:MF_UNCHECKED));
-        HWND pin=GetDlgItem(panel,PanelPin);if(pin){SetWindowTextW(pin,L"Always on top");fs_host_ui::setButtonIcon(pin,fs_host_ui::Icon::Pin);setToggle(pin,experience.pinned[id]);addTooltip(pin,L"Always on top");}
+        HWND pin=GetDlgItem(panel,PanelPin);if(pin){SetWindowTextW(pin,L"Always on top");fs_host_ui::setButtonIcon(pin,experience.pinned[id]?fs_host_ui::Icon::Pin:fs_host_ui::Icon::PinOff);setToggle(pin,experience.pinned[id]);addTooltip(pin,experience.pinned[id]?L"Always on top: On. Unpin this window.":L"Always on top: Off. Pin this window.");}
     }
     void installPanelMenuOnce(HWND panel){if(!GetPropW(panel,L"FolderstormPanelMenu")){installPanelMenu(panel);SetPropW(panel,L"FolderstormPanelMenu",reinterpret_cast<HANDLE>(1));}}
     void installPanelMenu(HWND panel)
@@ -1270,7 +1304,7 @@ struct Host
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(remove),L"Remove pin");
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(left),L"Move pin left");
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(right),L"Move pin right");
-        POINT point{}; GetCursorPos(&point); const auto choice = TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr); DestroyMenu(menu);
+        POINT point=fs_host_ui::popupPoint(); const auto choice = TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr); DestroyMenu(menu);
         if(filterCommand(choice))return;
         if(choice==ChatClose){if(slots[chatIndex] && slots[chatIndex]->chat.identity.owns(source) && source.conversation==conversation)closeConversation(chatIndex,conversation);return;}
         if (choice >= 100 && choice < 100 + pins.entries.size()) selectPin(choice-100);
@@ -1654,7 +1688,7 @@ struct Host
     void message(const std::wstring& text)
     {
         lastNotice = text; const auto display=saveError.empty()?text:saveError+L" "+text; SetWindowTextW(notice, display.c_str());
-        if (chrome == 2) SetWindowTextW(revealControl,(L"Show controls · "+display).c_str());
+        if (chrome == 2) SetWindowTextW(revealControl,(L"Show controls · "+display+L" · "+voiceText).c_str());
     }
     void tray(bool add)
     {
@@ -1859,7 +1893,7 @@ struct Host
             AppendMenuW(menu,MF_STRING|(open?MF_CHECKED:0)|(!open && (!ready || i==active || busy())?MF_GRAYED:0),MonitorBase+static_cast<UINT>(i),characterName(i).c_str());
         }
         AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,213,L"Open all inactive monitors");AppendMenuW(menu,MF_STRING,214,L"Tile as grid");AppendMenuW(menu,MF_STRING,215,L"Arrange as row");AppendMenuW(menu,MF_STRING,216,L"Cycling monitor");AppendMenuW(menu,MF_STRING,212,L"Close all monitors");AppendMenuW(menu,MF_STRING,180,L"Monitor settings…");
-        POINT point{};GetCursorPos(&point);menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
+        POINT point=fs_host_ui::popupPoint();menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
         if(choice==213){openAllMonitors();return;}if(choice==214 || choice==215){arrangeMonitors(point,choice==215);return;}if(choice==216){openCycler();return;}
         if(choice==212){stopMonitors();return;}if(choice==180){editPreferences(PrefMonitors);return;}
         if(choice>=MonitorBase && choice<MonitorBase+MaxCharacters)
@@ -1873,8 +1907,13 @@ struct Host
     {
         focusRequested=false;RemovePropW(window,L"FolderstormViewportFocusIntent");
         const auto actions=overflowActions;const int target=lifecycle.selection();auto* original=slots[target].get();const Message identity=original?original->snapshot:Message{};const auto menu=CreatePopupMenu();
-        for(std::size_t i=0;i<actions.size();++i){const auto* c=shellCommand(actions[i]);if(c)AppendMenuW(menu,MF_STRING,static_cast<UINT>(i+1),c->label);}
-        POINT point{};GetCursorPos(&point);menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
+        for(std::size_t i=0;i<actions.size();++i)
+        {
+            const auto* c=shellCommand(actions[i]);if(!c)continue;
+            const auto visual=fs_host_ui::commandVisual(actions[i],{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
+            AppendMenuW(menu,MF_STRING|(visual.checked&&*visual.checked?MF_CHECKED:0),static_cast<UINT>(i+1),c->label);
+        }
+        POINT point=fs_host_ui::popupPoint();menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
         if(choice && choice<=actions.size())
         {
             if(slots[target].get()!=original || (original && !ChatKey{identity.worker,identity.generation,identity.account,identity.grid,{}}.owns(original->snapshot)))
@@ -1889,9 +1928,9 @@ struct Host
         for(const auto action:actions)
         {
             const auto* name=action==LaunchNext?L"Login":action==ShowChat?L"Chat":action==MonitorsMenu?L"Monitors":L"Preferences";
-            AppendMenuW(popup,MF_STRING|(action==LaunchNext&&!IsWindowEnabled(launchButton)?MF_GRAYED:0),action,name);
+            AppendMenuW(popup,MF_STRING|(action==ShowChat&&showChat?MF_CHECKED:0)|(action==LaunchNext&&!IsWindowEnabled(launchButton)?MF_GRAYED:0),action,name);
         }
-        POINT point{};GetCursorPos(&point);menuOpen=true;const UINT action=TrackPopupMenu(popup,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(popup);
+        POINT point=fs_host_ui::popupPoint();menuOpen=true;const UINT action=TrackPopupMenu(popup,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(popup);
         if(action)SendMessageW(window,WM_COMMAND,action,0);
     }
     void sessionMenu(unsigned int group=0,UINT direct=0,int target=-1)
@@ -1947,7 +1986,7 @@ struct Host
         else if(group==3){RemoveMenu(menu,0,MF_BYPOSITION);DestroyMenu(menu);menu=settings;}
         else if(group==4){RemoveMenu(menu,0,MF_BYPOSITION);DestroyMenu(menu);menu=login;}
         else if(group==1){RemoveMenu(menu,0,MF_BYPOSITION);RemoveMenu(menu,0,MF_BYPOSITION);DestroyMenu(menu);menu=characters;AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(login),L"Open login");}
-        POINT point{};GetCursorPos(&point);menuOpen=true;
+        POINT point=fs_host_ui::popupPoint();menuOpen=true;
         const UINT choice=direct?direct:TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);
         menuOpen=false;DestroyMenu(menu);
         const bool scoped=choice==201 || choice==202 || choice==240 || choice==241 || choice==273 || choice==277 || choice==MonitorSelected || (choice>=430 && choice<=433);
@@ -2006,8 +2045,8 @@ struct Host
         }
         else if (choice == 277) copyProfileSettings(index);
         else if (choice == 209) {if(MessageBoxW(window,L"Stop managing all characters and leave their viewers running separately?",L"Stop managing",MB_OKCANCEL)==IDOK)detach(false);}
-        else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); }
-        else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); }
+        else if (choice == 204) { voice = !voice; SendMessageW(voiceControl, BM_SETCHECK, voice ? BST_CHECKED : BST_UNCHECKED, 0); layout();refreshVoiceStatus(); }
+        else if (choice == 205) { muteBackground = !muteBackground; SendMessageW(muteControl, BM_SETCHECK, muteBackground ? BST_CHECKED : BST_UNCHECKED, 0); layout(); }
         else if (choice == 206) saveOptions();
         else if (choice == 207) editTransition();
         else if (choice == 208) skipTransition();
@@ -2453,7 +2492,7 @@ struct Host
         AppendMenuW(popup, MF_POPUP, reinterpret_cast<UINT_PTR>(conversationFilters()), L"Show conversations");
         AppendMenuW(popup,MF_STRING,23,L"Tile monitors as grid");AppendMenuW(popup,MF_STRING,24,L"Arrange monitors as row");
         AppendMenuW(popup, MF_STRING, 20, L"Close this monitor");
-        POINT point{}; GetCursorPos(&point);
+        POINT point=fs_host_ui::popupPoint();
         menuOpen = true;
         const auto choice = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_NONOTIFY, point.x, point.y, 0, monitors[id].window, nullptr);
         menuOpen = false;
@@ -2556,6 +2595,9 @@ struct Host
         m.latest = make(L"BUTTON",L"Latest",BS_PUSHBUTTON|WS_TABSTOP,ChatLatest);
         m.history = make(L"EDIT",L"",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER|WS_TABSTOP,0);
         m.compose = make(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|WS_BORDER|WS_TABSTOP,ChatCompose);
+        theme.accessible.set(m.choices,L"Monitor Chat conversation");theme.accessible.set(m.history,L"Monitor Chat history");
+        theme.accessible.set(m.compose,L"Monitor Chat message",L"Send as the character shown in this monitor. Shift+Enter adds a line.");
+        if(m.cycleInterval)theme.accessible.set(m.cycleInterval,L"Cycling interval in seconds",L"2 to 3,600 seconds. Apply by leaving this field.");
         m.send = make(L"BUTTON",L"Send",BS_PUSHBUTTON|WS_TABSTOP,ChatSend);
         auto items = std::vector<HWND>{m.label,m.choices,m.history,m.compose,m.send,m.read,m.close,m.exchange,m.chatToggle,m.pin,m.options,m.latest,m.newIM,m.friendsToggle};
         if(id==CyclingView){items.insert(items.end(),{m.cyclePrevious,m.cycleNext,m.cyclePlay,m.cycleInterval});}
@@ -2591,7 +2633,7 @@ struct Host
         auto& m=monitors[id];if(!m.label)return;const auto scale=[this,&m](int v){return theme.scale(v,m.dpi);};RECT r{};GetClientRect(m.window,&r);
         const int fullWidth=static_cast<int>(r.right),side=m.showChat && m.showFriends?(std::min)(scale(260),fullWidth/2):0;
         const int width=(std::max)(1,fullWidth-scale(12)-side),image=monitorImageHeight(id),header=image+scale(28),cycle=id==CyclingView?scale(32):0,top=image+scale(60)+cycle;
-        for(HWND child:{m.exchange,m.chatToggle,m.pin,m.options})ShowWindow(child,SW_SHOWNOACTIVATE);
+        for(HWND child:{m.exchange,m.chatToggle,m.pin,m.options})ShowWindow(child,SW_SHOWNOACTIVATE);setToggle(m.chatToggle,m.showChat);
         const int cell=(fullWidth-scale(12))/4;
         MoveWindow(m.exchange,scale(6),header,cell-scale(3),scale(26),TRUE);MoveWindow(m.chatToggle,scale(6)+cell,header,cell-scale(3),scale(26),TRUE);MoveWindow(m.pin,scale(6)+cell*2,header,cell-scale(3),scale(26),TRUE);MoveWindow(m.options,scale(6)+cell*3,header,cell-scale(3),scale(26),TRUE);
         if(id==CyclingView)
@@ -3518,6 +3560,32 @@ struct Host
             SetWindowTextW(compactInfo, summary.c_str());
         }
     }
+    void refreshVoiceStatus()
+    {
+        std::vector<fs_host_ui::VoiceCandidate> candidates;
+        for(int i=0;i<MaxCharacters;++i)if(slots[i])
+        {
+            const auto& slot=*slots[i];const auto& snapshot=slot.snapshot;
+            candidates.push_back({i,slot.running()&&!slot.detached&&slot.pipe.alive()&&slot.chat.identity.owns(snapshot),
+                snapshot.state==State::Ready,snapshot.mode==Mode::Active&&!(snapshot.flags&(Promoting|Error)),
+                (snapshot.flags&VoiceOwner)!=0,(slot.audioPolicy&AudioVoice)!=0});
+        }
+        const auto status=fs_host_ui::voiceStatus(voice,detaching||handoff.step()!=Handoff::Step::Idle,active,candidates);
+        std::wstring text=status.display==fs_host_ui::VoiceDisplay::Off?L"Voice: Off":status.display==fs_host_ui::VoiceDisplay::Switching?L"Voice: Switching…":L"Voice: Unavailable";
+        std::wstring accessibleName=text,description=text;
+        if(status.display==fs_host_ui::VoiceDisplay::Assigned)
+        {
+            text=L"Voice → "+characterName(status.slot);
+            accessibleName=L"Voice assigned to "+wide(slots[status.slot]->snapshot.name)+L" · "+wide(slots[status.slot]->snapshot.grid);
+            description=accessibleName+L". Connection and microphone status remain in the native viewer.";
+        }
+        if(voiceText==text && voiceName==accessibleName && voiceDescription==description)return;
+        voiceText=std::move(text);voiceName=std::move(accessibleName);voiceDescription=std::move(description);
+        for(HWND label:{voiceStatusControl,detachedVoiceStatus})if(label)
+        {SetWindowTextW(label,voiceText.c_str());theme.accessible.set(label,voiceName,voiceDescription);addTooltip(label,voiceDescription.c_str());}
+        if(chrome==2)message(lastNotice);
+        layout();
+    }
     void tick()
     {
         controllerTick();
@@ -3712,6 +3780,7 @@ struct Host
         refreshChat();
         refreshPins(); refreshAttention();
         refreshCharacters();
+        refreshVoiceStatus();
         std::uint64_t signature=static_cast<std::uint64_t>(lifecycle.selection()+1);for(int i=0;i<MaxCharacters;++i)if(slots[i])signature=signature*131+static_cast<unsigned int>(slots[i]->snapshot.state)*7+static_cast<unsigned int>(slots[i]->restart.phase())+(slots[i]->pipe.alive()?0u:100u);
         if(signature!=layoutState){layoutState=signature;layout();}
         if (active < 0) SetWindowTextW(compactInfo, L"Choose a character · details in Session");
@@ -3842,9 +3911,9 @@ struct Host
     }
     int characterHeight(HWND parent,bool condensed) const
     {
-        const UINT local=parent==window?dpi:controlsDpi;const int row=experience.density?38:30;
+        const UINT local=parent==window?dpi:controlsDpi;const int row=visualOptions().density?38:30;
         const bool needsRestart=slots[lifecycle.selection()] && (slots[lifecycle.selection()]->snapshot.state==State::Disconnected || !slots[lifecycle.selection()]->pipe.alive() || slots[lifecycle.selection()]->restart.phase()!=Restart::Phase::Idle);
-        const int rows=1+(parent!=window && !experience.quick.empty()?1:0)+(!condensed && experience.cards?MaxCharacters:0)+(!condensed && experience.diagnostics?MaxCharacters:0)+(needsRestart?1:0);
+        const int rows=1+(parent!=window?1:0)+(parent!=window && !experience.quick.empty()?1:0)+(!condensed && visualOptions().cards?MaxCharacters:0)+(!condensed && experience.diagnostics?MaxCharacters:0)+(needsRestart?1:0);
         return theme.scale(rows*row,local);
     }
     ToolbarRange controlsArea(HWND parent) const
@@ -3867,19 +3936,24 @@ struct Host
     {
         const UINT local=parent==window?dpi:controlsDpi;const auto area=controlsArea(parent);
         const auto scale=[this,local](int n){return theme.scale(n,local);};const int width=MulDiv(area.width,96,theme.uiDpi(local));
-        const int row=experience.density?38:30,h=row-6;
+        const int row=visualOptions().density?38:30,h=row-6;
         std::vector<HWND> shown;
         const auto show=[&](HWND child){shown.push_back(child);if(!(GetWindowLongPtrW(child,GWL_STYLE)&WS_VISIBLE))ShowWindow(child,SW_SHOWNOACTIVATE);};
         const int faceHeight=(std::max)(scale(h),fs_host_ui::comboFaceHeight(characterControl,scale(h)));
         const auto position=[&](HWND child,int x,int y,int w,int height,int expectedHeight)
-        {RECT old{};GetWindowRect(child,&old);MapWindowPoints(nullptr,parent,reinterpret_cast<POINT*>(&old),2);if(old.left!=x || old.top!=y || old.right-old.left!=w || old.bottom-old.top!=expectedHeight)MoveWindow(child,x,y,w,height,TRUE);show(child);};
+        {RECT old{};GetWindowRect(child,&old);MapWindowPoints(nullptr,parent,reinterpret_cast<POINT*>(&old),2);if(old.left!=x || old.top!=y || old.right-old.left!=w || old.bottom-old.top!=expectedHeight)SetWindowPos(child,nullptr,x,y,w,height,SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOCOPYBITS);show(child);};
         const auto move=[&](HWND child,int x,int y,int w){position(child,area.x+scale(x),scale(y),(std::max)(1,scale(w)),faceHeight,faceHeight);};
         const auto name=[&](HWND child,const wchar_t* label){wchar_t old[256]{};GetWindowTextW(child,old,256);if(wcscmp(old,label))SetWindowTextW(child,label);};
         const auto icon=[&](HWND child,int x,int y,fs_host_ui::Icon glyph,const wchar_t* label,const wchar_t* tip)
         {name(child,label);fs_host_ui::setButtonIcon(child,glyph);move(child,x,y,28);addTooltip(child,tip);};
         if(visible)
         {
-            const bool detached=parent!=window;const auto groups=toolbarGroups(width,!experience.quick.empty()&&!detached,detached);
+            const bool detached=parent!=window;
+            const HDC dc=GetDC(parent);const auto previous=dc?SelectObject(dc,parent==window?font:controlsFont):nullptr;
+            const auto textWidth=[&](const std::wstring& label){SIZE size{};if(dc)GetTextExtentPoint32W(dc,label.c_str(),static_cast<int>(label.size()),&size);return (std::max)(28,MulDiv(static_cast<int>(size.cx),96,theme.uiDpi(local))+14);};
+            const unsigned int mainMode=visualOptions().toolbarLabels;
+            std::vector<int> mainWidths;for(const auto* label:{L"Login",L"Chat",L"Monitors",L"Preferences"})mainWidths.push_back((mainMode==2?28:textWidth(label)+(mainMode==0?24:0))+4);
+            const auto groups=toolbarGroups(width,!experience.quick.empty()&&!detached,detached,mainWidths);
             position(characterControl,area.x+scale(4),scale(3),(std::max)(1,scale(groups.selector)),scale(220),faceHeight);
             addTooltip(characterControl,(L"Select character: "+characterName(lifecycle.selection())+L". Right-click for actions.").c_str());
             SendMessageW(characterControl,CB_SETDROPPEDWIDTH,scale((std::max)(180,groups.selector)),0);
@@ -3889,7 +3963,12 @@ struct Host
             const wchar_t* mainNames[]={L"Login",L"Chat",L"Monitors",L"Preferences"};
             const wchar_t* mainTips[]={L"Open the next available login; right-click to choose a character",L"Show or hide shared Chat",L"Open or close character monitors",L"Host Preferences"};
             int x=4+groups.selector+4;overflowMain.clear();
-            for(int i=0;i<4;++i){if(i<groups.mainCount){icon(mainButtons[i],x,3,mainIcons[i],mainNames[i],mainTips[i]);x+=32;}else overflowMain.push_back(mainCommands[i]);}
+            for(int i=0;i<4;++i)
+            {
+                theme.accessible.set(mainButtons[i],mainNames[i],mainTips[i]);
+                if(i<groups.mainCount){name(mainButtons[i],mainNames[i]);fs_host_ui::setButtonIcon(mainButtons[i],mainMode==1?fs_host_ui::Icon::None:mainIcons[i],mainMode==0);move(mainButtons[i],x,3,mainWidths[static_cast<std::size_t>(i)]-4);addTooltip(mainButtons[i],mainTips[i]);x+=mainWidths[static_cast<std::size_t>(i)];}
+                else overflowMain.push_back(mainCommands[i]);
+            }
             setToggle(showChatControl,showChat);
             if(groups.mainOverflow)icon(mainOverflow,x,3,fs_host_ui::Icon::Ellipsis,L"More controls",L"More character controls");
             int right=groups.rightStart;
@@ -3900,16 +3979,19 @@ struct Host
             icon(densityToggle,right,3,requestedCondensed?fs_host_ui::Icon::ChevronDown:fs_host_ui::Icon::ChevronUp,
                 requestedCondensed?L"Expand character controls":L"Condense character controls",
                 requestedCondensed?L"Expand character controls":condensed?L"Condense character controls. Currently compacted to fit; enlarge the window to show cards.":L"Condense character controls");
+            theme.accessible.set(densityToggle,requestedCondensed?L"Expand character controls":L"Condense character controls",
+                condensed?requestedCondensed?L"Character controls are condensed.":L"Character controls are automatically compacted to fit. Enlarge the window to show cards.":L"Character controls are expanded.");
             int y=row;const int available=detached?(std::max)(0,width-8):groups.centerAvailable;
             const int quickY=detached?y+3:3;if(detached&&!experience.quick.empty())y+=row;
             std::vector<QuickButtonSize> sizes;std::vector<std::wstring> labels;
-            const HDC dc=GetDC(parent);const auto previous=dc?SelectObject(dc,parent==window?font:controlsFont):nullptr;
-            const auto textWidth=[&](const std::wstring& label){SIZE size{};if(dc)GetTextExtentPoint32W(dc,label.c_str(),static_cast<int>(label.size()),&size);return (std::max)(28,MulDiv(static_cast<int>(size.cx),96,theme.uiDpi(local))+14);};
+
             for(const auto command:experience.quick)
             {
                 const auto badge=std::to_wstring(attentionCount);labels.push_back(command==274?L"Attention · "+badge:quickLabel(command));
+                const auto visual=fs_host_ui::commandVisual(command,{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
+                if(visualOptions().audioStateText && (command==204 || command==205))labels.back()+=std::wstring(L" · ")+visual.suffix;
                 const int compact=command==274?textWidth(badge):28;
-                sizes.push_back({experience.labels==2?compact:textWidth(labels.back())+(experience.labels==0?24:0),compact});
+                sizes.push_back({visualOptions().labels==2?compact:textWidth(labels.back())+(visualOptions().labels==0?24:0),compact});
             }
             if(dc){if(previous)SelectObject(dc,previous);ReleaseDC(parent,dc);}
             const auto fit=quickToolbarLayout(available,sizes);int quickX=detached?(width-fit.used)/2:centeredQuickStart(width,groups,fit.used);
@@ -3917,12 +3999,17 @@ struct Host
             for(std::size_t i=0;i<experience.quick.size();++i)
             {
                 const auto command=experience.quick[i];if(i>=fit.visible){overflowActions.push_back(command);continue;}
-                const bool compact=experience.labels==2 || fit.widths[i]<sizes[i].full;
+                const bool compact=visualOptions().labels==2 || fit.widths[i]<sizes[i].full;
                 name(quickButtons[i],(compact&&command==274?std::to_wstring(attentionCount):labels[i]).c_str());
-                fs_host_ui::setButtonIcon(quickButtons[i],compact?(command==274?fs_host_ui::Icon::None:fs_host_ui::commandIcon(command)):experience.labels==0?fs_host_ui::commandIcon(command):fs_host_ui::Icon::None,!compact&&experience.labels==0);
+                const auto visual=fs_host_ui::commandVisual(command,{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
+                fs_host_ui::setButtonIcon(quickButtons[i],compact?(command==274?fs_host_ui::Icon::None:visual.icon):visualOptions().labels==0?visual.icon:fs_host_ui::Icon::None,!compact&&visualOptions().labels==0);
+                theme.checkButton(quickButtons[i],visual.checked);
                 move(quickButtons[i],quickX,quickY,fit.widths[i]);quickX+=fit.widths[i]+4;
-                if(const auto* commandInfo=shellCommand(command))addTooltip(quickButtons[i],commandInfo->tip);
-                setToggle(quickButtons[i],command==274&&attentionWindow&&IsWindowVisible(attentionWindow));
+                if(const auto* commandInfo=shellCommand(command))
+                {
+                    std::wstring tip=commandInfo->tip;if(command==204 || command==205)tip=std::wstring(commandInfo->label)+L": "+visual.suffix+L". "+tip;
+                    addTooltip(quickButtons[i],tip.c_str());theme.accessible.set(quickButtons[i],commandInfo->label,tip);
+                }
             }
             if(fit.overflow&&available>0){fs_host_ui::setButtonIcon(quickOverflow,fs_host_ui::Icon::Ellipsis);move(quickOverflow,quickX,quickY,(std::min)(28,available));}
             if(!detached&&fit.used>0)
@@ -3932,15 +4019,19 @@ struct Host
             }
             const int selected=lifecycle.selection();const bool needsRestart=slots[selected]&&(slots[selected]->snapshot.state==State::Disconnected||!slots[selected]->pipe.alive()||slots[selected]->restart.phase()!=Restart::Phase::Idle);
             if(needsRestart){move(restartButton,4,y,160);name(restartButton,slots[selected]->restart.phase()==Restart::Phase::Idle?L"Restart character":L"Cancel restart");fs_host_ui::setButtonIcon(restartButton,fs_host_ui::Icon::RotateCw,true);addTooltip(restartButton,L"Restart this character or cancel its pending restart");y+=row;}
-            if(!condensed&&experience.cards)for(unsigned int position=0;position<MaxCharacters;++position){const int i=static_cast<int>(experience.order[position]);move(cardButtons[i],4,y,width-48);move(cardActions[i],width-40,y,34);name(cardActions[i],L"Character actions");fs_host_ui::setButtonIcon(cardActions[i],fs_host_ui::Icon::Ellipsis);addTooltip(cardButtons[i],(L"Select "+characterName(i)).c_str());addTooltip(cardActions[i],(L"Actions for "+characterName(i)).c_str());y+=row;}
+            if(!condensed&&visualOptions().cards)for(unsigned int position=0;position<MaxCharacters;++position){const int i=static_cast<int>(experience.order[position]);move(cardButtons[i],4,y,width-48);move(cardActions[i],width-40,y,34);name(cardActions[i],L"Character actions");fs_host_ui::setButtonIcon(cardActions[i],fs_host_ui::Icon::Ellipsis);addTooltip(cardButtons[i],(L"Select "+characterName(i)).c_str());addTooltip(cardActions[i],(L"Actions for "+characterName(i)).c_str());y+=row;}
             if(!condensed&&experience.diagnostics)for(int i=0;i<MaxCharacters;++i){move(status[i],4,y,width-8);y+=row;}
+            if(detached)
+            {
+                if(!detachedVoiceStatus)detachedVoiceStatus=CreateWindowExW(0,L"STATIC",voiceText.c_str(),WS_CHILD|SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX,0,0,1,1,parent,nullptr,GetModuleHandleW(nullptr),nullptr);
+                if(detachedVoiceStatus){theme.accessible.set(detachedVoiceStatus,voiceName,voiceDescription);fs_host_ui::setNativeFont(detachedVoiceStatus,controlsFont);move(detachedVoiceStatus,4,y,width-8);addTooltip(detachedVoiceStatus,voiceDescription.c_str());}
+            }
         }
         for(auto child:characterControls())if(std::find(shown.begin(),shown.end(),child)==shown.end()&&(GetWindowLongPtrW(child,GWL_STYLE)&WS_VISIBLE))ShowWindow(child,SW_HIDE);
     }
     void setToggle(HWND child,bool selected)
     {
-        const bool prior=GetPropW(child,L"FolderstormToggle")!=nullptr;if(prior==selected)return;
-        if(selected)SetPropW(child,L"FolderstormToggle",reinterpret_cast<HANDLE>(1));else RemovePropW(child,L"FolderstormToggle");InvalidateRect(child,nullptr,FALSE);
+        theme.checkButton(child,selected);
     }
     void layoutChat(HWND parent,int top,bool visible,int bottomInset=0)
     {
@@ -3974,6 +4065,7 @@ struct Host
     }
     void layout()
     {
+        const HWND priorFocus=GetFocus();
         RECT rect{}; GetClientRect(window, &rect);
         const int width = static_cast<int>(rect.right), height = static_cast<int>(rect.bottom);
         const bool collapsed = chrome == 2;
@@ -3982,9 +4074,9 @@ struct Host
         RECT controlsRect{};if(controlsWindow)GetClientRect(controlsWindow,&controlsRect);
         const bool controlsCondensed=controlsDetached && (chrome==1 || characterHeight(controlsWindow,false)>controlsRect.bottom);
         layoutCharacters(controlsDetached ? controlsWindow : window, controlsDetached ? controlsCondensed : condensed, controlsDetached || !collapsed);
-        const int top = collapsed ? scaled(revealHeight(chrome,experience.density!=0)) : controlsDetached ? 0 : characterHeight(window,condensed);
+        const int top = collapsed ? scaled(revealHeight(chrome,visualOptions().density!=0)) : controlsDetached ? 0 : characterHeight(window,condensed);
         ShowWindow(revealControl,collapsed ? SW_SHOWNOACTIVATE : SW_HIDE);
-        MoveWindow(revealControl,0,0,width,scaled(revealHeight(chrome,experience.density!=0)),TRUE);
+        MoveWindow(revealControl,0,0,width,scaled(revealHeight(chrome,visualOptions().density!=0)),TRUE);
         const bool dockChat = showChat && !chatDetached && !collapsed;
         const int footerHeight = chrome != 2 ? scaled(24) : 0;
         const int chatTop = dockChat ? (std::max)(top + scaled(100), height - footerHeight - scaled(pins.entries.empty() ? 278 : 306)) : height - footerHeight;
@@ -4000,11 +4092,23 @@ struct Host
         showPanel(controlsWindow, controlsDetached && !IsIconic(window));
         showPanel(chatWindow, chatDetached && showChat && !IsIconic(window));
         ShowWindow(notice,chrome!=2?SW_SHOWNOACTIVATE:SW_HIDE);
-        MoveWindow(notice, scaled(10), height - scaled(23), (std::max)(1, width - scaled(20)), scaled(20), TRUE);
+        const int voiceWidth=(std::min)(width/2,scaled(260));
+        ShowWindow(voiceStatusControl,chrome!=2?SW_SHOWNOACTIVATE:SW_HIDE);
+        MoveWindow(voiceStatusControl,width-voiceWidth-scaled(10),height-scaled(23),voiceWidth,scaled(20),TRUE);
+        MoveWindow(notice, scaled(10), height - scaled(23), (std::max)(1,width-voiceWidth-scaled(32)), scaled(20), TRUE);
+        DWORD focusProcess=0;if(priorFocus)GetWindowThreadProcessId(priorFocus,&focusProcess);
+        if(focusProcess==GetCurrentProcessId() && !IsWindowVisible(priorFocus) &&
+            (IsChild(window,priorFocus) || (chatWindow&&IsChild(chatWindow,priorFocus)) || (controlsWindow&&IsChild(controlsWindow,priorFocus))))
+        {
+            HWND target=collapsed?revealControl:characterControl;
+            if(IsWindowVisible(target)&&IsWindowEnabled(target))SetFocus(target);
+        }
     }
     void addTooltip(HWND child, const wchar_t* text)
     {
         tooltips.set(child,text,theme);
+        if(child==chatAccount)theme.accessible.set(child,L"Chat sending character",text);
+        else if(child==chatConversation)theme.accessible.set(child,L"Chat conversation",text);
     }
 };
 Host* host = nullptr;
@@ -4153,6 +4257,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     if(message==WM_SYSCOMMAND){const auto command=wparam&0xfff0u;if(command==0xA140 || command==0xA150){host->recover(command==0xA150);return 0;}if(command==0xA160){host->pinWindow(window);return 0;}}
     const auto& binding = host->monitorSet.bindings[id];
     auto scale = [monitor,context=host](int value) { return context->theme.scale(value,monitor->dpi); };
+    fs_host_ui::PopupAnchor commandAnchor(reinterpret_cast<HWND>(lparam),message==WM_COMMAND&&HIWORD(wparam)==BN_CLICKED&&lparam?-1:0);
     switch (message)
     {
     case WM_COMMAND:
@@ -4166,7 +4271,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     case WM_MEASUREITEM: reinterpret_cast<MEASUREITEMSTRUCT*>(lparam)->itemHeight=static_cast<UINT>(host->theme.scale(22,monitor->dpi));return TRUE;
     case WM_DRAWITEM: if(host->theme.button(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)) || host->theme.drawCombo(*reinterpret_cast<DRAWITEMSTRUCT*>(lparam)))return TRUE;break;
     case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORBTN: return host->theme.color(message,wparam,lparam);
-    case WM_CONTEXTMENU: host->monitorMenu(id); return 0;
+    case WM_CONTEXTMENU: {fs_host_ui::PopupAnchor anchor(reinterpret_cast<HWND>(wparam),lparam);host->monitorMenu(id);return 0;}
     case WM_CLOSE:
         host->stopMonitor(id, true); return 0;
     case WM_LBUTTONDOWN:
@@ -4260,6 +4365,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 {
     if (host && host->taskbarCreated && message == host->taskbarCreated) { host->tray(true); return 0; }
     if (!host) return DefWindowProcW(window, message, wparam, lparam);
+    fs_host_ui::PopupAnchor commandAnchor(reinterpret_cast<HWND>(lparam),message==WM_COMMAND&&HIWORD(wparam)==BN_CLICKED&&lparam?-1:0);
     if (message == WM_SYSCOMMAND && ((wparam & 0xfff0u) == 0xA140 || (wparam & 0xfff0u) == 0xA150))
     { host->recover((wparam & 0xfff0u) == 0xA150); return 0; }
     switch (message)
@@ -4314,6 +4420,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         }
         host->compactInfo = control(window, L"STATIC", L"Character status in Session menu", SS_LEFT, 536, 5, 250, 20);
         host->viewport = control(window, L"STATIC", L"", SS_BLACKRECT | SS_NOTIFY | WS_CLIPCHILDREN, 0, 99, 880, 490, ViewportFocus);
+        host->voiceStatusControl=control(window,L"STATIC",L"Voice: Off",SS_RIGHT|SS_ENDELLIPSIS|SS_NOPREFIX,0,0,1,1);
         host->notice = control(window, L"STATIC", L"Choose a character or open a login to begin.", SS_LEFT|SS_ENDELLIPSIS|SS_NOPREFIX, 10, 600, 850, 20);
         host->pinMenu = control(window,L"BUTTON",L"Chat…",BS_PUSHBUTTON|WS_TABSTOP,810,400,80,24,PinActions);
         for (int i = 0; i < 6; ++i) host->pinButtons[i] = control(window,L"BUTTON",L"",BS_OWNERDRAW|WS_TABSTOP,10+i*130,400,125,25,PinBase+i);
@@ -4321,6 +4428,9 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->chatConversation = control(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_TABSTOP | WS_VSCROLL, 200, 400, 400, 200, ChatConversation);
         host->chatHistory = control(window, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 10, 452, 850, 88);
         host->chatCompose = control(window, L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_TABSTOP, 10, 545, 800, 35, ChatCompose);
+        host->theme.accessible.set(host->chatAccount,L"Chat sending character",L"Independent of the active world and voice assignment.");
+        host->theme.accessible.set(host->chatConversation,L"Chat conversation");host->theme.accessible.set(host->chatHistory,L"Chat history");
+        host->theme.accessible.set(host->chatCompose,L"Chat message",L"Send as the character shown above. Shift+Enter adds a line.");
         SendMessageW(host->chatCompose, EM_SETLIMITTEXT, 1023, 0);
         host->chatSend = control(window, L"BUTTON", L"Send", BS_PUSHBUTTON | WS_TABSTOP, 820, 545, 75, 35, ChatSend);
         host->chatReview = control(window, L"BUTTON", L"Review in viewer", BS_PUSHBUTTON | WS_TABSTOP, 620, 400, 140, 24, ChatReview);
@@ -4357,6 +4467,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         host->addTooltip(host->detachControl, L"Use separate viewer windows while retaining character management");
         host->addTooltip(host->optionsControl, L"Character actions, monitors, host presentation and docking");
         host->addTooltip(host->mainOverflow,L"More character controls");host->addTooltip(host->characterControl,L"Select a character; right-click for its actions");
+        host->theme.accessible.set(host->characterControl,L"Character",L"Select a character for management; right-click for its actions.");
         host->addTooltip(host->chatReview,L"Review the selected conversation in its native viewer");host->addTooltip(host->chatRead,L"Mark this conversation read");
         host->addTooltip(host->chatSend,L"Send as the account shown above");host->addTooltip(host->pinMenu,L"Pinned conversations");
         if (chatDetached) host->setPanelDetached(true, true, false);
@@ -4368,6 +4479,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case WM_TIMER: host->tick(); return 0;
     case WM_CONTEXTMENU:
     {
+        fs_host_ui::PopupAnchor anchor(reinterpret_cast<HWND>(wparam),lparam);
         const HWND child=reinterpret_cast<HWND>(wparam);const int id=GetDlgCtrlID(child);
         if(child==host->launchButton){host->sessionMenu(4);return 0;}
         if((id>=QuickBase && id<QuickBase+12) && static_cast<std::size_t>(id-QuickBase)<host->experience.quick.size() && host->experience.quick[static_cast<std::size_t>(id-QuickBase)]==274){host->sessionMenu(5);return 0;}
@@ -4376,6 +4488,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         break;
     }
     case WM_DISPLAYCHANGE: host->refitWindows(); return 0;
+    case WM_THEMECHANGED:
     case WM_SETTINGCHANGE:
         host->applyTheme();host->updateDpi(host->dpi);
         for(HWND panel:{host->chatWindow,host->controlsWindow,host->attentionWindow})if(panel)host->panelFont(panel,panel==host->chatWindow?host->chatDpi:panel==host->controlsWindow?host->controlsDpi:host->attentionDpi);
@@ -4386,7 +4499,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         else if (lparam == WM_RBUTTONUP)
         {
             HMENU menu = CreatePopupMenu(); AppendMenuW(menu,MF_STRING,RestoreControls,L"Show controls"); AppendMenuW(menu,MF_STRING,RecoverWindows,L"Recover windows"); AppendMenuW(menu,MF_STRING,142,L"Exit host…");
-            POINT point{}; GetCursorPos(&point); SetForegroundWindow(window);
+            POINT point=fs_host_ui::popupPoint(); SetForegroundWindow(window);
             const auto choice = TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr); DestroyMenu(menu);
             if (choice == RestoreControls) host->recover(); else if (choice == RecoverWindows) host->recover(true); else if (choice == 142) SendMessageW(window,WM_CLOSE,0,0);
             PostMessageW(window,WM_NULL,0,0);

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssquirtynotes.h"
 #include "fssessionworker.h"
 #include "fsworkspacecontroller.h"
 
@@ -4234,6 +4235,8 @@ void LLStartUp::setStartupState( EStartupState state )
 
     getPhases().stopPhase(getStartupStateString());
     gStartupState = state;
+    if (state == STATE_LOGIN_CLEANUP) FSSquirtyNotes::reset();
+    if (state == STATE_STARTED) FSSquirtyNotes::seedFriends();
     getPhases().startPhase(getStartupStateString());
 
     postStartupState();

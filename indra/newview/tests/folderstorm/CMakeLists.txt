@@ -75,7 +75,7 @@ target_include_directories(session_controller_mcp PRIVATE ../..)
 folderstorm_check(session_controller_dispatch
   ../../../../tools/session-host/tests/test_controller_dispatch.cpp)
 target_include_directories(session_controller_dispatch PRIVATE ../..)
-foreach(check IN ITEMS assistant_features assistant_async assistant_session contacts monitor_tools icons toolbar_layout preferences chat_capacity chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
+foreach(check IN ITEMS assistant_features assistant_async assistant_session contacts monitor_tools controls icons toolbar_layout preferences chat_capacity chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
   folderstorm_check(session_${check}
     ../../../../tools/session-host/tests/test_${check}.cpp)
   target_include_directories(session_${check} PRIVATE ../..)
@@ -97,4 +97,22 @@ if(Boost_FOUND AND TARGET Boost::fiber AND TARGET Boost::context)
   find_package(Threads REQUIRED)
   folderstorm_check(inventory_bulk_scope ../test_fsinventorybulkscope.cpp)
   target_link_libraries(inventory_bulk_scope PRIVATE Boost::fiber Boost::context Threads::Threads)
+endif()
+
+folderstorm_check(squirty_policy ../test_fssquirtypolicy.cpp)
+
+# Native HWND/accessibility checks run only on Windows; portable UI models above
+# remain available without Win32 headers or the viewer.
+if(WIN32)
+  add_executable(session_native_controls ../../../../tools/session-host/tests/test_native_controls.cpp
+    ../../../../tools/session-host/accessibility.cpp)
+  target_include_directories(session_native_controls PRIVATE ../..)
+  target_compile_definitions(session_native_controls PRIVATE UNICODE _UNICODE)
+  if(MSVC)
+    target_compile_options(session_native_controls PRIVATE /utf-8 /UNDEBUG)
+  else()
+    target_compile_options(session_native_controls PRIVATE -UNDEBUG)
+  endif()
+  target_link_libraries(session_native_controls PRIVATE user32 gdi32 comctl32 ole32 oleaut32 uuid oleacc uxtheme msimg32 advapi32 comdlg32)
+  add_test(NAME session_native_controls COMMAND session_native_controls)
 endif()

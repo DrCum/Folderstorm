@@ -102,7 +102,7 @@
   <color name="ChatToastAgentNameColor" reference="ThemeBright" />
   <color name="ToolbarDropZoneColor" reference="ThemeBright" />
   <color name="InventoryFavoriteColor" reference="ThemeGold" />
-  <color name="ButtonFlashBgColor" reference="ThemeGold" />
+  <color name="ButtonFlashBgColor" reference="ThemeInventory" />
   <color name="ColorSwatchBorderColor" reference="ThemeLine" />
   <color name="FloaterUnfocusBorderColor" reference="ThemeLine" />
   <color name="FloaterFocusBorderColor" reference="ThemeFrame" />
@@ -115,6 +115,8 @@
   <color name="ScrollUnselectedColor" reference="ThemeText" />
   <color name="ScrollSelectedFGColor" reference="ThemeInk" />
   <color name="MenuItemHighlightFgColor" reference="ThemeInk" />
+  <color name="MenuItemFlashBgColor" reference="ThemeInventory" />
+  <color name="MentionFlashBgColor" reference="ThemeTitle" />
   <color name="EmphasisColor_13" value="0.074510 0.937255 0.960784 0.13" />
   <color name="EmphasisColor_35" value="0.074510 0.937255 0.960784 0.35" />
   <color name="SchemeLightest_35" value="0.074510 0.937255 0.960784 0.35" />

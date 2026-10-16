@@ -23,12 +23,15 @@
 #include "llsd.h"
 #include "fsposeranimator.h"
 #include "fssharedposemodel.h"
+#include "fssharedposeeditqueue.h"
 #include "fsassistantfeature.h"
 #include "fsposepolicy.h"
 #include "fssharedposepolicy.h"
 #include <deque>
 #include <boost/signals2/connection.hpp>
 #include <functional>
+#include <optional>
+#include <set>
 
 class FSSharedPoseManager : public LLSingleton<FSSharedPoseManager>
 {
@@ -42,6 +45,7 @@ public:
     bool isApplying() const { return mApplying; }
     bool hasSessions() const { return mOwner.active() || !mApprovals.empty(); }
     bool edit(const LLUUID& avatar, const FSSharedPose::JointSet& joints, std::function<void()> action);
+    void finishEdit(const LLUUID& avatar);
     bool history(const LLUUID& avatar, bool redo);
     bool canHistory(const LLUUID& avatar, bool redo) const;
     void shareSelf();
@@ -73,14 +77,17 @@ private:
     };
     struct Approval { LLUUID session, token; double seen = 0., heartbeat = 0.; bool undo = false, redo = false; LLUUID generation=LLUUID::generateNewID(); };
     struct Request { LLUUID id; double expires = 0.; };
-    struct Work
+    struct NativeWorkBinding
     {
         LLUUID avatar, session, token, lease,generation,grantGeneration;
-        FSSharedPose::JointSet joints;
-        std::vector<std::function<void()>> actions;
-        FSSharedPose::Pose latest, lastSent, legacyLockedPose;
+        bool operator==(const NativeWorkBinding& other) const
+        {return avatar==other.avatar && session==other.session && token==other.token && lease==other.lease && generation==other.generation && grantGeneration==other.grantGeneration;}
+    };
+    struct Work : FSSharedPose::EditGesture, NativeWorkBinding
+    {
+        FSSharedPose::Pose legacyLockedPose;
         double requested = 0., sent = -100., renewed = -100.;
-        bool asked = false, granted = false, finished = false, forceFinish = false, awaitingLegacySnapshot = false;
+        bool awaitingLegacySnapshot = false;
         int history = 0;
         U32 sequence = 0;
     };
@@ -96,8 +103,7 @@ private:
         double started=0.,renewed=-100.;
         bool granted=false,sourceSubmitted=false,finished=false,publishing=false,cleanup=false,publicationStop=false;
     };
-    struct Queued { LLUUID target; std::deque<std::string> packets; bool control = false, started = false; LLSD data; std::shared_ptr<AssistantWork> assistant; };
-    struct Deferred { LLUUID avatar; FSSharedPose::JointSet joints; std::function<void()> action; };
+    struct Queued { LLUUID target; std::deque<std::string> packets; bool control = false, started = false; LLSD data; std::shared_ptr<AssistantWork> assistant; std::optional<NativeWorkBinding> native; };
     static void onIdle(void* data);
     void tick();
     void tickAssistant();
@@ -108,15 +114,22 @@ private:
     void sendAssistant(const std::shared_ptr<AssistantWork>& work,const LLSD& data,bool control=true);
     bool assistantJointAllowed(const LLUUID& target,const std::string& joint,const FSSharedPose::Pose& pose) const;
     void endAssistantPublishing(const std::string& reason);
-    void send(const LLUUID& target, const LLSD& message, bool control = true,const std::shared_ptr<AssistantWork>& assistant = {});
+    void send(const LLUUID& target, const LLSD& message, bool control = true,const std::shared_ptr<AssistantWork>& assistant = {},const std::optional<NativeWorkBinding>& native = {});
+    void sendNative(const Work& work, const LLSD& message, bool control = true);
+    bool nativePacketCurrent(const Queued& packet) const;
+    bool nativePacketCurrent(const NativeWorkBinding& binding, bool release) const;
+    void cancelNativePacket(const NativeWorkBinding& binding);
     void handle(const LLUUID& sender, const LLSD& message);
     void publish();
     void snapshot(const LLUUID& target);
     void apply(const LLUUID& avatar, const FSSharedPose::Pose& pose);
     void stopRemote(const LLUUID& avatar);
-    void grantWork(const LLUUID& avatar, const FSSharedPose::Pose& pose);
+    bool grantWork(const LLUUID& avatar, const FSSharedPose::Pose& pose);
     void execute(Work& work);
-    bool nativeWorkCurrent(const Work& work) const;
+    bool nativeWorkCurrent(const NativeWorkBinding& work) const;
+    bool nativeQueueCurrent(const std::deque<Work>& queue) const;
+    void restorePreviews(const LLUUID& avatar);
+    void retireNativeOwnerWork();
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
     void ensureSharedSelf(bool nativeTakeover);
@@ -138,10 +151,10 @@ private:
     std::map<LLUUID, Request> mRequests, mOutgoingRequests;
     std::map<LLUUID, double> mLastRequests;
     std::map<LLUUID, double> mLastIncomingRequests, mPeers;
-    std::map<LLUUID, Work> mWorks;
+    std::map<LLUUID, std::deque<Work>> mWorks;
+    std::set<LLUUID> mBlockedEdits;
     std::map<LLUUID, std::pair<LLUUID, double>> mClosed;
     std::deque<Queued> mQueue;
-    std::deque<Deferred> mDeferred;
     FSSharedPose::Pose mPublished;
     U32 mPublishedRevision = 0;
     LLUUID mRegion, mBridge;

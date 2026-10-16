@@ -32,6 +32,7 @@ struct Field
     std::wstring help;
     bool fixed=false, transient=false;
     int rowHeight=36;
+    std::size_t mirror=static_cast<std::size_t>(-1);
 };
 struct EditorPage
 {
@@ -75,6 +76,22 @@ struct EditorUpdate
 };
 inline void dirtyEditor(HWND dialog)
 {if(auto* e=currentEditor(dialog)){if(!e->updating){e->dirty=true;SetWindowTextW(e->savedLabel,L"");}}}
+inline Field& synchronizeEditorField(Editor& editor,std::size_t index)
+{
+    auto& fields=*editor.fields;const auto source=fields[index].mirror<fields.size()?fields[index].mirror:index;
+    const auto& changed=fields[index];std::wstring value=changed.value;
+    if(changed.type==FieldType::Check)value=SendMessageW(changed.control,BM_GETCHECK,0,0)==BST_CHECKED?L"1":L"0";
+    else if(changed.type==FieldType::Choice)value=std::to_wstring(SendMessageW(changed.control,CB_GETCURSEL,0,0));
+    const bool previous=editor.updating;editor.updating=true;
+    for(std::size_t i=0;i<fields.size();++i)if(i==source || fields[i].mirror==source)
+    {
+        auto& field=fields[i];field.value=value;
+        if(field.type==FieldType::Check)SendMessageW(field.control,BM_SETCHECK,number(field)?BST_CHECKED:BST_UNCHECKED,0);
+        else if(field.type==FieldType::Choice)SendMessageW(field.control,CB_SETCURSEL,number(field),0);
+        InvalidateRect(field.control,nullptr,FALSE);
+    }
+    editor.updating=previous;return fields[source];
+}
 inline LRESULT CALLBACK editorBodyProc(HWND body,UINT message,WPARAM wp,LPARAM lp)
 {
     if(message==WM_ERASEBKGND)
@@ -287,6 +304,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
             const DWORD style=WS_CHILD|(note?SS_LEFT|SS_NOPREFIX:WS_TABSTOP)|(check?BS_AUTOCHECKBOX:choice?CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL:color?BS_OWNERDRAW:action?BS_PUSHBUTTON:note?0:WS_BORDER|ES_AUTOHSCROLL);
             f.control=CreateWindowExW(0,note?L"STATIC":check||color||action?L"BUTTON":choice?L"COMBOBOX":L"EDIT",check?f.label.c_str():color?L"Color":f.value.c_str(),style,0,0,1,1,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(100+i)),instance,nullptr);
             for(HWND child:{f.caption,f.control})setNativeFont(child,font);
+            if(dialogTheme && !note)dialogTheme->accessible.set(f.control,f.label,f.help);
             if(!note)SetWindowSubclass(f.control,editorFieldProc,3,0);EnableWindow(f.control,f.enabled);EnableWindow(f.caption,f.enabled);
             if(check)SendMessageW(f.control,BM_SETCHECK,number(f)?BST_CHECKED:BST_UNCHECKED,0);
             if(choice){for(const auto& label:f.choices)SendMessageW(f.control,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));SendMessageW(f.control,CB_SETCURSEL,number(f),0);}
@@ -328,7 +346,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
     {
         const bool horizontal=message==WM_HSCROLL;const HWND bar=horizontal?e->horizontal:e->vertical;SCROLLINFO scroll{};scroll.cbSize=sizeof(scroll);scroll.fMask=SIF_ALL;GetScrollInfo(bar,SB_CTL,&scroll);int next=horizontal?e->x:e->y;
         if(message==WM_MOUSEWHEEL)next-=GET_WHEEL_DELTA_WPARAM(wparam)/WHEEL_DELTA*e->scale(48);
-        else switch(LOWORD(wparam)){case SB_LINEUP:next-=e->scale(24);break;case SB_LINEDOWN:next+=e->scale(24);break;case SB_PAGEUP:next-=static_cast<int>(scroll.nPage);break;case SB_PAGEDOWN:next+=static_cast<int>(scroll.nPage);break;case SB_THUMBTRACK:case SB_THUMBPOSITION:next=(!dialogTheme || !dialogTheme->highContrast) && GetPropW(bar,L"FolderstormCustomScroll")?scroll.nPos:scroll.nTrackPos;break;default:break;}
+        else switch(LOWORD(wparam)){case SB_LINEUP:next-=e->scale(24);break;case SB_LINEDOWN:next+=e->scale(24);break;case SB_PAGEUP:next-=static_cast<int>(scroll.nPage);break;case SB_PAGEDOWN:next+=static_cast<int>(scroll.nPage);break;case SB_THUMBTRACK:case SB_THUMBPOSITION:next=(!dialogTheme || !dialogTheme->systemHighContrast) && GetPropW(bar,L"FolderstormCustomScroll")?scroll.nPos:scroll.nTrackPos;break;default:break;}
         scrollEditor(dialog,*e,horizontal?next:e->x,horizontal?e->y:next);return TRUE;
     }
     if(message==WM_APP+2)
@@ -350,7 +368,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
         {
             const bool selected=(draw.itemState&ODS_SELECTED)!=0;const COLORREF background=dialogTheme?(selected?dialogTheme->accent:dialogTheme->background):GetSysColor(selected?COLOR_HIGHLIGHT:COLOR_WINDOW);
             const auto rgb=[](COLORREF c){return (static_cast<unsigned int>(GetRValue(c))<<16)|(static_cast<unsigned int>(GetGValue(c))<<8)|GetBValue(c);};
-            const COLORREF foreground=dialogTheme?selected&&dialogTheme->highContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):selected?(fs_session::colorContrast(rgb(background),0)>fs_session::colorContrast(rgb(background),0xffffff)?RGB(0,0,0):RGB(255,255,255)):dialogTheme->text:GetSysColor(selected?COLOR_HIGHLIGHTTEXT:COLOR_WINDOWTEXT);
+            const COLORREF foreground=dialogTheme?selected&&dialogTheme->systemHighContrast?GetSysColor(COLOR_HIGHLIGHTTEXT):selected?(fs_session::colorContrast(rgb(background),0)>fs_session::colorContrast(rgb(background),0xffffff)?RGB(0,0,0):RGB(255,255,255)):dialogTheme->text:GetSysColor(selected?COLOR_HIGHLIGHTTEXT:COLOR_WINDOWTEXT);
             const auto brush=CreateSolidBrush(background);FillRect(draw.hDC,&draw.rcItem,brush);DeleteObject(brush);const auto& labels=e->structured()?e->categories:e->pages;
             if(draw.itemID<labels.size()){RECT r=draw.rcItem;r.left+=e->scale(8);SetTextColor(draw.hDC,foreground);SetBkMode(draw.hDC,TRANSPARENT);DrawTextW(draw.hDC,labels[draw.itemID].c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);}if(draw.itemState&ODS_FOCUS)DrawFocusRect(draw.hDC,&draw.rcItem);return TRUE;
         }
@@ -380,7 +398,7 @@ inline INT_PTR CALLBACK editorProc(HWND dialog,UINT message,WPARAM wparam,LPARAM
         auto& f=(*e->fields)[id-100];const bool choice=f.type==FieldType::Choice && (HIWORD(wparam)==CBN_SELENDOK || (HIWORD(wparam)==CBN_SELCHANGE&&!SendMessageW(f.control,CB_GETDROPPEDSTATE,0,0)));
         const bool check=f.type==FieldType::Check && HIWORD(wparam)==BN_CLICKED;
         if(!e->updating && !f.transient && (choice||check||((f.type==FieldType::Text||f.type==FieldType::Number)&&HIWORD(wparam)==EN_CHANGE)))dirtyEditor(dialog);
-        if(!e->updating && f.changed && (choice||check))f.changed(dialog);
+        if(!e->updating && (choice||check)){auto& canonical=synchronizeEditorField(*e,id-100);if(canonical.changed)canonical.changed(dialog);}
         if(f.type==FieldType::Action && HIWORD(wparam)==BN_CLICKED && f.action)f.action(dialog);
         if(f.type==FieldType::Color && HIWORD(wparam)==BN_CLICKED)
         {

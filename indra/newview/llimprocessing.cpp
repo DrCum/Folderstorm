@@ -25,6 +25,8 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "fssquirtynotes.h"
+#include "fssquirtypolicy.h"
 
 #include "llimprocessing.h"
 
@@ -949,6 +951,19 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             break;
 
         case IM_NOTHING_SPECIAL:    // p2p IM
+        {
+            const bool region_message = region_id.isNull() &&
+                LLWorld::instance().getRegionFromID(from_id) != nullptr;
+            // Classify once before autoresponse/away handling splits the paths.
+            const bool squirty_eligible = FSSquirtyPolicy::eligibleIM({
+                offline == IM_ONLINE,
+                is_muted || (accept_im_from_only_friend && !is_friend),
+                region_message,
+                to_id == gAgent.getID(),
+                !notice_name.empty(),
+                RlvActions::canReceiveIM(from_id)
+            });
+
             // Don't show dialog, just do IM
             if (!gAgent.isGodlike()
                 && gAgent.inPrelude()
@@ -1037,6 +1052,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                     keyword_alert_performed = true;
                 }
                 // </FS:PP>
+
+                if (squirty_eligible)
+                    FSSquirtyNotes::onIM(from_id, name);
 
                 // add to IM panel, but do not bother the user
                 gIMMgr->addMessage(
@@ -1189,16 +1207,6 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
 
                     buffer = saved + message;
 
-                    bool region_message = false;
-                    if (region_id.isNull())
-                    {
-                        LLViewerRegion* regionp = LLWorld::instance().getRegionFromID(from_id);
-                        if (regionp)
-                        {
-                            region_message = true;
-                        }
-                    }
-
                     std::string real_name;
 
                     if (!notice_name.empty())
@@ -1207,6 +1215,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                         LLTrans::findString(buffer, notice_name, notice_args);
                         real_name = SYSTEM_FROM;
                     }
+
+                    if (squirty_eligible)
+                        FSSquirtyNotes::onIM(from_id, name);
 
                     gIMMgr->addMessage(session_id,
                         from_id,
@@ -1255,6 +1266,7 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                 }
             }
             break;
+        }
 
         case IM_TYPING_START:
         {

@@ -32,8 +32,8 @@ inline const std::vector<ShellCommandInfo>& shellCommands()
         {MonitorSelected,L"Monitor",L"Open a read-only monitor for the selected inactive character",L"▤"},
         {240,L"Restart",L"Restart the selected character through normal logout and login",L"↻"},
         {201,L"Workspaces",L"Open the selected character's workspace controls",L"▦"},
-        {204,L"Voice",L"Toggle voice following the active character",L"♪"},
-        {205,L"Mute",L"Toggle background world and media sound muting",L"♫"},
+        {204,L"Voice follows active",L"Let voice follow the active character; this does not indicate microphone transmission",L"♪"},
+        {205,L"BG Audio",L"Allow or mute inactive viewers’ world, UI and media audio; host alerts have separate settings",L"♫"},
         {208,L"Skip",L"Skip the current visual transition",L"»"},
         {Details,L"Details",L"Show resource measurements and connection diagnostics",L"≡"},
         {NextAttention,L"Next",L"Go to the next eligible conversation or attention item",L"›"},
@@ -63,11 +63,13 @@ struct HostExperience
     std::vector<unsigned int> quick{274};
     unsigned int toolbarVersion=1,dockedArea=0,cycleSeconds=10;
     bool requirePauseToChat=true;
+    unsigned int toolbarLabels=0,hostContrast=0;
+    bool audioStateText=false;
     std::array<ShortcutChord,3> keys{}; // Host-local recovery/next/previous; no defaults.
     ShellRect attentionRect;
     bool valid() const
     {
-        if(theme>2 || density>1 || labels>2 || attentionMask>31 || accountMask>31 || pinned[0] || quick.size()>12 || toolbarVersion>1 || dockedArea>6 || cycleSeconds<2 || cycleSeconds>3600) return false;
+        if(toolbarLabels>2 || hostContrast>1 || theme>2 || density>1 || labels>2 || attentionMask>31 || accountMask>31 || pinned[0] || quick.size()>12 || toolbarVersion>1 || dockedArea>6 || cycleSeconds<2 || cycleSeconds>3600) return false;
         std::set<unsigned int> seen;
         for(auto id:quick) if(!shellCommand(id) || !seen.insert(id).second) return false;
         seen.clear(); for(auto id:order) if(id>=MaxCharacters || !seen.insert(id).second) return false;
@@ -78,18 +80,18 @@ struct HostExperience
     std::string encode() const
     {
         if(!valid()) { return {}; }
-        StoreWriter w("FSX4");
+        StoreWriter w("FSX5");
         for(auto n:{theme,density,labels,attentionMask,accountMask}) w.number(n);
         w.number(cards); w.number(diagnostics); w.number(oldestFirst);w.number(viewerShellKeys);
         for(std::size_t i=0;i<8;++i)w.number(pinned[i]);
         for(auto n:order) w.number(n);
         w.number(static_cast<std::uint32_t>(quick.size())); for(auto n:quick) w.number(n);
         for(const auto& k:keys) { w.number(k.key); w.number(k.modifiers); }
-        w.rect(attentionRect);w.number(toolbarVersion);w.number(dockedArea);w.number(cycleSeconds);w.number(requirePauseToChat);for(std::size_t i=8;i<pinned.size();++i)w.number(pinned[i]);return w.data;
+        w.rect(attentionRect);w.number(toolbarVersion);w.number(dockedArea);w.number(cycleSeconds);w.number(requirePauseToChat);for(std::size_t i=8;i<pinned.size();++i)w.number(pinned[i]);w.number(toolbarLabels);w.number(hostContrast);w.number(audioStateText);return w.data;
     }
     static bool decode(const std::string& data,HostExperience& output)
     {
-        const bool extended=data.substr(0,4)=="FSX4",placed=extended || data.substr(0,4)=="FSX3",current=placed || data.substr(0,4)=="FSX2";StoreReader r(data,extended?"FSX4":placed?"FSX3":current?"FSX2":"FSX1",MaxBytes);HostExperience v;
+        const bool accessible=data.substr(0,4)=="FSX5",extended=accessible || data.substr(0,4)=="FSX4",placed=extended || data.substr(0,4)=="FSX3",current=placed || data.substr(0,4)=="FSX2";StoreReader r(data,accessible?"FSX5":extended?"FSX4":placed?"FSX3":current?"FSX2":"FSX1",MaxBytes);HostExperience v;
         v.theme=r.number();v.density=r.number();v.labels=r.number();v.attentionMask=r.number();v.accountMask=r.number();
         const auto boolean=[&r](bool& b){const auto n=r.number();if(n>1)r.ok=false;b=n!=0;};
         boolean(v.cards);boolean(v.diagnostics);boolean(v.oldestFirst);boolean(v.viewerShellKeys);for(std::size_t i=0;i<8;++i)boolean(v.pinned[i]);
@@ -97,6 +99,7 @@ struct HostExperience
         auto count=r.number();if(count>12)return false;v.quick.clear();while(count--)v.quick.push_back(r.number());
         for(auto& k:v.keys){k.key=r.number();k.modifiers=r.number();}v.attentionRect=r.rect();v.toolbarVersion=current?r.number():0;v.dockedArea=placed?r.number():0;
         if(extended){v.cycleSeconds=r.number();boolean(v.requirePauseToChat);for(std::size_t i=8;i<v.pinned.size();++i)boolean(v.pinned[i]);}
+        if(accessible){v.toolbarLabels=r.number();v.hostContrast=r.number();boolean(v.audioStateText);}
         if(!r.done() || !v.valid()) { return false; }
         output=std::move(v);return true;
     }

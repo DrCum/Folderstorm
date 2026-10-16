@@ -4,6 +4,9 @@ Portable validation covers `test_pose_policy.cpp`, `test_pose_xml.cpp`,
 `test_pose_file.cpp`, `test_pose_shared.cpp`, the existing
 `test_fssharedpose.cpp`, `test_fspose_native_contract.py`, and the Go
 `TestPose*` tests in `tools/fs-mcp/internal/mcptools`.
+`test_fspose_publication_lifecycle.py` also compiles actual native manager method
+bodies with portable viewer-boundary stubs and a C++17 compiler, covering manual
+preview preservation and native Share takeover during assistant publication.
 
 These checks do not replace a viewer build, Windows file-handle acceptance, or
 live multi-viewer acceptance. Those remain pending. The following runtime

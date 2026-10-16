@@ -143,8 +143,11 @@ void FSSharedPoseManager::invalidateNativeSharing(const std::string& reason)
  // Run synchronously so returning to the same IDs cannot revive old consent.
  for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel(reason);
  endAssistantPublishing(reason);
+ // Roll back only still-current canonical work before clearing its proof.
+ std::vector<LLUUID> native;for(const auto& entry:mWorks)native.push_back(entry.first);
+ for(const auto& target:native)complete(target,false);
  mOwner.clear();mPublicGeneration=LLUUID::generateNewID();mPublished.clear();mPublishedRevision=0;
- mApprovals.clear();mRequests.clear();mOutgoingRequests.clear();mWorks.clear();mDeferred.clear();
+ mApprovals.clear();mRequests.clear();mOutgoingRequests.clear();mBlockedEdits.clear();
  // Release received remote overlays before their ownership records disappear.
  // stopRemote excludes self and preserves pre-existing/changed native motions.
  std::vector<LLUUID> remotes;for(const auto& entry:mRemotes)remotes.push_back(entry.first);
@@ -202,15 +205,15 @@ void FSSharedPoseManager::bridgeReady()
     mStatus = "Ready";
 }
 
-void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool control,const std::shared_ptr<AssistantWork>& assistant)
+void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool control,const std::shared_ptr<AssistantWork>& assistant,const std::optional<NativeWorkBinding>& native)
 {
     LLSD outgoing = data;
-    const auto provenance=assistant?assistant:((mAssistantPublishing && data["s"].asString()==mAssistantPublishing->session.asString())?mAssistantPublishing:std::shared_ptr<AssistantWork>());
+    const auto provenance=native?std::shared_ptr<AssistantWork>():assistant?assistant:((mAssistantPublishing && data["s"].asString()==mAssistantPublishing->session.asString())?mAssistantPublishing:std::shared_ptr<AssistantWork>());
     const auto type = data["t"].asString();
     // Keep one unsent update per stream, merging disjoint joint changes.
     auto pending = std::find_if(mQueue.begin(), mQueue.end(), [&](const Queued& item)
     {
-        return !item.started && item.assistant==provenance && item.target == target && item.data["t"] == data["t"] &&
+        return !item.started && item.assistant==provenance && item.native==native && item.target == target && item.data["t"] == data["t"] &&
             item.data["s"] == data["s"] && item.data["l"] == data["l"] &&
             (type == "update" || type == "snapshot" || type == "edit" || type == "renew" ||
              type == "heartbeat" || type == "permit" || type == "alive");
@@ -248,7 +251,7 @@ void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool cont
         if (discard == mQueue.end()) return;
         mQueue.erase(discard);
     }
-    Queued entry{target, std::deque<std::string>(packets.begin(), packets.end()), control, false, outgoing,provenance};
+    Queued entry{target, std::deque<std::string>(packets.begin(), packets.end()), control, false, outgoing,provenance,native};
     if (type == "renew" || type == "heartbeat" || type == "permit" || type == "alive" || type == "stop" || type == "revoke")
         mQueue.push_front(std::move(entry));
     else if (control)
@@ -257,6 +260,33 @@ void FSSharedPoseManager::send(const LLUUID& target, const LLSD& data, bool cont
         mQueue.insert(position, std::move(entry));
     }
     else mQueue.push_back(std::move(entry));
+}
+
+void FSSharedPoseManager::sendNative(const Work& work, const LLSD& data, bool control)
+{
+    send(work.avatar,data,control,{},static_cast<const NativeWorkBinding&>(work));
+}
+
+bool FSSharedPoseManager::nativePacketCurrent(const Queued& packet) const
+{
+    if (!packet.native) return true;
+    return nativePacketCurrent(*packet.native,packet.data["t"].asString()=="release");
+}
+bool FSSharedPoseManager::nativePacketCurrent(const NativeWorkBinding& binding, bool release) const
+{
+    if (!nativeWorkCurrent(binding)) return false;
+    // A cancelled lease may release before a replacement front acquires.
+    if (release) return true;
+    const auto found=mWorks.find(binding.avatar);
+    return found!=mWorks.end() && nativeQueueCurrent(found->second) && FSSharedPose::gesturePacketCurrent(found->second,now(),
+        [this](const Work& work){return nativeWorkCurrent(work);},
+        [&binding](const Work& work){return static_cast<const NativeWorkBinding&>(work)==binding;});
+}
+void FSSharedPoseManager::cancelNativePacket(const NativeWorkBinding& binding)
+{
+    const auto found=mWorks.find(binding.avatar);
+    if(found!=mWorks.end() && !found->second.empty() &&
+       static_cast<const NativeWorkBinding&>(found->second.front())==binding)complete(binding.avatar,false);
 }
 
 void FSSharedPoseManager::receive(const LLUUID& owner, const LLUUID& object, const std::string& packet)
@@ -367,6 +397,7 @@ void FSSharedPoseManager::apply(const LLUUID& id, const FSSharedPose::Pose& pose
 }
 void FSSharedPoseManager::stopRemote(const LLUUID& id)
 {
+    complete(id,false);
     const auto found = mRemotes.find(id);
     if (found != mRemotes.end())
     {
@@ -374,7 +405,7 @@ void FSSharedPoseManager::stopRemote(const LLUUID& id)
         mAnimator.stopReceivedPose(avatarFor(id),found->second.overlay);
         mRemotes.erase(found);
     }
-    mApprovals.erase(id);mWorks.erase(id);
+    mApprovals.erase(id);mBlockedEdits.erase(id);
 }
 void FSSharedPoseManager::leave(const LLUUID& id)
 {
@@ -384,8 +415,9 @@ void FSSharedPoseManager::leave(const LLUUID& id)
     LLSD data = message("leave", approval->second.session.asString());
     data["g"] = approval->second.token;
     send(id, data);
+    complete(id, false);
     mApprovals.erase(id);
-    mWorks.erase(id);
+    mBlockedEdits.erase(id);
     mStatus = "Editing session ended";
 }
 void FSSharedPoseManager::stopAll()
@@ -401,7 +433,7 @@ void FSSharedPoseManager::stopAll()
     mRequests.clear();
     mOutgoingRequests.clear();
     mWorks.clear();
-    mDeferred.clear();
+    mBlockedEdits.clear();
     mAssembler.clear();
     Applying guard(mApplying);
     if (owned) mAnimator.stopPosingAvatar(avatarFor(gAgentID));
@@ -419,61 +451,82 @@ LLSD FSSharedPoseManager::workMessage(const Work& work, const std::string& type)
 bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& joints, std::function<void()> action)
 {
     if (mApplying || !isShared(id)) return false;
-    if (!canEdit(id) || joints.empty()) return true;
-    auto found = mWorks.find(id);
-    if (found != mWorks.end() && found->second.asked &&
-        (found->second.finished || !std::includes(found->second.joints.begin(), found->second.joints.end(), joints.begin(), joints.end())))
-    {
-        if (mDeferred.size() < 64) mDeferred.push_back({id, joints, std::move(action)});
-        found->second.forceFinish = true;
-        return true;
-    }
-    auto& work = mWorks[id];
+    const auto pending=mWorks.find(id);
+    if (pending!=mWorks.end() && !nativeQueueCurrent(pending->second)) complete(id,false);
+    if (!canEdit(id) || joints.empty() || mBlockedEdits.count(id)) return true;
+    const auto& canonical=id==gAgentID?mOwner.pose():mRemotes.at(id).pose;
+    if(subset(canonical,joints).size()!=joints.size())return true;
+    if (mWorks.count(id) && !FSSharedPose::canAppendGesture(mWorks.at(id),joints)) { complete(id,false); return true; }
+    auto& work = FSSharedPose::appendGesture(mWorks[id], joints, std::move(action));
     if (work.avatar.isNull())
     {
         work.avatar = id;
         work.lease = LLUUID::generateNewID();
-        if (id == gAgentID) work.session = LLUUID(mOwner.session());
+        if (id == gAgentID) { work.session = LLUUID(mOwner.session());work.generation=work.session;work.grantGeneration=work.session; }
         else { work.session=mApprovals.at(id).session;work.token=mApprovals.at(id).token;work.generation=mRemotes.at(id).generation;work.grantGeneration=mApprovals.at(id).generation; }
         mStatus = "Reserving joints";
     }
-    if (!work.asked) work.joints.insert(joints.begin(), joints.end());
-    if (work.actions.size() < 256) work.actions.push_back(std::move(action));
-    if (work.granted) execute(work);
+    execute(work);
     return true;
 }
 
-bool FSSharedPoseManager::nativeWorkCurrent(const Work& work) const
+bool FSSharedPoseManager::nativeWorkCurrent(const NativeWorkBinding& work) const
 {
-    if(!canEdit(work.avatar))return false;
-    if(work.avatar==gAgentID)return mOwner.active() && work.session.asString()==mOwner.session();
+    if(work.avatar.isNull() || work.session.isNull() || work.lease.isNull() || work.generation.isNull() || work.grantGeneration.isNull() || !canEdit(work.avatar))return false;
+    // Native owner gestures follow the native session, independently of an
+    // assistant publication's ownership generation or a native Share takeover.
+    if(work.avatar==gAgentID)return mOwner.active() && work.session.asString()==mOwner.session() && work.generation==work.session && work.grantGeneration==work.session;
+    if(work.token.isNull())return false;
     const auto remote=mRemotes.find(work.avatar);const auto approval=mApprovals.find(work.avatar);
     if(remote==mRemotes.end() || approval==mApprovals.end())return false;
     return fs_pose::currentAcknowledgementSource(
         {work.session.asString(),work.generation.asString(),work.session.asString(),work.grantGeneration.asString(),work.token.asString()},
         {remote->second.session.asString(),remote->second.generation.asString(),approval->second.session.asString(),approval->second.generation.asString(),approval->second.token.asString()});
 }
+
+bool FSSharedPoseManager::nativeQueueCurrent(const std::deque<Work>& queue) const
+{
+    return FSSharedPose::currentGestureQueue(queue,[this](const Work& work)
+    {
+        if(!nativeWorkCurrent(work))return false;
+        const auto& canonical=work.avatar==gAgentID?mOwner.pose():mRemotes.at(work.avatar).pose;
+        return work.history || (!work.joints.empty() && subset(canonical,work.joints).size()==work.joints.size());
+    });
+}
+
+void FSSharedPoseManager::finishEdit(const LLUUID& id)
+{
+    const auto found = mWorks.find(id);
+    if (found != mWorks.end()) FSSharedPose::finishGesture(found->second);
+    mBlockedEdits.erase(id);
+}
+
 void FSSharedPoseManager::execute(Work& work)
 {
     if(!nativeWorkCurrent(work))return;
     Applying guard(mApplying);
     const auto remote=mRemotes.find(work.avatar);if(remote!=mRemotes.end())remote->second.overlay.detach();
-    auto actions = std::move(work.actions);
-    work.actions.clear();
-    for (const auto& action : actions) action();
+    if (!work.preview([this,&work]{return nativeWorkCurrent(work);})) return;
     work.latest = subset(mAnimator.captureSharedPose(avatarFor(work.avatar)), work.joints);
 }
 
-void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& pose)
+void FSSharedPoseManager::restorePreviews(const LLUUID& id)
+{
+    const auto found = mWorks.find(id);
+    if (found != mWorks.end() && nativeQueueCurrent(found->second)) apply(id, FSSharedPose::previewPose(found->second));
+}
+
+bool FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& pose)
 {
     auto found = mWorks.find(id);
-    if (found == mWorks.end() || found->second.finished) return;
-    auto& work = found->second;
-    if(work.granted)return; // duplicate locked replies cannot rewind an active drag
-    if(!nativeWorkCurrent(work)){complete(id,false);return;}
-    if(work.awaitingLegacySnapshot && !fs_pose::legacyLockMatches(mRemotes.at(id).pose,work.legacyLockedPose,work.joints))return;
+    if (found == mWorks.end() || found->second.empty() || found->second.front().finished) return false;
+    auto& work = found->second.front();
+    if (!nativeQueueCurrent(found->second)) return false;
+    if (FSSharedPose::gestureWaitExpired(work,now())) return false;
+    if(work.granted)return true; // duplicate locked replies cannot rewind an active drag
+    if(work.awaitingLegacySnapshot && !fs_pose::legacyLockMatches(mRemotes.at(id).pose,work.legacyLockedPose,work.joints))return false;
     const auto observed=id==gAgentID?subset(pose,work.joints):fs_pose::observedWorkPose(mRemotes.at(id).pose,work.joints);
-    if (observed.size() != work.joints.size()) { complete(id, false); return; }
+    if (observed.size() != work.joints.size()) return false;
     apply(id,observed);
     work.lastSent=observed;
     work.awaitingLegacySnapshot=false;
@@ -481,19 +534,62 @@ void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     mStatus = "Editing pose";
     work.renewed = now();
     if (!work.history) execute(work);
+    restorePreviews(id);
+    return true;
+}
+
+void FSSharedPoseManager::retireNativeOwnerWork()
+{
+    const auto found=mWorks.find(gAgentID);
+    if(found==mWorks.end())return;
+    for(const auto& work:found->second)
+    {
+        mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& packet)
+        {return !packet.assistant && packet.native && *packet.native==static_cast<const NativeWorkBinding&>(work);}),mQueue.end());
+        if(nativeWorkCurrent(work))mOwner.release(gAgentID.asString(),work.lease.asString());
+    }
+    // Publication cleanup retires its traffic, never the manual local pose.
+    // Once the owner session ends, delayed native POST guards also fail.
+    mWorks.erase(found);
+    mBlockedEdits.insert(gAgentID);
 }
 
 void FSSharedPoseManager::complete(const LLUUID& id, bool accepted)
 {
     auto found = mWorks.find(id);
     if (found == mWorks.end()) return;
-    if (!accepted) mStatus = "Edit cancelled; pose refreshed";
-    if(nativeWorkCurrent(found->second))
+    if (found->second.empty()) { mWorks.erase(found); return; }
+    // Capture canonical rollback while the exact front proof still exists.
+    // Rejected work cancels every speculative tail; accepted work retires only
+    // its front and keeps newer gestures' previews visible.
+    auto& front=found->second.front();
+    accepted=accepted && nativeQueueCurrent(found->second);
+    auto joints=front.joints;
+    if (!accepted) for (const auto& work:found->second) joints.insert(work.joints.begin(),work.joints.end());
+    const auto canonical=nativeWorkCurrent(front)?
+        (id==gAgentID?subset(mOwner.pose(),joints):fs_pose::observedWorkPose(mRemotes.at(id).pose,joints)):FSSharedPose::Pose();
+    const auto cancelPackets=[&](const Work& work)
     {
-        if(id!=gAgentID)apply(id,fs_pose::observedWorkPose(mRemotes.at(id).pose,found->second.joints));
-        else apply(id,subset(mOwner.pose(),found->second.joints));
+        mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& packet)
+        {return !packet.assistant && packet.native && *packet.native==static_cast<const NativeWorkBinding&>(work);}),mQueue.end());
+    };
+    if (!accepted)
+    {
+        mStatus = "Edit cancelled; pose refreshed";
+        for(const auto& work:found->second)cancelPackets(work);
+        if(id==gAgentID && nativeWorkCurrent(front))mOwner.release(gAgentID.asString(),front.lease.asString());
+        else if(front.asked && nativeWorkCurrent(front))sendNative(front,workMessage(front,"release"));
+        mWorks.erase(found);
+        mBlockedEdits.insert(id);
     }
-    mWorks.erase(found);
+    else
+    {
+        cancelPackets(front);
+        found->second.pop_front();
+        if(found->second.empty())mWorks.erase(found);
+    }
+    if(!canonical.empty())apply(id,canonical);
+    restorePreviews(id);
 }
 
 bool FSSharedPoseManager::canHistory(const LLUUID& id, bool redo) const
@@ -505,17 +601,21 @@ bool FSSharedPoseManager::canHistory(const LLUUID& id, bool redo) const
 bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
 {
     if (!isShared(id)) return false;
+    const auto pending=mWorks.find(id);
+    if (pending!=mWorks.end() && !nativeQueueCurrent(pending->second)) complete(id,false);
     if (!canEdit(id) || mWorks.count(id)) return true;
     Work work;
     work.avatar = id;
     work.lease = LLUUID::generateNewID();
     work.history = redo ? 2 : 1;
+    work.inputComplete = true;
     work.asked = true;
     work.requested = now();
     if (id == gAgentID)
     {
         const auto editor = gAgentID.asString();
         work.session = LLUUID(mOwner.session());
+        work.generation=work.session;work.grantGeneration=work.session;
         work.joints = mOwner.historyJoints(editor, redo);
         const auto acquired = mOwner.acquire(editor, "", work.lease.asString(), work.joints, now());
         const auto before = mOwner.pose();
@@ -537,8 +637,8 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
         // Once dispatched, cleanup cannot prove the owner made no change.
         // Locally denied/busy requests returned above without taking ownership.
         mRemotes.at(id).overlay.detach();
-        send(id, data);
-        mWorks.emplace(id, std::move(work));
+        sendNative(work, data);
+        mWorks[id].push_back(std::move(work));
     }
     return true;
 }
@@ -609,7 +709,7 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         if (type == "decline") { mStatus = "Permission declined"; return; }
         const auto token = data["g"].asUUID();
         if (session.isNull() || token.isNull()) return;
-        mApprovals[sender] = {session, token, time, 0.};
+        complete(sender,false);
         if (mRemotes.count(sender) && mRemotes.at(sender).session != session) stopRemote(sender);
         // A snapshot can arrive before the grant; keep it when its session matches.
         mApprovals[sender] = {session, token, time, 0.};
@@ -629,7 +729,7 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         }
         if (type == "revoke")
         {
-            if (mApprovals.count(sender) && mApprovals.at(sender).session == session) { mApprovals.erase(sender); complete(sender, false); }
+            if (mApprovals.count(sender) && mApprovals.at(sender).session == session) { complete(sender, false); mApprovals.erase(sender); }
             mStatus = "Editing permission removed";
             return;
         }
@@ -638,6 +738,8 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         if (newSession)
         {
             if (type != "snapshot" && !remote.session.isNull()) return;
+            // Dispose every old gesture/packet before replacing its source.
+            complete(sender,false);
             mAnimator.stopReceivedPose(avatarFor(sender),remote.overlay);
             remote = Remote(); remote.session = session;
         }
@@ -675,22 +777,30 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         if(!observed.accepted)return;
         auto display=observed.display;
         const auto pending=mWorks.find(sender);
-        if(pending!=mWorks.end() && pending->second.awaitingLegacySnapshot && nativeWorkCurrent(pending->second) &&
-           fs_pose::legacyLockMatches(remote.pose,pending->second.legacyLockedPose,pending->second.joints))
-            grantWork(sender,pending->second.legacyLockedPose);
+        if(pending!=mWorks.end() && nativeQueueCurrent(pending->second))
+        {
+            auto& front=pending->second.front();
+            if(front.awaitingLegacySnapshot && fs_pose::legacyLockMatches(remote.pose,front.legacyLockedPose,front.joints) &&
+               !grantWork(sender,front.legacyLockedPose))complete(sender,false);
+        }
+        else if(pending!=mWorks.end())complete(sender,false);
         const auto work = mWorks.find(sender);
-        if (work != mWorks.end() && work->second.granted)
-            for (const auto& joint : work->second.joints) display.erase(joint);
+        if (work != mWorks.end())
+            for (const auto& gesture : work->second)
+                for (const auto& joint : gesture.joints) display.erase(joint);
         apply(sender, display);
         return;
     }
     if (type == "locked" || type == "busy" || type == "ack")
     {
         const auto found = mWorks.find(sender);
-        if (found == mWorks.end() || found->second.session != session || found->second.lease != data["l"].asUUID()) return;
-        if(!nativeWorkCurrent(found->second)){complete(sender,false);return;}
+        const auto lease=data["l"].asUUID();
+        if (found == mWorks.end() || found->second.empty() || lease.isNull()) return;
+        auto& work=found->second.front();
+        if (!work.asked || work.session != session || work.lease != lease) return;
+        if(!nativeQueueCurrent(found->second)){complete(sender,false);return;}
+        if(FSSharedPose::gestureWaitExpired(work,time)){complete(sender,false);return;}
         if (type == "busy") { complete(sender, false); mStatus = "Joint reserved by " + nameFor(data["by"].asUUID()); return; }
-        auto& work=found->second;
         if(type=="locked" && (work.granted || work.awaitingLegacySnapshot))return;
         const auto pose = readPose(data["p"]);
         auto& remote=mRemotes.at(sender);auto& approval=mApprovals.at(sender);
@@ -699,13 +809,14 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
             work.legacyLockedPose=subset(*pose,work.joints);
             if(work.legacyLockedPose.size()!=work.joints.size()){complete(sender,false);return;}
             work.awaitingLegacySnapshot=true;
-            if(fs_pose::legacyLockMatches(remote.pose,work.legacyLockedPose,work.joints))grantWork(sender,work.legacyLockedPose);
+            if(fs_pose::legacyLockMatches(remote.pose,work.legacyLockedPose,work.joints))
+            {if(!grantWork(sender,work.legacyLockedPose))complete(sender,false);}
             else
             {
                 // The lock may overtake its broadcast. Keep only this exact
                 // lease alive while requesting a revisioned native snapshot;
                 // neither its unversioned bytes nor stale cache may run actions.
-                send(sender,workMessage(work,"renew"));work.renewed=time;
+                sendNative(work,workMessage(work,"renew"));work.renewed=time;
                 send(sender,message("hello"));remote.requestedSnapshot=time;
                 mStatus="Waiting for the reserved pose snapshot";
             }
@@ -728,7 +839,23 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
                 {remote.session.asString(),remote.generation.asString(),approval.session.asString(),approval.generation.asString(),approval.token.asString()},
                 work.joints,*pose,revisions,remote.pose,remote.jointRevisions);
         }
-        if (type == "locked") { if (pose) grantWork(sender,*pose); else complete(sender,false); return; }
+        if (type == "locked")
+        {
+            if (!pose) { complete(sender,false); return; }
+            // Even a versioned lock cannot replay against different newer
+            // canonical bytes (or an incomplete/malformed version map).
+            work.legacyLockedPose=subset(*pose,work.joints);
+            if(work.legacyLockedPose.size()!=work.joints.size()){complete(sender,false);return;}
+            if(!fs_pose::legacyLockMatches(remote.pose,work.legacyLockedPose,work.joints))
+            {
+                work.awaitingLegacySnapshot=true;
+                sendNative(work,workMessage(work,"renew"));work.renewed=time;
+                send(sender,message("hello"));remote.requestedSnapshot=time;
+                mStatus="Waiting for the reserved pose snapshot";
+            }
+            else if(!grantWork(sender,*pose))complete(sender,false);
+            return;
+        }
         if(data["u"].isBoolean())approval.undo=data["u"].asBoolean();
         if(data["d"].isBoolean())approval.redo=data["d"].asBoolean();
         if (data["f"].asBoolean() || !data["ok"].asBoolean()) complete(sender, data["ok"].asBoolean());
@@ -848,7 +975,7 @@ void FSSharedPoseManager::tick()
             if (FSLSLBridge::instance().canUseBridge())
             {
                 for (const auto& entry : mQueue)
-                    if (entry.control && !entry.assistant) for (const auto& packet : entry.packets)
+                    if (entry.control && !entry.assistant && !entry.native) for (const auto& packet : entry.packets)
                         FSLSLBridge::instance().viewerToLSL(entry.target.isNull() ? "SharedPoseBroadcast|" + packet :
                             "SharedPoseSend|" + entry.target.asString() + "|" + packet);
             }
@@ -889,35 +1016,44 @@ void FSSharedPoseManager::tick()
         ++it;
     }
     std::vector<std::pair<LLUUID, bool>> done;
+    std::string busyStatus;
+    if (!gFocusMgr.getMouseCapture())
+    {
+        for (auto& entry : mWorks) FSSharedPose::finishGesture(entry.second);
+        mBlockedEdits.clear();
+    }
     for (auto& entry : mWorks)
     {
-        auto& work = entry.second;
-        if (!nativeWorkCurrent(work)) { done.emplace_back(entry.first, false); continue; }
+        if (!nativeQueueCurrent(entry.second)) { done.emplace_back(entry.first, false); continue; }
+        auto& work = entry.second.front();
         if (!work.asked)
         {
             work.asked = true; work.requested = time;
             if (entry.first == gAgentID)
             {
                 const auto result = mOwner.acquire(gAgentID.asString(), "", work.lease.asString(), work.joints, time);
-                if (result.granted) grantWork(entry.first, mOwner.pose());
-                else { mStatus = "Joint reserved by " + nameFor(LLUUID(result.occupiedBy)); done.emplace_back(entry.first, true); }
+                if (result.granted)
+                {
+                    if (!grantWork(entry.first, mOwner.pose())) { done.emplace_back(entry.first, false); continue; }
+                }
+                else { busyStatus = "Joint reserved by " + nameFor(LLUUID(result.occupiedBy)); done.emplace_back(entry.first, false); }
             }
             else
             {
                 LLSD data = workMessage(work, "acquire");
                 data["j"] = LLSD::emptyArray(); for (const auto& joint : work.joints) data["j"].append(joint);
-                send(entry.first, data);
+                sendNative(work, data);
             }
         }
         if ((work.granted || work.awaitingLegacySnapshot) && work.renewed + 1. <= time)
         {
             if (entry.first == gAgentID) mOwner.renew(gAgentID.asString(), "", work.lease.asString(), time);
-            else send(entry.first, workMessage(work, "renew"));
+            else sendNative(work, workMessage(work, "renew"));
             work.renewed = time;
         }
-        if (work.finished) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
-        if (!work.granted) { if (work.requested + 20. < time) done.emplace_back(entry.first, false); continue; }
-        const bool final = work.forceFinish || !gFocusMgr.getMouseCapture();
+        if (FSSharedPose::gestureWaitExpired(work,time)) { done.emplace_back(entry.first, false); continue; }
+        if (work.finished || !work.granted) continue;
+        const bool final = work.inputComplete;
         if (!work.latest.empty() && (final || (work.latest != work.lastSent && work.sent + .2 <= time)))
         {
             if (entry.first == gAgentID)
@@ -930,7 +1066,7 @@ void FSSharedPoseManager::tick()
             {
                 LLSD data = workMessage(work, "edit"); data["p"] = poseData(work.latest);
                 data["f"] = final; data["n"] = static_cast<S32>(++work.sequence);
-                send(entry.first, data, final);
+                sendNative(work, data, final);
                 if (final) { work.finished = true; work.requested = time; }
             }
             work.sent = time;
@@ -938,11 +1074,7 @@ void FSSharedPoseManager::tick()
         }
     }
     for (const auto& item : done) complete(item.first, item.second);
-    if (!mDeferred.empty() && !mWorks.count(mDeferred.front().avatar))
-    {
-        auto deferred = std::move(mDeferred.front()); mDeferred.pop_front();
-        edit(deferred.avatar, deferred.joints, std::move(deferred.action));
-    }
+    if (!busyStatus.empty()) mStatus = busyStatus;
     if (mLastPublish + .2 <= time) { publish(); mLastPublish = time; }
     if (mOwner.active() && mLastHeartbeat + 2. <= time)
     {
@@ -957,7 +1089,23 @@ void FSSharedPoseManager::tick()
         const auto packet = entry.packets.front();
         const std::string command = entry.target.isNull() ? "SharedPoseBroadcast|" + packet :
             "SharedPoseSend|" + entry.target.asString() + "|" + packet;
-        if(entry.assistant)
+        if(entry.native && !nativePacketCurrent(entry))mQueue.pop_front();
+        else if(entry.native)
+        {
+            // Capture immutable values: the deque entry/front may retire while
+            // the bounded HTTP pool is waiting to begin this packet's POST.
+            const auto binding=*entry.native;const bool release=entry.data["t"].asString()=="release";
+            // Retire this fragment before dispatch: rejection/completion may
+            // synchronously cancel and erase this avatar's remaining packets.
+            entry.started=true;entry.packets.pop_front();if(entry.packets.empty())mQueue.pop_front();
+            const bool queued=FSLSLBridge::instance().sharedPoseToLSLNativeGuarded(command,
+                [binding,release]
+                {return FSSharedPoseManager::instanceExists() && FSSharedPoseManager::instance().nativePacketCurrent(binding,release);},
+                [binding](bool,bool accepted)
+                {if(!accepted && FSSharedPoseManager::instanceExists())FSSharedPoseManager::instance().cancelNativePacket(binding);});
+            if(!queued)cancelNativePacket(binding);
+        }
+        else if(entry.assistant)
         {
             const auto work=entry.assistant;const bool edit=entry.data["t"].asString()=="edit";
             if(!assistantAllowed(work))
@@ -1154,9 +1302,9 @@ void FSSharedPoseManager::endAssistantPublishing(const std::string& reason)
  mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& queued){return queued.data["s"].asString()==publishing->session.asString();}),mQueue.end());
  if(mOwner.active() && mOwner.session()==publishing->session.asString())
  {
+  retireNativeOwnerWork();
   // End only publishing/consent; never stop the owner's native Poser motion.
   mOwner.clear();mPublished.clear();mPublicGeneration=LLUUID::generateNewID();
-  mWorks.erase(gAgentID);
  }
  finishAssistant(publishing,"cancelled",reason);
 }

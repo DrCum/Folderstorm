@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Session host controls and Accessibility — revision 2</title>
+<style>
+:root{color-scheme:dark;--bg:#111016;--panel:#1a1921;--raised:#24212e;--line:#554a63;--text:#f5f3fa;--muted:#b7b0c4;--accent:#bfa4fc;--selected:#3a2c53;--input:#100f15;--gold:#ebce95}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+button,select,input{font:inherit}button,select{color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:5px}
+button{position:relative;cursor:pointer;display:inline-flex;gap:7px;align-items:center;justify-content:center;min-height:34px;padding:6px 10px;white-space:nowrap}
+button:hover{background:var(--raised);border-color:var(--accent)}button[aria-pressed=true],button[aria-selected=true]{background:var(--selected);border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{cursor:default;opacity:.5}select{padding:6px 28px 6px 9px;max-width:100%}input[type=checkbox],input[type=range]{accent-color:var(--accent)}
+svg{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.page{max-width:1360px;margin:auto;padding:28px 34px 30px}h1,h2,h3,p{margin:0}h1{font-size:29px;font-weight:600;letter-spacing:-.025em}h2{font-size:19px;font-weight:600}h3{font-size:14px;font-weight:600}
+.eyebrow{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);font-weight:650}.heading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:20px}.lead{color:var(--muted);margin-top:4px}.tag{color:var(--muted);font-size:12px;border:1px solid var(--line);padding:5px 10px;border-radius:24px;white-space:nowrap}
+.explorer{display:flex;gap:22px;align-items:center;flex-wrap:wrap;background:var(--panel);padding:13px 16px;border:1px solid var(--line);border-radius:7px;margin-bottom:12px}.explorer label{display:flex;gap:9px;align-items:center;font-size:12px}.explorer select{font-size:12px}.explorer .label-title{color:var(--muted)}.preview-tools{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin:0 2px 16px;font-size:12px;color:var(--muted)}.preview-tools label{display:flex;align-items:center;gap:8px}.preview-tools select{font-size:12px;padding-block:4px}.preview-tools input[type=range]{width:110px}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:11px}.section-head span{color:var(--muted);font-size:12px}.preview-scroll{overflow:auto;padding:3px 3px 9px}.host{width:100%;max-width:1240px;margin:auto;border:1px solid #786888;border-radius:7px;overflow:hidden;box-shadow:0 14px 35px #0003;background:var(--bg)}.caption{height:32px;background:var(--raised);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:12px}.window-actions{display:flex;gap:20px;color:var(--muted)}.window-actions svg{width:13px;height:13px}
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 10px;border-bottom:1px solid var(--line)}.toolbar select{font-size:12px;width:168px;height:34px}.toolbar button{font-size:12px}.toolbar .divider{height:24px;width:1px;background:var(--line);margin:0 3px}.utility{width:34px;padding:6px}.state-label{font-size:11px;color:var(--muted);padding-left:2px}.checked-mark{display:none;position:absolute;top:0;right:0;width:11px;height:11px}.checked-mark svg{width:11px;height:11px}button[aria-pressed=true]>.checked-mark{display:inline-flex}
+.host[data-toolbar-labels=icons] .permanent>.button-label{display:none}.host[data-toolbar-labels=icons] .permanent{width:34px;padding:6px}.host[data-toolbar-labels=text] .permanent>.button-icon{display:none}
+.host[data-quick-labels=icons] .quick>.button-label,.host[data-quick-labels=icons] .quick>.state-label{display:none}.host[data-quick-labels=icons] .quick{width:36px;padding:7px}.host[data-quick-labels=icons] #attention>.button-icon{display:none}.host[data-quick-labels=text] .quick>.button-icon{display:none}
+.host[data-spacing=comfortable] .toolbar button{min-height:38px}.host[data-spacing=comfortable] .toolbar select{height:38px}
+.details{display:flex;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)}.card{font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:4px}.card.current{border-color:var(--accent)}
+.world{position:relative;min-height:182px;background:radial-gradient(ellipse at 65% 75%,#2b2334 0,transparent 65%),linear-gradient(135deg,#191720,#121117);display:flex;align-items:center;justify-content:center}.world::before{content:"";position:absolute;inset:0;background-image:linear-gradient(#ffffff04 1px,transparent 1px),linear-gradient(90deg,#ffffff04 1px,transparent 1px);background-size:32px 32px}.world-label{position:relative;color:var(--muted);text-align:center}.world-label strong{display:block;font-weight:500;font-size:20px;color:var(--text)}.world-label span{font-size:12px}.world-note{position:absolute;right:11px;bottom:9px;font-size:10px;color:var(--muted)}
+.chat{border-top:1px solid var(--line);padding:10px 12px}.chat-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:8px}.chat-identity{display:flex;gap:10px;align-items:center}.chat-identity label{display:flex;gap:6px;align-items:center}.chat-top select{font-size:12px;padding:4px 22px 4px 7px}.chat-actions{display:flex;gap:7px}.chat-actions button{min-height:28px;width:30px;padding:5px}.conversation{font-size:12px;color:var(--muted);margin-bottom:8px}.composer{display:flex;gap:8px}.composer input{width:100%;min-width:0;color:var(--text);background:var(--input);border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:12px}.composer button{font-size:12px}
+.host-status{padding:6px 11px;min-height:35px;display:flex;gap:14px;align-items:center;justify-content:space-between;background:var(--panel);border-top:1px solid var(--line);font-size:11px}.notice{color:var(--muted);min-width:0}.voice-status{display:flex;gap:7px;align-items:center;color:var(--accent);white-space:nowrap}.voice-status svg{width:16px;height:16px}.voice-status.warning{color:var(--gold)}.voice-status.off{color:var(--muted)}.caption-note{color:var(--muted);font-size:12px;margin:8px 3px 0}.caption-note strong{font-weight:500;color:var(--text)}.feedback{font-size:12px;color:var(--muted);min-height:20px;margin:7px 3px}.sr-only{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden;white-space:nowrap}
+.notes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:17px}.note{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:14px 15px}.note p{font-size:12px;color:var(--muted);margin-top:5px}.note .number{font-size:11px;color:var(--accent);margin-bottom:4px}
+.settings-section{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}.prefs{background:var(--panel);border:1px solid #786888;border-radius:7px;overflow:hidden;margin-top:13px}.prefs-caption{background:var(--raised);display:flex;align-items:center;justify-content:space-between;padding:9px 14px;font-size:12px}.prefs-content{display:grid;grid-template-columns:192px 1fr;min-height:590px}.sidebar{padding:14px 10px;border-right:1px solid var(--line);background:var(--bg)}.sidebar button{width:100%;justify-content:flex-start;white-space:normal;text-align:left;border-color:transparent;margin-bottom:4px;padding:8px 11px;min-height:35px;font-size:12px}.sidebar button svg{width:16px;height:16px}.settings-main{min-width:0;padding:14px 22px 18px}.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:16px}.tabs button{font-size:12px;min-height:29px;padding:4px 12px}.settings-intro{margin-bottom:17px}.settings-intro h3{font-size:17px}.settings-intro p{font-size:12px;color:var(--muted);margin-top:3px}.group-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--accent);padding-bottom:7px;border-bottom:1px solid var(--line);margin:16px 0 0}.setting-row{display:grid;grid-template-columns:1fr 260px;gap:18px;align-items:center;padding:11px 0;border-bottom:1px solid #554a6344}.setting-name{font-size:13px}.setting-name small{font-size:11px;color:var(--muted);display:block;margin-top:3px}.setting-row select{width:100%;font-size:12px}.setting-check{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #554a6344}.setting-check input{margin:4px 0 0;width:15px;height:15px;flex-shrink:0}.setting-check small{font-size:11px;color:var(--muted);display:block;margin-top:3px}.shared-note{font-size:11px;color:var(--muted);margin-top:13px;padding:9px 12px;background:var(--bg);border-radius:5px}.prefs-footer{border-top:1px solid var(--line);padding:11px 15px;display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--bg)}.prefs-footer p{font-size:12px;color:var(--muted)}.prefs-buttons{display:flex;gap:8px}.prefs-buttons button{font-size:12px;min-width:85px}.primary{border-color:var(--accent)}.action-preview{display:flex;gap:7px;flex-wrap:wrap;padding:16px 0}.action-preview span{font-size:12px;border:1px solid var(--line);padding:6px 10px;border-radius:4px}.settings-empty{font-size:12px;color:var(--muted);padding:18px 0}.footer{display:flex;justify-content:space-between;gap:18px;margin-top:22px;font-size:11px;color:var(--muted)}a{color:var(--accent)}
+.light{color-scheme:light;--bg:#f7f5fb;--panel:#fff;--raised:#eee8f5;--line:#a79ab5;--text:#211a2b;--muted:#61566f;--accent:#6c3fa8;--selected:#eee4fb;--input:#fff;--gold:#76500d}.light .world{background:linear-gradient(135deg,#e8e1ef,#f4f0f9)}.light .world::before{background-image:linear-gradient(#00000006 1px,transparent 1px),linear-gradient(90deg,#00000006 1px,transparent 1px)}
+.contrast{color-scheme:dark;--bg:#000;--panel:#000;--raised:#000;--line:#fff;--text:#fff;--muted:#fff;--accent:#ff0;--selected:#202000;--input:#000;--gold:#ff0}.contrast button{border-width:2px}.contrast .world{background:#000}.contrast .world::before{display:none}.contrast button[aria-pressed=true]{text-decoration:underline}
+@media(max-width:900px){.page{padding:22px 18px}.notes{grid-template-columns:1fr}.setting-row{grid-template-columns:1fr 210px}.settings-main{padding:14px}.prefs-content{grid-template-columns:170px 1fr}}
+@media(max-width:620px){.heading,.section-head{align-items:flex-start;flex-direction:column;gap:10px}.host{min-width:530px}.prefs-content{grid-template-columns:1fr}.sidebar{display:flex;gap:4px;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}.sidebar button{width:auto}.setting-row{grid-template-columns:1fr}.prefs-footer{flex-wrap:wrap}.footer{flex-direction:column}}
+</style>
+</head>
+<body>
+<!-- Lucide SVGs: revision 7b0196e249ca09ca27c584c497aca9a8cab8a7f5. License notices: lucide-LICENSE.txt. -->
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="i-volume-2" viewBox="0 0 24 24">
+  <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" />
+  <path d="M16 9a5 5 0 0 1 0 6" />
+  <path d="M19.364 18.364a9 9 0 0 0 0-12.728" />
+</symbol>
+<symbol id="i-volume-x" viewBox="0 0 24 24">
+  <path d="M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z" />
+  <path d="m16.5 14.5 5-5" />
+  <path d="m16.5 9.5 5 5" />
+</symbol>
+<symbol id="i-mic" viewBox="0 0 24 24">
+  <path d="M12 19v3" />
+  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+  <rect x="9" y="2" width="6" height="13" rx="3" />
+</symbol>
+<symbol id="i-mic-off" viewBox="0 0 24 24">
+  <path d="M12 19v3" />
+  <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33" />
+  <path d="M16.95 16.95A7 7 0 0 1 5 12v-2" />
+  <path d="M18.89 13.23A7 7 0 0 0 19 12v-2" />
+  <path d="m2 2 20 20" />
+  <path d="M9 9v3a3 3 0 0 0 5.12 2.12" />
+</symbol>
+<symbol id="i-pin" viewBox="0 0 24 24">
+  <path d="M12 17v5" />
+  <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+</symbol>
+<symbol id="i-pin-off" viewBox="0 0 24 24">
+  <path d="M12 17v5" />
+  <path d="M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89" />
+  <path d="m2 2 20 20" />
+  <path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11" />
+</symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24">
+  <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+</symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24">
+  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+  <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+</symbol>
+<symbol id="i-panel-top-open" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 9h18" />
+  <path d="m15 14-3 3-3-3" />
+</symbol>
+<symbol id="i-panel-top-close" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 9h18" />
+  <path d="m9 16 3-3 3 3" />
+</symbol>
+<symbol id="i-panel-bottom-open" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 15h18" />
+  <path d="m9 10 3-3 3 3" />
+</symbol>
+<symbol id="i-panel-bottom-close" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 15h18" />
+  <path d="m15 8-3 3-3-3" />
+</symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24">
+  <path d="M15 3h6v6" />
+  <path d="M10 14 21 3" />
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+</symbol>
+<symbol id="i-arrow-down-left" viewBox="0 0 24 24">
+  <path d="M17 7 7 17" />
+  <path d="M17 17H7V7" />
+</symbol>
+<symbol id="i-settings" viewBox="0 0 24 24">
+  <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+  <circle cx="12" cy="12" r="3" />
+</symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24">
+  <path d="m6 9 6 6 6-6" />
+</symbol>
+<symbol id="i-chevron-up" viewBox="0 0 24 24">
+  <path d="m18 15-6-6-6 6" />
+</symbol>
+<symbol id="i-plus" viewBox="0 0 24 24">
+  <path d="M5 12h14" />
+  <path d="M12 5v14" />
+</symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24">
+  <rect width="20" height="14" x="2" y="3" rx="2" />
+  <line x1="8" x2="16" y1="21" y2="21" />
+  <line x1="12" x2="12" y1="17" y2="21" />
+</symbol>
+<symbol id="i-headphones" viewBox="0 0 24 24">
+  <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+</symbol>
+<symbol id="i-arrow-right-left" viewBox="0 0 24 24">
+  <path d="m16 3 4 4-4 4" />
+  <path d="M20 7H4" />
+  <path d="m8 21-4-4 4-4" />
+  <path d="M4 17h16" />
+</symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="1" />
+  <circle cx="19" cy="12" r="1" />
+  <circle cx="5" cy="12" r="1" />
+</symbol>
+<symbol id="i-check" viewBox="0 0 24 24">
+  <path d="M20 6 9 17l-5-5" />
+</symbol>
+<symbol id="i-send" viewBox="0 0 24 24">
+  <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" />
+  <path d="m21.854 2.147-10.94 10.939" />
+</symbol>
+<symbol id="i-x" viewBox="0 0 24 24">
+  <path d="M18 6 6 18" />
+  <path d="m6 6 12 12" />
+</symbol>
+<symbol id="i-minus" viewBox="0 0 24 24">
+  <path d="M5 12h14" />
+</symbol>
+<symbol id="i-move-horizontal" viewBox="0 0 24 24">
+  <path d="m18 8 4 4-4 4" />
+  <path d="M2 12h20" />
+  <path d="m6 8-4 4 4 4" />
+</symbol>
+<symbol id="i-circle-alert" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="10" />
+  <line x1="12" x2="12" y1="8" y2="12" />
+  <line x1="12" x2="12.01" y1="16" y2="16" />
+</symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24">
+  <path d="M10 8h.01" />
+  <path d="M12 12h.01" />
+  <path d="M14 8h.01" />
+  <path d="M16 12h.01" />
+  <path d="M18 8h.01" />
+  <path d="M6 8h.01" />
+  <path d="M7 16h10" />
+  <path d="M8 12h.01" />
+  <rect width="20" height="16" x="2" y="4" rx="2" />
+</symbol>
+<symbol id="i-accessibility" viewBox="0 0 24 24">
+  <circle cx="16" cy="4" r="1" />
+  <path d="m18 19 1-7-6 1" />
+  <path d="m5 8 3-3 5.5 3-2.36 3.5" />
+  <path d="M4.24 14.5a5 5 0 0 0 6.88 6" />
+  <path d="M13.76 17.5a5 5 0 0 0-6.88-6" />
+</symbol>
+<symbol id="i-bell" viewBox="0 0 24 24">
+  <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+  <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+</symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24">
+  <path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" />
+</symbol>
+<symbol id="i-panel-bottom" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 15h18" />
+</symbol>
+<symbol id="i-panel-top" viewBox="0 0 24 24">
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 9h18" />
+</symbol></defs></svg>
+<main class="page">
+<section id="overview">
+ <header class="heading"><div><div class="eyebrow">Folderstorm · Session host</div><h1>Toolbar labels and Accessibility</h1><p class="lead">Independent label choices, cleaner audio buttons, and shared accessibility settings.</p></div><span class="tag">Revision 2 · Interactive proposal</span></header>
+ <div class="explorer" aria-label="Toolbar appearance preview">
+  <label><span class="label-title">Toolbar button labels</span><select data-pref="toolbarLabels" aria-label="Preview toolbar button labels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+  <label><span class="label-title">Quick action labels</span><select data-pref="quickLabels" aria-label="Preview quick action labels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+  <label><input type="checkbox" data-pref="textStates">Show audio text states</label>
+ </div>
+ <div class="preview-tools">
+  <label>Theme <select data-pref="theme" aria-label="Preview theme"><option value="midnight">Midnight</option><option value="daylight">Daylight</option><option value="system">Follow Windows</option></select></label>
+  <label>Voice state <select id="scenario"><option value="assigned">Assigned</option><option value="switching">Switching</option><option value="unavailable">Unavailable</option></select></label>
+  <label>Width <input id="width" type="range" min="600" max="1240" value="1240"><output id="width-value">1240 px</output></label>
+  <label><input id="contrast" type="checkbox">Windows High Contrast sample</label>
+ </div>
+ <div class="section-head"><h2>Host toolbar</h2><span>Optional audio quick actions enabled for this example</span></div>
+ <div class="preview-scroll"><div class="host" id="host" data-toolbar-labels="both" data-quick-labels="both" data-spacing="compact">
+  <div class="caption"><span>Folderstorm character sessions</span><span class="window-actions" aria-hidden="true"><svg><use href="#i-minus"/></svg><svg><use href="#i-x"/></svg></span></div>
+  <div class="toolbar" aria-label="Character controls">
+   <select id="active" aria-label="Active character"><option>Sodie</option><option>Briar</option><option>Alex</option></select>
+   <button id="login" class="permanent" aria-label="Open another character login"><svg class="button-icon"><use href="#i-plus"/></svg><span class="button-label">Login</span></button>
+   <button id="chat-toggle" class="permanent" aria-label="Shared Chat" aria-pressed="true"><svg class="button-icon"><use href="#i-message-square"/></svg><span class="button-label">Chat</span><span class="checked-mark"><svg><use href="#i-check"/></svg></span></button>
+   <button id="monitor" class="permanent" aria-label="Character monitors"><svg class="button-icon"><use href="#i-monitor"/></svg><span class="button-label">Monitors</span></button>
+   <button id="settings" class="permanent" aria-label="Host Preferences"><svg class="button-icon"><use href="#i-settings"/></svg><span class="button-label">Preferences</span></button>
+   <button id="expand" class="utility" aria-label="Expand character details" aria-expanded="false" aria-controls="details"><svg><use href="#i-chevron-down"/></svg></button>
+   <button id="detach" class="utility" aria-label="Pop out character controls"><svg><use href="#i-external-link"/></svg></button>
+   <span class="divider" aria-hidden="true"></span>
+   <button id="background" class="quick" aria-label="BG Audio" aria-pressed="false" aria-describedby="audio-scope"><svg class="button-icon"><use href="#i-volume-x"/></svg><span class="button-label">BG Audio</span><span id="background-state" class="state-label" hidden>Muted</span><span class="checked-mark"><svg><use href="#i-check"/></svg></span></button>
+   <button id="follow" class="quick" aria-label="Voice follows active" aria-pressed="true" aria-describedby="voice-scope"><svg class="button-icon"><use href="#i-mic"/></svg><span class="button-label">Voice follows active</span><span id="follow-state" class="state-label" hidden>On</span><span class="checked-mark"><svg><use href="#i-check"/></svg></span></button>
+   <button id="attention" class="quick" aria-label="Attention inbox, 3 items" aria-pressed="false"><svg class="button-icon"><use href="#i-inbox"/></svg><span class="button-label">Attention</span><span>3</span><span class="checked-mark"><svg><use href="#i-check"/></svg></span></button>
+  </div>
+  <div id="details" class="details" hidden></div>
+  <div class="world"><div class="world-label"><strong>World viewport</strong><span>Schematic placeholder</span></div></div>
+  <div id="chat" class="chat"><div class="chat-top"><div class="chat-identity"><strong>Shared Chat</strong><label>Send as <select id="sender"><option>Briar</option><option>Sodie</option><option>Alex</option></select></label></div><div class="chat-actions"><button id="chat-detach" aria-label="Pop out shared Chat"><svg><use href="#i-external-link"/></svg></button><button id="pin" aria-label="Always on top" aria-pressed="false" hidden><svg><use href="#i-pin-off"/></svg><span class="checked-mark"><svg><use href="#i-check"/></svg></span></button></div></div><p class="conversation">Nearby Chat · draft stays with its sending character</p><div class="composer"><input id="draft" aria-label="Message draft" placeholder="Message as Briar…"><button id="send"><svg><use href="#i-send"/></svg>Send</button></div></div>
+  <div class="host-status"><span class="notice" id="notice">Ready</span><span id="voice-status" class="voice-status" role="status" aria-live="polite"><svg><use href="#i-headphones"/></svg><span id="voice-status-text">Voice → Sodie</span></span></div>
+ </div></div>
+ <p class="feedback" id="interaction-help" role="status">Try different label choices above; each group keeps its own setting.</p>
+ <p class="caption-note"><strong id="owner-description">Voice → Sodie identifies the assigned character.</strong> Voice connection and microphone activity remain in the native viewer.</p>
+ <div class="notes">
+  <article class="note"><div class="number">01 · TWO LABEL SETTINGS</div><h3>Permanent buttons and quick actions</h3><p>Login, Chat, Monitors and Preferences use Toolbar button labels. Optional actions use Quick action labels. Neither choice changes the other.</p></article>
+  <article class="note"><div class="number">02 · SIMPLE AUDIO LABELS</div><h3>BG Audio and Voice follows active</h3><p id="audio-scope">Icons and selected states communicate the audio policy. On/Off/Muted text is optional. BG Audio affects inactive viewers; host alerts keep their own settings.</p><span id="voice-scope" class="sr-only">Voice follows the active character when enabled. This does not indicate live microphone transmission.</span></article>
+  <article class="note"><div class="number">03 · ACCESSIBILITY TAB</div><h3>Shared controls, one saved value</h3><p>Label choices, button spacing, switch effect and keyboard shortcuts remain in their original tabs and are also available in Accessibility.</p></article>
+ </div>
+</section>
+<section class="settings-section" id="settings-preview">
+ <div class="section-head"><h2>Host Preferences · Accessibility</h2><span>Changes preview above. Apply saves the mockup’s choices; Cancel restores them.</span></div>
+ <div class="prefs" id="preferences">
+  <div class="prefs-caption"><span>Folderstorm Host Preferences</span><span class="window-actions" aria-hidden="true"><svg><use href="#i-x"/></svg></span></div>
+  <div class="prefs-content">
+   <nav class="sidebar" aria-label="Preferences categories">
+    <button data-page="appearance" aria-pressed="false">Layout &amp; theme</button>
+    <button data-page="character" aria-pressed="false">Character settings</button>
+    <button data-page="conversations" aria-pressed="false">Chats &amp; notifications</button>
+    <button data-page="audio" aria-pressed="false">Audio &amp; voice</button>
+    <button data-page="switching" aria-pressed="false">Switching &amp; monitors</button>
+    <button data-page="quick" aria-pressed="false">Controls</button>
+    <button data-page="accessibility" aria-pressed="true"><svg><use href="#i-accessibility"/></svg>Accessibility</button>
+    <button data-page="advanced" aria-pressed="false">Advanced</button>
+   </nav>
+   <div class="settings-main"><div class="tabs" id="settings-tabs" role="tablist" aria-label="Preferences tabs"></div>
+    <section id="pane-accessibility" data-pane="accessibility" role="tabpanel" aria-label="Accessibility">
+     <div class="settings-intro"><h3>Accessibility</h3><p>Choose readable controls, optional state text and comfortable navigation.</p></div>
+     <h4 class="group-title">Button labels and states</h4>
+     <label class="setting-row"><span class="setting-name">Toolbar button labels<small>Login, Chat and other permanent buttons. Also in Layout &amp; theme → Appearance.</small></span><select data-pref="toolbarLabels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+     <label class="setting-row"><span class="setting-name">Quick action labels<small>Optional toolbar actions. Also in Layout &amp; theme → Appearance.</small></span><select data-pref="quickLabels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+     <label class="setting-check"><input type="checkbox" data-pref="textStates"><span class="setting-name">Show text states on audio buttons<small>Add On/Off/Muted when audio quick-action labels are shown. Screen readers always receive the state.</small></span></label>
+     <h4 class="group-title">Comfort and navigation</h4>
+     <label class="setting-row"><span class="setting-name">Button spacing<small>Also in Layout &amp; theme → Appearance.</small></span><select data-pref="spacing"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
+     <label class="setting-row"><span class="setting-name">Switch effect<small>Also in Switching &amp; monitors → Switching. Windows reduced-motion settings still apply.</small></span><select data-pref="effect"><option value="instant">Instant</option><option value="bird">Bird’s-eye</option><option value="fade">Fade</option></select></label>
+     <label class="setting-check"><input type="checkbox" data-pref="shortcuts"><span class="setting-name">Enable character shortcuts<small>Also in Controls → Keyboard shortcuts.</small></span></label>
+     <p class="shared-note">These controls share the same values as their original tabs. Full accessible names, toggle states and visible keyboard focus are always available.</p>
+    </section>
+    <section id="pane-appearance" data-pane="appearance" role="tabpanel" aria-label="Appearance" hidden>
+     <div class="settings-intro"><h3>Appearance</h3><p>Choose the host theme, spacing and labels for each button group.</p></div>
+     <label class="setting-row"><span class="setting-name">Theme</span><select data-pref="theme"><option value="midnight">Midnight</option><option value="daylight">Daylight</option><option value="system">Follow Windows</option></select></label>
+     <label class="setting-row"><span class="setting-name">Button spacing<small>Also available in Accessibility.</small></span><select data-pref="spacing"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
+     <label class="setting-row"><span class="setting-name">Toolbar button labels<small>Permanent buttons such as Login and Chat. Also available in Accessibility.</small></span><select data-pref="toolbarLabels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+     <label class="setting-row"><span class="setting-name">Quick action labels<small>Optional actions such as BG Audio. Also available in Accessibility.</small></span><select data-pref="quickLabels"><option value="both">Icon and text</option><option value="text">Text</option><option value="icons">Icons with tooltips</option></select></label>
+    </section>
+    <section id="pane-switching" data-pane="switching" role="tabpanel" aria-label="Switching" hidden><div class="settings-intro"><h3>Switching</h3><p>Choose the visual effect when switching characters.</p></div><label class="setting-row"><span class="setting-name">Switch effect<small>Also available in Accessibility.</small></span><select data-pref="effect"><option value="instant">Instant</option><option value="bird">Bird’s-eye</option><option value="fade">Fade</option></select></label></section>
+    <section id="pane-keyboard" data-pane="keyboard" role="tabpanel" aria-label="Keyboard shortcuts" hidden><div class="settings-intro"><h3>Keyboard shortcuts</h3><p>Character switching and recovery bindings remain here.</p></div><label class="setting-check"><input type="checkbox" data-pref="shortcuts"><span class="setting-name">Enable character shortcuts<small>Also available in Accessibility.</small></span></label><p class="shared-note">The existing per-character key bindings are outside this mockup’s scope.</p></section>
+    <section id="pane-quick" data-pane="quick" role="tabpanel" aria-label="Quick actions" hidden><div class="settings-intro"><h3>Quick actions</h3><p>Example optional toolbar actions, independent of the permanent buttons.</p></div><div class="action-preview"><span>BG Audio</span><span>Voice follows active</span><span>Attention</span></div><p class="shared-note">Quick action labels remain in Layout &amp; theme → Appearance and are also available in Accessibility.</p></section>
+    <section id="pane-audio" data-pane="audio" role="tabpanel" aria-label="Audio" hidden><div class="settings-intro"><h3>Audio &amp; voice</h3><p>The existing audio policies keep their scope.</p></div><label class="setting-check"><input id="audio-policy" type="checkbox"><span class="setting-name">BG Audio<small>Allow inactive viewers’ world, UI and media audio. Host notification alerts keep their own settings.</small></span></label><label class="setting-check"><input id="voice-policy" type="checkbox" checked><span class="setting-name">Voice follows active<small>Allow voice to follow the active character. Voice assignment is shown in the host status area.</small></span></label></section>
+    <section id="pane-other" data-pane="other" role="tabpanel" aria-label="Other preferences" hidden><div class="settings-intro"><h3 id="other-title">Preferences</h3><p>Existing settings stay in this category. This preview focuses on the revised label and Accessibility controls.</p></div></section>
+   </div>
+  </div>
+  <div class="prefs-footer"><p id="save-status" role="status">Changes preview immediately.</p><div class="prefs-buttons"><button id="prefs-ok" class="primary">OK</button><button id="prefs-cancel">Cancel</button><button id="prefs-apply" disabled>Apply</button></div></div>
+ </div>
+</section>
+<footer class="footer"><span>Design proposal · native Windows implementation and acceptance remain separate.</span><span>Embedded <a href="https://lucide.dev">Lucide</a> icons · <a href="lucide-LICENSE.txt">License notices</a></span></footer>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const prefs={toolbarLabels:'both',quickLabels:'both',textStates:false,spacing:'compact',effect:'instant',shortcuts:false,theme:'midnight',audio:false,follow:true};
+let accepted={...prefs};
+const session={chat:true,attention:false,expanded:false,controlsDetached:false,chatDetached:false,pin:false,active:'Sodie',sender:'Briar',scenario:'assigned',drafts:{}};
+const icon=(id,name)=>$(id).querySelector('use').setAttribute('href','#i-'+name);
+const pressed=(id,value)=>$(id).setAttribute('aria-pressed',String(value));
+const explain=text=>{$('interaction-help').textContent=text;};
+const labelModes={both:'Icon and text',text:'Text',icons:'Icons with tooltips'};
+function syncPreferences(){
+ document.querySelectorAll('[data-pref]').forEach(control=>{const value=prefs[control.dataset.pref];if(control.type==='checkbox')control.checked=value;else control.value=value;});
+ $('host').dataset.toolbarLabels=prefs.toolbarLabels;$('host').dataset.quickLabels=prefs.quickLabels;$('host').dataset.spacing=prefs.spacing;
+ const theme=prefs.theme==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'midnight':'daylight'):prefs.theme;
+ document.body.classList.toggle('light',theme==='daylight');document.body.classList.toggle('contrast',$('contrast').checked);
+ const dirty=JSON.stringify(prefs)!==JSON.stringify(accepted);$('prefs-apply').disabled=!dirty;$('save-status').textContent=dirty?'Unapplied changes · previewing above.':'Changes preview immediately.';
+ refresh();
+}
+function refresh(){
+ pressed('background',prefs.audio);icon('background',prefs.audio?'volume-2':'volume-x');$('background-state').textContent=prefs.audio?'On':'Muted';$('background-state').hidden=!prefs.textStates||prefs.quickLabels==='icons';
+ $('background').title=(prefs.audio?'BG Audio: On. Mute':'BG Audio: Muted. Allow')+' inactive viewers’ world, UI and media audio.';
+ pressed('follow',prefs.follow);icon('follow',prefs.follow?'mic':'mic-off');$('follow-state').textContent=prefs.follow?'On':'Off';$('follow-state').hidden=!prefs.textStates||prefs.quickLabels==='icons';
+ $('follow').title=prefs.follow?'Voice follows active: On. Stop following the active character.':'Voice follows active: Off. Let voice follow the active character.';
+ pressed('chat-toggle',session.chat);$('chat').hidden=!session.chat;$('chat-toggle').title=session.chat?'Hide shared Chat':'Show shared Chat';
+ pressed('attention',session.attention);$('attention').title=(session.attention?'Close':'Open')+' Attention inbox · 3 eligible items';
+ $('expand').setAttribute('aria-expanded',String(session.expanded));$('expand').setAttribute('aria-label',session.expanded?'Collapse character details':'Expand character details');icon('expand',session.expanded?'chevron-up':'chevron-down');$('details').hidden=!session.expanded;
+ $('details').replaceChildren(...['Sodie','Briar','Alex'].map(name=>{const element=document.createElement('span');element.className='card'+(name===session.active?' current':'');element.textContent=name+(name===session.active?' · Active':' · Background');return element;}));
+ for(const [id,key,label] of [['detach','controlsDetached','character controls'],['chat-detach','chatDetached','shared Chat']]){$(id).setAttribute('aria-label',(session[key]?'Dock ':'Pop out ')+label);icon(id,session[key]?'arrow-down-left':'external-link');}
+ $('pin').hidden=!session.chatDetached;pressed('pin',session.pin);icon('pin',session.pin?'pin':'pin-off');$('pin').title=session.pin?'Always on top: On. Unpin this window.':'Always on top: Off. Pin this window.';
+ $('audio-policy').checked=prefs.audio;$('voice-policy').checked=prefs.follow;
+ const owner=!prefs.follow?'Voice: Off':session.scenario==='switching'?'Voice: Switching…':session.scenario==='unavailable'?'Voice: Unavailable':'Voice → '+session.active;
+ $('voice-status-text').textContent=owner;$('voice-status').classList.toggle('off',!prefs.follow);$('voice-status').classList.toggle('warning',prefs.follow&&session.scenario!=='assigned');
+ $('voice-status').title=prefs.follow&&session.scenario==='assigned'?'Voice assigned to '+session.active+'. Connection and microphone status remain in the native viewer.':owner;
+ $('owner-description').textContent=!prefs.follow?'Voice following is off.':session.scenario==='switching'?'Voice ownership is changing.':session.scenario==='unavailable'?'No current voice owner is available.':'Voice → '+session.active+' identifies the assigned character.';
+ $('draft').placeholder='Message as '+session.sender+'…';
+ for(const control of document.querySelectorAll('button[aria-label]'))if(!['background','follow','pin','chat-toggle','attention'].includes(control.id))control.title=control.getAttribute('aria-label');
+}
+const tabGroups={appearance:[['layout','Layout'],['appearance','Appearance']],accessibility:[['accessibility','Accessibility']],switching:[['switching','Switching'],['monitors','Monitors']],quick:[['quick','Quick actions'],['keyboard','Keyboard shortcuts']],character:[['character','Profile']],conversations:[['conversations','Conversations']],audio:[['audio','Audio']],advanced:[['advanced','Diagnostics']]};
+const titles={layout:'Layout',monitors:'Monitors',character:'Character settings',conversations:'Chats & notifications',advanced:'Advanced'};
+let currentPage='accessibility';
+function showPage(page){
+ currentPage=page;const group=['keyboard'].includes(page)?'quick':['layout'].includes(page)?'appearance':['monitors'].includes(page)?'switching':page;
+ document.querySelectorAll('.sidebar [data-page]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.page===group)));
+ const tabs=tabGroups[group]||tabGroups.accessibility;$('settings-tabs').replaceChildren(...tabs.map(([id,title])=>{const button=document.createElement('button');button.textContent=title;button.id='tab-'+id;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(page===id));button.tabIndex=page===id?0:-1;button.setAttribute('aria-controls','pane-'+(document.querySelector('[data-pane="'+id+'"]')?id:'other'));button.addEventListener('click',()=>showPage(id));return button;}));
+ const known=Boolean(document.querySelector('[data-pane="'+page+'"]'));document.querySelectorAll('[data-pane]').forEach(pane=>pane.hidden=pane.dataset.pane!==(known?page:'other'));
+ $('other-title').textContent=titles[page]||'Preferences';
+}
+document.querySelectorAll('[data-pref]').forEach(control=>control.addEventListener('change',()=>{prefs[control.dataset.pref]=control.type==='checkbox'?control.checked:control.value;syncPreferences();explain('Toolbar labels: '+labelModes[prefs.toolbarLabels]+'. Quick action labels: '+labelModes[prefs.quickLabels]+'. Shared settings stay synchronized.');}));
+document.querySelectorAll('.sidebar [data-page]').forEach(button=>button.addEventListener('click',()=>showPage(button.dataset.page)));
+$('settings-tabs').addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const tabs=[...$('settings-tabs').querySelectorAll('[role=tab]')];const index=tabs.indexOf(document.activeElement);let next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;event.preventDefault();const id=tabs[next].id;tabs[next].click();$(id).focus();});
+for(const [id,key] of [['background','audio'],['follow','follow'],['chat-toggle','chat'],['attention','attention'],['expand','expanded'],['pin','pin']])$(id).addEventListener('click',()=>{if(key in prefs){prefs[key]=!prefs[key];syncPreferences();}else{session[key]=!session[key];refresh();}explain('Icon and accessible toggle state updated. Audio text states are '+(prefs.textStates?'enabled.':'optional and currently hidden.'));});
+for(const [id,key] of [['detach','controlsDetached'],['chat-detach','chatDetached']])$(id).addEventListener('click',()=>{session[key]=!session[key];refresh();explain('Detached/docked header illustrated in place. Always on top applies only to its detached window.');});
+$('active').addEventListener('change',event=>{session.active=event.target.value;refresh();explain('Character changed to '+session.active+'. Chat still sends as '+session.sender+'.');});
+$('sender').addEventListener('change',event=>{session.sender=event.target.value;$('draft').value=session.drafts[session.sender]||'';refresh();});$('draft').addEventListener('input',event=>{session.drafts[session.sender]=event.target.value;});
+$('scenario').addEventListener('change',event=>{session.scenario=event.target.value;refresh();});
+$('width').addEventListener('input',event=>{$('host').style.maxWidth=event.target.value+'px';$('width-value').textContent=event.target.value+' px';explain('Width changed. Both label settings retain their selected values.');});
+$('contrast').addEventListener('change',syncPreferences);
+for(const [id,key] of [['audio-policy','audio'],['voice-policy','follow']])$(id).addEventListener('change',event=>{prefs[key]=event.target.checked;syncPreferences();});
+$('settings').addEventListener('click',()=>{showPage('accessibility');$('settings-preview').scrollIntoView({behavior:'instant',block:'start'});document.querySelector('.sidebar [data-page=accessibility]').focus();});
+function acceptPreferences(){accepted={...prefs};syncPreferences();$('save-status').textContent='Applied · shared choices saved for this mockup.';}
+$('prefs-apply').addEventListener('click',acceptPreferences);
+$('prefs-ok').addEventListener('click',()=>{acceptPreferences();$('host').scrollIntoView({behavior:'instant',block:'center'});$('settings').focus();});
+$('prefs-cancel').addEventListener('click',()=>{Object.assign(prefs,accepted);syncPreferences();$('save-status').textContent='Restored the last applied choices.';});
+for(const [id,text] of [['login','Login behavior is unchanged in this mockup.'],['monitor','Monitors share the same stateful Chat and Always on top controls.'],['send','Mockup only: no message was sent.']])$(id).addEventListener('click',()=>explain(text));
+showPage('accessibility');syncPreferences();
+})();
+</script>
+</body>
+</html>
