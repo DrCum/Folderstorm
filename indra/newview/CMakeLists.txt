@@ -232,6 +232,8 @@ set(viewer_SOURCE_FILES
     omnifilter.cpp
     omnifilterengine.cpp
     fsprimfeedconnect.cpp
+    fssquirtynotes.cpp
+    fsfloatersquirtynotes.cpp
     fsfloaterprimfeed.cpp
     llpanelopenregionsettings.cpp
     # <FS:Ansariel> [Legacy Bake]
@@ -1155,6 +1157,9 @@ set(viewer_HEADER_FILES
     llflickrconnect.h
     llfloaterflickr.h
     fsprimfeedconnect.h
+    fssquirtynotes.h
+    fssquirtypolicy.h
+    fsfloatersquirtynotes.h
     fsfloaterprimfeed.h
     # <FS:Ansariel> [Legacy Bake]
     llagentwearablesfetch.h
@@ -2409,13 +2414,14 @@ add_executable(${VIEWER_BINARY_NAME}
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
   target_include_directories(folderstorm-session-host PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
   target_compile_definitions(folderstorm-session-host PRIVATE
       UNICODE _UNICODE "FS_SESSION_VIEWER_FILENAME=\"${VIEWER_BINARY_NAME}.exe\"")
-  target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 msimg32 advapi32 bcrypt shell32 ole32 uuid psapi comctl32 comdlg32 winmm imm32 uxtheme)
+  target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 msimg32 advapi32 bcrypt shell32 ole32 uuid oleacc psapi comctl32 comdlg32 winmm imm32 uxtheme)
   set_target_properties(folderstorm-session-host PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   if (MSVC)

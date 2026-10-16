@@ -38,5 +38,17 @@ int main()
     const auto roomy=toolbarGroups(1920,true);r=quickToolbarLayout(roomy.centerAvailable,buttons);
     assert(centeredQuickStart(1920,roomy,r.used)==(1920-r.used)/2 && roomy.mainCount==4);
     const auto narrow=toolbarGroups(186,true);assert(narrow.mainOverflow && narrow.mainCount<4);
+    // Permanent labels consume their measured widths independently of quick-action mode.
+    for(const auto& measured: {std::vector<int>{32,32,32,32},std::vector<int>{70,60,95,120},std::vector<int>{95,85,120,145}})
+        for(int width=180;width<3000;++width)for(bool quick:{false,true})for(bool pin:{false,true})
+        {
+            const auto group=toolbarGroups(width,quick,pin,measured);
+            int occupied=8+group.selector+(group.mainOverflow?32:0);
+            for(int i=0;i<group.mainCount;++i)occupied+=measured[static_cast<std::size_t>(i)];
+            assert(occupied<=group.rightStart && group.selector>=0);
+            r=quickToolbarLayout(group.centerAvailable,quick?buttons:std::vector<QuickButtonSize>{});
+            const auto start=centeredQuickStart(width,group,r.used);
+            assert(start>=occupied && start+r.used<=group.rightStart);
+        }
     std::cout<<"Quick actions retain order, collapse labels, and fit bounded overflow.\n";
 }

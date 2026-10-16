@@ -16,7 +16,7 @@ class Tooltips
     {return GetPropW(tip,L"FolderstormTooltipOwner")==reinterpret_cast<HANDLE>(const_cast<Tooltips*>(this)) && GetWindow(tip,GW_OWNER)==root;}
     static void colors(HWND tip,const Theme& theme)
     {
-        SetWindowTheme(tip,theme.highContrast?nullptr:L"",theme.highContrast?nullptr:L"");
+        SetWindowTheme(tip,theme.systemHighContrast?nullptr:L"",theme.systemHighContrast?nullptr:L"");
         SendMessageW(tip,TTM_SETTIPBKCOLOR,theme.background,0);SendMessageW(tip,TTM_SETTIPTEXTCOLOR,theme.text,0);
     }
     static TOOLINFOW toolInfo(HWND parent,HWND child)
