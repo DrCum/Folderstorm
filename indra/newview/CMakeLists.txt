@@ -1953,6 +1953,8 @@ configure_file(
 )
 list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/fsversionvalues.h)
 include(FolderstormReleases)
+include(FolderstormSentry)
+list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp)
 list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsreleasepolicy.h fsreleaseprefs.h fsreleaseviewer.h ${CMAKE_CURRENT_BINARY_DIR}/fsreleasebuild.h)
 # </FS:TS>
@@ -2412,6 +2414,7 @@ add_executable(${VIEWER_BINARY_NAME}
     MACOSX_BUNDLE
     ${viewer_SOURCE_FILES}
     )
+folderstorm_crash_target(${VIEWER_BINARY_NAME})
 
 # Explicitly launched Windows feasibility tool. Normal viewer login never starts
 # a controller or background workers. Keep the binary beside the matching viewer.
@@ -2422,6 +2425,7 @@ if (WINDOWS)
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
+  folderstorm_crash_target(folderstorm-session-host)
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
   target_include_directories(folderstorm-session-host PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")

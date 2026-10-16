@@ -29,6 +29,7 @@
 
 #include "llappviewer.h"
 #include "fsreleaseviewer.h"
+#include "fscrash.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1511,6 +1512,7 @@ bool LLAppViewer::init()
     }
 #endif
     FSReleaseViewer::startup();
+    fs_crash::initialize(FSSessionWorker::managed()?"worker":"viewer");
     LL_PROFILER_FRAME_END;
     return true;
 }
@@ -2059,6 +2061,7 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    fs_crash::shutdown();
 #if LL_VELOPACK
     // Apply any pending Velopack update before shutdown
     if (velopack_is_update_pending())
@@ -5949,6 +5952,7 @@ static LLTrace::BlockTimerStatHandle FTM_HUD_EFFECTS("HUD Effects");
 ///////////////////////////////////////////////////////
 void LLAppViewer::idle()
 {
+    fs_crash::poll();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
     pingMainloopTimeout("Main:Idle");
 

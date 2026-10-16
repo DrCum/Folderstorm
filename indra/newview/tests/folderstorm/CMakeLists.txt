@@ -20,6 +20,8 @@ endfunction()
 
 folderstorm_check(release_policy ../test_fsreleasepolicy.cpp)
 target_include_directories(release_policy PRIVATE ../..)
+folderstorm_check(crash_policy ../test_fscrashpolicy.cpp)
+target_include_directories(crash_policy PRIVATE ../..)
 
 folderstorm_check(shared_pose ../test_fssharedpose.cpp)
 

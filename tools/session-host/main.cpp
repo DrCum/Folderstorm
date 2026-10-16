@@ -56,6 +56,7 @@
 #include "fssessionlifecycle.h"
 #include "controller_pipe.h"
 #include "release_http.h"
+#include "fscrash.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -519,11 +520,12 @@ struct Host
         return -1;
     }
     enum PreferencePage : unsigned int { PrefLayout,PrefAppearance,PrefCharacter,PrefSounds,PrefViewer,PrefSession,
-        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefAccessibility,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController,PrefUpdates };
+        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefAccessibility,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController,PrefUpdates,PrefCrashes };
     void editPreferences(unsigned int page=~0u,int target=-1)
     {
         if(preferencesOpen)return;
         auto originalUpdates=fs_release::loadPreferences(fs_release::DefaultChannel);
+        bool originalCrashConsent=fs_crash::consent().enabled;
         if(page==~0u)page=preferencesPage;
         using namespace fs_host_ui;
         struct ProfileDraft
@@ -564,7 +566,13 @@ struct Host
             {7,L"Advanced",L"Diagnostics",L""},{7,L"Advanced",L"Files & recovery",L""},
             {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."},
             {8,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."},
-            {9,L"Updates",L"Releases",L"Find published Folderstorm versions, downloads and changelogs."}};
+            {9,L"Updates",L"Releases",L"Find published Folderstorm versions, downloads and changelogs."},
+            {10,L"Support",L"Crash reports",L"Native minidumps can contain process memory and personal information. This choice applies to the host and all viewers on this computer."}};
+        const auto crashConsentField=add(PrefCrashes,{L"Allow Sentry crash reports",originalCrashConsent?L"1":L"0",FieldType::Check});
+        fields[crashConsentField].enabled=fs_crash::configured() || originalCrashConsent;fields[crashConsentField].help=L"Off by default. No chat logs or screenshots are attached. Turning off stops future uploads once each process observes the change; sent uploads cannot be recalled.";
+        const auto crashStatusField=add(PrefCrashes,{L"",wide(fs_crash::status()),FieldType::Note});fields[crashStatusField].rowHeight=60;
+        const auto bugReportField=add(PrefCrashes,{L"GitHub",L"Report a bug…",FieldType::Action});
+        fields[bugReportField].action=[&](HWND){ShellExecuteW(window,L"open",wide(fs_crash::IssueUrl).c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
         const auto updatesAutomatic=add(PrefUpdates,{L"Check automatically",originalUpdates.automatic?L"1":L"0",FieldType::Check});
         const auto updatesChannel=add(PrefUpdates,{L"Release channel",originalUpdates.channel=="nightly"?L"1":L"0",FieldType::Choice,{L"Stable",L"Nightly"}});
         const auto updatesNote=add(PrefUpdates,{L"",releaseStatus,FieldType::Note});fields[updatesNote].rowHeight=72;
@@ -955,6 +963,13 @@ struct Host
             if(!fields[pair.first].enabled){fields[pair.first].value=std::to_wstring(pair.second);if(fields[pair.first].control)SetWindowTextW(fields[pair.first].control,fields[pair.first].value.c_str());}
         const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);
         if(!saved)return false;
+        const bool crashConsent=readField(crashConsentField)==L"1";
+        if(crashConsent!=originalCrashConsent)
+        {
+            if(!fs_crash::setConsent(crashConsent)){message(L"Host choices saved, but crash-report consent could not be saved. Retry Apply.");return false;}
+            originalCrashConsent=crashConsent;fields[crashStatusField].value=wide(fs_crash::status());
+            if(fields[crashStatusField].control)SetWindowTextW(fields[crashStatusField].control,fields[crashStatusField].value.c_str());
+        }
         const bool automatic=readField(updatesAutomatic)==L"1";
         const std::string channel=readField(updatesChannel)==L"1"?"nightly":"stable";
         if(automatic!=originalUpdates.automatic || channel!=originalUpdates.channel)
@@ -3611,6 +3626,7 @@ struct Host
     void tick()
     {
         pollUpdates();
+        fs_crash::poll();
         controllerTick();
         autosaveChoices();
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
@@ -4698,6 +4714,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     else SetProcessDPIAware();
     INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES}; InitCommonControlsEx(&common);
     Host state;
+    fs_crash::initialize("host");
+    struct CrashShutdown {~CrashShutdown(){fs_crash::shutdown();}} crashShutdown;
     std::vector<wchar_t> executable(32768);
     const DWORD size = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
     if (!size || size >= executable.size()) return 1;

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="folderstorm_crashes" title="Folderstorm crash reporting" width="540" height="300" can_resize="false">
+  <text name="explanation" left="16" top="38" width="508" height="74" wrap="true">Send native crash reports to Folderstorm's Sentry project. Off by default. Minidumps can contain process memory and personal information. This choice applies to the host and all character viewers on this computer.</text>
+  <check_box name="enabled" label="Allow crash reports" left="16" top="124" width="400" height="22" tool_tip="No chat logs or screenshots are attached. Turning this off stops future uploads after each process observes the change; an upload already sent cannot be recalled." />
+  <text name="status" left="16" top="160" width="508" height="42" wrap="true" />
+  <button name="report" label="Report a bug…" left="16" top="218" width="140" height="24" tool_tip="Review and submit a GitHub issue. No crash dump is attached." />
+  <button name="ok" label="OK" right="-180" bottom="-16" width="76" height="24" />
+  <button name="cancel" label="Cancel" right="-96" bottom="-16" width="76" height="24" />
+  <button name="apply" label="Apply" right="-16" bottom="-16" width="72" height="24" />
+</floater>
