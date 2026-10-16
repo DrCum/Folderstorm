@@ -4807,7 +4807,7 @@ const LLVector3 LLViewerObject::getRenderPosition() const
         }
     }
 
-    if (mDrawable.isNull() || mDrawable->getGeneration() < 0)
+    if (mDrawable.isNull())
     {
         return getPositionAgent();
     }
@@ -8197,4 +8197,3 @@ public:
 
 LLHTTPRegistration<ObjectPhysicsProperties>
     gHTTPRegistrationObjectPhysicsProperties("/message/ObjectPhysicsProperties");
-
