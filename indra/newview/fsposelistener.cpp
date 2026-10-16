@@ -237,7 +237,14 @@ public:
  {gIdleCallbacks.addFunction([](void*){fs_pose_tick();});for(const char* op:{"status","joints","presets","start","update","undo","reset","stop","load","save","sharedSessions","sharedGrants","sharedEdit","startSharing","stopSharing"})add(op,"Pose tools",&FSPoseListener::dispatch);}
  const char* assistantCapability() const override{return "pose_tools";}
  LLSD assistantCapabilities() const override{return llsd::map("pose_tools",1,"shared_pose_tools",1);}
- LLSD assistantLimits() const override{return llsd::map("rotation_joints",64,"preset_bytes",65536,"presets",256,"history",20,"reference_frame","local","rotation_only",true,"visibility","local_viewer","overwrite_presets",false,"requires_live_operation_authority",true);}
+ LLSD assistantLimits() const override
+ {
+  auto result=llsd::map("rotation_joints",64,"preset_bytes",65536,"presets",256,"history",20,"reference_frame","local","rotation_only",true,"visibility","local_viewer","overwrite_presets",false,"requires_live_operation_authority",true);
+  result["visibility_scope"]="own_pose";
+  result["shared_pose"]=llsd::map("visibility","native_shared_pose_peers","native_owner_consent",true,
+   "rotation_edit_joints",64,"may_publish_existing_position_scale",true,"uncertain_replay",false);
+  return result;
+ }
  bool prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error) const override
  {
   if(sharedOperation(operation.request["op"].asString()))return FSSharedPoseManager::instance().prepareAssistantPose(operation,error);

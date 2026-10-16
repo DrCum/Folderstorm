@@ -85,6 +85,26 @@ func TestPoseSharedRegisteredDispatch(t *testing.T) {
 		})
 	}
 }
+func TestPoseSharedMutationsDeclarePeerEffects(t *testing.T) {
+	api := &sharedPoseTestAPI{fakeAPI: fakeAPI{status: sharedPosePolicy("allow", "ask", 1)}}
+	tools, err := poseClient(t, reviewServer(api)).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]bool{"pose_shared_update": true, "pose_shared_cancel": true, "pose_start_sharing": true, "pose_stop_sharing": true}
+	for _, tool := range tools.Tools {
+		if !wanted[tool.Name] {
+			continue
+		}
+		if tool.Annotations == nil || tool.Annotations.ReadOnlyHint || tool.Annotations.OpenWorldHint == nil || !*tool.Annotations.OpenWorldHint {
+			t.Fatalf("shared peer effects missing from %s annotations", tool.Name)
+		}
+		delete(wanted, tool.Name)
+	}
+	if len(wanted) != 0 {
+		t.Fatalf("shared tools missing: %v", wanted)
+	}
+}
 func TestPoseSharedDedicatedGates(t *testing.T) {
 	for _, tt := range []struct {
 		read, share   string
