@@ -80,7 +80,17 @@
 #include "message.h"
 
 // system libraries
+#include <deque>
+#include <memory>
+#include <stdexcept>
+#include "workqueue.h"
+#if LL_WINDOWS
+#include "llwin32headers.h"
+#endif
+#include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
+#include "lldirpicker.h"
+#include "llcallbacklist.h"
 
 #include "llinventorydefines.h"
 
@@ -545,7 +555,8 @@ void upload_single_file(
     return;
 }
 
-void do_bulk_upload(std::vector<std::string> filenames, bool allow_2k, const LLUUID& dest)
+void do_bulk_upload(std::vector<std::string> filenames, bool allow_2k, const LLUUID& dest,
+                    const LLUUID& material_dest, const LLUUID& texture_dest)
 {
     for (std::vector<std::string>::const_iterator in_iter = filenames.begin(); in_iter != filenames.end(); ++in_iter)
     {
@@ -712,7 +723,10 @@ void do_bulk_upload(std::vector<std::string> filenames, bool allow_2k, const LLU
                     // Todo:
                     // 1. Decouple bulk upload from material editor
                     // 2. Take into account possiblity of identical textures
-                    LLMaterialEditor::uploadMaterialFromModel(filename, model, i, dest);
+                    if (material_dest.notNull())
+                        LLMaterialEditor::uploadMaterialFromModel(filename, model, i, material_dest, texture_dest.notNull() ? texture_dest : material_dest);
+                    else
+                        LLMaterialEditor::uploadMaterialFromModel(filename, model, i, dest);
                 }
             }
         }
@@ -849,7 +863,7 @@ bool get_bulk_upload_expected_cost(
     return file_count > 0;
 }
 
-void upload_bulk(const std::vector<std::string>& filtered_filenames, bool allow_2k, const LLUUID& dest)
+void upload_bulk(const std::vector<std::string>& filtered_filenames, bool allow_2k, const LLUUID& dest, const LLSD& folder_upload = LLSD())
 {
     S32 expected_upload_cost;
     S32 expected_upload_count;
@@ -862,6 +876,8 @@ void upload_bulk(const std::vector<std::string>& filtered_filenames, bool allow_
         key["upload_count"] = expected_upload_count;
         key["has_2k_textures"] = (textures_2k_count > 0);
         key["dest"] = dest;
+        if (folder_upload.isDefined())
+            key["folder_upload"] = folder_upload;
 
         // <FS:Ansariel> Check balance before trying to upload
         S32 current_balance = gStatusBar->getBalance();
@@ -1014,7 +1030,20 @@ class LLFileUploadBulk : public view_listener_t
         {
             gAgentCamera.changeCameraToDefault();
         }
-        LLFilePickerReplyThread::startPicker(boost::bind(&upload_bulk, _1, _2, true, LLUUID::null), LLFilePicker::FFLOAD_ALL, true);
+        LLFilePickerReplyThread::startPicker(boost::bind(static_cast<void(*)(const std::vector<std::string>&, LLFilePicker::ELoadFilter, bool, const LLUUID&)>(&upload_bulk), _1, _2, true, LLUUID::null), LLFilePicker::FFLOAD_ALL, true);
+        return true;
+    }
+};
+
+class LLFileUploadBulkFolder : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        if (gAgentCamera.cameraMouselook())
+        {
+            gAgentCamera.changeCameraToDefault();
+        }
+        start_bulk_folder_upload(LLUUID::null);
         return true;
     }
 };
@@ -1653,6 +1682,290 @@ class FSFileEnableImportWindlightBulk : public view_listener_t
 };
 // </FS:Ansariel>
 
+// Keep the confirmed tree separate from the live filesystem. No directories are
+// rescanned after confirmation, so newly added files cannot join an upload.
+namespace
+{
+namespace bfs = boost::filesystem;
+
+bfs::path folder_upload_path(const std::string& path)
+{
+#if LL_WINDOWS
+    return bfs::path(ll_convert_string_to_wide(path));
+#else
+    return bfs::path(path);
+#endif
+}
+
+std::string folder_upload_path_string(const bfs::path& path)
+{
+#if LL_WINDOWS
+    return ll_convert_wide_to_string(path.wstring());
+#else
+    return path.string();
+#endif
+}
+
+bool folder_upload_is_link(const bfs::path& path)
+{
+#if LL_WINDOWS
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+        throw std::runtime_error("A selected file or folder is no longer accessible.");
+    return (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return bfs::is_symlink(bfs::symlink_status(path));
+#endif
+}
+
+LLSD scan_folder_upload(const bfs::path& path, size_t& entries, size_t depth = 0)
+{
+    if (depth > 32 || ++entries > 10000)
+        throw std::runtime_error("Choose a smaller folder (at most 10,000 entries and 32 folder levels).");
+    if (folder_upload_is_link(path) || !bfs::is_directory(path))
+        throw std::runtime_error("Choose a regular folder, rather than a shortcut or linked folder.");
+
+    LLSD node;
+    const std::string name = folder_upload_path_string(path.filename());
+    node["name"] = name.empty() ? "Uploaded Folder" : name;
+    node["path"] = folder_upload_path_string(path);
+    node["files"] = LLSD::emptyArray();
+    node["folders"] = LLSD::emptyArray();
+    for (bfs::directory_iterator it(path), end; it != end; ++it)
+    {
+        if (folder_upload_is_link(it->path()))
+            continue;
+        if (bfs::is_directory(it->path()))
+            node["folders"].append(scan_folder_upload(it->path(), entries, depth + 1));
+        else if (bfs::is_regular_file(it->path()))
+        {
+            if (++entries > 10000)
+                throw std::runtime_error("Choose a smaller folder (at most 10,000 entries).");
+            LLSD file;
+            file["path"] = folder_upload_path_string(it->path());
+            file["size"] = std::to_string(bfs::file_size(it->path()));
+            file["modified"] = std::to_string(bfs::last_write_time(it->path()));
+            node["files"].append(file);
+        }
+    }
+    return node;
+}
+
+void collect_folder_upload_files(const LLSD& node, std::vector<std::string>& files)
+{
+    for (const LLSD& file : llsd::inArray(node["files"]))
+        files.push_back(file["path"].asString());
+    for (const LLSD& folder : llsd::inArray(node["folders"]))
+        collect_folder_upload_files(folder, files);
+}
+
+void validate_folder_upload(const LLSD& node)
+{
+    const bfs::path directory = folder_upload_path(node["path"].asString());
+    if (folder_upload_is_link(directory) || !bfs::is_directory(directory))
+        throw std::runtime_error("The selected folder has changed. Please select it again.");
+    for (const LLSD& file : llsd::inArray(node["files"]))
+    {
+        const bfs::path path = folder_upload_path(file["path"].asString());
+        if (folder_upload_is_link(path) || !bfs::is_regular_file(path) ||
+            std::to_string(bfs::file_size(path)) != file["size"].asString() ||
+            std::to_string(bfs::last_write_time(path)) != file["modified"].asString())
+            throw std::runtime_error("A selected file has changed. Please select the folder again to refresh its upload cost.");
+    }
+    for (const LLSD& folder : llsd::inArray(node["folders"]))
+        validate_folder_upload(folder);
+}
+
+bool folder_upload_session_valid(const LLSD& plan)
+{
+    return gAgent.getID().notNull() && gAgent.getID() == plan["agent_id"].asUUID() &&
+        gAgent.getSessionID() == plan["session_id"].asUUID() &&
+        !gDisconnected && !LLApp::isExiting();
+}
+
+void folder_upload_error(const std::string& message)
+{
+    LLSD args;
+    args["MESSAGE"] = message;
+    LLNotificationsUtil::add("GenericAlertOK", args);
+}
+
+// Prepare every destination before handing any files to the native uploader.
+// One outstanding category request bounds the queue and makes a failed folder
+// an unambiguous stop, rather than a silently omitted, partially charged import.
+struct FolderUploadOperation : std::enable_shared_from_this<FolderUploadOperation>
+{
+    enum class Kind { Folder, Materials, Textures };
+    struct Task
+    {
+        Kind kind = Kind::Folder;
+        LLSD node;
+        LLUUID parent;
+        std::string path;
+        LLUUID material;
+        std::vector<std::string> files;
+    };
+    struct Batch
+    {
+        std::vector<std::string> files;
+        LLUUID destination, material, texture;
+    };
+
+    FolderUploadOperation(const LLSD& source, bool textures_2k) : plan(source), allow_2k(textures_2k) {}
+
+    LLSD plan;
+    bool allow_2k;
+    bool finished = false;
+    size_t created = 0;
+    std::deque<Task> pending;
+    std::vector<Batch> batches;
+
+    void stop()
+    {
+        finished = true;
+        pending.clear();
+        batches.clear();
+    }
+
+    void advance()
+    {
+        if (finished) return;
+        if (!folder_upload_session_valid(plan)) { stop(); return; }
+        if (pending.empty())
+        {
+            finished = true; // A duplicate callback must never submit the files twice.
+            auto prepared = std::move(batches);
+            for (auto& batch : prepared)
+            {
+                if (!folder_upload_session_valid(plan)) return;
+                do_bulk_upload(std::move(batch.files), allow_2k,
+                    batch.destination, batch.material, batch.texture);
+            }
+            return;
+        }
+
+        Task task = std::move(pending.front());
+        pending.pop_front();
+        const std::string name = task.kind == Kind::Folder ? task.node["name"].asString() :
+            task.kind == Kind::Materials ? "Materials" : "Textures";
+        const std::string destination_path = task.kind == Kind::Folder ? task.path : task.path + "/" + name;
+        auto operation = shared_from_this();
+        gInventory.createNewCategory(task.parent, LLFolderType::FT_NONE, name,
+            [operation, task, destination_path, completed = std::make_shared<bool>(false)](const LLUUID& id)
+            {
+                if (*completed || operation->finished) return;
+                *completed = true;
+                if (!folder_upload_session_valid(operation->plan)) { operation->stop(); return; }
+                if (id.isNull())
+                {
+                    operation->stop();
+                    folder_upload_error("Could not create folder: " + destination_path +
+                        "\nNo files were uploaded. " + std::to_string(operation->created) +
+                        " folder(s) were created and remain in inventory. The import was not retried.");
+                    return;
+                }
+                ++operation->created;
+                operation->prepare(task, id);
+                // Category callbacks may be synchronous. Continue on idle so the
+                // inventory update settles without recursive callback growth.
+                doOnIdleOneTime([operation]() { operation->advance(); });
+            });
+    }
+
+    void prepare(const Task& task, const LLUUID& id)
+    {
+        if (task.kind == Kind::Textures)
+        {
+            batches.push_back({task.files, task.material, task.material, id});
+            return;
+        }
+        if (task.kind == Kind::Materials)
+        {
+            pending.push_back({Kind::Textures, {}, task.parent, task.path, id, task.files});
+            return;
+        }
+
+        std::vector<std::string> files, materials;
+        for (const LLSD& file : llsd::inArray(task.node["files"]))
+        {
+            const std::string path = file["path"].asString();
+            const std::string ext = gDirUtilp->getExtension(path);
+            (ext == "gltf" || ext == "glb" ? materials : files).push_back(path);
+        }
+        if (!files.empty()) batches.push_back({std::move(files), id, {}, {}});
+        if (!materials.empty())
+            pending.push_back({Kind::Materials, {}, id, task.path, {}, std::move(materials)});
+        for (const LLSD& folder : llsd::inArray(task.node["folders"]))
+            pending.push_back({Kind::Folder, folder, id, task.path + "/" + folder["name"].asString(), {}, {}});
+    }
+};
+} // namespace
+
+void start_folder_recursive_upload(const LLSD& plan, const LLUUID& dest, bool allow_2k)
+{
+    if (!folder_upload_session_valid(plan)) return;
+    auto main_queue = LL::WorkQueue::getInstance("mainloop");
+    auto general_queue = LL::WorkQueue::getInstance("General");
+    if (!main_queue || !general_queue || !main_queue->postTo(general_queue,
+        [plan]() -> std::string
+        {
+            try { validate_folder_upload(plan["tree"]); }
+            catch (const std::exception& error) { return error.what(); }
+            return {};
+        },
+        [plan, dest, allow_2k](const std::string& error)
+        {
+            if (!folder_upload_session_valid(plan)) return;
+            if (!error.empty()) { folder_upload_error(error); return; }
+            const LLUUID parent = dest.notNull() ? dest : gInventory.getRootFolderID();
+            if (!gInventory.getCategory(parent))
+            {
+                folder_upload_error("The upload destination is no longer available. No files were uploaded.");
+                return;
+            }
+            auto operation = std::make_shared<FolderUploadOperation>(plan, allow_2k);
+            operation->pending.push_back({FolderUploadOperation::Kind::Folder,
+                plan["tree"], parent, plan["tree"]["name"].asString(), {}, {}});
+            operation->advance();
+        }))
+        folder_upload_error("Folder upload could not start. Please try again.");
+}
+
+void start_bulk_folder_upload(const LLUUID& dest)
+{
+    LLSD plan;
+    plan["agent_id"] = gAgent.getID();
+    plan["session_id"] = gAgent.getSessionID();
+    (new LLDirPickerThread([plan, dest](const std::vector<std::string>& dirs, std::string)
+    {
+        if (dirs.empty() || !folder_upload_session_valid(plan)) return;
+        const std::string local_dir = dirs.front();
+        auto main_queue = LL::WorkQueue::getInstance("mainloop");
+        auto general_queue = LL::WorkQueue::getInstance("General");
+        if (!main_queue || !general_queue || !main_queue->postTo(general_queue,
+            [local_dir, plan]() mutable
+            {
+                try
+                {
+                    size_t entries = 0;
+                    plan["tree"] = scan_folder_upload(folder_upload_path(local_dir), entries);
+                }
+                catch (const std::exception& error) { plan["error"] = error.what(); }
+                return plan;
+            },
+            [dest](const LLSD& result)
+            {
+                if (!folder_upload_session_valid(result)) return;
+                if (result.has("error")) { folder_upload_error(result["error"].asString()); return; }
+                std::vector<std::string> files;
+                collect_folder_upload_files(result["tree"], files);
+                upload_bulk(files, true, dest, result);
+            }))
+            folder_upload_error("The folder could not be scanned. Please try again.");
+    }, ""))->getFile();
+}
+
+
 void init_menu_file()
 {
     view_listener_t::addCommit(new LLFileUploadImage(), "File.UploadImage");
@@ -1661,6 +1974,7 @@ void init_menu_file()
     view_listener_t::addCommit(new LLFileUploadModel(), "File.UploadModel");
     view_listener_t::addCommit(new LLFileUploadMaterial(), "File.UploadMaterial");
     view_listener_t::addCommit(new LLFileUploadBulk(), "File.UploadBulk");
+    view_listener_t::addCommit(new LLFileUploadBulkFolder(), "File.UploadBulkFolder");
     view_listener_t::addCommit(new LLFileCloseWindow(), "File.CloseWindow");
     view_listener_t::addCommit(new LLFileCloseAllWindows(), "File.CloseAllWindows");
     view_listener_t::addEnable(new LLFileEnableCloseWindow(), "File.EnableCloseWindow");
