@@ -8,7 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 class SessionIntegrationTests(unittest.TestCase):
     def setUp(self):
-        self.host = (ROOT / "tools/session-host/main.cpp").read_text()
+        self.host = (ROOT / "tools/session-host/main.cpp").read_text(encoding="utf-8")
         self.preferences = self.host[self.host.index("enum PreferencePage"):self.host.index("void editHostSettings(")]
 
     def test_conflicting_pages_keep_distinct_indices_and_categories(self):
@@ -52,7 +52,7 @@ class SessionIntegrationTests(unittest.TestCase):
         self.assertIn("next.experience.audioStateText=n(stateTextField)!=0", self.preferences)
 
     def test_standalone_regressions_retain_both_suites_and_content_includes(self):
-        cmake = (ROOT / "indra/newview/tests/folderstorm/CMakeLists.txt").read_text()
+        cmake = (ROOT / "indra/newview/tests/folderstorm/CMakeLists.txt").read_text(encoding="utf-8")
         checks = re.search(r"foreach\(check IN ITEMS ([^)]+)\)", cmake)[1].split()
         self.assertTrue({"controls", "assistant_features", "assistant_async"}.issubset(checks))
         for target in ("session_controller_mcp", "session_controller_dispatch", "squirty_policy"):
