@@ -38,6 +38,18 @@ cancellation, source loss or sharing cleanup must preserve that manual work.
 Native consent, joint reservations, privacy checks and Preferences acceptance
 remain authoritative.
 
+Native owner gestures follow their original native session, independently of
+the assistant publication generation. Explicit native Share takeover preserves
+valid queued gestures, leases and grants. Ending assistant-owned publication
+retires the old native queue/traffic without applying older canonical bytes to
+the manual Poser; ordinary rejected drags still perform canonical rollback.
+
+`test_fspose_publication_lifecycle.py` compiles the actual manager method bodies
+against portable boundary stubs. It covers manual front/tail previews during
+publication cancellation, same-session native Share takeover, rejection rollback
+and old-session invalidation. It requires a C++17 compiler and does not test
+viewer rendering or live transport.
+
 ## Host Preferences and test registration
 
 Accessibility, Advanced, Local Assistant and MCP controller pages retain
@@ -62,7 +74,10 @@ The four content targets retain their viewer include directories.
   native peer. Preserve monotonic canonical state and per-gesture ownership.
 - Interleave native edits/Undo/Redo and MCP operations, then revoke, disable
   sharing, change region or end the session. Preserve unrelated manual motion
-  and independently owned work.
+  and independently owned work. Cancel publication before the next native tick
+  with a manual preview and queued tail; confirm that pose stays visible. Take
+  over publishing with native Share while a gesture is pending; its session,
+  lease and queued intent must remain valid.
 - Visit Accessibility, Local Assistant and MCP controller pages; test shared
   field mirrors, preview, Apply/OK and Cancel. Check controller permissions
   remain independent of viewer permissions.

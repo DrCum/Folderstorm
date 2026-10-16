@@ -129,6 +129,7 @@ private:
     bool nativeWorkCurrent(const NativeWorkBinding& work) const;
     bool nativeQueueCurrent(const std::deque<Work>& queue) const;
     void restorePreviews(const LLUUID& avatar);
+    void retireNativeOwnerWork();
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
     void ensureSharedSelf(bool nativeTakeover);

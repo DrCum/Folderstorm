@@ -312,7 +312,6 @@ void FSSharedPoseManager::ensureSharedSelf(bool nativeTakeover)
     {
         if(nativeTakeover && mAssistantPublishing)
         {
-            complete(gAgentID,false);
             // An explicit native Share action takes over the same native
             // publication, preserving its session, grants, leases and Poser.
             // Old MCP cleanup can no longer own or stop that publication.
@@ -463,7 +462,7 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
     {
         work.avatar = id;
         work.lease = LLUUID::generateNewID();
-        if (id == gAgentID) { work.session = LLUUID(mOwner.session());work.generation=mPublicGeneration;work.grantGeneration=mPublicGeneration; }
+        if (id == gAgentID) { work.session = LLUUID(mOwner.session());work.generation=work.session;work.grantGeneration=work.session; }
         else { work.session=mApprovals.at(id).session;work.token=mApprovals.at(id).token;work.generation=mRemotes.at(id).generation;work.grantGeneration=mApprovals.at(id).generation; }
         mStatus = "Reserving joints";
     }
@@ -474,7 +473,9 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
 bool FSSharedPoseManager::nativeWorkCurrent(const NativeWorkBinding& work) const
 {
     if(work.avatar.isNull() || work.session.isNull() || work.lease.isNull() || work.generation.isNull() || work.grantGeneration.isNull() || !canEdit(work.avatar))return false;
-    if(work.avatar==gAgentID)return mOwner.active() && work.session.asString()==mOwner.session() && work.generation==mPublicGeneration && work.grantGeneration==mPublicGeneration;
+    // Native owner gestures follow the native session, independently of an
+    // assistant publication's ownership generation or a native Share takeover.
+    if(work.avatar==gAgentID)return mOwner.active() && work.session.asString()==mOwner.session() && work.generation==work.session && work.grantGeneration==work.session;
     if(work.token.isNull())return false;
     const auto remote=mRemotes.find(work.avatar);const auto approval=mApprovals.find(work.avatar);
     if(remote==mRemotes.end() || approval==mApprovals.end())return false;
@@ -535,6 +536,22 @@ bool FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     if (!work.history) execute(work);
     restorePreviews(id);
     return true;
+}
+
+void FSSharedPoseManager::retireNativeOwnerWork()
+{
+    const auto found=mWorks.find(gAgentID);
+    if(found==mWorks.end())return;
+    for(const auto& work:found->second)
+    {
+        mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& packet)
+        {return !packet.assistant && packet.native && *packet.native==static_cast<const NativeWorkBinding&>(work);}),mQueue.end());
+        if(nativeWorkCurrent(work))mOwner.release(gAgentID.asString(),work.lease.asString());
+    }
+    // Publication cleanup retires its traffic, never the manual local pose.
+    // Once the owner session ends, delayed native POST guards also fail.
+    mWorks.erase(found);
+    mBlockedEdits.insert(gAgentID);
 }
 
 void FSSharedPoseManager::complete(const LLUUID& id, bool accepted)
@@ -598,7 +615,7 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
     {
         const auto editor = gAgentID.asString();
         work.session = LLUUID(mOwner.session());
-        work.generation=mPublicGeneration;work.grantGeneration=mPublicGeneration;
+        work.generation=work.session;work.grantGeneration=work.session;
         work.joints = mOwner.historyJoints(editor, redo);
         const auto acquired = mOwner.acquire(editor, "", work.lease.asString(), work.joints, now());
         const auto before = mOwner.pose();
@@ -1285,7 +1302,7 @@ void FSSharedPoseManager::endAssistantPublishing(const std::string& reason)
  mQueue.erase(std::remove_if(mQueue.begin(),mQueue.end(),[&](const Queued& queued){return queued.data["s"].asString()==publishing->session.asString();}),mQueue.end());
  if(mOwner.active() && mOwner.session()==publishing->session.asString())
  {
-  complete(gAgentID,false);
+  retireNativeOwnerWork();
   // End only publishing/consent; never stop the owner's native Poser motion.
   mOwner.clear();mPublished.clear();mPublicGeneration=LLUUID::generateNewID();
  }
