@@ -18,6 +18,7 @@ func validPoseUUID(id string) bool {
 	return poseUUID.MatchString(id) && id != "00000000-0000-0000-0000-000000000000"
 }
 func registerPose(server *mcp.Server, state *Server, readOnly, mutating *mcp.ToolAnnotations) {
+	registerSharedPose(server, state, readOnly, mutating)
 	mcp.AddTool(server, &mcp.Tool{Name: "pose_status", Description: "Read a self-targeted local rotation transaction or a source-bound operation receipt. Requires explicit current-account avatar target and opted-in Pose Read. Never returns simulator login/session secrets.", Annotations: withTitle(readOnly, "Pose transaction status")}, state.poseStatus)
 	mcp.AddTool(server, &mcp.Tool{Name: "pose_joints", Description: "Read supported non-root local joint names and quaternion rotations for the exact current-account avatar. Pose Read is separate from inventory Read. No animesh, control avatars or world/root transforms.", Annotations: withTitle(readOnly, "Read local pose joints")}, state.poseJoints)
 	mcp.AddTool(server, &mcp.Tool{Name: "pose_presets", Description: "List bounded native pose-store preset IDs, exact file revisions and rotation-only compatibility. Returns opaque IDs rather than file paths. Wider native motion/position/scale presets are refused by the audited loader.", Annotations: withTitle(readOnly, "List saved pose presets")}, state.posePresets)
@@ -50,9 +51,18 @@ type poseMutationArgs struct {
 }
 
 func (s *Server) poseCall(ctx context.Context, pid int, op string, params map[string]any, write bool) (*mcp.CallToolResult, any, error) {
+	return s.poseFeatureCall(ctx, pid, op, params, write, false)
+}
+func (s *Server) poseFeatureCall(ctx context.Context, pid int, op string, params map[string]any, write, shared bool) (*mcp.CallToolResult, any, error) {
+	capability := "pose_tools"
+	if shared {
+		capability = "shared_pose_tools"
+	}
 	classes := []string{viewerapi.ClassPoseRead}
 	if write {
-		if op == "save" {
+		if shared {
+			classes = append(classes, viewerapi.ClassPoseShare)
+		} else if op == "save" {
 			classes = append(classes, viewerapi.ClassPoseSave)
 		} else {
 			classes = append(classes, viewerapi.ClassPoseEdit)
@@ -62,8 +72,8 @@ func (s *Server) poseCall(ctx context.Context, pid int, op string, params map[st
 	if errRes != nil {
 		return errRes, nil, nil
 	}
-	if !policy.Present || policy.Capabilities["pose_tools"] != 1 {
-		return errorResult("unsupported_feature", "Selected viewer does not support pose_tools version 1; no fallback was attempted", nil)
+	if !policy.Present || policy.Capabilities[capability] != 1 {
+		return errorResult("unsupported_feature", "Selected viewer does not support "+capability+" version 1; no fallback was attempted", nil)
 	}
 	raw, err := api.CallNamed(ctx, "LocalAssistant", "health", map[string]any{"diagnostic": true})
 	if err != nil {
@@ -77,13 +87,13 @@ func (s *Server) poseCall(ctx context.Context, pid int, op string, params map[st
 		Capabilities map[string]int  `json:"capabilities"`
 		APIs         map[string]bool `json:"apis_ready"`
 	}
-	if len(raw) > 65536 || json.Unmarshal(raw, &health) != nil || !health.Ready || !health.APIs["FSPose"] || health.Capabilities["pose_tools"] != 1 {
+	if len(raw) > 65536 || json.Unmarshal(raw, &health) != nil || !health.Ready || !health.APIs["FSPose"] || health.Capabilities[capability] != 1 {
 		return errorResult("unsupported_feature", "Fresh viewer health does not expose a ready FSPose service", nil)
 	}
 	if selected, ok := requestIdentity(ctx); ok && selected.ViewerSession != "" && (selected.ViewerSession != health.Session || selected.Account != health.Account || selected.Grid != health.Grid) {
 		return errorResult("session_changed", "Selected account/grid/viewer connection changed before posing", nil)
 	}
-	if target, ok := params["target"].(string); ok && health.Account != "" && target != health.Account {
+	if target, ok := params["target"].(string); ok && (!shared || op == "startSharing" || op == "stopSharing") && health.Account != "" && target != health.Account {
 		return errorResult("invalid_target", "Own posing requires the current account avatar target", nil)
 	}
 	return apiResult(api.CallNamed(ctx, "FSPose", op, params))

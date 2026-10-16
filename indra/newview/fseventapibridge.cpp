@@ -706,6 +706,16 @@ public:
         for (const LLUUID& key : revoked) resolveAsk(key, false, ERR_NOT_ALLOWED, false);
     }
 
+    void sharedPosePrivacyChanged()
+    {
+        std::vector<LLUUID> revoked;
+        for(const auto& entry:mAsks)
+            if(entry.second.api=="FSPose")
+                if(const auto* op=fs_assistant::featureOperation(entry.second.api,entry.second.op))
+                    if(std::string(op->capability)=="shared_pose_tools")revoked.push_back(entry.first);
+        for(const auto& key:revoked)resolveAsk(key,false,"Native shared-pose privacy changed",false);
+    }
+
     FSEventAPIBridge::StatusSnapshot snapshot() const
     {
         FSEventAPIBridge::StatusSnapshot result;
@@ -1627,6 +1637,8 @@ void FSEventAPIBridge::refreshSession()
 void FSEventAPIBridge::nearbyMessage(const LLChat& message)
 {if(mState && mState->enabled())mState->nearbyMessage(message);}
 void FSEventAPIBridge::reviewPending() {if(mState && FSSessionWorker::assistantActiveAllowed())mState->review();}
+void FSEventAPIBridge::noteSharedPosePrivacyChanged()
+{if(instanceExists() && instance().mState)instance().mState->sharedPosePrivacyChanged();}
 bool FSEventAPIBridge::requestAllowed(const LLSD& request)
 {
     if(!request.has("__assistant_guard"))return true;

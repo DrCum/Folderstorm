@@ -73,3 +73,15 @@ Windows acceptance:
 - Verify default permission presets and native approval distinguish runtime posing from saving files. No operation may control another avatar or implicitly enable sharing.
 
 Shared MCP posing remains a separate checkpoint with two-viewer native consent acceptance.
+
+## Delivered shared-pose checkpoint
+
+Eight tools add shared-session/grant/joint reads, source-bound operation status, rotation update/cancel and explicit native publication start/stop under `shared_pose_tools=1`. Pose read and Ask-capable Pose share remain separate. Native owner consent comes only from the ordinary viewer flow: tools cannot request/accept a grant, expose its token, enable sharing or start a native Poser. Both peers must support the typed rotation protocol.
+
+Edits freeze exact target/session/grant/native-motion generations and at most 64 selected joint rotations/revisions. Unrelated joint changes do not invalidate approval; selected-joint changes do. Owner reservations and current revisions remain authoritative. The fresh native rotation setter preserves position, scale, priorities, enable/mirror/lock state and unrelated undo history. Native/MCP replies and broadcast caches use monotonic per-joint state; uncertain final edits are never replayed or rolled back automatically.
+
+Actual bridge POSTs use an initialized bounded HTTP coprocedure pool, captured source/region/privacy/bridge-instance authority and no retries/redirects. Region transitions and native sharing/bridge disable synchronously revoke consent, including manually created grants. Received remote overlays are released only while their exact motion/generation/last target remain owned; native/manual/self poses survive. RLVa location/name/nearby-agent restrictions gate assistant reads, receipts, approvals and deferred effects without changing ordinary native sharing UI.
+
+Publishing freezes the existing complete native pose through initial approval, including its position/scale state. Once published, ordinary authorized native/peer edits continue. Its original source/permission/deadline authority owns only that publishing session; expiry/revocation ends it while preserving native Poser. Explicit native Share can take over without destroying current grants or posing. Receipts distinguish submission, exact owner acknowledgement and uncertain outcomes; transport acknowledgement alone is insufficient.
+
+Focused portable native-model/policy regressions, registered Go tools and native-boundary checks cover the source/consent/ordering/cleanup paths. Independent Max review and exact hashes are recorded in the checkpoint PR. Native Windows compilation and live two-viewer acceptance remain pending; follow `indra/newview/tests/README-assistant-pose.md`, including mixed native/MCP editors, old-grant replay after region/toggle changes, late ACK/broadcast ordering, privacy changes during Ask and manual publication/overlay takeover.

@@ -123,7 +123,7 @@ void FSPosingMotion::releaseAssistantRotations()
 
 bool FSPosingMotion::onActivate()
 {
-    return true;
+    mActivationGeneration=LLUUID::generateNewID();return true;
 }
 
 bool FSPosingMotion::onUpdate(F32 time, U8* joint_mask)

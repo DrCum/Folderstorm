@@ -60,8 +60,9 @@ void FSJointPose::setPublicPosition(const LLVector3& pos)
 
 void FSJointPose::setAssistantTargetRotation(const LLQuaternion& rotation)
 {
-    // This joint belongs to a private assistant motion, never the native UI's
-    // poser/undo stack. Do not zero the base or alter non-rotation state.
+    // Used by private motions and typed, owner-reserved shared edits. Shared
+    // history is owned by OwnerSession. Preserve native per-joint undo/base
+    // and every non-rotation field.
     mCurrentState.setTargetRotationOnly(rotation);
 }
 

@@ -81,6 +81,8 @@ public:
     // Publish a new generation and reject pending approvals whose required
     // permission was revoked. Permanent-delete settings remain irrelevant.
     static void notePermissionClassesChanged();
+    // Trusted native privacy signal; removes already-rendered shared metadata.
+    static void noteSharedPosePrivacyChanged();
     static int getPolicyGeneration();
     // Effective current class permission for trusted local inventory review UI.
     static std::string getPermissionLevel(const std::string& class_id);
