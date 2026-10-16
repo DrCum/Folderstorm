@@ -85,6 +85,17 @@ int main()
  assert(updateAcknowledgedCache(oldSource,oldSource,ackJoints,{{"mHead",initial},{"mNeck",initial}},{{"mHead",6},{"mNeck",9}},cache,cacheRevisions)==0);
  assert(cache.at("mHead")==changed && cache.at("mNeck")==changed);
  cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
+ // Ordinary native final ACKs use the same proof/cache helper. A newer
+ // broadcast followed by ACK1 cannot poison bytes while retaining revision2;
+ // completion/locked refresh renders the cache, and duplicate snapshot2 stays
+ // consistent even though equal-version content cannot repair bad cache bytes.
+ Pose nativeCache{{"mHead",initial}};std::map<std::string,std::uint32_t> nativeRevisions{{"mHead",0}};std::uint32_t nativeGlobal=0;
+ assert(ingestObservedPose({{"mHead",changed}},{{"mHead",2}},2,false,false,nativeCache,nativeRevisions,nativeGlobal).accepted);
+ assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},{{"mHead",initial}},{{"mHead",1}},nativeCache,nativeRevisions)==0);
+ assert(observedWorkPose(nativeCache,{"mHead"}).at("mHead")==changed && nativeRevisions.at("mHead")==2);
+ auto duplicateSnapshot=ingestObservedPose({{"mHead",changed}},{{"mHead",2}},2,true,false,nativeCache,nativeRevisions,nativeGlobal);
+ assert(duplicateSnapshot.display.at("mHead")==changed && nativeCache.at("mHead")==changed && nativeRevisions.at("mHead")==2);
+ assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},{{"mHead",initial}},{},nativeCache,nativeRevisions)==0); // unversioned native reply never invents a revision
  // An Ask freezes the exact selected joint, not unrelated joint/global
  // updates. Native/session/grant identity and selected reservation remain exact.
  PreparedSharedSource prepared{"target","session","grant","motion",true,true,true,true,false};

@@ -434,7 +434,7 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
         work.avatar = id;
         work.lease = LLUUID::generateNewID();
         if (id == gAgentID) work.session = LLUUID(mOwner.session());
-        else { work.session = mApprovals.at(id).session; work.token = mApprovals.at(id).token; }
+        else { work.session=mApprovals.at(id).session;work.token=mApprovals.at(id).token;work.generation=mRemotes.at(id).generation;work.grantGeneration=mApprovals.at(id).generation; }
         mStatus = "Reserving joints";
     }
     if (!work.asked) work.joints.insert(joints.begin(), joints.end());
@@ -443,8 +443,19 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
     return true;
 }
 
+bool FSSharedPoseManager::nativeWorkCurrent(const Work& work) const
+{
+    if(!canEdit(work.avatar))return false;
+    if(work.avatar==gAgentID)return mOwner.active() && work.session.asString()==mOwner.session();
+    const auto remote=mRemotes.find(work.avatar);const auto approval=mApprovals.find(work.avatar);
+    if(remote==mRemotes.end() || approval==mApprovals.end())return false;
+    return fs_pose::currentAcknowledgementSource(
+        {work.session.asString(),work.generation.asString(),work.session.asString(),work.grantGeneration.asString(),work.token.asString()},
+        {remote->second.session.asString(),remote->second.generation.asString(),approval->second.session.asString(),approval->second.generation.asString(),approval->second.token.asString()});
+}
 void FSSharedPoseManager::execute(Work& work)
 {
+    if(!nativeWorkCurrent(work))return;
     Applying guard(mApplying);
     const auto remote=mRemotes.find(work.avatar);if(remote!=mRemotes.end())remote->second.overlay.detach();
     auto actions = std::move(work.actions);
@@ -458,9 +469,12 @@ void FSSharedPoseManager::grantWork(const LLUUID& id, const FSSharedPose::Pose& 
     auto found = mWorks.find(id);
     if (found == mWorks.end() || found->second.finished) return;
     auto& work = found->second;
-    if (subset(pose, work.joints).size() != work.joints.size()) { complete(id, false); return; }
-    apply(id, subset(pose, work.joints));
-    work.lastSent = subset(pose, work.joints);
+    if(work.granted)return; // duplicate locked replies cannot rewind an active drag
+    if(!nativeWorkCurrent(work)){complete(id,false);return;}
+    const auto observed=id==gAgentID?subset(pose,work.joints):fs_pose::observedWorkPose(mRemotes.at(id).pose,work.joints);
+    if (observed.size() != work.joints.size()) { complete(id, false); return; }
+    apply(id,observed);
+    work.lastSent=observed;
     work.granted = true;
     mStatus = "Editing pose";
     work.renewed = now();
@@ -472,8 +486,11 @@ void FSSharedPoseManager::complete(const LLUUID& id, bool accepted)
     auto found = mWorks.find(id);
     if (found == mWorks.end()) return;
     if (!accepted) mStatus = "Edit cancelled; pose refreshed";
-    if (id != gAgentID && mRemotes.count(id)) apply(id, subset(mRemotes.at(id).pose, found->second.joints));
-    else if (id == gAgentID && mOwner.active()) apply(id, subset(mOwner.pose(), found->second.joints));
+    if(nativeWorkCurrent(found->second))
+    {
+        if(id!=gAgentID)apply(id,fs_pose::observedWorkPose(mRemotes.at(id).pose,found->second.joints));
+        else apply(id,subset(mOwner.pose(),found->second.joints));
+    }
     mWorks.erase(found);
 }
 
@@ -510,7 +527,7 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
     else
     {
         work.session = mApprovals.at(id).session;
-        work.token = mApprovals.at(id).token;
+        work.token = mApprovals.at(id).token;work.generation=mRemotes.at(id).generation;work.grantGeneration=mApprovals.at(id).generation;
         LLSD data = workMessage(work, "history");
         data["redo"] = redo;
         send(id, data);
@@ -660,11 +677,32 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
     {
         const auto found = mWorks.find(sender);
         if (found == mWorks.end() || found->second.session != session || found->second.lease != data["l"].asUUID()) return;
+        if(!nativeWorkCurrent(found->second)){complete(sender,false);return;}
         if (type == "busy") { complete(sender, false); mStatus = "Joint reserved by " + nameFor(data["by"].asUUID()); return; }
+        auto& work=found->second;
+        if(type=="locked" && work.granted)return;
         const auto pose = readPose(data["p"]);
-        if (type == "locked") { if (pose) grantWork(sender, *pose); else complete(sender, false); return; }
-        if (mApprovals.count(sender)) { mApprovals.at(sender).undo = data["u"].asBoolean(); mApprovals.at(sender).redo = data["d"].asBoolean(); }
-        if (pose && mRemotes.count(sender)) for (const auto& item : *pose) mRemotes.at(sender).pose[item.first] = item.second;
+        auto& remote=mRemotes.at(sender);auto& approval=mApprovals.at(sender);
+        if(pose)
+        {
+            // Native UI replies obey the same cache invariant as MCP replies.
+            // Without revisions (legacy peer), retain known cache versions;
+            // never label unversioned reply bytes with a newer cached revision.
+            if(work.history)for(const auto& joint:*pose)work.joints.insert(joint.first);
+            std::map<std::string,U32> revisions;
+            for(const auto& joint:*pose)
+            {
+                const auto& revision=data["jr"][joint.first];
+                if(revision.isInteger() && revision.asInteger()>=0 && (!data.has("r") || (data["r"].isInteger() && data["r"].asInteger()>=revision.asInteger())))revisions[joint.first]=static_cast<U32>(revision.asInteger());
+            }
+            fs_pose::updateAcknowledgedCache(
+                {work.session.asString(),work.generation.asString(),work.session.asString(),work.grantGeneration.asString(),work.token.asString()},
+                {remote.session.asString(),remote.generation.asString(),approval.session.asString(),approval.generation.asString(),approval.token.asString()},
+                work.joints,*pose,revisions,remote.pose,remote.jointRevisions);
+        }
+        if (type == "locked") { if (pose) grantWork(sender,*pose); else complete(sender,false); return; }
+        if(data["u"].isBoolean())approval.undo=data["u"].asBoolean();
+        if(data["d"].isBoolean())approval.redo=data["d"].asBoolean();
         if (data["f"].asBoolean() || !data["ok"].asBoolean()) complete(sender, data["ok"].asBoolean());
         return;
     }
@@ -706,7 +744,7 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         const bool revisions=!data["a"].asBoolean() || mOwner.revisionsMatch(expected,joints);
         const auto acquired = revisions?mOwner.acquire(editor, token, lease, joints, time):FSSharedPose::OwnerSession::Reservation();
         LLSD reply = message(acquired.granted ? "locked" : "busy", mOwner.session());
-        reply["l"] = data["l"];
+        reply["l"] = data["l"];reply["r"]=static_cast<S32>(mOwner.revision());
         if (acquired.granted)
         {reply["p"] = poseData(subset(mOwner.pose(), joints));reply["jr"]=LLSD::emptyMap();for(const auto& joint:joints)reply["jr"][joint]=static_cast<S32>(mOwner.jointRevision(joint));}
         else reply["by"] = LLUUID(acquired.occupiedBy);
@@ -826,7 +864,7 @@ void FSSharedPoseManager::tick()
     for (auto& entry : mWorks)
     {
         auto& work = entry.second;
-        if (!canEdit(entry.first)) { done.emplace_back(entry.first, false); continue; }
+        if (!nativeWorkCurrent(work)) { done.emplace_back(entry.first, false); continue; }
         if (!work.asked)
         {
             work.asked = true; work.requested = time;

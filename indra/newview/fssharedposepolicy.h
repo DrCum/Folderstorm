@@ -65,6 +65,8 @@ inline CoalescedPoseUpdate coalescePoseUpdate(const FSSharedPose::Pose& previous
  }
  return result;
 }
+inline FSSharedPose::Pose observedWorkPose(const FSSharedPose::Pose& cache,const FSSharedPose::JointSet& requested)
+{FSSharedPose::Pose result;for(const auto& name:requested){const auto found=cache.find(name);if(found!=cache.end())result.emplace(*found);}return result;}
 struct PreparedSharedSource
 {
  std::string target,sessionGeneration,grantGeneration,nativeMotionGeneration;

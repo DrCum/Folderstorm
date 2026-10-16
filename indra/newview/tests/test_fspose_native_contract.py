@@ -131,6 +131,25 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn('data["jr"][joint.first]', send)
         self.assertIn('outgoing["jr"][joint.first]', send)
         self.assertIn("poseData(merged.pose)", send)
+    def test_all_native_reply_and_refresh_paths_keep_current_cache_proof(self):
+        handle = function("fssharedposemanager.cpp", "void FSSharedPoseManager::handle(")
+        native = handle[handle.index('if (type == "locked" || type == "busy" || type == "ack")'):handle.index('if (type == "permit")')]
+        self.assertIn("if(!nativeWorkCurrent(found->second))", native)
+        self.assertLess(native.index("nativeWorkCurrent(found->second)"), native.index("approval.undo="))
+        self.assertIn("fs_pose::updateAcknowledgedCache", native)
+        self.assertIn('if(type=="locked" && work.granted)return', native)
+        self.assertNotIn("mRemotes.at(sender).pose[item.first] =", handle)
+        proof = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::nativeWorkCurrent")
+        for field in ("work.generation", "work.grantGeneration", "approval->second.generation", "remote->second.generation", "approval->second.token"):
+            self.assertIn(field, proof)
+        grant = function("fssharedposemanager.cpp", "void FSSharedPoseManager::grantWork")
+        self.assertIn("if(work.granted)return", grant)
+        self.assertIn("fs_pose::observedWorkPose(mRemotes.at(id).pose", grant)
+        complete = function("fssharedposemanager.cpp", "void FSSharedPoseManager::complete")
+        self.assertLess(complete.index("nativeWorkCurrent(found->second)"), complete.index("apply(id,"))
+        self.assertIn("fs_pose::observedWorkPose", complete)
+        execute = function("fssharedposemanager.cpp", "void FSSharedPoseManager::execute(Work&")
+        self.assertLess(execute.index("nativeWorkCurrent(work)"), execute.index("for (const auto& action"))
     def test_shared_ask_validates_selected_material_without_disjoint_conflicts(self):
         validate = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::validateAssistantPose")
         self.assertIn("fs_pose::preparedSharedEditCurrent", validate)

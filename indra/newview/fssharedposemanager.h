@@ -75,7 +75,7 @@ private:
     struct Request { LLUUID id; double expires = 0.; };
     struct Work
     {
-        LLUUID avatar, session, token, lease;
+        LLUUID avatar, session, token, lease,generation,grantGeneration;
         FSSharedPose::JointSet joints;
         std::vector<std::function<void()>> actions;
         FSSharedPose::Pose latest, lastSent;
@@ -116,6 +116,7 @@ private:
     void stopRemote(const LLUUID& avatar);
     void grantWork(const LLUUID& avatar, const FSSharedPose::Pose& pose);
     void execute(Work& work);
+    bool nativeWorkCurrent(const Work& work) const;
     void complete(const LLUUID& avatar, bool accepted);
     void accept(const LLUUID& editor, const LLUUID& request);
     void ensureSharedSelf(bool nativeTakeover);
