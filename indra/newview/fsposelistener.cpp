@@ -96,7 +96,7 @@ Rotations captured()
 std::map<std::string,LLQuaternion> nativeRotations(const Rotations& rotations)
 {
  std::map<std::string,LLQuaternion> result;
- for(const auto& entry:rotations)result.emplace(entry.first,LLQuaternion(entry.second[0],entry.second[1],entry.second[2],entry.second[3]));return result;
+ for(const auto& entry:rotations)result.emplace(entry.first,LLQuaternion(static_cast<F32>(entry.second[0]),static_cast<F32>(entry.second[1]),static_cast<F32>(entry.second[2]),static_cast<F32>(entry.second[3])));return result;
 }
 void reconcile()
 {
@@ -151,7 +151,7 @@ bool parsePreset(const std::string& bytes,Rotations& result,std::string& error)
      (joint.has("userSetBaseRotationToZero") && (!joint["userSetBaseRotationToZero"].isBoolean() || !joint["userSetBaseRotationToZero"].asBoolean())) ||
      !joint["jointBaseRotationIsZero"].isBoolean() || !joint["jointBaseRotationIsZero"].asBoolean() || !joint["rotation"].isArray() || joint["rotation"].size()!=3)
   {error="Preset requires unsupported joint enable or relative/base state changes";return false;}
-  F32 angles[3];for(unsigned i=0;i<3;++i){const auto& component=joint["rotation"][i];const double angle=component.asReal();if((!component.isReal() && !component.isInteger()) || !std::isfinite(angle) || std::abs(angle)>3.141593){error="Preset rotation exceeds local Euler bounds";return false;}angles[i]=angle;}
+  F32 angles[3];for(unsigned i=0;i<3;++i){const auto& component=joint["rotation"][i];const double angle=component.asReal();if((!component.isReal() && !component.isInteger()) || !std::isfinite(angle) || std::abs(angle)>3.141593){error="Preset rotation exceeds local Euler bounds";return false;}angles[i]=static_cast<F32>(angle);}
   LLQuaternion q;q.setEulerAngles(angles[0],angles[1],angles[2]);LLSD rotation=LLSD::emptyArray();for(float component:q.mQ)rotation.append(component);
   LLSD one;one[entry->first]=rotation;if(!readRotations(one,result,error))return false;
  }
@@ -263,7 +263,7 @@ public:
   }
   if(op=="save" || op=="load")
    operation.summary["subjects"].append(llsd::map("name","Native pose preset","after_name",op=="save"?operation.request["name"].asString()+".xml (new file only)":operation.request["preset_id"].asString()+" revision "+operation.request["preset_revision"].asString()));
-  operation.summary["subject_count"]=operation.summary["subjects"].size();
+  operation.summary["subject_count"]=static_cast<S32>(operation.summary["subjects"].size());
   operation.summary["consequences"].append("pose_local_rotations");return true;
  }
  bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error) const override

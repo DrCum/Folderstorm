@@ -111,7 +111,7 @@ void FSPosingMotion::releaseAssistantJoint(FSJointPose& joint)
         if(owned->second.restore(current))
         {
             const auto& original=owned->second.original;
-            native->setRotation(LLQuaternion(original[0],original[1],original[2],original[3]));
+            native->setRotation(LLQuaternion(static_cast<F32>(original[0]),static_cast<F32>(original[1]),static_cast<F32>(original[2]),static_cast<F32>(original[3])));
         }
         else if(!owned->second.complete(current))mAssistantRestorationComplete=false;
         mAssistantOwned.erase(owned);

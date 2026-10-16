@@ -469,7 +469,7 @@ bool FSGestureListener::prepareAssistant(FSAssistantPreparedOperation& operation
     for(const auto& animation:frozen.animations)
     {LLSD row;row["name"]="Inspected animation "+animation.first.asString();
         row["after_name"]="SHA256 "+animation.second.hash+"; version 1.0 header with empty embedded emote";operation.summary["subjects"].append(row);}
-    operation.summary["subject_count"]=operation.summary["subjects"].size();operation.summary["effects"]=effects(frozen.plan);
+    operation.summary["subject_count"]=static_cast<S32>(operation.summary["subjects"].size());operation.summary["effects"]=effects(frozen.plan);
     return true;
 }
 bool FSGestureListener::validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error)const
