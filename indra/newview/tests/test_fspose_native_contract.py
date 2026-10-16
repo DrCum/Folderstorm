@@ -229,6 +229,15 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("overlay.observe", apply)
         execute = function("fssharedposemanager.cpp", "void FSSharedPoseManager::execute(Work&")
         self.assertLess(execute.index("overlay.detach()"), execute.index("for (const auto& action"))
+    def test_native_remote_history_detaches_received_overlay_at_dispatch(self):
+        history = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::history(")
+        detach = history.index("mRemotes.at(id).overlay.detach()")
+        self.assertLess(history.index("if (!isShared(id)) return false"), detach)
+        self.assertLess(history.index("if (!canEdit(id) || mWorks.count(id)) return true"), detach)
+        self.assertGreater(detach, history.index('workMessage(work, "history")'))
+        self.assertLess(detach, history.index("send(id, data)"))
+        self.assertNotIn("stopPosingAvatar", history)
+        self.assertNotIn("stopReceivedPose", history)
     def test_shared_duplicate_reservation_and_private_payload_gates(self):
         callback = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::handleAssistant")
         self.assertLess(callback.index("if(work->granted)return true"), callback.index('message("edit"'))

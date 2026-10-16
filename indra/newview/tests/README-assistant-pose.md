@@ -39,7 +39,10 @@ acceptance:
    editor stays in A: old owner grants/leases must remain invalid on return.
    Received remote overlays that started their native motion must stop on
    disable/region loss; pre-existing or subsequently edited manual remote Poser
-   motions and the self owner's native Poser must survive.
+   motions and the self owner's native Poser must survive. Dispatch remote native
+   Undo/Redo before disable/region loss: its Poser must survive, including
+   same-value history and rejected/lost acknowledgements. A history request
+   rejected locally before dispatch retains received-overlay cleanup ownership.
 7. Duplicate a locked reply, lose or delay a final POST/acknowledgement, and
    deliver an acknowledgement late. There is one final sequence, no uncertain
    resend, and `owner_accepted` appears only for the exact owner acknowledgement.

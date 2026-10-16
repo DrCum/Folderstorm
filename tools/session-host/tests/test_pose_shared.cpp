@@ -49,6 +49,21 @@ int main()
  received.detach();received.observe("received-motion",secondOverlay,"received-motion",secondOverlay);assert(!received.owned());
  ReceivedOverlay externallyChanged;externallyChanged.observe("",{},"received-motion",firstOverlay);
  externallyChanged.observe("received-motion",secondOverlay,"received-motion",secondOverlay);assert(!externallyChanged.owned());
+ // Native remote Undo/Redo dispatch explicitly takes over even when history
+ // keeps identical bytes, is rejected, or loses its ACK. Subsequent receive /
+ // completion refresh must not reclaim that still-active manual generation.
+ for(const auto& historyResult:{firstOverlay,secondOverlay})
+ {
+  ReceivedOverlay manualHistory;manualHistory.observe("",{},"received-motion",firstOverlay);
+  assert(manualHistory.canRelease("received-motion",firstOverlay));
+  manualHistory.detach(); // production history() does this only at dispatch
+  manualHistory.observe("received-motion",firstOverlay,"received-motion",historyResult);
+  assert(!manualHistory.owned() && !manualHistory.canRelease("received-motion",historyResult));
+  manualHistory.observe("received-motion",historyResult,"received-motion",historyResult);
+  assert(!manualHistory.canRelease("received-motion",historyResult));
+ }
+ ReceivedOverlay locallyDeniedHistory;locallyDeniedHistory.observe("",{},"received-motion",firstOverlay);
+ assert(locallyDeniedHistory.canRelease("received-motion",firstOverlay)); // no dispatched action, cleanup retains ownership
  // The actual queue coalescer retains each pose entry's own revision rather
  // than assigning the newest overall revision to all disjoint retained joints.
  OwnerSession coalescedOwner;coalescedOwner.start("owner","coalesced",{{"mHead",initial},{"mNeck",initial}});

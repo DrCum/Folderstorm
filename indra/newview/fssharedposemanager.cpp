@@ -532,6 +532,11 @@ bool FSSharedPoseManager::history(const LLUUID& id, bool redo)
         work.token = mApprovals.at(id).token;work.generation=mRemotes.at(id).generation;work.grantGeneration=mApprovals.at(id).generation;
         LLSD data = workMessage(work, "history");
         data["redo"] = redo;
+        // This native action hands the remote Poser to its manual editor,
+        // including same-value history and a rejected/lost acknowledgement.
+        // Once dispatched, cleanup cannot prove the owner made no change.
+        // Locally denied/busy requests returned above without taking ownership.
+        mRemotes.at(id).overlay.detach();
         send(id, data);
         mWorks.emplace(id, std::move(work));
     }
