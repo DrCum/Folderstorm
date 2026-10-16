@@ -3953,11 +3953,13 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
                     {
                         if (inv_item->getUUID().isNull())
                         {
-                            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " << inv_item->getName() << LL_ENDL;
+                            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " << inv_item->LLInventoryObject::getName() << LL_ENDL;
                         }
                         else
                         {
-                            if (inv_item->getType() == LLAssetType::AT_UNKNOWN)
+                            // Cache parsing can run off-thread. Link resolution belongs
+                            // to the main-thread merge, never the live inventory here.
+                            if (inv_item->getActualType() == LLAssetType::AT_UNKNOWN)
                             {
                                 cats_to_update.insert(inv_item->getParentUUID());
                             }
