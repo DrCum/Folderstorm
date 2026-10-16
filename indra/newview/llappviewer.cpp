@@ -28,6 +28,7 @@
 #include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
+#include "fsreleaseviewer.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1509,6 +1510,7 @@ bool LLAppViewer::init()
         gDirUtilp->deleteDirAndContents(gDirUtilp->getDumpLogsDirPath());
     }
 #endif
+    FSReleaseViewer::startup();
     LL_PROFILER_FRAME_END;
     return true;
 }

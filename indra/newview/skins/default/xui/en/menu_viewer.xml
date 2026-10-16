@@ -2696,6 +2696,9 @@
      name="Help"
      tear_off="true"
      visible="true">
+        <menu_item_call label="Check for updates…" name="Folderstorm Updates">
+            <menu_item_call.on_click function="Help.CheckFolderstormUpdates" />
+        </menu_item_call>
         <menu_item_check
          label="Enable Viewer UI Hints"
          name="Enable Hints">

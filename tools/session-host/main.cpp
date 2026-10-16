@@ -55,6 +55,7 @@
 #include "tooltips.h"
 #include "fssessionlifecycle.h"
 #include "controller_pipe.h"
+#include "release_http.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -476,6 +477,7 @@ struct Host
             std::to_string(screen.rcWork.left)+":"+std::to_string(screen.rcWork.top)+":"+std::to_string(screen.rcWork.right)+":"+std::to_string(screen.rcWork.bottom)+":"+std::to_string(dpi);
     }
     #include "controller_host.inc"
+    #include "releases_host.inc"
 
     bool saveStore(const wchar_t* filename,const std::string& data)
     {
@@ -517,10 +519,11 @@ struct Host
         return -1;
     }
     enum PreferencePage : unsigned int { PrefLayout,PrefAppearance,PrefCharacter,PrefSounds,PrefViewer,PrefSession,
-        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefAccessibility,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController };
+        PrefConversations,PrefAttention,PrefReading,PrefAudio,PrefSwitching,PrefMonitors,PrefQuick,PrefKeys,PrefAccessibility,PrefDiagnostics,PrefRecovery,PrefAssistant,PrefController,PrefUpdates };
     void editPreferences(unsigned int page=~0u,int target=-1)
     {
         if(preferencesOpen)return;
+        auto originalUpdates=fs_release::loadPreferences(fs_release::DefaultChannel);
         if(page==~0u)page=preferencesPage;
         using namespace fs_host_ui;
         struct ProfileDraft
@@ -560,7 +563,14 @@ struct Host
             {6,L"Accessibility",L"Accessibility",L"Shared display and keyboard choices. Original settings remain in their usual tabs."},
             {7,L"Advanced",L"Diagnostics",L""},{7,L"Advanced",L"Files & recovery",L""},
             {1,L"Character settings",L"Local Assistant",L"Connect an MCP assistant to this character. Access and permissions stay separate for each profile."},
-            {8,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."}};
+            {8,L"MCP controller",L"Host access",L"Separate host authority. Enabling this does not enable any viewer's Local Assistant or log in a character."},
+            {9,L"Updates",L"Releases",L"Find published Folderstorm versions, downloads and changelogs."}};
+        const auto updatesAutomatic=add(PrefUpdates,{L"Check automatically",originalUpdates.automatic?L"1":L"0",FieldType::Check});
+        const auto updatesChannel=add(PrefUpdates,{L"Release channel",originalUpdates.channel=="nightly"?L"1":L"0",FieldType::Choice,{L"Stable",L"Nightly"}});
+        const auto updatesNote=add(PrefUpdates,{L"",releaseStatus,FieldType::Note});fields[updatesNote].rowHeight=72;
+        const auto updatesNow=add(PrefUpdates,{L"Updates",L"Check now",FieldType::Action});
+        fields[updatesNow].help=L"Results appear after Preferences closes. Apply a changed channel first.";
+        fields[updatesNow].action=[&](HWND){checkUpdates();};
         auto controllerDraft=controllerConfig;auto controllerCapturedRevision=controllerConfig.revision;
         const auto controllerEnableField=add(PrefController,{L"Enable controller MCP",controllerConfig.enabled?L"1":L"0",FieldType::Check});
         fields[controllerEnableField].help=L"Off by default. A private current-user connection controls only explicitly opted-in profiles. Apply or OK accepts; Cancel discards.";
@@ -943,7 +953,18 @@ struct Host
         showPerson(owner);refreshAssistant();dependencies(owner);
         for(const auto pair:{std::make_pair(delayField,chatPreferences.delay),std::make_pair(durationField,presentation.duration),std::make_pair(heightField,presentation.height)})
             if(!fields[pair.first].enabled){fields[pair.first].value=std::to_wstring(pair.second);if(fields[pair.first].control)SetWindowTextW(fields[pair.first].control,fields[pair.first].value.c_str());}
-        const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);return saved;
+        const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);
+        if(!saved)return false;
+        const bool automatic=readField(updatesAutomatic)==L"1";
+        const std::string channel=readField(updatesChannel)==L"1"?"nightly":"stable";
+        if(automatic!=originalUpdates.automatic || channel!=originalUpdates.channel)
+        {
+            auto prefs=fs_release::loadPreferences(fs_release::DefaultChannel);prefs.automatic=automatic;
+            if(prefs.channel!=channel){prefs.channel=channel;prefs.skipped.clear();prefs.lastCheck=0;}
+            if(!fs_release::savePreferences(prefs)){message(L"Host choices saved, but update choices could not be saved. Retry Apply.");return false;}
+            originalUpdates=prefs;
+        }
+        return true;
         };
         preferencesOpen=true;refreshAssistantEditor=refreshAssistant;
         edit(window,L"Folderstorm Host Preferences",fields,{},page,true,validate,navigation,apply,&preferencesPage,profileDialogOwner());
@@ -1740,6 +1761,7 @@ struct Host
         AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
         AppendMenuW(menu,MF_STRING,0xA140,L"Restore host controls");
         AppendMenuW(menu,MF_STRING,0xA150,L"Recover window positions");
+        AppendMenuW(menu,MF_STRING,0xA170,L"Check for updates…");
     }
     int closeAction(bool alreadyClosing)
     {
@@ -3588,6 +3610,7 @@ struct Host
     }
     void tick()
     {
+        pollUpdates();
         controllerTick();
         autosaveChoices();
         DWORD foregroundPid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
@@ -4118,6 +4141,7 @@ LRESULT CALLBACK panelProc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
     if (message == WM_SYSCOMMAND && ((wparam & 0xfff0u) == 0xA140 || (wparam & 0xfff0u) == 0xA150))
     { host->recover((wparam & 0xfff0u) == 0xA150); return 0; }
     if(message==WM_SYSCOMMAND && (wparam&0xfff0u)==0xA160){host->pinWindow(window);return 0;}
+    if(message==WM_SYSCOMMAND && (wparam&0xfff0u)==0xA170){host->checkUpdates();return 0;}
     const bool chat = window == host->chatWindow;
     if (window == host->attentionWindow)
     {
@@ -4223,6 +4247,7 @@ LRESULT CALLBACK friendsProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
     case WM_GETMINMAXINFO:if(pane->standalone){reinterpret_cast<MINMAXINFO*>(lp)->ptMinTrackSize={host->theme.scale(280,pane->dpi),host->theme.scale(260,pane->dpi)};return 0;}break;
     case WM_SYSCOMMAND:
         if((wp&0xfff0u)==0xA160){host->pinWindow(window);return 0;}
+        if((wp&0xfff0u)==0xA170){host->checkUpdates();return 0;}
         if((wp&0xfff0u)==0xA140 || (wp&0xfff0u)==0xA150){host->recover((wp&0xfff0u)==0xA150);return 0;}break;
     case WM_MEASUREITEM:
         if(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->CtlID==ContactList){reinterpret_cast<MEASUREITEMSTRUCT*>(lp)->itemHeight=static_cast<UINT>(host->theme.scale(24,pane->dpi));return TRUE;}break;
@@ -4254,7 +4279,7 @@ LRESULT CALLBACK monitorProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
     int id = -1;
     for (int i = 0; i < MonitorViews; ++i) if (&host->monitors[i] == monitor) { id = i; break; }
     if (id < 0) return DefWindowProcW(window, message, wparam, lparam);
-    if(message==WM_SYSCOMMAND){const auto command=wparam&0xfff0u;if(command==0xA140 || command==0xA150){host->recover(command==0xA150);return 0;}if(command==0xA160){host->pinWindow(window);return 0;}}
+    if(message==WM_SYSCOMMAND){const auto command=wparam&0xfff0u;if(command==0xA140 || command==0xA150){host->recover(command==0xA150);return 0;}if(command==0xA160){host->pinWindow(window);return 0;}if(command==0xA170){host->checkUpdates();return 0;}}
     const auto& binding = host->monitorSet.bindings[id];
     auto scale = [monitor,context=host](int value) { return context->theme.scale(value,monitor->dpi); };
     fs_host_ui::PopupAnchor commandAnchor(reinterpret_cast<HWND>(lparam),message==WM_COMMAND&&HIWORD(wparam)==BN_CLICKED&&lparam?-1:0);
@@ -4454,6 +4479,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         AppendMenuW(system, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(system, MF_STRING, 0xA100, L"Expanded character controls");
         AppendMenuW(system, MF_STRING, 0xA110, L"Condensed character controls");
+        AppendMenuW(system, MF_STRING, 0xA170, L"Check for updates…");
 
 
         host->recoveryMenu(window); host->tray(true);
@@ -4540,6 +4566,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         if (command >= 0xA100 && command <= 0xA120) { host->setChrome((command - 0xA100) / 0x10); return 0; }
         if (command == 0xA130) { host->sessionMenu(); return 0; }
         if (command == 0xA140 || command == 0xA150) { host->recover(command == 0xA150); return 0; }
+        if (command == 0xA170) { host->checkUpdates(); return 0; }
         return DefWindowProcW(window, message, wparam, lparam);
     }
     case WM_COMMAND:

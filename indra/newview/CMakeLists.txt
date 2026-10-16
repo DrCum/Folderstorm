@@ -1952,6 +1952,9 @@ configure_file(
     @ONLY
 )
 list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/fsversionvalues.h)
+include(FolderstormReleases)
+list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
+list(APPEND viewer_HEADER_FILES fsreleasepolicy.h fsreleaseprefs.h fsreleaseviewer.h ${CMAKE_CURRENT_BINARY_DIR}/fsreleasebuild.h)
 # </FS:TS>
 
 source_group("CMake Rules" FILES ViewerInstall.cmake)
@@ -2414,12 +2417,15 @@ add_executable(${VIEWER_BINARY_NAME}
 # a controller or background workers. Keep the binary beside the matching viewer.
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
+      fsreleasefeed.cpp
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/release_json.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
   target_include_directories(folderstorm-session-host PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
+  target_link_libraries(folderstorm-session-host PRIVATE ll::boost winhttp)
   target_compile_definitions(folderstorm-session-host PRIVATE
       UNICODE _UNICODE "FS_SESSION_VIEWER_FILENAME=\"${VIEWER_BINARY_NAME}.exe\"")
   target_link_libraries(folderstorm-session-host PRIVATE user32 gdi32 msimg32 advapi32 bcrypt shell32 ole32 uuid oleacc psapi comctl32 comdlg32 winmm imm32 uxtheme)
