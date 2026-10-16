@@ -142,9 +142,21 @@ LLUUID FSPoserAnimator::nativePoseGeneration(LLVOAvatar* avatar) const
 {auto* motion=getPosingMotion(avatar);return motion && !motion->isStopped()?motion->activationGeneration():LLUUID::null;}
 
 FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
+{return capturePose(getPosingMotion(avatar));}
+bool FSPoserAnimator::stopReceivedPose(LLVOAvatar* avatar,const fs_pose::ReceivedOverlay& owned)
+{
+    // Cleanup may run synchronously after gAgent has moved to another region.
+    // Match the live object's exact registered native motion/generation rather
+    // than using a current-region lookup or stopping a replacement/manual pose.
+    if(!avatar || avatar->isSelf() || avatar->getID()==gAgentID || avatar->isDead() || avatar->isControlAvatar() || !owned.owned())return false;
+    const auto registered=sAvatarIdToRegisteredAnimationId.find(avatar->getID());if(registered==sAvatarIdToRegisteredAnimationId.end())return false;
+    auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(registered->second));
+    if(!motion || motion->assistantRotationOnly() || motion->isStopped() || !owned.canRelease(motion->activationGeneration().asString(),capturePose(motion)))return false;
+    mPosingState.purgeMotionStates(avatar);avatar->LLCharacter::stopMotion(registered->second,true);return true;
+}
+FSSharedPose::Pose FSPoserAnimator::capturePose(FSPosingMotion* motion) const
 {
     FSSharedPose::Pose result;
-    auto* motion = getPosingMotion(avatar);
     if (!motion) return result;
     for (const auto& definition : PoserJoints)
     {

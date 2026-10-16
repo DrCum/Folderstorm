@@ -35,6 +35,20 @@ int main()
  // changes. Cancellation does not call restore or owner.clear.
  owner.grant("source","new-token",1);assert(owner.acquire("source","new-token","source-undo",owner.historyJoints("source",false),1).granted);
  assert(owner.restore("source","new-token","source-undo",false,1));assert(owner.pose().at("mNeck")==changed);
+ // Received-overlay ownership survives stream updates and is released only
+ // for the exact unchanged native generation. Pre-existing/manual work is
+ // detached and must survive toggle/region cleanup, including same-value edits.
+ const Pose firstOverlay{{"mHead",initial}},secondOverlay{{"mHead",changed}};
+ ReceivedOverlay received;received.observe("",{},"received-motion",firstOverlay);
+ assert(received.canRelease("received-motion",firstOverlay));
+ received.observe("received-motion",firstOverlay,"received-motion",secondOverlay);
+ assert(received.canRelease("received-motion",secondOverlay));
+ assert(!received.canRelease("newer-native-motion",secondOverlay));
+ assert(!received.canRelease("received-motion",firstOverlay));
+ ReceivedOverlay preexisting;preexisting.observe("manual-motion",firstOverlay,"manual-motion",secondOverlay);assert(!preexisting.owned());
+ received.detach();received.observe("received-motion",secondOverlay,"received-motion",secondOverlay);assert(!received.owned());
+ ReceivedOverlay externallyChanged;externallyChanged.observe("",{},"received-motion",firstOverlay);
+ externallyChanged.observe("received-motion",secondOverlay,"received-motion",secondOverlay);assert(!externallyChanged.owned());
  // The actual queue coalescer retains each pose entry's own revision rather
  // than assigning the newest overall revision to all disjoint retained joints.
  OwnerSession coalescedOwner;coalescedOwner.start("owner","coalesced",{{"mHead",initial},{"mNeck",initial}});

@@ -28,6 +28,7 @@
 #define LL_FSPoserAnimator_H
 
 #include "fsposingmotion.h"
+#include "fssharedposepolicy.h"
 #include "fsposestate.h"
 #include "llvoavatar.h"
 #include "fsmaniprotatejoint.h"
@@ -811,6 +812,7 @@ public:
     // native joint's base, undo, priority, enable, position, scale and flags.
     bool applyAssistantSharedRotations(LLVOAvatar* avatar,const FSSharedPose::Pose& before,
         const fs_pose::Rotations& rotations,const std::function<bool()>& allowed);
+    bool stopReceivedPose(LLVOAvatar* avatar,const fs_pose::ReceivedOverlay& owned);
     LLUUID nativePoseGeneration(LLVOAvatar* avatar) const;
     FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
     void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
@@ -820,6 +822,7 @@ public:
                          bool position, std::function<void()> action);
 
   private:
+    FSSharedPose::Pose capturePose(FSPosingMotion* motion) const;
     std::map<LLUUID,LLUUID> mAssistantMotions;
     /// <summary>
     /// Translates the supplied rotation vector from UI to a Quaternion for the bone.

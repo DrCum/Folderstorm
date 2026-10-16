@@ -127,8 +127,12 @@ void FSSharedPoseManager::invalidateNativeSharing(const std::string& reason)
  endAssistantPublishing(reason);
  mOwner.clear();mPublicGeneration=LLUUID::generateNewID();mPublished.clear();mPublishedRevision=0;
  mApprovals.clear();mRequests.clear();mOutgoingRequests.clear();mWorks.clear();mDeferred.clear();
- mQueue.clear();mRemotes.clear();mClosed.clear();mPeers.clear();mTypedPeers.clear();mAssembler.clear();
- // Preserve all native Poser motions and manual joint state. Setting mReady
+ // Release received remote overlays before their ownership records disappear.
+ // stopRemote excludes self and preserves pre-existing/changed native motions.
+ std::vector<LLUUID> remotes;for(const auto& entry:mRemotes)remotes.push_back(entry.first);
+ for(const auto& target:remotes)stopRemote(target);
+ mQueue.clear();mClosed.clear();mPeers.clear();mTypedPeers.clear();mAssembler.clear();
+ // Preserve the owner's and manually owned native Poser state. Setting mReady
  // false also prevents the legacy unavailable branch from calling stopAll.
  mReady=false;mRegion.setNull();mBridge.setNull();mStatus="Shared posing stopped";
 }
@@ -331,18 +335,28 @@ std::vector<LLUUID> FSSharedPoseManager::editors() const
 
 void FSSharedPoseManager::apply(const LLUUID& id, const FSSharedPose::Pose& pose)
 {
-    Applying guard(mApplying);
-    mAnimator.applySharedPose(avatarFor(id), pose);
+    Applying guard(mApplying);auto* avatar=avatarFor(id);
+    const auto remote=mRemotes.find(id);const bool track=id!=gAgentID && remote!=mRemotes.end();
+    const auto beforeGeneration=track?mAnimator.nativePoseGeneration(avatar):LLUUID::null;
+    const auto before=track?mAnimator.captureSharedPose(avatar):FSSharedPose::Pose();
+    mAnimator.applySharedPose(avatar,pose);
+    if(track)
+    {
+        const auto after=mAnimator.nativePoseGeneration(avatar);
+        remote->second.overlay.observe(beforeGeneration.isNull()?std::string():beforeGeneration.asString(),before,
+            after.isNull()?std::string():after.asString(),mAnimator.captureSharedPose(avatar));
+    }
 }
 void FSSharedPoseManager::stopRemote(const LLUUID& id)
 {
     const auto found = mRemotes.find(id);
-    if (found != mRemotes.end()) mClosed[id] = {found->second.session, now() + 30.};
-    mRemotes.erase(id);
-    mApprovals.erase(id);
-    mWorks.erase(id);
-    Applying guard(mApplying);
-    mAnimator.stopPosingAvatar(avatarFor(id));
+    if (found != mRemotes.end())
+    {
+        mClosed[id] = {found->second.session, now() + 30.};
+        mAnimator.stopReceivedPose(avatarFor(id),found->second.overlay);
+        mRemotes.erase(found);
+    }
+    mApprovals.erase(id);mWorks.erase(id);
 }
 void FSSharedPoseManager::leave(const LLUUID& id)
 {
@@ -414,6 +428,7 @@ bool FSSharedPoseManager::edit(const LLUUID& id, const FSSharedPose::JointSet& j
 void FSSharedPoseManager::execute(Work& work)
 {
     Applying guard(mApplying);
+    const auto remote=mRemotes.find(work.avatar);if(remote!=mRemotes.end())remote->second.overlay.detach();
     auto actions = std::move(work.actions);
     work.actions.clear();
     for (const auto& action : actions) action();
@@ -580,6 +595,7 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         if (remote.session != session)
         {
             if (type != "snapshot" && !remote.session.isNull()) return;
+            mAnimator.stopReceivedPose(avatarFor(sender),remote.overlay);
             remote = Remote(); remote.session = session;
         }
         remote.seen = time;

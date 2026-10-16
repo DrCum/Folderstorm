@@ -131,6 +131,24 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn('data["jr"][joint.first]', send)
         self.assertIn('outgoing["jr"][joint.first]', send)
         self.assertIn("poseData(merged.pose)", send)
+    def test_received_remote_overlay_cleanup_preserves_manual_native_owners(self):
+        invalidation = function("fssharedposemanager.cpp", "void FSSharedPoseManager::invalidateNativeSharing")
+        self.assertIn("stopRemote(target)", invalidation)
+        self.assertNotIn("mRemotes.clear()", invalidation)
+        stop = function("fssharedposemanager.cpp", "void FSSharedPoseManager::stopRemote")
+        self.assertLess(stop.index("stopReceivedPose"), stop.index("mRemotes.erase"))
+        self.assertNotIn("stopPosingAvatar", stop)
+        release = function("fsposeranimator.cpp", "bool FSPoserAnimator::stopReceivedPose")
+        self.assertIn("avatar->isSelf()", release)
+        self.assertIn("avatar->getID()==gAgentID", release)
+        self.assertLess(release.index("owned.canRelease"), release.index("avatar->LLCharacter::stopMotion"))
+        self.assertIn("motion->activationGeneration()", release)
+        self.assertNotIn("getPosingMotion(avatar)", release)
+        apply = function("fssharedposemanager.cpp", "void FSSharedPoseManager::apply(")
+        self.assertIn("id!=gAgentID", apply)
+        self.assertIn("overlay.observe", apply)
+        execute = function("fssharedposemanager.cpp", "void FSSharedPoseManager::execute(Work&")
+        self.assertLess(execute.index("overlay.detach()"), execute.index("for (const auto& action"))
     def test_shared_duplicate_reservation_and_private_payload_gates(self):
         callback = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::handleAssistant")
         self.assertLess(callback.index("if(work->granted)return true"), callback.index('message("edit"'))
@@ -165,7 +183,7 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("mApprovals.clear()", invalidation)
         self.assertIn("mQueue.clear()", invalidation)
         self.assertIn("mReady=false", invalidation)
-        for forbidden in ("stopAll(", "stopRemote(", "stopPosingAvatar(", "applySharedPose("):
+        for forbidden in ("stopAll(", "stopPosingAvatar(", "applySharedPose("):
             self.assertNotIn(forbidden, invalidation)
         self.assertIn("gAgent.addRegionChangedCallback", ctor)
         self.assertIn("mAssistantRegionGeneration.advance()", ctor)

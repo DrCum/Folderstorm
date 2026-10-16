@@ -29,6 +29,24 @@ inline bool rotationResult(const FSSharedPose::Joint& before,const FSSharedPose:
 {return (allowBefore && sameSharedJoint(before,after)) || sameSharedJoint(rotationJoint(before,requested),after);}
 inline bool sameSharedPose(const FSSharedPose::Pose& a,const FSSharedPose::Pose& b)
 {if(a.size()!=b.size())return false;for(const auto& joint:a){const auto other=b.find(joint.first);if(other==b.end() || !sameSharedJoint(joint.second,other->second))return false;}return true;}
+// Only a motion started by receiving a remote pose may be released by the
+// sharing lifecycle. Pre-existing or subsequently edited native motions belong
+// to their manual owner, even if an incoming stream used the same motion ID.
+struct ReceivedOverlay
+{
+ std::string generation;FSSharedPose::Pose expected;
+ bool owned() const{return !generation.empty();}
+ void detach(){generation.clear();expected.clear();}
+ void observe(const std::string& beforeGeneration,const FSSharedPose::Pose& before,
+              const std::string& afterGeneration,const FSSharedPose::Pose& after)
+ {
+  const bool retained=owned() && generation==beforeGeneration && sameSharedPose(expected,before);
+  if(afterGeneration.empty() || (!beforeGeneration.empty() && !retained)){detach();return;}
+  generation=afterGeneration;expected=after;
+ }
+ bool canRelease(const std::string& currentGeneration,const FSSharedPose::Pose& current) const
+ {return owned() && generation==currentGeneration && sameSharedPose(expected,current);}
+};
 struct CoalescedPoseUpdate
 {
  FSSharedPose::Pose pose;std::map<std::string,std::uint32_t> revisions;

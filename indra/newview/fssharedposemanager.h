@@ -65,6 +65,7 @@ private:
     {
         LLUUID session,generation=LLUUID::generateNewID();
         FSSharedPose::Pose pose;
+        fs_pose::ReceivedOverlay overlay;
         std::map<std::string,U32> jointRevisions;
         U32 revision = 0;
         double seen = 0., requestedSnapshot = -100.;

@@ -37,6 +37,9 @@ acceptance:
    and publishing/editing consent requires a new explicit native flow. Also
    round-trip a manually published owner A→B→A before idle while its remote
    editor stays in A: old owner grants/leases must remain invalid on return.
+   Received remote overlays that started their native motion must stop on
+   disable/region loss; pre-existing or subsequently edited manual remote Poser
+   motions and the self owner's native Poser must survive.
 7. Duplicate a locked reply, lose or delay a final POST/acknowledgement, and
    deliver an acknowledgement late. There is one final sequence, no uncertain
    resend, and `owner_accepted` appears only for the exact owner acknowledgement.
