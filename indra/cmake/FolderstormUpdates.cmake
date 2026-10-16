@@ -1,0 +1,11 @@
+include_guard()
+configure_file(fsupdateconfig.h.in ${CMAKE_CURRENT_BINARY_DIR}/fsupdateconfig.h @ONLY)
+set_source_files_properties(fsupdate.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/fssessionprotocol.h" session_protocol)
+string(REGEX MATCH "Version = ([0-9]+)" protocol_match "${session_protocol}")
+set(bundle_protocol "${CMAKE_MATCH_1}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json"
+  "{\"schema\":1,\"version\":\"${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}\",\"commit\":\"${FS_SOURCE_COMMIT}\",\"installer\":\"${FS_RELEASE_INSTALLER}\",\"app_id\":\"Folderstorm.${FS_RELEASE_FLAVOR}.${FS_RELEASE_DEFAULT_CHANNEL}.${FS_RELEASE_ARCH}.${FS_RELEASE_CPU}\",\"protocol\":${bundle_protocol}}\n")
+function(folderstorm_update_target target)
+  target_sources(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fsupdate.cpp")
+endfunction()

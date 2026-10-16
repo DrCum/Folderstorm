@@ -41,6 +41,7 @@
 #include "llcoros.h"
 
 #include "Velopack.h"
+#include "fsupdate.h"
 
 #if LL_WINDOWS
 #include <windows.h>
@@ -1487,6 +1488,10 @@ static void show_required_update_prompt()
 
 void velopack_check_for_updates(const std::string& required_version, const std::string& relnotes_url)
 {
+#if LL_WINDOWS
+    fs_update::prepare();
+    return;
+#else
     if (sUpdateUrl.empty())
     {
         LL_DEBUGS("Velopack") << "No update URL set, skipping update check" << LL_ENDL;
@@ -1557,6 +1562,7 @@ void velopack_check_for_updates(const std::string& required_version, const std::
     args["VERSION"] = target_version;
     args["URL"] = relnotes_url;
     LLNotificationsUtil::add("PromptOptionalUpdate", args, LLSD(), on_optional_update_response);
+#endif
 }
 
 std::string velopack_get_current_version()
@@ -1602,6 +1608,10 @@ void velopack_request_restart_after_update()
 
 void velopack_apply_pending_update(bool restart)
 {
+#if LL_WINDOWS
+    LL_WARNS("Velopack") << "Use the installation coordinator to apply updates" << LL_ENDL;
+    return;
+#else
     if (!sUpdateManager || !sPendingUpdate || !sPendingUpdate->TargetFullRelease)
     {
         LL_WARNS("Velopack") << "Cannot apply update: no pending update or manager" << LL_ENDL;
@@ -1614,6 +1624,7 @@ void velopack_apply_pending_update(bool restart)
                                        false,
                                        restart,
                                        nullptr, 0);
+#endif
 }
 
 void velopack_cleanup()

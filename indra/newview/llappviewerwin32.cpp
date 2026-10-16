@@ -77,6 +77,7 @@
 // Velopack installer and update framework
 #if LL_VELOPACK
 #include "llvelopack.h"
+#include "fsupdate.h"
 #endif
 
 // Bugsplat (http://bugsplat.com) crash reporting tool
@@ -534,6 +535,11 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
 #endif
 
     // Call Tracy first thing to have it allocate memory
+    if(!fs_update::enter())
+    {
+        MessageBoxA(nullptr,fs_update::lastError().c_str(),"Folderstorm update",MB_OK|MB_ICONINFORMATION);
+        return 1;
+    }
     // https://github.com/wolfpld/tracy/issues/196
     LL_PROFILER_FRAME_END;
     LL_PROFILER_SET_THREAD_NAME("App");

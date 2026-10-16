@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fs-mcp/internal/diagnose"
+	"fs-mcp/internal/installguard"
 	"io"
 	"log"
 	"os"
@@ -15,6 +16,12 @@ import (
 )
 
 func main() {
+	release, err := installguard.Acquire()
+	if err != nil {
+		log.Print("Folderstorm is being updated; close this client and retry after the viewer opens.")
+		return
+	}
+	defer release()
 	if len(os.Args) > 1 {
 		os.Exit(diagnosticMain(os.Args[1:], os.Stdout))
 	}

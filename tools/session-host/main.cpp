@@ -57,6 +57,7 @@
 #include "controller_pipe.h"
 #include "release_http.h"
 #include "fscrash.h"
+#include "fsupdate.h"
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -577,6 +578,9 @@ struct Host
         const auto updatesChannel=add(PrefUpdates,{L"Release channel",originalUpdates.channel=="nightly"?L"1":L"0",FieldType::Choice,{L"Stable",L"Nightly"}});
         const auto updatesNote=add(PrefUpdates,{L"",releaseStatus,FieldType::Note});fields[updatesNote].rowHeight=72;
         const auto updatesNow=add(PrefUpdates,{L"Updates",L"Check now",FieldType::Action});
+        const auto updatesPrepare=add(PrefUpdates,{L"Whole application",L"Prepare update…",FieldType::Action});
+        fields[updatesPrepare].help=L"Separate Velopack installs only. Download first, then close every character and the MCP client before installing. NSIS installs use the release download.";
+        fields[updatesPrepare].action=[&](HWND){if(!fs_update::prepare())message(wide(fs_update::lastError()));};
         fields[updatesNow].help=L"Results appear after Preferences closes. Apply a changed channel first.";
         fields[updatesNow].action=[&](HWND){checkUpdates();};
         auto controllerDraft=controllerConfig;auto controllerCapturedRevision=controllerConfig.revision;
@@ -4713,6 +4717,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if (dpiContext) dpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // PER_MONITOR_AWARE_V2
     else SetProcessDPIAware();
     INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES}; InitCommonControlsEx(&common);
+    if(!fs_update::enter()){MessageBoxA(nullptr,fs_update::lastError().c_str(),"Folderstorm update",MB_OK|MB_ICONINFORMATION);return 1;}
     Host state;
     fs_crash::initialize("host");
     struct CrashShutdown {~CrashShutdown(){fs_crash::shutdown();}} crashShutdown;

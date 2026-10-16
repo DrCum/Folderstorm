@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import hashlib
+import zipfile
 
 SPEC = importlib.util.spec_from_file_location("release", Path(__file__).resolve().parents[1] / "folderstorm_release.py")
 release = importlib.util.module_from_spec(SPEC)
@@ -59,6 +61,25 @@ class ReleasePublishing(unittest.TestCase):
         for text in ("<!-- folderstorm-release-v1\n{}\n-->", "a"*32769):
             (self.root / "notes.md").write_text(text)
             with self.assertRaises(ValueError): self.prepare()
+
+    def test_verified_matching_velopack_package(self):
+        asset=self.data["assets"][0];asset["installer"]="velopack";asset["velopack_feed"]="releases.win.json"
+        identity="Folderstorm.opensim.nightly.x86_64.avx2"
+        package=self.root / (identity+"-7.2.5-82125-full.nupkg")
+        with zipfile.ZipFile(package,"w") as archive:
+            archive.writestr("lib/app/folderstorm-bundle.json",json.dumps({"version":self.data["version"],"commit":self.data["commit"],"app_id":identity,"installer":"velopack"}))
+            for name in ("folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","folderstorm-session-viewer.txt"):
+                archive.writestr("lib/app/"+name,b"fixture")
+        raw=package.read_bytes()
+        catalog={"Assets":[{"PackageId":identity,"Version":"7.2.5-82125","Type":"Full","FileName":package.name,"Size":len(raw),"SHA1":hashlib.sha1(raw).hexdigest(),"SHA256":hashlib.sha256(raw).hexdigest()}]}
+        feed=self.root / asset["velopack_feed"];feed.write_text(json.dumps(catalog))
+        _,data,paths=self.prepare()
+        self.assertEqual(package.name,data["assets"][0]["update"]["file"])
+        self.assertIn(package,paths)
+        package.write_bytes(raw+b"changed")
+        with self.assertRaises(ValueError):self.prepare()
+        package.write_bytes(raw);catalog["Assets"][0]["Version"]="7.2.5-82126";feed.write_text(json.dumps(catalog))
+        with self.assertRaises(ValueError):self.prepare()
 
 
 if __name__ == "__main__": unittest.main()
