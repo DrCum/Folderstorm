@@ -131,6 +131,29 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn('data["jr"][joint.first]', send)
         self.assertIn('outgoing["jr"][joint.first]', send)
         self.assertIn("poseData(merged.pose)", send)
+    def test_shared_assistant_privacy_gates_all_private_delivery_and_deferred_work(self):
+        privacy = function("fssharedposemanager.cpp", "bool assistantPrivacyAllowed()")
+        for native in ("RLV_BHVR_SHOWLOC", "RLV_BHVR_SHOWNAMES", "RlvActions::canShowNearbyAgents()"):
+            self.assertIn(native, privacy)
+        readable = function("fssharedposemanager.cpp", "bool assistantReadable()")
+        self.assertIn("assistantPrivacyAllowed()", readable)
+        active = function("fssharedposemanager.cpp", "bool assistantActive()")
+        self.assertIn("assistantReadable()", active)
+        for signature in ("bool FSSharedPoseManager::prepareAssistantPose", "bool FSSharedPoseManager::validateAssistantPose", "LLSD FSSharedPoseManager::assistantSnapshot", "LLSD FSSharedPoseManager::executeAssistantPose"):
+            self.assertIn("!assistantReadable()", function("fssharedposemanager.cpp", signature))
+        execute = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::executeAssistantPose")
+        self.assertIn("assistantDelivery(found->second->result,error)", execute)
+        self.assertIn("assistantDelivery(result,error)", execute)
+        delivery = function("fssharedposemanager.cpp", "LLSD assistantDelivery(")
+        self.assertIn("!assistantReadable()", delivery)
+        self.assertIn("assistantActive()", function("fssharedposemanager.cpp", "bool FSSharedPoseManager::assistantNativeValid"))
+        constructor = function("fssharedposemanager.cpp", "FSSharedPoseManager::FSSharedPoseManager()")
+        self.assertIn("gRlvHandler.setBehaviourCallback", constructor)
+        self.assertIn('cancel("native_privacy_restricted")', constructor)
+        self.assertIn("mAssistantPrivacyGeneration=LLUUID::generateNewID()", constructor)
+        self.assertIn("mAssistantPrivacyConnection.disconnect()", function("fssharedposemanager.cpp", "FSSharedPoseManager::~FSSharedPoseManager()"))
+        for normal in ("bool FSSharedPoseManager::available()", "void FSSharedPoseManager::handle(", "void FSSharedPoseManager::shareSelf()"):
+            self.assertNotIn("assistantPrivacyAllowed()", function("fssharedposemanager.cpp", normal))
     def test_broadcast_ingestion_preserves_newer_ack_joint_versions(self):
         handle = function("fssharedposemanager.cpp", "void FSSharedPoseManager::handle(")
         self.assertIn("fs_pose::ingestObservedPose", handle)
@@ -170,7 +193,7 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn("approval->second.token.asString()", callback)
         self.assertNotIn("mRemotes[sender].pose", callback)
         read = function("fssharedposemanager.cpp", "LLSD FSSharedPoseManager::executeAssistantPose")
-        self.assertLess(read.index("!assistantReadable()"), read.index("return found->second->result"))
+        self.assertLess(read.index("!assistantReadable()"), read.index("assistantDelivery(found->second->result,error)"))
         self.assertIn("found->second->epoch!=epoch", read)
         self.assertIn("found->second->binding!=assistantBinding()", read)
         native = function("fssharedposemanager.cpp", "bool FSSharedPoseManager::assistantNativeValid")

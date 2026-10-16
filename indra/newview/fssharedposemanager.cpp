@@ -37,12 +37,19 @@
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
 #include "llvoavatarself.h"
+#include "rlvactions.h"
+#include "rlvhandler.h"
 #include <chrono>
 #include <sstream>
 
 namespace
 {
 double now() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+bool assistantPrivacyAllowed()
+{
+ return fs_pose::sharedPrivacyAllowed(!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC),
+  !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES),RlvActions::canShowNearbyAgents());
+}
 std::string uuid() { return LLUUID::generateNewID().asString(); }
 LLVOAvatar* avatarFor(const LLUUID& id)
 {
@@ -104,6 +111,15 @@ struct Applying
 FSSharedPoseManager::FSSharedPoseManager()
 {
  gIdleCallbacks.addFunction(onIdle,this);
+ mAssistantPrivacyConnection=gRlvHandler.setBehaviourCallback([this](ERlvBehaviour behaviour,ERlvParamType type)
+ {
+  if(type!=RLV_TYPE_ADD || (behaviour!=RLV_BHVR_SHOWLOC && behaviour!=RLV_BHVR_SHOWNAMES && behaviour!=RLV_BHVR_SHOWNEARBY))return;
+  mAssistantPrivacyGeneration=LLUUID::generateNewID();
+  for(const auto& entry:mAssistantWorks)if(entry.second->task && entry.second->task->guard())entry.second->task->guard()->cancel("native_privacy_restricted");
+  // Only captured assistant authority ends. Native/manual sharing consent and
+  // preferences remain on the ordinary UI path.
+  endAssistantPublishing("Native privacy restrictions ended source authority");
+ });
  mAssistantRegionConnection=gAgent.addRegionChangedCallback([this]()
  {
   mAssistantRegionGeneration.advance();
@@ -117,7 +133,7 @@ FSSharedPoseManager::FSSharedPoseManager()
  if(LLControlVariable* control=gSavedSettings.getControl("UseLSLBridge"))mBridgeUseConnection=control->getSignal()->connect(disable);
 }
 FSSharedPoseManager::~FSSharedPoseManager()
-{mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();mBridgeUseConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
+{mAssistantPrivacyConnection.disconnect();mAssistantRegionConnection.disconnect();mSharingConnection.disconnect();mBridgeUseConnection.disconnect();gIdleCallbacks.deleteFunction(onIdle,this);}
 void FSSharedPoseManager::invalidateNativeSharing(const std::string& reason)
 {
  // Native control disable and region transitions revoke consent even when
@@ -909,10 +925,12 @@ LLSD assistantBinding()
 {
  return llsd::map("account",gAgentID,"login",gAgent.getSessionID(),"grid",LLGridManager::instance().getGrid(),
   "region",gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null,"region_generation",std::to_string(FSSharedPoseManager::instance().assistantRegionGeneration()),"bridge",FSLSLBridge::instance().getAttachedID(),
-  "worker",FSSessionWorker::assistantIdentity());
+  "worker",FSSessionWorker::assistantIdentity(),"privacy_generation",FSSharedPoseManager::instance().assistantPrivacyGeneration());
 }
 bool assistantReadable()
-{return !gDisconnected && !LLApp::isExiting() && LLStartUp::getStartupState()==STATE_STARTED && gAgentID.notNull() && gAgent.getRegion() && FSSharedPoseManager::instance().assistantRegionGeneration()!=0;}
+{return assistantPrivacyAllowed() && !gDisconnected && !LLApp::isExiting() && LLStartUp::getStartupState()==STATE_STARTED && gAgentID.notNull() && gAgent.getRegion() && FSSharedPoseManager::instance().assistantRegionGeneration()!=0;}
+LLSD assistantDelivery(const LLSD& result,std::string& error)
+{if(!assistantReadable()){error="Native privacy or connection changed before shared-pose delivery";return LLSD();}return result;}
 bool assistantActive()
 {return assistantReadable() && gAgent.getTeleportState()==LLAgent::TELEPORT_NONE && FSSessionWorker::assistantActiveAllowed() && !FSSessionWorker::assistantPaused();}
 LLSD revisionData(const std::map<std::string,U32>& revisions)
@@ -953,6 +971,7 @@ bool FSSharedPoseManager::assistantJointAllowed(const LLUUID& target,const std::
 }
 LLSD FSSharedPoseManager::assistantSnapshot(const LLUUID& target) const
 {
+ if(!assistantReadable())return LLSD();
  LLSD result=llsd::map("target",target,"available",available(),"shared",isShared(target),"can_edit",false,"joints",LLSD::emptyMap(),
   "reservation_authority",target==gAgentID?"owner_current":"owner_reservation_required","region_id",gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null);
  if(!nearby(target))return result;
@@ -1075,7 +1094,7 @@ bool FSSharedPoseManager::prepareAssistantPose(FSAssistantPreparedOperation& ope
 {
  auto& request=operation.request;const auto op=request["op"].asString();const bool read=op=="sharedSessions" || op=="sharedGrants";
  operation.validation=llsd::map("binding",assistantBinding(),"epoch",request["__assistant_epoch"]);
- if(!assistantReadable()){error="A current connected native avatar session is required";return false;}
+ if(!assistantReadable()){error="Native privacy restrictions or the current connection block shared-pose access";return false;}
  if(read)return true;
  if(!assistantActive() || !available()){error="RequiresActive: shared posing needs the explicitly enabled native sharing bridge";return false;}
  const auto target=request["target"].asUUID();const auto source=assistantSnapshot(target);
@@ -1158,7 +1177,7 @@ bool FSSharedPoseManager::validateAssistantPose(const FSAssistantPreparedOperati
 LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assistant::AsyncTaskPtr& task,std::string& error)
 {
  const auto op=request["op"].asString();const auto epoch=request["__assistant_epoch"].asString();
- if(!assistantReadable()){error="Native avatar connection ended before private delivery";return LLSD();}
+ if(!assistantReadable()){error="Native privacy or avatar connection blocks private shared-pose delivery";return LLSD();}
  if(op=="sharedSessions" || op=="sharedGrants")
  {
   if(request.has("operation_id"))
@@ -1166,17 +1185,17 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
    const auto found=mAssistantWorks.find(request["operation_id"].asUUID());
    if(found==mAssistantWorks.end() || found->second->epoch!=epoch || found->second->binding!=assistantBinding())
    {error="Shared operation belongs to an expired source or connection";return LLSD();}
-   return found->second->result;
+   return assistantDelivery(found->second->result,error);
   }
   LLSD result;result["available"]=available();result["sessions"]=LLSD::emptyArray();
-  if(request["target"].asUUID().notNull()){result["session"]=assistantSnapshot(request["target"].asUUID());return result;}
+  if(request["target"].asUUID().notNull()){result["session"]=assistantSnapshot(request["target"].asUUID());return assistantDelivery(result,error);}
   const auto append=[&](const LLUUID& id){auto summary=assistantSnapshot(id);summary.erase("joints");result["sessions"].append(summary);};
   // Include the current self/native source even before publishing, so callers
   // can obtain an opaque generation for an explicit startSharing request.
   append(gAgentID);
   for(const auto& remote:mRemotes)
   {if(result["sessions"].size()>=64)break;if(nearby(remote.first) && (op!="sharedGrants" || canEdit(remote.first)))append(remote.first);}
-  return result;
+  return assistantDelivery(result,error);
  }
  if(!task || !task->guard() || !fs_assistant::asyncTaskAllowed(task) || !assistantActive() || !available())
  {error="Shared operation authority is unavailable";return LLSD();}
@@ -1194,7 +1213,7 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
    cancelled->result["cleanup_operation_id"]=release->operation;
    mAssistantWorks[release->operation]=release;LLSD packet=message("release",release->session.asString());packet["g"]=release->token;packet["l"]=release->lease;sendAssistant(release,packet);
   }
-  finishAssistant(cancelled,cancelled->sourceSubmitted?"submitted_unknown":"cancelled","Cancelled by this source; no source replay or global pose reset");return cancelled->result;
+  finishAssistant(cancelled,cancelled->sourceSubmitted?"submitted_unknown":"cancelled","Cancelled by this source; no source replay or global pose reset");return assistantDelivery(cancelled->result,error);
  }
  for(auto it=mAssistantWorks.begin();it!=mAssistantWorks.end() && mAssistantWorks.size()>=64;)
   if(it->second->finished)it=mAssistantWorks.erase(it);else ++it;
@@ -1217,7 +1236,7 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
   work->session=LLUUID(mOwner.session());work->generation=mPublicGeneration;work->publishing=true;
   work->result["session_generation"]=work->generation;work->result["state"]="published_local_session";work->result["remote_synchronization"]="unconfirmed";
   mAssistantWorks[work->operation]=work;mAssistantPublishing=work;mPublished.clear();mPublishedRevision=0;snapshot(LLUUID::null);mPublished=work->before;
-  return work->result;
+  return assistantDelivery(work->result,error);
  }
  if(op=="stopSharing")
  {
@@ -1230,7 +1249,7 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
   if(mAssistantPublishing)endAssistantPublishing("Explicit publishing stop");
   else{mOwner.clear();mPublished.clear();mPublicGeneration=LLUUID::generateNewID();}
   work->result["state"]="publishing_stopped_local";work->result["native_pose_preserved"]=true;work->result["remote_synchronization"]="unconfirmed_until_native_peer_timeout";
-  send(LLUUID::null,message("stop",work->session.asString()),true,work);return work->result;
+  send(LLUUID::null,message("stop",work->session.asString()),true,work);return assistantDelivery(work->result,error);
  }
  if(op!="sharedEdit" || !source["can_edit"].asBoolean() || !rotationRequest(request,work->rotations,work->expected,error))
  {if(error.empty())error="Native owner consent and typed rotation protocol are required";return LLSD();}
@@ -1246,20 +1265,20 @@ LLSD FSSharedPoseManager::executeAssistantPose(const LLSD& request,const fs_assi
  mAssistantWorks[work->operation]=work;
  if(work->target==gAgentID)
  {
-  if(!assistantAllowed(work) || !mOwner.revisionsMatch(work->expected,joints)){finishAssistant(work,"conflicted","Native joint revisions changed");return work->result;}
+  if(!assistantAllowed(work) || !mOwner.revisionsMatch(work->expected,joints)){finishAssistant(work,"conflicted","Native joint revisions changed");return assistantDelivery(work->result,error);}
   const auto acquired=mOwner.acquire(gAgentID.asString(),"",work->lease.asString(),joints,now());
-  if(!acquired.granted){finishAssistant(work,"conflicted","Another editor reserved an affected joint");return work->result;}
+  if(!acquired.granted){finishAssistant(work,"conflicted","Another editor reserved an affected joint");return assistantDelivery(work->result,error);}
   work->granted=true;auto changes=work->before;for(auto& joint:changes)joint.second=fs_pose::rotationJoint(joint.second,work->rotations.at(joint.first));
-  if(!fs_assistant::asyncTaskSubmit(task) || !assistantAllowed(work)){finishAssistant(work,"cancelled","Authority changed before owned joint commit");return work->result;}
+  if(!fs_assistant::asyncTaskSubmit(task) || !assistantAllowed(work)){finishAssistant(work,"cancelled","Authority changed before owned joint commit");return assistantDelivery(work->result,error);}
   work->sourceSubmitted=true;
-  if(!mOwner.apply(gAgentID.asString(),"",work->lease.asString(),changes,true,now(),true,1)){finishAssistant(work,"owner_rejected","Owner reservation/revision refused");return work->result;}
+  if(!mOwner.apply(gAgentID.asString(),"",work->lease.asString(),changes,true,now(),true,1)){finishAssistant(work,"owner_rejected","Owner reservation/revision refused");return assistantDelivery(work->result,error);}
   if(!mAnimator.applyAssistantSharedRotations(avatarFor(gAgentID),work->before,work->rotations,[&](){return assistantAllowed(work);}))
-  {finishAssistant(work,"submitted_unknown","Native joint ownership changed after the owner model accepted the edit");return work->result;}
-  finishAssistant(work,"owner_accepted","");return work->result;
+  {finishAssistant(work,"submitted_unknown","Native joint ownership changed after the owner model accepted the edit");return assistantDelivery(work->result,error);}
+  finishAssistant(work,"owner_accepted","");return assistantDelivery(work->result,error);
  }
  LLSD acquire=message("acquire",work->session.asString());acquire["g"]=work->token;acquire["l"]=work->lease;acquire["a"]=true;acquire["e"]=revisionData(work->expected);
  acquire["j"]=LLSD::emptyArray();for(const auto& joint:joints)acquire["j"].append(joint);
- sendAssistant(work,acquire);work->result["phase"]="acquire";return work->result;
+ sendAssistant(work,acquire);work->result["phase"]="acquire";return assistantDelivery(work->result,error);
 }
 bool FSSharedPoseManager::handleAssistant(const LLUUID& sender,const LLSD& data)
 {

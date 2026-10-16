@@ -16,6 +16,8 @@ public:
  void advance(){if(mValue)++mValue;}
  bool matches(std::uint64_t expected) const{return expected && expected==mValue;}
 };
+inline bool sharedPrivacyAllowed(bool showLocation,bool showNames,bool showNearbyAgents)
+{return showLocation && showNames && showNearbyAgents;}
 inline FSSharedPose::Joint rotationJoint(const FSSharedPose::Joint& fresh,const Rotation& rotation)
 {auto result=fresh;for(unsigned i=0;i<4;++i)result.transform[i]=static_cast<float>(rotation[i]);return result;}
 inline bool sameSharedJoint(const FSSharedPose::Joint& a,const FSSharedPose::Joint& b)

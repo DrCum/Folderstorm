@@ -149,6 +149,12 @@ int main()
  assert(!travellingOwner.apply("stationary-editor","old-owner-grant","old-owner-lease",{{"mHead",changed}},true,0,true,1));
  travellingOwner.start("owner","new-owner-in-A",{{"mHead",initial}});
  assert(!travellingOwner.authorized("stationary-editor","old-owner-grant",0));
+ // Native location/name/nearby restrictions gate every private payload and
+ // deferred source effect. A restrict/unrestrict cycle cannot revive a task.
+ for(unsigned mask=0;mask<8;++mask)assert(sharedPrivacyAllowed(mask&1,mask&2,mask&4)==(mask==7));
+ bool privacyVisible=true;auto privacyGuard=std::make_shared<AsyncOperation>([&](){return sharedPrivacyAllowed(privacyVisible,true,true)?std::string():std::string("native_privacy_restricted");});
+ auto privacyTask=std::make_shared<AsyncTask>(privacyGuard);assert(asyncTaskAllowed(privacyTask));
+ privacyVisible=false;privacyGuard->cancel("native_privacy_restricted");privacyVisible=true;assert(!asyncTaskAllowed(privacyTask));
  // A -> B -> A with identical current region/URL IDs still invalidates a
  // captured queued transport. The production synchronous signal advances this
  // epoch and cancels captured guards before idle or the HTTP pool can observe.

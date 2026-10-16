@@ -60,6 +60,7 @@ public:
     LLSD executeAssistantPose(const LLSD& request,const fs_assistant::AsyncTaskPtr& task,std::string& error);
     LLSD assistantSnapshot(const LLUUID& target) const;
     std::uint64_t assistantRegionGeneration() const{return mAssistantRegionGeneration.value();}
+    LLUUID assistantPrivacyGeneration() const{return mAssistantPrivacyGeneration;}
 private:
     struct Remote
     {
@@ -121,8 +122,9 @@ private:
     void invalidateNativeSharing(const std::string& reason);
     LLSD workMessage(const Work& work, const std::string& type) const;
     bool nearby(const LLUUID& avatar) const;
-    boost::signals2::scoped_connection mSharingConnection,mBridgeUseConnection,mAssistantRegionConnection;
+    boost::signals2::scoped_connection mSharingConnection,mBridgeUseConnection,mAssistantRegionConnection,mAssistantPrivacyConnection;
     fs_pose::RegionGeneration mAssistantRegionGeneration;
+    LLUUID mAssistantPrivacyGeneration=LLUUID::generateNewID();
     FSPoserAnimator mAnimator;
     FSSharedPose::OwnerSession mOwner;
     FSSharedPose::Assembler mAssembler;

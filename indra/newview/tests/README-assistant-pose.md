@@ -54,6 +54,12 @@ acceptance:
    cleanup cannot end the newer native publication. Remote synchronization is
    unconfirmed until the peer receives the stop or times out.
 
+10. Apply native `@shownames`, `@showloc`, or `@shownearby` restrictions before
+    reading sessions, snapshots, receipts, opening/confirming Ask, or draining
+    queued HTTP work. Assistant metadata/delivery and effects must be denied.
+    Restrict/unrestrict before idle must not revive captured work or pending
+    preparations. Ordinary manual native sharing/UI/preferences remain usable.
+
 The typed protocol extends the existing native consent/reservation model. Both
 native peers must advertise typed-rotation support. Ordinary native UI packet
 and undo behavior remains on its existing path. Automatic consent requests,
