@@ -85,6 +85,21 @@ int main()
  assert(updateAcknowledgedCache(oldSource,oldSource,ackJoints,{{"mHead",initial},{"mNeck",initial}},{{"mHead",6},{"mNeck",9}},cache,cacheRevisions)==0);
  assert(cache.at("mHead")==changed && cache.at("mNeck")==changed);
  cache.erase("mHead");assert(updateAcknowledgedCache(oldSource,oldSource,{"mHead"},acknowledged,{{"mHead",10}},cache,cacheRevisions)==0 && !cache.count("mHead"));
+ // ACK head2 can overtake a globally older broadcast head1/neck1. The real
+ // ingestion helper preserves head2 for cache and display while accepting the
+ // disjoint neck, even when an unrelated frame already advanced global r.
+ Pose observed{{"mHead",changed}};std::map<std::string,std::uint32_t> observedRevisions{{"mHead",2}};std::uint32_t observedGlobal=0;
+ auto frame=ingestObservedPose({{"mHead",initial},{"mNeck",initial}},{{"mHead",1},{"mNeck",1}},1,false,false,observed,observedRevisions,observedGlobal);
+ assert(frame.accepted && observed.at("mHead")==changed && frame.display.at("mHead")==changed && observedRevisions.at("mHead")==2);
+ assert(observed.count("mNeck") && observedRevisions.at("mNeck")==1 && observedGlobal==1);
+ observedGlobal=4;frame=ingestObservedPose({{"mNeck",changed}},{{"mNeck",3}},3,false,false,observed,observedRevisions,observedGlobal);
+ assert(frame.accepted && observed.at("mNeck")==changed && observedRevisions.at("mNeck")==3 && observedGlobal==4);
+ frame=ingestObservedPose({{"mHead",initial},{"mNeck",initial}},{{"mHead",1},{"mNeck",1}},1,true,false,observed,observedRevisions,observedGlobal);
+ assert(frame.accepted && observed.at("mHead")==changed && observed.at("mNeck")==changed);
+ frame=ingestObservedPose({{"mNeck",initial}},{{"mNeck",1}},1,true,false,observed,observedRevisions,observedGlobal);
+ assert(frame.accepted && observed.count("mHead") && frame.display.at("mHead")==changed); // snapshot cannot erase newer ACK joint
+ frame=ingestObservedPose({{"mHead",initial}},{{"mHead",0}},0,true,true,observed,observedRevisions,observedGlobal);
+ assert(frame.accepted && observed.size()==1 && observed.at("mHead")==initial && observedRevisions.at("mHead")==0 && observedGlobal==0);
  using namespace fs_assistant;bool active=true,nativeGrant=true;auto guard=std::make_shared<AsyncOperation>([&](){return active && nativeGrant?std::string():std::string("authority_changed");});
  auto task=std::make_shared<AsyncTask>(guard);assert(asyncTaskAllowed(task));nativeGrant=false;assert(!asyncTaskAllowed(task));nativeGrant=true;assert(!asyncTaskAllowed(task));
  // Publication authority retains its original native-session task while

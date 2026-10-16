@@ -131,6 +131,13 @@ class PoseNativeContract(unittest.TestCase):
         self.assertIn('data["jr"][joint.first]', send)
         self.assertIn('outgoing["jr"][joint.first]', send)
         self.assertIn("poseData(merged.pose)", send)
+    def test_broadcast_ingestion_preserves_newer_ack_joint_versions(self):
+        handle = function("fssharedposemanager.cpp", "void FSSharedPoseManager::handle(")
+        self.assertIn("fs_pose::ingestObservedPose", handle)
+        self.assertIn("auto display=observed.display", handle)
+        self.assertIn("const bool newSession=remote.session!=session", handle)
+        self.assertNotIn("static_cast<U32>(revision) < remote.revision", handle)
+        self.assertNotIn('if (type == "snapshot") remote.pose = *pose', handle)
     def test_received_remote_overlay_cleanup_preserves_manual_native_owners(self):
         invalidation = function("fssharedposemanager.cpp", "void FSSharedPoseManager::invalidateNativeSharing")
         self.assertIn("stopRemote(target)", invalidation)

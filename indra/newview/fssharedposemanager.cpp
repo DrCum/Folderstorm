@@ -592,7 +592,8 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
             return;
         }
         auto& remote = mRemotes[sender];
-        if (remote.session != session)
+        const bool newSession=remote.session!=session;
+        if (newSession)
         {
             if (type != "snapshot" && !remote.session.isNull()) return;
             mAnimator.stopReceivedPose(avatarFor(sender),remote.overlay);
@@ -610,22 +611,27 @@ void FSSharedPoseManager::handle(const LLUUID& sender, const LLSD& data)
         }
         const auto pose = readPose(data["p"]);
         const S32 revision = data["r"].asInteger();
-        if (!pose || revision < 0 || static_cast<U32>(revision) < remote.revision) return;
+        if (!pose || !data["r"].isInteger() || revision < 0) return;
         if (type == "update" && (remote.pose.empty() || data["b"].asInteger() > static_cast<S32>(remote.revision)))
         {
             if (remote.requestedSnapshot + 2. < time) { remote.requestedSnapshot = time; send(sender, message("hello")); }
             return;
         }
+        std::map<std::string,U32> revisions;
         for(const auto& item:*pose)
         {
-            if(data["jr"][item.first].isInteger() && data["jr"][item.first].asInteger()>=0)
-                remote.jointRevisions[item.first]=static_cast<U32>(data["jr"][item.first].asInteger());
-            else if(!remote.pose.count(item.first) || remote.pose.at(item.first)!=item.second)remote.jointRevisions[item.first]=revision;
+            if(!data["jr"].isMap())revisions[item.first]=static_cast<U32>(revision); // legacy native peer
+            else
+            {
+                const auto& jointRevision=data["jr"][item.first];
+                if(!jointRevision.isInteger() || jointRevision.asInteger()<0 || jointRevision.asInteger()>revision)return;
+                revisions[item.first]=static_cast<U32>(jointRevision.asInteger());
+            }
         }
-        if (type == "snapshot") remote.pose = *pose;
-        else for (const auto& item : *pose) remote.pose[item.first] = item.second;
-        remote.revision = static_cast<U32>(revision);
-        auto display = *pose;
+        const auto observed=fs_pose::ingestObservedPose(*pose,revisions,static_cast<U32>(revision),type=="snapshot",newSession,
+            remote.pose,remote.jointRevisions,remote.revision);
+        if(!observed.accepted)return;
+        auto display=observed.display;
         const auto work = mWorks.find(sender);
         if (work != mWorks.end() && work->second.granted)
             for (const auto& joint : work->second.joints) display.erase(joint);

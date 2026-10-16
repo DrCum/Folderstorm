@@ -63,6 +63,33 @@ inline CoalescedPoseUpdate coalescePoseUpdate(const FSSharedPose::Pose& previous
  }
  return result;
 }
+struct ObservedPoseFrame {bool accepted=false;FSSharedPose::Pose display;};
+inline ObservedPoseFrame ingestObservedPose(const FSSharedPose::Pose& incoming,const std::map<std::string,std::uint32_t>& incomingRevisions,
+ std::uint32_t incomingGlobal,bool snapshot,bool newSession,FSSharedPose::Pose& pose,std::map<std::string,std::uint32_t>& revisions,std::uint32_t& global)
+{
+ ObservedPoseFrame result;
+ for(const auto& joint:incoming){const auto revision=incomingRevisions.find(joint.first);if(revision==incomingRevisions.end() || revision->second>incomingGlobal)return result;}
+ if(newSession){pose.clear();revisions.clear();global=0;}
+ if(snapshot)
+ {
+  for(auto it=pose.begin();it!=pose.end();)
+  {
+   if(incoming.count(it->first)){++it;continue;}
+   const auto revision=revisions.find(it->first);
+   if(revision!=revisions.end() && revision->second>incomingGlobal){result.display.emplace(*it);++it;}
+   else{revisions.erase(it->first);it=pose.erase(it);}
+  }
+ }
+ for(const auto& joint:incoming)
+ {
+  const auto revision=incomingRevisions.at(joint.first),cached=revisions.find(joint.first)==revisions.end()?0:revisions.at(joint.first);
+  if(!pose.count(joint.first) || revision>cached){pose[joint.first]=joint.second;revisions[joint.first]=revision;}
+  // Render the newest observed version, including an ACK that overtook this
+  // broadcast. Equal or older frame content can never rewind the cache/scene.
+  result.display[joint.first]=pose.at(joint.first);
+ }
+ global=std::max(global,incomingGlobal);result.accepted=true;return result;
+}
 // An old final ACK can settle its operation receipt without being a snapshot
 // of the currently observed native session or grant. Keep those decisions
 // separate; cache updates need the exact still-current private native proof.
