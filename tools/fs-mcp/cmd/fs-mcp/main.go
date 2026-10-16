@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"folderstorm-updateguard"
 	"fs-mcp/internal/diagnose"
-	"fs-mcp/internal/installguard"
 	"io"
 	"log"
 	"os"
@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	release, err := installguard.Acquire()
+	release, err := updateguard.Acquire()
 	if err != nil {
 		log.Print("Folderstorm is being updated; close this client and retry after the viewer opens.")
 		return

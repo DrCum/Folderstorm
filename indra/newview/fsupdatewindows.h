@@ -60,7 +60,9 @@ inline bool idle(const std::filesystem::path& root,bool updaterOnly=false)
         }
         std::array<wchar_t,32768> path{};DWORD size=static_cast<DWORD>(path.size());
         if(!QueryFullProcessImageNameW(process.value,0,path.data(),&size))return false;
-        const auto image=std::filesystem::path(std::wstring(path.data(),size));
+        std::error_code error;
+        const auto image=std::filesystem::weakly_canonical(std::filesystem::path(std::wstring(path.data(),size)),error);
+        if(error)return false;
         if(under(image,root) && (!updaterOnly || image.filename()==L"Update.exe"))return false;
     }while(Process32NextW(snapshot.value,&entry));
     return GetLastError()==ERROR_NO_MORE_FILES;

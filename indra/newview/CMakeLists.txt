@@ -2480,12 +2480,14 @@ endif (OPENSIM)
 # GO_EXECUTABLE is the absolute path from indra/cmake/GoToolchain.cmake,
 # chosen at the start of configure. These build steps call that path.
 set(MIGRATE_SETTINGS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/migrate-settings${CMAKE_EXECUTABLE_SUFFIX}")
+file(GLOB FS_UPDATE_GUARD_DEPS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/../tools/updateguard/*.go" "${CMAKE_SOURCE_DIR}/../tools/updateguard/go.mod")
 add_custom_command(
   OUTPUT "${MIGRATE_SETTINGS_OUTPUT}"
   COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
           "${GO_EXECUTABLE}" build -o "${MIGRATE_SETTINGS_OUTPUT}" .
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../tools/migrate-settings"
   DEPENDS
+    ${FS_UPDATE_GUARD_DEPS}
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/go.mod"
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/main.go"
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/migrate.go"
@@ -2504,6 +2506,7 @@ add_custom_command(
           "${GO_EXECUTABLE}" build -o "${FS_MCP_OUTPUT}" ./cmd/fs-mcp
   WORKING_DIRECTORY "${FS_MCP_DIR}"
   DEPENDS
+    ${FS_UPDATE_GUARD_DEPS}
     "${FS_MCP_DIR}/go.mod"
     "${FS_MCP_DIR}/go.sum"
     "${FS_MCP_DIR}/cmd/fs-mcp/main.go"
@@ -2537,6 +2540,7 @@ if(WINDOWS)
             "${GO_EXECUTABLE}" build -o "${FS_MCP_MAINTENANCE_OUTPUT}" .
     WORKING_DIRECTORY "${FS_MCP_MAINTENANCE_DIR}"
     DEPENDS
+      ${FS_UPDATE_GUARD_DEPS}
       "${FS_MCP_MAINTENANCE_DIR}/go.mod"
       "${FS_MCP_MAINTENANCE_DIR}/main.go"
       "${FS_MCP_MAINTENANCE_DIR}/cleanup.go"

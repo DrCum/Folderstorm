@@ -100,3 +100,19 @@ concurrent new launches at handoff; background Crashpad exit; download cancellat
 cache tampering, offline/404, changed channel/bundle, Update.exe failure, recovery,
 exact target restart and persistent settings. No broad/native/packaging builds or
 GitHub workflow builds were run as part of this work.
+
+Correction pass: default NSIS startup now includes the common guard independently
+of Velopack. SDK progress uses its actual int16_t ABI. Package validation requires
+unique exact `lib/app` paths, valid schema/protocol, the bounded viewer guide and
+its real named executable plus all helper components. Tests reject missing viewer
+and missing host even when metadata hashes are recomputed correctly.
+
+Stable root barriers now take precedence over temporarily missing current bundle
+markers. A shared, standard-library-only Go updateguard is linked by MCP, migration
+and launcher maintenance, closing the helper launch race as well. Its regression
+exercises missing metadata with either stable lock or pending marker. Root image
+paths are canonicalized for installation comparisons. Channel changes invalidate
+a prepared install. The updateguard test passes, and affected MCP, migrator,
+maintenance and guard Windows test executables cross-compile successfully; this
+is not a native C++/SDK runtime build. All affected Go binaries rebuild when their
+shared guard changes through explicit CMake dependencies.

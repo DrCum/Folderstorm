@@ -68,16 +68,29 @@ def update_package(entry, data, input_path, base):
     if native.get("Size") != package.stat().st_size or str(native.get("SHA1", "")).lower() != sha1.hexdigest() or str(native.get("SHA256", "")).lower() != sha256.hexdigest():
         raise ValueError("Velopack feed does not match the actual package hash/size")
     with zipfile.ZipFile(package) as archive:
-        markers = [item for item in archive.infolist() if item.filename.endswith("/folderstorm-bundle.json")]
+        members = archive.infolist()
+        by_name = {item.filename:item for item in members}
+        if len(members) != len(by_name):
+            raise ValueError("Duplicate archive paths in the full package")
+        markers = [item for item in members if item.filename == "lib/app/folderstorm-bundle.json"]
         if len(markers) != 1 or markers[0].file_size > 4096:
             raise ValueError("Full package needs one bounded bundle identity")
         bundle = json.loads(archive.read(markers[0]))
+        if bundle.get("schema") != 1 or type(bundle.get("protocol")) is not int or bundle["protocol"] < 16:
+            raise ValueError("Invalid bundle schema/protocol")
         for key, expected in {"version": data["version"], "commit": data["commit"], "app_id": expected_id, "installer": "velopack"}.items():
             if bundle.get(key) != expected:
                 raise ValueError("Full package has a different build identity")
-        names = {Path(item.filename).name for item in archive.infolist() if not item.is_dir()}
-        if not {"folderstorm-session-host.exe", "fs-mcp.exe", "folderstorm-update.exe", "folderstorm-session-viewer.txt"} <= names:
-            raise ValueError("Full package is missing a matching app component")
+        guide = by_name.get("lib/app/folderstorm-session-viewer.txt")
+        if guide is None or not 0 < guide.file_size <= 256:
+            raise ValueError("Invalid packaged viewer guide")
+        viewer = archive.read(guide).decode("utf-8").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}\.exe", viewer):
+            raise ValueError("Invalid packaged viewer name")
+        for component in (viewer,"folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","folderstorm-session-viewer.txt"):
+            info = by_name.get("lib/app/"+component)
+            if info is None or info.is_dir() or info.file_size <= 0:
+                raise ValueError("Full package is missing a nonempty app component")
     return {"id": expected_id, "version": expected_version, "file": name,
             "url": base + "/" + quote(name), "sha1": sha1.hexdigest(), "sha256": sha256.hexdigest(),
             "bytes": package.stat().st_size}, package

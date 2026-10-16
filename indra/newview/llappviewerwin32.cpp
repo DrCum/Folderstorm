@@ -75,9 +75,9 @@
 #include <exception>
 
 // Velopack installer and update framework
+#include "fsupdate.h"
 #if LL_VELOPACK
 #include "llvelopack.h"
-#include "fsupdate.h"
 #endif
 
 // Bugsplat (http://bugsplat.com) crash reporting tool

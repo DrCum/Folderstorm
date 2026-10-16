@@ -1,5 +1,5 @@
 //go:build !windows
 
-package installguard
+package updateguard
 
 func Acquire() (func(), error) { return func() {}, nil }

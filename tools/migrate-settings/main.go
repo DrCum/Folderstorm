@@ -3,12 +3,19 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"folderstorm-updateguard"
 	"os"
 	"runtime"
 	"strings"
 )
 
 func main() {
+	release, err := updateguard.Acquire()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Folderstorm is being updated; retry after the viewer opens.")
+		return
+	}
+	defer release()
 	os.Exit(run(os.Args[1:]))
 }
 

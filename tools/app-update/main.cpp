@@ -86,7 +86,7 @@ struct Source
                 if(!count)break;
                 if(count>expected.bytes-received || !hash.add(buffer,count))throw std::runtime_error("Invalid package");
                 received+=count;file.write(buffer,count);if(!file)throw std::runtime_error("Package storage unavailable");
-                vpkc_source_report_progress(progress,static_cast<int>(received*100/expected.bytes));
+                vpkc_source_report_progress(progress,static_cast<std::int16_t>(received*100/expected.bytes));
             }
             file.close();if(!file || received!=expected.bytes || hash.finish()!=expected.sha256)throw std::runtime_error("Package verification failed");
             return true;
@@ -172,6 +172,8 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int)
             {
                 if(!ask(L"All Folderstorm processes are closed. Install the verified update now? The viewer will restart afterward.")){coordinator.cancel();return 0;}
                 if(!idle(root) || !bundleMatches(root))continue;
+                if(fs_release::loadPreferences(fs_release::DefaultChannel).channel!=prefs.channel)
+                    throw std::runtime_error("Release channel changed; check again");
                 Barrier barrier{fs_release::runningBuild().version,result.release.version,result.release.commit};
                 if(!writeBarrier(root,barrier))throw std::runtime_error("Could not reserve installation");
                 coordinator.applying();
