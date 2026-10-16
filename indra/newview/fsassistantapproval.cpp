@@ -94,6 +94,9 @@ void FSAssistantApproval::answer(bool allow)
 void FSAssistantApproval::dismiss()
 {
     mCallback = {};
+    mSummary=LLSD();mPage=0;
+    if(auto* details=findChild<LLTextEditor>("details"))details->setText(LLStringUtil::null);
+    if(auto* heading=findChild<LLUICtrl>("heading"))heading->setValue(LLSD());
     closeFloater();
 }
 
