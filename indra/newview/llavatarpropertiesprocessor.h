@@ -33,6 +33,7 @@
 #include "v3dmath.h"    // LLVector3d
 #include <list>
 #include <map>
+#include <tuple>
 
 // For Flags in AvatarPropertiesReply
 const U32 AVATAR_ALLOW_PUBLISH          = 0x1 << 0; // whether profile is externally visible or not
@@ -311,8 +312,10 @@ public:
 
     static bool hasPaymentInfoOnFile(const LLAvatarData* avatar_data);
 
-    fs_assistant::AsyncLoads<std::pair<LLUUID,EAvatarProcessorType>> mProfileLoads;
-    static void requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type,
+    // Native and assistant fetches cannot share cancellation or load generations.
+    using ProfileRequestKey = std::tuple<LLUUID, EAvatarProcessorType, fs_assistant::AsyncGuard>;
+    fs_assistant::AsyncLoads<ProfileRequestKey> mProfileLoads;
+    static void requestAvatarPropertiesCoro(std::string cap_url, ProfileRequestKey key,
         fs_assistant::AsyncTaskPtr task, LLUUID account, LLUUID login);
 
     // Processing of UDP variant of properties, truncates certain fields!
@@ -351,6 +354,8 @@ protected:
 
     // Call this when the reply to the request is received
     void removePendingRequest(const LLUUID& avatar_id, EAvatarProcessorType type);
+    void removePendingRequest(const ProfileRequestKey& key);
+    static ProfileRequestKey profileRequestKey(const LLUUID& avatar_id, EAvatarProcessorType type);
 
     typedef void* (*processor_method_t)(LLMessageSystem*);
     static processor_method_t getProcessor(EAvatarProcessorType type);
@@ -364,8 +369,8 @@ protected:
     // Keep track of pending requests for data by avatar id and type.
     // Maintain a timestamp for each request so a request that receives no reply
     // does not block future requests forever.
-    // Map avatar_id+request_type -> U32 timestamp in seconds
-    typedef std::map< std::pair<LLUUID, EAvatarProcessorType>, U32> timestamp_map_t;
+    // HTTP profiles retain their captured authority; legacy UDP stays unscoped.
+    typedef std::map<ProfileRequestKey, U32> timestamp_map_t;
     timestamp_map_t mRequestTimestamps;
 
     // Is returned by isHideAgeSupportedByServer()

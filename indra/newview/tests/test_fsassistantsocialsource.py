@@ -54,9 +54,28 @@ class SocialNativeBoundaryTests(unittest.TestCase):
         coro = text[text.index("void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro"):text.index("void LLAvatarPropertiesProcessor::processAvatarLegacyPropertiesReply")]
         self.assertLess(coro.index("asyncTaskSubmit(task)"), coro.index("getAndSuspend"))
         self.assertGreater(coro.index("asyncTaskAllowed(task)"), coro.index("getAndSuspend"))
-        self.assertIn("mProfileLoads.finish({avatar_id,type},task)", coro)
+        self.assertIn("mProfileLoads.finish(key,task)", coro)
+        self.assertIn("inst.removePendingRequest(key)", coro)
+        self.assertNotIn("removePendingRequest(avatar_id", coro)
         self.assertIn("account!=gAgentID || login!=gAgent.getSessionID()", coro)
         self.assertNotIn("AsyncScope", coro)  # TLS must never span a coroutine yield
+
+    def test_native_and_assistant_profile_fetches_have_separate_ownership(self):
+        header = source("llavatarpropertiesprocessor.h")
+        text = source("llavatarpropertiesprocessor.cpp")
+        self.assertIn("std::tuple<LLUUID, EAvatarProcessorType, fs_assistant::AsyncGuard>", header)
+        self.assertIn("AsyncLoads<ProfileRequestKey> mProfileLoads", header)
+        self.assertIn("std::map<ProfileRequestKey, U32>", header)
+        key = text[text.index("LLAvatarPropertiesProcessor::ProfileRequestKey LLAvatarPropertiesProcessor::profileRequestKey"):text.index("bool LLAvatarPropertiesProcessor::isPendingRequest")]
+        self.assertIn("type == APT_PROPERTIES ? fs_assistant::AsyncScope::current() : fs_assistant::AsyncGuard()", key)
+        init = text[text.index("void LLAvatarPropertiesProcessor::initAgentProfileCapRequest"):text.index("void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequest(")]
+        self.assertIn("const auto key = profileRequestKey(avatar_id, type)", init)
+        self.assertIn("mProfileLoads.begin(key)", init)
+        self.assertIn("[cap_url, key, task, account, login]", init)
+        for method, next_method in (("isPendingRequest", "addPendingRequest"), ("addPendingRequest", "removePendingRequest")):
+            start = text.index("LLAvatarPropertiesProcessor::" + method + "(", text.index("LLAvatarPropertiesProcessor::ProfileRequestKey"))
+            end = text.index("LLAvatarPropertiesProcessor::" + next_method + "(", start)
+            self.assertIn("profileRequestKey(avatar_id, type)", text[start:end])
 
     def test_profile_accepts_only_owning_account_http_replies(self):
         text = source("fsassistantsocial.cpp")
