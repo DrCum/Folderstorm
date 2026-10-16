@@ -2280,8 +2280,10 @@ bool idle_startup()
     {
         do_startup_frame();
 
+        gInventory.cancelCacheLoad();
+
         // These textures are not warrantied to be cached, so needs
-        // to hapen with caps granted
+        // to happen with caps granted (textures use asset cap)
         gTextureList.doPrefetchImages();
 
         // will init images, should be done with caps, but before gSky.init()
@@ -2673,6 +2675,8 @@ bool idle_startup()
         }
         do_startup_frame();
 
+        // OpenSim grids can supply a different library owner.
+        gInventory.setLibraryOwnerID(LLUUID::null);
         LLSD inv_lib_owner = response["inventory-lib-owner"];
         if(inv_lib_owner.isDefined())
         {
@@ -2680,10 +2684,23 @@ bool idle_startup()
             LLSD id = inv_lib_owner[0]["agent_id"];
             if(id.isDefined())
             {
-                gInventory.setLibraryOwnerID(LLUUID(id.asUUID()));
+                LLUUID library_owner_id = id.asUUID();
+                gInventory.setLibraryOwnerID(library_owner_id);
             }
         }
         do_startup_frame();
+        // Folderstorm's purge marker must be applied before any background reads.
+        LLInventoryModel::purgeMarkedInventoryCache(gAgentID);
+        const LLUUID library_owner_id = gInventory.getLibraryOwnerID();
+        if (library_owner_id.notNull())
+        {
+            LLInventoryModel::purgeMarkedInventoryCache(library_owner_id);
+        }
+        LLInventoryModel::loadInventoryCacheAsync(gAgentID);
+        if (library_owner_id.notNull() && library_owner_id != gAgentID)
+        {
+            LLInventoryModel::loadInventoryCacheAsync(library_owner_id);
+        }
         LLStartUp::setStartupState(STATE_INVENTORY_SKEL);
         do_startup_frame();
         return false;
@@ -2696,26 +2713,72 @@ bool idle_startup()
         LLSD response = LLLoginInstance::getInstance()->getResponse();
 
         LLSD inv_skel_lib = response["inventory-skel-lib"];
-        if (inv_skel_lib.isDefined() && gInventory.getLibraryOwnerID().notNull())
+        bool have_lib_skel = inv_skel_lib.isDefined() && gInventory.getLibraryOwnerID().notNull();
+
+        S32 num_ready = 0; // wait for both inventories to be ready before moving on to STATE_INVENTORY_SEND2
+        if (have_lib_skel)
         {
-            LL_PROFILE_ZONE_NAMED("load library inv")
-            if (!gInventory.loadSkeleton(inv_skel_lib, gInventory.getLibraryOwnerID()))
+            LLInventoryModel::ECacheLoadResult res = gInventory.waitForCacheResult(gInventory.getLibraryOwnerID());
+            if (res == LLInventoryModel::CACHE_READY_TO_PROCESS)
             {
-                LL_WARNS("AppInit") << "Problem loading inventory-skel-lib" << LL_ENDL;
+                do_startup_frame();
+                LL_PROFILE_ZONE_NAMED("load library inv")
+                num_ready++;
+                if (!gInventory.loadSkeleton(inv_skel_lib, gInventory.getLibraryOwnerID()))
+                {
+                    LL_WARNS("AppInit") << "Problem loading inventory-skel-lib" << LL_ENDL;
+                }
             }
+            else if (res == LLInventoryModel::CACHE_PROCESSED)
+            {
+                num_ready++;
+            }
+            // else wait for cache to be ready
         }
-        do_startup_frame();
+        else
+        {
+            // absent in login response, needs no processing.
+            num_ready++;
+        }
 
         LLSD inv_skeleton = response["inventory-skeleton"];
-        if (inv_skeleton.isDefined())
+        bool have_agent_skel = inv_skeleton.isDefined();
+        if (have_agent_skel)
         {
-            LL_PROFILE_ZONE_NAMED("load personal inv")
-            if (!gInventory.loadSkeleton(inv_skeleton, gAgent.getID()))
+            LLInventoryModel::ECacheLoadResult res = gInventory.waitForCacheResult(gAgentID);
+            if (res == LLInventoryModel::CACHE_READY_TO_PROCESS)
             {
-                LL_WARNS("AppInit") << "Problem loading inventory-skel-targets" << LL_ENDL;
+                do_startup_frame();
+                LL_PROFILE_ZONE_NAMED("load personal inv")
+                num_ready++;
+                if (!gInventory.loadSkeleton(inv_skeleton, gAgentID))
+                {
+                    LL_WARNS("AppInit") << "Problem loading inventory-skeleton" << LL_ENDL;
+                }
             }
+            else if (res == LLInventoryModel::CACHE_PROCESSED)
+            {
+                num_ready++;
+            }
+            // else wait for cache to be ready
         }
-        do_startup_frame();
+        else
+        {
+            // absent in login response, needs no processing.
+            num_ready++;
+        }
+
+        if (num_ready < 2)
+        {
+            do_startup_frame();
+            return false;
+        }
+
+        // In case agent or library skeleton were not consumed due to
+        // have_agent_skel or have_lib_skel being false, cancel to
+        // drop and clear unused requests.
+        gInventory.cancelCacheLoad();
+
         LLStartUp::setStartupState(STATE_INVENTORY_SEND2);
         do_startup_frame();
         return false;
@@ -4260,6 +4323,7 @@ void reset_login()
     gSky.cleanup(); // mVOSkyp is an inworld object.
     LLWorld::getInstance()->resetClass();
     LLAppearanceMgr::getInstance()->cleanup();
+    gInventory.cancelCacheLoad();
 
     if ( gViewerWindow )
     {   // Hide menus and normal buttons
