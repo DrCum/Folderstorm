@@ -60,6 +60,8 @@
 namespace {
 const std::string ASSISTANT_POSE_HTTP_POOL="FSAssistantSharedPoseHTTP";
 constexpr std::size_t ASSISTANT_POSE_HTTP_QUEUE=16,ASSISTANT_POSE_HTTP_LIMIT=8;
+const std::string NATIVE_POSE_HTTP_POOL="FSNativeSharedPoseHTTP";
+constexpr std::size_t NATIVE_POSE_HTTP_QUEUE=16,NATIVE_POSE_HTTP_LIMIT=8;
 }
 static const std::string FS_BRIDGE_FOLDER = "#LSL Bridge";
 static const std::string FS_BRIDGE_CONTAINER_FOLDER = "Landscaping";
@@ -108,6 +110,7 @@ FSLSLBridge::FSLSLBridge():
     // The manager owns the one bounded pool through shutdown and closes it in
     // its destructor. Bridge recreation can safely reuse that existing pool.
     LLCoprocedureManager::instance().initializePool(ASSISTANT_POSE_HTTP_POOL,ASSISTANT_POSE_HTTP_QUEUE);
+    LLCoprocedureManager::instance().initializePool(NATIVE_POSE_HTTP_POOL,NATIVE_POSE_HTTP_QUEUE);
     LL_INFOS("FSLSLBridge") << "Constructing FSLSLBridge" << LL_ENDL;
     mCurrentFullName = llformat("%s%d.%d", FS_BRIDGE_NAME.c_str(), FS_BRIDGE_MAJOR_VERSION, FS_BRIDGE_MINOR_VERSION);
 
@@ -119,6 +122,7 @@ FSLSLBridge::~FSLSLBridge()
     // Invalidate queued callbacks before this singleton's storage disappears.
     // Do not close a manager-owned pool needed by a replacement bridge.
     mAssistantPoseLifetime.setNull();
+    mNativePoseLifetime.setNull();
     gIdleCallbacks.deleteFunction(onIdle, this);
 }
 
@@ -653,6 +657,44 @@ bool FSLSLBridge::sharedPoseToLSLGuarded(const std::string& message,const fs_ass
         const auto status=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
         const bool accepted=static_cast<bool>(status) && bound();
         if(completion)completion(true,accepted);
+    });
+    return queued.notNull();
+}
+
+bool FSLSLBridge::sharedPoseToLSLNativeGuarded(const std::string& message,
+    std::function<bool()> nativeAuthority,std::function<void(bool,bool)> completion)
+{
+    if((message.rfind("SharedPoseSend|",0)!=0 && message.rfind("SharedPoseBroadcast|",0)!=0) ||
+       message.size()>1024 || !nativeAuthority || !nativeAuthority() || !canUseBridge() ||
+       mNativePoseLifetime.isNull() || !LLCoprocedureManager::instanceExists())return false;
+    auto& pool=LLCoprocedureManager::instance();
+    if(pool.count(NATIVE_POSE_HTTP_POOL)>=NATIVE_POSE_HTTP_LIMIT)return false;
+    const auto lifetime=mNativePoseLifetime;
+    const auto url=mCurrentURL,grid=LLGridManager::instance().getGrid();
+    const auto account=gAgentID,login=gAgent.getSessionID(),bridge=getAttachedID();
+    const auto region=gAgent.getRegion()?gAgent.getRegion()->getRegionID():LLUUID::null;
+    const auto regionGeneration=FSSharedPoseManager::instance().assistantRegionGeneration();if(!regionGeneration)return false;
+    // No deque references, assistant task, worker/profile or privacy authority
+    // are captured by ordinary manual native posing.
+    const auto bound=[lifetime,url,grid,account,login,bridge,region,regionGeneration]()
+    {
+        return FSLSLBridge::instanceExists() && FSSharedPoseManager::instanceExists() &&
+            FSSharedPoseManager::instance().assistantRegionGeneration()==regionGeneration &&
+            FSLSLBridge::instance().mNativePoseLifetime==lifetime && gAgentID==account && gAgent.getSessionID()==login &&
+            LLGridManager::instance().getGrid()==grid && gAgent.getRegion() && gAgent.getRegion()->getRegionID()==region &&
+            FSLSLBridge::instance().getAttachedID()==bridge && FSLSLBridge::instance().mCurrentURL==url &&
+            FSLSLBridge::instance().canUseBridge();
+    };
+    auto submission=std::make_shared<FSSharedPose::NativePacketSubmission>([bound,nativeAuthority]{return bound() && nativeAuthority();});
+    const auto queued=pool.enqueueCoprocedure(NATIVE_POSE_HTTP_POOL,"FSLSLBridge native shared pose",
+        [url,message,submission,completion](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID&)
+    {
+        if(!submission->claim()){if(completion)completion(false,false);return;}
+        auto request=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();
+        options->setRetries(0);options->setFollowRedirects(false);options->setTimeout(15);
+        const auto response=adapter->postAndSuspend(request,url,LLSD(message),options);
+        const auto status=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+        if(completion)completion(true,static_cast<bool>(status) && submission->allowed());
     });
     return queued.notNull();
 }

@@ -1133,6 +1133,7 @@ set(viewer_HEADER_FILES
     fspose.h
     fssharedposemanager.h
     fssharedposemodel.h
+    fssharedposeeditqueue.h
     fsposeranimator.h
 	fsposestate.h
     fsposingmotion.h
