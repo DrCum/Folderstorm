@@ -138,7 +138,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int)
             if(!DeleteFileW((root/L".folderstorm-update-pending").c_str())){explain(L"The update barrier could not be cleared.");return 1;}
         }
         const auto prefs=fs_release::loadPreferences(fs_release::DefaultChannel);
-        auto result=work(L"Checking Folderstorm releases",[&]{std::string error;const auto feed=fs_release::decodeFeed(fs_release::fetchWindows(fs_release::FeedUrl),fs_release::DownloadHosts,error);auto result=fs_release::choose(feed,fs_release::runningBuild(),prefs,true,fs_release::DownloadHosts);if(!error.empty())result.error=error;return result;});
+        auto result=work(L"Checking Folderstorm releases",[&]{std::string error;const auto feed=fs_release::fetchFeed(fs_release::FeedUrl,fs_release::DownloadHosts,fs_release::fetchWindows,error);auto result=fs_release::choose(feed,fs_release::runningBuild(),prefs,true,fs_release::DownloadHosts);if(!error.empty())result.error=error;return result;});
         if(cancelled)return 0;
         if(!result.error.empty() || !result.artifact || !result.artifact->update || result.state!=fs_release::State::Available)
         {explain(L"No matching in-app update is published. Use Check for updates to open the installer or release page.");return 0;}
