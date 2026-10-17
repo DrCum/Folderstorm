@@ -33,6 +33,7 @@
 #endif
 
 #include "llviewermenu.h"
+#include "fsreleaseviewer.h"
 
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
@@ -13074,6 +13075,7 @@ void initialize_menus()
     commit.add("Advanced.WebContentTest", boost::bind(&handle_web_content_test, _2));   // this one opens the Web Content floater
     commit.add("Advanced.ShowURL", boost::bind(&handle_show_url, _2));
     commit.add("Advanced.ReportBug", boost::bind(&handle_report_bug, _2));
+    commit.add("Help.CheckFolderstormUpdates", boost::bind(&FSReleaseViewer::show));
     view_listener_t::addMenu(new LLAdvancedBuyCurrencyTest(), "Advanced.BuyCurrencyTest");
     view_listener_t::addMenu(new LLAdvancedDumpSelectMgr(), "Advanced.DumpSelectMgr");
     view_listener_t::addMenu(new LLAdvancedDumpInventory(), "Advanced.DumpInventory");

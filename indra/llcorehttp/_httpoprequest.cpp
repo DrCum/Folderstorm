@@ -35,6 +35,7 @@
 #include "bufferarray.h"
 #include "httpheaders.h"
 #include "httpoptions.h"
+#include "httpbodylimit.h"
 
 #include "_httprequestqueue.h"
 #include "_httpreplyqueue.h"
@@ -808,6 +809,10 @@ size_t HttpOpRequest::writeCallback(void * data, size_t size, size_t nmemb, void
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     HttpOpRequest::ptr_t op(HttpOpRequest::fromHandle<HttpOpRequest>(userdata));
+
+    const auto limit = op->mReqOptions ? op->mReqOptions->getMaxResponseBytes() : 0;
+    if (!bodyChunkFits(op->mReplyBody ? op->mReplyBody->size() : 0, size, nmemb, limit))
+        return 0; // CURLE_WRITE_ERROR; do not retain or copy the oversized chunk.
 
     if (! op->mReplyBody)
     {

@@ -30,6 +30,7 @@
 
 #include "httpcommon.h"
 #include "_refcounted.h"
+#include <cstddef>
 
 
 namespace LLCore
@@ -101,6 +102,11 @@ public:
     {
         return mTransferTimeout;
     }
+
+    // Zero retains the existing unlimited response behavior. Enforced before
+    // buffering each body chunk, including responses without Content-Length.
+    void setMaxResponseBytes(size_t bytes) { mMaxResponseBytes = bytes; }
+    size_t getMaxResponseBytes() const { return mMaxResponseBytes; }
 
     /// Sets the number of retries on an LLCore::HTTPRequest before the
     /// request fails.
@@ -201,6 +207,7 @@ protected:
     int                 mTracing;
     unsigned int        mTimeout;
     unsigned int        mTransferTimeout;
+    size_t              mMaxResponseBytes;
     unsigned int        mRetries;
     HttpTime            mMinRetryBackoff;
     HttpTime            mMaxRetryBackoff;
