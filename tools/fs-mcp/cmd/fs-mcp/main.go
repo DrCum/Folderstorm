@@ -15,11 +15,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var acquireUpdateGuard = updateguard.Acquire
+
 func main() {
-	release, err := updateguard.Acquire()
+	release, err := acquireUpdateGuard()
 	if err != nil {
 		log.Print("Folderstorm is being updated; close this client and retry after the viewer opens.")
-		return
+		os.Exit(1)
 	}
 	defer release()
 	if len(os.Args) > 1 {

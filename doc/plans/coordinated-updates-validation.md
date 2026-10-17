@@ -122,3 +122,12 @@ Independent Sol 6.1 Extra High review and two correction reviews completed throu
 pass closes uppercase/aliased launch paths during missing metadata and requires
 the launcher-maintenance helper in both package validators. Native acceptance is
 still outstanding; these source/portable checks do not establish Windows behavior.
+
+## Refused-command exit status
+
+Migration, MCP and launcher maintenance now exit with status 1 when the shared
+update guard refuses startup. No copy/diagnostic/cleanup work runs and no success
+output is written. Three focused subprocess tests inject refusal into each actual
+command main and assert its OS exit code, empty stdout and refusal diagnostic;
+all pass. This covers the installer-visible contract rather than a guard model
+alone. Native Windows update and Sentry acceptance remain required before merge.

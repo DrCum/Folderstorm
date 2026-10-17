@@ -10,11 +10,13 @@ import (
 	"os"
 )
 
+var acquireUpdateGuard = updateguard.Acquire
+
 func main() {
-	release, err := updateguard.Acquire()
+	release, err := acquireUpdateGuard()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Folderstorm is being updated; retry after it finishes.")
-		return
+		os.Exit(1)
 	}
 	defer release()
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
