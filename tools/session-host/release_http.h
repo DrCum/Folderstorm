@@ -67,7 +67,7 @@ public:
         job=std::async(std::launch::async,[prefs,requested]()
         {
             Result result;
-            try{std::string error;const auto releases=decodeFeed(fetchWindows(FeedUrl),DownloadHosts,error);result=choose(releases,runningBuild(),prefs,requested,DownloadHosts);if(!error.empty())result.error=error;}
+            try{std::string error;const auto releases=fetchFeed(FeedUrl,DownloadHosts,fetchWindows,error);result=choose(releases,runningBuild(),prefs,requested,DownloadHosts);if(!error.empty())result.error=error;}
             catch(const std::exception& error){result.error=error.what();}
             return result;
         });

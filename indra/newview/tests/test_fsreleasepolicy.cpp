@@ -4,6 +4,11 @@
 using namespace fs_release;
 int main()
 {
+    const auto pages=feedPages(GitHubFeed+"?per_page=32");
+    assert(pages.size()==4 && pages.front()==GitHubFeed+"?per_page=8&page=1");
+    assert(pages.back()==GitHubFeed+"?per_page=8&page=4");
+    assert(feedPages("https://downloads.example.test/releases.json").size()==1);
+    assert(feedPages(GitHubFeed+"-other?per_page=32").size()==1);
     assert(LLCore::bodyChunkFits(0,1,MaxFeedBytes,MaxFeedBytes));
     assert(!LLCore::bodyChunkFits(MaxFeedBytes,1,1,MaxFeedBytes));
     assert(!LLCore::bodyChunkFits(MaxFeedBytes-4,1,5,MaxFeedBytes));
@@ -21,6 +26,16 @@ int main()
     Artifact asset{"windows","x86_64","avx2","opensim","nsis",ReleasesPage+"/download/v10/setup.exe",std::string(64,'a'),100};
     Release stable{"7.2.5.10","stable",std::string(40,'b'),ReleasesPage+"/tag/v10","Notes",{asset}};
     auto nightly=stable;nightly.channel="nightly";nightly.version="7.2.5.11";
+    ReleaseHistory history;
+    assert(history.append({},GitHubPageEntries,GitHubPageEntries)); // Draft-only first page still counts.
+    assert(history.append({nightly},GitHubPageEntries,GitHubPageEntries));
+    assert(history.append({nightly},GitHubPageEntries,GitHubPageEntries)); // Pagination movement deduplicates.
+    assert(history.append({stable},GitHubPageEntries,GitHubPageEntries));
+    assert(history.entries==MaxReleases && history.releases.size()==2);
+    assert(choose(history.releases,build,prefs,true).release.version==stable.version); // Eligible result on page four.
+    assert(!history.append({},1,GitHubPageEntries));
+    ReleaseHistory invalid;assert(!invalid.append({},GitHubPageEntries+1,GitHubPageEntries));
+    assert(!invalid.append({stable},0,GitHubPageEntries));
     auto result=choose({nightly,stable},build,prefs,false);assert(result.state==State::Available && result.release.version==stable.version);
     prefs.channel="nightly";assert(choose({stable,nightly},build,prefs,false).release.version==nightly.version);
     prefs.skipped=nightly.version;assert(choose({nightly},build,prefs,false).state==State::Current);

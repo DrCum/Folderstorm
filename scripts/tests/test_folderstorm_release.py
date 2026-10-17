@@ -33,7 +33,9 @@ class ReleasePublishing(unittest.TestCase):
         self.assertEqual(paths[0].stat().st_size, data["assets"][0]["bytes"])
         body = (self.root / "out/release-notes.md").read_text()
         decoded = json.loads(body.split("<!-- folderstorm-release-v1\n")[1].split("\n-->")[0])
-        self.assertEqual(decoded, data)
+        self.assertNotIn("notes",decoded)
+        self.assertEqual(decoded,{key:value for key,value in data.items() if key!="notes"})
+        self.assertEqual(body.split("\n\n<!-- folderstorm-release-v1\n")[0],data["notes"])
 
     def test_custom_host_and_immutable_published_identity(self):
         _, data, _ = self.prepare(download_base="https://downloads.example.test/updates")
@@ -91,6 +93,44 @@ class ReleasePublishing(unittest.TestCase):
             changed=package.read_bytes();catalog["Assets"][0].update(Size=len(changed),SHA1=hashlib.sha1(changed).hexdigest(),SHA256=hashlib.sha256(changed).hexdigest())
             feed.write_text(json.dumps(catalog))
             with self.assertRaises(ValueError):self.prepare()
+
+    def test_full_history_with_maximum_changelogs_fits_bounded_pages(self):
+        (self.root / "notes.md").write_text("x"*release.MAX_NOTES)
+        native,legacy=[],[]
+        prior=None
+        for number in range(32):
+            self.data["version"]=f"7.2.5.{number+1}"
+            _,data,_=self.prepare(previous=prior)
+            prior=self.root/"out/folderstorm-releases.json"
+            body=(self.root/"out/release-notes.md").read_text()
+            base={"draft":False,"prerelease":True,"html_url":data["url"],"assets":[]}
+            native.append({**base,"body":body})
+            old_body=data["notes"]+"\n\n<!-- folderstorm-release-v1\n"+json.dumps(data,separators=(",",":"))+"\n-->\n"
+            legacy.append({**base,"body":old_body})
+        self.assertEqual(32,len(json.loads(prior.read_text())["releases"]))
+        self.assertLessEqual(prior.stat().st_size,release.MAX_FEED_BYTES)
+        # The reviewer reproduction: the old, publisher-accepted 32-row response
+        # exceeds the cap. Pages work for both existing and new release bodies.
+        self.assertGreater(len(json.dumps(legacy).encode()),release.MAX_FEED_BYTES)
+        for history in (legacy,native):
+            for offset in range(0,32,8):
+                self.assertLessEqual(len(json.dumps(history[offset:offset+8]).encode()),release.MAX_FEED_BYTES)
+        for entry in native:
+            metadata=json.loads(entry["body"].split("<!-- folderstorm-release-v1\n")[1].split("\n-->")[0])
+            self.assertNotIn("notes",metadata)
+
+    def test_oversized_static_history_is_refused_before_writing(self):
+        (self.root/"notes.md").write_text('"'*release.MAX_NOTES)
+        prior=None
+        for number in range(31):
+            self.data["version"]=f"7.2.5.{number+1}"
+            self.prepare(previous=prior)
+            prior=self.root/"out/folderstorm-releases.json"
+        previous=prior.read_bytes()
+        self.data["version"]="7.2.5.32"
+        with self.assertRaisesRegex(ValueError,"static feed exceeds"):
+            self.prepare(previous=prior)
+        self.assertEqual(prior.read_bytes(),previous)
 
 
 if __name__ == "__main__": unittest.main()

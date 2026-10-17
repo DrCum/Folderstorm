@@ -15,6 +15,7 @@ import zipfile
 from urllib.parse import quote, urlsplit
 
 MAX_ASSETS, MAX_RELEASES, MAX_NOTES = 24, 32, 32768
+MAX_FEED_BYTES = 2*1024*1024
 REPOSITORY = "DrCum/Folderstorm"
 RELEASES = "https://github.com/" + REPOSITORY + "/releases"
 
@@ -163,10 +164,16 @@ def prepare(input_path, output, download_base=None, previous=None):
                 releases.append(item)
     releases.append(release)
     releases.sort(key=lambda item: version(item["version"]), reverse=True)
+    feed = json.dumps({"schema": 1, "releases": releases[:MAX_RELEASES]}, ensure_ascii=False, separators=(",", ":"))+"\n"
+    if len(feed.encode("utf-8")) > MAX_FEED_BYTES:
+        raise ValueError("static feed exceeds 2 MiB; retain fewer previous releases")
+    # GitHub already carries these notes in its visible body. Leave them in the
+    # standalone manifest/feed, and omit the duplicate from hidden metadata.
+    metadata = {key:value for key,value in release.items() if key != "notes"}
     output.mkdir(parents=True, exist_ok=True)
-    (output / "folderstorm-releases.json").write_text(json.dumps({"schema": 1, "releases": releases[:MAX_RELEASES]}, indent=2)+"\n", encoding="utf-8")
+    (output / "folderstorm-releases.json").write_text(feed, encoding="utf-8")
     (output / "folderstorm-release.json").write_text(json.dumps(release, indent=2)+"\n", encoding="utf-8")
-    (output / "release-notes.md").write_text(notes + "\n\n<!-- folderstorm-release-v1\n" + json.dumps(release, separators=(",", ":")) + "\n-->\n", encoding="utf-8")
+    (output / "release-notes.md").write_text(notes + "\n\n<!-- folderstorm-release-v1\n" + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "\n-->\n", encoding="utf-8")
     return tag, release, paths
 
 

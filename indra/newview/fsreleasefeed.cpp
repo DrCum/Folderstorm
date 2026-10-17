@@ -53,9 +53,10 @@ Release releaseFrom(const boost::json::value& value,const std::string& extraHost
     return result;
 }
 }
-std::vector<Release> decodeFeed(const std::string& body,const std::string& extraHosts,std::string& error)
+std::vector<Release> decodeFeed(const std::string& body,const std::string& extraHosts,std::string& error,std::size_t* entries)
 {
     error.clear();std::vector<Release> result;
+    if(entries)*entries=0;
     if(body.size()>MaxFeedBytes){error="The update response is too large.";return result;}
     try
     {
@@ -67,6 +68,7 @@ std::vector<Release> decodeFeed(const std::string& body,const std::string& extra
             const auto* releases=root.as_object().if_contains("releases");
             if(!schema || !schema->is_int64() || schema->as_int64()!=1 || !releases || !releases->is_array() || releases->as_array().size()>MaxReleases)
                 throw std::runtime_error("Invalid update manifest");
+            if(entries)*entries=releases->as_array().size();
             for(const auto& entry:releases->as_array())
             {
                 auto release=releaseFrom(entry,extraHosts);if(release.version.empty())throw std::runtime_error("Invalid release");
@@ -75,6 +77,7 @@ std::vector<Release> decodeFeed(const std::string& body,const std::string& extra
         }
         else if(root.is_array() && root.as_array().size()<=MaxReleases)
         {
+            if(entries)*entries=root.as_array().size();
             const std::string marker="<!-- folderstorm-release-v1\n",end="\n-->";
             for(const auto& entry:root.as_array())
             {
@@ -86,6 +89,14 @@ std::vector<Release> decodeFeed(const std::string& body,const std::string& extra
                 const auto stop=notes.find(end,start+marker.size());
                 if(stop==std::string::npos || notes.find(marker,start+marker.size())!=std::string::npos)continue;
                 auto release=releaseFrom(boost::json::parse(notes.substr(start+marker.size(),stop-start-marker.size()),{},options),extraHosts);
+                // New publishers keep the changelog only in GitHub's visible
+                // body. Older releases with embedded notes remain supported.
+                if(release.notes.empty())
+                {
+                    auto visible=notes.substr(0,start);
+                    if(visible.size()>=2 && visible.compare(visible.size()-2,2,"\n\n")==0)visible.resize(visible.size()-2);
+                    release.notes=plainText(std::move(visible),MaxNotes);
+                }
                 const auto* prerelease=object.if_contains("prerelease");
                 if(release.version.empty() || !prerelease || !prerelease->is_bool() ||
                     prerelease->as_bool()!=(release.channel=="nightly") || text(object,"html_url")!=release.url)continue;
@@ -110,5 +121,20 @@ std::vector<Release> decodeFeed(const std::string& body,const std::string& extra
     }
     catch(const std::exception&){result.clear();error="The update response is invalid. Open the releases page to check manually.";}
     return result;
+}
+std::vector<Release> fetchFeed(const std::string& address,const std::string& extraHosts,
+    const std::function<std::string(const std::string&)>& fetch,std::string& error)
+{
+    error.clear();ReleaseHistory history;const bool github=githubFeed(address);
+    for(const auto& url:feedPages(address))
+    {
+        std::size_t entries=0;
+        auto page=decodeFeed(fetch(url),extraHosts,error,&entries);
+        if(!error.empty())return {};
+        if(!history.append(std::move(page),entries,github?GitHubPageEntries:MaxReleases))
+        {error="The update response contains too many release entries.";return {};}
+        if(github && entries<GitHubPageEntries)break;
+    }
+    return std::move(history.releases);
 }
 }
