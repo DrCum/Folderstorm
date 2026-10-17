@@ -925,6 +925,17 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Run only during uninstall, before its installation's sidecar disappears.
         self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
         self.path(self.stage_session_host(), "folderstorm-session-host.exe")
+        # SDK reporting is optional. The CMake marker makes a missing matching
+        # handler a packaging error instead of silently shipping a broken build.
+        if os.path.isfile(os.path.join(self.get_build_prefix(), "folderstorm-crash-reporting.enabled")):
+            config = self.args.get("configuration") or ""
+            candidates = [os.path.join(self.get_build_prefix(), part,
+                          "folderstorm-crashpad-handler.exe") for part in ([config, ""] if config else [""])]
+            handler = next((path for path in candidates if os.path.isfile(path)), None)
+            if handler is None:
+                raise ManifestError("The matching Folderstorm Sentry crash handler was not built.")
+            self.path(handler, "folderstorm-crashpad-handler.exe")
+            self.path(os.path.join(self.get_build_prefix(), "sentry-licenses"), "sentry-licenses")
         # Packaging renames firestorm-bin.exe. The controller uses only this
         # installation-local basename; it never searches PATH for a viewer.
         self.put_in_file(((self.final_exe() if self.is_packaging_viewer() else "firestorm-bin.exe") + "\n").encode("utf-8"),

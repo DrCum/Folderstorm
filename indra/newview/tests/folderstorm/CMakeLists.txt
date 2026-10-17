@@ -20,6 +20,8 @@ endfunction()
 
 folderstorm_check(release_policy ../test_fsreleasepolicy.cpp)
 target_include_directories(release_policy PRIVATE ../..)
+folderstorm_check(crash_policy ../test_fscrashpolicy.cpp)
+target_include_directories(crash_policy PRIVATE ../..)
 find_path(FS_RELEASE_BOOST_JSON_INCLUDE_DIR boost/json.hpp)
 if(FS_RELEASE_BOOST_JSON_INCLUDE_DIR)
   folderstorm_check(release_feed ../test_fsreleasefeed.cpp ../../fsreleasefeed.cpp

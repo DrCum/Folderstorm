@@ -1,0 +1,21 @@
+name: Bug report
+description: Report a Folderstorm problem. Never attach passwords, private chats or raw crash dumps.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the expected behavior and steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Viewer version, source commit, Windows version and whether session hosting was in use.
+  - type: input
+    id: crash
+    attributes:
+      label: Crash reference (optional)
+      description: A Sentry event ID or private issue reference, not the dump itself.
