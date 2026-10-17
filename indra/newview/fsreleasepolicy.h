@@ -4,15 +4,29 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace fs_release
 {
 inline constexpr std::size_t MaxFeedBytes=2*1024*1024, MaxReleases=32, MaxAssets=24, MaxNotes=32768;
+inline constexpr std::size_t GitHubPageEntries=8;
+inline const std::string GitHubFeed="https://api.github.com/repos/DrCum/Folderstorm/releases";
+inline bool githubFeed(const std::string& url)
+{return url==GitHubFeed || url.compare(0,GitHubFeed.size()+1,GitHubFeed+"?")==0;}
+inline std::vector<std::string> feedPages(const std::string& address)
+{
+    if(!githubFeed(address))return {address};
+    std::vector<std::string> result;
+    for(std::size_t page=1;page<=MaxReleases/GitHubPageEntries;++page)
+        result.push_back(GitHubFeed+"?per_page="+std::to_string(GitHubPageEntries)+"&page="+std::to_string(page));
+    return result;
+}
 inline constexpr std::uint64_t CheckInterval=12*60*60;
 inline const std::string ReleasesPage="https://github.com/DrCum/Folderstorm/releases";
 struct Version
@@ -74,6 +88,25 @@ struct Release
     std::string version,channel,commit,url,notes;
     std::vector<Artifact> assets;
 };
+struct ReleaseHistory
+{
+    std::vector<Release> releases;
+    std::size_t entries=0;
+    // Count native catalog rows, including drafts/unrecognized entries. A
+    // filtered page can be empty while later pages still contain valid releases.
+    bool append(std::vector<Release> page,std::size_t count,std::size_t limit)
+    {
+        if(count>limit || count>MaxReleases-entries || page.size()>count)return false;
+        entries+=count;
+        for(auto& release:page)
+        {
+            const auto duplicate=std::find_if(releases.begin(),releases.end(),[&](const Release& old)
+            {return old.channel==release.channel && old.version==release.version;});
+            if(duplicate==releases.end())releases.push_back(std::move(release));
+        }
+        return true;
+    }
+};
 struct Build
 {
     std::string version,platform,architecture,cpu,flavor,installer;
@@ -131,6 +164,8 @@ inline Result choose(const std::vector<Release>& releases,const Build& build,con
     return result;
 }
 // The decoder is shared by the host and viewer; no account or login data enters it.
-std::vector<Release> decodeFeed(const std::string& body,const std::string& extraHosts,std::string& error);
+std::vector<Release> decodeFeed(const std::string& body,const std::string& extraHosts,std::string& error,std::size_t* entries=nullptr);
+std::vector<Release> fetchFeed(const std::string& address,const std::string& extraHosts,
+    const std::function<std::string(const std::string&)>& fetch,std::string& error);
 }
 #endif

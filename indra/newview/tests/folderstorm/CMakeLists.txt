@@ -20,6 +20,13 @@ endfunction()
 
 folderstorm_check(release_policy ../test_fsreleasepolicy.cpp)
 target_include_directories(release_policy PRIVATE ../..)
+find_path(FS_RELEASE_BOOST_JSON_INCLUDE_DIR boost/json.hpp)
+if(FS_RELEASE_BOOST_JSON_INCLUDE_DIR)
+  folderstorm_check(release_feed ../test_fsreleasefeed.cpp ../../fsreleasefeed.cpp
+    ../../../../tools/session-host/release_json.cpp)
+  target_include_directories(release_feed PRIVATE ../.. "${FS_RELEASE_BOOST_JSON_INCLUDE_DIR}")
+  target_compile_definitions(release_feed PRIVATE BOOST_ALL_NO_LIB)
+endif()
 
 folderstorm_check(shared_pose ../test_fssharedpose.cpp)
 

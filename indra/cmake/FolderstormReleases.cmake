@@ -1,5 +1,5 @@
 include_guard()
-set(FS_RELEASE_FEED_URL "https://api.github.com/repos/DrCum/Folderstorm/releases?per_page=32" CACHE STRING "Public HTTPS release manifest or Folderstorm GitHub releases API")
+set(FS_RELEASE_FEED_URL "https://api.github.com/repos/DrCum/Folderstorm/releases?per_page=8&page=1" CACHE STRING "Public HTTPS release manifest or Folderstorm GitHub releases API")
 set(FS_RELEASE_DOWNLOAD_HOSTS "folderstorm.sodie.net" CACHE STRING "Comma-separated additional trusted HTTPS download hosts")
 foreach(value IN ITEMS FS_RELEASE_FEED_URL FS_RELEASE_DOWNLOAD_HOSTS)
   if("${${value}}" MATCHES "[\"\\;\n\r]")

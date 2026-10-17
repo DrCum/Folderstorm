@@ -101,3 +101,27 @@ verify TLS, preserve visible Preferences drafts, revalidate queued host results
 against current channel/skip choices and remove the duplicate system-menu item.
 Correction review found no remaining actionable finding. Release-policy CTest
 and five publisher tests pass after corrections. Native compilation is pending.
+
+## Release-history review correction
+
+The 32-release GitHub response can exceed the 2 MiB body limit when changelogs
+are duplicated. GitHub checks now fetch up to four pages of eight rows, each
+with the existing transfer-time byte cap and timeout. Viewer and host share the
+collector; draft/unrecognized rows still count toward pagination, and selection
+runs across the combined history. Legacy cached `per_page=32` feed configuration
+is normalized to the bounded requests. Custom static feeds remain one bounded
+request. A failed/invalid page discards the partial result.
+
+Publishing leaves notes in the visible GitHub body and omits them from its
+hidden metadata; standalone manifests keep notes. The decoder accepts both the
+legacy embedded notes and the new visible notes. Static output is compact UTF-8
+and refuses to overwrite its previous feed if it would exceed the client cap.
+
+Focused checks: seven publisher tests pass, including the 32 maximum-changelog
+history and oversized static history without destructive output. Strict C++17
+release-policy and actual Boost.JSON 1.90 feed/collector tests pass. The latter
+checks legacy and new bodies, page-four selection, draft-only pages, early EOF,
+custom feeds and malformed/oversized/failed pages. It is an optional CMake target
+`release_feed` when Boost.JSON headers are available; the production codec and
+shared collector were compiled directly with the retained Boost headers here.
+Native Windows transport/UI acceptance remains pending.
