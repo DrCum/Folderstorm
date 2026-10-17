@@ -13,6 +13,7 @@
 #include "llfloaterreg.h"
 #include "lltexteditor.h"
 #include "llweb.h"
+#include <stdexcept>
 namespace
 {
 fs_release::Result result;bool checking=false,requested=false;unsigned long revision=0;
@@ -38,20 +39,19 @@ void FSReleaseViewer::check(bool manual)
             options->setMaxResponseBytes(fs_release::MaxFeedBytes);options->setRetries(0);
             options->setSSLVerifyPeer(true);options->setSSLVerifyHost(true);
             auto headers=std::make_shared<LLCore::HttpHeaders>();headers->append("Accept","application/json");
-            const auto response=adapter.getRawAndSuspend(request,fs_release::FeedUrl,options,headers);
-            if(!LLApp::isExiting())
+            std::string error;
+            const auto releases=fs_release::fetchFeed(fs_release::FeedUrl,fs_release::DownloadHosts,[&](const std::string& url)
             {
+                if(LLApp::isExiting())throw std::runtime_error("Viewer exiting");
+                const auto response=adapter.getRawAndSuspend(request,url,options,headers);
                 const auto httpStatus=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
-                if(httpStatus || httpStatus==LLCore::HttpStatus(404))
-                {
-                    const auto& bytes=response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
-                    const auto raw=httpStatus?std::string(bytes.begin(),bytes.end()):"[]";
-                    std::string error;const auto releases=fs_release::decodeFeed(raw,fs_release::DownloadHosts,error);
-                    next=fs_release::choose(releases,fs_release::runningBuild(),fs_release::loadPreferences(fs_release::DefaultChannel),requested,fs_release::DownloadHosts);
-                    if(!error.empty())next.error=error;
-                }
-                else next.error="Could not check for updates. Try again later or open All releases.";
-            }
+                if(httpStatus==LLCore::HttpStatus(404))return std::string("[]");
+                if(!httpStatus)throw std::runtime_error("Update request failed");
+                const auto& bytes=response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
+                return std::string(bytes.begin(),bytes.end());
+            },error);
+            next=fs_release::choose(releases,fs_release::runningBuild(),fs_release::loadPreferences(fs_release::DefaultChannel),requested,fs_release::DownloadHosts);
+            if(!error.empty())next.error=error;
         }
         catch(const std::exception&){next.error="Could not check for updates. Try again later.";}
         checking=false;
