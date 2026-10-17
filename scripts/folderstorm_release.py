@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import zipfile
 from urllib.parse import quote, urlsplit
 
 MAX_ASSETS, MAX_RELEASES, MAX_NOTES = 24, 32, 32768
@@ -42,6 +43,58 @@ def bounded_json(path, maximum=2*1024*1024):
     if len(raw) > maximum:
         raise ValueError("input manifest is too large")
     return json.loads(raw)
+
+
+def update_package(entry, data, input_path, base):
+    """Bind an actual full Velopack package to the matching installer variant."""
+    feed = (input_path.parent / entry["velopack_feed"]).resolve(strict=True)
+    catalog = bounded_json(feed)
+    expected_id = "Folderstorm.{flavor}.{channel}.{architecture}.{cpu}".format(**entry, channel=data["channel"])
+    parts = data["version"].rsplit(".", 1)
+    expected_version = "-".join(parts)
+    matches = [asset for asset in catalog.get("Assets", []) if asset.get("Type") == "Full" and asset.get("PackageId") == expected_id and asset.get("Version") == expected_version]
+    if len(matches) != 1:
+        raise ValueError("Velopack feed needs one matching full package")
+    native = matches[0]
+    name = native.get("FileName", "")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,174}\.nupkg", name):
+        raise ValueError("Velopack package must use a simple filename")
+    package = feed.parent / name
+    if not package.is_file() or not 0 < package.stat().st_size <= 5*1024**3:
+        raise ValueError("Velopack full package is missing or too large")
+    sha1, sha256 = hashlib.sha1(), hashlib.sha256()
+    with package.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024*1024), b""):
+            sha1.update(block); sha256.update(block)
+    if native.get("Size") != package.stat().st_size or str(native.get("SHA1", "")).lower() != sha1.hexdigest() or str(native.get("SHA256", "")).lower() != sha256.hexdigest():
+        raise ValueError("Velopack feed does not match the actual package hash/size")
+    with zipfile.ZipFile(package) as archive:
+        members = archive.infolist()
+        by_name = {item.filename:item for item in members}
+        if len(members) != len(by_name):
+            raise ValueError("Duplicate archive paths in the full package")
+        markers = [item for item in members if item.filename == "lib/app/folderstorm-bundle.json"]
+        if len(markers) != 1 or markers[0].file_size > 4096:
+            raise ValueError("Full package needs one bounded bundle identity")
+        bundle = json.loads(archive.read(markers[0]))
+        if bundle.get("schema") != 1 or type(bundle.get("protocol")) is not int or bundle["protocol"] < 16:
+            raise ValueError("Invalid bundle schema/protocol")
+        for key, expected in {"version": data["version"], "commit": data["commit"], "app_id": expected_id, "installer": "velopack"}.items():
+            if bundle.get(key) != expected:
+                raise ValueError("Full package has a different build identity")
+        guide = by_name.get("lib/app/folderstorm-session-viewer.txt")
+        if guide is None or not 0 < guide.file_size <= 256:
+            raise ValueError("Invalid packaged viewer guide")
+        viewer = archive.read(guide).decode("utf-8").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}\.exe", viewer):
+            raise ValueError("Invalid packaged viewer name")
+        for component in (viewer,"folderstorm-session-host.exe","fs-mcp.exe","folderstorm-update.exe","migrate-settings.exe","fs-mcp-launcher-maintenance.exe","folderstorm-session-viewer.txt"):
+            info = by_name.get("lib/app/"+component)
+            if info is None or info.is_dir() or info.file_size <= 0:
+                raise ValueError("Full package is missing a nonempty app component")
+    return {"id": expected_id, "version": expected_version, "file": name,
+            "url": base + "/" + quote(name), "sha1": sha1.hexdigest(), "sha256": sha256.hexdigest(),
+            "bytes": package.stat().st_size}, package
 
 
 def prepare(input_path, output, download_base=None, previous=None):
@@ -87,6 +140,14 @@ def prepare(input_path, output, download_base=None, previous=None):
         assets.append({**{key: entry[key] for key in allowed}, "url": base + "/" + quote(path.name),
                        "sha256": digest.hexdigest(), "bytes": path.stat().st_size})
         paths.append(path); names.add(path.name); variants.add(variant)
+        if entry.get("velopack_feed"):
+            if entry["installer"] != "velopack" or entry["platform"] != "windows":
+                raise ValueError("In-app update packages currently require Windows Velopack")
+            update, package = update_package(entry, data, input_path, base)
+            if package.name in names or (not download_base and package.stat().st_size >= 2*1024**3):
+                raise ValueError("Duplicate or oversized GitHub update package; use hosting for assets >=2 GiB")
+            assets[-1]["update"] = update
+            names.add(package.name); paths.append(package)
     release = {"schema": 1, "version": data["version"], "channel": data["channel"], "commit": data["commit"],
                "url": release_url, "notes": notes, "assets": assets}
     releases = []

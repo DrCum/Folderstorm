@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"folderstorm-updateguard"
 	"fs-mcp/internal/diagnose"
 	"io"
 	"log"
@@ -14,7 +15,15 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var acquireUpdateGuard = updateguard.Acquire
+
 func main() {
+	release, err := acquireUpdateGuard()
+	if err != nil {
+		log.Print("Folderstorm is being updated; close this client and retry after the viewer opens.")
+		os.Exit(1)
+	}
+	defer release()
 	if len(os.Args) > 1 {
 		os.Exit(diagnosticMain(os.Args[1:], os.Stdout))
 	}

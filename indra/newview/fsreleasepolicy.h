@@ -78,10 +78,16 @@ inline std::string plainText(std::string value,std::size_t limit=MaxNotes)
     if(value.size()>limit)value.resize(limit);
     return value;
 }
+struct UpdatePackage
+{
+    std::string id,version,file,url,sha1,sha256;
+    std::uint64_t bytes=0;
+};
 struct Artifact
 {
     std::string platform,architecture,cpu,flavor,installer,url,sha256;
     std::uint64_t bytes=0;
+    std::optional<UpdatePackage> update={};
 };
 struct Release
 {

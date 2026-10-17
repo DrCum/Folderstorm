@@ -1954,6 +1954,7 @@ configure_file(
 list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/fsversionvalues.h)
 include(FolderstormReleases)
 include(FolderstormSentry)
+include(FolderstormUpdates)
 list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp)
 list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsreleasepolicy.h fsreleaseprefs.h fsreleaseviewer.h ${CMAKE_CURRENT_BINARY_DIR}/fsreleasebuild.h)
@@ -2415,6 +2416,7 @@ add_executable(${VIEWER_BINARY_NAME}
     ${viewer_SOURCE_FILES}
     )
 folderstorm_crash_target(${VIEWER_BINARY_NAME})
+folderstorm_update_target(${VIEWER_BINARY_NAME})
 
 # Explicitly launched Windows feasibility tool. Normal viewer login never starts
 # a controller or background workers. Keep the binary beside the matching viewer.
@@ -2426,6 +2428,7 @@ if (WINDOWS)
       "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/session-host.rc")
   folderstorm_crash_target(folderstorm-session-host)
+  folderstorm_update_target(folderstorm-session-host)
   target_compile_features(folderstorm-session-host PRIVATE cxx_std_17)
   target_include_directories(folderstorm-session-host PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
@@ -2439,6 +2442,18 @@ if (WINDOWS)
     target_compile_options(folderstorm-session-host PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
   endif()
   add_dependencies(${VIEWER_BINARY_NAME} folderstorm-session-host)
+  if(USE_VELOPACK)
+    add_executable(folderstorm-update WIN32
+      "${CMAKE_SOURCE_DIR}/../tools/app-update/main.cpp" fsreleasefeed.cpp
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/release_json.cpp")
+    target_compile_features(folderstorm-update PRIVATE cxx_std_17)
+    target_include_directories(folderstorm-update PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/../tools/session-host")
+    target_compile_definitions(folderstorm-update PRIVATE UNICODE _UNICODE)
+    target_compile_options(folderstorm-update PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
+    target_link_libraries(folderstorm-update PRIVATE ll::velopack ll::boost winhttp bcrypt user32 shell32 ole32 uuid)
+    set_target_properties(folderstorm-update PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    add_dependencies(${VIEWER_BINARY_NAME} folderstorm-update)
+  endif()
 endif()
 
 # add package files
@@ -2465,12 +2480,14 @@ endif (OPENSIM)
 # GO_EXECUTABLE is the absolute path from indra/cmake/GoToolchain.cmake,
 # chosen at the start of configure. These build steps call that path.
 set(MIGRATE_SETTINGS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/migrate-settings${CMAKE_EXECUTABLE_SUFFIX}")
+file(GLOB FS_UPDATE_GUARD_DEPS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/../tools/updateguard/*.go" "${CMAKE_SOURCE_DIR}/../tools/updateguard/go.mod")
 add_custom_command(
   OUTPUT "${MIGRATE_SETTINGS_OUTPUT}"
   COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0
           "${GO_EXECUTABLE}" build -o "${MIGRATE_SETTINGS_OUTPUT}" .
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../tools/migrate-settings"
   DEPENDS
+    ${FS_UPDATE_GUARD_DEPS}
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/go.mod"
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/main.go"
     "${CMAKE_SOURCE_DIR}/../tools/migrate-settings/migrate.go"
@@ -2489,6 +2506,7 @@ add_custom_command(
           "${GO_EXECUTABLE}" build -o "${FS_MCP_OUTPUT}" ./cmd/fs-mcp
   WORKING_DIRECTORY "${FS_MCP_DIR}"
   DEPENDS
+    ${FS_UPDATE_GUARD_DEPS}
     "${FS_MCP_DIR}/go.mod"
     "${FS_MCP_DIR}/go.sum"
     "${FS_MCP_DIR}/cmd/fs-mcp/main.go"
@@ -2522,6 +2540,7 @@ if(WINDOWS)
             "${GO_EXECUTABLE}" build -o "${FS_MCP_MAINTENANCE_OUTPUT}" .
     WORKING_DIRECTORY "${FS_MCP_MAINTENANCE_DIR}"
     DEPENDS
+      ${FS_UPDATE_GUARD_DEPS}
       "${FS_MCP_MAINTENANCE_DIR}/go.mod"
       "${FS_MCP_MAINTENANCE_DIR}/main.go"
       "${FS_MCP_MAINTENANCE_DIR}/cleanup.go"
@@ -3416,6 +3435,9 @@ check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
   add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance folderstorm-session-host)
+  if(TARGET folderstorm-update)
+    add_dependencies(copy_w_viewer_manifest folderstorm-update)
+  endif()
 endif()
 if(TARGET copy_l_viewer_manifest)
   add_dependencies(copy_l_viewer_manifest migrate-settings fs-mcp)

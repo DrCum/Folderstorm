@@ -32,6 +32,22 @@ Release releaseFrom(const boost::json::value& value,const std::string& extraHost
         if(!bytes || (!bytes->is_uint64() && !bytes->is_int64()) || (bytes->is_int64() && bytes->as_int64()<=0))return {};
         item.bytes=bytes->is_uint64()?bytes->as_uint64():static_cast<std::uint64_t>(bytes->as_int64());
         if(!item.bytes || !hex(item.sha256,64) || !trustedUrl(item.url,extraHosts))return {};
+        if(const auto* update=asset.if_contains("update");update && update->is_object())
+        {
+            const auto& details=update->as_object();UpdatePackage package;
+            package.id=text(details,"id",120);package.version=text(details,"version",80);package.file=text(details,"file",180);
+            package.url=text(details,"url");package.sha1=text(details,"sha1",40);package.sha256=text(details,"sha256",64);
+            const auto* size=details.if_contains("bytes");
+            if(size && size->is_int64() && size->as_int64()>0)package.bytes=static_cast<std::uint64_t>(size->as_int64());
+            else if(size && size->is_uint64())package.bytes=size->as_uint64();
+            if(package.id.empty() || package.id.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")!=std::string::npos ||
+                package.file.empty() || package.file.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")!=std::string::npos ||
+                package.file.size()<6 || package.file.substr(package.file.size()-6)!=".nupkg" || !trustedUrl(package.url,extraHosts) ||
+                !hex(package.sha1,40) || !hex(package.sha256,64) || !package.bytes || package.bytes>5ULL*1024*1024*1024)return {};
+            const auto dot=result.version.find_last_of('.');
+            if(item.installer!="velopack" || package.version!=result.version.substr(0,dot)+"-"+result.version.substr(dot+1))return {};
+            item.update=std::move(package);
+        }
         result.assets.push_back(std::move(item));
     }
     return result;

@@ -37,6 +37,7 @@ void pollUpdates()
     const auto notes=wide(fs_release::plainText(result.release.notes,4000));
     std::vector<TASKDIALOG_BUTTON> buttons;
     if(result.artifact && result.error.empty())buttons.push_back({100,L"Download"});
+    if(result.artifact && result.artifact->update && fs_release::runningBuild().installer=="velopack")buttons.push_back({103,L"Update whole application…"});
     buttons.push_back({101,L"What's new / all releases"});
     if(result.state==fs_release::State::Available || result.state==fs_release::State::NoArtifact)buttons.push_back({102,L"Skip this version"});
     buttons.push_back({IDCANCEL,L"Later"});
@@ -49,6 +50,7 @@ void pollUpdates()
     if(!taskDialog || FAILED(taskDialog(&dialog,&selected,nullptr,nullptr)))
         selected=MessageBoxW(window,(releaseStatus+L"\n\nOpen the releases page?").c_str(),title.c_str(),MB_YESNO)==IDYES?101:IDCANCEL;
     if(selected==100 && result.artifact && result.error.empty())open(result.artifact->url);
+    if(selected==103 && !fs_update::prepare())message(wide(fs_update::lastError()));
     if(selected==101)open(result.release.url.empty()?fs_release::ReleasesPage:result.release.url);
     if(selected==102)
     {

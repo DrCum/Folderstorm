@@ -2063,12 +2063,14 @@ bool LLAppViewer::cleanup()
 {
     fs_crash::shutdown();
 #if LL_VELOPACK
-    // Apply any pending Velopack update before shutdown
+    // Windows updates belong to the whole installation, never one worker exit.
+#if !LL_WINDOWS
     if (velopack_is_update_pending())
     {
         LL_INFOS("AppInit") << "Applying pending Velopack update on shutdown..." << LL_ENDL;
         velopack_apply_pending_update(velopack_should_restart_after_update());
     }
+#endif
     velopack_cleanup();
 #endif
 

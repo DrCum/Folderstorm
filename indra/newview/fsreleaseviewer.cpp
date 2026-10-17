@@ -3,6 +3,7 @@
 #include "fsreleaseviewer.h"
 #include "fsreleasebuild.h"
 #include "fsreleaseprefs.h"
+#include "fsupdate.h"
 #include "fssessionworker.h"
 #include "llapp.h"
 #include "llbutton.h"
@@ -76,6 +77,7 @@ bool FSFloaterUpdates::postBuild()
 {
     getChild<LLButton>("check")->setCommitCallback([](LLUICtrl*,const LLSD&){FSReleaseViewer::check(true);});
     getChild<LLButton>("download")->setCommitCallback([](LLUICtrl*,const LLSD&){if(result.artifact)openUrl(result.artifact->url);});
+    getChild<LLButton>("install")->setCommitCallback([this](LLUICtrl*,const LLSD&){if(!fs_update::prepare())getChild<LLUICtrl>("status")->setValue(fs_update::lastError());});
     getChild<LLButton>("notes")->setCommitCallback([](LLUICtrl*,const LLSD&){openUrl(result.release.url.empty()?fs_release::ReleasesPage:result.release.url);});
     getChild<LLButton>("skip")->setCommitCallback([this](LLUICtrl*,const LLSD&){auto prefs=fs_release::loadPreferences(fs_release::DefaultChannel);if(fs_release::Version::parse(result.release.version)){prefs.skipped=result.release.version;fs_release::savePreferences(prefs);}closeFloater();});
     getChild<LLButton>("apply")->setCommitCallback([this](LLUICtrl*,const LLSD&){apply();});
@@ -108,6 +110,7 @@ void FSFloaterUpdates::refresh()
     getChild<LLUICtrl>("status")->setValue(status);
     getChild<LLTextEditor>("changelog")->setText(result.release.notes);
     getChild<LLButton>("download")->setEnabled(!checking && result.artifact.has_value() && result.error.empty());
+    getChild<LLButton>("install")->setEnabled(!checking && result.artifact && result.artifact->update && result.error.empty() && fs_release::runningBuild().platform=="windows" && fs_release::runningBuild().installer=="velopack");
     getChild<LLButton>("skip")->setEnabled(!checking && (result.state==fs_release::State::Available || result.state==fs_release::State::NoArtifact));
     getChild<LLButton>("check")->setEnabled(!checking);
 }

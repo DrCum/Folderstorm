@@ -1,0 +1,6 @@
+#pragma once
+namespace fs_update
+{
+inline constexpr const char* AppId="Folderstorm.@FS_RELEASE_FLAVOR@.@FS_RELEASE_DEFAULT_CHANNEL@.@FS_RELEASE_ARCH@.@FS_RELEASE_CPU@";
+inline constexpr const char* SourceCommit="@FS_SOURCE_COMMIT@";
+}
