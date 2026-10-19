@@ -44,8 +44,12 @@ if(FS_ENABLE_SENTRY)
   set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "")
   set(viewer_c_flags "${CMAKE_C_FLAGS}")
   set(viewer_cxx_flags "${CMAKE_CXX_FLAGS}")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Z7")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Z7")
+  # Crashpad declares newer Windows APIs and resolves them dynamically. Keep
+  # the viewer's legacy API visibility flags out of the SDK subdirectory only.
+  string(REGEX REPLACE "[-/]D(WINVER|_WIN32_WINNT)=[^ ]+" "" sdk_c_flags "${CMAKE_C_FLAGS}")
+  string(REGEX REPLACE "[-/]D(WINVER|_WIN32_WINNT)=[^ ]+" "" sdk_cxx_flags "${CMAKE_CXX_FLAGS}")
+  set(CMAKE_C_FLAGS "${sdk_c_flags} /Z7")
+  set(CMAKE_CXX_FLAGS "${sdk_cxx_flags} /Z7")
   add_link_options(/DEBUG)
   # SDK source and vendored Crashpad are pinned by the archive hash.
   FetchContent_MakeAvailable(folderstorm_sentry_native)
@@ -75,7 +79,13 @@ function(folderstorm_crash_target target)
   if(FS_ENABLE_SENTRY)
     target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/Z7>")
     target_link_options(${target} PRIVATE /DEBUG)
-    target_link_libraries(${target} PRIVATE sentry)
+    # The viewer uses CMake's plain linking signature; the host uses keywords.
+    # CMake requires every call for a given target to use the same signature.
+    if("${target}" STREQUAL "${VIEWER_BINARY_NAME}")
+      target_link_libraries(${target} sentry)
+    else()
+      target_link_libraries(${target} PRIVATE sentry)
+    endif()
     add_dependencies(${target} crashpad_handler)
     add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "$<TARGET_FILE:crashpad_handler>" "$<TARGET_FILE_DIR:${target}>/folderstorm-crashpad-handler.exe")
