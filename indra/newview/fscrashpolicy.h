@@ -3,20 +3,8 @@
 #include <string>
 namespace fs_crash
 {
-inline const std::string IssueUrl="https://github.com/DrCum/Folderstorm/issues/new";
-inline std::string bugReportUrl(const std::string& environment)
-{
-    // A generic prefilled issue works before this branch's template is on main.
-    const std::string body="### What happened?\n\n\n### Steps to reproduce\n\n\n### Environment\n"+environment;
-    std::string encoded;
-    constexpr char hex[]="0123456789ABCDEF";
-    for(const unsigned char c:body)
-    {
-        if((c>='a'&&c<='z') || (c>='A'&&c<='Z') || (c>='0'&&c<='9') || c=='-' || c=='_' || c=='.' || c=='~')encoded+=static_cast<char>(c);
-        else{encoded+='%';encoded+=hex[c>>4];encoded+=hex[c&15];}
-    }
-    return IssueUrl+"?title=%5BBug%5D%20&body="+encoded;
-}
+// Open the public tracker without automatically adding account or build data.
+inline const std::string BugReportUrl="https://folderstorm.com/bugs";
 struct Consent
 {
     bool enabled=false;

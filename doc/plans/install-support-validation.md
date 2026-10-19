@@ -5,9 +5,10 @@ other worktrees are preserved. No release, installer or application was deployed
 
 ## Behavior
 
-- Viewer Help/Crash reporting and host Support use one prefilled GitHub issue URL
-  with build-only environment information. It does not require an issue template
-  to exist on the default branch and never submits a report or attaches files.
+- Viewer Help/Crash reporting, host Support and the login-page report action open
+  the public Mantis tracker at https://folderstorm.com/bugs. No account/build data
+  is added to the URL and no report or attachment is submitted automatically.
+  GitHub Issues remains available for development tracking.
 - The Phoenix login splash's Firestorm latest-version panel becomes Folderstorm
   updates, with a user-click-only native update check and the published release
   list. Its Firestorm JIRA button opens the same Folderstorm report action.
@@ -43,10 +44,9 @@ other worktrees are preserved. No release, installer or application was deployed
 
 ## Focused checks
 
-- Strict C++17 install-policy/report URL checks: all four-choice round trips,
+- Strict C++17 install-policy checks: all four-choice round trips,
   corrupt versions/masks, link ownership/conflict decisions, legacy registration
-  name/ownership guards, safe executable
-  filenames and escaped prefilled report URLs with no template dependency.
+  name/ownership guards and safe executable filenames.
 - Extracted actual splash JavaScript syntax and behavior checks: latest-version
   replacement, absolute/relative JIRA link rewriting, lookalike-host exclusion
   and repeated DOM updates without further mutations.
@@ -74,13 +74,13 @@ git diff --check
 Without Node/CMake/MinGW the corresponding optional source tests skip; the portable
 policy test remains registered in the standalone CMake regression project.
 
-## External setting and Windows acceptance
+## Public tracker and Windows acceptance
 
-GitHub returned `has_issues: false`. The connected integration's attempt to enable
-it was rejected with HTTP 403, Resource not accessible by integration. A repository
-owner must enable Settings → General → Features → Issues. Until then GitHub will
-reject report links regardless of which viewer build is used. No alternate
-credentials, permission escalation or issue creation was attempted.
+The maintainer selected self-hosted Mantis for public/anonymous reports after the
+initial GitHub setup. All primary report actions now use the supplied tracker URL.
+GitHub Issues is retained as a development option; reporting no longer depends
+on the GitHub issue-template/default-branch setup. Sentry opt-in crash reporting
+and release/download links remain separate.
 
 Native Windows acceptance remains pending:
 
@@ -94,8 +94,9 @@ Native Windows acceptance remains pending:
    without another prompt, and only matching owned shortcuts/legacy uninstall
    entries may be removed. Keep native
    settings and persistent host choices. Verify Windows Apps identity/version.
-4. With Issues enabled, each native and login report action opens a reviewable
-   GitHub draft. Report actions must not submit or attach private data.
+4. Each native and login report action opens https://folderstorm.com/bugs without
+   query metadata. Verify the anonymous reporting flow in a signed-out browser.
+   Opening it must not submit or attach private data.
 5. Login splash: Folderstorm update check uses the native configured feed;
    release metadata and current version remain distinct, including with no
    published releases, custom grids, resizing and upstream DOM refreshes.

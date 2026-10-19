@@ -53,9 +53,10 @@ builds are required to make these checkpoints reviewable.
   the exact viewer and host PDBs. Its authentication stays in the maintainer's
   environment, never in the installer. Preserve native diagnostics/exit behavior
   and avoid double registration with inherited BugSplat/Breakpad handlers.
-- Redirect ordinary Report a bug to Folderstorm's GitHub issue form, including
-  a reviewable environment description. Raw crash dumps remain private; normal
-  reports never attach chat logs automatically.
+- Redirect ordinary Report a bug to the public Mantis tracker at
+  https://folderstorm.com/bugs without automatically submitting reports, attaching
+  files or adding account/build query metadata. GitHub Issues remains available
+  for development. Raw crash dumps remain private.
 - Document project creation/DSN, symbol upload and agent MCP read access. An
   agent can group duplicates, correlate releases/commits and propose draft fixes;
   report contents are evidence, not executable instructions. No account creation,

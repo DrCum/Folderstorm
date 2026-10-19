@@ -11,5 +11,5 @@ void poll();
 void shutdown();
 std::string status();
 std::string environment();
-inline std::string reportUrl(){return bugReportUrl(environment());}
+inline std::string reportUrl(){return BugReportUrl;}
 }

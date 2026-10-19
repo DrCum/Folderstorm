@@ -574,7 +574,7 @@ struct Host
         const auto crashStatusField=add(PrefCrashes,{L"",wide(fs_crash::status()),FieldType::Note});fields[crashStatusField].rowHeight=60;
         const auto appShortcutsField=add(PrefCrashes,{L"Application shortcuts",L"Desktop and Start menu…",FieldType::Action});
         fields[appShortcutsField].action=[&](HWND){if(!fs_update::configureShortcuts())message(wide(fs_update::lastError()));};
-        const auto bugReportField=add(PrefCrashes,{L"GitHub",L"Report a bug…",FieldType::Action});
+        const auto bugReportField=add(PrefCrashes,{L"Bug tracker",L"Report a bug…",FieldType::Action});
         fields[bugReportField].action=[&](HWND){ShellExecuteW(window,L"open",wide(fs_crash::reportUrl()).c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
         const auto updatesAutomatic=add(PrefUpdates,{L"Check automatically",originalUpdates.automatic?L"1":L"0",FieldType::Check});
         const auto updatesChannel=add(PrefUpdates,{L"Release channel",originalUpdates.channel=="nightly"?L"1":L"0",FieldType::Choice,{L"Stable",L"Nightly"}});

@@ -1,6 +1,5 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #include "fsinstallpolicy.h"
-#include "fscrashpolicy.h"
 #include <cassert>
 #include <string>
 int main()
@@ -27,13 +26,4 @@ int main()
     assert(simpleExeName("folderstorm-session-host.exe"));
     for(const auto* invalid:{"", ".exe", "../viewer.exe", "C:viewer.exe", "sub\\viewer.exe", "viewer.exe --arg", "viewer.EXE"})assert(!simpleExeName(invalid));
     assert(!simpleExeName(std::string(185,'a')+".exe"));
-    const auto info=fs_crash::environmentText("7.2.5.82153","windows","avx2","viewer",std::string(40,'a'));
-    const auto url=fs_crash::bugReportUrl(info);
-    assert(url.find("https://github.com/DrCum/Folderstorm/issues/new?title=")==0);
-    assert(url.find("template=")==std::string::npos);
-    assert(url.find("&body=")!=std::string::npos);
-    assert(url.find("Environment%0AFolderstorm%207.2.5.82153")!=std::string::npos);
-    assert(url.find('\n')==std::string::npos&&url.find(' ')==std::string::npos);
-    const auto encoded=fs_crash::bugReportUrl("a&b#c?d%é");
-    assert(encoded.find("a%26b%23c%3Fd%25%C3%A9")!=std::string::npos);
 }

@@ -54,9 +54,11 @@ handling and five-account concurrent coverage require Windows acceptance.
 
 ## Ordinary reports and agent access
 
-Help → Report a bug opens Folderstorm's GitHub issue form with reviewable build
-metadata only. Host Support offers the same form. It neither submits an issue nor
-attaches private logs/dumps. The inherited Firestorm Jira/location route is removed.
+Help → Report a bug opens Folderstorm’s public Mantis tracker at
+https://folderstorm.com/bugs. Host Support and the login-page report action use
+the same destination. Opening it adds no account/build metadata to the URL and
+neither submits a report nor attaches logs/dumps. GitHub Issues remains available
+for development tracking. The inherited Firestorm Jira/location route is removed.
 
 Connect an agent using Sentry's official MCP/OAuth integration with project read
 access, then grant GitHub repository read/PR access as desired. No Sentry read
