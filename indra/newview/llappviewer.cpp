@@ -31,6 +31,7 @@
 #include "fsreleaseviewer.h"
 #include "fscrash.h"
 #include "fsupdate.h"
+#include "fsinstallviewer.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1512,10 +1513,8 @@ bool LLAppViewer::init()
         gDirUtilp->deleteDirAndContents(gDirUtilp->getDumpLogsDirPath());
     }
 #endif
-    if(!FSSessionWorker::managed())fs_update::offerShortcuts();
     FSReleaseViewer::startup();
     fs_crash::initialize(FSSessionWorker::managed()?"worker":"viewer");
-    if(!FSSessionWorker::managed())fs_crash::offerConsent();
     LL_PROFILER_FRAME_END;
     return true;
 }
@@ -5958,6 +5957,7 @@ static LLTrace::BlockTimerStatHandle FTM_HUD_EFFECTS("HUD Effects");
 void LLAppViewer::idle()
 {
     fs_crash::poll();
+    FSInstallViewer::poll();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
     pingMainloopTimeout("Main:Idle");
 

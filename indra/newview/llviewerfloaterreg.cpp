@@ -216,6 +216,7 @@
 #include "fsfloaterworkspaces.h"
 #include "fsreleaseviewer.h"
 #include "fscrashviewer.h"
+#include "fsinstallviewer.h"
 #include "fsfloatergestureboard.h"
 #include "fsworkspacepreview.h"
 #include "fsfloaterworkspacetools.h"
@@ -508,6 +509,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("gesture_board_editor", "floater_gesture_board_editor.xml", &LLFloaterReg::build<FSFloaterGestureTileEditor>);
     LLFloaterReg::add("workspace_switch", "floater_workspaces.xml", &LLFloaterReg::build<FSFloaterWorkspaces>);
     LLFloaterReg::add("folderstorm_updates", "floater_folderstorm_updates.xml", &LLFloaterReg::build<FSFloaterUpdates>);
+    LLFloaterReg::add("folderstorm_setup", "floater_folderstorm_setup.xml", &LLFloaterReg::build<FSFloaterSetup>);
     LLFloaterReg::add("folderstorm_crashes", "floater_folderstorm_crashes.xml", &LLFloaterReg::build<FSFloaterCrash>);
     LLFloaterReg::add("workspace_report", "floater_workspace_report.xml", &LLFloaterReg::build<FSFloaterWorkspaceReport>);
     LLInspectAvatarUtil::registerFloater();

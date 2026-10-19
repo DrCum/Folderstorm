@@ -59,6 +59,19 @@ bool prepare()
     error="Coordinated in-app updates currently support Windows. Use the release download.";return false;
 #endif
 }
+std::optional<ShortcutPrompt> shortcutPrompt(bool manual)
+{
+    error.clear();
+#if defined(_WIN32)
+    auto setup=shortcuts::prepare(manual,error);if(!setup)return {};
+    if(!setup->choose){setup->finish(setup->choices,error);return {};}
+    return ShortcutPrompt{setup->choices,[setup](std::optional<std::uint32_t> choices)
+    {error.clear();return setup->finish(choices,error);}};
+#else
+    if(manual)error="Shortcut setup is available in Windows Velopack installations.";
+    return {};
+#endif
+}
 void offerShortcuts()
 {
 #if defined(_WIN32)

@@ -32,8 +32,9 @@ service upload, symbol upload or test crash was configured/executed here.
 ## First-launch invitation
 
 Configured Windows builds ask once from the first interactive viewer or host
-launch. **Enable crash reporting** opts in; **Not now**, Escape or closing the
-dialog leaves reporting Off and remembers that decision. The explanation names
+launch. The viewer uses a nonblocking floater after the login UI is ready;
+the host uses its native dialog. **Enable crash reporting** opts in; **Not now**,
+Escape or closing the dialog leaves reporting Off and remembers that decision. The explanation names
 Sentry, the memory-dump privacy limits, the shared scope and where to change it.
 The default button is Not now. No installer hook or managed character worker
 opens a prompt, and builds without a configured Sentry project do not ask.

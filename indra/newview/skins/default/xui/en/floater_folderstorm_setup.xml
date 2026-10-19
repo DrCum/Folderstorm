@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="folderstorm_setup" title="Folderstorm setup" width="560" height="360" can_resize="false" can_minimize="false" single_instance="true" positioning="centered">
+  <text name="explanation" left="20" top="40" width="520" height="200" wrap="true" />
+  <check_box name="desktop_viewer" label="Desktop: viewer" left="24" top="94" width="500" height="24" />
+  <check_box name="desktop_host" label="Desktop: character sessions" left="24" top="130" width="500" height="24" />
+  <check_box name="start_viewer" label="Start menu: viewer" left="24" top="166" width="500" height="24" />
+  <check_box name="start_host" label="Start menu: character sessions" left="24" top="202" width="500" height="24" />
+  <text name="details" left="20" top="252" width="520" height="52" wrap="true" />
+  <button name="accept" label="Apply" left="172" bottom="-18" width="190" height="26" />
+  <button name="later" label="Not now" right="-20" bottom="-18" width="160" height="26" />
+</floater>

@@ -8,6 +8,7 @@
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <vector>
+#include <memory>
 namespace fs_update::shortcuts
 {
 using Path=std::filesystem::path;
@@ -182,35 +183,57 @@ struct Dialog
         return DialogBoxIndirectParamW(GetModuleHandleW(nullptr),reinterpret_cast<const DLGTEMPLATE*>(data.data()),GetActiveWindow(),procedure,reinterpret_cast<LPARAM>(this));
     }
 };
-inline bool run(bool manual,std::string& error)
+// Hold the inter-process chooser lease across asynchronous viewer UI. The host
+// uses the same preparation/commit path with its synchronous native dialog.
+struct Setup
 {
-    const auto root=installation(binaryPath());
-    if(root.empty()){if(manual)error="Shortcut setup is available in a Velopack installation.";return !manual;}
-    const auto mutexName=L"Local\\Folderstorm.Shortcuts."+widen(AppId);
-    Handle mutex(CreateMutexW(nullptr,FALSE,mutexName.c_str()));
-    if(!mutex){error="Shortcut choices could not be opened.";return false;}
-    const auto wait=WaitForSingleObject(mutex.value,0);
-    if(wait!=WAIT_OBJECT_0&&wait!=WAIT_ABANDONED){if(manual)error="Shortcut setup is already open in another Folderstorm window.";return !manual;}
-    struct Unlock {HANDLE handle;~Unlock(){ReleaseMutex(handle);}} unlock{mutex.value};
-    const auto saved=load();std::uint32_t choices=saved.choices.value_or(fs_install::AllShortcuts);
-    if(!manual&&saved.choices&&saved.commit==widen(SourceCommit))return true;
-    removeLegacyRegistration(root);
-    if(manual||!saved.choices)
+    Path root;
+    Handle mutex;
+    Saved saved;
+    std::uint32_t choices=0;
+    bool choose=false,locked=false;
+    void unlock(){if(locked){ReleaseMutex(mutex.value);locked=false;}}
+    ~Setup(){unlock();}
+    bool finish(std::optional<std::uint32_t> selected,std::string& error)
     {
-        Dialog dialog;dialog.choices=choices;const auto result=dialog.show();
-        if(result==-1){error="The shortcut chooser could not open.";return false;}
-        if(result!=IDOK)
+        struct Release {Setup& owner;~Release(){owner.unlock();}} release{*this};
+        if(!locked){error="This shortcut chooser is no longer active.";return false;}
+        if(!selected)
         {
-            if(saved.choices||save(0))return true; // First-run Not now is remembered.
+            if(saved.choices || save(0))return true;
             error="Shortcut choices could not be saved.";return false;
         }
-        choices=dialog.choices;
+        if(*selected&~fs_install::AllShortcuts){error="Invalid shortcut choices.";return false;}
+        std::vector<Entry> links;
+        if(!entries(root,links)){error="The matching viewer/session-host files or Windows shortcut folders are unavailable.";return false;}
+        if(!apply(links,*selected,error))return false;
+        if(!save(*selected)){error="Shortcuts changed, but their choices could not be saved.";return false;}
+        return true;
     }
-    std::vector<Entry> links;
-    if(!entries(root,links)){error="The matching viewer/session-host files or Windows shortcut folders are unavailable.";return false;}
-    if(!apply(links,choices,error))return false;
-    if(!save(choices)){error="Shortcuts changed, but their choices could not be saved.";return false;}
-    return true;
+};
+inline std::shared_ptr<Setup> prepare(bool manual,std::string& error)
+{
+    auto setup=std::make_shared<Setup>();setup->root=installation(binaryPath());
+    if(setup->root.empty()){if(manual)error="Shortcut setup is available in a Velopack installation.";return {};}
+    const auto mutexName=L"Local\\Folderstorm.Shortcuts."+widen(AppId);
+    setup->mutex.value=CreateMutexW(nullptr,FALSE,mutexName.c_str());
+    if(!setup->mutex){error="Shortcut choices could not be opened.";return {};}
+    const auto wait=WaitForSingleObject(setup->mutex.value,0);
+    if(wait!=WAIT_OBJECT_0&&wait!=WAIT_ABANDONED){if(manual)error="Shortcut setup is already open in another Folderstorm window.";return {};}
+    setup->locked=true;setup->saved=load();
+    setup->choices=setup->saved.choices.value_or(fs_install::AllShortcuts);
+    if(!manual&&setup->saved.choices&&setup->saved.commit==widen(SourceCommit))return {};
+    removeLegacyRegistration(setup->root);
+    setup->choose=manual||!setup->saved.choices;
+    return setup;
+}
+inline bool run(bool manual,std::string& error)
+{
+    auto setup=prepare(manual,error);if(!setup)return error.empty();
+    if(!setup->choose)return setup->finish(setup->choices,error);
+    Dialog dialog;dialog.choices=setup->choices;const auto result=dialog.show();
+    if(result==-1){error="The shortcut chooser could not open.";return false;}
+    return setup->finish(result==IDOK?std::optional<std::uint32_t>(dialog.choices):std::nullopt,error);
 }
 inline void remove()
 {

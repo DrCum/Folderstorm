@@ -6,6 +6,7 @@
 #include <array>
 #include <iomanip>
 #include <random>
+#include <memory>
 #if defined(_WIN32)
 #include <commctrl.h>
 #endif
@@ -114,18 +115,39 @@ bool setConsent(bool enabled)
 }
 void initialize(const std::string& role)
 {processRole=validRole(role)?role:"viewer";started=true;observed={};sync();}
+std::optional<ConsentPrompt> consentPrompt()
+{
+#if defined(_WIN32)
+    if(!started || !configured() || processRole=="worker")return {};
+    // Keep one pending question across hosts/viewers without blocking their UI.
+    struct Lease
+    {
+        HANDLE handle=CreateMutexW(nullptr,FALSE,L"Local\\Folderstorm.CrashConsent.v1");
+        bool locked=false;
+        void unlock(){if(locked){ReleaseMutex(handle);locked=false;}}
+        ~Lease(){unlock();if(handle)CloseHandle(handle);}
+    };
+    auto lease=std::make_shared<Lease>();if(!lease->handle)return {};
+    const auto acquired=WaitForSingleObject(lease->handle,0);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED)return {};
+    lease->locked=true;
+    const auto original=consent();
+    if(original.enabled || !original.epoch.empty())return {};
+    return ConsentPrompt{[lease,original](std::optional<bool> choice)
+    {
+        if(!lease->locked)return false;
+        struct Release {Lease& owner;~Release(){owner.unlock();}} release{*lease};
+        if(!choice || !(consent()==original))return true;
+        return offerConsentOnce(configured(),processRole,consent,[choice](){return choice;},setConsent);
+    }};
+#else
+    return {};
+#endif
+}
 void offerConsent()
 {
 #if defined(_WIN32)
-    if(!started || !configured() || processRole=="worker")return;
-    // One prompt across simultaneously launched hosts/viewers and variants.
-    // Workers never enter this path. Do not wait for another app's modal UI.
-    const auto mutex=CreateMutexW(nullptr,FALSE,L"Local\\Folderstorm.CrashConsent.v1");
-    if(!mutex)return;
-    struct Close {HANDLE value;~Close(){CloseHandle(value);}} close{mutex};
-    const auto acquired=WaitForSingleObject(mutex,0);
-    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED)return;
-    struct Unlock {HANDLE value;~Unlock(){ReleaseMutex(value);}} unlock{mutex};
+    auto prompt=consentPrompt();if(!prompt)return;
     const auto owner=GetActiveWindow();
     const auto ask=[owner]() -> std::optional<bool>
     {
@@ -149,7 +171,7 @@ void offerConsent()
         const auto selected=MessageBoxW(owner,text.c_str(),title,MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION);
         return selected?std::optional<bool>(selected==IDYES):std::nullopt;
     };
-    if(!offerConsentOnce(configured(),processRole,consent,ask,setConsent))
+    if(!prompt->respond(ask()))
         MessageBoxW(owner,L"Your crash-reporting choice could not be saved. You can change it in viewer Help or host Settings > Support > Crash reports.",
             L"Folderstorm crash reporting",MB_OK|MB_ICONINFORMATION);
 #endif

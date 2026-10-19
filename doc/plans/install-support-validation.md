@@ -21,9 +21,10 @@ other worktrees are preserved. No release, installer or application was deployed
 - The NSIS coexistence notice names the separate installation without claiming
   that it is out of date or requiring removal. Startup no longer deletes or
   retargets that installation's shortcuts. It is independent of the release feed.
-- A Windows Velopack installation offers a native shortcut chooser on the first
-  interactive viewer or session-host launch. Four independent choices cover
-  Desktop/Start menu × viewer/session host. This is intentionally outside SDK
+- A Windows Velopack installation offers a shortcut chooser on the first
+  interactive viewer or session-host launch. The viewer uses a frame-driven
+  floater after its login UI is ready; the host uses its native dialog. Four
+  independent choices cover Desktop/Start menu × viewer/session host. This is intentionally outside SDK
   install hooks and managed worker startup, so updates cannot block on that UI.
   Help → Desktop and Start menu shortcuts and host Preferences → Support → Crash
   reports → Application shortcuts reopen it later.
