@@ -36,6 +36,7 @@
 #include "fssessionpresentation.h"
 #include "fssessionusability.h"
 #include "fssessionpipe.h"
+#include "fssessionconnection.h"
 #include "fssessionchatmodel.h"
 #include "fssessionhostoptions.h"
 #include "fssessionmonitormodel.h"
@@ -294,6 +295,9 @@ public:
 };
 struct Slot
 {
+    LinkRecovery recovery;
+    ULONGLONG recoveryAt=0;
+    bool lossRecorded=false;
     Restart restart;
     std::string controllerViewerSession; ChatKey controllerSessionSource;
     PeriodicPoller periodic;
@@ -1830,6 +1834,7 @@ struct Host
     {
         if (!validSlot(index) || !slots[index]) return false;
         auto& slot = *slots[index];
+        if(slot.recovery.active() && kind!=Kind::Recover)return false;
         if (slot.waiting || !slot.pipe.alive() || slot.pipe.writing()) return false;
         if(!controllerTransportAllowed(index,kind))return false;
         Message request;
@@ -1849,6 +1854,7 @@ struct Host
         }
         if(kind==Kind::AssistantPause)request.width=pauseAllAssistant?1u:0u;
         if (kind == Kind::WorkspaceInfo || kind==Kind::AssistantInfo) { request.account = slot.snapshot.account; request.grid = slot.snapshot.grid; }
+        if(kind==Kind::Recover){request.account=slot.snapshot.account;request.grid=slot.snapshot.grid;}
         if(kind==Kind::AssistantInfo)request.title=utf8(profileName(index));
         if (kind == Kind::SetMode)
         {
@@ -2111,7 +2117,7 @@ struct Host
     bool contactsLive(int index) const
     {
         const auto* s=validSlot(index)?slots[index].get():nullptr;
-        return s && s->running() && !s->detached && s->pipe.alive() && s->contacts.owns(s->snapshot);
+        return s && s->running() && !s->detached && s->pipe.alive() && !s->recovery.active() && s->contacts.owns(s->snapshot);
     }
     bool contactsVisible(int index) const
     {
@@ -2755,6 +2761,8 @@ struct Host
         std::wstring label = L"Send as: "+(slot ? characterName(binding.slot) : L"unavailable");
         const bool cyclingLocked=id==CyclingView && cycler.playing && experience.requirePauseToChat;
         if(cyclingLocked)label+=L" · Pause to chat.";
+        const bool recovering=slot && slot->recovery.active();
+        if(recovering){label+=L" · recovering control";m.editor.releaseFocus(m.window);}
         if (restricted || blocked) label += L" · restricted; use native viewer";
         else if (slot && slot->chat.gap) label += L" · history gap";
         if (label != m.chatStatus) { m.chatStatus = label; SetWindowTextW(m.label,label.c_str()); }
@@ -2778,13 +2786,13 @@ struct Host
             m.historyCursor = slot ? slot->chat.cursor : 0; m.historyLines = slot ? slot->chat.lines.size() : 0;
             m.historyConversation = m.chat.identity.conversation;
         }
-        const auto draft = send ? slot->chat.conversations.at(m.chat.identity.conversation).draft : std::string{};
+        const auto draft = selectedShown ? slot->chat.conversations.at(m.chat.identity.conversation).draft : std::string{};
         if (editText(m.compose) != draft) SetWindowTextW(m.compose,wide(draft).c_str());
         const bool sending = slot && (slot->hasPendingSend || (slot->waiting && slot->request.kind == Kind::SendChat));
-        EnableWindow(m.choices,live && !cyclingLocked); EnableWindow(m.compose,send.has_value() && !cyclingLocked);
+        EnableWindow(m.choices,live && !cyclingLocked && !recovering); EnableWindow(m.compose,send.has_value() && !cyclingLocked);
         SendMessageW(m.compose,EM_SETREADONLY,sending?TRUE:FALSE,0);
-        EnableWindow(m.send,send.has_value() && !sending && !cyclingLocked); EnableWindow(m.read,read.has_value() && !cyclingLocked);EnableWindow(m.close,selectedShown && selectedEntry->second.topic!=Topic::Nearby && !cyclingLocked);
-        EnableWindow(m.newIM,live && !cyclingLocked);EnableWindow(m.friendsToggle,live && !cyclingLocked);
+        EnableWindow(m.send,send.has_value() && !sending && !cyclingLocked); EnableWindow(m.read,read.has_value() && !cyclingLocked);EnableWindow(m.close,selectedShown && selectedEntry->second.topic!=Topic::Nearby && !cyclingLocked && !recovering);
+        EnableWindow(m.newIM,live && !cyclingLocked && !recovering);EnableWindow(m.friendsToggle,live && !cyclingLocked && !recovering);
         if(id==CyclingView){SetWindowTextW(m.cyclePlay,cycler.playing?L"Pause":L"Play");addTooltip(m.cyclePlay,cycler.playing?L"Pause on this character to use Chat":L"Resume cycling; Chat keeps each character’s draft");}
         m.updatingChat = false;
     }
@@ -2924,12 +2932,13 @@ struct Host
         }
         syncChoices(chatAccount, accounts, chatIndex);
         auto* slot = slots[chatIndex].get();
-        const bool ready = slot && !slot->detached && slot->pipe.alive() && slot->snapshot.state == State::Ready;
+        const bool ready = slot && !slot->detached && slot->pipe.alive() && !slot->recovery.active() && slot->snapshot.state == State::Ready;
         const bool restricted = slot && (slot->snapshot.flags & ChatRestricted);
         const auto selectedChat = slot ? slot->chat.conversations.find(conversation) : std::map<std::string,Conversation>::iterator{};
         bool conversationBlocked = !slot || selectedChat==slot->chat.conversations.end() || selectedChat->second.restricted || !shownConversation(selectedChat->second);
         std::wstring label = L"Send as: " + (slot && !slot->snapshot.name.empty() ? characterName(chatIndex) : L"not logged in");
-        if (!ready) label += L" · unavailable";
+        if(slot && slot->recovery.active()){label+=L" · recovering control";editor.releaseFocus(chatDetached?chatWindow:window);}
+        else if (!ready) label += L" · unavailable";
         else if (restricted) label += L" · shared chat restricted; use native viewer";
         else if (conversationBlocked) label += L" · conversation restricted; use native viewer";
         else if (slot->chat.gap) label += L" · history gap; native history has more detail";
@@ -3320,14 +3329,18 @@ struct Host
     }
     bool waitingForLostOwner(int target) const
     {
-        for (int index = 0; index < MaxCharacters; ++index) if (index != target && slots[index] && !slots[index]->pipe.alive())
-            if (auto surface = slots[index]->surface())
-                if (GetPropW(surface, InputLeaseProperty) == reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(GetCurrentProcessId()))) return true;
+        for (int index = 0; index < MaxCharacters; ++index) if (index != target && slots[index])
+        {
+            if(slots[index]->recovery.active() && slots[index]->pipe.alive())return true;
+            if(!slots[index]->pipe.alive())if(auto surface=slots[index]->surface())
+                if(GetPropW(surface,InputLeaseProperty)==reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(GetCurrentProcessId())))return true;
+        }
         return false;
     }
     void switchTo(int index)
     {
         if (!validSlot(index) || busy() || !slots[index] || slots[index]->detached || !slots[index]->pipe.alive()) return;
+        if(slots[index]->recovery.active()){message(L"This character is recovering its control connection. Its login is still running.");return;}
         if (slots[index]->snapshot.state != State::Ready) { message(L"Finish login before switching this character."); return; }
         if (index == active)
         {
@@ -3359,6 +3372,14 @@ struct Host
     }
     void failHandoff(int index, const std::wstring& error)
     {
+        if(handoff.step()==Handoff::Step::Promote && slots[index] && slots[index]->pipe.alive())
+        {
+            const int previous=handoff.original();const auto generation=handoff.originalGeneration();
+            beginConnectionRecovery(index);
+            if(validSlot(previous) && slots[previous] && slots[previous]->snapshot.generation==generation)switchTo(previous);
+            message(error+L" Recovering the control connection without logging out.");
+            return;
+        }
         // Closing an uncertain promotion's capability prevents a delayed grant
         // from remaining a managed owner when the old worker is restored.
         if (handoff.step() == Handoff::Step::Promote && slots[index])
@@ -3369,13 +3390,97 @@ struct Host
         message(error);
         if (handoff.step() == Handoff::Step::Idle && active >= 0 && (!slots[active] || !slots[active]->pipe.alive())) active = -1;
     }
+    void connectionLog(int index,ConnectionEvent event)
+    {
+        auto& slot=*slots[index];
+        std::error_code error;const auto path=profiles.parent_path()/L"connection-diagnostics.log";
+        std::filesystem::create_directories(path.parent_path(),error);if(error)return;
+        const auto size=std::filesystem::file_size(path,error);error.clear();
+        if(size!=static_cast<std::uintmax_t>(-1) && size>=1024*1024)
+        {
+            const auto previous=profiles.parent_path()/L"connection-diagnostics.previous.log";
+            std::filesystem::remove(previous,error);error.clear();std::filesystem::rename(path,previous,error);if(error)return;
+        }
+        std::ofstream file(path,std::ios::app|std::ios::binary);if(!file)return;
+        SYSTEMTIME time{};GetSystemTime(&time);
+        const auto now=GetTickCount64();
+        file<<std::setfill('0')<<std::setw(4)<<time.wYear<<'-'<<std::setw(2)<<time.wMonth<<'-'<<std::setw(2)<<time.wDay
+            <<'T'<<std::setw(2)<<time.wHour<<':'<<std::setw(2)<<time.wMinute<<':'<<std::setw(2)<<time.wSecond<<"Z "
+            <<connectionDiagnostic(event,index,slot.pid,slot.request,now>=slot.sentAt?now-slot.sentAt:0)<<'\n';
+    }
+    void beginConnectionRecovery(int index)
+    {
+        auto& slot=*slots[index];
+        if(!slot.recovery.begin(slot.snapshot,active==index))return;
+        setOpen.cancel();
+        if(detaching || closing){slot.recovery.abandonResume();detaching=closing=logoutOnClose=false;}
+        connectionLog(index,ConnectionEvent::Stalled);
+        slot.recoveryAt=0;
+        if(!slot.waiting)slot.recovery.drained(slot.snapshot);
+        slot.snapshot.flags|=ControlPaused;
+        slot.hasPendingSend=slot.hasPendingTyping=slot.hasPendingAction=slot.hasPendingReview=slot.hasPendingContact=slot.hasPendingSkip=false;
+        slot.restart.cancel();
+        if(auto* receipt=controllerOperations.find(controllerNativeRequests[index]))
+        {receipt->state=receipt->submitted?"uncertain":"cancelled";receipt->error="control_stalled";}
+        controllerNativeRequests[index].clear();
+        if(active==index)active=-1;
+        int other=-1;
+        if(handoff.step()!=Handoff::Step::Idle && (handoff.original()==index || handoff.target()==index))
+        {
+            other=handoff.worker();handoff.cancel();finishMonitorExchange(false);
+            if(auto* receipt=controllerOperations.find(controllerHandoffRequest))
+            {receipt->state=receipt->submitted?"uncertain":"cancelled";receipt->error="control_stalled";}
+            controllerHandoffRequest.clear();
+        }
+        message(slot.waiting && slot.request.kind==Kind::SendChat?
+            L"Character response delayed. Chat delivery is uncertain; text was not retried. Recovering its control connection…":
+            L"Character response delayed; recovering its control connection without logging out…");
+        if(validSlot(other) && other!=index && slots[other] && slots[other]->pipe.alive())beginConnectionRecovery(other);
+    }
+    void stopConnectionRecovery(bool keepLoggedIn)
+    {
+        for(int index=0;index<MaxCharacters;++index)if(slots[index])
+        {
+            auto& slot=*slots[index];slot.recovery.abandonResume();
+            if(keepLoggedIn && slot.recovery.active() && slot.pipe.alive())
+            {
+                connectionLog(index,ConnectionEvent::PeerClosed);slot.lossRecorded=true;
+                slot.pipe.close();slot.waiting=false;slot.detached=true;
+            }
+        }
+    }
     void reply(int index, const Message& response)
     {
         auto& slot = *slots[index];
         if (!slot.waiting || response.kind != Kind::Status || response.worker != slot.id || response.pid != slot.pid || response.sequence != slot.request.sequence)
-        { slot.pipe.close(); message(L"Worker identity or reply sequence changed; returning it to a separate viewer."); return; }
+        { connectionLog(index,ConnectionEvent::ProtocolError);slot.lossRecorded=true;slot.pipe.close(); message(L"Worker identity or reply sequence changed; returning it to a separate viewer. See connection-diagnostics.log."); return; }
         const auto request = slot.request;
+        if((response.flags&ControlPaused) && !slot.recovery.active())beginConnectionRecovery(index);
         slot.waiting = false; slot.pollAt = GetTickCount64();
+        if(slot.recovery.active())
+        {
+            if((request.kind==Kind::Detach || request.kind==Kind::Quit) && !(response.flags&(Error|Embedded)))
+            {
+                slot.recovery.abandonResume();slot.detached=true;slot.pipe.close();
+                connectionLog(index,ConnectionEvent::PeerClosed);
+                return; // An already accepted native close/detach still completes.
+            }
+            if(request.kind!=Kind::Recover)
+            {
+                slot.recovery.drained(response);slot.snapshot=response;slot.snapshot.flags|=ControlPaused;
+                return; // Drain a late command once, without applying delayed UI/handoff effects.
+            }
+            const auto surface=slot.surface();
+            const bool inputReleased=!surface || GetPropW(surface,InputLeaseProperty)!=reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(GetCurrentProcessId()));
+            if(!slot.recovery.finish(request,response,inputReleased))
+            {
+                connectionLog(index,ConnectionEvent::ResetFailed);
+                slot.recovery.drained(response);slot.snapshot=response;slot.snapshot.flags|=ControlPaused;slot.recoveryAt=GetTickCount64();
+                return;
+            }
+            connectionLog(index,ConnectionEvent::Recovered);slot.lossRecorded=false;
+            message(L"Character control connection recovered; the login and drafts were kept.");
+        }
         if (response.detail.rfind("Settings import:",0)==0 && response.detail!=slot.lastImportReport)
         {slot.lastImportReport=response.detail;message(wide(response.detail));}
         const bool changedSession = !slot.chat.identity.owns(response);
@@ -3573,6 +3678,9 @@ struct Host
             else active = -1; // Old input owner has explicitly acknowledged revoke.
         }
         controllerReply(index,request,response);
+        if(request.kind==Kind::Recover && slot.recovery.resumeActive() && active<0 && !busy() && !detaching && !closing &&
+            slot.restart.phase()==Restart::Phase::Idle &&
+            response.state==State::Ready && sameConnectionSession(request,response))switchTo(index);
     }
     void describe(int index)
     {
@@ -3580,7 +3688,7 @@ struct Host
         const auto& slot = *slots[index];
         std::wostringstream text;
         text << (std::to_wstring(index + 1) + L": ") << characterName(index);
-        text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.snapshot.state == State::Disconnected ? L" · disconnected" :
+        text << (!slot.running() ? L" · closed" : slot.detached ? L" · separate viewer" : !slot.pipe.alive() ? L" · control lost" : slot.recovery.active()?L" · recovering control":slot.snapshot.state == State::Disconnected ? L" · disconnected" :
             slot.snapshot.state != State::Ready ? L" · connecting" : slot.snapshot.mode == Mode::Warm ? L" · warm" :
                 slot.snapshot.mode == Mode::Economy ? L" · economy (experimental)" : L" · active");
         if (experience.diagnostics && (slot.snapshot.flags & EconomyTrimmed)) text << L" · render targets released";
@@ -3685,6 +3793,8 @@ struct Host
             }
             if (!slot.running() || !slot.pipe.alive())
             {
+                if(!slot.lossRecorded){connectionLog(index,ConnectionEvent::PeerClosed);slot.lossRecorded=true;}
+                slot.recovery.abandonResume();
                 attention.forget(slot.chat.identity);
                 if (slot.hasPendingSend || (slot.waiting && slot.request.kind == Kind::SendChat))
                     message(L"Chat connection lost: delivery is uncertain. Text was not retried; check the owning character's native chat before sending again.");
@@ -3694,17 +3804,19 @@ struct Host
                 if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"Character connection lost. Other connected characters can still be selected.");
                 if (active == index) active = -1;
             }
-            if (slot.waiting && GetTickCount64() - slot.sentAt > (slot.snapshot.state == State::Ready ? 12000ULL : 60000ULL))
+            if(slot.waiting && !slot.recovery.active() && connectionOverdue(GetTickCount64(),slot.sentAt,
+                slot.snapshot.state==State::Ready?ReplyStallMs:StartupReplyStallMs))
             {
-                slot.pipe.close(); slot.waiting = false; slot.detached = true;
-                if (handoff.step() != Handoff::Step::Idle && handoff.worker() == index) failHandoff(index, L"The viewer did not respond; returning it to an ordinary window.");
-                else if (slot.request.kind == Kind::SendChat)
-                    message(L"Chat send timed out: delivery is uncertain and will not be retried. Check the native conversation; the watchdog restores an ordinary window.");
-                else message(L"The viewer did not respond; its local watchdog will return it to an ordinary window.");
+                beginConnectionRecovery(index);
             }
             if (!slot.waiting && slot.pipe.alive() && !slot.detached)
             {
-                if (detaching)
+                if(slot.recovery.active())
+                {
+                    if(slot.recovery.resetReady() && connectionOverdue(GetTickCount64(),slot.recoveryAt,1000))
+                        send(index,Kind::Recover);
+                }
+                else if (detaching)
                 {
                     if (logoutOnClose)
                     {
@@ -3826,7 +3938,7 @@ struct Host
         refreshPins(); refreshAttention();
         refreshCharacters();
         refreshVoiceStatus();
-        std::uint64_t signature=static_cast<std::uint64_t>(lifecycle.selection()+1);for(int i=0;i<MaxCharacters;++i)if(slots[i])signature=signature*131+static_cast<unsigned int>(slots[i]->snapshot.state)*7+static_cast<unsigned int>(slots[i]->restart.phase())+(slots[i]->pipe.alive()?0u:100u);
+        std::uint64_t signature=static_cast<std::uint64_t>(lifecycle.selection()+1);for(int i=0;i<MaxCharacters;++i)if(slots[i])signature=signature*131+static_cast<unsigned int>(slots[i]->snapshot.state)*7+static_cast<unsigned int>(slots[i]->restart.phase())+(slots[i]->pipe.alive()?0u:100u)+(slots[i]->recovery.active()?200u:0u);
         if(signature!=layoutState){layoutState=signature;layout();}
         if (active < 0) SetWindowTextW(compactInfo, L"Choose a character · details in Session");
         updateMonitors();
@@ -3852,6 +3964,7 @@ struct Host
     }
     void detach(bool close, bool logout = false)
     {
+        stopConnectionRecovery(!logout);
         ++profileSetupEpoch;
         controllerOperations.revoke("stop_managing");controllerEndpoint.stop();controllerHandoffRequest.clear();controllerNativeRequests={};controllerCycleOwned=false;
         setOpen.cancel();

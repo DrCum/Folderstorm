@@ -7,7 +7,7 @@ fs_controller::Source controllerSource(int index) const
     const auto* slot=slots[index].get();if(!slot)return out;
     out.running=slot->running();out.worker=utf8(hexId(slot->id));out.generation=slot->snapshot.generation;
     out.account=slot->snapshot.account;out.grid=slot->snapshot.grid;
-    if(slot->controllerSessionSource.owns(slot->snapshot))out.viewerSession=slot->controllerViewerSession;
+    if(!slot->recovery.active() && slot->controllerSessionSource.owns(slot->snapshot))out.viewerSession=slot->controllerViewerSession;
     return out;
 }
 bool controllerOpted(int index) const
@@ -39,7 +39,7 @@ std::string controllerProfileJSON(int index) const
     if(source.running)
     {
         out+=",\"worker_id\":"+quote(source.worker)+",\"worker_generation\":"+quote(std::to_string(source.generation))+",\"viewer_session\":"+quote(source.viewerSession);
-        out+=",\"state\":"+quote(slot->detached?"detached":slot->snapshot.state==State::Ready?"ready":slot->snapshot.state==State::Disconnected?"disconnected":"login");
+        out+=",\"state\":"+quote(slot->detached?"detached":slot->recovery.active()?"recovering":slot->snapshot.state==State::Ready?"ready":slot->snapshot.state==State::Disconnected?"disconnected":"login");
         out+=",\"active\":"+std::string(index==active?"true":"false")+",\"background_mode\":"+quote(slot->snapshot.mode==Mode::Economy?"economy":slot->snapshot.mode==Mode::Warm?"warm":"active");
         out+=",\"restart_pending\":"+std::string(slot->restart.phase()!=Restart::Phase::Idle?"true":"false")+",\"observed_age_ms\":"+std::to_string(GetTickCount64()-slot->pollAt);
         if(!restricted)out+=",\"account\":"+quote(source.account)+",\"grid\":"+quote(source.grid);
@@ -217,6 +217,7 @@ void controllerExecute(fs_controller::Receipt& r)
     if(!controllerAllowed(r))return;
     if(preferencesOpen||closing||detaching||controllerBusyFor(q))return;
     if(validSlot(index)&&slots[index]&&(slots[index]->waiting||slots[index]->pipe.writing()))return;
+    if(validSlot(index)&&slots[index]&&slots[index]->recovery.active())return;
     const auto fail=[&](const char* error){r.state="refused";r.error=error;};
     if(permission(q.op)==Permission::Monitors&&r.nativeSnapshot!=controllerMonitorSnapshot()){fail("monitor_changed");return;}
     if(validSlot(index)&&(q.op==Op::Activate||q.op==Op::Background||q.op==Op::MonitorOpen)&&slots[index]->snapshot.state!=State::Ready){fail("not_ready");return;}

@@ -12,6 +12,7 @@
 #if LL_WINDOWS
 #include <algorithm>
 #include "fssessionpipe.h"
+#include "fssessionconnection.h"
 #include "fssessionchatmodel.h"
 #include "fssessioncontacts.h"
 #include "llavatarnamecache.h"
@@ -218,6 +219,8 @@ struct Worker : LLIMSessionObserver
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false, recoveryShown = false;
+    bool controlPaused = false, recoveryReplyPending = false;
+    Message recoveryReply;
     bool assistantHold=false;
     std::string assistantProfile;
     LLProcessPtr assistantCheck;Message assistantCheckRequest;LLFrameTimer assistantCheckTimer;std::string assistantCheckOutput,assistantCheckSession;
@@ -573,6 +576,7 @@ struct Worker : LLIMSessionObserver
     }
     bool grantInput()
     {
+        if(controlPaused)return false;
         if (!window || !SetPropW(window, InputLeaseProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(host)))) return false;
         if (++focusLease == 0) ++focusLease;
         if (!SetPropW(window, FocusLeaseProperty, reinterpret_cast<HANDLE>(focusLease)))
@@ -689,6 +693,31 @@ struct Worker : LLIMSessionObserver
         if (FSEventAPIBridge::instanceExists()) FSEventAPIBridge::instance().applyEnabled(gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
         return true;
     }
+    void pauseControl()
+    {
+        if(controlPaused)return;
+        if(promoting || demoting)
+        {recoveryReply=promoting?pendingPromotion:pendingDemotion;recoveryReplyPending=true;}
+        controlPaused=true;
+        releaseInput();transition.cancel();promoting=demoting=false;mode=Mode::Warm;
+        if(readyApplied && !gDisconnected && window)EnableWindow(window,FALSE);
+        LL_WARNS("SessionConnection") << "Controller silence; control paused, pipe retained; sequence "
+            << sequence << "; generation " << generation << LL_ENDL;
+    }
+    void recoverControl(const Message& request)
+    {
+        const auto current=status(request);
+        if(request.account!=current.account || request.grid!=current.grid)
+        {reply(request,"Recovery login changed; no ownership was granted.");return;}
+        // Reset is an idempotent revoke, never a grant or action replay.
+        releaseInput();transition.cancel();promoting=demoting=false;mode=Mode::Warm;
+        if(!unembed(gDisconnected)){controlPaused=true;reply(request,"Recovery could not release the hosted window.");return;}
+        controlPaused=false;
+        if(readyApplied && window)
+        {EnableWindow(window,gDisconnected?TRUE:FALSE);ShowWindow(window,gDisconnected?SW_RESTORE:SW_HIDE);}
+        reply(request);
+        LL_INFOS("SessionConnection") << "Controller reset acknowledged; awaiting fresh activation; generation " << generation << LL_ENDL;
+    }
     Message status(const Message& request, const std::string& error = {}) const
     {
         Message reply;
@@ -715,6 +744,7 @@ struct Worker : LLIMSessionObserver
         if (economyTrimmed) reply.flags |= EconomyTrimmed;
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
+        if(controlPaused)reply.flags|=ControlPaused;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
         if (!settingsNotice.empty() && error.empty())
         {
@@ -855,6 +885,9 @@ struct Worker : LLIMSessionObserver
         sequence = request.sequence; lastCommand = GetTickCount64();
         if (request.kind != Kind::Poll && request.generation != generation)
         { reply(request, "Session changed; action was not applied."); return; }
+        if(request.kind==Kind::Recover){recoverControl(request);return;}
+        if(controlPaused)
+        {reply(request,request.kind==Kind::Poll?"":"Control paused; recover before sending actions.");return;}
         switch (request.kind)
         {
         case Kind::AssistantPause:
@@ -934,8 +967,8 @@ struct Worker : LLIMSessionObserver
             if (request.unread > 2 || (request.unread && (request.width < 250 || request.width > 2000 || request.height < 16 || request.height > 96)) || request.account != gAgentID.asString() || request.grid != loginGrid)
             { reply(request, "Invalid transition policy or changed account."); break; }
             const HWND popup = window ? GetLastActivePopup(window) : nullptr;
-            if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
-                (popup && popup != window && IsWindowVisible(popup)) || LLFloaterReg::instanceVisible("preferences"))
+            if (sessionModeBlocked(request.mode,ready(),readyApplied,gFocusMgr.focusLocked(),
+                popup && popup != window && IsWindowVisible(popup),LLFloaterReg::instanceVisible("preferences")))
             { reply(request, "Close Preferences or the modal dialog, or wait for login before switching."); break; }
             const bool previousGrant = inputGranted;
             releaseInput();
@@ -1447,6 +1480,7 @@ void FSSessionWorker::tick()
     if (!managed()) return;
     auto& value = *worker;
     ++value.maintenance;
+    if(connectionOverdue(GetTickCount64(),value.lastCommand,ControlSilenceMs))value.pauseControl();
     value.pollAssistantCheck();
     if (gViewerWindow && gViewerWindow->getWindow()) value.window = static_cast<HWND>(gViewerWindow->getWindow()->getPlatformWindow());
     if (value.session != gAgentSessionID)
@@ -1540,9 +1574,14 @@ void FSSessionWorker::tick()
         }
     }
     Message request;
+    if(value.recoveryReplyPending && !value.pipe.writing())
+    {
+        value.recoveryReplyPending=false;
+        value.reply(value.recoveryReply,"Switch paused while the controller was unresponsive.");
+    }
     // Visual-only cancellation has no reply and names the exact pending mode
     // request. It cannot acquire input or cancel a later switch.
-    if (!value.pipe.writing() && value.pipe.receive(request))
+    if (!value.recoveryReplyPending && !value.pipe.writing() && value.pipe.receive(request))
     {
         if (request.kind == Kind::CancelTransition)
         {
@@ -1557,8 +1596,10 @@ void FSSessionWorker::tick()
         else if (!value.promoting && !value.demoting) value.command(request);
         else { value.detach(); value.pipe.close(); } // Single-response contract violated.
     }
-    if (!value.pipe.alive() || GetTickCount64() - value.lastCommand > 15000)
+    if (!value.pipe.alive())
     {
+        LL_WARNS("SessionConnection") << "Control pipe closed; returning to separate viewer; sequence "
+            << value.sequence << "; generation " << value.generation << LL_ENDL;
         if (!value.detach()) { value.releaseInput(); value.mode = Mode::Warm; value.promoting = value.demoting = false; value.transition.cancel(); }
         value.pipe.close();
     }

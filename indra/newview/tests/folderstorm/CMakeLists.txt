@@ -91,7 +91,7 @@ target_include_directories(session_controller_mcp PRIVATE ../..)
 folderstorm_check(session_controller_dispatch
   ../../../../tools/session-host/tests/test_controller_dispatch.cpp)
 target_include_directories(session_controller_dispatch PRIVATE ../..)
-foreach(check IN ITEMS assistant_features assistant_async assistant_session contacts monitor_tools controls icons toolbar_layout preferences chat_capacity chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
+foreach(check IN ITEMS connection assistant_features assistant_async assistant_session contacts monitor_tools controls icons toolbar_layout preferences chat_capacity chat_lifecycle dialog_layout choice_state chat_behavior sound read_policy input_guard protocol chat contact_policy options preview transition restart registry monitors controller presentation usability alerts shortcuts monitor_chat profile_seed recovery experience sets)
   folderstorm_check(session_${check}
     ../../../../tools/session-host/tests/test_${check}.cpp)
   target_include_directories(session_${check} PRIVATE ../..)
