@@ -4,10 +4,12 @@
 #include "fsreleasebuild.h"
 #include "fsreleaseprefs.h"
 #include "fsupdate.h"
+#include "fscrash.h"
 #include "fssessionworker.h"
 #include "llapp.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
+#include "llcommandhandler.h"
 #include "llcombobox.h"
 #include "llcoros.h"
 #include "llcorehttputil.h"
@@ -20,6 +22,20 @@ namespace
 fs_release::Result result;bool checking=false,requested=false;unsigned long revision=0;
 std::string status="Check for a published Folderstorm release.";
 void openUrl(const std::string& url){if(fs_release::trustedUrl(url,fs_release::DownloadHosts))LLWeb::loadURLExternal(url);}
+class FolderstormSupportHandler final : public LLCommandHandler
+{
+public:
+    FolderstormSupportHandler():LLCommandHandler("folderstorm_support",UNTRUSTED_CLICK_ONLY){}
+    bool handle(const LLSD& tokens,const LLSD&,const std::string&,LLMediaCtrl*) override
+    {
+        if(tokens.size()!=1)return false;
+        const auto action=tokens[0].asString();
+        if(action=="updates")FSReleaseViewer::show();
+        else if(action=="report-bug")LLWeb::loadURLExternal(fs_crash::reportUrl());
+        else return false;
+        return true;
+    }
+} supportHandler;
 }
 void FSReleaseViewer::check(bool manual)
 {

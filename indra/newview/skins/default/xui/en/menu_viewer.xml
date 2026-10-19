@@ -2699,6 +2699,9 @@
         <menu_item_call label="Check for updates…" name="Folderstorm Updates">
             <menu_item_call.on_click function="Help.CheckFolderstormUpdates" />
         </menu_item_call>
+        <menu_item_call label="Desktop and Start menu shortcuts…" name="Folderstorm Shortcuts">
+            <menu_item_call.on_click function="Help.FolderstormShortcuts" />
+        </menu_item_call>
         <menu_item_call label="Crash reporting…" name="Folderstorm Crash Reports">
             <menu_item_call.on_click function="Help.FolderstormCrashReports" />
         </menu_item_call>

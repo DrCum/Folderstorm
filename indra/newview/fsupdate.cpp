@@ -3,6 +3,7 @@
 #include "fsupdatewindows.h"
 #include "fsreleasebuild.h"
 #include "fsupdateconfig.h"
+#include "fsinstallwindows.h"
 namespace fs_update
 {
 namespace {std::string error;
@@ -58,4 +59,26 @@ bool prepare()
     error="Coordinated in-app updates currently support Windows. Use the release download.";return false;
 #endif
 }
+void offerShortcuts()
+{
+#if defined(_WIN32)
+    std::string failure;
+    if(!shortcuts::run(false,failure))MessageBoxA(GetActiveWindow(),failure.c_str(),"Folderstorm shortcuts",MB_OK|MB_ICONINFORMATION);
+#endif
+}
+bool configureShortcuts()
+{
+#if defined(_WIN32)
+    error.clear();return shortcuts::run(true,error);
+#else
+    error="Shortcut setup is available in Windows Velopack installations.";return false;
+#endif
+}
+void removeShortcuts()
+{
+#if defined(_WIN32)
+    shortcuts::remove();
+#endif
+}
+
 }

@@ -12,4 +12,13 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json"
   "{\"schema\":1,\"version\":\"${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}\",\"commit\":\"${FS_SOURCE_COMMIT}\",\"installer\":\"${FS_RELEASE_INSTALLER}\",\"app_id\":\"Folderstorm.${FS_RELEASE_FLAVOR}.${FS_RELEASE_DEFAULT_CHANNEL}.${FS_RELEASE_ARCH}.${FS_RELEASE_CPU}\",\"protocol\":${bundle_protocol}}\n")
 function(folderstorm_update_target target)
   target_sources(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fsupdate.cpp")
+  if(WINDOWS)
+    # Shortcut setup is shared by the viewer and standalone host, including
+    # builds without llvelopack.cpp's implicit linker pragmas.
+    if("${target}" STREQUAL "${VIEWER_BINARY_NAME}")
+      target_link_libraries(${target} ole32 shell32 uuid advapi32 user32)
+    else()
+      target_link_libraries(${target} PRIVATE ole32 shell32 uuid advapi32 user32)
+    endif()
+  endif()
 endfunction()

@@ -572,8 +572,10 @@ struct Host
         const auto crashConsentField=add(PrefCrashes,{L"Allow Sentry crash reports",originalCrashConsent?L"1":L"0",FieldType::Check});
         fields[crashConsentField].enabled=fs_crash::configured() || originalCrashConsent;fields[crashConsentField].help=L"Off by default. No chat logs or screenshots are attached. Turning off stops future uploads once each process observes the change; sent uploads cannot be recalled.";
         const auto crashStatusField=add(PrefCrashes,{L"",wide(fs_crash::status()),FieldType::Note});fields[crashStatusField].rowHeight=60;
+        const auto appShortcutsField=add(PrefCrashes,{L"Application shortcuts",L"Desktop and Start menu…",FieldType::Action});
+        fields[appShortcutsField].action=[&](HWND){if(!fs_update::configureShortcuts())message(wide(fs_update::lastError()));};
         const auto bugReportField=add(PrefCrashes,{L"GitHub",L"Report a bug…",FieldType::Action});
-        fields[bugReportField].action=[&](HWND){ShellExecuteW(window,L"open",wide(fs_crash::IssueUrl).c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
+        fields[bugReportField].action=[&](HWND){ShellExecuteW(window,L"open",wide(fs_crash::reportUrl()).c_str(),nullptr,nullptr,SW_SHOWNORMAL);};
         const auto updatesAutomatic=add(PrefUpdates,{L"Check automatically",originalUpdates.automatic?L"1":L"0",FieldType::Check});
         const auto updatesChannel=add(PrefUpdates,{L"Release channel",originalUpdates.channel=="nightly"?L"1":L"0",FieldType::Choice,{L"Stable",L"Nightly"}});
         const auto updatesNote=add(PrefUpdates,{L"",releaseStatus,FieldType::Note});fields[updatesNote].rowHeight=72;
@@ -4829,6 +4831,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     state.restorePlacement(window,0,state.dpi);
     if(state.controllerConfig.enabled&&!state.controllerEndpoint.start())state.message(L"Controller MCP could not start; viewer permissions remain separate.");
     ShowWindow(window, show); UpdateWindow(window);
+    fs_update::offerShortcuts();
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {

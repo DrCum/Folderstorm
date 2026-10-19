@@ -11,5 +11,5 @@ void poll();
 void shutdown();
 std::string status();
 std::string environment();
-inline const std::string IssueUrl="https://github.com/DrCum/Folderstorm/issues/new?template=bug_report.yml";
+inline std::string reportUrl(){return bugReportUrl(environment());}
 }

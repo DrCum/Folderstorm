@@ -30,6 +30,7 @@
 #include "llappviewer.h"
 #include "fsreleaseviewer.h"
 #include "fscrash.h"
+#include "fsupdate.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1511,6 +1512,7 @@ bool LLAppViewer::init()
         gDirUtilp->deleteDirAndContents(gDirUtilp->getDumpLogsDirPath());
     }
 #endif
+    if(!FSSessionWorker::managed())fs_update::offerShortcuts();
     FSReleaseViewer::startup();
     fs_crash::initialize(FSSessionWorker::managed()?"worker":"viewer");
     LL_PROFILER_FRAME_END;

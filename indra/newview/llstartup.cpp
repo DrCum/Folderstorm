@@ -3684,38 +3684,13 @@ void uninstall_nsis_if_required()
         return;
     }
 
-    LLVersionInfo* ver_inst = LLVersionInfo::getInstance();
-
-    if (found_major > ver_inst->getMajor())
-    {
-        LL_INFOS() << "Found installed nsis version that is newer" << found_major << "." << found_minor << "." << found_patch << "." << found_build << LL_ENDL;
-        return;
-    }
-
-    if (found_major == ver_inst->getMajor()
-        && found_minor > ver_inst->getMinor())
-    {
-        LL_INFOS() << "Found installed nsis version that is newer" << found_major << "." << found_minor << "." << found_patch << "." << found_build << LL_ENDL;
-        return;
-    }
-
-    if (found_major == ver_inst->getMajor()
-        && found_minor == ver_inst->getMinor()
-        && found_patch > ver_inst->getPatch())
-    {
-        LL_INFOS() << "Found installed nsis version that is newer" << found_major << "." << found_minor << "." << found_patch << "." << found_build << LL_ENDL;
-        return;
-    }
-
-    // Assume that nsis is going to be something like x.x.x, while velopack is x.x.(x+1),
-    // so there is no point to check build.
-    LL_INFOS() << "Found NSIS install " << found_major << "." << found_minor << "." << found_patch << "." << found_build << LL_ENDL;
-
-    clear_nsis_links(nsis_path);
-
+    // Coexistence is supported. Never delete or retarget another installation's
+    // shortcuts just because this per-user Velopack application was launched.
     LLSD args;
-    args["VERSION"] = llformat("%d.%d.%d", found_major, found_minor, found_patch);
-    LLNotificationsUtil::add("FoundLegacyNsisInstallation", args);
+    args["VERSION"] = found_build ? llformat("%d.%d.%d.%llu", found_major, found_minor, found_patch, found_build) :
+        llformat("%d.%d.%d", found_major, found_minor, found_patch);
+    args["PATH"] = nsis_path;
+    LLNotificationsUtil::add("FolderstormSeparateInstallation", args);
 #endif
 }
 

@@ -35,6 +35,7 @@
 #include "llviewermenu.h"
 #include "fsreleaseviewer.h"
 #include "fscrash.h"
+#include "fsupdate.h"
 
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
@@ -11593,7 +11594,7 @@ void handle_show_url(const LLSD& param)
 
 void handle_report_bug(const LLSD& param)
 {
-    LLWeb::loadURLExternal(fs_crash::IssueUrl+"&environment="+LLURI::escape(fs_crash::environment()));
+    LLWeb::loadURLExternal(fs_crash::reportUrl());
 }
 
 void handle_buy_currency_test()
@@ -13063,6 +13064,7 @@ void initialize_menus()
     commit.add("Advanced.ShowURL", boost::bind(&handle_show_url, _2));
     commit.add("Advanced.ReportBug", boost::bind(&handle_report_bug, _2));
     commit.add("Help.CheckFolderstormUpdates", boost::bind(&FSReleaseViewer::show));
+    commit.add("Help.FolderstormShortcuts", [](LLUICtrl*, const LLSD&) { if(!fs_update::configureShortcuts()){LLSD args;args["MESSAGE"]=fs_update::lastError();LLNotificationsUtil::add("GenericAlert",args);} });
     commit.add("Help.FolderstormCrashReports", boost::bind(&LLFloaterReg::showInstance,"folderstorm_crashes",LLSD(),false));
     view_listener_t::addMenu(new LLAdvancedBuyCurrencyTest(), "Advanced.BuyCurrencyTest");
     view_listener_t::addMenu(new LLAdvancedDumpSelectMgr(), "Advanced.DumpSelectMgr");

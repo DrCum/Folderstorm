@@ -11,7 +11,7 @@ bool FSFloaterCrash::postBuild()
     getChild<LLButton>("apply")->setCommitCallback([this](LLUICtrl*,const LLSD&){apply();});
     getChild<LLButton>("ok")->setCommitCallback([this](LLUICtrl*,const LLSD&){if(apply())closeFloater();});
     getChild<LLButton>("cancel")->setCommitCallback([this](LLUICtrl*,const LLSD&){closeFloater();});
-    getChild<LLButton>("report")->setCommitCallback([](LLUICtrl*,const LLSD&){LLWeb::loadURLExternal(fs_crash::IssueUrl+"&environment="+LLURI::escape(fs_crash::environment()));});
+    getChild<LLButton>("report")->setCommitCallback([](LLUICtrl*,const LLSD&){LLWeb::loadURLExternal(fs_crash::reportUrl());});
     return true;
 }
 void FSFloaterCrash::onOpen(const LLSD&)

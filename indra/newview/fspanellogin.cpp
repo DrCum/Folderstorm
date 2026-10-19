@@ -1073,6 +1073,31 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
     meta.content = meta.content.replace(/Firestorm/g, 'Folderstorm');
   }
 
+  // The upstream splash's release is Firestorm's, not this fork's. Use the
+  // native, variant-aware Folderstorm check; never infer a version from it.
+  function patchSupportLinks() {
+    var latest = document.querySelector('#top-row > div');
+    if (latest && !latest.getAttribute('data-folderstorm-updates')) {
+      latest.setAttribute('data-folderstorm-updates', '1');
+      latest.innerHTML = '<h4>Folderstorm updates</h4>' +
+        '<a class="d-block font-weight-bold" href="secondlife:///app/folderstorm_support/updates">Check for updates</a>' +
+        '<a class="d-block" href="https://github.com/DrCum/Folderstorm/releases" target="_blank">Published releases</a>';
+    }
+    var links = document.querySelectorAll('a[href]');
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i], url;
+      try { url = new URL(link.getAttribute('href'), window.location.href); } catch (_) { continue; }
+      if ((url.hostname === 'phoenixviewer.com' || url.hostname === 'www.phoenixviewer.com') &&
+          /^\/app\/file-a-jira\/?$/.test(url.pathname)) {
+        link.setAttribute('href', 'secondlife:///app/folderstorm_support/report-bug');
+        link.removeAttribute('target');
+        link.setAttribute('title', 'Report a Folderstorm bug');
+        var heading = link.parentNode && link.parentNode.querySelector('h4');
+        if (heading) heading.textContent = 'Help & bug reports';
+      }
+    }
+  }
+
   var blockedModals = {newVersionModal: 1, newPreviewVersionModal: 1, emergencyModal: 1};
 
   function dismissSplashModals() {
@@ -1180,10 +1205,12 @@ const char FOLDERSTORM_LOGIN_THEME_JS[] = R"JS(
   }
 
   layoutColumns();
+  patchSupportLinks();
   patchJqueryModal();
   dismissSplashModals();
   var obs = new MutationObserver(function () {
     layoutColumns();
+    patchSupportLinks();
     patchJqueryModal();
     dismissSplashModals();
   });
@@ -1200,8 +1227,10 @@ bool isUpstreamFirestormSplash(const std::string& uri)
 {
     std::string lower(uri);
     LLStringUtil::toLower(lower);
-    return lower.find("phoenixviewer.com") != std::string::npos
-        && lower.find("loginv3") != std::string::npos;
+    const LLURI page(lower);
+    return (page.scheme() == "https" || page.scheme() == "http") &&
+        (page.hostName() == "phoenixviewer.com" || page.hostName() == "www.phoenixviewer.com") &&
+        (page.path() == "/app/loginv3" || page.path() == "/app/loginv3/");
 }
 }
 
