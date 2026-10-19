@@ -7,6 +7,7 @@ Consent consent();
 bool setConsent(bool enabled);
 bool configured();
 void initialize(const std::string& role);
+void offerConsent();
 void poll();
 void shutdown();
 std::string status();

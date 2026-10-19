@@ -9,6 +9,10 @@ other worktrees are preserved. No release, installer or application was deployed
   the public Mantis tracker at https://folderstorm.com/bugs. No account/build data
   is added to the URL and no report or attachment is submitted automatically.
   GitHub Issues remains available for development tracking.
+- Configured Sentry builds offer a one-time crash-reporting invitation from the
+  first interactive viewer/host launch. Enable and Not now both persist; prior
+  consent is preserved and managed workers do not prompt. See
+  `sentry-validation.md` for the consent/privacy and acceptance cases.
 - The Phoenix login splash's Firestorm latest-version panel becomes Folderstorm
   updates, with a user-click-only native update check and the published release
   list. Its Firestorm JIRA button opens the same Folderstorm report action.
@@ -103,3 +107,7 @@ Native Windows acceptance remains pending:
 6. Verify the NSIS notice is informative, does not open an SL uninstall guide,
    and leaves its shortcuts/files/settings intact. Recheck crash consent and a
    controlled Sentry crash independently of bug-report issue creation.
+7. With no earlier consent, launch the configured viewer or host: Enable opts in;
+   Not now, Escape and Close remember Off. Restart/upgrade must not repeat the
+   invitation. Preserve earlier explicit On/Off choices, suppress worker prompts
+   and duplicate simultaneous prompts, and allow changing the choice later.

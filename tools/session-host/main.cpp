@@ -4832,6 +4832,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if(state.controllerConfig.enabled&&!state.controllerEndpoint.start())state.message(L"Controller MCP could not start; viewer permissions remain separate.");
     ShowWindow(window, show); UpdateWindow(window);
     fs_update::offerShortcuts();
+    fs_crash::offerConsent();
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {

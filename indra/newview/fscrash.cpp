@@ -6,6 +6,9 @@
 #include <array>
 #include <iomanip>
 #include <random>
+#if defined(_WIN32)
+#include <commctrl.h>
+#endif
 #if FS_HAS_SENTRY
 #include <sentry.h>
 #endif
@@ -111,6 +114,46 @@ bool setConsent(bool enabled)
 }
 void initialize(const std::string& role)
 {processRole=validRole(role)?role:"viewer";started=true;observed={};sync();}
+void offerConsent()
+{
+#if defined(_WIN32)
+    if(!started || !configured() || processRole=="worker")return;
+    // One prompt across simultaneously launched hosts/viewers and variants.
+    // Workers never enter this path. Do not wait for another app's modal UI.
+    const auto mutex=CreateMutexW(nullptr,FALSE,L"Local\\Folderstorm.CrashConsent.v1");
+    if(!mutex)return;
+    struct Close {HANDLE value;~Close(){CloseHandle(value);}} close{mutex};
+    const auto acquired=WaitForSingleObject(mutex,0);
+    if(acquired!=WAIT_OBJECT_0 && acquired!=WAIT_ABANDONED)return;
+    struct Unlock {HANDLE value;~Unlock(){ReleaseMutex(value);}} unlock{mutex};
+    const auto owner=GetActiveWindow();
+    const auto ask=[owner]() -> std::optional<bool>
+    {
+        const wchar_t* title=L"Folderstorm crash reporting";
+        const wchar_t* explanation=L"Automatically send crash reports to Folderstorm's Sentry project to help fix bugs. Reports include technical details and a memory dump, which may contain personal information. Chat logs and screenshots are not attached.\n\n"
+            L"Your choice applies to the viewer, host and all character sessions for this Windows user. Change it later in viewer Help or host Settings > Support > Crash reports.";
+        using TaskDialog=HRESULT(WINAPI*)(const TASKDIALOGCONFIG*,int*,int*,BOOL*);
+        const auto dialog=reinterpret_cast<TaskDialog>(reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"comctl32.dll"),"TaskDialogIndirect")));
+        if(dialog)
+        {
+            const TASKDIALOG_BUTTON buttons[]={{IDYES,L"Enable crash reporting"},{IDNO,L"Not now"}};
+            TASKDIALOGCONFIG options{};options.cbSize=sizeof(options);options.hwndParent=owner;
+            options.dwFlags=TDF_ALLOW_DIALOG_CANCELLATION;options.pszWindowTitle=title;
+            options.pszMainInstruction=L"Help improve Folderstorm?";options.pszContent=explanation;
+            options.cButtons=2;options.pButtons=buttons;options.nDefaultButton=IDNO;
+            int selected=0;
+            if(SUCCEEDED(dialog(&options,&selected,nullptr,nullptr)))
+                return selected==IDYES;
+        }
+        const std::wstring text=std::wstring(L"Enable crash reporting?\n\n")+explanation;
+        const auto selected=MessageBoxW(owner,text.c_str(),title,MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION);
+        return selected?std::optional<bool>(selected==IDYES):std::nullopt;
+    };
+    if(!offerConsentOnce(configured(),processRole,consent,ask,setConsent))
+        MessageBoxW(owner,L"Your crash-reporting choice could not be saved. You can change it in viewer Help or host Settings > Support > Crash reports.",
+            L"Folderstorm crash reporting",MB_OK|MB_ICONINFORMATION);
+#endif
+}
 void poll()
 {
     if(!started)return;

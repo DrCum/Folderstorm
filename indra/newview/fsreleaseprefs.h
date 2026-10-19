@@ -51,7 +51,8 @@ inline bool savePreferences(const Preferences& value)
     file.write(bytes.data(),static_cast<std::streamsize>(bytes.size()));file.close();if(!file)return false;
 #if defined(_WIN32)
     const bool saved=MoveFileExW(temporary.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
-    if(!saved)std::filesystem::remove(temporary,error);return saved;
+    if(!saved)std::filesystem::remove(temporary,error);
+    return saved;
 #else
     std::filesystem::rename(temporary,path,error);return !error;
 #endif

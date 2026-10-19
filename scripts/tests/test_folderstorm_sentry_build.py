@@ -3,6 +3,8 @@
 Optional FS_SENTRY_NATIVE_HEADER points at the verified 0.17.3 sentry.h to
 syntax-check the Windows API declarations used by fscrash.cpp with a minimal
 Windows type shim. This does not compile/link the native runtime or Crashpad.
+FS_MINGW_CXX optionally enables a compile of the affected Windows runtime with
+real Windows headers; no Windows application or installer is executed.
 """
 from pathlib import Path
 import os
@@ -155,6 +157,41 @@ void check_declarations() {
             cpp.write_text(source)
             subprocess.run(compiler + ["-std=c++17", "-Wall", "-Wextra", "-Werror", "-pedantic",
                                       "-I", str(directory), "-fsyntax-only", str(cpp)], check=True)
+
+    def test_windows_runtime_with_consent_prompt(self):
+        compiler = shlex.split(os.environ.get("FS_MINGW_CXX", "x86_64-w64-mingw32-g++"))
+        if not shutil.which(compiler[0]):
+            self.skipTest("MinGW is required for the affected Windows runtime compile")
+        viewer = ROOT / "indra/newview"
+        with tempfile.TemporaryDirectory(prefix="folderstorm-crash-runtime-") as temporary:
+            directory = Path(temporary)
+            values = {"VIEWER_SHORT_VERSION":"7.2.5", "VIEWER_VERSION_REVISION":"82154",
+                      "FS_RELEASE_PLATFORM":"windows", "FS_RELEASE_ARCH":"x86_64", "FS_RELEASE_CPU":"avx2",
+                      "FS_RELEASE_FLAVOR":"opensim", "FS_RELEASE_INSTALLER":"velopack",
+                      "FS_RELEASE_DEFAULT_CHANNEL":"nightly", "FS_RELEASE_FEED_URL":"https://example.test/feed",
+                      "FS_RELEASE_DOWNLOAD_HOSTS":"example.test", "FS_SOURCE_COMMIT":"a"*40,
+                      "FS_HAS_SENTRY":"0", "FS_SENTRY_DSN":"https://public@example.test/1"}
+            def configure(name):
+                content = (viewer / (name+".in")).read_text()
+                for key, value in values.items():
+                    content = content.replace("@"+key+"@", value)
+                (directory / name).write_text(content)
+            configure("fsreleasebuild.h")
+            configure("fscrashconfig.h")
+            main = directory / "main.cpp"
+            main.write_text('#include "fscrash.h"\nint main(){fs_crash::initialize("viewer");fs_crash::offerConsent();fs_crash::shutdown();}\n')
+            flags = ["-std=c++17", "-Wall", "-Wextra", "-Werror", "-pedantic", "-DWINVER=0x0600",
+                     "-D_WIN32_WINNT=0x0600", "-DNOMINMAX", "-DWIN32_LEAN_AND_MEAN", "-DSENTRY_BUILD_STATIC=1",
+                     "-I"+str(directory), "-I"+str(viewer)]
+            subprocess.run(compiler + flags + [str(viewer / "fscrash.cpp"), str(main), "-lshell32", "-lole32",
+                                              "-luuid", "-luser32", "-o", str(directory / "check.exe")], check=True)
+            header = os.environ.get("FS_SENTRY_NATIVE_HEADER")
+            if header:
+                shutil.copyfile(header, directory / "sentry.h")
+                values["FS_HAS_SENTRY"] = "1"
+                configure("fscrashconfig.h")
+                subprocess.run(compiler + flags + ["-c", str(viewer / "fscrash.cpp"), "-o",
+                                                  str(directory / "enabled.o")], check=True)
 
 
 if __name__ == "__main__":

@@ -1515,6 +1515,7 @@ bool LLAppViewer::init()
     if(!FSSessionWorker::managed())fs_update::offerShortcuts();
     FSReleaseViewer::startup();
     fs_crash::initialize(FSSessionWorker::managed()?"worker":"viewer");
+    if(!FSSessionWorker::managed())fs_crash::offerConsent();
     LL_PROFILER_FRAME_END;
     return true;
 }

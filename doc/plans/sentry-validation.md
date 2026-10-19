@@ -29,6 +29,33 @@ service upload, symbol upload or test crash was configured/executed here.
    installation/profile folders under `FolderstormSessions/CrashReports-v1`.
    Unconfigured builds explain their status and allow a prior consent to be revoked.
 
+## First-launch invitation
+
+Configured Windows builds ask once from the first interactive viewer or host
+launch. **Enable crash reporting** opts in; **Not now**, Escape or closing the
+dialog leaves reporting Off and remembers that decision. The explanation names
+Sentry, the memory-dump privacy limits, the shared scope and where to change it.
+The default button is Not now. No installer hook or managed character worker
+opens a prompt, and builds without a configured Sentry project do not ask.
+
+Existing valid consent, including an earlier explicit Off choice, is preserved.
+The shared consent file stores the decision outside installations/profiles, so
+upgrades and reinstalls do not repeat the invitation. A named Windows mutex
+prevents simultaneous viewer/host prompts. A newer choice saved while the dialog
+is open takes precedence. Failure to open or save a dialog choice leaves it
+eligible for a later launch; save failure is reported without enabling uploads.
+
+Focused checks cover enable/decline and subsequent host/viewer launches, earlier
+choices, unconfigured/worker suppression, failed dialog/save and changes made
+while open. The affected Windows runtime compiles with strict MinGW C++17 warnings
+against real Windows headers, including its Sentry-enabled path with the pinned
+SDK header; the disabled path also links. Native UI/SDK execution remains pending.
+
+Windows acceptance: first launch from each app; default button, Escape and Close;
+simultaneous host/viewer launches; no worker duplicates; restart/upgrade after
+both answers; pre-existing On/Off; save failure; and missing DSN. Verify the Enable
+answer starts configured reporting and that later settings can revoke it.
+
 ## Privacy, lifecycle and limits
 
 No account, avatar, region, chat text, credentials, command line, preference/log

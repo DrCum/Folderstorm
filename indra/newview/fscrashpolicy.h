@@ -1,5 +1,6 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
+#include <optional>
 #include <string>
 namespace fs_crash
 {
@@ -19,6 +20,19 @@ struct Consent
     }
     bool operator==(const Consent& other)const {return enabled==other.enabled && epoch==other.epoch;}
 };
+template<class Read,class Ask,class Save>
+bool offerConsentOnce(bool available,const std::string& role,Read read,Ask ask,Save save)
+{
+    if(!available || (role!="viewer" && role!="host"))return true;
+    const auto original=read();
+    // A valid saved choice, including an explicit refusal, predates this prompt
+    // and must never be replaced. Missing/corrupt consent still defaults to Off.
+    if(original.enabled || !original.epoch.empty())return true;
+    const std::optional<bool> choice=ask();
+    if(!choice)return true; // A dialog that could not open is not a decision.
+    if(!(read()==original))return true; // Respect settings changed while open.
+    return save(*choice);
+}
 inline bool validRole(const std::string& role)
 {return role=="host" || role=="worker" || role=="viewer";}
 inline std::string environmentText(const std::string& version,const std::string& platform,
