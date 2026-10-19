@@ -125,3 +125,12 @@ custom feeds and malformed/oversized/failed pages. It is an optional CMake targe
 `release_feed` when Boost.JSON headers are available; the production codec and
 shared collector were compiled directly with the retained Boost headers here.
 Native Windows transport/UI acceptance remains pending.
+
+## Windows build compatibility: Boost consumers
+
+The `ll::boost` prebuilt target now exports its package include directory as a
+system interface include, so standalone host/update targets inherit the headers
+they use instead of depending on the viewer's incidental include paths. Conan
+continues to obtain includes from `CONAN_PKG::boost`. A focused configure-only
+consumer check confirms both normal and system interface include properties.
+This does not compile or link Windows binaries.

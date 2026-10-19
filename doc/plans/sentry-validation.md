@@ -84,3 +84,31 @@ Independent Sol 6.1 Extra High review found two enabled-build issues, corrected:
 SDK C/MASM sources now avoid inherited viewer C++ language flags, and optimized
 Release viewer/host/SDK/handler targets explicitly generate debug information and
 linked PDBs. Neither correction was verified with a native Windows build here.
+
+## Windows compatibility corrections from the PR #71 build report
+
+Reviewed the local three-file patch against the pinned, SHA-256-verified SDK
+0.17.3 header/source and the actual CMake target declarations. Boost header
+visibility is corrected in prerequisite PR #68. Sentry now links using the
+viewer's existing plain CMake signature and the host's keyword signature.
+Only the SDK configuration strips inherited `WINVER`/`_WIN32_WINNT` flags;
+the viewer's original compiler/linker settings are restored afterward. This
+allows Crashpad's newer declarations without changing viewer API visibility.
+
+The `send_default_pii` setter is declared and implemented only for Nintendo NX
+in this SDK. The Windows integration removes that unsupported call, rather than
+leaving a misleading privacy switch. Consent requirements, revocation, automatic
+session/breadcrumb suppression, fresh per-run databases, build-only tags and no
+explicit identity/private attachments remain unchanged. The minidump privacy
+limits above still apply.
+
+Three focused checks pass in `scripts/tests/test_folderstorm_sentry_build.py`:
+Boost interface includes, enabled/disabled configure-only SDK isolation and both
+linking signatures, and declarations for every Sentry call used by the runtime
+against the verified 0.17.3 Windows API header surface. The declaration check
+uses a minimal Windows context-type shim and no SDK linking. Run with `CMAKE`
+pointing at an available CMake and `FS_SENTRY_NATIVE_HEADER` pointing at the
+verified SDK header; that optional check skips without the header. No SDK source
+is downloaded by the tests. `git diff --check` passes. No broad viewer, SDK,
+packaging or GitHub build was performed, and native runtime/consent/crash
+acceptance remains pending.

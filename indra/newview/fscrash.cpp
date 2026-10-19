@@ -63,7 +63,8 @@ void sync()
     const auto release="folderstorm@"+build.version+"+"+FS_CRASH_COMMIT;
     sentry_options_set_release(options,release.c_str());
     sentry_options_set_environment(options,fs_release::DefaultChannel);
-    sentry_options_set_send_default_pii(options,0);
+    // send_default_pii is NX-only in SDK 0.17.3. Keep identity and private
+    // attachments out of this integration; native minidumps can contain memory.
     sentry_options_set_auto_session_tracking(options,0);
     sentry_options_set_max_breadcrumbs(options,0);
     sentry_options_set_require_user_consent(options,1);
