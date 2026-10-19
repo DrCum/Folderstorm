@@ -8,6 +8,7 @@
 #ifndef FS_GESTURE_BOARD_CONTROLLER_H
 #define FS_GESTURE_BOARD_CONTROLLER_H
 #include "fsgestureboardmodel.h"
+#include "llassettype.h"
 #include "llgesturemgr.h"
 #include "llinventoryobserver.h"
 #include "llsd.h"
@@ -31,7 +32,8 @@ public:
     bool commit(const FSGestureBoard::Collection& data, const LLSD& expected, const LLUUID& account, const LLUUID& session);
     bool selectBoard(const std::string& id);
     bool addItems(const std::string& board, const std::vector<LLUUID>& items, const LLSD& expected, const LLUUID& account, const LLUUID& session);
-    bool resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason) const;
+    bool resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason,
+                 LLAssetType::EType* type = nullptr) const;
     std::string tileState(const FSGestureBoard::Tile& tile) const;
     bool play(const std::string& board, const std::string& tile);
     void cancelPending();
@@ -40,7 +42,7 @@ public:
     void changed(U32) override { ++mRevision; }
 private:
     FSGestureBoardController();
-    bool permitted() const;
+    bool permitted(LLAssetType::EType type = LLAssetType::AT_GESTURE) const;
     static void idle(void*);
     void poll();
     struct Pending

@@ -2,6 +2,10 @@
 
 Status: implemented on `feat/gesture-board`, stacked on open PR #8 (`feat/workspace-context`, head `34ab510d3d`). The user authorized implementation and publication. Inventory selection, native playback, saved boards, tile reordering, editable tile text/colors, compact paged presentation and individual tile sizes are included. Keyboard shortcuts are excluded. Actual focused checks and remaining native acceptance are recorded in [gesture-board-validation.md](gesture-board-validation.md).
 
+Inventory-sound follow-up: `feat/gesture-board-sounds`, stacked above PR #70. The picker and Inventory drag/drop accept gestures and sounds, including links. Replacement can switch between the two. Sound tiles use the native Inventory **Play** path for one-shot in-world audio at normal gain; their hover text explains that Stop cannot recall an emitted sound. Gesture playback, loading and stopping retain their existing restrictions. Gesture-only preferences do not disable native sound-item playback. Availability also rejects disconnected sessions, and delayed gesture loads verify the resolved item is still a gesture.
+
+The account-local version-two format is unchanged: tiles store Inventory references and presentation only, and resolve their type at use time. Existing boards remain readable, and sounds share label/color/size/reorder/duplicate behavior. This adds no desktop audio-file playback, voice injection, IPC or MCP command. Native acceptance and the portable controller-boundary checks are recorded in the validation document.
+
 Planning source: `feat/workspace-context` at `34ab510d3d`, the current PR #8 worktree. PR #8 was verified open/unmerged and current main remained `33e371fb3f`; implementation uses a separate worktree at `/workspace/Folderstorm-gesture-board` from the PR #8 head plus the plan-only commit `aa828a9447`. Preserve user edits and published history. Do not mix this feature into a workspace/snapshot fix without an explicit delivery decision.
 
 ## User experience

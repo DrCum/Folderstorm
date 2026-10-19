@@ -145,7 +145,7 @@ bool FSFloaterGestureBoard::postBuild()
     getChild<LLButton>("options")->setCommitCallback([this](LLUICtrl*, const LLSD&) { optionsMenu(); });
     getChild<LLButton>("previous_page")->setCommitCallback([this](LLUICtrl*, const LLSD&) { changePage(-1); });
     getChild<LLButton>("next_page")->setCommitCallback([this](LLUICtrl*, const LLSD&) { changePage(1); });
-    getChild<LLButton>("add_gestures")->setCommitCallback([this](LLUICtrl*, const LLSD&) { addGestures(); });
+    getChild<LLButton>("add_items")->setCommitCallback([this](LLUICtrl*, const LLSD&) { addItems(); });
     getChild<LLButton>("stop")->setCommitCallback([this](LLUICtrl*, const LLSD&) { if (current()) FSGestureBoardController::instance().stopBoard(); });
     getChild<LLComboBox>("boards")->setCommitCallback([this](LLUICtrl*, const LLSD&)
     {
@@ -199,12 +199,12 @@ void FSFloaterGestureBoard::refresh(bool force)
     }
     const bool ready = controller.valid();
     const auto* board = findBoard(controller.data(), controller.data().selected);
-    for (const char* name : {"add_gestures", "stop"}) getChild<LLButton>(name)->setEnabled(ready && board);
+    for (const char* name : {"add_items", "stop"}) getChild<LLButton>(name)->setEnabled(ready && board);
     getChild<LLButton>("options")->setEnabled(ready);
     getChild<LLComboBox>("boards")->setEnabled(ready && board);
     getChild<LLTextBox>("empty")->setVisible(!board || board->tiles.empty());
     const std::string status = ready ? controller.status() : controller.available() ? "invalid_data" : "logged_out";
-    const bool warning = status != "ready" && status != "saved" && status != "playing" && status != "loading" &&
+    const bool warning = status != "ready" && status != "saved" && status != "playing" && status != "sound_played" && status != "loading" &&
         status != "stopped" && status != "cancelled";
     auto* indicator = getChild<LLTextBox>("status"); indicator->setVisible(warning);
     indicator->setToolTip(getString(status));
@@ -251,7 +251,7 @@ void FSFloaterGestureBoard::rebuild()
     { view->setShape(LLRect(rect.x, parent_height - rect.y, rect.x + rect.width, parent_height - rect.y - rect.height)); };
     position_view(getChild<LLComboBox>("boards"), frame.boards, mGridHeight);
     position_view(getChild<LLTextBox>("status"), frame.status, mGridHeight);
-    position_view(getChild<LLButton>("add_gestures"), frame.add, mGridHeight);
+    position_view(getChild<LLButton>("add_items"), frame.add, mGridHeight);
     position_view(getChild<LLButton>("stop"), frame.stop, mGridHeight);
     position_view(getChild<LLButton>("options"), frame.options, mGridHeight);
     position_view(grid, frame.grid, mGridHeight);
@@ -324,7 +324,7 @@ void FSFloaterGestureBoard::playTile(const std::string& tile)
     if (!current()) return;
     auto& controller = FSGestureBoardController::instance(); controller.play(controller.data().selected, tile);
 }
-void FSFloaterGestureBoard::addGestures()
+void FSFloaterGestureBoard::addItems()
 {
     if (!current()) return;
     closeEditors(); auto& controller = FSGestureBoardController::instance();
@@ -414,14 +414,14 @@ bool FSFloaterGestureBoard::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop
     const auto source = LLToolDragAndDrop::getInstance()->getSource();
     if (!pointInView(x, y) || !current() || !findBoard(controller.data(), controller.data().selected) ||
         (source != LLToolDragAndDrop::SOURCE_AGENT && source != LLToolDragAndDrop::SOURCE_LIBRARY) ||
-        (type != DAD_GESTURE && type != DAD_LINK) || !cargo) return true;
+        (type != DAD_GESTURE && type != DAD_SOUND && type != DAD_LINK) || !cargo) return true;
     const auto* reference = static_cast<LLInventoryItem*>(cargo);
     LLUUID item, asset; std::string name, reason;
     if (!controller.resolve(reference->getUUID(), item, asset, name, reason)) { tooltip = getString(reason); return true; }
     *accept = ACCEPT_YES_COPY_MULTI;
     if (drop)
     {
-        if (controller.addItems(controller.data().selected, {reference->getUUID()}, controller.snapshot(), mAccount, mSession)) focusGesture(reference->getUUID());
+        if (controller.addItems(controller.data().selected, {reference->getUUID()}, controller.snapshot(), mAccount, mSession)) focusItem(reference->getUUID());
         else *accept = ACCEPT_NO;
     }
     return true; // Inventory drags add; Replace is an explicit picker action.
@@ -430,7 +430,7 @@ bool FSFloaterGestureBoard::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop
 bool FSFloaterGesturePicker::postBuild()
 {
     auto* panel = getChild<LLInventoryPanel>("inventory");
-    panel->setFilterTypes(1ULL << LLInventoryType::IT_GESTURE);
+    panel->setFilterTypes((1ULL << LLInventoryType::IT_GESTURE) | (1ULL << LLInventoryType::IT_SOUND));
     panel->setShowFolderState(LLInventoryFilter::SHOW_NON_EMPTY_FOLDERS); panel->setSuppressOpenItemAction(true);
     getChild<LLFilterEditor>("search")->setCommitCallback([panel](LLUICtrl*, const LLSD& value) { panel->setFilterSubString(value.asString()); });
     getChild<LLButton>("add")->setCommitCallback([this](LLUICtrl*, const LLSD&) { acceptSelection(); });
@@ -463,12 +463,12 @@ void FSFloaterGesturePicker::acceptSelection()
     {
         if (selected.size() != 1) { getChild<LLTextBox>("status")->setText(getString("select_one")); return; }
         auto* editor = LLFloaterReg::findTypedInstance<FSFloaterGestureTileEditor>("gesture_board_editor");
-        if (editor && editor->replaceGesture(selected.front(), mKey)) closeFloater(false);
+        if (editor && editor->replaceItem(selected.front(), mKey)) closeFloater(false);
         else getChild<LLTextBox>("status")->setText(getString(controller.status()));
     }
     else if (controller.addItems(mKey["board"].asString(), selected, mExpected, mAccount, mSession))
     {
-        if (!selected.empty()) if (auto* board = LLFloaterReg::findTypedInstance<FSFloaterGestureBoard>("gesture_board")) board->focusGesture(selected.front());
+        if (!selected.empty()) if (auto* board = LLFloaterReg::findTypedInstance<FSFloaterGestureBoard>("gesture_board")) board->focusItem(selected.front());
         closeFloater(false);
     }
     else getChild<LLTextBox>("status")->setText(getString(controller.status()));
@@ -536,7 +536,7 @@ void FSFloaterGestureTileEditor::replace()
     auto key = pickerKey(mKey["board"].asString(), mExpected); key["tile"] = mTile.id; key["editor_token"] = mToken;
     FSGestureBoardController::instance().cancelPending(); LLFloaterReg::showInstance("gesture_board_picker", key);
 }
-bool FSFloaterGestureTileEditor::replaceGesture(const LLUUID& reference, const LLSD& key)
+bool FSFloaterGestureTileEditor::replaceItem(const LLUUID& reference, const LLSD& key)
 {
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
     if (!LLView::getVisible() || !sameSession(mAccount, mSession) || mToken.isNull() || key["editor_token"].asUUID() != mToken ||
@@ -567,8 +567,8 @@ void FSFloaterGestureTileEditor::updatePreview()
     mTile.height = board_size ? 0 : getChild<LLSpinCtrl>("tile_height")->getValue().asInteger();
     LLUUID item, asset; std::string name, reason;
     if (!FSGestureBoardController::instance().resolve(LLUUID(mTile.item), item, asset, name, reason)) name = getString("missing_tile");
-    getChild<LLTextBox>("gesture_name")->setText(LLStringExplicit(name));
-    getChild<LLTextBox>("gesture_name")->setToolTip(name);
+    getChild<LLTextBox>("item_name")->setText(LLStringExplicit(name));
+    getChild<LLTextBox>("item_name")->setToolTip(name);
     // Recreate only the editor's sample so theme reset restores every button
     // state, rather than retaining a prior custom tint.
     auto* sample = getChild<LLView>("sample"); sample->deleteAllChildren();

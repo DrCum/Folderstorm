@@ -13,6 +13,7 @@
 #include "llinventorymodel.h"
 #include "llstartup.h"
 #include "llviewercontrol.h"
+#include "llviewermessage.h"
 #include "llsdutil.h"
 #include "rlvactions.h"
 #include <algorithm>
@@ -29,11 +30,16 @@ FSGestureBoardController::~FSGestureBoardController()
 }
 bool FSGestureBoardController::available() const
 {
-    return !LLApp::isQuitting() && LLStartUp::getStartupState() == STATE_STARTED && gAgent.getID().notNull() && gAgent.getSessionID().notNull() &&
+    return !LLApp::isQuitting() && !gDisconnected && LLStartUp::getStartupState() == STATE_STARTED && gAgent.getID().notNull() && gAgent.getSessionID().notNull() &&
         gSavedPerAccountSettings.controlExists("FSGestureBoards");
 }
-bool FSGestureBoardController::permitted() const
-{ return available() && gSavedPerAccountSettings.getBOOL("FSGesturesEnabled") && RlvActions::canPlayGestures(); }
+bool FSGestureBoardController::permitted(LLAssetType::EType type) const
+{
+    // Inventory sounds use Inventory > Play's native sound path. The gesture
+    // enable switch and sendgesture restriction apply only to gesture playback.
+    return available() && gAgent.getRegion() && (type == LLAssetType::AT_SOUND ||
+        (type == LLAssetType::AT_GESTURE && gSavedPerAccountSettings.getBOOL("FSGesturesEnabled") && RlvActions::canPlayGestures()));
+}
 void FSGestureBoardController::setStatus(const std::string& status)
 { if (mStatus != status) { mStatus = status; ++mRevision; } }
 void FSGestureBoardController::cancelPending()
@@ -70,18 +76,22 @@ bool FSGestureBoardController::selectBoard(const std::string& id)
     refresh(); if (!valid() || !FSGestureBoard::findBoard(mData, id)) return false;
     auto data = mData; data.selected = id; return commit(data, mRaw, mAccount, mSession);
 }
-bool FSGestureBoardController::resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason) const
+bool FSGestureBoardController::resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason,
+                                     LLAssetType::EType* type) const
 {
     if (!gInventory.isInventoryUsable()) { reason = "inventory_not_ready"; return false; }
     const auto* original = gInventory.getItem(reference);
     item = gInventory.getLinkedItemID(reference);
     const auto* resolved = gInventory.getItem(item);
-    if (!original || !resolved || resolved->getIsLinkType() || resolved->getType() != LLAssetType::AT_GESTURE ||
+    if (!original || !resolved || resolved->getIsLinkType() ||
+        (resolved->getType() != LLAssetType::AT_GESTURE && resolved->getType() != LLAssetType::AT_SOUND) ||
         resolved->getAssetUUID().isNull()) { reason = "missing"; return false; }
     const auto trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
     if (trash.notNull() && (gInventory.isObjectDescendentOf(reference, trash) || gInventory.isObjectDescendentOf(item, trash)))
     { reason = "missing"; return false; }
-    asset = resolved->getAssetUUID(); name = original->getName(); return true;
+    asset = resolved->getAssetUUID(); name = original->getName();
+    if (type) *type = resolved->getType();
+    return true;
 }
 bool FSGestureBoardController::addItems(const std::string& id, const std::vector<LLUUID>& items, const LLSD& expected, const LLUUID& account, const LLUUID& session)
 {
@@ -102,8 +112,10 @@ bool FSGestureBoardController::addItems(const std::string& id, const std::vector
 std::string FSGestureBoardController::tileState(const FSGestureBoard::Tile& tile) const
 {
     LLUUID item, asset; std::string name, error;
-    if (!resolve(LLUUID(tile.item), item, asset, name, error)) return error;
-    if (!permitted()) return "blocked";
+    LLAssetType::EType type = LLAssetType::AT_NONE;
+    if (!resolve(LLUUID(tile.item), item, asset, name, error, &type)) return error;
+    if (!permitted(type)) return "blocked";
+    if (type == LLAssetType::AT_SOUND) return "sound_ready";
     if (mPending.count(item)) return "loading";
     return LLGestureMgr::instance().isGesturePlaying(item) ? "playing" : "ready";
 }
@@ -112,9 +124,18 @@ bool FSGestureBoardController::play(const std::string& id, const std::string& ti
     refresh(); const auto* board = FSGestureBoard::findBoard(mData, id);
     const auto* tile = board ? FSGestureBoard::findTile(*board, tile_id) : nullptr;
     if (!valid() || !tile || mData.selected != id) return false;
-    if (!permitted()) { setStatus("blocked"); return false; }
     LLUUID item, asset; std::string name, error;
-    if (!resolve(LLUUID(tile->item), item, asset, name, error)) { setStatus(error); return false; }
+    LLAssetType::EType type = LLAssetType::AT_NONE;
+    if (!resolve(LLUUID(tile->item), item, asset, name, error, &type)) { setStatus(error); return false; }
+    if (!permitted(type)) { setStatus("blocked"); return false; }
+    if (type == LLAssetType::AT_SOUND)
+    {
+        // Submit once, just like Inventory > Play. No delayed callback can
+        // emit a sound after a board edit, login change or cancellation.
+        send_sound_trigger(asset, 1.f);
+        setStatus("sound_played");
+        return true;
+    }
     auto& manager = LLGestureMgr::instance();
     if (mPending.count(item)) { setStatus("loading"); return true; }
     if (manager.isGesturePlaying(item)) { manager.stopGesture(item); mStarted.erase(item); setStatus("stopped"); return true; }
@@ -151,8 +172,10 @@ void FSGestureBoardController::poll()
         const auto* board = FSGestureBoard::findBoard(mData, pending.board);
         const auto* tile = board ? FSGestureBoard::findTile(*board, pending.tile) : nullptr;
         LLUUID item, asset; std::string name, error;
+        LLAssetType::EType type = LLAssetType::AT_NONE;
         const bool target = tile && tile->item == pending.reference.asString() && mData.selected == pending.board &&
-            resolve(pending.reference, item, asset, name, error) && item == pending.item && asset == pending.asset;
+            resolve(pending.reference, item, asset, name, error, &type) && type == LLAssetType::AT_GESTURE &&
+            item == pending.item && asset == pending.asset;
         const float elapsed = pending.timer.getElapsedTimeF32();
         if (!FSGestureBoard::pendingMatches(pending.account.asString(), pending.session.asString(), mAccount.asString(), mSession.asString(),
                 pending.generation, mGeneration, target, permitted(), elapsed))
