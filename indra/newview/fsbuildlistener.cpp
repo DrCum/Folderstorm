@@ -123,7 +123,7 @@ LLSD objectState(LLViewerObject* value)
         "position",ll_sd_from_vector3(value->getPositionRegion()),"rotation",ll_sd_from_quaternion(value->getRotation()),"scale",ll_sd_from_vector3(value->getScale()),
         "owned",value->permYouOwner(),"modify",value->permModify(),"move",value->permMove(),"physical",value->flagUsePhysics(),"children",value->numChildren());
     result["linked_members"]=LLSD::emptyMap();
-    for(const auto* child : value->getChildren())
+    for(auto child : value->getChildren())
         result["linked_members"][child->getID().asString()]=llsd::map("position",ll_sd_from_vector3(child->getPosition()),"rotation",ll_sd_from_quaternion(child->getRotation()),"scale",ll_sd_from_vector3(child->getScale()),"local_id",static_cast<S32>(child->getLocalID()));
     result["faces"]=LLSD::emptyArray();
     for(S32 face=0;face<value->getNumTEs();++face)
