@@ -6,7 +6,7 @@
 #include <vector>
 namespace fs_assistant {
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 62> featureOperations {{
+inline constexpr std::array<FeatureOperation, 67> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -69,6 +69,11 @@ inline constexpr std::array<FeatureOperation, 62> featureOperations {{
     {"FSBuild","rezInventory","building_tools","build_rez",false,true,"world_read"},
     {"FSBuild","permissionsGet","building_tools","read",true,false,"read"},
     {"FSBuild","nextOwnerSet","building_tools","inventory_permissions",false,false,"read"},
+    {"FSNavigation","status","navigation_tools","world_read",true,false,"world_read"},
+    {"FSNavigation","moveTo","navigation_tools","navigation_move",false,true,"world_read"},
+    {"FSNavigation","flyingSet","navigation_tools","navigation_move",false,true,"world_read"},
+    {"FSNavigation","teleport","navigation_tools","navigation_teleport",false,true,"world_read"},
+    {"FSNavigation","stop","navigation_tools","world_read",false,false,"world_read"},
 }};
 inline const FeatureOperation* featureOperation(const std::string& api,const std::string& op)
 {for(const auto& entry:featureOperations)if(api==entry.api && op==entry.op)return &entry;return nullptr;}

@@ -34,6 +34,7 @@
 #include "llcoordframe.h"           // for mFrameAgent
 #include "llavatarappearancedefines.h"
 #include "llpermissionsflags.h"
+#include "fsassistantasync.h"
 #include "llevents.h"
 #include "v3dmath.h"
 #include "httprequest.h"
@@ -745,6 +746,9 @@ public:
     void            teleportViaLocationLookAt(const LLVector3d& pos_global, const LLVector3& look_at = LLVector3::zero);// To a global location, preserving camera rotation
 // [/RLVa:KB]
 //  void            teleportViaLocationLookAt(const LLVector3d& pos_global);// To a global location, preserving camera rotation
+    bool            hasTeleportRequest() const;
+    bool            hasAssistantTeleport(const fs_assistant::AsyncGuard& guard) const;
+    void            cancelAssistantTeleport(const fs_assistant::AsyncGuard& guard);
     void            teleportCancel();                                       // May or may not be allowed by server
     void            restoreCanceledTeleportRequest();
     bool            canRestoreCanceledTeleport() { return mTeleportCanceled != NULL; }

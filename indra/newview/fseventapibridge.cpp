@@ -38,6 +38,7 @@
 #include "fsworkspacelistener.h"
 #include "fsworldlistener.h"
 #include "fsbuildlistener.h"
+#include "fsnavigationlistener.h"
 #include "fscontentlistener.h"
 #include "fsgesturelistener.h"
 #include "fspreferenceslistener.h"
@@ -379,6 +380,7 @@ public:
         fs_initialize_workspace_api();
         fs_initialize_world_api();
         fs_initialize_build_api();
+        fs_initialize_navigation_api();
         fs_initialize_content_api();
         fs_initialize_gesture_api();
         fs_initialize_preferences_api();
@@ -751,7 +753,7 @@ private:
     {
         return (!posted.async || posted.async->allowed()) && mEnabled && !posted.sent && !gDisconnected && posted.generation==mSessionGeneration && posted.login==gAgent.getSessionID() &&
             posted.account==gAgentID && now_seconds()<posted.deadline && posted.gate && posted.gate->allowed() &&
-            (!mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(posted.api,posted.op) || FSSessionWorker::assistantActiveAllowed());
+            (!mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(posted.api,posted.op) || FSSessionWorker::assistantActiveAllowed(posted.api=="FSNavigation" && posted.op=="teleport"));
     }
 
     struct Ask
@@ -1004,7 +1006,7 @@ private:
                 posted.async->checkWith([weak,frozen](){std::string error;const auto self=weak.lock();return self && self->validateOperation(frozen,error)?std::string():std::string("operation_source_changed");});
             }
             if(fs_assistant::needsActiveCharacter(api,op))
-                posted.async->checkWith([](){return FSSessionWorker::assistantActiveAllowed()?std::string():std::string("requires_active_character");});
+                posted.async->checkWith([api,op](){return FSSessionWorker::assistantActiveAllowed(api=="FSNavigation" && op=="teleport")?std::string():std::string("requires_active_character");});
             mAsync.emplace(request_id,posted.async);
             if(fs_assistant::featureAPI(api))
             {
@@ -1043,7 +1045,7 @@ private:
             {
                 auto self = weak.lock();
                 return self && gate->allowed() && self->mEnabled && self->mSessionGeneration == generation && !gDisconnected && account==gAgentID && login==gAgent.getSessionID() &&
-                    (!self->mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(api,op) || FSSessionWorker::assistantActiveAllowed()) &&
+                    (!self->mIdentity["managed"].asBoolean() || !fs_assistant::needsActiveCharacter(api,op) || FSSessionWorker::assistantActiveAllowed(api=="FSNavigation" && op=="teleport")) &&
                     fs_assistant::decide(effective_levels(classes)) != fs_assistant::Decision::Deny;
             };
             if (api == "LLWorkspace")

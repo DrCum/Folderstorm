@@ -16,7 +16,7 @@ public:
     static bool managed();
     static LLSD assistantIdentity();
     static bool assistantPaused();
-    static bool assistantActiveAllowed();
+    static bool assistantActiveAllowed(bool allowTeleport = false); // Only owned navigation may retain authority through its teleport UI.
     static void configure(); // Temporary settings only, after command line.
     static void importProfileSettings(); // Explicit host choice; before UI/login, native backup eligibility.
     static void importProfileAccountSettings(); // First successful account only; reviewed controls, not account contents.

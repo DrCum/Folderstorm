@@ -120,6 +120,7 @@ set(viewer_SOURCE_FILES
     fsworkspaceserialization.cpp
     fsworkspacecontextui.cpp
     fsassistantsocial.cpp
+    fsnavigationlistener.cpp
     fsbuildlistener.cpp
     fsworldlistener.cpp
     fscontentlistener.cpp
@@ -1043,6 +1044,8 @@ set(viewer_HEADER_FILES
     fscontentreadpolicy.h
     fscontentpermissions.h
     fscontentpolicy.h
+    fsnavigationlistener.h
+    fsnavigationmodel.h
     fsbuildlistener.h
     fsassistantworldmodel.h
     fsworldlistener.h

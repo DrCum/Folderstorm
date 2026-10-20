@@ -38,14 +38,13 @@ Address inventory by UUID. Names and paths are not unique. `inventory_resolve_pa
 
 ## What it will not do
 
-The viewer allowlist is `LLInventory`, `LLAppearance`, and `LLCamera`. Any other Event API is rejected with HTTP 403, including teleport, chat, gestures, `UI.call`, and window or input injection.
+The viewer uses a closed manifest of typed inventory, appearance, camera, workspace and curated feature APIs. Generic `UI.call`, arbitrary Event APIs and window/input injection are rejected. New feature tools require their advertised capability version and native permission classes.
 
 Also out of scope:
 
 - Task inventory (objects you are sitting on or editing in-world).
 - Marketplace listings and purchases.
 - Remote or multi-user access. The HTTP listener is `127.0.0.1` only.
-- Saving notecard or script edits. Reads are capped and report `asset_id` and `stale`.
 - Push notifications. `inventory_changes` is request/response. Poll it with the `generation` from `viewer_status`.
 
 Restrained Love locks are honored. A locked wearable, attachment, or folder returns an error instead of changing the avatar or the inventory.
@@ -57,6 +56,14 @@ Restrained Love locks are honored. A locked wearable, attachment, or folder retu
 `build_rez_primitive` creates cube/sphere/cylinder/cone shapes with explicit position/rotation/scale. `build_rez_inventory` copies a copyable inventory object into the world. Both are limited to the current buildable parcel and 64m. Neither changes native selection or guesses the new UUID. Results distinguish queued/submitted from simulator confirmation; inspect the original receipt and world before another action.
 
 `inventory_permissions_get` returns native masks and a revision for a finished owned item outside Trash/Library. `inventory_next_owner_set` accepts that revision and explicit `copy`, `modify`, `transfer` booleans. Native Properties eligibility, base rights, fair-use and object slam flags apply; other masks and sale information stay unchanged. These tools have separate Ask-capable permissions in Local assistant. World reads remain opt-in. Update the viewer and sidecar together (`building_tools: 1`).
+
+## Navigation
+
+`navigation_status` reads location and the last assistant-owned outcome. `navigation_move_to` accepts global `[x,y,z]`, explicit `walk`/`fly`, `stop_distance` (0.25–4m), and `timeout_seconds` (1–30). Movement stays within the current region and 64m. Stand first; finish existing native pilot/follow/teleport actions first. Land before requesting a walk. Native autopilot handles movement and can fail to reach a destination.
+
+`navigation_flying_set` explicitly takes off or lands. `navigation_teleport` submits one global-coordinate teleport. Delayed maturity callbacks retain the original authority and cannot retry a submitted request. `navigation_stop` uses the exact returned `operation_id` and stops only that assistant action. Teleport cancellation after submission is best effort. Poll status; inspect the original operation receipt after uncertainty and never replay it.
+
+Enable opt-in World read and the separate Ask-capable avatar movement/teleport permissions in Local assistant. All navigation targets an exact `viewer_session`; managed mutations require its active character. Switching, revocation, source/region changes, restrictions, timeout or manual replacement stop owned movement. Matching viewer/sidecar versions must advertise `navigation_tools: 1`.
 
 ## Build
 

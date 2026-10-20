@@ -1211,12 +1211,12 @@ LLSD FSSessionWorker::assistantIdentity()
         "profile",worker->assistantProfile,"name",worker->loginName,"grid",worker->loginGrid);
 }
 bool FSSessionWorker::assistantPaused() {return managed() && worker->assistantHold;}
-bool FSSessionWorker::assistantActiveAllowed()
+bool FSSessionWorker::assistantActiveAllowed(bool allowTeleport)
 {
     if(!managed())return true;
     const HWND popup=worker->window?GetLastActivePopup(worker->window):nullptr;
     return !(popup && popup!=worker->window && IsWindowVisible(popup)) && worker->ready() && worker->inputGranted && worker->mode==Mode::Active && !worker->promoting && !worker->demoting &&
-        !worker->transition.active() && !gTeleportDisplay && !gFocusMgr.focusLocked() && !LLFloaterReg::instanceVisible("preferences");
+        !worker->transition.active() && (allowTeleport || !gTeleportDisplay) && !gFocusMgr.focusLocked() && !LLFloaterReg::instanceVisible("preferences");
 }
 void FSSessionWorker::importProfileSettings()
 {
@@ -1861,7 +1861,7 @@ bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
 LLSD FSSessionWorker::assistantIdentity() {return LLSD::emptyMap();}
 bool FSSessionWorker::assistantPaused() {return false;}
-bool FSSessionWorker::assistantActiveAllowed() {return true;}
+bool FSSessionWorker::assistantActiveAllowed(bool) {return true;}
 bool FSSessionWorker::nativeChatReadAllowed() { return true; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}

@@ -29,6 +29,7 @@
 #include "fsgesturelistener.h"
 
 #include "llagent.h"
+#include "fsnavigationlistener.h"
 
 #include "pipeline.h"
 
@@ -159,6 +160,17 @@ public:
         kRestartPending
     };
 
+    // Only assistant-created requests retain this authority through maturity
+    // callbacks. Native requests remain unaffected.
+    fs_assistant::AsyncTaskPtr mAssistantTask;
+    bool mAssistantSubmitted = false;
+    bool assistantAllowed() const { return !mAssistantTask || fs_assistant::asyncTaskAllowed(mAssistantTask); }
+    bool assistantSubmit()
+    {
+        if(!mAssistantTask) return true;
+        if(mAssistantSubmitted || !fs_assistant::asyncTaskSubmit(mAssistantTask)) return false;
+        mAssistantSubmitted=true; return true;
+    }
     LLTeleportRequest();
     virtual ~LLTeleportRequest();
 
@@ -2264,6 +2276,7 @@ void LLAgent::stopAutoPilot(bool user_cancel)
 //-----------------------------------------------------------------------------
 void LLAgent::autoPilot(F32 *delta_yaw)
 {
+    fs_navigation_tick(); // Revoke owned motion before producing control flags.
     if (mAutoPilot)
     {
         if (!mLeaderID.isNull())
@@ -4923,6 +4936,9 @@ bool LLAgent::hasPendingTeleportRequest()
 
 void LLAgent::startTeleportRequest()
 {
+    const auto guardedRequest=mTeleportRequest;
+    if(guardedRequest && !guardedRequest->assistantAllowed())
+    { clearTeleportRequest(); setTeleportState(TELEPORT_NONE); gTeleportDisplay=false; return; }
     LL_INFOS("Teleport") << "Agent handling start teleport request." << LL_ENDL; // <FS:Beq> fix mistyped tag
     if(LLVoiceClient::instanceExists())
     {
@@ -4961,6 +4977,8 @@ void LLAgent::startTeleportRequest()
 
 void LLAgent::handleTeleportFinished()
 {
+    if(mTeleportRequest && mTeleportRequest->mAssistantTask)
+        mTeleportRequest->mAssistantTask->guard()->acknowledge("native_teleport_finished");
     LL_INFOS("Teleport") << "Agent handling teleport finished." << LL_ENDL;
     if (mTPNeedsNeabyChatSeparator)
     {
@@ -5006,6 +5024,8 @@ void LLAgent::handleTeleportFinished()
 
 void LLAgent::handleTeleportFailed()
 {
+    if(mTeleportRequest && mTeleportRequest->mAssistantTask)
+        mTeleportRequest->mAssistantTask->guard()->cancel("native_teleport_failed");
     LL_WARNS("Teleport") << "Agent handling teleport failure!" << LL_ENDL;
     if(LLVoiceClient::instanceExists())
     {
@@ -5235,6 +5255,18 @@ void LLAgent::doTeleportViaLure(const LLUUID& lure_id, bool godlike)
 }
 
 // James Cook, July 28, 2005
+bool LLAgent::hasTeleportRequest() const
+{ return mTeleportRequest && mTeleportRequest->getStatus()!=LLTeleportRequest::kFailed; }
+bool LLAgent::hasAssistantTeleport(const fs_assistant::AsyncGuard& guard) const
+{ return guard && mTeleportRequest && mTeleportRequest->getStatus()!=LLTeleportRequest::kFailed && mTeleportRequest->mAssistantTask && mTeleportRequest->mAssistantTask->guard()==guard; }
+void LLAgent::cancelAssistantTeleport(const fs_assistant::AsyncGuard& guard)
+{
+    if(!hasAssistantTeleport(guard)) return;
+    const bool pending=!mTeleportRequest->mAssistantSubmitted;
+    // Cancellation is cleanup, never fresh teleport authority. Native cancel
+    // restrictions still apply after submission; an accepted TP cannot be undone.
+    if(pending || gRlvHandler.getCanCancelTp()) { teleportCancel(); gTeleportDisplay=false; }
+}
 void LLAgent::teleportCancel()
 {
     if (!hasPendingTeleportRequest())
@@ -5300,6 +5332,11 @@ void LLAgent::teleportViaLocation(const LLVector3d& pos_global)
 
 void LLAgent::doTeleportViaLocation(const LLVector3d& pos_global)
 {
+    const auto guardedRequest=mTeleportRequest; // Keep it alive if callbacks clear it.
+    // The following native core and UDP send do not yield. Check immediately
+    // before entering them, including after any maturity-preference delay.
+    if(guardedRequest && !guardedRequest->assistantSubmit())
+    { clearTeleportRequest(); setTeleportState(TELEPORT_NONE); gTeleportDisplay=false; return; }
     LLViewerRegion* regionp = getRegion();
 
     if (!regionp)
@@ -5414,7 +5451,7 @@ void LLAgent::doTeleportViaLocation(const LLVector3d& pos_global)
     // </FS:Beq>
     }
 // <FS:TT> Client LSL Bridge
-    if (FSLSLBridge::instance().canUseBridge() && is_local)
+    if ((!guardedRequest || !guardedRequest->mAssistantTask) && FSLSLBridge::instance().canUseBridge() && is_local)
     {
         teleportBridgeGlobal(pos_global);
     }
@@ -6144,7 +6181,7 @@ LLAgentQueryManager::~LLAgentQueryManager()
 //-----------------------------------------------------------------------------
 
 LLTeleportRequest::LLTeleportRequest()
-    : mStatus(kPending)
+    : mAssistantTask(fs_assistant::AsyncScope::current()?fs_assistant::asyncTask():nullptr), mStatus(kPending)
 {
 }
 
