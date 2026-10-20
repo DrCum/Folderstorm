@@ -32,6 +32,9 @@ public:
     void playTile(const std::string& tile);
     void focusItem(const LLUUID& item) { mFocusReference = item; }
     bool current() const;
+    const LLUUID& windowID() const { return mWindowID; }
+    const std::string& selectedBoard() const { return mBoard; }
+    void selectBoard(const std::string& id);
 private:
     void refresh(bool force = false);
     void rebuild();
@@ -45,6 +48,8 @@ private:
     void closeEditors();
     LLTimer mRefreshTimer;
     LLUUID mAccount, mSession, mFocusReference;
+    const LLUUID mWindowID = LLUUID::generateNewID();
+    std::string mBoard;
     LLSD mDisplayed;
     S32 mGridWidth = 0, mGridHeight = 0, mPage = 0;
     std::string mDisplayedBoard;

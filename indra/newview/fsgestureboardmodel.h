@@ -44,6 +44,7 @@ Board* findBoard(Collection& collection, const std::string& id);
 const Board* findBoard(const Collection& collection, const std::string& id);
 Tile* findTile(Board& board, const std::string& id);
 const Tile* findTile(const Board& board, const std::string& id);
+bool sameBoard(const Board& left, const Board& right);
 bool moveTile(Board& board, const std::string& id, int index);
 float foreground(const std::array<float, 3>& background);
 // Pure cancellation gate used by the delayed native playback path.

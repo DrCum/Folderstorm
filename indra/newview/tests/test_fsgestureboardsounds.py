@@ -119,17 +119,19 @@ public:
     bool permitted(LLAssetType::EType type = LLAssetType::AT_GESTURE) const;
     bool resolve(const LLUUID&, LLUUID&, LLUUID&, std::string&, std::string&, LLAssetType::EType* = nullptr) const;
     std::string tileState(const FSGestureBoard::Tile&) const;
-    bool play(const std::string&, const std::string&);
+    bool play(const std::string&, const std::string&, const LLUUID& = LLUUID());
     void setStatus(const std::string&);
     void cancelPending();
-    void stopBoard();
+    void cancelPendingForWindow(const LLUUID&);
+    void cancelPendingForBoard(const std::string&);
+    void stopBoard(const std::string&);
     void poll();
     bool valid() const { return mValid && available(); }
     // Settings persistence isn't part of this transport-boundary harness.
     void refresh() {}
     struct Pending {
         std::string board, tile;
-        LLUUID reference, item, asset, account, session;
+        LLUUID reference, item, asset, account, session, owner;
         unsigned long generation = 0;
         LLTimer timer;
     };
@@ -139,7 +141,7 @@ public:
     unsigned long mRevision = 0, mGeneration = 0;
     std::string mStatus;
     std::map<LLUUID, Pending> mPending;
-    std::set<LLUUID> mStarted;
+    std::map<LLUUID, std::string> mStarted;
     LLTimer mPollTimer;
 };
 '''
@@ -174,7 +176,7 @@ int main() {
     assert(c.play("board", st.id) && sounds.size() == 3 && sounds.back() == asset);
     c.mData.boards.front().tiles.front().item = "link";
     now += 1.f; c.poll(); assert(sounds.size() == 3);
-    c.stopBoard(); assert(sounds.size() == 3 && manager.stops == 0);
+    c.stopBoard("board"); assert(sounds.size() == 3 && manager.stops == 0);
     assert(!c.play("other-board", st.id) && !c.play("board", "removed"));
     gSavedPerAccountSettings.gestures = false; RlvActions::gestures = false;
     assert(c.play("board", st.id) && !c.play("board", gt.id));
@@ -208,7 +210,7 @@ int main() {
     assert(manager.plays == 1 && c.mPending.empty() && c.mStarted.count(gesture));
     assert(c.play("board", gt.id) && manager.stops == 1 && c.mStarted.empty());
     assert(c.play("board", gt.id) && manager.plays == 2);
-    manager.playing.insert(LLUUID("unrelated")); c.stopBoard();
+    manager.playing.insert(LLUUID("unrelated")); c.stopBoard("board");
     assert(!manager.playing.count(gesture) && manager.playing.count(LLUUID("unrelated")));
     // A loading gesture must not become a sound implicitly when a link changes.
     manager.loaded.clear();
@@ -238,6 +240,7 @@ class GestureBoardSounds(unittest.TestCase):
             "bool FSGestureBoardController::play(", "void FSGestureBoardController::stopBoard(",
             "void FSGestureBoardController::poll(", "void FSGestureBoardController::cancelPending(",
             "void FSGestureBoardController::setStatus(",
+            "void FSGestureBoardController::cancelPendingForWindow(", "void FSGestureBoardController::cancelPendingForBoard(",
         ]
         helpers = ["Board* findBoard(", "const Board* findBoard(", "Tile* findTile(",
                    "const Tile* findTile(", "bool pendingMatches("]

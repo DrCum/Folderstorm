@@ -15,7 +15,6 @@
 #include "lltimer.h"
 #include "lluuid.h"
 #include <map>
-#include <set>
 class FSGestureBoardController final : public LLGestureManagerObserver, public LLInventoryObserver
 {
 public:
@@ -30,14 +29,17 @@ public:
     const std::string& status() const { return mStatus; }
     void setStatus(const std::string& status);
     bool commit(const FSGestureBoard::Collection& data, const LLSD& expected, const LLUUID& account, const LLUUID& session);
+    bool matchesSnapshot(const LLSD& expected) const;
     bool selectBoard(const std::string& id);
     bool addItems(const std::string& board, const std::vector<LLUUID>& items, const LLSD& expected, const LLUUID& account, const LLUUID& session);
     bool resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason,
                  LLAssetType::EType* type = nullptr) const;
     std::string tileState(const FSGestureBoard::Tile& tile) const;
-    bool play(const std::string& board, const std::string& tile);
+    bool play(const std::string& board, const std::string& tile, const LLUUID& owner = LLUUID::null);
     void cancelPending();
-    void stopBoard();
+    void cancelPendingForWindow(const LLUUID& owner);
+    void cancelPendingForBoard(const std::string& board);
+    void stopBoard(const std::string& board);
     void changed() override { ++mRevision; }
     void changed(U32) override { ++mRevision; }
 private:
@@ -48,7 +50,7 @@ private:
     struct Pending
     {
         std::string board, tile;
-        LLUUID reference, item, asset, account, session;
+        LLUUID reference, item, asset, account, session, owner;
         unsigned long generation = 0;
         LLTimer timer;
     };
@@ -60,8 +62,9 @@ private:
     std::string mStatus = "ready";
     std::map<LLUUID, Pending> mPending;
     // Native gestures share one playback instance per item. Retain only those
-    // this board started, and forget completions before a later external play.
-    std::set<LLUUID> mStarted;
+    // a board started, retaining its board ID. Forget completions before a later
+    // external play; Stop in one board must not stop another board's gestures.
+    std::map<LLUUID, std::string> mStarted;
     LLTimer mPollTimer;
 };
 #endif

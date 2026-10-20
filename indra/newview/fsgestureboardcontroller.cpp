@@ -44,6 +44,25 @@ void FSGestureBoardController::setStatus(const std::string& status)
 { if (mStatus != status) { mStatus = status; ++mRevision; } }
 void FSGestureBoardController::cancelPending()
 { ++mGeneration; if (!mPending.empty()) { mPending.clear(); ++mRevision; setStatus("cancelled"); } }
+void FSGestureBoardController::cancelPendingForWindow(const LLUUID& owner)
+{
+    for (auto it = mPending.begin(); it != mPending.end();)
+        if (it->second.owner == owner) { it = mPending.erase(it); ++mRevision; } else ++it;
+}
+void FSGestureBoardController::cancelPendingForBoard(const std::string& board)
+{
+    for (auto it = mPending.begin(); it != mPending.end();)
+        if (it->second.board == board) { it = mPending.erase(it); ++mRevision; } else ++it;
+}
+bool FSGestureBoardController::matchesSnapshot(const LLSD& expected) const
+{
+    if (expected == mRaw) return true;
+    if (!expected.isMap() || !mRaw.isMap()) return false;
+    // The saved last selection is a launcher preference, not an edit to any
+    // board. A different window selecting a board must not invalidate a draft.
+    LLSD comparable = expected; comparable["selected"] = mRaw["selected"];
+    return comparable == mRaw;
+}
 void FSGestureBoardController::refresh()
 {
     if (!available() || mAccount != gAgent.getID() || mSession != gAgent.getSessionID())
@@ -64,17 +83,24 @@ bool FSGestureBoardController::commit(const FSGestureBoard::Collection& data, co
 {
     refresh();
     if (!valid() || account != mAccount || session != mSession) { setStatus(available() ? "invalid_data" : "logged_out"); return false; }
-    if (expected != mRaw) { setStatus("changed"); return false; }
+    if (!matchesSnapshot(expected)) { setStatus("changed"); return false; }
     FSGestureBoard::Collection checked;
     const LLSD encoded = FSGestureBoard::encode(data);
     if (!FSGestureBoard::decode(encoded, checked)) { setStatus("invalid_name"); return false; }
-    cancelPending(); gSavedPerAccountSettings.setLLSD("FSGestureBoards", encoded);
+    for (const auto& prior : mData.boards)
+    {
+        const auto* next = FSGestureBoard::findBoard(checked, prior.id);
+        if (!next || !FSGestureBoard::sameBoard(prior, *next)) cancelPendingForBoard(prior.id);
+    }
+    gSavedPerAccountSettings.setLLSD("FSGestureBoards", encoded);
     mRaw = encoded; mData = checked; ++mRevision; setStatus("saved"); return true;
 }
 bool FSGestureBoardController::selectBoard(const std::string& id)
 {
     refresh(); if (!valid() || !FSGestureBoard::findBoard(mData, id)) return false;
-    auto data = mData; data.selected = id; return commit(data, mRaw, mAccount, mSession);
+    if (mData.selected == id) return true;
+    mData.selected = id; mRaw = FSGestureBoard::encode(mData);
+    gSavedPerAccountSettings.setLLSD("FSGestureBoards", mRaw); ++mRevision; return true;
 }
 bool FSGestureBoardController::resolve(const LLUUID& reference, LLUUID& item, LLUUID& asset, std::string& name, std::string& reason,
                                      LLAssetType::EType* type) const
@@ -119,11 +145,11 @@ std::string FSGestureBoardController::tileState(const FSGestureBoard::Tile& tile
     if (mPending.count(item)) return "loading";
     return LLGestureMgr::instance().isGesturePlaying(item) ? "playing" : "ready";
 }
-bool FSGestureBoardController::play(const std::string& id, const std::string& tile_id)
+bool FSGestureBoardController::play(const std::string& id, const std::string& tile_id, const LLUUID& owner)
 {
     refresh(); const auto* board = FSGestureBoard::findBoard(mData, id);
     const auto* tile = board ? FSGestureBoard::findTile(*board, tile_id) : nullptr;
-    if (!valid() || !tile || mData.selected != id) return false;
+    if (!valid() || !tile) return false;
     LLUUID item, asset; std::string name, error;
     LLAssetType::EType type = LLAssetType::AT_NONE;
     if (!resolve(LLUUID(tile->item), item, asset, name, error, &type)) { setStatus(error); return false; }
@@ -141,18 +167,20 @@ bool FSGestureBoardController::play(const std::string& id, const std::string& ti
     if (manager.isGesturePlaying(item)) { manager.stopGesture(item); mStarted.erase(item); setStatus("stopped"); return true; }
     const auto loaded = manager.getActiveGestures().find(item);
     if (loaded != manager.getActiveGestures().end() && loaded->second)
-    { manager.playGesture(item); if (manager.isGesturePlaying(item)) mStarted.insert(item); setStatus("playing"); return true; }
+    { manager.playGesture(item); if (manager.isGesturePlaying(item)) mStarted[item] = id; setStatus("playing"); return true; }
     Pending pending; pending.board = id; pending.tile = tile_id; pending.reference = LLUUID(tile->item);
-    pending.item = item; pending.asset = asset; pending.account = mAccount; pending.session = mSession; pending.generation = mGeneration;
+    pending.item = item; pending.asset = asset; pending.owner = owner; pending.account = mAccount; pending.session = mSession; pending.generation = mGeneration;
     pending.timer.reset(); mPending[item] = pending; setStatus("loading");
     if (!manager.isGestureActive(item)) manager.activateGestureWithAsset(item, asset, true, false);
     return true;
 }
-void FSGestureBoardController::stopBoard()
+void FSGestureBoardController::stopBoard(const std::string& board)
 {
-    refresh(); cancelPending();
+    refresh(); cancelPendingForBoard(board);
     if (!available()) return;
-    const auto started = mStarted; mStarted.clear();
+    std::vector<LLUUID> started;
+    for (auto it = mStarted.begin(); it != mStarted.end();)
+        if (it->second == board) { started.push_back(it->first); it = mStarted.erase(it); } else ++it;
     for (const auto& item : started) if (LLGestureMgr::instance().isGesturePlaying(item)) LLGestureMgr::instance().stopGesture(item);
     setStatus("stopped");
 }
@@ -163,7 +191,7 @@ void FSGestureBoardController::poll()
     { if (!mPending.empty() || !mStarted.empty()) { cancelPending(); mStarted.clear(); } return; }
     auto& manager = LLGestureMgr::instance();
     for (auto it = mStarted.begin(); it != mStarted.end();)
-        if (!manager.isGesturePlaying(*it)) it = mStarted.erase(it); else ++it;
+        if (!manager.isGesturePlaying(it->first)) it = mStarted.erase(it); else ++it;
     if (mPending.empty() || mPollTimer.getElapsedTimeF32() < .1f) return;
     mPollTimer.reset(); refresh();
     for (auto it = mPending.begin(); it != mPending.end();)
@@ -173,7 +201,7 @@ void FSGestureBoardController::poll()
         const auto* tile = board ? FSGestureBoard::findTile(*board, pending.tile) : nullptr;
         LLUUID item, asset; std::string name, error;
         LLAssetType::EType type = LLAssetType::AT_NONE;
-        const bool target = tile && tile->item == pending.reference.asString() && mData.selected == pending.board &&
+        const bool target = tile && tile->item == pending.reference.asString() &&
             resolve(pending.reference, item, asset, name, error, &type) && type == LLAssetType::AT_GESTURE &&
             item == pending.item && asset == pending.asset;
         const float elapsed = pending.timer.getElapsedTimeF32();
@@ -185,7 +213,7 @@ void FSGestureBoardController::poll()
         if (!loaded->second) { ++it; continue; }
         // Erase before entering the native engine: it notifies observers.
         it = mPending.erase(it);
-        if (!manager.isGesturePlaying(item)) { manager.playGesture(item); if (manager.isGesturePlaying(item)) mStarted.insert(item); }
+        if (!manager.isGesturePlaying(item)) { manager.playGesture(item); if (manager.isGesturePlaying(item)) mStarted[item] = pending.board; }
         setStatus("playing");
     }
 }

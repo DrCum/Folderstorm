@@ -112,3 +112,74 @@ Windows acceptance:
 5. Inspect picker/editor text and sound tooltips at minimum size and larger UI scale in Folderstorm and alternate skins.
 
 Native Windows compile, drag/drop and audible playback remain pending.
+
+## Multiple open boards and sound badges: follow-up above PR #74
+
+Use **Options → Open board in new window** to open another launcher, then choose
+its board from that window's selector. Up to 16 board windows can be open. Titles
+include board names, and each window keeps its own selection, page, size and live
+position. Additional windows cascade through the native floater group. Closing
+one destroys that window; multiple open windows are not automatically restored
+on login. The normal toolbar/World/Preferences launcher still opens the primary
+board. Its next opening uses the saved last selection. Existing account-local
+board definitions and their version-two format are unchanged.
+
+A selection changes only the initiating window; the saved last-selection
+preference is ignored for definition-conflict checks. Real definition edits still
+use snapshots and account/login guards, and all views of an edited board refresh.
+Deleting the displayed board safely chooses an available fallback. An empty
+collection does not repeatedly dismiss the New-board editor.
+
+Pending gesture requests retain their originating window ID. Closing/switching
+one window cancels only that window's requests. Editing/deleting a board cancels
+that board's requests; another board's requests continue. Stop affects gestures
+started by that board and its pending requests. The native engine still has one
+playback instance per inventory gesture ID, so repeated references share its
+playing state. Already emitted sound/chat cannot be recalled.
+
+The existing shared editor/picker remain one of each. Their keys identify the
+exact owning window, board and login; closing another board cannot dismiss them
+or redirect Add/Replace/Save. Recreated primary windows cannot inherit old editor
+callbacks. Deferred deletion confirmation also checks its originating window.
+
+Resolved inventory sounds now show a small native **Inv_Sound** speaker overlay
+on their tiles and editor samples, including when gesture playback is disabled.
+The native button reserves label space, ellipsizes and scales the icon; custom
+fills use the selected foreground contrast. A tooltip also identifies inventory
+sounds. Inventory type is resolved afresh, so replacements/links update the badge
+without storing an extra asset/type field. Sound playback itself is unchanged.
+
+Focused checks passed:
+
+```sh
+python3 -m unittest discover -s indra/newview/tests -p 'test_fsgestureboard*.py' -v
+git diff --check
+```
+
+Five tests execute actual controller/window method bodies with C++17 strict
+warnings and small native UI/storage boundaries, plus XUI/icon wiring checks.
+They cover direct/linked sound playback and gesture restrictions, concurrent
+boards, per-window/per-board cancellation and Stop, last-selection independence,
+snapshot conflicts, all board presentation fields, real commit invalidation,
+stale/recreated owner keys, editor closure, account/session changes and rejection
+without writes. Codec/storage/UI/transport fixtures do not establish real settings
+persistence, native rendering or audible output. No broad viewer, packaging,
+GitHub build or unrelated tests were run.
+
+Windows acceptance remains pending:
+
+1. Open at least three board windows, choose different boards, resize and move
+   them, change pages and select boards independently. Check titles/cascading,
+   the 16-window limit, primary launcher reopening and saved board definitions.
+2. Edit a board visible in two windows; check both refresh without moving a
+   third window to another board. Create/rename/duplicate/delete boards, including
+   deleting the last board and then using New again. Check Add/drop/replace and
+   their receiving window, Save/Cancel, and closing another window during editing.
+3. Queue two distinct uncached gestures from different boards. Close/switch one,
+   and verify only the other can play on completion. Stop one board while another
+   is playing. Repeat with two views of the same board and with logout/relogin.
+4. Check sound badges on ordinary and linked sounds, mixed with gestures, at
+   minimum tile sizes/larger UI scale and in Folderstorm/alternate skins. Check
+   contrast on light/dark custom fills, editor samples and sound ↔ gesture
+   replacement. Each explicit sound click still plays once using Inventory Play's
+   native path; the badge must not cause playback itself.
