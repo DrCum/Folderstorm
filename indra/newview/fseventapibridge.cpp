@@ -37,6 +37,7 @@
 #include "fsinventorybulk.h"
 #include "fsworkspacelistener.h"
 #include "fsworldlistener.h"
+#include "fsbuildlistener.h"
 #include "fscontentlistener.h"
 #include "fsgesturelistener.h"
 #include "fspreferenceslistener.h"
@@ -377,6 +378,7 @@ public:
     {
         fs_initialize_workspace_api();
         fs_initialize_world_api();
+        fs_initialize_build_api();
         fs_initialize_content_api();
         fs_initialize_gesture_api();
         fs_initialize_preferences_api();

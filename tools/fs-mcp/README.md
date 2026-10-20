@@ -50,6 +50,14 @@ Also out of scope:
 
 Restrained Love locks are honored. A locked wearable, attachment, or folder returns an error instead of changing the avatar or the inventory.
 
+## Building and inventory next-owner permissions
+
+`build_object_get` returns a 120-second `expected_revision` for a loaded root volume. Supply that revision to `build_object_transform`, `build_object_surface`, or `build_object_material`. Positions use region coordinates; rotations are normalized `[x,y,z,w]` quaternions. Edits require an owned, modifiable, movable, nonphysical root and the active managed character. Linked roots can move/rotate; resize linked sets and edit PBR overrides in native Build. Inventory-backed textures/materials must have full owner permissions.
+
+`build_rez_primitive` creates cube/sphere/cylinder/cone shapes with explicit position/rotation/scale. `build_rez_inventory` copies a copyable inventory object into the world. Both are limited to the current buildable parcel and 64m. Neither changes native selection or guesses the new UUID. Results distinguish queued/submitted from simulator confirmation; inspect the original receipt and world before another action.
+
+`inventory_permissions_get` returns native masks and a revision for a finished owned item outside Trash/Library. `inventory_next_owner_set` accepts that revision and explicit `copy`, `modify`, `transfer` booleans. Native Properties eligibility, base rights, fair-use and object slam flags apply; other masks and sale information stay unchanged. These tools have separate Ask-capable permissions in Local assistant. World reads remain opt-in. Update the viewer and sidecar together (`building_tools: 1`).
+
 ## Build
 
 A packaged Windows install already has the binary next to the viewer. Copy an installation-bound client entry from its Setup page. On Linux and macOS, use the `fs-mcp` binary beside the viewer. See [doc/building-from-source.md](../../doc/building-from-source.md). Building from this directory still requires Go 1.25 or newer, and that copy is for a checkout. An installed viewer already includes the program above.

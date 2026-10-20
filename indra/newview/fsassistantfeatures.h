@@ -6,7 +6,7 @@
 #include <vector>
 namespace fs_assistant {
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 54> featureOperations {{
+inline constexpr std::array<FeatureOperation, 62> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -61,6 +61,14 @@ inline constexpr std::array<FeatureOperation, 54> featureOperations {{
     {"FSPreferences","preview","preferences_tools","preferences_write",false,false,"preferences_read"},
     {"FSPreferences","accept","preferences_tools","preferences_write",false,false,"preferences_read"},
     {"FSPreferences","cancel","preferences_tools","preferences_write",false,false,"preferences_read"},
+    {"FSBuild","objectGet","building_tools","world_read",true,false,"world_read"},
+    {"FSBuild","transform","building_tools","build_edit",false,true,"world_read"},
+    {"FSBuild","surface","building_tools","build_edit",false,true,"world_read"},
+    {"FSBuild","material","building_tools","build_edit",false,true,"world_read"},
+    {"FSBuild","rezPrimitive","building_tools","build_rez",false,true,"world_read"},
+    {"FSBuild","rezInventory","building_tools","build_rez",false,true,"world_read"},
+    {"FSBuild","permissionsGet","building_tools","read",true,false,"read"},
+    {"FSBuild","nextOwnerSet","building_tools","inventory_permissions",false,false,"read"},
 }};
 inline const FeatureOperation* featureOperation(const std::string& api,const std::string& op)
 {for(const auto& entry:featureOperations)if(api==entry.api && op==entry.op)return &entry;return nullptr;}

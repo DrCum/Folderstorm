@@ -11,37 +11,40 @@ const WorkspaceToolsVersion = 1
 // one of them: purge and emptyTrash are denied by the viewer with no key
 // that can enable them.
 const (
-	ClassRead               = "read"
-	ClassCamera             = "camera"
-	ClassCreate             = "create"
-	ClassEdit               = "edit"
-	ClassMove               = "move"
-	ClassTrash              = "trash"
-	ClassNoCopy             = "nocopy"
-	ClassWear               = "wear"
-	ClassLinks              = "links"
-	ClassWorkspace          = "workspace"
-	ClassChatRead           = "chat_read"
-	ClassChatState          = "chat_state"
-	ClassChatSendIM         = "chat_send_im"
-	ClassChatSendGroup      = "chat_send_group"
-	ClassChatSendConference = "chat_send_conference"
-	ClassChatSendNearby     = "chat_send_nearby"
-	ClassFriendsRead        = "friends_read"
-	ClassResidentSearch     = "resident_search"
-	ClassProfileRead        = "profile_read"
-	ClassNotificationsRead  = "notifications_read"
-	ClassNotificationReview = "notification_review"
-	ClassWorldRead          = "world_read"
-	ClassGestureRead        = "gesture_read"
-	ClassGesturePlay        = "gesture_play"
-	ClassPoseRead           = "pose_read"
-	ClassPoseEdit           = "pose_edit"
-	ClassPoseSave           = "pose_save"
-	ClassPoseShare          = "pose_share"
-	ClassContentEdit        = "content_edit"
-	ClassPreferencesRead    = "preferences_read"
-	ClassPreferencesWrite   = "preferences_write"
+	ClassRead                 = "read"
+	ClassCamera               = "camera"
+	ClassCreate               = "create"
+	ClassEdit                 = "edit"
+	ClassMove                 = "move"
+	ClassTrash                = "trash"
+	ClassNoCopy               = "nocopy"
+	ClassWear                 = "wear"
+	ClassLinks                = "links"
+	ClassWorkspace            = "workspace"
+	ClassChatRead             = "chat_read"
+	ClassChatState            = "chat_state"
+	ClassChatSendIM           = "chat_send_im"
+	ClassChatSendGroup        = "chat_send_group"
+	ClassChatSendConference   = "chat_send_conference"
+	ClassChatSendNearby       = "chat_send_nearby"
+	ClassFriendsRead          = "friends_read"
+	ClassResidentSearch       = "resident_search"
+	ClassProfileRead          = "profile_read"
+	ClassNotificationsRead    = "notifications_read"
+	ClassNotificationReview   = "notification_review"
+	ClassWorldRead            = "world_read"
+	ClassGestureRead          = "gesture_read"
+	ClassGesturePlay          = "gesture_play"
+	ClassPoseRead             = "pose_read"
+	ClassPoseEdit             = "pose_edit"
+	ClassPoseSave             = "pose_save"
+	ClassPoseShare            = "pose_share"
+	ClassContentEdit          = "content_edit"
+	ClassPreferencesRead      = "preferences_read"
+	ClassPreferencesWrite     = "preferences_write"
+	ClassBuildEdit            = "build_edit"
+	ClassBuildRez             = "build_rez"
+	ClassInventoryPermissions = "inventory_permissions"
 )
 
 // StatusPolicy is the viewer's effective permission map.
@@ -98,6 +101,9 @@ var classDefaults = []classDefault{
 	{ClassContentEdit, "ask", true},
 	{ClassPreferencesRead, "deny", false},
 	{ClassPreferencesWrite, "ask", true},
+	{ClassBuildEdit, "ask", true},
+	{ClassBuildRez, "ask", true},
+	{ClassInventoryPermissions, "ask", true},
 }
 
 // Level returns the effective level for a preference class.
@@ -135,7 +141,7 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 	bulkVersion := 0
 	workspaceVersion := 0
 	if capabilities, ok := payload["capabilities"].(map[string]any); ok {
-		for _, key := range []string{"social_chat", "social_contacts", "social_events", "world_observation", "gesture_tools", "pose_tools", "shared_pose_tools", "content_editing", "preferences_tools"} {
+		for _, key := range []string{"social_chat", "social_contacts", "social_events", "world_observation", "gesture_tools", "pose_tools", "shared_pose_tools", "content_editing", "preferences_tools", "building_tools"} {
 			if version, ok := capabilities[key].(float64); ok && version == 1 {
 				featureVersions[key] = 1
 			}
