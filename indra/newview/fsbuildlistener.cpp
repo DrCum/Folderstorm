@@ -137,6 +137,11 @@ bool location(const LLSD& request, std::string& error)
 {
     if (!request.has("position")) return true;
     const auto pos=ll_vector3_from_sd(request["position"]); auto* world=LLWorld::getInstance();
+    if(gRlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH))
+    {
+        static RlvCachedBehaviourModifier<float> farTouch(RLV_MODIFIER_FARTOUCHDIST);
+        if(dist_vec_squared(gAgent.getPositionGlobal(),gAgent.getRegion()->getPosGlobalFromRegion(pos))>farTouch*farTouch) { error="restricted: destination exceeds native interaction distance"; return false; }
+    }
     if(pos.mV[0]<0 || pos.mV[1]<0 || pos.mV[0]>=gAgent.getRegion()->getWidth() || pos.mV[1]>=gAgent.getRegion()->getWidth() || pos.mV[2]<world->getMinPrimZPos() || pos.mV[2]>world->getMaxPrimZPos() ||
         dist_vec(gAgent.getPositionGlobal(),gAgent.getRegion()->getPosGlobalFromRegion(pos))>64.) { error="not_permitted: position must be in this region, within native height limits and 64m of the avatar"; return false; }
     return true;
@@ -170,7 +175,7 @@ bool native(const LLSD& request, LLSD& state, std::string& error)
     {
         auto* target=object(request["id"]); if(!target) { error="not_found: loaded unattached root volume in current region required"; return false; }
         state=objectState(target);
-        if(!readOp(op) && (!target->permYouOwner() || !target->permModify() || !target->permMove() || target->flagUsePhysics() || !RlvActions::canEdit(target))) { error="not_permitted: owned modifiable movable nonphysical root required"; return false; }
+        if(!readOp(op) && (!target->permYouOwner() || !target->permModify() || !target->permMove() || target->flagUsePhysics() || !RlvActions::canEdit(target) || !RlvActions::canInteract(target))) { error="not_permitted: owned modifiable movable nonphysical root required"; return false; }
         if(op=="transform" && request.has("scale") && target->numChildren()!=0) { error="unsupported: linked-set resizing requires native Build"; return false; }
         if(op=="surface" || op=="material")
         {

@@ -18,7 +18,7 @@ class BuildingNativeTests(unittest.TestCase):
         self.assertIn('target_changed: inventory changed before deferred submission',text)
     def test_world_native_limits_and_selection_independence(self):
         text=(ROOT/'fsbuildlistener.cpp').read_text()
-        for guard in ('permYouOwner()', 'permModify()', 'permMove()', 'flagUsePhysics()', 'RlvActions::canEdit(target)', 'RlvActions::canRez()', 'inAgentParcel(', 'allowAgentBuild()', 'getRegionMinPrimScale()', 'getRegionMaxPrimScaleNoMesh()', 'assistantActiveAllowed()', 'UPD_LINKED_SETS'):
+        for guard in ('permYouOwner()', 'permModify()', 'permMove()', 'flagUsePhysics()', 'RlvActions::canEdit(target)', 'RlvActions::canInteract(target)', 'RLV_MODIFIER_FARTOUCHDIST', 'RlvActions::canRez()', 'inAgentParcel(', 'allowAgentBuild()', 'getRegionMinPrimScale()', 'getRegionMaxPrimScaleNoMesh()', 'assistantActiveAllowed()', 'UPD_LINKED_SETS'):
             self.assertIn(guard,text)
         self.assertNotIn('LLSelectMgr::getInstance()',text)
         self.assertNotIn('FLAGS_CREATE_SELECTED',text)
