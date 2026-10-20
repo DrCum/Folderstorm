@@ -344,7 +344,9 @@ void FSBuildListener::dispatch(const LLSD& request)
         });
         result["status"]="queued"; result["confirmation"]="inspect operation receipt and native object; no automatic retry"; response.result(result); return;
     }
-    if(!fs_assistant::asyncSubmit()) return response.error("not_permitted: authority revoked before submission");
+    // Inventory updateServer owns its actual AIS/UDP submission count.
+    // An AIS queue entry is not yet a transport submission.
+    if(op=="nextOwnerSet" ? !fs_assistant::asyncAllowed() : !fs_assistant::asyncSubmit()) return response.error("not_permitted: authority revoked before submission");
     entry->executed=true;
     if(op=="nextOwnerSet")
     {
@@ -371,6 +373,6 @@ void FSBuildListener::dispatch(const LLSD& request)
         if(request.has("texture_item")) target->setTETexture(face,item(request["texture_item"])->getAssetUUID());
         target->sendTEUpdate();
     }
-    result["status"]="submitted"; result["simulator_confirmed"]=false; response.result(result);
+    result["status"]=op=="nextOwnerSet"?"queued":"submitted"; result["simulator_confirmed"]=false; response.result(result);
 }
 void fs_initialize_build_api() { static FSBuildListener listener; }

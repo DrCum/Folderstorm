@@ -15,6 +15,7 @@ class BuildingNativeTests(unittest.TestCase):
             self.assertIn(gate,text)
         self.assertNotRegex(text,r'set(?:Base|Owner|Group|Everyone)Bits\(')
         self.assertIn('entry->value["after"]=itemState(changed)',dispatch)
+        self.assertIn('op=="nextOwnerSet" ? !fs_assistant::asyncAllowed() : !fs_assistant::asyncSubmit()',dispatch)
         self.assertIn('target_changed: inventory changed before deferred submission',text)
     def test_world_native_limits_and_selection_independence(self):
         text=(ROOT/'fsbuildlistener.cpp').read_text()
