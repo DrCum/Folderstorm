@@ -27,3 +27,19 @@ Windows: Ask refusal/approval/revocation, native manual movement and follow owne
 Five typed tools use `navigation_tools: 1`, exact sessions and compound World-read/movement authority. Movement is rechecked both during idle maintenance and before native autopilot writes control flags. Flight changes/manual replacement win. Native teleport requests retain captured authority across maturity callbacks, reject a second submission, skip the extra bridge teleport path, and expose a guarded cancel helper matching the original execution. Only teleport operations can retain input authority through their own progress display; all other ownership, transition and Preferences gates remain intact.
 
 Passed focused C++ ownership/bounds tests, native source contracts including a compiled extraction of the actual delayed request submit gate, host integration contracts and affected MCP tools/schema/policy tests. XML and diff checks pass. Native viewer compilation remains blocked by missing Boost headers in this Linux workspace; matching Windows viewer/sidecar and live navigation acceptance remain pending. No broad build or packaging was run.
+
+## Review correction: status polling and Stop capacity
+
+Status reads no longer allocate a 120-second mutation preparation ticket. Their
+frozen source and material live only in the existing bridge execution guard;
+validation still checks the exact account/login/grid/worker source, readiness
+and native restrictions. Dispatch retains the authenticated guard, exact login
+epoch and explicit World-read permission checks before returning status. Mutation
+records and live async guards retain their existing bounded lifetime and checks.
+
+A regression compiles the actual native preparation function with the production
+ticket cache: 63 idle status polls, movement start and Stop one second later now
+succeed. Another 1,024 polls leave the live mutation record intact. The same
+harness rejects changed account/login/grid/worker sources, non-ready or restricted
+reads, and changed read material. Native source contracts verify guarded read
+routing precedes mutation-cache lookup. Windows runtime acceptance remains pending.

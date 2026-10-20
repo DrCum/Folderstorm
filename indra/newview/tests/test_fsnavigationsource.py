@@ -6,6 +6,100 @@ import tempfile
 import unittest
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 class NavigationNativeTests(unittest.TestCase):
+    def test_status_polling_keeps_stop_available_with_actual_preparation(self):
+        text=(ROOT/'fsnavigationlistener.cpp').read_text()
+        prepare=text[text.index('bool FSNavigationListener::prepareAssistant('):text.index('bool FSNavigationListener::validateAssistant(')]
+        # Compile the production preparation function against its real ticket
+        # cache. Only viewer/UI dependencies and LLSD storage are stand-ins.
+        # Include the production stateless-read helpers when present.
+        helpers=""
+        if 'bool prepareSourceBoundStatusRead(' in text:
+            helpers=text[text.index('bool prepareSourceBoundStatusRead('):text.index('LLSD baseline()')]
+        program=r'''#include "fsassistantworldmodel.h"
+#include <cassert>
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
+struct LLSD {
+    std::string value;std::map<std::string,LLSD> fields;
+    LLSD()=default;LLSD(const std::string& v):value(v){}LLSD(const char* v):value(v){}LLSD(int v):value(std::to_string(v)){}
+    const LLSD& operator[](const std::string& key)const{static const LLSD none;auto found=fields.find(key);return found==fields.end()?none:found->second;}
+    LLSD& operator[](const std::string& key){return fields[key];}
+    std::string asString()const{return value;}
+    bool operator==(const LLSD& other)const{return value==other.value && fields==other.fields;}
+};
+bool llsd_equals(const LLSD& a,const LLSD& b){return a==b;}
+namespace llsd {
+inline void append(LLSD&){}
+template<class Value,class... Rest>void append(LLSD& out,const char* key,Value value,Rest... rest){out[key]=LLSD(value);append(out,rest...);}
+template<class... Args>LLSD map(Args... args){LLSD out;append(out,args...);return out;}
+}
+struct FSAssistantPreparedOperation{LLSD request,validation,summary;std::vector<std::string> requiredClasses;};
+struct FakeID{std::string asString()const{return "account-a";}};
+struct FakeAgent{FakeID getID()const{return {};}}gAgent;
+struct LLUUID{std::string value;static LLUUID generateNewID(){static int id=0;return {std::to_string(++id)};}std::string asString()const{return value;}};
+struct Service{fs_assistant_world::Tickets<LLSD> prepared;std::string preparedSource;};
+Service& service(){static Service cache;return cache;}
+std::string login="account-a/login-a/grid-a/worker-a";double clockValue=1.;bool nativeAllowed=true,loginReady=true;
+std::string source(){return login;}double now(){return clockValue;}bool ready(){return loginReady;}
+void fs_navigation_tick(){}
+bool arguments(const LLSD&,std::string&){return true;}
+bool native(const LLSD&,std::string& error){if(!nativeAllowed){error="restricted";return false;}return true;}
+LLSD material(const LLSD& request){return request;}
+LLSD baseline(){return LLSD("live-position");}LLSD approvalBaseline(const LLSD&){return baseline();}
+std::string ll_stream_notation_sd(const LLSD& v){return v.value;}
+class FSNavigationListener{public:bool prepareAssistant(FSAssistantPreparedOperation&,std::string&)const;};
+HELPERS
+PREPARE
+int main(){
+    FSNavigationListener listener;std::string error;
+    auto prepare=[&](const char* op){FSAssistantPreparedOperation p;p.request["op"]=op;assert(listener.prepareAssistant(p,error));return p;};
+    for(int i=0;i<63;++i)prepare("status");
+    auto movement=prepare("moveTo");
+    const auto key=movement.validation["navigation_prepared"].asString();
+    auto* active=service().prepared.get(key,source(),now());assert(active);active->executed=true;
+    clockValue=2.;auto stop=prepare("stop");
+    assert(service().prepared.get(stop.validation["navigation_prepared"].asString(),source(),now()));
+    for(int i=0;i<1024;++i)prepare("status");
+    assert(service().prepared.get(key,source(),now())==active && active->executed);
+    EXTRA_CHECKS
+}
+'''
+        checks=""
+        if helpers:
+            checks=r'''auto read=prepare("status");
+    assert(validateSourceBoundStatusRead(read,error));
+    for(const char* changed:{"account-b/login-a/grid-a/worker-a","account-a/login-b/grid-a/worker-a","account-a/login-a/grid-b/worker-a","account-a/login-a/grid-a/worker-b"}){
+        login=changed;assert(!validateSourceBoundStatusRead(read,error));
+    }
+    login="account-a/login-a/grid-a/worker-a";nativeAllowed=false;assert(!validateSourceBoundStatusRead(read,error));
+    nativeAllowed=true;loginReady=false;assert(!validateSourceBoundStatusRead(read,error));loginReady=true;
+    read.request["operation_id"]="other";assert(!validateSourceBoundStatusRead(read,error));'''
+        program=program.replace('HELPERS',helpers).replace('PREPARE',prepare).replace('EXTRA_CHECKS',checks)
+        with tempfile.TemporaryDirectory() as temp:
+            cpp=pathlib.Path(temp)/'polling.cpp';cpp.write_text(program);exe=pathlib.Path(temp)/'polling'
+            subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-pedantic','-I'+str(ROOT),str(cpp),'-o',str(exe)],check=True)
+            subprocess.run([str(exe)],check=True)
+
+    def test_status_source_validation_and_guarded_dispatch_bypass_only_tickets(self):
+        text=(ROOT/'fsnavigationlistener.cpp').read_text()
+        prepare=text[text.index('bool FSNavigationListener::prepareAssistant('):text.index('bool FSNavigationListener::validateAssistant(')]
+        self.assertLess(prepare.index('prepareSourceBoundStatusRead(operation,error)'),prepare.index('service().prepared.put('))
+        validation=text[text.index('bool FSNavigationListener::validateAssistant('):text.index('void FSNavigationListener::dispatch(')]
+        self.assertLess(validation.index('validateSourceBoundStatusRead(operation,error)'),validation.index('service().prepared.get('))
+        dispatch=text[text.index('void FSNavigationListener::dispatch('):]
+        read=dispatch[dispatch.index('if(op=="status")'):dispatch.index('auto* entry=self.prepared.get(')]
+        self.assertNotIn('entry->executed',read)
+        self.assertNotIn('prepared.',read)
+        self.assertIn('getPermissionLevel("world_read")!="allow"',read)
+        self.assertIn('!native(request,error)',read)
+        for gate in ('fs_assistant_request_allowed(request)','fs_assistant::asyncAllowed()','request["__assistant_epoch"].asString()!=FSEventAPIBridge::instance().sessionReference()'):
+            self.assertLess(dispatch.index(gate),dispatch.index('if(op=="status")'))
+        # Mutation records and their guarded native submission remain intact.
+        self.assertIn('entry->executed',dispatch[dispatch.index('auto* entry=self.prepared.get('):])
+        self.assertIn('fs_assistant::asyncSubmit()',dispatch)
+
     def test_queued_native_teleport_revocation_and_no_replay(self):
         agent=(ROOT/'llagent.cpp').read_text()
         body=re.search(r'bool assistantSubmit\(\)\s*\{(.*?)\n    \}',agent,re.S)[1]

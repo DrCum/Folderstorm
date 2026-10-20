@@ -53,6 +53,22 @@ LLSD material(const LLSD& request)
     for(const char* key:{"op","position","mode","stop_distance","timeout_seconds","flying","operation_id"}) if(request.has(key)) value[key]=request[key];
     return value;
 }
+bool native(const LLSD& request,std::string& error);
+bool prepareSourceBoundStatusRead(FSAssistantPreparedOperation& operation,std::string& error)
+{
+    const auto origin=source();
+    if(origin.empty()) { error="not_ready: exact navigation source required"; return false; }
+    // This evidence belongs to the bridge's frozen execution guard, not the
+    // mutation cache or native request. Never expose the private login source.
+    operation.validation=llsd::map("navigation_status_source",origin,"navigation_status_material",material(operation.request));
+    return true;
+}
+bool validateSourceBoundStatusRead(const FSAssistantPreparedOperation& operation,std::string& error)
+{
+    if(!ready() || operation.validation["navigation_status_source"].asString()!=source() || !llsd_equals(operation.validation["navigation_status_material"],material(operation.request)))
+    { error="session_changed: navigation status source or request changed"; return false; }
+    return native(operation.request,error);
+}
 LLSD baseline()
 {
     return llsd::map("position",ll_sd_from_vector3d(gAgent.getPositionGlobal()),"region",gAgent.getRegion()->getRegionID(),"flying",gAgent.getFlying(),"pilot",gAgent.getAutoPilot(),"pilot_behavior",gAgent.getAutoPilotBehaviorName(),"teleport_state",static_cast<S32>(gAgent.getTeleportState()),"operation_id",service().token);
@@ -164,10 +180,11 @@ LLSD FSNavigationListener::assistantLimits()const
 bool FSNavigationListener::prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error)const
 {
     fs_navigation_tick();
-    auto& current=service(); if(current.preparedSource!=source()) { current.prepared.clear(); current.preparedSource=source(); }
     if(!arguments(operation.request,error) || !native(operation.request,error)) return false;
     const auto op=operation.request["op"].asString(); operation.requiredClasses={"world_read"};
-    if(op!="status" && op!="stop") operation.requiredClasses.emplace_back(op=="teleport"?"navigation_teleport":"navigation_move");
+    if(op=="status") return prepareSourceBoundStatusRead(operation,error);
+    auto& current=service(); if(current.preparedSource!=source()) { current.prepared.clear(); current.preparedSource=source(); }
+    if(op!="stop") operation.requiredClasses.emplace_back(op=="teleport"?"navigation_teleport":"navigation_move");
     const auto nonce=LLUUID::generateNewID().asString(); service().prepared.put(nonce,source(),now(),llsd::map("material",material(operation.request),"baseline",approvalBaseline(operation.request)));
     if(!service().prepared.get(nonce,source(),now())) { error="busy: too many live navigation requests"; return false; }
     operation.validation["navigation_prepared"]=nonce; operation.request["__navigation_prepared"]=nonce;
@@ -176,6 +193,7 @@ bool FSNavigationListener::prepareAssistant(FSAssistantPreparedOperation& operat
 }
 bool FSNavigationListener::validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error)const
 {
+    if(operation.request["op"].asString()=="status") return validateSourceBoundStatusRead(operation,error);
     auto* entry=service().prepared.get(operation.validation["navigation_prepared"].asString(),source(),now());
     if(!entry || !llsd_equals(entry->value["material"],material(operation.request)) || !ready()) { error="session_changed: navigation source expired or changed"; return false; }
     if(entry->executed)
@@ -193,7 +211,7 @@ bool FSNavigationListener::validateAssistant(const FSAssistantPreparedOperation&
         return true; // Our movement legitimately changes the baseline.
     }
     if(!native(operation.request,error)) return false;
-    if(operation.request["op"].asString()!="status" && !llsd_equals(entry->value["baseline"],approvalBaseline(operation.request))) { error="conflict: avatar position or movement changed during approval"; return false; }
+    if(!llsd_equals(entry->value["baseline"],approvalBaseline(operation.request))) { error="conflict: avatar position or movement changed during approval"; return false; }
     return true;
 }
 void FSNavigationListener::dispatch(const LLSD& request)
@@ -202,12 +220,22 @@ void FSNavigationListener::dispatch(const LLSD& request)
     if(!request.has("__assistant_guard") || !fs_assistant_request_allowed(request)) return response.error("not_permitted: guarded bridge required");
     const auto guard=fs_assistant_async_context(request); fs_assistant::AsyncScope scope(guard);
     if(!guard || !fs_assistant::asyncAllowed()) return response.error("session_changed: navigation authority changed");
-    auto& self=service(); const auto op=request["op"].asString();
+    const auto op=request["op"].asString();
+    if(request["__assistant_epoch"].asString()!=FSEventAPIBridge::instance().sessionReference()) return response.error("session_changed: exact navigation login required");
+    if(op=="status")
+    {
+        // The bridge guard validates the frozen source/material above. Reads
+        // never reserve, complete, prune or evict mutation preparation slots.
+        std::string error;
+        if(FSEventAPIBridge::getPermissionLevel("world_read")!="allow") return response.error("not_permitted: World read is required");
+        if(!arguments(request,error) || !native(request,error)) return response.error(error);
+        response.result(status()); return;
+    }
+    auto& self=service();
     auto* entry=self.prepared.get(request["__navigation_prepared"].asString(),source(),now()); std::string error;
-    if(!entry || entry->executed || !llsd_equals(entry->value["material"],material(request)) || request["__assistant_epoch"].asString()!=FSEventAPIBridge::instance().sessionReference()) return response.error("session_changed: exact unconsumed navigation preparation required");
+    if(!entry || entry->executed || !llsd_equals(entry->value["material"],material(request))) return response.error("session_changed: exact unconsumed navigation preparation required");
     if(!arguments(request,error) || !native(request,error)) return response.error(error);
-    if(op!="status" && !llsd_equals(entry->value["baseline"],approvalBaseline(request))) return response.error("conflict: navigation baseline changed");
-    if(op=="status") { entry->executed=true; response.result(status()); return; }
+    if(!llsd_equals(entry->value["baseline"],approvalBaseline(request))) return response.error("conflict: navigation baseline changed");
     if(op=="stop") { entry->executed=true; finish("cancelled","explicit_stop",true); response.result(status()); return; }
     if(op!="teleport" && !fs_assistant::asyncSubmit()) return response.error("not_permitted: navigation revoked before execution");
     entry->executed=true;
