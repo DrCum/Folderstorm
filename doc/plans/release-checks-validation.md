@@ -134,3 +134,31 @@ they use instead of depending on the viewer's incidental include paths. Conan
 continues to obtain includes from `CONAN_PKG::boost`. A focused configure-only
 consumer check confirms both normal and system interface include properties.
 This does not compile or link Windows binaries.
+
+## CRLF metadata compatibility and published-note repair (2026-10-20)
+
+Confirmed public Nightlies 7.2.5.82161, 82163 and 82164 had CRLF delimiters
+around their hidden metadata. Installer and full Velopack package sizes and
+GitHub-provided SHA-256 digests matched their metadata. The existing decoder
+recognized none of these release bodies because it matched LF delimiters only.
+
+The shared viewer/host/updater decoder now normalizes CRLF before looking for
+metadata and duplicate blocks, preserving the raw response/body bounds, uploaded
+asset checks and URL/channel validation. LF, CRLF and mixed delimiters work for
+both legacy embedded notes and current visible-only notes. The publisher writes
+all three generated UTF-8 files with explicit LF newlines on every OS; reading
+CRLF input notes alone did not prevent Windows text-output translation.
+
+The three existing GitHub release bodies were normalized to LF, then fetched
+again through the live releases endpoint. Only body line endings changed; tags,
+release flags, artifacts, byte sizes and digests stayed unchanged. Testing the
+original decoder against the repaired live feed now recognizes all three
+releases and selects 82164 for an installed 82161 build. An installed 82164 build
+reports Current. Existing installations can use Check now without reinstalling.
+No installer or new release was built or published during this repair.
+
+Validation: nine publisher tests, including byte-level simulated Windows output;
+strict C++17 and Release CTest release-feed/release-policy tests, including all
+LF/CRLF delimiter combinations and mixed-ending duplicate rejection. The original
+and corrected codecs were also run on the captured public release data. Native
+Windows transport/UI acceptance remains pending.

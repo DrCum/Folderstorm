@@ -12,6 +12,16 @@ std::string text(const boost::json::object& object,const char* key,std::size_t l
     const auto* value=object.if_contains(key);
     return value && value->is_string() && value->as_string().size()<=limit?std::string(value->as_string()):std::string{};
 }
+std::string normalizeGitHubNotes(std::string value)
+{
+    // GitHub edits and Windows publishers can supply CRLF, including only one
+    // of the metadata delimiters. Normalize before matching either delimiter
+    // and before checking for a duplicate block. Keep the raw response limits.
+    std::size_t output=0;
+    for(std::size_t i=0;i<value.size();++i)
+        if(value[i]!='\r' || i+1==value.size() || value[i+1]!='\n')value[output++]=value[i];
+    value.resize(output);return value;
+}
 Release releaseFrom(const boost::json::value& value,const std::string& extraHosts)
 {
     Release result;if(!value.is_object())return result;
@@ -84,7 +94,7 @@ std::vector<Release> decodeFeed(const std::string& body,const std::string& extra
                 if(!entry.is_object())continue;
                 const auto& object=entry.as_object();const auto* draft=object.if_contains("draft");
                 if(!draft || !draft->is_bool() || draft->as_bool())continue;
-                const auto notes=text(object,"body",256*1024);const auto start=notes.find(marker);
+                const auto notes=normalizeGitHubNotes(text(object,"body",256*1024));const auto start=notes.find(marker);
                 if(start==std::string::npos)continue;
                 const auto stop=notes.find(end,start+marker.size());
                 if(stop==std::string::npos || notes.find(marker,start+marker.size())!=std::string::npos)continue;

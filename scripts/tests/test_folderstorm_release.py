@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import hashlib
 import zipfile
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("release", Path(__file__).resolve().parents[1] / "folderstorm_release.py")
 release = importlib.util.module_from_spec(SPEC)
@@ -36,6 +37,28 @@ class ReleasePublishing(unittest.TestCase):
         self.assertNotIn("notes",decoded)
         self.assertEqual(decoded,{key:value for key,value in data.items() if key!="notes"})
         self.assertEqual(body.split("\n\n<!-- folderstorm-release-v1\n")[0],data["notes"])
+
+    def test_generated_files_use_lf_even_with_windows_text_defaults(self):
+        (self.root / "notes.md").write_bytes(b"First line\r\nSecond line\r\nThird line\n")
+        native_open = Path.open
+
+        def windows_open(path, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
+            if "b" not in mode and "w" in mode and newline is None:
+                newline = "\r\n"
+            return native_open(path, mode, buffering, encoding, errors, newline)
+
+        # Linux read_text() would hide this Windows-only output bug. Simulate
+        # native newline translation, then inspect actual bytes in every output.
+        with mock.patch.object(Path, "open", windows_open):
+            _, data, _ = self.prepare()
+        self.assertEqual(data["notes"], "First line\nSecond line\nThird line\n")
+        for name in ("release-notes.md", "folderstorm-release.json", "folderstorm-releases.json"):
+            raw = (self.root / "out" / name).read_bytes()
+            self.assertNotIn(b"\r", raw, name)
+            self.assertTrue(raw.endswith(b"\n"), name)
+        body = (self.root / "out/release-notes.md").read_bytes()
+        self.assertIn(b"<!-- folderstorm-release-v1\n", body)
+        self.assertIn(b"\n-->\n", body)
 
     def test_custom_host_and_immutable_published_identity(self):
         _, data, _ = self.prepare(download_base="https://downloads.example.test/updates")

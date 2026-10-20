@@ -27,6 +27,35 @@ json::object github(json::object manifest,bool legacy)
 }
 int main()
 {
+    // Windows publisher output and GitHub edits may use CRLF, including
+    // mixed delimiters. Visible notes must have the same normalized text.
+    for(const bool legacy:{true,false})
+    {
+        auto manifest=release(0);manifest["notes"]="First line\nSecond line\n";
+        const auto original=github(manifest,legacy);
+        const auto lf=std::string(original.at("body").as_string());
+        for(unsigned mask=0;mask<8;++mask)
+        {
+            auto row=original;std::string body;
+            const auto opening=lf.find("<!-- folderstorm-release-v1\n");
+            const auto closing=lf.find("\n-->",opening);
+            for(std::size_t i=0;i<lf.size();++i)
+            {
+                const unsigned section=i<opening?1U:i<closing?2U:4U;
+                if(lf[i]=='\n' && (mask&section))body+='\r';
+                body+=lf[i];
+            }
+            row["body"]=body;std::string error;
+            const auto decoded=decodeFeed(json::serialize(json::array{row}),"",error);
+            assert(error.empty() && decoded.size()==1);
+            assert(decoded[0].version=="7.2.5.100" && decoded[0].assets.size()==1);
+            assert(decoded[0].notes=="First line\nSecond line\n");
+        }
+        auto duplicate=original;
+        duplicate["body"]=lf+"<!-- folderstorm-release-v1\r\n"+json::serialize(manifest)+"\r\n-->\r\n";
+        std::string error;
+        assert(decodeFeed(json::serialize(json::array{duplicate}),"",error).empty() && error.empty());
+    }
     const Build build{"7.2.5.1","windows","x86_64","avx2","opensim","nsis"};Preferences prefs;
     const auto requests=feedPages(GitHubFeed+"?per_page=32");
     for(const bool legacy:{true,false})

@@ -45,6 +45,13 @@ def bounded_json(path, maximum=2*1024*1024):
     return json.loads(raw)
 
 
+def write_lf(path, text):
+    # newline=None translates LF to CRLF on Windows, including the metadata
+    # delimiters required by already-installed update clients.
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(text)
+
+
 def update_package(entry, data, input_path, base):
     """Bind an actual full Velopack package to the matching installer variant."""
     feed = (input_path.parent / entry["velopack_feed"]).resolve(strict=True)
@@ -171,9 +178,9 @@ def prepare(input_path, output, download_base=None, previous=None):
     # standalone manifest/feed, and omit the duplicate from hidden metadata.
     metadata = {key:value for key,value in release.items() if key != "notes"}
     output.mkdir(parents=True, exist_ok=True)
-    (output / "folderstorm-releases.json").write_text(feed, encoding="utf-8")
-    (output / "folderstorm-release.json").write_text(json.dumps(release, indent=2)+"\n", encoding="utf-8")
-    (output / "release-notes.md").write_text(notes + "\n\n<!-- folderstorm-release-v1\n" + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "\n-->\n", encoding="utf-8")
+    write_lf(output / "folderstorm-releases.json", feed)
+    write_lf(output / "folderstorm-release.json", json.dumps(release, indent=2)+"\n")
+    write_lf(output / "release-notes.md", notes + "\n\n<!-- folderstorm-release-v1\n" + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "\n-->\n")
     return tag, release, paths
 
 
