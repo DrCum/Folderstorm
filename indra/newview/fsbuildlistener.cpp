@@ -122,6 +122,9 @@ LLSD objectState(LLViewerObject* value)
     LLSD result=llsd::map("id",value->getID(),"local_id",static_cast<S32>(value->getLocalID()),"region_id",value->getRegion()->getRegionID(),
         "position",ll_sd_from_vector3(value->getPositionRegion()),"rotation",ll_sd_from_quaternion(value->getRotation()),"scale",ll_sd_from_vector3(value->getScale()),
         "owned",value->permYouOwner(),"modify",value->permModify(),"move",value->permMove(),"physical",value->flagUsePhysics(),"children",value->numChildren());
+    result["linked_members"]=LLSD::emptyMap();
+    for(const auto* child : value->getChildren())
+        result["linked_members"][child->getID().asString()]=llsd::map("position",ll_sd_from_vector3(child->getPosition()),"rotation",ll_sd_from_quaternion(child->getRotation()),"scale",ll_sd_from_vector3(child->getScale()),"local_id",static_cast<S32>(child->getLocalID()));
     result["faces"]=LLSD::emptyArray();
     for(S32 face=0;face<value->getNumTEs();++face)
     { LLSD row=value->getTE(face)->asLLSD(); row["face"]=face; row["material_id"]=value->getRenderMaterialID(face); result["faces"].append(row); }
@@ -130,7 +133,7 @@ LLSD objectState(LLViewerObject* value)
 LLViewerObject* object(const LLSD& value)
 {
     auto* result=gObjectList.findObject(LLUUID(value.asString()));
-    if(!result || result->isDead() || result->getPCode()!=LL_PCODE_VOLUME || result->getParent() || result->isAttachment() || result->getRegion()!=gAgent.getRegion() || result->getNumTEs()>64) return nullptr;
+    if(!result || result->isDead() || result->getPCode()!=LL_PCODE_VOLUME || result->getParent() || result->isAttachment() || result->getRegion()!=gAgent.getRegion() || result->getNumTEs()>64 || result->numChildren()>255) return nullptr;
     return result;
 }
 bool location(const LLSD& request, std::string& error)

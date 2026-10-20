@@ -20,6 +20,7 @@ class BuildingNativeTests(unittest.TestCase):
         text=(ROOT/'fsbuildlistener.cpp').read_text()
         for guard in ('permYouOwner()', 'permModify()', 'permMove()', 'flagUsePhysics()', 'RlvActions::canEdit(target)', 'RlvActions::canInteract(target)', 'RLV_MODIFIER_FARTOUCHDIST', 'RlvActions::canRez()', 'inAgentParcel(', 'allowAgentBuild()', 'getRegionMinPrimScale()', 'getRegionMaxPrimScaleNoMesh()', 'assistantActiveAllowed()', 'UPD_LINKED_SETS'):
             self.assertIn(guard,text)
+        self.assertIn('result["linked_members"][child->getID().asString()]',text)
         self.assertNotIn('LLSelectMgr::getInstance()',text)
         self.assertNotIn('FLAGS_CREATE_SELECTED',text)
         self.assertIn('addBOOLFast(_PREHASH_RemoveItem,false)',text)
