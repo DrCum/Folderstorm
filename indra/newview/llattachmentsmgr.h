@@ -29,6 +29,7 @@
 #define LL_LLATTACHMENTSMGR_H
 
 #include "llsingleton.h"
+#include "fsassistantasync.h"
 
 //--------------------------------------------------------------------------------
 // LLAttachmentsMgr
@@ -70,6 +71,7 @@ public:
         LLUUID mItemID;
         U8 mAttachmentPt;
         bool mAdd;
+        fs_assistant::AsyncTaskPtr mAssistantTask;
     };
     typedef std::deque<AttachmentsInfo> attachments_vec_t;
 
@@ -127,6 +129,7 @@ private:
 
     // Attachments that we are planning to rez but haven't requested from the server yet.
     attachments_vec_t mPendingAttachments;
+    std::map<LLUUID,fs_assistant::AsyncOrigin> mAssistantOrigins;
 
     // Attachments that have been requested from server but have not arrived yet.
     LLItemRequestTimes mAttachmentRequests;

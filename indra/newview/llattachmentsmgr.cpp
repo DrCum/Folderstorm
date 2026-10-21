@@ -38,6 +38,7 @@
 #include "message.h"
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
 #include "rlvactions.h"
+#include "rlvhandler.h"
 #include "rlvlocks.h"
 // [/RLVa:KB]
 
@@ -49,8 +50,11 @@ const F32 MAX_BAD_COF_TIME = 30.0F;
 class LLRegisterAttachmentCallback : public LLRequestServerAppearanceUpdateOnDestroy
 {
 public:
+    explicit LLRegisterAttachmentCallback(const LLUUID& original=LLUUID::null):mOriginal(original){}
+    LLUUID mOriginal;
     void fire(const LLUUID& item_id) override
     {
+        if(item_id.isNull()){if(mOriginal.notNull())LLAttachmentsMgr::instance().clearPendingAttachmentLink(mOriginal);return;}
         LLAttachmentsMgr::instance().onRegisterAttachmentComplete(item_id);
         LLRequestServerAppearanceUpdateOnDestroy::fire(item_id);
     }
@@ -75,6 +79,25 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
                                             const bool add, const bool fRlvForce /*=false*/)
 // [/RLVa:KB]
 {
+    if(!fs_assistant::asyncAllowed())return;
+    // An unsent, stopped request must not swallow a newer assistant/manual
+    // intent through the native recent-request debounce.
+    for (auto it = mPendingAttachments.begin(); it != mPendingAttachments.end();)
+    {
+        if (it->mItemID == item_id && it->mAssistantTask && !it->mAssistantTask->guard()->allowed())
+        {
+            mAttachmentRequests.removeTime(item_id);
+            mAssistantOrigins.erase(item_id); // No packet was submitted for this entry.
+            it = mPendingAttachments.erase(it);
+        }
+        else ++it;
+    }
+    if(fs_assistant::AsyncScope::current())
+    {
+        if(!mAssistantOrigins.count(item_id) && mAssistantOrigins.size()>=512)
+        {fs_assistant::AsyncScope::current()->cancel("attachment_tracking_capacity");return;}
+    }
+    else mAssistantOrigins.erase(item_id); // New native/manual intent supersedes old provenance.
 // [SL:KB] - Appearance-Fixes
     if (item_id.isNull())
         return;
@@ -84,6 +107,10 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
 
     if (mAttachmentRequests.wasRequestedRecently(item_id))
     {
+        const auto current = fs_assistant::AsyncScope::current();
+        const auto origin = mAssistantOrigins.find(item_id);
+        if (current && (origin == mAssistantOrigins.end() || origin->second.guard.lock() != current))
+            current->cancel("attachment_request_already_pending");
         LL_DEBUGS("Avatar") << "ATT not adding attachment to mPendingAttachments, recent request is already pending: "
                             << (item ? item->getName() : "UNKNOWN") << " id " << item_id << LL_ENDL;
         return;
@@ -93,6 +120,8 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
                         << (item ? item->getName() : "UNKNOWN") << " id " << item_id << LL_ENDL;
 
     AttachmentsInfo attachment;
+    if(fs_assistant::AsyncScope::current())
+    {attachment.mAssistantTask=fs_assistant::asyncTask();mAssistantOrigins[item_id]={attachment.mAssistantTask->guard(),attachment.mAssistantTask};}
     attachment.mItemID = item_id;
     attachment.mAttachmentPt = attachment_pt;
     attachment.mAdd = add;
@@ -151,6 +180,7 @@ void LLAttachmentsMgr::onIdle()
         return;
     }
 
+    for(auto& origin:mAssistantOrigins)if(origin.second.pending && !origin.second.pending->guard()->allowed())origin.second.pending.reset();
     requestPendingAttachments();
 
     linkRecentlyArrivedAttachments();
@@ -182,6 +212,15 @@ void LLAttachmentsMgr::requestAttachments(attachments_vec_t& attachment_requests
         return;
     }
 
+    for(auto it=attachment_requests.begin();it!=attachment_requests.end();)
+    {
+        fs_assistant::AsyncScope operationScope(it->mAssistantTask?it->mAssistantTask->guard():fs_assistant::AsyncGuard());
+        auto* target=gInventory.getItem(it->mItemID);
+        if(it->mAssistantTask && target && rlv_handler_t::isEnabled() && !rlvPredCanWearItem(target,it->mAdd?RLV_WEAR_ADD:RLV_WEAR_REPLACE))it->mAssistantTask->guard()->cancel("restriction_changed");
+        if(it->mAssistantTask && !fs_assistant::asyncAllowed())
+        {mAttachmentRequests.removeTime(it->mItemID);mAssistantOrigins[it->mItemID].pending.reset();it=attachment_requests.erase(it);}
+        else ++it;
+    }
     // For unknown reasons, requesting many attachments at once causes
     // frequent server-side failures. Here we're limiting the number
     // of attachments requested per idle loop.
@@ -234,6 +273,7 @@ void LLAttachmentsMgr::requestAttachments(attachments_vec_t& attachment_requests
         }
 
         const AttachmentsInfo& attachment = attachment_requests.front();
+        fs_assistant::AsyncScope operationScope(attachment.mAssistantTask?attachment.mAssistantTask->guard():fs_assistant::AsyncGuard());
         LLViewerInventoryItem* item = gInventory.getItem(attachment.mItemID);
         if (item)
         {
@@ -243,6 +283,7 @@ void LLAttachmentsMgr::requestAttachments(attachments_vec_t& attachment_requests
             if (attachment.mAdd)
                 attachment_pt |= ATTACHMENT_ADD;
 
+            if(!fs_assistant::asyncSubmit()){attachment_requests.pop_front();continue;}
             msg->nextBlockFast(_PREHASH_ObjectData );
             msg->addUUIDFast(_PREHASH_ItemID, item->getLinkedUUID());
             msg->addUUIDFast(_PREHASH_OwnerID, item->getPermissions().getOwner());
@@ -320,16 +361,29 @@ void LLAttachmentsMgr::linkRecentlyArrivedAttachments()
         }
         if (ids_to_link.size())
         {
-            LLPointer<LLInventoryCallback> cb = new LLRegisterAttachmentCallback();
+            LLPointer<LLInventoryCallback> cb;
             for (const LLUUID& id_item: ids_to_link)
             {
                 if (std::find(mPendingAttachLinks.begin(), mPendingAttachLinks.end(), id_item) == mPendingAttachLinks.end())
                 {
-                    LLAppearanceMgr::instance().addCOFItemLink(id_item, cb);
+                    const auto origin=mAssistantOrigins.find(id_item);
+                    if(origin!=mAssistantOrigins.end())
+                    {
+                        fs_assistant::AsyncScope operationScope(origin->second.guard.lock());
+                        if(!fs_assistant::asyncOriginAllowed(origin->second)){origin->second.pending.reset();continue;}
+                        LLPointer<LLInventoryCallback> scoped=new LLRegisterAttachmentCallback(id_item);
+                        LLAppearanceMgr::instance().addCOFItemLink(id_item,scoped);origin->second.pending.reset();
+                    }
+                    else
+                    {
+                        if (cb.isNull()) cb = new LLRegisterAttachmentCallback();
+                        LLAppearanceMgr::instance().addCOFItemLink(id_item, cb);
+                    }
                     mPendingAttachLinks.insert(id_item);
                 }
             }
         }
+        for(const auto& id:mRecentlyArrivedAttachments){const auto origin=mAssistantOrigins.find(id);if(origin!=mAssistantOrigins.end())origin->second.pending.reset();}
         mRecentlyArrivedAttachments.clear();
     }
 }

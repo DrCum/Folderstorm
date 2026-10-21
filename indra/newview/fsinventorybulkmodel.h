@@ -52,6 +52,7 @@ struct Plan
     Kind kind = Kind::Rename;
     double expires = 0;
     std::vector<Row> rows;
+    bool assistant = false;
 };
 struct Outcome
 {
@@ -69,6 +70,7 @@ struct History
     bool terminal = false, cancelled = false, visible = true;
     std::vector<Row> rows;
     std::vector<Outcome> results;
+    bool assistant = false;
 };
 
 class Store
@@ -91,6 +93,7 @@ public:
     void settle(History& entry, std::size_t index, const Outcome& outcome);
     void finish(History& entry);
     void clear();
+    void retireAssistant(); // Retain native-only plans/history.
     void stop(const std::string& operation_id);
     bool current(const History& entry) const;
 private:

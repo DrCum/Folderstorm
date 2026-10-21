@@ -30,16 +30,17 @@
 #include "lltransfermanager.h"
 #include "llassetstorage.h"
 #include "llfilesystem.h"
+#include <utility>
 
 class LLFileSystem;
 
 // Lame, an S32 for now until I figure out the deal with how we want to do
 // error codes.
-typedef void (*LLTTVFCompleteCallback)(
+typedef std::function<void(
     S32 status,
     const LLUUID& file_id,
     LLAssetType::EType file_type,
-    LLBaseDownloadRequest* user_data, LLExtStat ext_status );
+    LLBaseDownloadRequest* user_data, LLExtStat ext_status )> LLTTVFCompleteCallback;
 
 class LLTransferTargetParamsVFile : public LLTransferTargetParams
 {
@@ -48,6 +49,7 @@ public:
 
     void setAsset(const LLUUID& asset_id, LLAssetType::EType asset_type);
     void setCallback(LLTTVFCompleteCallback cb, LLBaseDownloadRequest& request);
+    void setReadGuard(std::function<bool()> guard) { mReadGuard=std::move(guard); }
 
     LLUUID getAssetID() const                       { return mAssetID; }
     LLAssetType::EType getAssetType() const         { return mAssetType; }
@@ -62,6 +64,7 @@ protected:
     LLTTVFCompleteCallback  mCompleteCallback;
     LLBaseDownloadRequest*  mRequestDatap;
     S32                     mErrCode;
+    std::function<bool()>   mReadGuard;
 };
 
 
@@ -83,11 +86,13 @@ protected:
     /*virtual*/ void applyParams(const LLTransferTargetParams& params);
     /*virtual*/ LLTSCode dataCallback(const S32 packet_id, U8* in_datap, const S32 in_size);
     /*virtual*/ void completionCallback(const LLTSCode status);
+    bool readAllowed();
 
     LLTransferTargetParamsVFile mParams;
 
     bool mNeedsCreate;
     LLUUID mTempID;
+    bool mReadDenied=false;
 };
 
 #endif // LL_LLTRANSFERTARGETFILE_H

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="folderstorm_updates" title="Folderstorm updates" width="620" height="490" can_resize="true" min_width="620" min_height="430" help_topic="folderstorm_updates">
+  <text name="installed" left="16" top="36" width="588" height="22" follows="left|top|right" />
+  <text name="status" left="16" top="65" width="588" height="42" wrap="true" follows="left|top|right" />
+  <text_editor name="changelog" left="16" top="111" width="588" height="227" follows="all" read_only="true" parse_urls="false" word_wrap="true" />
+  <check_box name="automatic" label="Check for updates automatically" left="16" bottom="368" width="300" height="22" follows="left|bottom" />
+  <combo_box name="channel" left="414" bottom="368" width="190" height="22" follows="right|bottom">
+    <combo_box.item label="Stable" value="stable" />
+    <combo_box.item label="Nightly" value="nightly" />
+  </combo_box>
+  <button name="check" label="Check now" left="16" bottom="407" width="112" height="24" follows="left|bottom" />
+  <button name="download" label="Download" left="136" bottom="407" width="112" height="24" follows="left|bottom" />
+  <button name="notes" label="What's new" left="256" bottom="407" width="112" height="24" follows="left|bottom" tool_tip="Open the release page and full changelog." />
+  <button name="skip" label="Skip version" left="376" bottom="407" width="112" height="24" follows="left|bottom" />
+  <button name="install" label="Update app…" left="496" bottom="407" width="108" height="24" follows="left|bottom" tool_tip="Prepare a Velopack update for the complete app bundle. Installation waits for all characters and MCP to close. NSIS installs use Download." />
+  <button name="ok" label="OK" right="-248" bottom="-16" width="72" height="24" follows="right|bottom" />
+  <button name="cancel" label="Cancel" right="-168" bottom="-16" width="72" height="24" follows="right|bottom" />
+  <button name="apply" label="Apply" right="-16" bottom="-16" width="144" height="24" follows="right|bottom" />
+</floater>

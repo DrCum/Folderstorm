@@ -7,12 +7,16 @@
 #ifndef FS_SESSION_WORKER_H
 #define FS_SESSION_WORKER_H
 #include <string>
+class LLSD;
 class FSSessionWorker
 {
 public:
     enum class LoginGate { Allow, Wait, Deny };
     static bool initialize(); // Valid inherited capability or ordinary viewer.
     static bool managed();
+    static LLSD assistantIdentity();
+    static bool assistantPaused();
+    static bool assistantActiveAllowed(bool allowTeleport = false); // Only owned navigation may retain authority through its teleport UI.
     static void configure(); // Temporary settings only, after command line.
     static void importProfileSettings(); // Explicit host choice; before UI/login, native backup eligibility.
     static void importProfileAccountSettings(); // First successful account only; reviewed controls, not account contents.
@@ -28,6 +32,7 @@ public:
     static void drawTransition(); // World-only fade, before native 2D controls.
     static void endCameraFrame();   // Paired even when display returns early.
     static bool inputAllowed();
+    static bool nativeChatReadAllowed(); // Logical floater focus alone cannot read an inactive character's IMs.
     static bool voiceAllowed();
     static bool backgroundAudioMuted();
     static bool backgroundUIAudioMuted(); // Host alerts own background UI; world/media mute is independent.

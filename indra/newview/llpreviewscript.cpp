@@ -34,6 +34,7 @@
 #include "llcombobox.h"
 #include "lldir.h"
 #include "llexternaleditor.h"
+#include "fscontentupload.h"
 #include "llfilepicker.h"
 #include "llfloaterreg.h"
 #include "llfloatersearchreplace.h"
@@ -2542,6 +2543,16 @@ public:
 // Save needs to compile the text in the buffer. If the compile
 // succeeds, then save both assets out to the database. If the compile
 // fails, go ahead and save the text anyway.
+bool LLPreviewLSL::assistantSourceBusy() const
+{
+    return fs_content::nativeSourceBusy({!mScriptEd, mPendingUploads > 0,
+        mScriptEd && mScriptEd->mEditor && !mScriptEd->mEditor->isPristine(),
+        mScriptEd && mScriptEd->mLiveFile, mScriptEd && mScriptEd->mEnableSave,
+        mScriptEd && mScriptEd->mSaveDialogShown,
+        mScriptEd && mScriptEd->mLSLProc && mScriptEd->mLSLProc->mWaving,
+        mScriptEd && mScriptEd->mLSLProc && !mScriptEd->mLSLProc->caching_files.empty()});
+}
+
 void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
 {
 //  if(!mScriptEd->hasChanged())

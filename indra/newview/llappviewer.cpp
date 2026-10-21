@@ -28,6 +28,10 @@
 #include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
+#include "fsreleaseviewer.h"
+#include "fscrash.h"
+#include "fsupdate.h"
+#include "fsinstallviewer.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1509,6 +1513,8 @@ bool LLAppViewer::init()
         gDirUtilp->deleteDirAndContents(gDirUtilp->getDumpLogsDirPath());
     }
 #endif
+    FSReleaseViewer::startup();
+    fs_crash::initialize(FSSessionWorker::managed()?"worker":"viewer");
     LL_PROFILER_FRAME_END;
     return true;
 }
@@ -1603,6 +1609,7 @@ bool LLAppViewer::doFrame()
 {
     resumeMainloopTimeout("Main:doFrameStart");
     FSSessionWorker::tick();
+    if(FSEventAPIBridge::instanceExists())FSEventAPIBridge::instance().refreshSession();
 #ifdef LL_DISCORD
     {
         LL_PROFILE_ZONE_NAMED("discord_callbacks");
@@ -2056,13 +2063,16 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    fs_crash::shutdown();
 #if LL_VELOPACK
-    // Apply any pending Velopack update before shutdown
+    // Windows updates belong to the whole installation, never one worker exit.
+#if !LL_WINDOWS
     if (velopack_is_update_pending())
     {
         LL_INFOS("AppInit") << "Applying pending Velopack update on shutdown..." << LL_ENDL;
         velopack_apply_pending_update(velopack_should_restart_after_update());
     }
+#endif
     velopack_cleanup();
 #endif
 
@@ -5946,6 +5956,8 @@ static LLTrace::BlockTimerStatHandle FTM_HUD_EFFECTS("HUD Effects");
 ///////////////////////////////////////////////////////
 void LLAppViewer::idle()
 {
+    fs_crash::poll();
+    FSInstallViewer::poll();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
     pingMainloopTimeout("Main:Idle");
 

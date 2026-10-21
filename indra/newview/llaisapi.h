@@ -104,14 +104,16 @@ private:
 
     static void EnqueueAISCommand(const std::string &procName, LLCoprocedureManager::CoProcedure_t proc);
     static void onIdle(void *userdata); // launches postponed AIS commands
-    static void onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body);
+    static bool onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body,
+        const LLUUID& loginSession = LLUUID::null);
 
     static std::string getInvCap();
     static std::string getLibCap();
 
     static void InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
         invokationFn_t invoke, std::string url, LLUUID targetId, LLSD body,
-        completion_t callback, COMMAND_TYPE type);
+        completion_t callback, COMMAND_TYPE type,
+        fs_assistant::AsyncTaskPtr task, LLUUID loginSession);
 
     typedef std::pair<std::string, LLCoprocedureManager::CoProcedure_t> ais_query_item_t;
     static std::list<ais_query_item_t> sPostponedQuery;
@@ -120,7 +122,8 @@ private:
 class AISUpdate
 {
 public:
-    AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body);
+    AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body,
+        const LLUUID& loginSession = LLUUID::null);
     void parseUpdate(const LLSD& update);
     void parseMeta(const LLSD& update);
     void parseContent(const LLSD& update);
@@ -137,6 +140,8 @@ public:
     void parseEmbeddedCategory(const LLSD& category, S32 depth);
     void doUpdate();
 private:
+    const LLUUID mLoginSession;
+    void checkSession() const;
     void clearParseResults();
     void checkTimeout();
 

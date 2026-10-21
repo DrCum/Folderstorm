@@ -56,7 +56,10 @@ void FSAssistantApproval::present(const LLSD& summary, std::function<void(bool)>
     mPage = 0;
     LLStringUtil::format_map_t args;
     args["COUNT"] = summary["subject_count"].asString();
-    childSetValue("heading", getString("action_" + summary["op"].asString(), args));
+    const auto key = "action_" + summary["op"].asString();
+    bool shortened = false;
+    childSetValue("heading", summary.has("action") ? display(summary["action"], shortened) :
+        hasString(key) ? getString(key, args) : getString("action_feature", args));
     updatePage();
     openFloater();
     setFocus(true);
@@ -91,6 +94,9 @@ void FSAssistantApproval::answer(bool allow)
 void FSAssistantApproval::dismiss()
 {
     mCallback = {};
+    mSummary=LLSD();mPage=0;
+    if(auto* details=findChild<LLTextEditor>("details"))details->setText(LLStringUtil::null);
+    if(auto* heading=findChild<LLUICtrl>("heading"))heading->setValue(LLSD());
     closeFloater();
 }
 
@@ -106,6 +112,7 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
     bool shortened = false;
     const auto format = [&shortened](const LLSD& value) { return display(value, shortened); };
     std::ostringstream text;
+    if(summary.has("actor_name"))text << format(summary["actor_name"]) << " · " << format(summary["actor_grid"]) << "\n" << format(summary["actor_account"]) << "\n\n";
     if (summary.has("target")) text << getString("target") << format(summary["target"]) << "\n";
     if (summary.has("destination")) text << getString("destination") << format(summary["destination"]) << "\n";
     if (summary.has("source")) text << getString("source") << format(summary["source"]) << "\n";
@@ -125,6 +132,7 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
         const LLSD& subject = subjects[index];
         if (subject["name_unavailable"].asBoolean()) text << getString("name_unavailable") << " ";
         text << format(subject["name"]);
+        if (subject.has("before_name")) text << " (" << format(subject["before_name"]) << ")";
         if (subject.has("after_name")) text << " → " << format(subject["after_name"]);
         text << "\n";
         if (subject.has("path")) text << "  " << format(subject["path"]) << "\n";
@@ -138,6 +146,17 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
         text << getString(vector);
         for (const LLSD& number : llsd::inArray(summary[vector])) text << number.asReal() << " ";
         text << "\n";
+    }
+    if (summary.has("replacement_text"))
+    {
+        // Source text is untrusted data. Show the complete bounded replacement
+        // verbatim (without URL parsing), rather than treating it as a label.
+        auto replacement = summary["replacement_text"].asString();
+        replacement = utf8str_truncate(replacement, 65536);
+        for (char& c : replacement)
+            if ((static_cast<unsigned char>(c) < 32 && c != '\n' && c != '\r' && c != '\t') || c == 127) c = ' ';
+        text << "\n" << getString("content_replacement") << "\n" << replacement << "\n";
+        text << getString("content_compiler") << format(summary["compiler"]) << "\n";
     }
     for (const LLSD& warning : llsd::inArray(summary["consequences"]))
     {

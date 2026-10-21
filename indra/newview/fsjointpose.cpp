@@ -58,6 +58,14 @@ void FSJointPose::setPublicPosition(const LLVector3& pos)
     mCurrentState.mPoserChangeType = POSER_CHANGE_DEFAULT;
 }
 
+void FSJointPose::setAssistantTargetRotation(const LLQuaternion& rotation)
+{
+    // Used by private motions and typed, owner-reserved shared edits. Shared
+    // history is owned by OwnerSession. Preserve native per-joint undo/base
+    // and every non-rotation field.
+    mCurrentState.setTargetRotationOnly(rotation);
+}
+
 void FSJointPose::applySharedTransform(const FSSharedPose::Joint& state)
 {
     const auto& v = state.transform;

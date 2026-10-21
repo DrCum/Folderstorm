@@ -173,6 +173,17 @@ Tile* findTile(Board& board, const std::string& id)
 { for (auto& tile : board.tiles) if (tile.id == id) return &tile; return nullptr; }
 const Tile* findTile(const Board& board, const std::string& id)
 { for (const auto& tile : board.tiles) if (tile.id == id) return &tile; return nullptr; }
+bool sameBoard(const Board& left, const Board& right)
+{
+    if (left.id != right.id || left.name != right.name || left.compact != right.compact || left.tiles.size() != right.tiles.size()) return false;
+    for (size_t i = 0; i < left.tiles.size(); ++i)
+    {
+        const auto& a = left.tiles[i]; const auto& b = right.tiles[i];
+        if (a.id != b.id || a.item != b.item || a.label != b.label || a.custom_color != b.custom_color ||
+            a.color != b.color || a.width != b.width || a.height != b.height) return false;
+    }
+    return true;
+}
 bool moveTile(Board& board, const std::string& id, int index)
 {
     const auto it = std::find_if(board.tiles.begin(), board.tiles.end(), [&](const Tile& tile) { return tile.id == id; });

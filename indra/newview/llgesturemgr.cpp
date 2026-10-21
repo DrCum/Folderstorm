@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 
 #include "llgesturemgr.h"
 
@@ -153,6 +154,7 @@ void LLGestureMgr::changed(U32 mask)
 // and you KNOW the inventory is loaded.
 void LLGestureMgr::activateGesture(const LLUUID& item_id)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     LLViewerInventoryItem* item = gInventory.getItem(item_id);
     if (!item) return;
     if (item->getType() != LLAssetType::AT_GESTURE)
@@ -171,6 +173,7 @@ void LLGestureMgr::activateGesture(const LLUUID& item_id)
 
 void LLGestureMgr::activateGestures(LLViewerInventoryItem::item_array_t& items)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     // Load up the assets
     S32 count = 0;
     LLViewerInventoryItem::item_array_t::const_iterator it;
@@ -241,6 +244,7 @@ void LLGestureMgr::activateGestures(LLViewerInventoryItem::item_array_t& items)
 
         if (msg->getCurrentSendTotal() > MTUBYTES)
         {
+            if (!fs_assistant::asyncSubmit()) return;
             gAgent.sendReliableMessage();
             start_message = true;
         }
@@ -248,6 +252,7 @@ void LLGestureMgr::activateGestures(LLViewerInventoryItem::item_array_t& items)
 
     if (!start_message)
     {
+        if (!fs_assistant::asyncSubmit()) return;
         gAgent.sendReliableMessage();
     }
 }
@@ -258,6 +263,7 @@ struct LLLoadInfo
     LLUUID mItemID;
     bool mInformServer;
     bool mDeactivateSimilar;
+    fs_assistant::AsyncTaskPtr mAssistantTask;
 };
 
 // If inform_server is true, will send a message upstream to update
@@ -270,6 +276,7 @@ void LLGestureMgr::activateGestureWithAsset(const LLUUID& item_id,
                                                 bool inform_server,
                                                 bool deactivate_similar)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     const LLUUID& base_item_id = gInventory.getLinkedItemID(item_id);
 
     if( !gAssetStorage )
@@ -301,6 +308,7 @@ void LLGestureMgr::activateGestureWithAsset(const LLUUID& item_id,
         info->mItemID = base_item_id;
         info->mInformServer = inform_server;
         info->mDeactivateSimilar = deactivate_similar;
+        info->mAssistantTask = mPendingLoads.begin(base_item_id);
 
         const bool high_priority = true;
         gAssetStorage->getAssetData(asset_id,
@@ -324,6 +332,7 @@ void notify_update_label(const LLUUID& base_item_id)
 
 void LLGestureMgr::deactivateGesture(const LLUUID& item_id)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     const LLUUID& base_item_id = gInventory.getLinkedItemID(item_id);
     item_map_t::iterator it = mActive.find(base_item_id);
     if (it == mActive.end())
@@ -344,6 +353,7 @@ void LLGestureMgr::deactivateGesture(const LLUUID& item_id)
         gesture = NULL;
     }
 
+    mPendingLoads.erase(base_item_id);
     mActive.erase(it);
 
     // Inform the database of this change
@@ -358,6 +368,7 @@ void LLGestureMgr::deactivateGesture(const LLUUID& item_id)
     msg->addUUID("ItemID", base_item_id);
     msg->addU32("GestureFlags", 0x0);
 
+    if (!fs_assistant::asyncSubmit()) return;
     gAgent.sendReliableMessage();
 
     LLPointer<LLInventoryCallback> cb =
@@ -370,6 +381,7 @@ void LLGestureMgr::deactivateGesture(const LLUUID& item_id)
 
 void LLGestureMgr::deactivateSimilarGestures(LLMultiGesture* in, const LLUUID& in_item_id)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     const LLUUID& base_in_item_id = gInventory.getLinkedItemID(in_item_id);
     uuid_vec_t gest_item_ids;
 
@@ -397,6 +409,7 @@ void LLGestureMgr::deactivateSimilarGestures(LLMultiGesture* in, const LLUUID& i
             delete gest;
             gest = NULL;
 
+            mPendingLoads.erase(item_id);
             mActive.erase(it++);
             gInventory.addChangedMask(LLInventoryObserver::LABEL, item_id);
 
@@ -429,6 +442,7 @@ void LLGestureMgr::deactivateSimilarGestures(LLMultiGesture* in, const LLUUID& i
 
         if (msg->getCurrentSendTotal() > MTUBYTES)
         {
+            if (!fs_assistant::asyncSubmit()) return;
             gAgent.sendReliableMessage();
             start_message = true;
         }
@@ -438,6 +452,7 @@ void LLGestureMgr::deactivateSimilarGestures(LLMultiGesture* in, const LLUUID& i
 
     if (!start_message)
     {
+        if (!fs_assistant::asyncSubmit()) return;
         gAgent.sendReliableMessage();
     }
 
@@ -488,6 +503,7 @@ bool LLGestureMgr::isGesturePlaying(LLMultiGesture* gesture)
 
 void LLGestureMgr::replaceGesture(const LLUUID& item_id, LLMultiGesture* new_gesture, const LLUUID& asset_id)
 {
+    if (!fs_assistant::asyncAllowed()) return;
     const LLUUID& base_item_id = gInventory.getLinkedItemID(item_id);
 
     item_map_t::iterator it = mActive.find(base_item_id);
@@ -500,6 +516,7 @@ void LLGestureMgr::replaceGesture(const LLUUID& item_id, LLMultiGesture* new_ges
     LLMultiGesture* old_gesture = (*it).second;
     stopGesture(old_gesture);
 
+    mPendingLoads.erase(base_item_id);
     mActive.erase(base_item_id);
 
     mActive[base_item_id] = new_gesture;
@@ -521,6 +538,7 @@ void LLGestureMgr::replaceGesture(const LLUUID& item_id, LLMultiGesture* new_ges
         info->mItemID = base_item_id;
         info->mInformServer = true;
         info->mDeactivateSimilar = false;
+        info->mAssistantTask = mPendingLoads.begin(base_item_id);
 
         const bool high_priority = true;
         gAssetStorage->getAssetData(asset_id,
@@ -558,6 +576,13 @@ void LLGestureMgr::playGesture(LLMultiGesture* gesture, bool fromKeyPress)
     if (!RlvActions::canPlayGestures())
         return;
 // [/RLVa:KB]
+
+    // Reserve native/manual replay ownership immediately, including animation
+    // steps after waits or asset prefetch. An older assistant cancellation must
+    // never stop this newer gesture's contribution.
+    for (LLGestureStep* step : gesture->mSteps)
+        if (step->getType() == STEP_ANIMATION)
+            fs_assistant_animation_request(static_cast<LLGestureStepAnimation*>(step)->mAnimAssetID);
 
     // Reset gesture to first step
     gesture->reset();
@@ -838,6 +863,9 @@ struct IsGesturePlaying
 
 void LLGestureMgr::update()
 {
+    // Maintenance must also run while the bridge is disabled or gestures have
+    // been switched off, so revoked timelines release only their own state.
+    fs_assistant_gestures_tick();
     // <FS:PP> FIRE-36169 Gestures enable/disable switch
     if (!are_gestures_enabled())
     {
@@ -1184,11 +1212,31 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
     LLUUID item_id = info->mItemID;
     bool inform_server = info->mInformServer;
     bool deactivate_similar = info->mDeactivateSimilar;
+    const auto task = info->mAssistantTask;
+    fs_assistant::AsyncScope operationScope(task ? task->guard() : fs_assistant::AsyncGuard());
 
     delete info;
     info = NULL;
     LLGestureMgr& self = LLGestureMgr::instance();
-    self.mLoadingCount--;
+    if (!self.mPendingLoads.finish(item_id, task)) return;
+    if (self.mLoadingCount > 0) --self.mLoadingCount;
+    const auto discardPlaceholder = [&]()
+    {
+        // Only discard this load's placeholder. A later activation/replacement
+        // has its own generation and must survive an obsolete callback.
+        const auto pending = self.mActive.find(item_id);
+        if (pending != self.mActive.end() && !pending->second)
+        {
+            self.mActive.erase(pending);
+            gInventory.addChangedMask(LLInventoryObserver::LABEL, item_id);
+            self.notifyObservers();
+        }
+    };
+    if (!fs_assistant::asyncAllowed())
+    {
+        discardPlaceholder();
+        return;
+    }
 
     if (0 == status)
     {
@@ -1208,6 +1256,12 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
 
         if (ok)
         {
+            if (!fs_assistant::asyncAllowed())
+            {
+                delete gesture;
+                discardPlaceholder();
+                return;
+            }
             if (deactivate_similar)
             {
                 self.deactivateSimilarGestures(gesture, item_id);
@@ -1235,6 +1289,12 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
                 self.startFetch();
             }
 
+            if (!fs_assistant::asyncAllowed())
+            {
+                delete gesture;
+                discardPlaceholder();
+                return;
+            }
             item_map_t::iterator it = self.mActive.find(item_id);
             if (it == self.mActive.end())
             {
@@ -1282,6 +1342,7 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
                 msg->addUUID("AssetID", asset_uuid);
                 msg->addU32("GestureFlags", 0x0);
 
+                if (!fs_assistant::asyncSubmit()) return;
                 gAgent.sendReliableMessage();
             }
             callback_map_t::iterator i_cb = self.mCallbackMap.find(item_id);

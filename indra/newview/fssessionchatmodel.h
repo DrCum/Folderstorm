@@ -80,7 +80,7 @@ struct Conversation
     Topic topic = Topic::Nearby;
     std::uint32_t unread = 0;
     std::string destination;
-    std::uint64_t lastIncomingEvent = 0;
+    std::uint64_t lastIncomingEvent = 0, lastEvent = 0;
     bool restricted = false;
     bool closed=false;
     std::uint64_t closedAt=0;
@@ -92,16 +92,26 @@ class ChatView
 {
 public:
     static constexpr std::size_t MaxConversations = 64, MaxLines = 512;
+    static constexpr std::size_t MaxNotices = 64, MaxNoticeLines = 128;
     ChatKey identity;
     std::map<std::string, Conversation> conversations;
     std::deque<Message> lines;
     std::uint64_t cursor = 0;
     bool gap = false;
+    std::size_t conversationCount(bool notices) const
+    {return static_cast<std::size_t>(std::count_if(conversations.begin(),conversations.end(),[notices](const auto& entry){return (entry.second.topic==Topic::Notice)==notices;}));}
     bool close(const std::string& id,std::uint64_t watermark)
     {
         const auto found=conversations.find(id);
         if(found==conversations.end() || found->second.topic==Topic::Nearby) return false;
         found->second.closed=true;found->second.closedAt=watermark;return true;
+    }
+    bool reopen(const Message& acknowledgement)
+    {
+        if(acknowledgement.eventType!=EventType::Conversation || acknowledgement.topic!=Topic::Private ||
+            (acknowledgement.flags&(Error|ChatRestricted|ConversationRestricted)) || !accept(acknowledgement))return false;
+        auto& entry=conversations.at(acknowledgement.conversation);entry.closed=false;entry.closedAt=acknowledgement.cursor;
+        return true;
     }
     bool markRead(const Message& request)
     {
@@ -172,11 +182,19 @@ public:
         }
         if (found == conversations.end())
         {
-            if (conversations.size() >= MaxConversations) { gap = true; if (event.event) cursor = event.event; return false; }
+            if(!makeRoom(event.topic)){gap=true;if(event.event)cursor=event.event;return false;}
             found = conversations.emplace(event.conversation, Conversation{event.conversation, event.title, "", event.topic, 0}).first;
         }
+        // A notice UUID cannot replace a native chat/draft, or vice versa.
+        if((found->second.topic==Topic::Notice)!=(event.topic==Topic::Notice))
+        {if(event.event)cursor=event.event;return false;}
+        if(event.event)found->second.lastEvent=event.event;
         if(event.eventType==EventType::ConversationClosed)
         {
+            // Explicit New IM also establishes a fence. A queued native Close
+            // from before that acknowledgement cannot undo the user's reopen.
+            if(!found->second.closed && event.event<=found->second.closedAt)
+            {if(event.event)cursor=event.event;return true;}
             // Native close delivery must not lower an acknowledged host fence
             // or its pending maximum. The acknowledgement explicitly replaces
             // that temporary maximum through close().
@@ -216,21 +234,37 @@ public:
         if (event.eventType == EventType::Chat || event.eventType == EventType::Notice)
         {
             lines.push_back(event);
-            if (lines.size() > MaxLines) { lines.pop_front(); gap = true; }
+            const bool notice=event.topic==Topic::Notice;
+            const auto count=std::count_if(lines.begin(),lines.end(),[notice](const Message& line){return (line.topic==Topic::Notice)==notice;});
+            if(static_cast<std::size_t>(count)>(notice?MaxNoticeLines:MaxLines))
+            {const auto oldest=std::find_if(lines.begin(),lines.end(),[notice](const Message& line){return (line.topic==Topic::Notice)==notice;});lines.erase(oldest);if(!notice)gap=true;}
         }
         if (event.event) cursor = event.event;
         return true;
     }
 private:
+    bool makeRoom(Topic topic)
+    {
+        if(topic!=Topic::Notice)return conversationCount(false)<MaxConversations;
+        if(conversationCount(true)<MaxNotices)return true;
+        auto oldest=conversations.end();
+        for(auto it=conversations.begin();it!=conversations.end();++it)if(it->second.topic==Topic::Notice &&
+            (oldest==conversations.end() || it->second.lastEvent<oldest->second.lastEvent))oldest=it;
+        if(oldest==conversations.end())return false;
+        const auto id=oldest->first;conversations.erase(oldest);
+        lines.erase(std::remove_if(lines.begin(),lines.end(),[&id](const Message& line){return line.topic==Topic::Notice && line.conversation==id;}),lines.end());
+        return true;
+    }
     void restrictConversation(const Message& event)
     {
         auto found = conversations.find(event.conversation);
-        if (found == conversations.end() && conversations.size() < MaxConversations)
+        if (found == conversations.end() && makeRoom(event.topic))
             found = conversations.emplace(event.conversation,Conversation{event.conversation,"Restricted conversation","",event.topic,0}).first;
         if (found != conversations.end())
         {
             found->second.restricted = true; found->second.title = "Restricted conversation";
             found->second.unread = 0; found->second.destination.clear();
+            if(event.event)found->second.lastEvent=event.event;
         }
         lines.erase(std::remove_if(lines.begin(),lines.end(),[&event](const Message& line)
             { return line.conversation == event.conversation; }),lines.end());

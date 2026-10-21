@@ -88,3 +88,98 @@ Custom tiles and editor samples now share a native-button subclass whose normal/
 Actual focused checks passed: a small C++ harness compiled the editor's actual early preview-update code against the native swatch callback contract, exercised ten off/on cycles with retained pickers and forced nested close callbacks, and checked single updates, guard reset, no cancel rollback and preserved chosen RGB. A rendering wiring check confirmed the same button implementation serves the board and sample, all nine custom image states use the neutral fill, and theme styling is retained when custom color is off. Every available skin/theme `white.tga` was inspected read-only and is uniformly opaque white. Inspected native swatch cancel/detach behavior, image constructor/reference ownership, protected button APIs and numeric types. `git diff --check` passed. No viewer build, packaging/GitHub build, unrelated tests or subagent.
 
 Remaining native Windows acceptance: select a color, then turn Custom tile color off with the picker already closed and while it is still open; repeat off/on and editor reuse. Check no crash or unwanted RGB rollback, compare picker swatch/sample/saved tile while focused and opaque, verify bright green/purple/light/dark fills and readable text in Folderstorm/Anastorm, and check hover/playing outlines and theme reset. Save and Cancel (including a picker left open) should preserve their staged behavior. The harness does not establish an observed native crash fix or GPU-rendered pixel match.
+
+
+## Inventory sounds: follow-up above PR #70
+
+Implemented in the isolated `feat/gesture-board-sounds` worktree. The original checkout and published history are preserved. Add/Replace select gestures or sounds; agent/Library drag/drop also accepts sound references. Existing link resolution, trash/missing checks, duplicate handling, editor Save/Cancel and per-account board storage apply to both. Playback resolves the current item type and sends a sound exactly once through `send_sound_trigger`, matching Inventory **Play**. No sound asset data or extra type field is persisted. Sounds report a ready state rather than pretending a one-shot sound can be stopped. The gesture engine remains responsible for gesture activation/loading/playing/stopping. Disconnected/logged-out/shutting-down sessions cannot start board playback, and a loading gesture cannot implicitly turn into sound playback if its resolved type changes.
+
+Actual focused validation:
+
+```sh
+python3 -m unittest discover -s indra/newview/tests -p test_fsgestureboardsounds.py -v
+git diff --check
+```
+
+Both tests passed. The first compiles the production availability, permission, resolution, play, stop and pending-poll method bodies plus production lookup/cancellation helpers with C++17 and `-Wall -Wextra -Werror -pedantic`. Native boundaries are mocked: settings persistence, inventory transport, native UI, server receipt and audible output are not covered. Cases include direct/linked resolution, original link names, one sound submission per click, no gesture activation for sounds or polling replay, gesture-only preference/restriction behavior, invalid board/tile, disconnected/no-region/logout/shutdown rejection, missing/broken/trashed/wrong-type/null-asset references, unchanged gesture loading and duplicate suppression, click-to-stop, preserving unrelated gesture playback, type changes during a pending gesture and login cancellation. The second parses all three changed XUI resources, verifies control names, picker/drop support and drag-source guards by source inspection, plus new status strings, and checks that serialization still writes item references without sound asset fields. No broad viewer, packaging or GitHub build was run.
+
+Windows acceptance:
+
+1. Open an existing board. Use Add to select both gestures and inventory sounds; also drag sounds and links onto tiles and empty space. Check duplicate and broken/trashed-item behavior. Selecting or editing items must not play them.
+2. Click a direct sound and a linked sound. Compare with Inventory **Play**, including what a nearby second account hears. Check native sound volume/mute behavior. Each click submits once, with no lingering playing toggle; Stop does not promise to silence a sound already emitted.
+3. Edit a sound tile's text, color and dimensions; Save/Cancel, replace sound ↔ gesture, reorder, duplicate boards and relog. Confirm existing gesture tiles and account isolation remain intact.
+4. Check gesture enable/restriction/loading/cancellation behavior in mixed boards. Sound items should behave like native Inventory Play when gestures are disabled. Disconnect or close during a loading gesture, then relog; no old request may play.
+5. Inspect picker/editor text and sound tooltips at minimum size and larger UI scale in Folderstorm and alternate skins.
+
+Native Windows compile, drag/drop and audible playback remain pending.
+
+## Multiple open boards and sound badges: follow-up above PR #74
+
+Use **Options → Open board in new window** to open another launcher, then choose
+its board from that window's selector. Up to 16 board windows can be open. Titles
+include board names, and each window keeps its own selection, page, size and live
+position. Additional windows cascade through the native floater group. Closing
+one destroys that window; multiple open windows are not automatically restored
+on login. The normal toolbar/World/Preferences launcher still opens the primary
+board. Its next opening uses the saved last selection. Existing account-local
+board definitions and their version-two format are unchanged.
+
+A selection changes only the initiating window; the saved last-selection
+preference is ignored for definition-conflict checks. Real definition edits still
+use snapshots and account/login guards, and all views of an edited board refresh.
+Deleting the displayed board safely chooses an available fallback. An empty
+collection does not repeatedly dismiss the New-board editor.
+
+Pending gesture requests retain their originating window ID. Closing/switching
+one window cancels only that window's requests. Editing/deleting a board cancels
+that board's requests; another board's requests continue. Stop affects gestures
+started by that board and its pending requests. The native engine still has one
+playback instance per inventory gesture ID, so repeated references share its
+playing state. Already emitted sound/chat cannot be recalled.
+
+The existing shared editor/picker remain one of each. Their keys identify the
+exact owning window, board and login; closing another board cannot dismiss them
+or redirect Add/Replace/Save. Recreated primary windows cannot inherit old editor
+callbacks. Deferred deletion confirmation also checks its originating window.
+
+Resolved inventory sounds now show a small native **Inv_Sound** speaker overlay
+on their tiles and editor samples, including when gesture playback is disabled.
+The native button reserves label space, ellipsizes and scales the icon; custom
+fills use the selected foreground contrast. A tooltip also identifies inventory
+sounds. Inventory type is resolved afresh, so replacements/links update the badge
+without storing an extra asset/type field. Sound playback itself is unchanged.
+
+Focused checks passed:
+
+```sh
+python3 -m unittest discover -s indra/newview/tests -p 'test_fsgestureboard*.py' -v
+git diff --check
+```
+
+Five tests execute actual controller/window method bodies with C++17 strict
+warnings and small native UI/storage boundaries, plus XUI/icon wiring checks.
+They cover direct/linked sound playback and gesture restrictions, concurrent
+boards, per-window/per-board cancellation and Stop, last-selection independence,
+snapshot conflicts, all board presentation fields, real commit invalidation,
+stale/recreated owner keys, editor closure, account/session changes and rejection
+without writes. Codec/storage/UI/transport fixtures do not establish real settings
+persistence, native rendering or audible output. No broad viewer, packaging,
+GitHub build or unrelated tests were run.
+
+Windows acceptance remains pending:
+
+1. Open at least three board windows, choose different boards, resize and move
+   them, change pages and select boards independently. Check titles/cascading,
+   the 16-window limit, primary launcher reopening and saved board definitions.
+2. Edit a board visible in two windows; check both refresh without moving a
+   third window to another board. Create/rename/duplicate/delete boards, including
+   deleting the last board and then using New again. Check Add/drop/replace and
+   their receiving window, Save/Cancel, and closing another window during editing.
+3. Queue two distinct uncached gestures from different boards. Close/switch one,
+   and verify only the other can play on completion. Stop one board while another
+   is playing. Repeat with two views of the same board and with logout/relogin.
+4. Check sound badges on ordinary and linked sounds, mixed with gestures, at
+   minimum tile sizes/larger UI scale and in Folderstorm/alternate skins. Check
+   contrast on light/dark custom fills, editor samples and sound ↔ gesture
+   replacement. Each explicit sound click still plays once using Inventory Play's
+   native path; the badge must not cause playback itself.

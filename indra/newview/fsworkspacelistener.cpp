@@ -93,6 +93,7 @@ public:
     void dispatch(const LLSD& request)
     {
         Response response(LLSD(), request);
+        if(!fs_assistant_request_allowed(request))return response.error("Assistant request expired or its session/permission changed");
         const auto op = request["op"].asString();
         if (op == "apply" || op == "previous") return response.error("Workspace mutation requires the bridge's prepared execution context");
         auto& controller = FSWorkspaceController::instance();

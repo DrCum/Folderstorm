@@ -33,6 +33,10 @@
 #endif
 
 #include "llviewermenu.h"
+#include "fsreleaseviewer.h"
+#include "fscrash.h"
+#include "fsupdate.h"
+#include "fsinstallviewer.h"
 
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
@@ -11591,21 +11595,7 @@ void handle_show_url(const LLSD& param)
 
 void handle_report_bug(const LLSD& param)
 {
-    // <FS:Ansariel> Keep linking to out JIRA
-    //std::string url = gSavedSettings.getString("ReportBugURL");
-    //LLWeb::loadURLExternal(url);
-    LLSD sysinfo = FSData::getSystemInfo();
-    LLStringUtil::format_map_t replace;
-    replace["[ENVIRONMENT]"] = LLURI::escape(sysinfo["Part1"].asString().substr(1) + sysinfo["Part2"].asString().substr(1));
-    LLSLURL location_url;
-    LLAgentUI::buildSLURL(location_url);
-    replace["[LOCATION]"] = LLURI::escape(location_url.getSLURLString());
-
-    LLUIString file_bug_url = gSavedSettings.getString("ReportBugURL");
-    file_bug_url.setArgs(replace);
-
-    LLWeb::loadURLExternal(file_bug_url.getString());
-    // </FS:Ansariel>
+    LLWeb::loadURLExternal(fs_crash::reportUrl());
 }
 
 void handle_buy_currency_test()
@@ -13074,6 +13064,9 @@ void initialize_menus()
     commit.add("Advanced.WebContentTest", boost::bind(&handle_web_content_test, _2));   // this one opens the Web Content floater
     commit.add("Advanced.ShowURL", boost::bind(&handle_show_url, _2));
     commit.add("Advanced.ReportBug", boost::bind(&handle_report_bug, _2));
+    commit.add("Help.CheckFolderstormUpdates", boost::bind(&FSReleaseViewer::show));
+    commit.add("Help.FolderstormShortcuts", [](LLUICtrl*, const LLSD&) { FSInstallViewer::shortcuts(); });
+    commit.add("Help.FolderstormCrashReports", boost::bind(&LLFloaterReg::showInstance,"folderstorm_crashes",LLSD(),false));
     view_listener_t::addMenu(new LLAdvancedBuyCurrencyTest(), "Advanced.BuyCurrencyTest");
     view_listener_t::addMenu(new LLAdvancedDumpSelectMgr(), "Advanced.DumpSelectMgr");
     view_listener_t::addMenu(new LLAdvancedDumpInventory(), "Advanced.DumpInventory");

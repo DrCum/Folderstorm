@@ -1,0 +1,12 @@
+/** Generated build identity; shared by the matching viewer and host. */
+#ifndef FS_RELEASE_BUILD_H
+#define FS_RELEASE_BUILD_H
+#include "fsreleasepolicy.h"
+namespace fs_release
+{
+inline Build runningBuild(){return {"@VIEWER_SHORT_VERSION@.@VIEWER_VERSION_REVISION@","@FS_RELEASE_PLATFORM@","@FS_RELEASE_ARCH@","@FS_RELEASE_CPU@","@FS_RELEASE_FLAVOR@","@FS_RELEASE_INSTALLER@"};}
+inline constexpr const char* FeedUrl="@FS_RELEASE_FEED_URL@";
+inline constexpr const char* DownloadHosts="@FS_RELEASE_DOWNLOAD_HOSTS@";
+inline constexpr const char* DefaultChannel="@FS_RELEASE_DEFAULT_CHANNEL@";
+}
+#endif

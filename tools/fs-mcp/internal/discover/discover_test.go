@@ -1,10 +1,12 @@
 package discover
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -130,6 +132,33 @@ func TestRedactedHidesToken(t *testing.T) {
 	}
 	if in.Token != "secret" {
 		t.Fatal("original token mutated")
+	}
+}
+
+func TestSessionDiscoveryBoundsAndIdentity(t *testing.T) {
+	dir := t.TempDir()
+	path := writeDiscovery(t, dir, "fs-mcp-99.json", `{"pid":99,"port":1234,"token":"secret","managed":true,"viewer_session":"login","account":"resident","grid":"grid","name":"Sodie"}`)
+	inst, err := LoadFile(path)
+	if err != nil || !inst.Managed || inst.ViewerSession != "login" {
+		t.Fatal(inst, err)
+	}
+	raw, _ := json.Marshal(inst.Redacted())
+	if strings.Contains(string(raw), "secret") {
+		t.Fatal("token leaked")
+	}
+	changed := inst
+	changed.Token = "new"
+	if changed.BindingKey() == inst.BindingKey() {
+		t.Fatal("connection reuse not detected")
+	}
+	if _, err = Parse([]byte(`{"managed":true}`)); err == nil {
+		t.Fatal("managed record without login identity")
+	}
+	if err = os.WriteFile(path, []byte(strings.Repeat("x", 65537)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = LoadFile(path); err == nil {
+		t.Fatal("oversized discovery accepted")
 	}
 }
 

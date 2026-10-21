@@ -24,11 +24,13 @@
 
 #include "llsingleton.h"
 #include "llsd.h"
+#include "fsassistantasync.h"
 
 #include <memory>
 #include <string>
 
 class LLPumpIO;
+class LLChat;
 
 class FSEventAPIBridge final : public LLSingleton<FSEventAPIBridge>
 {
@@ -43,10 +45,20 @@ public:
     // Disable rejects every request and deletes the discovery file. It does
     // not unbind the socket.
     bool applyEnabled(bool enabled);
+    void nearbyMessage(const LLChat& message);
+    void refreshSession(); // Main-thread login/connection identity; revokes old work.
+    void reviewPending(); // Presents native approval only on the active owner.
+    static bool requestAllowed(const LLSD& request);
+    static fs_assistant::AsyncGuard asyncContext(const LLSD& request);
     void stop();
     bool isRunning() const;
     int getPort() const;
     const std::string& getDiscoveryPath() const;
+    std::string discoveryDirectory() const;
+    std::string configurationDiscovery() const;
+    const std::string& sessionReference() const {return mViewerSession;}
+    // Credential-free host binding; does not start or enable worker MCP.
+    std::string controllerLoginReference();
 
     struct StatusSnapshot
     {
@@ -55,6 +67,8 @@ public:
         int port = 0;
         int policyGeneration = 0;
         int pendingApprovals = 0;
+        U64 approvalRevision = 0;
+        std::string pendingApprovalSummary;
         F64 lastExternalRequestAt = 0.0;
         F64 lastDiagnosticAt = 0.0;
         std::string lastExternalApi;
@@ -67,6 +81,8 @@ public:
     // Publish a new generation and reject pending approvals whose required
     // permission was revoked. Permanent-delete settings remain irrelevant.
     static void notePermissionClassesChanged();
+    // Trusted native privacy signal; removes already-rendered shared metadata.
+    static void noteSharedPosePrivacyChanged();
     static int getPolicyGeneration();
     // Effective current class permission for trusted local inventory review UI.
     static std::string getPermissionLevel(const std::string& class_id);
@@ -83,6 +99,9 @@ private:
     std::string mDiscoveryPath;
     int mPort = 0;
     std::string mLastError;
+    std::string mSessionKey, mViewerSession;
+    std::string mControllerLoginKey, mControllerLoginReference;
+    bool mHostedRegistry=false;
 };
 
 #endif

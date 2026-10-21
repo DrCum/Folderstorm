@@ -1101,6 +1101,7 @@ void LLAgentWearables::removeWearableFinal(const LLWearableType::EType type, boo
 void LLAgentWearables::setWearableOutfit(const LLInventoryItem::item_array_t& items,
                                          const std::vector< LLViewerWearable* >& wearables)
 {
+    if(!fs_assistant::asyncSubmit())return;
     LL_INFOS() << "setWearableOutfit() start" << LL_ENDL;
 
     auto count = wearables.size();
@@ -1538,6 +1539,7 @@ std::vector<LLViewerObject*> LLAgentWearables::getTempAttachments()
 
 void LLAgentWearables::userRemoveMultipleAttachments(llvo_vec_t& objects_to_remove)
 {
+    if(!fs_assistant::asyncAllowed())return;
     if (!isAgentAvatarValid()) return;
 
 // [RLVa:KB] - Checked: 2010-03-04 (RLVa-1.2.0)
@@ -1590,11 +1592,13 @@ void LLAgentWearables::userRemoveMultipleAttachments(llvo_vec_t& objects_to_remo
         LL_DEBUGS("Avatar") << "ATT removing object, item is " << (item ? item->getName() : "UNKNOWN") << " " << item_id << LL_ENDL;
         LLAttachmentsMgr::instance().onDetachRequested(item_id);
     }
+    if (!fs_assistant::asyncSubmit()) return;
     gMessageSystem->sendReliable(gAgent.getRegionHost());
 }
 
 void LLAgentWearables::userAttachMultipleAttachments(LLInventoryModel::item_array_t& obj_item_array)
 {
+    if(!fs_assistant::asyncAllowed())return;
     // Build a compound message to send all the objects that need to be rezzed.
     auto obj_count = obj_item_array.size();
     if (obj_count > 0)
@@ -1711,6 +1715,7 @@ bool LLAgentWearables::moveWearable(const LLViewerInventoryItem* item, bool clos
 // static
 void LLAgentWearables::createWearable(LLWearableType::EType type, bool wear, const LLUUID& parent_id, std::function<void(const LLUUID&)> created_cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     if (type == LLWearableType::WT_INVALID || type == LLWearableType::WT_NONE) return;
 
     if (type == LLWearableType::WT_UNIVERSAL && !gAgent.getRegion()->bakesOnMeshEnabled())
@@ -1729,6 +1734,17 @@ void LLAgentWearables::createWearable(LLWearableType::EType type, bool wear, con
     else
     {
         cb = new LLBoostFuncInventoryCallback(wear_cb);
+    }
+    if(fs_assistant::AsyncScope::current())
+    {
+        const auto everyone=LLFloaterPerms::getEveryonePerms("Wearables"),group=LLFloaterPerms::getGroupPerms("Wearables");
+        cb=new LLBoostFuncInventoryCallback([everyone,group](const LLUUID& id)
+        {
+            if(id.isNull() || !fs_assistant::asyncAllowed())return;
+            auto* item=gInventory.getItem(id);if(!item)return;
+            auto perm=item->getPermissions();perm.setMaskEveryone(everyone);perm.setMaskGroup(group);
+            item->setPermissions(perm);item->updateServer(false);gInventory.updateItem(item);gInventory.notifyObservers();
+        });
     }
     if (created_cb != NULL)
     {

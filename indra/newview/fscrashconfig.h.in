@@ -1,0 +1,4 @@
+#pragma once
+#define FS_HAS_SENTRY @FS_HAS_SENTRY@
+#define FS_SENTRY_DSN "@FS_SENTRY_DSN@"
+#define FS_CRASH_COMMIT "@FS_SOURCE_COMMIT@"

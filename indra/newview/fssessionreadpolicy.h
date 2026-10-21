@@ -5,6 +5,8 @@
 #include <map>
 namespace fs_session
 {
+inline bool nativeChatReadAllowed(bool managed,bool ready,bool inputOwner,bool foreground,bool visible,bool switching)
+{return !managed || (ready && inputOwner && foreground && visible && !switching);}
 inline bool readFenceCurrent(const Message& request,std::uint64_t latest)
 { return request.kind == Kind::MarkRead && request.topic != Topic::Notice && request.cursor == latest && request.event <= request.cursor; }
 class ActiveReadClock

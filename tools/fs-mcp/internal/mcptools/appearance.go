@@ -42,12 +42,14 @@ func registerAppearance(s *mcp.Server, state *Server, readOnly, destructive *mcp
 }
 
 type viewerArgs struct {
-	ViewerPID int `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type outfitItemsArgs struct {
-	OutfitID  string `json:"outfit_id" jsonschema:"outfit folder UUID"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	OutfitID      string `json:"outfit_id" jsonschema:"outfit folder UUID"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type wearOutfitArgs struct {
@@ -55,17 +57,20 @@ type wearOutfitArgs struct {
 	FolderName      string `json:"folder_name,omitempty" jsonschema:"outfit folder name"`
 	Append          bool   `json:"append,omitempty" jsonschema:"add to the current outfit instead of replacing it"`
 	SkipElicitation bool   `json:"skip_elicitation,omitempty" jsonschema:"return plan_id instead of prompting"`
+	ViewerSession   string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
 	ViewerPID       int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type wearItemsArgs struct {
-	ItemsID         any  `json:"items_id" jsonschema:"one item UUID or an array of item UUIDs"`
-	Replace         bool `json:"replace,omitempty" jsonschema:"replace worn items of the same type"`
-	SkipElicitation bool `json:"skip_elicitation,omitempty" jsonschema:"return plan_id instead of prompting"`
-	ViewerPID       int  `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ItemsID         any    `json:"items_id" jsonschema:"one item UUID or an array of item UUIDs"`
+	Replace         bool   `json:"replace,omitempty" jsonschema:"replace worn items of the same type"`
+	SkipElicitation bool   `json:"skip_elicitation,omitempty" jsonschema:"return plan_id instead of prompting"`
+	ViewerSession   string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID       int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func (s *Server) appearanceOutfits(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
@@ -74,6 +79,7 @@ func (s *Server) appearanceOutfits(ctx context.Context, _ *mcp.CallToolRequest, 
 }
 
 func (s *Server) appearanceOutfitItems(ctx context.Context, _ *mcp.CallToolRequest, args outfitItemsArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.OutfitID == "" {
 		return errorResult("invalid_args", "outfit_id is required", nil)
 	}
@@ -85,6 +91,7 @@ func (s *Server) appearanceOutfitItems(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *Server) appearanceWorn(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	api, _, errRes := s.openClass(ctx, args.ViewerPID, viewerapi.ClassRead)
 	if errRes != nil {
 		return errRes, nil, nil
@@ -93,6 +100,7 @@ func (s *Server) appearanceWorn(ctx context.Context, _ *mcp.CallToolRequest, arg
 }
 
 func (s *Server) appearanceWearOutfit(ctx context.Context, req *mcp.CallToolRequest, args wearOutfitArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.FolderID == "" && args.FolderName == "" {
 		return errorResult("invalid_args", "folder_id or folder_name is required", nil)
 	}
@@ -111,6 +119,7 @@ func (s *Server) appearanceWearOutfit(ctx context.Context, req *mcp.CallToolRequ
 }
 
 func (s *Server) appearanceWearItems(ctx context.Context, req *mcp.CallToolRequest, args wearItemsArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ItemsID == nil || args.ItemsID == "" {
 		return errorResult("invalid_args", "items_id is required", nil)
 	}
@@ -120,6 +129,7 @@ func (s *Server) appearanceWearItems(ctx context.Context, req *mcp.CallToolReque
 }
 
 func (s *Server) appearanceDetach(ctx context.Context, req *mcp.CallToolRequest, args wearItemsArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ItemsID == nil || args.ItemsID == "" {
 		return errorResult("invalid_args", "items_id is required", nil)
 	}

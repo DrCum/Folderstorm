@@ -86,7 +86,7 @@ public:
     }
     bool valid() const
     {
-        if (accounts.size() > MaxProfiles || pins.size() > MaxPins || rectangles.size() > 7 || transition > 2 ||
+        if (accounts.size() > MaxProfiles || pins.size() > MaxPins || rectangles.size() > 13 || transition > 2 ||
             duration < 250 || duration > 2000 || height < 16 || height > 96 || volume > 100) return false;
         for (const auto& entry : accounts) if (!entry.first.valid() || !validUtf8(entry.second.alias) ||
             entry.second.alias.size() > 64 || entry.second.color > 0xffffff || entry.second.alerts > 2) return false;
@@ -98,7 +98,7 @@ public:
             { if (j < i && pins[i] == pins[j]) return false; if (pins[i].owner == pins[j].owner) ++count; }
             if (count > 8) return false;
         }
-        for (const auto& rect : rectangles) if (rect.first > 6 || !rect.second.valid()) return false;
+        for (const auto& rect : rectangles) if (rect.first > 13 || !rect.second.valid()) return false;
         for (std::size_t i = 0; i < bindings.size(); ++i)
         {
             if (!bindings[i].valid()) return false;
@@ -156,7 +156,7 @@ public:
         count = number(); if (!ok || count > MaxPins) return false;
         for (std::uint32_t i = 0; i < count && ok; ++i)
         { SavedPin pin; pin.owner.account = string(); pin.owner.grid = string(); pin.topic = static_cast<Topic>(number()); pin.destination = string(); value.pins.push_back(pin); }
-        count = number(); if (!ok || count > 7) return false;
+        count = number(); if (!ok || count > 13) return false;
         const auto signedNumber = [&]() -> int
         { const auto n = number(); return n <= 0x7fffffffu ? static_cast<int>(n) : -1 - static_cast<int>(0xffffffffu - n); };
         for (std::uint32_t i = 0; i < count && ok; ++i)

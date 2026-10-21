@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="local_assistant_approval" title="Local assistant request" width="550" height="470"
  can_resize="true" min_width="410" min_height="340" can_minimize="false" save_rect="false" layout="topleft">
+ <string name="action_preferences_preview">Preview these viewer settings?</string>
+ <string name="action_preferences_accept">Save this viewer settings preview?</string>
+ <string name="action_preferences_cancel">Discard this viewer settings preview?</string>
+ <string name="action_pose_start">Start an assistant pose?</string>
+ <string name="action_pose_update">Update these pose rotations?</string>
+ <string name="action_pose_undo">Undo the last assistant pose edit?</string>
+ <string name="action_pose_reset">Reset this assistant pose?</string>
+ <string name="action_pose_stop">Stop this assistant pose?</string>
+ <string name="action_pose_load">Load these preset rotations?</string>
+ <string name="action_pose_save">Save this rotation preset?</string>
+ <string name="pose_local_rotations">This affects local joint rotations only. It does not move your character or enable shared publishing. Native or shared poser ownership takes priority.</string>
+ <string name="pose_native_shared_consent">Native owner consent and joint reservations are required separately. This approval cannot create a grant. Submitted edits may remain uncertain and are never replayed automatically. Publishing exposes the existing native pose to compatible peers; stopping publishing preserves the native pose.</string>
+ <string name="action_feature">Allow this assistant action?</string>
+ <string name="action_saveNotecard">Replace this notecard's source?</string>
+ <string name="action_saveScript">Save and compile this inventory script?</string>
+ <string name="content_replace_source">This replaces inventory source. The local revision check cannot prevent concurrent changes made elsewhere. A script compilation failure can still save its source. Unknown outcomes are never retried automatically.</string>
+ <string name="content_replacement">Complete replacement source:</string>
+ <string name="content_compiler">Compiler: </string>
  <string name="action_workspace_apply">Switch to saved workspace or layout</string>
  <string name="action_workspace_previous">Return to Previous arrangement</string>
  <string name="workspace_graphics">This setup changes supported graphics settings.</string>

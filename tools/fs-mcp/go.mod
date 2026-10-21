@@ -3,9 +3,12 @@ module fs-mcp
 go 1.25.0
 
 require (
+	folderstorm-updateguard v0.0.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
+
+replace folderstorm-updateguard => ../updateguard
 
 require (
 	github.com/segmentio/asm v1.1.3 // indirect

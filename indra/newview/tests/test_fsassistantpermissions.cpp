@@ -61,7 +61,8 @@ int main()
     applyPermissionPreset(PermissionPreset::ReadOnly, write);
     check(policy.size() == permissionClasses.size() + 1 && policy["future-class"] == "future-value");
     check(permissionPreset(lookup) == PermissionPreset::ReadOnly);
-    for (const auto& def : permissionClasses) check(policy[def.id] == (def.ask ? "deny" : "allow"));
+    for (const auto& def : permissionClasses) check(policy[def.id] == (def.kind == ActionClass::Read ? "allow" : "deny"));
+    check(policy["chat_read"] == "deny" && policy["world_read"] == "deny");
     const auto before = policy;
     applyPermissionPreset(PermissionPreset::Custom, write);
     check(policy == before);

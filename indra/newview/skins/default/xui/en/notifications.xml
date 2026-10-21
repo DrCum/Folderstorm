@@ -204,6 +204,11 @@ No tutorial is currently available.
      yestext="OK"/>
   </notification>
 
+  <notification icon="alertmodal.tga" name="FolderstormSeparateInstallation" type="alertmodal">
+    A separate [APP_NAME] installation ([VERSION]) was found at [PATH]. It can remain installed. Its shortcuts may open that copy. To remove it later, use Windows Settings → Apps → Installed apps. This notice is separate from checking for updates.
+    <usetemplate name="okbutton" yestext="OK"/>
+  </notification>
+
   <notification
    icon="alertmodal.tga"
    name="FoundLegacyNsisInstallation"

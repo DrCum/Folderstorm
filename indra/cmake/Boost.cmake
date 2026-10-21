@@ -11,6 +11,7 @@ if( USE_CONAN )
 endif()
 
 use_prebuilt_binary(boost)
+target_include_directories(ll::boost SYSTEM INTERFACE "${LIBS_PREBUILT_DIR}/include")
 
 # As of sometime between Boost 1.67 and 1.72, Boost libraries are suffixed
 # with the address size.

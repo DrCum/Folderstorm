@@ -32,6 +32,7 @@
 #include "llviewerinventory.h"
 #include "llinventoryobserver.h"
 #include "lleventtimer.h"
+#include "fsassistantasync.h"
 
 class FSLSLBridgeRequestResponder;
 
@@ -67,6 +68,14 @@ public:
 
     bool lslToViewer(std::string_view message, const LLUUID& fromID, const LLUUID& ownerID);
     bool viewerToLSL(std::string_view message, Callback_t = nullptr);
+    // Only shared-pose packets, with immutable source provenance retained until
+    // the actual queued POST. Completion is transport acknowledgement, not owner
+    // consent or acceptance. Assistant POSTs never retry or follow redirects.
+    bool sharedPoseToLSLGuarded(const std::string& message,const fs_assistant::AsyncTaskPtr& task,
+        std::function<bool(bool)> nativeAuthority,std::function<void(bool,bool)> completion);
+    // Manual native edits retain only native consent/front/lease authority.
+    bool sharedPoseToLSLNativeGuarded(const std::string& message,
+        std::function<bool()> nativeAuthority,std::function<void(bool,bool)> completion);
 
     bool updateBoolSettingValue(const std::string& msgVal);
     bool updateBoolSettingValue(const std::string& msgVal, bool contentVal);
@@ -119,6 +128,8 @@ private:
 
     bool                    mIsFirstCallDone; //initialization conversation
     bool                    mSharedPoseReady = false;
+    LLUUID                  mAssistantPoseLifetime=LLUUID::generateNewID();
+    LLUUID                  mNativePoseLifetime=LLUUID::generateNewID();
 
     uuid_vec_t              mAllowedDetachables;
 

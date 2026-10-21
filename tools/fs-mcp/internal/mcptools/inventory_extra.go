@@ -35,43 +35,49 @@ func registerInventoryExtra(s *mcp.Server, state *Server, readOnly, mutating, de
 }
 
 type idsArgs struct {
-	IDs       []string `json:"ids" jsonschema:"inventory UUIDs, at most 50"`
-	ViewerPID int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	IDs           []string `json:"ids" jsonschema:"inventory UUIDs, at most 50"`
+	ViewerSession string   `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type pathArgs struct {
-	Path      string `json:"path" jsonschema:"inventory path such as Clothing/Outfits/Formal"`
-	FolderID  string `json:"folder_id,omitempty" jsonschema:"folder UUID to start from instead of inventory root"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Path          string `json:"path" jsonschema:"inventory path such as Clothing/Outfits/Formal"`
+	FolderID      string `json:"folder_id,omitempty" jsonschema:"folder UUID to start from instead of inventory root"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type sinceArgs struct {
-	Since     int `json:"since,omitempty" jsonschema:"return changes with a generation greater than this"`
-	ViewerPID int `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Since         int    `json:"since,omitempty" jsonschema:"return changes with a generation greater than this"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type descArgs struct {
-	ID        string `json:"id" jsonschema:"item or folder UUID"`
-	Desc      string `json:"desc" jsonschema:"new description"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ID            string `json:"id" jsonschema:"item or folder UUID"`
+	Desc          string `json:"desc" jsonschema:"new description"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type thumbArgs struct {
-	ID          string `json:"id" jsonschema:"item or folder UUID"`
-	ThumbnailID string `json:"thumbnail_id,omitempty" jsonschema:"texture UUID, empty to clear"`
-	ViewerPID   int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ID            string `json:"id" jsonschema:"item or folder UUID"`
+	ThumbnailID   string `json:"thumbnail_id,omitempty" jsonschema:"texture UUID, empty to clear"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type snapshotUploadArgs struct {
-	ID           string `json:"id" jsonschema:"outfit folder, other folder, or item UUID"`
-	Width        *int   `json:"width,omitempty" jsonschema:"width in pixels, default 1024, with height"`
-	Height       *int   `json:"height,omitempty" jsonschema:"height in pixels, default 1024, with width"`
-	ViewportOnly *bool  `json:"viewport_only,omitempty" jsonschema:"capture the world viewport, default true"`
-	Destination  string `json:"destination,omitempty" jsonschema:"thumbnail (default, free) or texture"`
-	Name         string `json:"name,omitempty" jsonschema:"texture name; defaults to the folder or item name"`
-	ShowUI       *bool  `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
-	ShowHUD      *bool  `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
-	ViewerPID    int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ID            string `json:"id" jsonschema:"outfit folder, other folder, or item UUID"`
+	Width         *int   `json:"width,omitempty" jsonschema:"width in pixels, default 1024, with height"`
+	Height        *int   `json:"height,omitempty" jsonschema:"height in pixels, default 1024, with width"`
+	ViewportOnly  *bool  `json:"viewport_only,omitempty" jsonschema:"capture the world viewport, default true"`
+	Destination   string `json:"destination,omitempty" jsonschema:"thumbnail (default, free) or texture"`
+	Name          string `json:"name,omitempty" jsonschema:"texture name; defaults to the folder or item name"`
+	ShowUI        *bool  `json:"show_ui,omitempty" jsonschema:"include viewer UI, default false"`
+	ShowHUD       *bool  `json:"show_hud,omitempty" jsonschema:"include HUD, default false"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func buildSnapshotUploadParams(args snapshotUploadArgs) ([]string, map[string]any, string) {
@@ -122,29 +128,33 @@ func buildSnapshotUploadParams(args snapshotUploadArgs) ([]string, map[string]an
 }
 
 type favoriteArgs struct {
-	ID        string `json:"id" jsonschema:"item or folder UUID"`
-	Favorite  bool   `json:"favorite" jsonschema:"true to mark favorite"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ID            string `json:"id" jsonschema:"item or folder UUID"`
+	Favorite      bool   `json:"favorite" jsonschema:"true to mark favorite"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type linkArgs struct {
-	ID        string `json:"id" jsonschema:"item or folder UUID to link"`
-	ParentID  string `json:"parent_id" jsonschema:"destination folder UUID"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	ID            string `json:"id" jsonschema:"item or folder UUID to link"`
+	ParentID      string `json:"parent_id" jsonschema:"destination folder UUID"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type createItemArgs struct {
-	Type      string `json:"type" jsonschema:"notecard, lsl, gesture, material, landmark, sky, water, daycycle, or a wearable type such as shirt"`
-	ParentID  string `json:"parent_id,omitempty" jsonschema:"destination folder UUID"`
-	Name      string `json:"name,omitempty" jsonschema:"landmark name; other types use the viewer default"`
-	Desc      string `json:"desc,omitempty" jsonschema:"landmark description"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Type          string `json:"type" jsonschema:"notecard, lsl, gesture, material, landmark, sky, water, daycycle, or a wearable type such as shirt"`
+	ParentID      string `json:"parent_id,omitempty" jsonschema:"destination folder UUID"`
+	Name          string `json:"name,omitempty" jsonschema:"landmark name; other types use the viewer default"`
+	Desc          string `json:"desc,omitempty" jsonschema:"landmark description"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type batchMoveArgs struct {
-	IDs       []string `json:"ids" jsonschema:"objects to move"`
-	ParentID  string   `json:"parent_id" jsonschema:"destination folder UUID"`
-	ViewerPID int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	IDs           []string `json:"ids" jsonschema:"objects to move"`
+	ParentID      string   `json:"parent_id" jsonschema:"destination folder UUID"`
+	ViewerSession string   `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type renameEntry struct {
@@ -153,35 +163,41 @@ type renameEntry struct {
 }
 
 type batchRenameArgs struct {
-	Items     []renameEntry `json:"items" jsonschema:"objects to rename"`
-	ViewerPID int           `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Items         []renameEntry `json:"items" jsonschema:"objects to rename"`
+	ViewerSession string        `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int           `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type batchCopyArgs struct {
-	IDs       []string `json:"ids" jsonschema:"items to copy"`
-	ParentID  string   `json:"parent_id" jsonschema:"destination folder UUID"`
-	Policy    string   `json:"policy,omitempty" jsonschema:"default, strict, or copyable_only"`
-	ViewerPID int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	IDs           []string `json:"ids" jsonschema:"items to copy"`
+	ParentID      string   `json:"parent_id" jsonschema:"destination folder UUID"`
+	Policy        string   `json:"policy,omitempty" jsonschema:"default, strict, or copyable_only"`
+	ViewerSession string   `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type replaceLinksArgs struct {
 	SourceID        string `json:"source_id" jsonschema:"UUID the existing links point at"`
 	TargetID        string `json:"target_id" jsonschema:"UUID the new links should point at"`
 	SkipElicitation bool   `json:"skip_elicitation,omitempty" jsonschema:"return plan_id instead of prompting"`
+	ViewerSession   string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
 	ViewerPID       int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type purgeArgs struct {
 	ID              string `json:"id" jsonschema:"object UUID to delete permanently"`
 	SkipElicitation bool   `json:"skip_elicitation,omitempty" jsonschema:"return plan_id instead of prompting"`
+	ViewerSession   string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
 	ViewerPID       int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func (s *Server) inventoryTypes(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.named(ctx, args.ViewerPID, viewerapi.DefaultAPI, "types", map[string]any{})
 }
 
 func (s *Server) inventoryGetMany(ctx context.Context, _ *mcp.CallToolRequest, args idsArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.IDs) == 0 || len(args.IDs) > 50 {
 		return errorResult("invalid_args", "ids must contain between 1 and 50 UUIDs", nil)
 	}
@@ -189,6 +205,7 @@ func (s *Server) inventoryGetMany(ctx context.Context, _ *mcp.CallToolRequest, a
 }
 
 func (s *Server) inventoryResolvePath(ctx context.Context, _ *mcp.CallToolRequest, args pathArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.Path == "" {
 		return errorResult("invalid_args", "path is required", nil)
 	}
@@ -200,14 +217,17 @@ func (s *Server) inventoryResolvePath(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) inventoryProtectedFolders(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.named(ctx, args.ViewerPID, viewerapi.DefaultAPI, "protectedFolders", map[string]any{})
 }
 
 func (s *Server) inventoryChanges(ctx context.Context, _ *mcp.CallToolRequest, args sinceArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.named(ctx, args.ViewerPID, viewerapi.DefaultAPI, "changes", map[string]any{"since": args.Since})
 }
 
 func (s *Server) inventoryReadNotecard(ctx context.Context, _ *mcp.CallToolRequest, args getArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -215,6 +235,7 @@ func (s *Server) inventoryReadNotecard(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *Server) inventoryReadScript(ctx context.Context, _ *mcp.CallToolRequest, args getArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -222,6 +243,7 @@ func (s *Server) inventoryReadScript(ctx context.Context, _ *mcp.CallToolRequest
 }
 
 func (s *Server) inventoryLandmark(ctx context.Context, _ *mcp.CallToolRequest, args getArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -229,6 +251,7 @@ func (s *Server) inventoryLandmark(ctx context.Context, _ *mcp.CallToolRequest, 
 }
 
 func (s *Server) inventorySetDescription(ctx context.Context, _ *mcp.CallToolRequest, args descArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -236,6 +259,7 @@ func (s *Server) inventorySetDescription(ctx context.Context, _ *mcp.CallToolReq
 }
 
 func (s *Server) inventorySetThumbnail(ctx context.Context, _ *mcp.CallToolRequest, args thumbArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -243,6 +267,7 @@ func (s *Server) inventorySetThumbnail(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *Server) inventorySnapshotUpload(ctx context.Context, _ *mcp.CallToolRequest, args snapshotUploadArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	classes, params, message := buildSnapshotUploadParams(args)
 	if message != "" {
 		return errorResult("invalid_args", message, nil)
@@ -255,6 +280,7 @@ func (s *Server) inventorySnapshotUpload(ctx context.Context, _ *mcp.CallToolReq
 }
 
 func (s *Server) inventorySetFavorite(ctx context.Context, _ *mcp.CallToolRequest, args favoriteArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -262,6 +288,7 @@ func (s *Server) inventorySetFavorite(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) inventoryLink(ctx context.Context, _ *mcp.CallToolRequest, args linkArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" || args.ParentID == "" {
 		return errorResult("invalid_args", "id and parent_id are required", nil)
 	}
@@ -269,6 +296,7 @@ func (s *Server) inventoryLink(ctx context.Context, _ *mcp.CallToolRequest, args
 }
 
 func (s *Server) inventoryCreateItem(ctx context.Context, _ *mcp.CallToolRequest, args createItemArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.Type == "" {
 		return errorResult("invalid_args", "type is required", nil)
 	}
@@ -286,6 +314,7 @@ func (s *Server) inventoryCreateItem(ctx context.Context, _ *mcp.CallToolRequest
 }
 
 func (s *Server) inventoryBatchMove(ctx context.Context, _ *mcp.CallToolRequest, args batchMoveArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.IDs) == 0 || len(args.IDs) > 50 || args.ParentID == "" {
 		return errorResult("invalid_args", "ids (1-50) and parent_id are required", nil)
 	}
@@ -293,6 +322,7 @@ func (s *Server) inventoryBatchMove(ctx context.Context, _ *mcp.CallToolRequest,
 }
 
 func (s *Server) inventoryBatchRename(ctx context.Context, _ *mcp.CallToolRequest, args batchRenameArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.Items) == 0 || len(args.Items) > 50 {
 		return errorResult("invalid_args", "items must contain between 1 and 50 entries", nil)
 	}
@@ -307,6 +337,7 @@ func (s *Server) inventoryBatchRename(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) inventoryBatchCopy(ctx context.Context, _ *mcp.CallToolRequest, args batchCopyArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.IDs) == 0 || len(args.IDs) > 50 || args.ParentID == "" {
 		return errorResult("invalid_args", "ids (1-50) and parent_id are required", nil)
 	}
@@ -318,6 +349,7 @@ func (s *Server) inventoryBatchCopy(ctx context.Context, _ *mcp.CallToolRequest,
 }
 
 func (s *Server) inventoryTrash(ctx context.Context, _ *mcp.CallToolRequest, args getArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -325,6 +357,7 @@ func (s *Server) inventoryTrash(ctx context.Context, _ *mcp.CallToolRequest, arg
 }
 
 func (s *Server) inventoryRestore(ctx context.Context, _ *mcp.CallToolRequest, args getArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}
@@ -332,6 +365,7 @@ func (s *Server) inventoryRestore(ctx context.Context, _ *mcp.CallToolRequest, a
 }
 
 func (s *Server) inventoryReplaceLinks(ctx context.Context, req *mcp.CallToolRequest, args replaceLinksArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.SourceID == "" || args.TargetID == "" {
 		return errorResult("invalid_args", "source_id and target_id are required", nil)
 	}
@@ -345,7 +379,8 @@ func (s *Server) inventoryEmptyTrash(context.Context, *mcp.CallToolRequest, wear
 	return permanentDeleteResult()
 }
 
-func (s *Server) inventoryPurge(_ context.Context, _ *mcp.CallToolRequest, args purgeArgs) (*mcp.CallToolResult, any, error) {
+func (s *Server) inventoryPurge(ctx context.Context, _ *mcp.CallToolRequest, args purgeArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.ID == "" {
 		return errorResult("invalid_args", "id is required", nil)
 	}

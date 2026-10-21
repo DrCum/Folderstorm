@@ -43,7 +43,7 @@ private:
     void worn(LLSD const &data);
 
     bool requireConfirm(LLSD const& data, LLEventAPI::Response& response) const;
-    bool rlvAllows(const LLUUID& item_id, bool detach, std::string& error) const;
+    static bool rlvAllows(const LLUUID& item_id, bool detach, std::string& error);
 };
 
 #endif // LL_LLAPPEARANCELISTENER_H

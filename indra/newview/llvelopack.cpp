@@ -41,6 +41,8 @@
 #include "llcoros.h"
 
 #include "Velopack.h"
+#include "fsupdate.h"
+#include "fsupdateconfig.h"
 
 #if LL_WINDOWS
 #include <windows.h>
@@ -284,7 +286,10 @@ static const wchar_t* PROTOCOL_GRID_INFO_OPENSIM = L"x-grid-info";
 // </FS:TJ>
 static std::wstring get_viewer_exe_name()
 {
-    return ll_convert<std::wstring>(gDirUtilp->getExecutableFilename());
+    // Velopack hooks run before gDirUtilp is initialized.
+    std::vector<wchar_t> module(32768);
+    const DWORD length=GetModuleFileNameW(nullptr,module.data(),static_cast<DWORD>(module.size()));
+    return length && length<module.size()?std::filesystem::path(std::wstring(module.data(),length)).filename().wstring():std::wstring{};
 }
 
 static std::wstring get_install_dir()
@@ -328,26 +333,6 @@ static std::wstring get_app_name_oneword()
     std::wstring name = get_app_name();
     name.erase(std::remove(name.begin(), name.end(), L' '), name.end());
     return name;
-}
-
-static std::wstring get_start_menu_path()
-{
-    wchar_t path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PROGRAMS, NULL, 0, path)))
-    {
-        return path;
-    }
-    return L"";
-}
-
-static std::wstring get_desktop_path()
-{
-    wchar_t path[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY, NULL, 0, path)))
-    {
-        return path;
-    }
-    return L"";
 }
 
 static HRESULT create_shortcut(const std::wstring& shortcut_path,
@@ -759,16 +744,11 @@ static void register_uninstall_info(const std::wstring& install_dir,
                                     const std::wstring& app_name,
                                     const std::wstring& version)
 {
-    std::wstring app_name_oneword = get_app_name_oneword();
-    // Clears velopack's recently created 'uninstall' registry entry.
-    // We are going to use a custom one.
-    // Note that velopack doesn't know about our custom entry.
-    std::wstring key_path = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + app_name_oneword;
-    RegDeleteTreeW(HKEY_CURRENT_USER, key_path.c_str());
-    // Use a unique key name to avoid conflicts with any existing NSIS-based uninstall info,
-    // which can cause only one of the two entries to show up in the Add/Remove Programs list.
-    // The UI will show DisplayName, so the key name itself is not important to be user-friendly.
-    key_path = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vlpk" + app_name_oneword;
+    // Keep the SDK's exact variant identity, including CPU/architecture, so
+    // one channel or variant cannot replace another app's uninstall entry.
+    const std::string app_id=fs_update::AppId;
+    const std::wstring key_path=L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"+
+        std::wstring(app_id.begin(),app_id.end());
     HKEY hkey;
 
     if (RegCreateKeyExW(HKEY_CURRENT_USER, key_path.c_str(), 0, NULL,
@@ -786,7 +766,7 @@ static void register_uninstall_info(const std::wstring& install_dir,
         RegSetValueExW(hkey, L"Publisher", 0, REG_SZ,
                       // <FS:TJ> Use Firestorm installation information
                       //(BYTE*)L"Linden Research, Inc.", 44);
-                      (BYTE*)L"The Phoenix Firestorm Project, Inc.", 72);
+                      (BYTE*)L"Folderstorm contributors", sizeof(L"Folderstorm contributors"));
                       // </FS:TJ>
         RegSetValueExW(hkey, L"UninstallString", 0, REG_SZ,
                       (BYTE*)uninstall_cmd.c_str(), (DWORD)((uninstall_cmd.size() + 1) * sizeof(wchar_t)));
@@ -795,21 +775,21 @@ static void register_uninstall_info(const std::wstring& install_dir,
 
         // <FS:TJ> Use Firestorm installation information
         //std::wstring link_url = L"https://support.secondlife.com/contact-support/";
-        std::wstring link_url = L"https://www.firestormviewer.org/support";
+        std::wstring link_url = L"https://folderstorm.com/bugs";
         // </FS:TJ>
         RegSetValueExW(hkey, L"HelpLink", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
 
         // <FS:TJ> Use Firestorm installation information
         //link_url = L"https://secondlife.com/whatis/";
-        link_url = L"https://www.firestormviewer.org";
+        link_url = L"https://github.com/DrCum/Folderstorm";
         // </FS:TJ>
         RegSetValueExW(hkey, L"URLInfoAbout", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
 
         // <FS:TJ> Use Firestorm installation information
         //link_url = L"https://secondlife.com/support/downloads/";
-        link_url = L"https://www.firestormviewer.org/downloads";
+        link_url = L"https://github.com/DrCum/Folderstorm/releases";
         // </FS:TJ>
         RegSetValueExW(hkey, L"URLUpdateInfo", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
@@ -838,34 +818,10 @@ static void register_uninstall_info(const std::wstring& install_dir,
 
 static void unregister_uninstall_info()
 {
-    std::wstring app_name_oneword = get_app_name_oneword();
-    std::wstring key_path = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vlpk" + app_name_oneword;
+    const std::string app_id=fs_update::AppId;
+    const std::wstring key_path=L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"+
+        std::wstring(app_id.begin(),app_id.end());
     RegDeleteTreeW(HKEY_CURRENT_USER, key_path.c_str());
-}
-
-static void create_shortcuts(const std::wstring& install_dir, const std::wstring& app_name)
-{
-    std::wstring exe_path = install_dir + L"\\" + get_viewer_exe_name();
-    std::wstring start_menu_dir = get_start_menu_path() + L"\\" + app_name;
-    std::wstring desktop_path = get_desktop_path();
-
-    CreateDirectoryW(start_menu_dir.c_str(), NULL);
-
-    create_shortcut(start_menu_dir + L"\\" + app_name + L".lnk",
-                    exe_path, L"", app_name, exe_path);
-
-    create_shortcut(desktop_path + L"\\" + app_name + L".lnk",
-                    exe_path, L"", app_name, exe_path);
-}
-
-static void remove_shortcuts(const std::wstring& app_name)
-{
-    std::wstring start_menu_dir = get_start_menu_path() + L"\\" + app_name;
-    std::wstring desktop_path = get_desktop_path();
-
-    DeleteFileW((start_menu_dir + L"\\" + app_name + L".lnk").c_str());
-    RemoveDirectoryW(start_menu_dir.c_str());
-    DeleteFileW((desktop_path + L"\\" + app_name + L".lnk").c_str());
 }
 
 static void on_first_run(void* p_user_data, const char* app_version)
@@ -883,35 +839,9 @@ static void on_first_run(void* p_user_data, const char* app_version)
     MultiByteToWideChar(CP_UTF8, 0, app_version, -1, &version[0], len);
 
     register_uninstall_info(install_dir, app_name, version);
-    // Drop install related settings
-    // Unfortunately gDirUtilp is not initialized yet and it's shouldn't
-    // be possible to change location of the settings. For now it's simpler
-    // to hardcode the location.
-    std::optional<std::string> app_data = LLStringUtil::getoptenv("APPDATA");
-    if (app_data)
-    {
-        // Strip trailing delimiter if present
-        std::string app_data_path = *app_data;
-        if (!app_data_path.empty() && (app_data_path.back() == '\\' || app_data_path.back() == '/'))
-        {
-            app_data_path.pop_back();
-        }
-
-        // <FS:TJ> Look for Firestorms settings.xml and not LL's
-        //std::string user_settings_path = app_data_path + "\\SecondLife\\user_settings\\settings.xml";
-        std::string user_settings_path = app_data_path + "\\Firestorm_x64\\user_settings\\settings.xml";
-        // </FS:TJ>
-        LLControlGroup settings("global");
-        if (settings.loadFromFile(user_settings_path))
-        {
-            // If user reinstalls or updates, we want to recheck for nsis leftovers.
-            if (settings.controlExists("PreviousInstallChecked"))
-            {
-                settings.setBOOL("PreviousInstallChecked", false);
-            }
-            settings.saveToFile(user_settings_path, true);
-        }
-    }
+    // Settings and shortcut choices belong to Folderstorm. Never rewrite the
+    // independent Firestorm profile here. Interactive shortcut setup runs only
+    // after normal viewer/host initialization, outside Velopack hooks.
 }
 
 static bool launch_migrator(const std::wstring& exe, const std::wstring& args, DWORD* exit_code)
@@ -1105,7 +1035,7 @@ static void on_after_install(void* user_data, const char* app_version)
     register_protocol_handler(PROTOCOL_HOP_OPENSIM, L"URL:Hypergrid", exe_path);
     register_protocol_handler(PROTOCOL_GRID_INFO_OPENSIM, L"URL:Hypergrid", exe_path);
     // </FS:TJ>
-    create_shortcuts(install_dir, app_name);
+    // Shortcuts are offered on the first interactive viewer/host launch.
     offer_settings_migration(install_dir);
 }
 
@@ -1121,7 +1051,7 @@ static void on_before_uninstall(void* user_data, const char* app_version)
     unregister_protocol_handler(PROTOCOL_GRID_INFO_OPENSIM);
     // </FS:TJ>
     unregister_uninstall_info();
-    remove_shortcuts(app_name);
+    fs_update::removeShortcuts();
 }
 
 static void on_log_message(void* user_data, const char* level, const char* message)
@@ -1487,6 +1417,10 @@ static void show_required_update_prompt()
 
 void velopack_check_for_updates(const std::string& required_version, const std::string& relnotes_url)
 {
+#if LL_WINDOWS
+    fs_update::prepare();
+    return;
+#else
     if (sUpdateUrl.empty())
     {
         LL_DEBUGS("Velopack") << "No update URL set, skipping update check" << LL_ENDL;
@@ -1557,6 +1491,7 @@ void velopack_check_for_updates(const std::string& required_version, const std::
     args["VERSION"] = target_version;
     args["URL"] = relnotes_url;
     LLNotificationsUtil::add("PromptOptionalUpdate", args, LLSD(), on_optional_update_response);
+#endif
 }
 
 std::string velopack_get_current_version()
@@ -1602,6 +1537,10 @@ void velopack_request_restart_after_update()
 
 void velopack_apply_pending_update(bool restart)
 {
+#if LL_WINDOWS
+    LL_WARNS("Velopack") << "Use the installation coordinator to apply updates" << LL_ENDL;
+    return;
+#else
     if (!sUpdateManager || !sPendingUpdate || !sPendingUpdate->TargetFullRelease)
     {
         LL_WARNS("Velopack") << "Cannot apply update: no pending update or manager" << LL_ENDL;
@@ -1614,6 +1553,7 @@ void velopack_apply_pending_update(bool restart)
                                        false,
                                        restart,
                                        nullptr, 0);
+#endif
 }
 
 void velopack_cleanup()

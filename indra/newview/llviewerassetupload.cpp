@@ -42,6 +42,8 @@
 #include "llinventorypanel.h"
 #include "llsdutil.h"
 #include "llviewerassetupload.h"
+#include "fscontentupload.h"
+#include <map>
 #include "llappviewer.h"
 #include "llviewerstats.h"
 #include "llfilesystem.h"
@@ -63,6 +65,35 @@
 void dialog_refresh_all();
 
 static const U32 LL_ASSET_UPLOAD_TIMEOUT_SEC = 60;
+namespace {
+std::map<const LLResourceUploadInfo*,std::pair<LLUUID,unsigned>> sPendingInventoryUploads;
+fs_content::PendingSourceOwners<LLUUID> sPendingLegacyInventoryUploads;
+struct PendingInventoryUpload
+{
+    explicit PendingInventoryUpload(const LLResourceUploadInfo::ptr_t& upload):info(upload.get())
+    {auto& entry=sPendingInventoryUploads[info];entry.first=upload->getItemId();++entry.second;}
+    ~PendingInventoryUpload(){const auto found=sPendingInventoryUploads.find(info);if(found!=sPendingInventoryUploads.end() && !--found->second.second)sPendingInventoryUploads.erase(found);}
+    const LLResourceUploadInfo* info;
+};
+}
+bool LLViewerAssetUpload::hasPendingInventoryUpload(const LLUUID& itemId,const LLResourceUploadInfo* except)
+{
+    if(sPendingLegacyInventoryUploads.has(itemId))return true;
+    for(const auto& upload:sPendingInventoryUploads)
+        if(upload.first!=except && upload.second.first==itemId)return true;
+    return false;
+}
+std::shared_ptr<void> LLViewerAssetUpload::trackLegacyInventoryUpload(const LLUUID& itemId)
+{
+    if(itemId.isNull())return {};
+    sPendingLegacyInventoryUploads.begin(itemId);
+    return std::shared_ptr<void>(new LLUUID(itemId), [](void* raw)
+    {
+        auto* id=static_cast<LLUUID*>(raw);
+        sPendingLegacyInventoryUploads.end(*id);
+        delete id;
+    });
+}
 
 LLResourceUploadInfo::LLResourceUploadInfo(LLTransactionID transactId,
         LLAssetType::EType assetType, std::string name, std::string description,
@@ -882,11 +913,15 @@ LLSD LLScriptAssetUpload::generatePostBody()
 /*static*/
 LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo)
 {
+    if(!uploadInfo->assistantCheck("queue"))
+    {uploadInfo->assistantStopped(LLSD(),"queue");return LLUUID::null;}
     std::string procName("LLViewerAssetUpload::AssetInventoryUploadCoproc(");
 
+    auto pending=std::make_shared<PendingInventoryUpload>(uploadInfo);
     LLUUID queueId = LLCoprocedureManager::instance().enqueueCoprocedure("Upload",
         procName + LLAssetType::lookup(uploadInfo->getAssetType()) + ")",
-        boost::bind(&LLViewerAssetUpload::AssetInventoryUploadCoproc, _1, _2, url, uploadInfo));
+        [url,uploadInfo,pending](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter,const LLUUID& id)
+        { (void)pending;LLViewerAssetUpload::AssetInventoryUploadCoproc(adapter,id,url,uploadInfo); });
 
     return queueId;
 }
@@ -899,6 +934,9 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOptions = std::make_shared<LLCore::HttpOptions>();
     httpOptions->setTimeout(LL_ASSET_UPLOAD_TIMEOUT_SEC);
+    if(uploadInfo->assistantOwned()){httpOptions->setRetries(0);httpOptions->setFollowRedirects(false);}
+    if(!uploadInfo->assistantCheck("prepare"))
+    {uploadInfo->assistantStopped(LLSD(),"prepare");return;}
 
     LLSD result = uploadInfo->prepareUpload();
     uploadInfo->logPreparedUpload();
@@ -911,6 +949,8 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
 
     llcoro::suspend();
 
+    if(!uploadInfo->assistantCheck("dequeued"))
+    {uploadInfo->assistantStopped(LLSD(),"dequeued");return;}
     if (uploadInfo->showUploadDialog())
     {
         // <FS:Ansariel> Localization fix
@@ -927,15 +967,19 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     LLSD body = uploadInfo->generatePostBody();
 
     // Retry stage-2 upload by re-requesting a fresh one-time uploader capability (up to 3 attempts total)
-    const S32 MAX_UPLOAD_RETRIES = 2;
+    const S32 MAX_UPLOAD_RETRIES = fs_content::uploadRetryLimit(uploadInfo->assistantOwned());
     S32 upload_retry_count = 0;
     LLCore::HttpStatus status;
 
     while (upload_retry_count <= MAX_UPLOAD_RETRIES)
     {
-        // Stage 1: Request uploader URL
+        // Stage 1: Request uploader URL. Each POST is a distinct submission.
+        if(!uploadInfo->assistantCheck("capability",true))
+        {uploadInfo->assistantStopped(LLSD(),"capability");return;}
         result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOptions);
 
+        if(!uploadInfo->assistantCheck("capability_result"))
+        {uploadInfo->assistantStopped(result,"capability_result");return;}
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -954,8 +998,12 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
             break;
         }
 
-        // Stage 2: Upload to the uploader URL
+        // Stage 2 can save the source even when the response is lost.
+        if(!uploadInfo->assistantCheck("source",true))
+        {uploadInfo->assistantStopped(result,"source");return;}
         result = httpAdapter->postFileAndSuspend(httpRequest, uploader, uploadInfo->getAssetId(), uploadInfo->getAssetType(), httpOptions);
+        if(!uploadInfo->assistantCheck("source_result"))
+        {uploadInfo->assistantStopped(result,"source_result");return;}
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -1007,6 +1055,10 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
         // </FS:Ansariel>
     }
 
+    if(uploadInfo->assistantOwned() && (result["state"].asString()!="complete" || result["new_asset"].asUUID().isNull()))
+    {uploadInfo->assistantStopped(result,"invalid_completion");return;}
+    if(!uploadInfo->assistantCheck("commit"))
+    {uploadInfo->assistantStopped(result,"commit");return;}
     LLUUID serverInventoryItem = uploadInfo->finishUpload(result);
 
     bool succeeded = false;
@@ -1067,6 +1119,12 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
 void LLViewerAssetUpload::HandleUploadError(LLCore::HttpStatus status, LLSD &result, LLResourceUploadInfo::ptr_t &uploadInfo)
 {
     std::string reason;
+    if(uploadInfo->assistantOwned())
+    {
+        reason="Content upload failed; the source may have been submitted";
+        uploadInfo->failedUpload(result,reason);
+        return;
+    }
     std::string label("CannotUploadReason");
 
     LL_WARNS() << ll_pretty_print_sd(result) << LL_ENDL;

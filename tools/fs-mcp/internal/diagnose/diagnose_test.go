@@ -117,3 +117,52 @@ func TestCanceledCheckAndRedirect(t *testing.T) {
 		t.Fatal(result)
 	}
 }
+
+func TestManagedCheckRequiresExactLoginAndAuthenticatedIdentity(t *testing.T) {
+	healthSession := "current"
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req["viewer_session"] != "current" {
+			t.Error("diagnostic lost expected login")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"bridge_ready": true, "viewer_session": healthSession, "account": "account", "grid": "grid", "api_version": 1})
+	}))
+	defer server.Close()
+	dir := discoveryFor(t, server)
+	file := filepath.Join(dir, "fs-mcp-"+strconv.Itoa(os.Getpid())+".json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record map[string]any
+	if err = json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	record["managed"] = true
+	record["viewer_session"] = "current"
+	record["account"] = "account"
+	record["grid"] = "grid"
+	data, _ = json.Marshal(record)
+	if err = os.WriteFile(file, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if result := Run(context.Background(), os.Getpid(), dir); result.OK || result.Stage != "session_required" {
+		t.Fatalf("missing source: %+v", result)
+	}
+	if result := Run(context.Background(), os.Getpid(), dir, "old"); result.OK || result.Stage != "session_changed" {
+		t.Fatalf("stale source: %+v", result)
+	}
+	if calls != 0 {
+		t.Fatal("invalid source contacted another viewer")
+	}
+	if result := Run(context.Background(), os.Getpid(), dir, "current"); !result.OK {
+		t.Fatalf("valid source: %+v", result)
+	}
+	healthSession = "replacement"
+	if result := Run(context.Background(), os.Getpid(), dir, "current"); result.OK || result.Stage != "session_changed" {
+		t.Fatalf("changed authenticated source: %+v", result)
+	}
+}

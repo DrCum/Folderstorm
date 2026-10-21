@@ -136,6 +136,10 @@ bool FSFloaterPoser::postBuild()
     mSharedEditors = getChild<LLComboBox>("shared_pose_editors");
     mAvatarTrackball = getChild<FSVirtualTrackpad>("limb_rotation");
     mAvatarTrackball->setCommitCallback([this](LLUICtrl *, const LLSD &) { onTrackballChanged(); });
+    mAvatarTrackball->setDragEndCallback([this]
+    {
+        if (auto* avatar = getUiSelectedAvatar()) FSSharedPoseManager::instance().finishEdit(avatar->getID());
+    });
 
     mJointsTabs = getChild<LLTabContainer>("joints_tabs");
     mJointsTabs->setCommitCallback(

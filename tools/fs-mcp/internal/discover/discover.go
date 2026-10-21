@@ -2,8 +2,10 @@
 package discover
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,17 +29,31 @@ var pidFromName = regexp.MustCompile(`(?i)^fs-mcp-(\d+)\.json$`)
 
 // Instance is one discovered viewer Event API bridge.
 type Instance struct {
-	PID        int    `json:"pid"`
-	Port       int    `json:"port"`
-	Token      string `json:"-"`
-	APIVersion string `json:"api_version,omitempty"`
-	Host       string `json:"host,omitempty"`
-	Path       string `json:"path,omitempty"`
-	Scheme     string `json:"scheme,omitempty"`
-	URL        string `json:"url,omitempty"`
-	Viewer     string `json:"viewer,omitempty"`
-	Source     string `json:"source"`
-	Alive      bool   `json:"alive"`
+	ViewerSession string `json:"viewer_session,omitempty"`
+	DisplayName   string `json:"display_name,omitempty"`
+	Active        bool   `json:"active,omitempty"`
+	Managed       bool   `json:"managed,omitempty"`
+	Account       string `json:"account,omitempty"`
+	Grid          string `json:"grid,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Profile       string `json:"profile,omitempty"`
+	Ready         bool   `json:"ready,omitempty"`
+	PID           int    `json:"pid"`
+	Port          int    `json:"port"`
+	Token         string `json:"-"`
+	APIVersion    string `json:"api_version,omitempty"`
+	Host          string `json:"host,omitempty"`
+	Path          string `json:"path,omitempty"`
+	Scheme        string `json:"scheme,omitempty"`
+	URL           string `json:"url,omitempty"`
+	Viewer        string `json:"viewer,omitempty"`
+	Source        string `json:"source"`
+	Alive         bool   `json:"alive"`
+}
+
+// BindingKey is internal: never return the credential-derived legacy fingerprint.
+func (in Instance) BindingKey() string {
+	return fmt.Sprintf("%d:%s:%x", in.PID, in.ViewerSession, sha256.Sum256([]byte(in.Token)))
 }
 
 // BaseURL returns the loopback Event API URL for this instance.
@@ -119,6 +135,12 @@ func FindWith(opts Options) ([]Instance, error) {
 				}
 				continue
 			}
+			if len(matches) > 256 {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("too many discovery records")
+				}
+				continue
+			}
 			files = matches
 		} else if !looksLikeDiscoveryFile(filepath.Base(root)) {
 			// Explicit file override is always considered, even if the name
@@ -164,9 +186,14 @@ func FindWith(opts Options) ([]Instance, error) {
 
 // LoadFile parses one discovery JSON file.
 func LoadFile(path string) (Instance, error) {
-	raw, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return Instance{}, err
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, 65537))
+	if err != nil || len(raw) > 65536 {
+		return Instance{}, fmt.Errorf("invalid discovery size")
 	}
 	inst, err := Parse(raw)
 	if err != nil {
@@ -202,6 +229,15 @@ func LoadFile(path string) (Instance, error) {
 }
 
 type wireDiscovery struct {
+	DisplayName     string          `json:"display_name"`
+	Active          bool            `json:"active"`
+	ViewerSession   string          `json:"viewer_session"`
+	Managed         bool            `json:"managed"`
+	Account         string          `json:"account"`
+	Grid            string          `json:"grid"`
+	Name            string          `json:"name"`
+	Profile         string          `json:"profile"`
+	Ready           bool            `json:"ready"`
 	PID             json.RawMessage `json:"pid"`
 	Port            json.RawMessage `json:"port"`
 	HTTPPort        json.RawMessage `json:"http_port"`
@@ -224,6 +260,7 @@ func Parse(data []byte) (Instance, error) {
 		return Instance{}, err
 	}
 	inst := Instance{
+		DisplayName: w.DisplayName, Active: w.Active, ViewerSession: w.ViewerSession, Managed: w.Managed, Account: w.Account, Grid: w.Grid, Name: w.Name, Profile: w.Profile, Ready: w.Ready,
 		Token:      firstNonEmpty(w.Token, w.BearerToken, w.AuthToken),
 		Host:       w.Host,
 		Path:       w.Path,
@@ -231,6 +268,9 @@ func Parse(data []byte) (Instance, error) {
 		URL:        w.URL,
 		Viewer:     w.Viewer,
 		APIVersion: stringifyRaw(firstRaw(w.APIVersion, w.APIVersionCamel)),
+	}
+	if len(inst.ViewerSession) > 128 || len(inst.Account) > 64 || len(inst.Grid) > 512 || len(inst.DisplayName) > 255 || len(inst.Name) > 255 || len(inst.Profile) > 255 || (inst.Managed && inst.ViewerSession == "") {
+		return Instance{}, fmt.Errorf("invalid session discovery")
 	}
 	if pid, err := intFromRaw(w.PID); err == nil {
 		inst.PID = pid
@@ -277,6 +317,9 @@ func DefaultSearchDirs(opts Options) []string {
 	}
 	switch runtime.GOOS {
 	case "windows":
+		if local := os.Getenv("LOCALAPPDATA"); local != "" {
+			dirs = append(dirs, filepath.Join(local, "FolderstormSessions", "Prototype-v1", "mcp-discovery"))
+		}
 		if appData != "" {
 			for _, name := range []string{
 				"Folderstorm_x64", "FolderstormOS_x64", "Folderstorm", "FolderstormOS",

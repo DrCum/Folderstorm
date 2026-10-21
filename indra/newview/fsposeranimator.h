@@ -28,6 +28,7 @@
 #define LL_FSPoserAnimator_H
 
 #include "fsposingmotion.h"
+#include "fssharedposepolicy.h"
 #include "fsposestate.h"
 #include "llvoavatar.h"
 #include "fsmaniprotatejoint.h"
@@ -109,7 +110,7 @@ class FSPoserAnimator
 public:
     FSPoserAnimator() = default;
 
-    virtual ~FSPoserAnimator() = default;
+    virtual ~FSPoserAnimator();
 
     /// <summary>
     /// A class encapsulating 'metadata' for a joint, such as its catagory and its opposite joint name.
@@ -795,6 +796,24 @@ public:
     /// </remarks>
     void applyJointMirrorToBaseRotations(FSPosingMotion* posingMotion);
 
+    // Private rotation-only motion. These never use the native UI's registered
+    // motion or FSPoseState, and can stop only the returned owned motion.
+    LLUUID startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void(bool)> stopped);
+    void tickAssistantPoses(LLVOAvatar* avatar);
+    static void invalidateAssistantPose(LLVOAvatar* avatar);
+    bool assistantRestorationComplete(LLVOAvatar* avatar,const LLUUID& motion) const;
+    bool assistantPoseActive(LLVOAvatar* avatar,const LLUUID& motion) const;
+    bool updateAssistantPose(LLVOAvatar* avatar,const LLUUID& motion,
+        const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed);
+    bool stopAssistantPose(LLVOAvatar* avatar,const LLUUID& motion);
+    FSSharedPose::Pose captureAssistantPose(LLVOAvatar* avatar,const LLUUID& motion) const;
+
+    // Typed native shared edits use only this rotation setter, preserving the
+    // native joint's base, undo, priority, enable, position, scale and flags.
+    bool applyAssistantSharedRotations(LLVOAvatar* avatar,const FSSharedPose::Pose& before,
+        const fs_pose::Rotations& rotations,const std::function<bool()>& allowed);
+    bool stopReceivedPose(LLVOAvatar* avatar,const fs_pose::ReceivedOverlay& owned);
+    LLUUID nativePoseGeneration(LLVOAvatar* avatar) const;
     FSSharedPose::Pose captureSharedPose(LLVOAvatar* avatar) const;
     void applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose);
     FSSharedPose::JointSet sharedEditJoints(LLVOAvatar* avatar, const FSPoserJoint* joint,
@@ -803,6 +822,8 @@ public:
                          bool position, std::function<void()> action);
 
   private:
+    FSSharedPose::Pose capturePose(FSPosingMotion* motion) const;
+    std::map<LLUUID,LLUUID> mAssistantMotions;
     /// <summary>
     /// Translates the supplied rotation vector from UI to a Quaternion for the bone.
     /// Also performs the axis-swapping and other transformations for up/down/left/right to make sense.

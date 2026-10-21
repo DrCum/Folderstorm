@@ -49,7 +49,8 @@ func New(inst discover.Instance) *Client {
 	return &Client{
 		Instance: inst,
 		HTTPClient: &http.Client{
-			Timeout: timeout,
+			Timeout:       timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		API: DefaultAPI,
 	}
@@ -102,6 +103,12 @@ func (c *Client) CallAPI(ctx context.Context, apiName, op string, params map[str
 		body["api"] = api
 	}
 	body["op"] = op
+	if c.Instance.ViewerSession != "" {
+		body["viewer_session"] = c.Instance.ViewerSession
+	}
+	if c.Instance.Managed && c.Instance.ViewerSession == "" {
+		return nil, &Error{Code: "target_required", Message: "Managed characters require an exact login reference"}
+	}
 
 	raw, err := json.Marshal(body)
 	if err != nil {

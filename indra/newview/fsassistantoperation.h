@@ -19,6 +19,7 @@
 #define FS_ASSISTANT_OPERATION_H
 
 #include "llsd.h"
+#include "fsassistantasync.h"
 
 #include <functional>
 #include <memory>
@@ -26,6 +27,8 @@
 #include <vector>
 
 struct FSLinkReplacementSelection;
+bool fs_assistant_request_allowed(const LLSD& request);
+fs_assistant::AsyncGuard fs_assistant_async_context(const LLSD& request);
 
 struct FSAssistantExecutionContext
 {

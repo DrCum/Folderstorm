@@ -11,7 +11,7 @@ namespace fs_session
 inline bool chatRequestAllowed(const ChatView& view, const Message& source, const Message& request)
 {
     if (!monitorSource(source) || !view.identity.owns(source) || !view.identity.owns(request) ||
-        (source.flags & ChatRestricted)) return false;
+        (source.flags & (ChatRestricted|ControlPaused))) return false;
     const auto found = view.conversations.find(request.conversation);
     if (found == view.conversations.end() || found->second.restricted || found->second.closed || found->second.topic != request.topic) return false;
     if (request.kind == Kind::MarkRead) return true;

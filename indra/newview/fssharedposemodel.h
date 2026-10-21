@@ -153,6 +153,12 @@ public:
     const std::string& session() const { return mSession; }
     const Pose& pose() const { return mPose; }
     std::uint32_t revision() const { return mRevision; }
+    std::uint32_t jointRevision(const std::string& joint) const
+    {const auto found=mJointRevisions.find(joint);return found==mJointRevisions.end()?0:found->second;}
+    std::string reservationOwner(const std::string& joint,double now) const
+    {for(const auto& lease:mLeases)if(lease.second.expires>now && lease.second.joints.count(joint))return lease.second.editor;return {};}
+    bool revisionsMatch(const std::map<std::string,std::uint32_t>& expected,const JointSet& joints) const
+    {if(expected.size()!=joints.size())return false;for(const auto& joint:joints){const auto found=expected.find(joint);if(found==expected.end() || found->second!=jointRevision(joint))return false;}return true;}
     void grant(const std::string& editor, const std::string& token, double now)
     {
         if (active() && !editor.empty() && !token.empty() && editor != mOwner)

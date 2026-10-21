@@ -67,6 +67,7 @@
 #include "llcorehttputil.h"
 #include "hbxxh.h"
 #include "llstartup.h"
+#include "workqueue.h"
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
 #include "rlvhandler.h"
 #include "rlvlocks.h"
@@ -1082,6 +1083,17 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
                                            inventory_func_type callback,
                                            const LLUUID& thumbnail_id)
 {
+    if (!fs_assistant::asyncAllowed()) { if (callback) callback(LLUUID::null); return; }
+    const auto task = fs_assistant::AsyncScope::current() ? fs_assistant::asyncTask() : nullptr;
+    if (task && callback)
+    {
+        const auto nativeCallback = callback;
+        callback = [task, nativeCallback](const LLUUID& id)
+        {
+            fs_assistant::asyncDeliver(task, id.isNull() ? std::string() : id.asString(),
+                [&](bool allowed) { nativeCallback(allowed ? id : LLUUID::null); });
+        };
+    }
     LL_DEBUGS(LOG_INV) << "Create '" << pname << "' in '" << make_inventory_path(parent_id) << "'" << LL_ENDL;
     if (!isInventoryUsable())
     {
@@ -1190,7 +1202,7 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
 
         LL_DEBUGS(LOG_INV) << "Creating category via request: " << ll_pretty_print_sd(request) << LL_ENDL;
         LLCoros::instance().launch("LLInventoryModel::createNewCategoryCoro",
-            boost::bind(&LLInventoryModel::createNewCategoryCoro, this, url, body, callback));
+            boost::bind(&LLInventoryModel::createNewCategoryCoro, this, url, body, callback, task, gAgent.getSessionID()));
         return;
     }
 
@@ -1200,7 +1212,8 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
     }
 }
 
-void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback)
+void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback,
+    fs_assistant::AsyncTaskPtr task, LLUUID loginSession)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1213,7 +1226,19 @@ void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inv
 
     LL_INFOS("HttpCoroutineAdapter", "genericPostCoro") << "Generic POST for " << url << LL_ENDL;
 
+    if (task && (gDisconnected || gAgent.getSessionID() != loginSession || !fs_assistant::asyncTaskSubmit(task)))
+    {
+        if (callback) callback(LLUUID::null);
+        return;
+    }
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+    if (task && (gDisconnected || gAgent.getSessionID() != loginSession))
+    {
+        task->guard()->cancel("session_changed");
+        if (callback) callback(LLUUID::null);
+        return;
+    }
+
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2902,52 +2927,7 @@ bool LLInventoryModel::loadSkeleton(
     const LLUUID& owner_id)
 {
     LL_PROFILE_ZONE_SCOPED;
-    // <FS:Zi> Purge inventory cache files marked by DELETE_INV_GZ marker files
-    std::string delete_cache_marker = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, owner_id.asString() + "_DELETE_INV_GZ");
-    LL_DEBUGS("LLInventoryModel") << "Checking for clear inventory cache marker: " << delete_cache_marker << LL_ENDL;
 
-    // if this marker exists, go ahead and delete the respective .inv and/or .inv.gz files
-    if (LLFile::isfile(delete_cache_marker))
-    {
-        LL_INFOS("LLInventoryModel") << "Clear inventory cache marker found: " << delete_cache_marker << LL_ENDL;
-
-        std::string inventory_filename = getInvCacheAddres(owner_id);
-        if (LLFile::isfile(inventory_filename))
-        {
-            LL_INFOS("LLInventoryModel") << "Purging inventory cache file: " << inventory_filename << LL_ENDL;
-            LLFile::remove(inventory_filename);
-        }
-
-        inventory_filename.append(".gz");
-        if (LLFile::isfile(inventory_filename))
-        {
-            LL_INFOS("LLInventoryModel") << "Purging inventory cache file: " << inventory_filename << LL_ENDL;
-            LLFile::remove(inventory_filename);
-        }
-
-        // also delete library cache if inventory cache is purged, so issues with EEP settings going missing
-        // and bridge objects not being found can be resolved
-        // <FS:Beq> correct OS library owner.
-        // inventory_filename = getInvCacheAddres(ALEXANDRIA_LINDEN_ID);
-        inventory_filename = getInvCacheAddres(gInventory.getLibraryOwnerID());
-        // </FS:Beq>
-        if (LLFile::isfile(inventory_filename))
-        {
-            LL_INFOS("LLInventoryModel") << "Purging library cache file: " << inventory_filename << LL_ENDL;
-            LLFile::remove(inventory_filename);
-        }
-
-        inventory_filename.append(".gz");
-        if (LLFile::isfile(inventory_filename))
-        {
-            LL_INFOS("LLInventoryModel") << "Purging library cache file: " << inventory_filename << LL_ENDL;
-            LLFile::remove(inventory_filename);
-        }
-
-        LL_INFOS("LLInventoryModel") << "Clear inventory cache marker removed: " << delete_cache_marker << LL_ENDL;
-        LLFile::remove(delete_cache_marker);
-    }
-    // </FS:Zi>
 
     LL_DEBUGS(LOG_INV) << "importing inventory skeleton for " << owner_id << LL_ENDL;
 
@@ -2997,48 +2977,35 @@ bool LLInventoryModel::loadSkeleton(
     if(!temp_cats.empty())
     {
         update_map_t child_counts;
-        cat_array_t categories;
-        item_array_t items;
-        changed_items_t categories_to_update;
         item_array_t possible_broken_links;
         cat_set_t invalid_categories; // Used to mark categories that weren't successfully loaded.
-        std::string inventory_filename = getInvCacheAddres(owner_id);
         const S32 NO_VERSION = LLViewerInventoryCategory::VERSION_UNKNOWN;
-        std::string gzip_filename(inventory_filename);
-        gzip_filename.append(".gz");
-        LLFILE* fp = LLFile::fopen(gzip_filename, "rb");
-        bool remove_inventory_file = false;
-        if (LLAppViewer::instance()->isSecondInstance())
+        // The caller (llstartup.cpp, STATE_INVENTORY_SKEL) must only call
+        // loadSkeleton() after waitForCacheResult(owner_id) has returned
+        // CACHE_READY_TO_PROCESS.
+        auto found = mCacheLoadResults.find(owner_id);
+        llassert(found != mCacheLoadResults.end());
+        if (found == mCacheLoadResults.end())
         {
-            // Safeguard viewer against trying to unpack file twice
-            // ex: user logs into two accounts simultaneously, so two
-            // viewers are trying to unpack library into same file
-            //
-            // Would be better to do it in gunzip_file, but it doesn't
-            // have access to llfilesystem
-            inventory_filename = gDirUtilp->getTempFilename();
-            remove_inventory_file = true;
+            LL_ERRS(LOG_INV) << "loadSkeleton() called for " << owner_id
+                << " without a ready async cache result!" << LL_ENDL;
+            return false;
         }
-        if(fp)
+        std::shared_ptr<LLCacheLoadResult> cache_result = found->second;
+        mCacheLoadResults.erase(found);
+        mCacheLoadRequested.erase(owner_id); // mask as completed for waitForCacheResult
+
+        cat_array_t& categories = cache_result->mCategories;
+        item_array_t& items = cache_result->mItems;
+        changed_items_t& categories_to_update = cache_result->mCategoriesToUpdate;
+        bool is_cache_obsolete = cache_result->mIsCacheObsolete;
+        const std::string& inventory_filename = cache_result->mInventoryFilename;
+        const std::string& gzip_filename = cache_result->mGzipFilename;
+        bool remove_inventory_file = cache_result->mRemoveInventoryFile;
+
+        if (!is_cache_obsolete)
         {
-            fclose(fp);
-            fp = NULL;
-            if(gunzip_file(gzip_filename, inventory_filename))
-            {
-                // we only want to remove the inventory file if it was
-                // gzipped before we loaded, and we successfully
-                // gunziped it.
-                remove_inventory_file = true;
-            }
-            else
-            {
-                LL_INFOS(LOG_INV) << "Unable to gunzip " << gzip_filename << LL_ENDL;
-            }
-        }
-        bool is_cache_obsolete = false;
-        if (loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
-        {
-            LL_PROFILE_ZONE_NAMED("loadFromFile");
+            LL_PROFILE_ZONE_NAMED("loadFromFile - merge");
             // We were able to find a cache of files. So, use what we
             // found to generate a set of categories we should add. We
             // will go through each category loaded and if the version
@@ -3241,14 +3208,28 @@ bool LLInventoryModel::loadSkeleton(
                       << " after " << timer.getElapsedTimeF32() << " seconds."
                       << LL_ENDL;
 
+    // Note that this is the time on main thread, does not include
+    // time in a thread or time polling
     const F32 elapsed = timer.getElapsedTimeF32();
+
+    F32 skel_wait_time = elapsed;
+    auto wait_timer_it = mCacheWaitTimers.find(owner_id);
+    if (wait_timer_it != mCacheWaitTimers.end())
+    {
+        skel_wait_time = wait_timer_it->second.getElapsedTimeF32();
+        skel_wait_time = llmax(0.f, skel_wait_time - elapsed);
+        mCacheWaitTimers.erase(wait_timer_it);
+    }
+
     if (owner_id == mLibraryOwnerID)
     {
         mLibrarySkeletonLoadTime = elapsed;
+        mLibrarySkeletonWaitTime = skel_wait_time;
     }
     else
     {
         mAgentSkeletonLoadTime = elapsed;
+        mAgentSkeletonWaitTime = skel_wait_time;
     }
 
     return rv;
@@ -3558,6 +3539,205 @@ void LLInventoryModel::buildParentChildMap()
     }
 }
 
+// Run before either cache reader starts; an agent purge also clears the library.
+void LLInventoryModel::purgeMarkedInventoryCache(const LLUUID& owner_id)
+{
+    // <FS:Zi> Purge inventory cache files marked by DELETE_INV_GZ marker files
+    std::string delete_cache_marker = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, owner_id.asString() + "_DELETE_INV_GZ");
+    LL_DEBUGS("LLInventoryModel") << "Checking for clear inventory cache marker: " << delete_cache_marker << LL_ENDL;
+
+    // if this marker exists, go ahead and delete the respective .inv and/or .inv.gz files
+    if (LLFile::isfile(delete_cache_marker))
+    {
+        LL_INFOS("LLInventoryModel") << "Clear inventory cache marker found: " << delete_cache_marker << LL_ENDL;
+
+        std::string inventory_filename = getInvCacheAddres(owner_id);
+        if (LLFile::isfile(inventory_filename))
+        {
+            LL_INFOS("LLInventoryModel") << "Purging inventory cache file: " << inventory_filename << LL_ENDL;
+            LLFile::remove(inventory_filename);
+        }
+
+        inventory_filename.append(".gz");
+        if (LLFile::isfile(inventory_filename))
+        {
+            LL_INFOS("LLInventoryModel") << "Purging inventory cache file: " << inventory_filename << LL_ENDL;
+            LLFile::remove(inventory_filename);
+        }
+
+        // also delete library cache if inventory cache is purged, so issues with EEP settings going missing
+        // and bridge objects not being found can be resolved
+        // <FS:Beq> correct OS library owner.
+        // inventory_filename = getInvCacheAddres(ALEXANDRIA_LINDEN_ID);
+        inventory_filename = getInvCacheAddres(gInventory.getLibraryOwnerID());
+        // </FS:Beq>
+        if (LLFile::isfile(inventory_filename))
+        {
+            LL_INFOS("LLInventoryModel") << "Purging library cache file: " << inventory_filename << LL_ENDL;
+            LLFile::remove(inventory_filename);
+        }
+
+        inventory_filename.append(".gz");
+        if (LLFile::isfile(inventory_filename))
+        {
+            LL_INFOS("LLInventoryModel") << "Purging library cache file: " << inventory_filename << LL_ENDL;
+            LLFile::remove(inventory_filename);
+        }
+
+        LL_INFOS("LLInventoryModel") << "Clear inventory cache marker removed: " << delete_cache_marker << LL_ENDL;
+        LLFile::remove(delete_cache_marker);
+    }
+    // </FS:Zi>
+}
+
+// static
+std::shared_ptr<LLInventoryModel::LLCacheLoadResult>
+LLInventoryModel::loadCacheResultFromDisk(const std::string& cache_filename, const std::string& temporary_filename)
+{
+    LL_PROFILE_ZONE_SCOPED;
+
+    auto result = std::make_shared<LLCacheLoadResult>();
+    result->mGzipFilename = cache_filename + ".gz";
+    result->mInventoryFilename = cache_filename;
+    if (LLFile::isfile(result->mGzipFilename))
+    {
+        // Each request owns its temporary file, including failed decompressions.
+        result->mInventoryFilename = temporary_filename;
+        result->mRemoveInventoryFile = true;
+        if (!gunzip_file(result->mGzipFilename, temporary_filename))
+        {
+            LL_WARNS(LOG_INV) << "Unable to gunzip " << result->mGzipFilename << LL_ENDL;
+            return result;
+        }
+    }
+
+    try
+    {
+        loadFromFile(result->mInventoryFilename,
+            result->mCategories,
+            result->mItems,
+            result->mCategoriesToUpdate,
+            result->mIsCacheObsolete);
+    }
+    catch (const std::exception& error)
+    {
+        // A bad local cache must fall back to the server, rather than stall login.
+        result->mIsCacheObsolete = true;
+        LL_WARNS(LOG_INV) << "Unable to read inventory cache: " << error.what() << LL_ENDL;
+    }
+
+    return result;
+}
+
+// static
+void LLInventoryModel::loadInventoryCacheAsync(const LLUUID& owner_id)
+{
+    std::function<void(std::shared_ptr<LLCacheLoadResult>)> cb =
+        [owner_id](std::shared_ptr<LLInventoryModel::LLCacheLoadResult> result)
+    {
+        gInventory.setCacheLoadResult(owner_id, result);
+    };
+    // Remove any stale requests or results.
+    gInventory.mCacheLoadRequested.erase(owner_id);
+    auto found = gInventory.mCacheLoadResults.find(owner_id);
+    if (found != gInventory.mCacheLoadResults.end())
+    {
+        const auto& result = found->second;
+        if (result && result->mRemoveInventoryFile)
+        {
+            LLFile::remove(result->mInventoryFilename);
+        }
+        gInventory.mCacheLoadResults.erase(found);
+    }
+
+    gInventory.mCacheLoadRequested.insert(owner_id);
+
+    LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
+    LL::WorkQueue::ptr_t general_queue = LL::WorkQueue::getInstance("General");
+    llassert_always(main_queue);
+    llassert_always(general_queue);
+
+    // Resolve grid-dependent paths on the main thread before dispatch.
+    const std::string cache_filename = getInvCacheAddres(owner_id);
+    const std::string temporary_filename = gDirUtilp->getTempFilename();
+    S32 generation = gInventory.mCacheLoadGeneration;
+    bool posted = main_queue->postTo(
+        general_queue,
+        [cache_filename, temporary_filename]() // runs on "General" worker thread
+    {
+        return loadCacheResultFromDisk(cache_filename, temporary_filename);
+    },
+        [cb, generation](std::shared_ptr<LLCacheLoadResult> result) // back on main thread
+    {
+        if (generation != gInventory.mCacheLoadGeneration)
+        {
+            // reset_login() happened while this was in flight; drop it.
+            LL_DEBUGS(LOG_INV) << "Discarding stale async inventory cache load" << LL_ENDL;
+            if (result && result->mRemoveInventoryFile)
+            {
+                LLFile::remove(result->mInventoryFilename);
+            }
+            return;
+        }
+        cb(result);
+    });
+    if (!posted)
+    {
+        LL_WARNS() << "Failed to post async inventory cache load for " << owner_id << LL_ENDL;
+        cb(loadCacheResultFromDisk(cache_filename, temporary_filename));
+    }
+}
+
+void LLInventoryModel::setCacheLoadResult(const LLUUID& owner_id, std::shared_ptr<LLCacheLoadResult> result)
+{
+    // Called on the main thread (via the postTo() callback above). Stash
+    // by owner_id; loadSkeleton() will pick it up when the matching
+    // skeleton arrives.
+    mCacheLoadResults[owner_id] = result;
+}
+
+LLInventoryModel::ECacheLoadResult LLInventoryModel::waitForCacheResult(const LLUUID& owner_id)
+{
+    if (mCacheLoadRequested.find(owner_id) == mCacheLoadRequested.end())
+    {
+        // Assume that the call was already made then processed
+        return CACHE_PROCESSED;
+    }
+
+    // Lazily start (once) the timer used to measure the full wait duration,
+    // from the first time we started waiting for this owner_id's cache
+    // result, until loadSkeleton() consumes it.
+    mCacheWaitTimers.try_emplace(owner_id);
+
+    if (mCacheLoadResults.find(owner_id) == mCacheLoadResults.end())
+    {
+        // No result yet, wait.
+        return CACHE_WAIT;
+    }
+    return CACHE_READY_TO_PROCESS;
+}
+
+void LLInventoryModel::cancelCacheLoad()
+{
+    // We can't un-post work already queued on "General", but any
+    // already-posted postTo() callback checks mCacheLoadGeneration
+    // on main thread and will no-op once it lands.
+    mCacheLoadGeneration++;
+
+    for (const auto& entry : mCacheLoadResults)
+    {
+        const auto& result = entry.second;
+        if (result && result->mRemoveInventoryFile)
+        {
+            LLFile::remove(result->mInventoryFilename);
+        }
+    }
+
+    mCacheLoadResults.clear();
+    mCacheLoadRequested.clear();
+    mCacheWaitTimers.clear();
+}
+
 // Would normally do this at construction but that's too early
 // in the process for gInventory.  Have the first requestPost()
 // call set things up.
@@ -3773,11 +3953,13 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
                     {
                         if (inv_item->getUUID().isNull())
                         {
-                            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " << inv_item->getName() << LL_ENDL;
+                            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " << inv_item->LLInventoryObject::getName() << LL_ENDL;
                         }
                         else
                         {
-                            if (inv_item->getType() == LLAssetType::AT_UNKNOWN)
+                            // Cache parsing can run off-thread. Link resolution belongs
+                            // to the main-thread merge, never the live inventory here.
+                            if (inv_item->getActualType() == LLAssetType::AT_UNKNOWN)
                             {
                                 cats_to_update.insert(inv_item->getParentUUID());
                             }

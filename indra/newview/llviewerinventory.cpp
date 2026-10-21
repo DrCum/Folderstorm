@@ -97,7 +97,7 @@ static const std::string INV_VERSION("version");
 void doInventoryCb(LLPointer<LLInventoryCallback> cb, LLUUID id)
 {
     if (cb.notNull())
-        cb->fire(id);
+        cb->fireGuarded(id);
 }
 #endif
 
@@ -418,6 +418,12 @@ void LLViewerInventoryItem::cloneViewerItem(LLPointer<LLViewerInventoryItem>& ne
 
 void LLViewerInventoryItem::updateServer(bool is_new) const
 {
+    updateServer(is_new, {});
+}
+
+void LLViewerInventoryItem::updateServer(bool is_new, const std::shared_ptr<void>& source_owner) const
+{
+    if(!fs_assistant::asyncAllowed())return;
     if(!mIsComplete)
     {
         // *FIX: deal with this better.
@@ -462,7 +468,10 @@ void LLViewerInventoryItem::updateServer(bool is_new) const
             updates["hash_id"] = getTransactionID();
         }
     }
-    AISAPI::completion_t cr = boost::bind(&doInventoryCb, (LLPointer<LLInventoryCallback>)NULL, _1);
+    // Keep the source writer alive through queued and suspended AIS work, not
+    // merely through the asset-storage callback which schedules this PATCH.
+    AISAPI::completion_t cr = [source_owner](LLUUID id)
+    { (void)source_owner; doInventoryCb(LLPointer<LLInventoryCallback>(), id); };
     AISAPI::UpdateItem(getUUID(), updates, cr);
     // <FS:Ansariel> [UDP-Msg]
     }
@@ -477,7 +486,16 @@ void LLViewerInventoryItem::updateServer(bool is_new) const
         msg->nextBlockFast(_PREHASH_InventoryData);
         msg->addU32Fast(_PREHASH_CallbackID, 0);
         packMessage(msg);
-        gAgent.sendReliableMessage();
+        if (!fs_assistant::asyncSubmit()) return;
+        if(source_owner && !gDisconnected && gAgent.getRegion())
+        {
+            auto* pending=new std::shared_ptr<void>(source_owner);
+            const auto sent=msg->sendReliable(gAgent.getRegionHost(),LL_DEFAULT_RELIABLE_RETRIES,true,
+                LL_PING_BASED_TIMEOUT_DUMMY,[](void** raw,S32)
+                {delete reinterpret_cast<std::shared_ptr<void>*>(raw);},reinterpret_cast<void**>(pending));
+            if(!sent){msg->clearMessage();delete pending;} // No circuit/packet was queued.
+        }
+        else gAgent.sendReliableMessage();
     }
     // </FS:Ansariel> [UDP-Msg]
 }
@@ -1080,8 +1098,9 @@ void LLInventoryCallbackManager::fire(U32 callback_id, const LLUUID& item_id)
     i = mMap.find(callback_id);
     if (i != mMap.end())
     {
-        (*i).second->fire(item_id);
-        mMap.erase(i);
+        LLPointer<LLInventoryCallback> callback=i->second;
+        mMap.erase(i); // Reentrant fire cannot invalidate this entry or destroy callback.
+        callback->fireGuarded(item_id);
     }
 }
 
@@ -1112,6 +1131,7 @@ void activate_gesture_cb(const LLUUID& inv_item)
 
 void set_default_permissions(LLViewerInventoryItem* item, std::string perm_type)
 {
+    if(!fs_assistant::asyncAllowed())return;
     llassert(item);
     LLPermissions perm = item->getPermissions();
     if (perm.getMaskEveryone() != LLFloaterPerms::getEveryonePerms(perm_type)
@@ -1209,6 +1229,8 @@ void create_inventory_item(
     U32 next_owner_perm,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
+    if(fs_assistant::AsyncScope::current() && cb.isNull())cb=new LLBoostFuncInventoryCallback(no_op_inventory_func);
     //check if name is equal to one of special inventory items names
     //EXT-5839
     std::string server_name = name;
@@ -1292,7 +1314,8 @@ void create_inventory_item(
     msg->addStringFast(_PREHASH_Name, server_name);
     msg->addStringFast(_PREHASH_Description, desc);
 
-    gAgent.sendReliableMessage();
+    if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 }
 
 void create_inventory_callingcard_callback(LLPointer<LLInventoryCallback> cb,
@@ -1358,6 +1381,7 @@ void copy_inventory_item(
     const std::string& new_name,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_CopyInventoryItem);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -1369,7 +1393,8 @@ void copy_inventory_item(
     msg->addUUIDFast(_PREHASH_OldItemID, item_id);
     msg->addUUIDFast(_PREHASH_NewFolderID, parent_id);
     msg->addStringFast(_PREHASH_NewName, new_name);
-    gAgent.sendReliableMessage();
+    if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 }
 
 // Create link to single inventory object.
@@ -1401,6 +1426,7 @@ void link_inventory_array(const LLUUID& category,
              LLInventoryObject::const_object_list_t& baseobj_array,
              LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
 #ifndef LL_RELEASE_FOR_DOWNLOAD
     const LLViewerInventoryCategory *cat = gInventory.getCategory(category);
     const std::string cat_name = cat ? cat->getName() : "CAT NOT FOUND";
@@ -1511,7 +1537,8 @@ void link_inventory_array(const LLUUID& category,
                 msg->addStringFast(_PREHASH_Name, link["name"].asString());
                 msg->addStringFast(_PREHASH_Description, link["desc"].asString());
             }
-            gAgent.sendReliableMessage();
+            if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
         }
     }
     // </FS:Ansariel> [UDP-Msg]
@@ -1545,6 +1572,7 @@ void update_inventory_item(
     LLViewerInventoryItem *update_item,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     const LLUUID& item_id = update_item->getUUID();
 
     // <FS:Ansariel> [UDP-Msg]
@@ -1588,14 +1616,15 @@ void update_inventory_item(
             msg->nextBlockFast(_PREHASH_InventoryData);
             msg->addU32Fast(_PREHASH_CallbackID, 0);
             update_item->packMessage(msg);
-            gAgent.sendReliableMessage();
+            if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 
             LLInventoryModel::LLCategoryUpdate up(update_item->getParentUUID(), 0);
             gInventory.accountForUpdate(up);
             gInventory.updateItem(update_item);
             if (cb)
             {
-                cb->fire(item_id);
+                cb->fireGuarded(item_id);
             }
         }
     }
@@ -1610,6 +1639,7 @@ void update_inventory_item(
     const LLSD& updates,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     // <FS:Ansariel> [UDP-Msg]
     if (AISAPI::isAvailable())
     {
@@ -1637,14 +1667,15 @@ void update_inventory_item(
             msg->nextBlockFast(_PREHASH_InventoryData);
             msg->addU32Fast(_PREHASH_CallbackID, 0);
             new_item->packMessage(msg);
-            gAgent.sendReliableMessage();
+            if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 
             LLInventoryModel::LLCategoryUpdate up(new_item->getParentUUID(), 0);
             gInventory.accountForUpdate(up);
             gInventory.updateItem(new_item);
             if (cb)
             {
-                cb->fire(item_id);
+                cb->fireGuarded(item_id);
             }
         }
     }
@@ -1694,7 +1725,7 @@ void update_inventory_category(
             gInventory.updateCategory(new_cat);
             if (cb)
             {
-                cb->fire(cat_id);
+                cb->fireGuarded(cat_id);
             }
         }
         // </FS:Ansariel> [UDP-Msg]
@@ -1719,6 +1750,7 @@ void remove_inventory_item(
     LLPointer<LLInventoryCallback> cb,
     bool immediate_delete)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LLPointer<LLInventoryObject> obj = gInventory.getItem(item_id);
     if (obj)
     {
@@ -1735,6 +1767,7 @@ void remove_inventory_item(
     LLPointer<LLInventoryCallback> cb,
     bool immediate_delete)
 {
+    if(!fs_assistant::asyncAllowed())return;
     if(obj)
     {
         const LLUUID item_id(obj->getUUID());
@@ -1760,14 +1793,15 @@ void remove_inventory_item(
             msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
             msg->nextBlockFast(_PREHASH_InventoryData);
             msg->addUUIDFast(_PREHASH_ItemID, item_id);
-            gAgent.sendReliableMessage();
+            if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 
             // Update inventory and call callback immediately since
             // message-based system has no callback mechanism (!)
             gInventory.onObjectDeletedFromServer(item_id);
             if (cb)
             {
-                cb->fire(item_id);
+                cb->fireGuarded(item_id);
             }
         }
 #endif
@@ -1795,6 +1829,8 @@ public:
     /* virtual */ void fire(const LLUUID& item_id) {}
     ~LLRemoveCategoryOnDestroy()
     {
+        fs_assistant::AsyncScope scope(assistantGuard());
+        if (!fs_assistant::asyncAllowed()) return;
         LLInventoryModel::EHasChildren children = gInventory.categoryHasChildren(mID);
         if(children != LLInventoryModel::CHILDREN_NO)
         {
@@ -1814,6 +1850,7 @@ void remove_inventory_category(
     const LLUUID& cat_id,
     LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     LL_DEBUGS(LOG_INV) << "cat_id: [" << cat_id << "] " << LL_ENDL;
     LLPointer<LLViewerInventoryCategory> obj = gInventory.getCategory(cat_id);
     if(obj)
@@ -1856,14 +1893,15 @@ void remove_inventory_category(
             msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
             msg->nextBlockFast(_PREHASH_FolderData);
             msg->addUUIDFast(_PREHASH_FolderID, cat_id);
-            gAgent.sendReliableMessage();
+            if (!fs_assistant::asyncSubmit()) return;
+        gAgent.sendReliableMessage();
 
             // Update inventory and call callback immediately since
             // message-based system has no callback mechanism (!)
             gInventory.onObjectDeletedFromServer(cat_id);
             if (cb)
             {
-                cb->fire(cat_id);
+                cb->fireGuarded(cat_id);
             }
         }
         // </FS:Ansariel> [UDP-Msg]
@@ -1963,7 +2001,7 @@ void purge_descendents_of(const LLUUID& id, LLPointer<LLInventoryCallback> cb)
             gInventory.onDescendentsPurgedFromServer(id);
             if (cb)
             {
-                cb->fire(id);
+                cb->fireGuarded(id);
             }
         }
 #endif
@@ -2087,6 +2125,19 @@ void create_new_item(const std::string& name,
             break;
         }
     }
+    if(fs_assistant::AsyncScope::current())
+    {
+        const std::string policy=inv_type==LLInventoryType::IT_LSL?"Scripts":inv_type==LLInventoryType::IT_GESTURE?"Gestures":
+            inv_type==LLInventoryType::IT_NOTECARD?"Notecards":"Materials";
+        const auto everyone=LLFloaterPerms::getEveryonePerms(policy),group=LLFloaterPerms::getGroupPerms(policy);
+        cb=new LLBoostFuncInventoryCallback([everyone,group](const LLUUID& id)
+        {
+            if(id.isNull() || !fs_assistant::asyncAllowed())return;
+            auto* item=gInventory.getItem(id);if(!item)return;
+            auto permissions=item->getPermissions();permissions.setMaskEveryone(everyone);permissions.setMaskGroup(group);
+            item->setPermissions(permissions);item->updateServer(false);gInventory.updateItem(item);gInventory.notifyObservers();
+        });
+    }
     if (created_cb != NULL)
     {
         cb->addOnFireFunc(created_cb);
@@ -2169,6 +2220,7 @@ void slam_inventory_folder(const LLUUID& folder_id,
                            const LLSD& contents,
                            LLPointer<LLInventoryCallback> cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     // <FS:Ansariel> [UDP-Msg]
     if (AISAPI::isAvailable())
     {
@@ -2248,6 +2300,7 @@ void menu_create_inventory_item(LLInventoryPanel* panel, LLFolderBridge *bridge,
 
 void menu_create_inventory_item(LLInventoryPanel* panel, LLUUID dest_id, const LLSD& userdata, const LLUUID& default_parent_uuid, std::function<void(const LLUUID&)> created_cb)
 {
+    if(!fs_assistant::asyncAllowed())return;
     std::string type_name = userdata.asString();
 
     if (("inbox" == type_name) || ("category" == type_name) || ("current" == type_name) || ("outfit" == type_name) || ("my_otfts" == type_name))
@@ -2314,6 +2367,16 @@ void menu_create_inventory_item(LLInventoryPanel* panel, LLUUID dest_id, const L
                     else
                     {
                         cb = new LLBoostFuncInventoryCallback(create_script_cb);
+                    }
+                    if(fs_assistant::AsyncScope::current())
+                    {
+                        const auto everyone=LLFloaterPerms::getEveryonePerms("Scripts"),group=LLFloaterPerms::getGroupPerms("Scripts");
+                        cb=new LLBoostFuncInventoryCallback([everyone,group,created_cb](const LLUUID& id)
+                        {
+                            if(id.notNull() && fs_assistant::asyncAllowed())if(auto* item=gInventory.getItem(id))
+                            {auto perm=item->getPermissions();perm.setMaskEveryone(everyone);perm.setMaskGroup(group);item->setPermissions(perm);item->updateServer(false);gInventory.updateItem(item);gInventory.notifyObservers();}
+                            if(created_cb)created_cb(id);
+                        });
                     }
                     copy_inventory_item(
                         gAgent.getID(),

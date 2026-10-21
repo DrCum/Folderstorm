@@ -744,8 +744,9 @@ void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvit
 
 }
 
+static U64 sAssistantLiveIngress=0;
 void translateSuccess(const LLUUID& session_id, const std::string& from, const LLUUID& from_id, const std::string& utf8_text,
-                        U64 time_n_flags, std::string originalMsg, std::string expectLang, std::string translation, const std::string detected_language)
+                        U64 time_n_flags, std::string originalMsg, std::string expectLang, std::string translation, const std::string detected_language,U64 live_sequence)
 {
     std::string message_txt(utf8_text);
     // filter out non-interesting responses
@@ -761,11 +762,11 @@ void translateSuccess(const LLUUID& session_id, const std::string& from, const L
     bool is_region_msg = (bool)(time_n_flags & (1LL << 33));
     U32 time_stamp = (U32)(time_n_flags & 0x00000000ffffffff);
 
-    LLIMModel::getInstance()->processAddingMessage(session_id, from, from_id, message_txt, log2file, is_region_msg, time_stamp, false);
+    LLIMModel::getInstance()->processAddingMessage(session_id, from, from_id, message_txt, log2file, is_region_msg, time_stamp, false,false,live_sequence);
 }
 
 void translateFailure(const LLUUID& session_id, const std::string& from, const LLUUID& from_id, const std::string& utf8_text,
-                        U64 time_n_flags, int status, const std::string err_msg)
+                        U64 time_n_flags, int status, const std::string err_msg,U64 live_sequence)
 {
     std::string message_txt(utf8_text);
     std::string msg = LLTrans::getString("TranslationFailed", LLSD().with("[REASON]", err_msg));
@@ -777,7 +778,7 @@ void translateFailure(const LLUUID& session_id, const std::string& from, const L
     bool is_region_msg = (bool)(time_n_flags & (1LL << 33));
     U32 time_stamp = (U32)(time_n_flags & 0x00000000ffffffff);
 
-    LLIMModel::getInstance()->processAddingMessage(session_id, from, from_id, message_txt, log2file, is_region_msg, time_stamp, false);
+    LLIMModel::getInstance()->processAddingMessage(session_id, from, from_id, message_txt, log2file, is_region_msg, time_stamp, false,false,live_sequence);
 }
 
 void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp)
@@ -1951,22 +1952,33 @@ void LLIMModel::proccessOnlineOfflineNotification(
 // <FS:Ansariel> Added is_announcement parameter
 //void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
 //                         const std::string& utf8_text, bool log2file /* = true */, bool is_region_msg, /* = false */ U32 time_stamp /* = 0 */)
+U64 LLIMModel::assistantLiveSequence(){return sAssistantLiveIngress;}
 void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
                            const std::string& utf8_text, bool log2file /* = true */, bool is_region_msg /* = false */, U32 time_stamp /* = 0 */, bool is_announcement /* = false */, bool keyword_alert_performed /* = false */)
 {
+    const U64 live_sequence=++sAssistantLiveIngress;
     //if (gSavedSettings.getBOOL("TranslateChat") && (from != SYSTEM_FROM))
     if (gSavedSettings.getBOOL("TranslateChat") && (from != SYSTEM_FROM) && !is_announcement && !keyword_alert_performed)
     {
         const std::string from_lang = ""; // leave empty to trigger autodetect
         const std::string to_lang = LLTranslate::getTranslateLanguage();
         U64 time_n_flags = ((U64) time_stamp) | (log2file ? (1LL << 32) : 0) | (is_region_msg ? (1LL << 33) : 0);   // boost::bind has limited parameters
+        const LLUUID source_account=gAgentID,source_login=gAgent.getSessionID();
         LLTranslate::translateMessage(from_lang, to_lang, utf8_text,
-            boost::bind(&translateSuccess, session_id, from, from_id, utf8_text, time_n_flags, utf8_text, from_lang, _1, _2),
-            boost::bind(&translateFailure, session_id, from, from_id, utf8_text, time_n_flags, _1, _2));
+            [=](const std::string& translated,const std::string& detected)
+            {
+                if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                translateSuccess(session_id,from,from_id,utf8_text,time_n_flags,utf8_text,from_lang,translated,detected,live_sequence);
+            },
+            [=](int status,const std::string& error)
+            {
+                if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                translateFailure(session_id,from,from_id,utf8_text,time_n_flags,status,error,live_sequence);
+            });
     }
     else
     {
-        processAddingMessage(session_id, from, from_id, utf8_text, log2file, is_region_msg, time_stamp, is_announcement, keyword_alert_performed);
+        processAddingMessage(session_id, from, from_id, utf8_text, log2file, is_region_msg, time_stamp, is_announcement, keyword_alert_performed,live_sequence);
     }
 }
 
@@ -1974,8 +1986,9 @@ void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, co
 //void LLIMModel::processAddingMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
 //    const std::string& utf8_text, bool log2file, bool is_region_msg, U32 time_stamp)
 void LLIMModel::processAddingMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
-    const std::string& utf8_text, bool log2file, bool is_region_msg, U32 time_stamp, bool is_announcement, bool keyword_alert_performed)
+    const std::string& utf8_text, bool log2file, bool is_region_msg, U32 time_stamp, bool is_announcement, bool keyword_alert_performed,U64 live_sequence)
 {
+    if(!live_sequence)live_sequence=++sAssistantLiveIngress;
     LLIMSession* session = addMessageSilently(session_id, from, from_id, utf8_text, log2file, is_region_msg, time_stamp, is_announcement);
     if (!session)
        return;
@@ -1988,6 +2001,11 @@ void LLIMModel::processAddingMessage(const LLUUID& session_id, const std::string
 
     // notify listeners
     LLSD arg;
+    // Live callback provenance. loadHistory/server replay do not emit this.
+    arg["account_id"] = gAgentID;
+    arg["login_id"] = gAgent.getSessionID();
+    arg["is_history"] = CHAT_STYLE_NORMAL;
+    arg["ingress_sequence"] = std::to_string(live_sequence);
     arg["session_id"] = session_id;
     arg["num_unread"] = session->mNumUnread;
     arg["participant_unread"] = session->mParticipantUnreadMessageCount;

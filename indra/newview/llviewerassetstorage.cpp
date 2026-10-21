@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsassistantassetfetch.h"
 
 #include "llviewerassetstorage.h"
 
@@ -53,6 +54,22 @@
 
  // There is also PoolSizeAssetStorage value in setting that should mirror this name
 static const std::string VIEWER_ASSET_STORAGE_CORO_POOL = "AssetStorage";
+
+struct LLViewerAssetFetchSource {bool alive=true;std::uint64_t regionGeneration=0;};
+struct LLViewerAssetFetch
+{
+    std::shared_ptr<fs_assistant::AssetReadAuthority> authority;
+    std::shared_ptr<LLViewerAssetFetchSource> source;
+    LLAssetStorage* storage=nullptr;
+    fs_assistant::AssetReadSource currentSource() const
+    {
+        return {gAgent.getID().asString(),gAgent.getSessionID().asString(),LLGridManager::instance().getGrid(),
+            gAgent.getRegion()?gAgent.getRegion()->getRegionID().asString():std::string(),source?source->regionGeneration:0,
+            source && source->alive && gAssetStorage==storage && !gDisconnected && gAgent.getRegion()!=nullptr};
+    }
+    bool allowed() const
+    {return authority && authority->allowed(currentSource());}
+};
 
 /**
  * @brief Local class to encapsulate asset fetch requests with a timestamp.
@@ -99,6 +116,8 @@ protected:
 public:
     LLViewerAssetStats::duration_t      mMetricsStartTime;
     bool mWithHTTP;
+    std::shared_ptr<LLViewerAssetFetch> mAssistant;
+    bool mFetchQueued=false;
 };
 
 ///----------------------------------------------------------------------------
@@ -116,6 +135,7 @@ LLViewerAssetStorage::LLViewerAssetStorage(LLMessageSystem *msg, LLXferManager *
       mCountSucceeded(0),
       mTotalBytesFetched(0)
 {
+    initializeAssistantFetchSource();
     LLCoprocedureManager::instance().initializePool(VIEWER_ASSET_STORAGE_CORO_POOL);
 }
 
@@ -127,16 +147,51 @@ LLViewerAssetStorage::LLViewerAssetStorage(LLMessageSystem *msg, LLXferManager *
       mCountSucceeded(0),
       mTotalBytesFetched(0)
 {
+    initializeAssistantFetchSource();
     LLCoprocedureManager::instance().initializePool(VIEWER_ASSET_STORAGE_CORO_POOL);
 }
 
 LLViewerAssetStorage::~LLViewerAssetStorage()
 {
+    mAssistantFetchSource->alive=false;
+    mAssistantRegionConnection.disconnect();
     if (!LLCoprocedureManager::wasDeleted())
     {
         // This class has dedicated coroutine pool, clean it up, otherwise coroutines will crash later.
         LLCoprocedureManager::instance().close(VIEWER_ASSET_STORAGE_CORO_POOL);
     }
+}
+
+void LLViewerAssetStorage::initializeAssistantFetchSource()
+{
+    mAssistantFetchSource=std::make_shared<LLViewerAssetFetchSource>();
+    mAssistantRegionConnection=gAgent.addRegionChangedCallback([source=mAssistantFetchSource](){++source->regionGeneration;});
+}
+
+std::shared_ptr<LLViewerAssetFetch> LLViewerAssetStorage::captureAssistantFetch()
+{
+    if(!fs_assistant::AsyncScope::current())return {};
+    auto fetch=std::make_shared<LLViewerAssetFetch>();fetch->source=mAssistantFetchSource;fetch->storage=this;
+    fetch->authority=std::make_shared<fs_assistant::AssetReadAuthority>(fetch->currentSource(),fs_assistant::asyncTask());return fetch;
+}
+
+namespace {
+LLGetAssetCallback assistantAssetCallback(LLGetAssetCallback callback,const std::shared_ptr<LLViewerAssetFetch>& fetch)
+{
+    if(!fetch)return callback;
+    return [callback,fetch](const LLUUID& id,LLAssetType::EType type,void* data,S32 status,LLExtStat ext)
+    {
+        const bool allowed=fetch->allowed();
+        fs_assistant::AsyncScope scope(fetch->authority->task()->guard());
+        if(callback)callback(id,type,data,allowed?status:LL_ERR_INSUFFICIENT_PERMISSIONS,allowed?ext:LLExtStat::REQUEST_DROPPED);
+    };
+}
+}
+
+std::function<bool()> LLViewerAssetStorage::captureAssetReadGuard(LLGetAssetCallback& callback)
+{
+    const auto fetch=captureAssistantFetch();if(!fetch)return {};
+    callback=assistantAssetCallback(callback,fetch);return [fetch](){return fetch->allowed();};
 }
 
 // virtual
@@ -385,7 +440,13 @@ void LLViewerAssetStorage::queueRequestHttp(
 
     bool with_http = true;
     LLViewerAssetRequest *req = new LLViewerAssetRequest(uuid, atype, with_http);
-    req->mDownCallback = callback;
+    req->mAssistant=captureAssistantFetch();
+    req->mDownCallback = assistantAssetCallback(callback,req->mAssistant);
+    if(req->mAssistant && !req->mAssistant->allowed())
+    {
+        if(req->mDownCallback)req->mDownCallback(uuid,atype,user_data,LL_ERR_INSUFFICIENT_PERMISSIONS,LLExtStat::REQUEST_DROPPED);
+        delete req;return;
+    }
     req->mUserData = user_data;
     req->mIsPriority = is_priority;
     if (!duplicate)
@@ -399,24 +460,56 @@ void LLViewerAssetStorage::queueRequestHttp(
     // This is the same as the current UDP logic - don't re-request a duplicate.
     if (!duplicate)
     {
-        LLCoprocedureManager* manager = LLCoprocedureManager::getInstance();
         // <FS:Ansariel> [UDP Assets]
         //bool with_http = true;
         //bool is_temp = false;
         //LLViewerAssetStatsFF::record_enqueue(atype, with_http, is_temp);
         // </FS:Ansariel> [UDP Assets]
-        manager->enqueueCoprocedure(
-            VIEWER_ASSET_STORAGE_CORO_POOL,
-            "LLViewerAssetStorage::assetRequestCoro",
-            // <FS:Ansariel> [UDP Assets] Need request for UDP assets
-            //[this, uuid, atype, callback, user_data]
-            [this, req, uuid, atype, callback, user_data]
-            (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)
-            {
-                // <FS:Ansariel> [UDP Assets] Need request for UDP assets
-                //assetRequestCoro(uuid, atype, callback, user_data);
-                assetRequestCoro(req, uuid, atype, callback, user_data);
-            });
+        enqueueAssetRequest(req);
+    }
+}
+
+void LLViewerAssetStorage::enqueueAssetRequest(LLViewerAssetRequest* req)
+{
+    req->mFetchQueued=true;
+    const auto uuid=req->getUUID();const auto type=req->getType();
+    const auto assistant=req->mAssistant;const auto callback=req->mDownCallback;void* data=req->mUserData;
+    LLCoprocedureManager::instance().enqueueCoprocedure(VIEWER_ASSET_STORAGE_CORO_POOL,"LLViewerAssetStorage::assetRequestCoro",
+        [this,req,uuid,type,assistant,callback,data](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&,const LLUUID&)
+        {assetRequestCoro(req,uuid,type,callback,data,assistant);});
+}
+
+bool LLViewerAssetStorage::assistantRequestPending(LLViewerAssetRequest* req,const std::shared_ptr<LLViewerAssetFetch>& assistant)const
+{
+    // Requests can time out while the coprocedure waits. Compare membership
+    // before dereferencing the queued pointer, and fence recycled addresses.
+    for(const auto* pending:mPendingDownloads)
+        if(pending==req)
+        {const auto* viewer=dynamic_cast<const LLViewerAssetRequest*>(pending);return viewer && viewer->mAssistant==assistant;}
+    return false;
+}
+
+void LLViewerAssetStorage::dropDeniedAssistantRequests(const LLUUID& uuid,LLAssetType::EType type)
+{
+    request_list_t denied;
+    for(auto it=mPendingDownloads.begin();it!=mPendingDownloads.end();)
+    {
+        auto* request=dynamic_cast<LLViewerAssetRequest*>(*it);
+        if(request && request->getUUID()==uuid && request->getType()==type && request->mAssistant && !request->mAssistant->allowed())
+        {denied.push_back(request);it=mPendingDownloads.erase(it);}else ++it;
+    }
+    for(auto* request:denied)
+    {
+        if(request->mDownCallback)request->mDownCallback(uuid,type,request->mUserData,LL_ERR_INSUFFICIENT_PERMISSIONS,LLExtStat::REQUEST_DROPPED);
+        delete request;
+    }
+    // Native or independently authorized duplicate consumers retain their own
+    // work. Give one a new queued fetch instead of failing the whole asset ID.
+    for(auto* pending:mPendingDownloads)
+    {
+        auto* request=dynamic_cast<LLViewerAssetRequest*>(pending);
+        if(request && request->getUUID()==uuid && request->getType()==type && !request->mFetchQueued)
+        {enqueueAssetRequest(request);break;}
     }
 }
 
@@ -454,18 +547,26 @@ void LLViewerAssetStorage::assetRequestCoro(
     const LLUUID uuid,
     LLAssetType::EType atype,
     LLGetAssetCallback callback,
-    void *user_data)
+    void *user_data,
+    std::shared_ptr<LLViewerAssetFetch> assistant)
 {
     LLScopedIncrement coro_count_boost(sAssetCoroCount); // static counter since corotine can outlive LLViewerAssetStorage
 
     S32 result_code = LL_ERR_NOERR;
     LLExtStat ext_status = LLExtStat::NONE;
 
-    if (!gAssetStorage)
+    if (gAssetStorage != this)
     {
         LL_WARNS_ONCE("ViewerAsset") << "Asset request fails: asset storage no longer exists" << LL_ENDL;
         return;
     }
+
+    auto originAllowed=[&]()
+    {
+        if(assistantRequestPending(req,assistant) && (!assistant || assistant->allowed()))return true;
+        dropDeniedAssistantRequests(uuid,atype);return false;
+    };
+    if(!originAllowed())return;
 
     mCountStarted++;
 
@@ -489,10 +590,11 @@ void LLViewerAssetStorage::assetRequestCoro(
             gAgent.removeRegionChangedCallback(region_conn);
             region_conn.disconnect();
 
-            if (LLApp::isExiting() || !gAssetStorage)
+            if (LLApp::isExiting() || gAssetStorage != this)
             {
                 return;
             }
+            if(!originAllowed())return;
 
             // recheck region whether suspend ended on timeout or not
             if (!gAgent.getRegion())
@@ -528,10 +630,11 @@ void LLViewerAssetStorage::assetRequestCoro(
         LLSD result = llcoro::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
         caps_conn.disconnect();
 
-        if (LLApp::isExiting() || !gAssetStorage)
+        if (LLApp::isExiting() || gAssetStorage != this)
         {
             return;
         }
+        if(!originAllowed())return;
 
         if (result.has("timeout"))
         {
@@ -568,10 +671,25 @@ void LLViewerAssetStorage::assetRequestCoro(
             // Set our destination file, and the completion callback.
             LLTransferTargetParamsVFile tpvf;
             tpvf.setAsset(uuid, atype);
-            tpvf.setCallback(downloadCompleteCallback, *req);
+            if(assistant)
+            {
+                tpvf.setReadGuard([assistant](){return assistant->allowed();});
+                tpvf.setCallback([this,assistant](S32 result,const LLUUID& file_id,LLAssetType::EType type,
+                    LLBaseDownloadRequest* request,LLExtStat ext)
+                {
+                    if(!assistant->allowed())
+                    {
+                        if(assistant->source->alive && gAssetStorage==this)dropDeniedAssistantRequests(file_id,type);
+                        return;
+                    }
+                    downloadCompleteCallback(result,file_id,type,request,ext);
+                },*req);
+            }
+            else tpvf.setCallback(downloadCompleteCallback,*req);
 
             LL_DEBUGS("ViewerAsset") << "Starting transfer for " << uuid << LL_ENDL;
             LLTransferTargetChannel *ttcp = gTransferManager.getTargetChannel(mUpstreamHost, LLTCT_ASSET);
+            if(!originAllowed())return;
             ttcp->requestTransfer(spa, tpvf, 100.f + (req->mIsPriority ? 1.f : 0.f));
 
             bool with_http = false;
@@ -608,13 +726,17 @@ void LLViewerAssetStorage::assetRequestCoro(
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOpts  = std::make_shared<LLCore::HttpOptions>();
 
+    // No TLS authority scope may span this suspension. The captured task and
+    // exact source survive queueing, capability waits, HTTP and UDP fallback.
+    if(!originAllowed())return;
     LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
 
-    if (LLApp::isExiting() || !gAssetStorage)
+    if (LLApp::isExiting() || gAssetStorage != this)
     {
         // Bail out if result arrives after shutdown has been started.
         return;
     }
+    if(!originAllowed())return;
 
     mCountCompleted++;
 

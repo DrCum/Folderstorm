@@ -16,9 +16,10 @@ func registerWorkspaces(server *mcp.Server, state *Server, readOnly, mutating *m
 }
 
 type workspaceTargetArgs struct {
-	Kind      string `json:"kind" jsonschema:"workspace or layout"`
-	ID        string `json:"id" jsonschema:"exact saved ID from workspace_list"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	Kind          string `json:"kind" jsonschema:"workspace or layout"`
+	ID            string `json:"id" jsonschema:"exact saved ID from workspace_list"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func validWorkspaceTarget(args workspaceTargetArgs) bool {
@@ -39,23 +40,28 @@ func (s *Server) workspaceCall(ctx context.Context, pid int, op string, params m
 	return apiResult(api.CallNamed(ctx, viewerapi.WorkspaceAPI, op, params))
 }
 func (s *Server) workspaceList(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.workspaceCall(ctx, args.ViewerPID, "list", map[string]any{}, true)
 }
 func (s *Server) workspaceStatus(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.workspaceCall(ctx, args.ViewerPID, "status", map[string]any{}, true)
 }
 func (s *Server) workspacePreview(ctx context.Context, _ *mcp.CallToolRequest, args workspaceTargetArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if !validWorkspaceTarget(args) {
 		return errorResult("invalid_args", "kind must be workspace or layout and id must be an exact saved identifier", nil)
 	}
 	return s.workspaceCall(ctx, args.ViewerPID, "preview", map[string]any{"kind": args.Kind, "id": args.ID}, true)
 }
 func (s *Server) workspaceApply(ctx context.Context, _ *mcp.CallToolRequest, args workspaceTargetArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if !validWorkspaceTarget(args) {
 		return errorResult("invalid_args", "kind must be workspace or layout and id must be an exact saved identifier", nil)
 	}
 	return s.workspaceCall(ctx, args.ViewerPID, "apply", map[string]any{"kind": args.Kind, "id": args.ID}, false)
 }
 func (s *Server) workspacePrevious(ctx context.Context, _ *mcp.CallToolRequest, args viewerArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	return s.workspaceCall(ctx, args.ViewerPID, "previous", map[string]any{}, false)
 }

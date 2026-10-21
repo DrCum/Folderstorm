@@ -18,22 +18,23 @@
 namespace fs_session
 {
 constexpr std::size_t FrameSize = 4096;
-// Version 14 pairs the expanded startup profile-copy policy with its host.
-constexpr std::uint32_t Version = 14;
+// Version 17 adds a paused-control status and authenticated recovery reset.
+constexpr std::uint32_t Version = 17;
 using Frame = std::array<std::uint8_t, FrameSize>;
 using WorkerId = std::array<std::uint8_t, 16>;
 enum class Kind : std::uint32_t
 {
     Poll = 1, SetMode, PermitLogin, DenyLogin, Detach, Quit, Embed, Unembed, Focus,
     Events, SendChat, MarkRead, Conversations, AudioPolicy, Typing,
-    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat, CloseChat
+    Status = 16, WorkspaceInfo, WorkspaceMenu, MonitorPolicy, CancelTransition, ReviewAttention, ShortcutPolicy, ReviewChat, CloseChat,
+    Contacts, ContactSearch, OpenIM, AssistantInfo, AssistantConfigure, AssistantReview, AssistantPause, Recover
 };
 enum class Mode : std::uint32_t { Active, Warm, Economy };
 enum class State : std::uint32_t { Starting, Login, Connecting, Ready, Disconnected };
 enum class Topic : std::uint32_t { Nearby, Private, Group, Conference, Notice };
 enum class EventType : std::uint32_t { None, Conversation, Chat, Notice, Gap, Attention, AttentionRemoved, SwitchIntent, ConversationClosed, NoticeRemoved };
-enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096, ConversationRestricted = 8192, AutomaticRead = 16384, ReadDeferred = 32768 };
-constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible | ConversationRestricted | AutomaticRead | ReadDeferred;
+enum Flag : std::uint32_t { LoginPending = 1, Error = 2, Embedded = 4, Promoting = 8, ClientFocused = 16, EconomyTrimmed = 32, VoiceOwner = 64, ChatRestricted = 128, HostedStyle = 256, PreviewFrame = 512, PreviewUnavailable = 1024, Transitioning = 2048, AlertEligible = 4096, ConversationRestricted = 8192, AutomaticRead = 16384, ReadDeferred = 32768, ControlPaused = 65536 };
+constexpr std::uint32_t KnownFlags = LoginPending | Error | Embedded | Promoting | ClientFocused | EconomyTrimmed | VoiceOwner | ChatRestricted | HostedStyle | PreviewFrame | PreviewUnavailable | Transitioning | AlertEligible | ConversationRestricted | AutomaticRead | ReadDeferred | ControlPaused;
 
 struct Message
 {
@@ -54,7 +55,7 @@ struct Message
 
 inline bool validKind(Kind kind)
 {
-    return kind >= Kind::Poll && kind <= Kind::CloseChat;
+    return kind >= Kind::Poll && kind <= Kind::Recover;
 }
 inline bool validUtf8(const std::string& text, bool multiline = false)
 {
@@ -211,6 +212,7 @@ public:
     Mode mode() const { return mStep == Step::Revoke ? mStandby : Mode::Active; }
     int target() const { return mTarget; }
     int original() const { return mOld; }
+    std::uint64_t originalGeneration() const { return mOldGeneration; }
     bool accept(int worker, const Message& reply)
     {
         if (mStep == Step::Idle || worker != this->worker() || reply.generation != generation() ||

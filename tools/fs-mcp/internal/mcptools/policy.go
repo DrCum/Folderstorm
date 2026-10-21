@@ -65,16 +65,19 @@ func permanentDeleteResult() (*mcp.CallToolResult, any, error) {
 	return errorResult("not_permitted", "Permanent delete is not available. The viewer bridge denies purge and emptyTrash, and no setting can enable them.", nil)
 }
 
-func (s *Server) rememberPolicy(pid int, policy viewerapi.StatusPolicy) {
+func (s *Server) rememberPolicy(pid string, policy viewerapi.StatusPolicy) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.policies == nil {
-		s.policies = map[int]viewerapi.StatusPolicy{}
+		s.policies = map[string]viewerapi.StatusPolicy{}
+	}
+	if len(s.policies) >= 128 {
+		s.policies = map[string]viewerapi.StatusPolicy{}
 	}
 	s.policies[pid] = policy
 }
 
-func (s *Server) loadPolicy(ctx context.Context, pid int, api API) (viewerapi.StatusPolicy, error) {
+func (s *Server) loadPolicy(ctx context.Context, pid string, api API) (viewerapi.StatusPolicy, error) {
 	raw, err := api.Status(ctx)
 	if err != nil {
 		if ve, ok := err.(*viewerapi.Error); ok {
@@ -97,7 +100,7 @@ func errStatus(raw []byte) error {
 	return &viewerapi.Error{Code: "viewer_error", Message: "inventory status was not a JSON object", Body: raw}
 }
 
-func (s *Server) rememberIfGenerationChanged(pid int, policy viewerapi.StatusPolicy) {
+func (s *Server) rememberIfGenerationChanged(pid string, policy viewerapi.StatusPolicy) {
 	s.mu.Lock()
 	prev, had := s.policies[pid]
 	s.mu.Unlock()
@@ -107,7 +110,7 @@ func (s *Server) rememberIfGenerationChanged(pid int, policy viewerapi.StatusPol
 	s.rememberPolicy(pid, policy)
 }
 
-func (s *Server) cachedPolicy(pid int, fallback viewerapi.StatusPolicy) viewerapi.StatusPolicy {
+func (s *Server) cachedPolicy(pid string, fallback viewerapi.StatusPolicy) viewerapi.StatusPolicy {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.policies == nil {
@@ -130,11 +133,11 @@ func (s *Server) openClass(ctx context.Context, viewerPID int, class string) (AP
 // Resolve and load policy once for compound actions. Ask still belongs to the
 // viewer, which rechecks every required class immediately before dispatch.
 func (s *Server) openClasses(ctx context.Context, viewerPID int, classes []string) (API, viewerapi.StatusPolicy, *mcp.CallToolResult) {
-	inst, api, errRes := s.resolve(viewerPID)
+	inst, api, errRes := s.resolve(ctx, viewerPID)
 	if errRes != nil {
 		return nil, viewerapi.StatusPolicy{}, errRes
 	}
-	policy, err := s.loadPolicy(ctx, inst.PID, api)
+	policy, err := s.loadPolicy(ctx, inst.BindingKey(), api)
 	if err != nil {
 		res, _, _ := apiError(err)
 		return nil, viewerapi.StatusPolicy{}, res
@@ -173,6 +176,7 @@ func (s *Server) callOrConfirm(ctx context.Context, req *mcp.CallToolRequest, vi
 func (s *Server) finishCopy(ctx context.Context, req *mcp.CallToolRequest, api API, policy viewerapi.StatusPolicy, viewerPID int, raw json.RawMessage, skip bool) (*mcp.CallToolResult, any, error) {
 	parsed := parseCopyResult(raw)
 	ids := copyConfirmPlanIDs(parsed.Payload)
+	s.rememberCopyTargets(ctx, ids)
 	if len(ids) == 0 {
 		return jsonResult(parsed.Payload)
 	}

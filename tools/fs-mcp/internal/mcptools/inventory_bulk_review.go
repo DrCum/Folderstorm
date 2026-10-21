@@ -38,21 +38,24 @@ func registerInventoryBulkReview(server *mcp.Server, state *Server, readOnly, de
 }
 
 type bulkPlanArgs struct {
-	PlanID    string `json:"plan_id" jsonschema:"viewer-owned plan UUID from a bulk preview"`
-	ViewerPID int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	PlanID        string `json:"plan_id" jsonschema:"viewer-owned plan UUID from a bulk preview"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type bulkHistoryArgs struct {
-	OperationID string `json:"operation_id,omitempty" jsonschema:"optional operation UUID for detailed outcomes"`
-	Offset      int    `json:"offset,omitempty" jsonschema:"nonnegative operations offset"`
-	Limit       int    `json:"limit,omitempty" jsonschema:"maximum operations to return, 1-50, default 20"`
-	ViewerPID   int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	OperationID   string `json:"operation_id,omitempty" jsonschema:"optional operation UUID for detailed outcomes"`
+	Offset        int    `json:"offset,omitempty" jsonschema:"nonnegative operations offset"`
+	Limit         int    `json:"limit,omitempty" jsonschema:"maximum operations to return, 1-50, default 20"`
+	ViewerSession string `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int    `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 type bulkUndoArgs struct {
-	OperationID string   `json:"operation_id" jsonschema:"history operation UUID to review for undo"`
-	IDs         []string `json:"ids,omitempty" jsonschema:"optional exact subset of 1-50 inventory UUIDs; omit for all eligible rows"`
-	ViewerPID   int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
+	OperationID   string   `json:"operation_id" jsonschema:"history operation UUID to review for undo"`
+	IDs           []string `json:"ids,omitempty" jsonschema:"optional exact subset of 1-50 inventory UUIDs; omit for all eligible rows"`
+	ViewerSession string   `json:"viewer_session,omitempty" jsonschema:"exact login reference from viewer_list; required for managed characters"`
+	ViewerPID     int      `json:"viewer_pid,omitempty" jsonschema:"optional Firestorm process id"`
 }
 
 func validBulkID(id string) bool {
@@ -78,11 +81,11 @@ func uniqueBulkIDs(ids []string) bool {
 // resolves it from its authenticated session-owned plan, and can execute with
 // Read disabled without exporting stored display fields.
 func (s *Server) bulkReview(ctx context.Context, viewerPID int, op string, params map[string]any, requireRead bool) (*mcp.CallToolResult, any, error) {
-	inst, api, errRes := s.resolve(viewerPID)
+	inst, api, errRes := s.resolve(ctx, viewerPID)
 	if errRes != nil {
 		return errRes, nil, nil
 	}
-	policy, err := s.loadPolicy(ctx, inst.PID, api)
+	policy, err := s.loadPolicy(ctx, inst.BindingKey(), api)
 	if err != nil {
 		return apiError(err)
 	}
@@ -96,6 +99,7 @@ func (s *Server) bulkReview(ctx context.Context, viewerPID int, op string, param
 }
 
 func (s *Server) inventoryPreviewBatchRename(ctx context.Context, _ *mcp.CallToolRequest, args batchRenameArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if len(args.Items) < 1 || len(args.Items) > 50 {
 		return errorResult("invalid_args", "items must contain between 1 and 50 entries", nil)
 	}
@@ -115,6 +119,7 @@ func (s *Server) inventoryPreviewBatchRename(ctx context.Context, _ *mcp.CallToo
 }
 
 func (s *Server) inventoryPreviewBatchMove(ctx context.Context, _ *mcp.CallToolRequest, args batchMoveArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if !uniqueBulkIDs(args.IDs) || !validBulkID(args.ParentID) {
 		return errorResult("invalid_args", "ids must contain 1-50 distinct UUIDs and parent_id is required", nil)
 	}
@@ -122,6 +127,7 @@ func (s *Server) inventoryPreviewBatchMove(ctx context.Context, _ *mcp.CallToolR
 }
 
 func (s *Server) inventoryExecutePlan(ctx context.Context, _ *mcp.CallToolRequest, args bulkPlanArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if !validBulkID(args.PlanID) {
 		return errorResult("invalid_args", "plan_id is required", nil)
 	}
@@ -129,6 +135,7 @@ func (s *Server) inventoryExecutePlan(ctx context.Context, _ *mcp.CallToolReques
 }
 
 func (s *Server) inventoryHistory(ctx context.Context, _ *mcp.CallToolRequest, args bulkHistoryArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if args.Offset < 0 || args.Limit < 0 || args.Limit > 50 || (args.OperationID != "" && !validBulkID(args.OperationID)) {
 		return errorResult("invalid_args", "offset must be nonnegative, limit 1-50, and operation_id a nonempty UUID when supplied", nil)
 	}
@@ -143,6 +150,7 @@ func (s *Server) inventoryHistory(ctx context.Context, _ *mcp.CallToolRequest, a
 }
 
 func (s *Server) inventoryPreviewUndo(ctx context.Context, _ *mcp.CallToolRequest, args bulkUndoArgs) (*mcp.CallToolResult, any, error) {
+	ctx = withViewerSession(ctx, args.ViewerSession)
 	if !validBulkID(args.OperationID) || (args.IDs != nil && !uniqueBulkIDs(args.IDs)) {
 		return errorResult("invalid_args", "operation_id is required; supplied ids must contain 1-50 distinct UUIDs", nil)
 	}

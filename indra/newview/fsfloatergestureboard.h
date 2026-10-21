@@ -30,8 +30,11 @@ public:
     void tileMenu(const std::string& tile, LLView* view, S32 x, S32 y);
     void dragTile(const std::string& tile, S32 screen_x, S32 screen_y, bool finish);
     void playTile(const std::string& tile);
-    void focusGesture(const LLUUID& item) { mFocusReference = item; }
+    void focusItem(const LLUUID& item) { mFocusReference = item; }
     bool current() const;
+    const LLUUID& windowID() const { return mWindowID; }
+    const std::string& selectedBoard() const { return mBoard; }
+    void selectBoard(const std::string& id);
 private:
     void refresh(bool force = false);
     void rebuild();
@@ -39,12 +42,14 @@ private:
     void boardAction(const std::string& action, const std::string& board, const LLSD& expected);
     void changePage(S32 direction);
     void editBoard(const std::string& mode);
-    void addGestures();
+    void addItems();
     void tileAction(const std::string& action, const std::string& board, const std::string& tile, const LLSD& expected);
     void deleteBoard();
     void closeEditors();
     LLTimer mRefreshTimer;
     LLUUID mAccount, mSession, mFocusReference;
+    const LLUUID mWindowID = LLUUID::generateNewID();
+    std::string mBoard;
     LLSD mDisplayed;
     S32 mGridWidth = 0, mGridHeight = 0, mPage = 0;
     std::string mDisplayedBoard;
@@ -73,7 +78,7 @@ public:
     void onOpen(const LLSD& key) override;
     void onClose(bool) override;
     void draw() override;
-    bool replaceGesture(const LLUUID& item, const LLSD& key);
+    bool replaceItem(const LLUUID& item, const LLSD& key);
 private:
     void save();
     void replace();

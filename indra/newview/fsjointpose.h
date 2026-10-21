@@ -268,6 +268,9 @@ class FSJointPose
     LLVector3    getTargetPosition() const { return mCurrentState.getTargetPosition(); }
     LLVector3    getTargetScale() const { return mCurrentState.getTargetScale(); }
 
+    // Rotation-only assistant motion; preserve all base/position/scale/flags.
+    void setAssistantTargetRotation(const LLQuaternion& rotation);
+
     // Network state must not enter the local joint undo queue.
     void applySharedTransform(const FSSharedPose::Joint& state);
 
@@ -301,6 +304,8 @@ class FSJointPose
 
         FSJointState() = default;
         LLQuaternion getTargetRotation() const { return mRotation * mBaseRotation; }
+        void setTargetRotationOnly(const LLQuaternion& rotation)
+        {LLQuaternion inverse=mBaseRotation;inverse.conjugate();mRotation=rotation*inverse;}
         LLVector3    getTargetPosition() const { return mPosition + mBasePosition; }
         LLVector3    getTargetScale() const { return mScale + mBaseScale; }
 

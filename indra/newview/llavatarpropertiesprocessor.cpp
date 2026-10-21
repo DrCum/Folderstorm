@@ -175,9 +175,12 @@ void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequestMessage(const LLUUI
 
 void LLAvatarPropertiesProcessor::initAgentProfileCapRequest(const LLUUID& avatar_id, const std::string& cap_url, EAvatarProcessorType type)
 {
+    const auto key = profileRequestKey(avatar_id, type);
     addPendingRequest(avatar_id, type);
+    const auto task=mProfileLoads.begin(key);
+    const auto account=gAgentID,login=gAgent.getSessionID();
     LLCoros::instance().launch("requestAgentUserInfoCoro",
-        [cap_url, avatar_id, type]() { requestAvatarPropertiesCoro(cap_url, avatar_id, type); });
+        [cap_url, key, task, account, login]() { requestAvatarPropertiesCoro(cap_url, key, task, account, login); });
 }
 void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequest(const LLUUID& avatar_id)
 {
@@ -307,9 +310,12 @@ bool LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(const LLAvatarData* avata
 }
 
 // static
-void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type)
+void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, ProfileRequestKey key,
+    fs_assistant::AsyncTaskPtr task, LLUUID account, LLUUID login)
 {
     LLAvatarPropertiesProcessor& inst = instance();
+    const LLUUID& avatar_id = std::get<0>(key);
+    const EAvatarProcessorType type = std::get<1>(key);
 
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -319,13 +325,18 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
 
     LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
     httpOpts->setFollowRedirects(true);
+    httpOpts->setTimeout(20);
 
     std::string finalUrl = cap_url + "/" + avatar_id.asString();
 
+    if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskSubmit(task))
+    {if(inst.mProfileLoads.finish(key,task))inst.removePendingRequest(key);return;}
     LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
 
     // Response is being processed, no longer pending is required
-    inst.removePendingRequest(avatar_id, type);
+    if(!inst.mProfileLoads.finish(key,task))return;
+    inst.removePendingRequest(key);
+    if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskAllowed(task))return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -420,8 +431,9 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
     }
 
     LLAppViewer::instance()->postToMainCoro(
-        [avatar_id, avatar_data, type]()
+        [avatar_id, avatar_data, type, task, account, login]()
         {
+            if(account!=gAgentID || login!=gAgent.getSessionID() || !fs_assistant::asyncTaskAllowed(task))return;
             LLAvatarPropertiesProcessor::instance().notifyObservers(avatar_id, (void*) &avatar_data, type);
         });
 }
@@ -806,9 +818,16 @@ void LLAvatarPropertiesProcessor::sendClassifiedInfoRequest(const LLUUID& classi
     gAgent.sendReliableMessage();
 }
 
+LLAvatarPropertiesProcessor::ProfileRequestKey LLAvatarPropertiesProcessor::profileRequestKey(const LLUUID& avatar_id, EAvatarProcessorType type)
+{
+    // Only AgentProfile HTTP requests capture assistant authority. Uncorrelated
+    // legacy UDP replies must retain their existing native deduplication keys.
+    return {avatar_id, type, type == APT_PROPERTIES ? fs_assistant::AsyncScope::current() : fs_assistant::AsyncGuard()};
+}
+
 bool LLAvatarPropertiesProcessor::isPendingRequest(const LLUUID& avatar_id, EAvatarProcessorType type)
 {
-    timestamp_map_t::key_type key = std::make_pair(avatar_id, type);
+    const auto key = profileRequestKey(avatar_id, type);
     timestamp_map_t::iterator it = mRequestTimestamps.find(key);
 
     // Is this a new request?
@@ -828,7 +847,7 @@ bool LLAvatarPropertiesProcessor::isPendingRequest(const LLUUID& avatar_id, EAva
 
 void LLAvatarPropertiesProcessor::addPendingRequest(const LLUUID& avatar_id, EAvatarProcessorType type)
 {
-    timestamp_map_t::key_type key = std::make_pair(avatar_id, type);
+    const auto key = profileRequestKey(avatar_id, type);
     U32 now = (U32)time(nullptr);
     // Add or update existing (expired) request
     mRequestTimestamps[ key ] = now;
@@ -836,7 +855,11 @@ void LLAvatarPropertiesProcessor::addPendingRequest(const LLUUID& avatar_id, EAv
 
 void LLAvatarPropertiesProcessor::removePendingRequest(const LLUUID& avatar_id, EAvatarProcessorType type)
 {
-    timestamp_map_t::key_type key = std::make_pair(avatar_id, type);
+    removePendingRequest(profileRequestKey(avatar_id, type));
+}
+
+void LLAvatarPropertiesProcessor::removePendingRequest(const ProfileRequestKey& key)
+{
     mRequestTimestamps.erase(key);
 }
 

@@ -318,6 +318,8 @@ public:
     ~LLPreviewLSL();
 
     LLUUID getScriptID() { return mItemUUID; }
+    // Includes native work which has not reached the inventory upload queue.
+    bool assistantSourceBusy() const;
 
     void setDirty() { mDirty = true; }
 

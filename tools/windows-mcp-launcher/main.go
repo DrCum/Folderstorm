@@ -5,11 +5,22 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"folderstorm-updateguard"
 	"io"
 	"os"
 )
 
-func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+var acquireUpdateGuard = updateguard.Acquire
+
+func main() {
+	release, err := acquireUpdateGuard()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Folderstorm is being updated; retry after it finishes.")
+		os.Exit(1)
+	}
+	defer release()
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
 
 func run(args []string, out, diagnostics io.Writer) int {
 	if len(args) == 0 || args[0] != "cleanup-owned-legacy" {

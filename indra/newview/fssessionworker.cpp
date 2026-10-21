@@ -6,10 +6,20 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fssessionworker.h"
+#include "llsd.h"
+#include "fsavatarpickersearchlease.h"
 
 #if LL_WINDOWS
+#include <algorithm>
 #include "fssessionpipe.h"
+#include "fssessionconnection.h"
 #include "fssessionchatmodel.h"
+#include "fssessioncontacts.h"
+#include "llavatarnamecache.h"
+#include "llavatarname.h"
+#include "llcoros.h"
+#include "llcorehttputil.h"
+#include "lluri.h"
 #include "fssessionlifecycle.h"
 #include "fssessionframepipe.h"
 #include "fssessiontransition.h"
@@ -29,6 +39,11 @@
 #include "llrender.h"
 #include "llrender2dutils.h"
 #include "fseventapibridge.h"
+#include "fssessionassistant.h"
+#include "fspanelpreferencelocalassistant.h"
+#include "llprocess.h"
+#include "llsdjson.h"
+#include <boost/json.hpp>
 #include "fsworkspacecontroller.h"
 #include "fsworkspacecontextadapter.h"
 #include "llagent.h"
@@ -204,6 +219,11 @@ struct Worker : LLIMSessionObserver
     FSSessionWorker::LoginGate gate = FSSessionWorker::LoginGate::Wait;
     bool loginRequested = false, readyApplied = false, promoting = false, detached = false, inputGranted = false;
     bool economyTrimmed = false, recoveryShown = false;
+    bool controlPaused = false, recoveryReplyPending = false;
+    Message recoveryReply;
+    bool assistantHold=false;
+    std::string assistantProfile;
+    LLProcessPtr assistantCheck;Message assistantCheckRequest;LLFrameTimer assistantCheckTimer;std::string assistantCheckOutput,assistantCheckSession;
     bool hostedStyle = false;
     std::uintptr_t focusLease = 0, restartTag = 0;
     bool permitVoice = false, muteBackground = true, hostUI = false, chatBlocked = false, shortcuts = false, shellShortcuts = false;
@@ -293,12 +313,19 @@ struct Worker : LLIMSessionObserver
     {
         return session.isGroupSessionType() ? Topic::Group : session.isAdHocSessionType() ? Topic::Conference : Topic::Private;
     }
-    bool backgroundAlertAllowed(const LLUUID& sender) const
+    WorkerAlertDecision backgroundAlertDecision(const LLUUID& sender) const
     {
-        return hostUI && backgroundHostAlertAllowed(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
+        if(!hostUI)return WorkerAlertDecision::PolicyOff;
+        return backgroundHostAlertDecision(ready(), mode != Mode::Active, promoting || demoting, !sharingAllowed(),
             gAgent.isDoNotDisturb(), gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteUI") ||
             gSavedSettings.getF32("AudioLevelUI") <= 0.f, !sender.isNull() && sender != gAgentID &&
             !LLMuteList::instance().isMuted(sender,LLMute::flagTextChat));
+    }
+    void prepareAlert(Message& message,const LLUUID& sender,bool region=false) const
+    {
+        const auto decision=region?WorkerAlertDecision::RegionMessage:backgroundAlertDecision(sender);
+        message.detail=workerAlertDecisionText(decision);
+        if(decision==WorkerAlertDecision::Allowed){message.flags|=AlertEligible;message.eventAt=GetTickCount64();}
     }
     void sessionAdded(const LLUUID&,const std::string&,const LLUUID&,bool) override {}
     void sessionActivated(const LLUUID&,const std::string&,const LLUUID&) override {}
@@ -329,8 +356,7 @@ struct Worker : LLIMSessionObserver
                 message.conversation = session->mSessionID.asString(); message.title = session->mName;
                 message.sender = data["from"].asString(); message.recipient = sender.isNull() ? "" : sender.asString();
                 message.text = data["message"].asString(); message.unread = static_cast<std::uint32_t>((std::max)(0, session->mNumUnread));
-                if (backgroundAlertAllowed(sender) && !data["is_region_msg"].asBoolean())
-                { message.flags |= AlertEligible; message.eventAt = GetTickCount64(); }
+                prepareAlert(message,sender,data["is_region_msg"].asBoolean());
                 events.push(std::move(message));
             });
         if (!notificationConnection.connected())
@@ -368,7 +394,7 @@ struct Worker : LLIMSessionObserver
                         {
                             item.eventType=EventType::Attention;item.title=category;item.text="Review in this character's native viewer.";
                             item.recipient=sender.isNull()?"":sender.asString();
-                            if(fresh && backgroundAlertAllowed(sender)){item.flags|=AlertEligible;item.eventAt=GetTickCount64();}
+                            if(fresh)prepareAlert(item,sender);
                         }
                         events.push(std::move(item));
                     }
@@ -403,10 +429,13 @@ struct Worker : LLIMSessionObserver
             payload = events.after(request.cursor);
             // Restrictions may change after the native enqueue callback. Check
             // the owning group as well as its sender immediately before IPC.
-            filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
-                { return RlvActions::canReceiveIM(LLUUID(id)); });
-            if((payload.flags&AlertEligible) && !backgroundAlertAllowed(LLUUID(payload.recipient)))
-            {payload.flags&=~AlertEligible;payload.eventAt=0;}
+            if(!filterChatEvent(payload,gAgentID.asString(),[](const std::string& id)
+                { return RlvActions::canReceiveIM(LLUUID(id)); }))payload.detail=workerAlertDecisionText(WorkerAlertDecision::Restricted);
+            if(payload.flags&AlertEligible)
+            {
+                const auto decision=backgroundAlertDecision(LLUUID(payload.recipient));
+                if(decision!=WorkerAlertDecision::Allowed){payload.flags&=~AlertEligible;payload.eventAt=0;payload.detail=workerAlertDecisionText(decision);}
+            }
             if (payload.eventType == EventType::Chat && payload.topic != Topic::Nearby && payload.topic != Topic::Notice)
                 if (const auto* native = LLIMModel::instance().findIMSession(LLUUID(payload.conversation)))
                     payload.unread = static_cast<std::uint32_t>((std::max)(0,native->mNumUnread));
@@ -415,6 +444,7 @@ struct Worker : LLIMSessionObserver
             response.topic = payload.topic; response.conversation = payload.conversation; response.sender = payload.sender;
             response.title = payload.title; response.text = payload.text; response.unread = payload.unread;
             response.recipient = payload.recipient; response.flags |= payload.flags & (AlertEligible|ConversationRestricted); response.eventAt = payload.eventAt;
+            if(payload.detail.rfind("Alert:",0)==0)response.detail=payload.detail;
             if (!pipe.send(response)) { detach(); pipe.close(); }
             return;
         }
@@ -490,6 +520,43 @@ struct Worker : LLIMSessionObserver
         // Accepted by native transport, not proof of remote delivery. Never retry.
         reply(request);
     }
+    Message assistantStatus(const Message& request) const
+    {
+        auto& bridge=FSEventAPIBridge::instance();const auto snapshot=bridge.getStatusSnapshot();
+        auto response=status(request);
+        response.width=(snapshot.enabled?AssistantEnabled:0u)|(snapshot.ready?AssistantReady:0u)|(assistantHold?AssistantPaused:0u)|
+            (FSPanelPreferenceLocalAssistant::sessionScoped()?AssistantSessionOnly:0u);
+        response.height=snapshot.enabled?1u:0u;response.unread=static_cast<std::uint32_t>(snapshot.pendingApprovals);
+        response.cursor=static_cast<std::uint64_t>(snapshot.policyGeneration);response.event=snapshot.approvalRevision;
+        response.text=bridge.controllerLoginReference();response.detail=boundedText(snapshot.error,118);
+        response.title=snapshot.pendingApprovalSummary.empty()?"Local Assistant":"Local Assistant: "+snapshot.pendingApprovalSummary;
+        response.sender="Read: "+FSEventAPIBridge::getPermissionLevel("read")+"; Edit: "+FSEventAPIBridge::getPermissionLevel("edit")+"; Wear: "+FSEventAPIBridge::getPermissionLevel("wear")+"; Create: "+FSEventAPIBridge::getPermissionLevel("create");
+        return response;
+    }
+    void pollAssistantCheck()
+    {
+        if(!assistantCheck)return;
+        auto& output=assistantCheck->getReadPipe(LLProcess::STDOUT);auto& errors=assistantCheck->getReadPipe(LLProcess::STDERR);
+        const bool stale=!ready() || assistantCheckRequest.generation!=generation || assistantCheckRequest.account!=gAgentID.asString() ||
+            assistantCheckRequest.grid!=loginGrid || assistantCheckSession!=FSEventAPIBridge::instance().sessionReference();
+        if(stale || output.size()+assistantCheckOutput.size()>8192 || errors.size()>8192 || assistantCheckTimer.getElapsedTimeF32()>5.f)
+        {reply(assistantCheckRequest,stale?"Character or assistant connection changed during check":"Connection check timed out or returned invalid output");assistantCheck.reset();return;}
+        assistantCheckOutput+=output.read(output.size());errors.read(errors.size());
+        if(assistantCheck->isRunning())return;
+        bool passed=false;std::string stage;
+        try
+        {
+            const auto data=LlsdFromJson(boost::json::parse(assistantCheckOutput));stage=data["stage"].asString();
+            passed=data["ok"].asBoolean() && data["pid"].asInteger()==LLApp::getPid() &&
+                assistantCheck->getStatus().mState==LLProcess::EXITED && assistantCheck->getStatus().mData==0;
+        }
+        catch(const std::exception&){}
+        auto response=assistantStatus(assistantCheckRequest);
+        response.text=passed?"Connection verified for this exact character login.":stage=="discovery"?"Discovery unavailable. Enable Local Assistant and check its registry.":
+            stage=="session_changed"?"Assistant login changed. Check again.":stage=="authorization"?"Local Assistant access was refused.":
+            stage=="timeout"?"Connection check timed out.":"Local Assistant connection check failed.";
+        pipe.send(response);assistantCheck.reset();
+    }
     void releaseInput()
     {
         inputGranted = false;
@@ -509,6 +576,7 @@ struct Worker : LLIMSessionObserver
     }
     bool grantInput()
     {
+        if(controlPaused)return false;
         if (!window || !SetPropW(window, InputLeaseProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(host)))) return false;
         if (++focusLease == 0) ++focusLease;
         if (!SetPropW(window, FocusLeaseProperty, reinterpret_cast<HANDLE>(focusLease)))
@@ -606,7 +674,7 @@ struct Worker : LLIMSessionObserver
         releaseInput();
         if (!unembed()) { if (previousGrant) grantInput(); return false; }
         transition.cancel(); demoting = false; promoting = false; mode = Mode::Active;
-        detached = true;
+        detached = true;assistantHold=false;contactSearch.reset();friendSnapshot.clear();friendToken=0;
         toolbarImport.clear(); accountImport.clear(); toolbarSource.clear(); settingsSource.clear();
         previewCap = {}; previewRate = 0;
         chatConnection.disconnect(); notificationConnection.disconnect(); disconnectSessionObserver(); events.clear();
@@ -624,6 +692,31 @@ struct Worker : LLIMSessionObserver
         if (LLVoiceClient::instanceExists()) LLVoiceClient::setVoiceEnabled(LLVoiceClient::instance().voiceEnabled(true));
         if (FSEventAPIBridge::instanceExists()) FSEventAPIBridge::instance().applyEnabled(gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
         return true;
+    }
+    void pauseControl()
+    {
+        if(controlPaused)return;
+        if(promoting || demoting)
+        {recoveryReply=promoting?pendingPromotion:pendingDemotion;recoveryReplyPending=true;}
+        controlPaused=true;
+        releaseInput();transition.cancel();promoting=demoting=false;mode=Mode::Warm;
+        if(readyApplied && !gDisconnected && window)EnableWindow(window,FALSE);
+        LL_WARNS("SessionConnection") << "Controller silence; control paused, pipe retained; sequence "
+            << sequence << "; generation " << generation << LL_ENDL;
+    }
+    void recoverControl(const Message& request)
+    {
+        const auto current=status(request);
+        if(request.account!=current.account || request.grid!=current.grid)
+        {reply(request,"Recovery login changed; no ownership was granted.");return;}
+        // Reset is an idempotent revoke, never a grant or action replay.
+        releaseInput();transition.cancel();promoting=demoting=false;mode=Mode::Warm;
+        if(!unembed(gDisconnected)){controlPaused=true;reply(request,"Recovery could not release the hosted window.");return;}
+        controlPaused=false;
+        if(readyApplied && window)
+        {EnableWindow(window,gDisconnected?TRUE:FALSE);ShowWindow(window,gDisconnected?SW_RESTORE:SW_HIDE);}
+        reply(request);
+        LL_INFOS("SessionConnection") << "Controller reset acknowledged; awaiting fresh activation; generation " << generation << LL_ENDL;
     }
     Message status(const Message& request, const std::string& error = {}) const
     {
@@ -651,6 +744,7 @@ struct Worker : LLIMSessionObserver
         if (economyTrimmed) reply.flags |= EconomyTrimmed;
         if (hostedStyle) reply.flags |= HostedStyle;
         if (voiceAllowed()) reply.flags |= VoiceOwner;
+        if(controlPaused)reply.flags|=ControlPaused;
         if (!sharingAllowed()) reply.flags |= ChatRestricted;
         if (!settingsNotice.empty() && error.empty())
         {
@@ -672,6 +766,118 @@ struct Worker : LLIMSessionObserver
         if (!pipe.send(response)) { detach(); pipe.close(); }
         else if (response.detail.rfind("Settings import:",0) == 0) settingsNotice.clear();
     }
+    struct SearchResult
+    {
+        ChatKey source;
+        LLUUID login;
+        std::uint64_t token=0;
+        bool pending=true;
+        std::string error;
+        std::vector<Contact> rows;
+    };
+    std::shared_ptr<SearchResult> contactSearch;
+    std::weak_ptr<SearchResult> runningContactSearch; // At most one bounded HTTP request, including discarded sessions.
+    std::vector<Contact> friendSnapshot;
+    std::uint64_t friendToken=0;
+    bool contactAllowed(const LLUUID& resident) const
+    {
+        return resident.notNull() && resident!=gAgentID && RlvActions::canStartIM(resident) &&
+            RlvActions::canSendIM(resident) && RlvActions::canReceiveIM(resident) && FSData::instance().canSendToIMContact(IM_NOTHING_SPECIAL,gAgentID,resident);
+    }
+    Contact contactFor(const LLUUID& resident) const
+    {
+        LLAvatarName name;Contact c;c.id=resident.asString();
+        if(LLAvatarNameCache::get(resident,&name)){c.display=boundedText(name.getDisplayName(true),255);c.username=boundedText(name.getUserName(),127);}
+        else {c.display=c.id;c.username="Name loading";}
+        c.online=LLAvatarTracker::instance().isBuddyOnline(resident);c.allowed=contactAllowed(resident);return c;
+    }
+    void contactCommand(const Message& request)
+    {
+        if(!ready() || !sharingAllowed() || request.account!=gAgentID.asString() || request.grid!=loginGrid || request.width>1 || !request.event)
+        {reply(request,"Contacts are unavailable or their character/session changed.");return;}
+        const ChatKey identity{id,generation,gAgentID.asString(),loginGrid,{}};
+        auto response=status(request);response.width=request.width;response.height=0;response.event=request.event;
+        if(request.kind==Kind::ContactSearch)
+        {
+            if(request.text.size()<2 || request.text.size()>127 || !validUtf8(request.text))
+            {reply(request,"Enter 2 to 127 UTF-8 bytes of a resident name.");return;}
+            if(const auto running=runningContactSearch.lock();running && running->pending){reply(request,"A resident search is still running. Try again shortly.");return;}
+            auto* region=gAgent.getRegion();auto url=region?region->getCapability("AvatarPickerSearch"):std::string{};
+            if(url.empty()){reply(request,"Resident search is unavailable on this region. Friends remain available.");return;}
+            const auto searchLease=fs_assistant_social::AvatarPickerSearchLease::acquire();
+            if(!searchLease){reply(request,"A resident search is still running. Try again shortly.");return;}
+            if(!url.empty() && url.back()!='/')url+='/';
+            auto query=request.text;std::replace(query.begin(),query.end(),'.',' ');url+="?page_size=100&names="+LLURI::escape(query);
+            auto result=std::make_shared<SearchResult>();result->source=identity;result->login=gAgent.getSessionID();result->token=request.event;contactSearch=result;runningContactSearch=result;
+            LLCoros::instance().launch("FolderstormContactSearch",[result,url,searchLease]()
+            {
+                (void)searchLease;
+                auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("FolderstormContactSearch",LLCore::HttpRequest::DEFAULT_POLICY_ID);
+                auto http=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();options->setTimeout(20);
+                const LLSD data=adapter->getAndSuspend(http,url,options);
+                const auto httpStatus=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(data[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+                // This state is session-only. Replaced requests own separate state;
+                // never keep a Worker pointer alive through an HTTP yield.
+                if(result->login!=gAgent.getSessionID() || result->source.account!=gAgentID.asString() || !FSSessionWorker::managed())
+                {result->error="Search session ended.";result->pending=false;return;}
+                if(!httpStatus || !data["agents"].isArray()){result->error="Resident search failed. Try again.";result->pending=false;return;}
+                for(auto it=data["agents"].beginArray();it!=data["agents"].endArray() && result->rows.size()<MaxSearchContacts;++it)
+                {
+                    const auto resident=(*it)["id"].asUUID();if(resident.isNull() || resident==gAgentID)continue;
+                    Contact c{resident.asString(),boundedText((*it)["display_name"].asString(),255),boundedText((*it)["username"].asString(),127),false,false};
+                    if(c.display.empty())c.display=c.username;
+                    if(c.valid() && std::none_of(result->rows.begin(),result->rows.end(),[&](const Contact& old){return old.id==c.id;}))result->rows.push_back(std::move(c));
+                }
+                result->pending=false;
+            });
+            response.height=1;response.text="FSC1\n";
+        }
+        else if(request.kind==Kind::OpenIM)
+        {
+            const LLUUID resident(request.recipient);
+            const Contact* chosen=nullptr;
+            if(request.width==1 && contactSearch && contactSearch->token==request.event && contactSearch->source.owns(request) && !contactSearch->pending && contactSearch->error.empty())
+                for(const auto& c:contactSearch->rows)if(c.id==request.recipient){chosen=&c;break;}
+            const bool friendNow=LLAvatarTracker::instance().isBuddy(resident);
+            if(!contactAllowed(resident) || (request.width==0?!friendNow:!chosen))
+            {reply(request,"This resident is unavailable or starting an IM is blocked by restrictions.");return;}
+            const auto name=chosen?chosen->display:contactFor(resident).display;
+            const auto sessionID=gIMMgr->addSession(name,IM_NOTHING_SPECIAL,resident);
+            auto* im=LLIMModel::instance().findIMSession(sessionID);
+            if(!im){reply(request,"The native conversation could not be opened.");return;}
+            response.event=0;response.cursor=events.latest();response.eventType=EventType::Conversation;response.topic=Topic::Private;
+            response.conversation=sessionID.asString();response.recipient=resident.asString();response.title=boundedText(im->mName,255);
+            response.unread=static_cast<std::uint32_t>((std::max)(0,im->mNumUnread));
+        }
+        else
+        {
+            std::vector<Contact>* rows=&friendSnapshot;
+            if(request.width==0)
+            {
+                if(!request.cursor)
+                {
+                    friendToken=request.event;friendSnapshot.clear();LLAvatarTracker::buddy_map_t buddies;LLAvatarTracker::instance().copyBuddyList(buddies);
+                    for(bool online:{true,false})for(const auto& buddy:buddies){if(friendSnapshot.size()>=MaxContacts)break;if(buddy.first!=gAgentID && LLAvatarTracker::instance().isBuddyOnline(buddy.first)==online)friendSnapshot.push_back(contactFor(buddy.first));}
+                    friendSnapshot=sortedContacts(std::move(friendSnapshot));
+                }
+                if(friendToken!=request.event){reply(request,"Friend refresh expired; refresh again.");return;}
+            }
+            else
+            {
+                if(!contactSearch || contactSearch->token!=request.event || !contactSearch->source.owns(request) || contactSearch->login!=gAgent.getSessionID())
+                {reply(request,"Search changed or expired. Search again.");return;}
+                if(!contactSearch->error.empty()){reply(request,contactSearch->error);return;}
+                if(contactSearch->pending){response.height=1;response.text="FSC1\n";if(!pipe.send(response)){detach();pipe.close();}return;}
+                rows=&contactSearch->rows;
+                for(auto& c:*rows){const LLUUID resident(c.id);c.allowed=contactAllowed(resident);c.online=LLAvatarTracker::instance().isBuddyOnline(resident);}
+            }
+            for(auto& c:*rows)c.allowed=contactAllowed(LLUUID(c.id));
+            if(request.cursor>rows->size()){reply(request,"Invalid contact page.");return;}
+            std::size_t next=0;response.text=contactPage(*rows,static_cast<std::size_t>(request.cursor),next);
+            response.cursor=next;response.unread=static_cast<std::uint32_t>(rows->size());
+        }
+        if(!pipe.send(response)){detach();pipe.close();}
+    }
     void command(const Message& request)
     {
         if (request.worker != id || request.kind == Kind::Status || request.sequence <= sequence)
@@ -679,16 +885,90 @@ struct Worker : LLIMSessionObserver
         sequence = request.sequence; lastCommand = GetTickCount64();
         if (request.kind != Kind::Poll && request.generation != generation)
         { reply(request, "Session changed; action was not applied."); return; }
+        if(request.kind==Kind::Recover){recoverControl(request);return;}
+        if(controlPaused)
+        {reply(request,request.kind==Kind::Poll?"":"Control paused; recover before sending actions.");return;}
         switch (request.kind)
         {
+        case Kind::AssistantPause:
+        {
+            // Runtime transport ownership belongs to this authenticated worker,
+            // including its login screen. No account data/action is accessed.
+            if(request.width>1){reply(request,"Invalid assistant pause choice.");break;}
+            assistantHold=request.width!=0;
+            auto& bridge=FSEventAPIBridge::instance();
+            bridge.applyEnabled(!assistantHold && gSavedSettings.getBOOL("EnableLocalEventAPIBridge"));
+            pipe.send(assistantStatus(request));break;
+        }
+        case Kind::AssistantInfo:
+        case Kind::AssistantConfigure:
+        case Kind::AssistantReview:
+        {
+            if((request.kind==Kind::AssistantInfo && request.unread>2) || !ready() || request.account!=gAgentID.asString() || request.grid!=loginGrid)
+            {reply(request,"Local Assistant login changed or is unavailable.");break;}
+            auto& bridge=FSEventAPIBridge::instance();
+            if(request.kind==Kind::AssistantConfigure)
+            {
+                auto control=gSavedSettings.getControl("EnableLocalEventAPIBridge");
+                if(request.width>1 || !control || FSPanelPreferenceLocalAssistant::sessionScoped() || LLFloaterReg::instanceVisible("preferences") ||
+                    request.cursor!=static_cast<std::uint64_t>(FSEventAPIBridge::getPolicyGeneration()) || request.height!=(control->getValue().asBoolean()?1u:0u))
+                {reply(request,"Local Assistant settings changed or have an open/session-only draft. Use native Preferences.");break;}
+                control->setValue(LLSD(request.width!=0),true);
+                const auto file=gSavedSettings.getString("ClientSettingsFile");
+                // saveToFile returns a control count: a valid empty/default-only
+                // file also returns zero. Verify the persisted enable choice.
+                if(!file.empty())gSavedSettings.saveToFile(file,true);
+                std::string bytes;LLSD persisted;bool saved=false;
+                if(!file.empty() && readProfileFile(std::filesystem::path(ll_convert_string_to_wide(file,file.size(),CP_UTF8)),bytes))
+                {
+                    std::istringstream input(bytes);
+                    if(LLSDSerialize::fromXML(persisted,input,false)>0 && (persisted.isMap() || persisted.isUndefined()))
+                    {
+                        const LLSD stored=persisted.has("EnableLocalEventAPIBridge")?persisted["EnableLocalEventAPIBridge"]["Value"]:control->getDefault();
+                        saved=stored.asBoolean()==control->getSaveValue().asBoolean();
+                    }
+                }
+                if(!saved){reply(request,"Local Assistant choice applied but could not be saved. Check native Preferences.");break;}
+            }
+            else if(request.kind==Kind::AssistantReview)
+            {
+                if(request.unread>1 || !FSSessionWorker::assistantActiveAllowed())
+                {reply(request,"Activate this character and close conflicting dialogs before reviewing.");break;}
+                SetForegroundWindow(window);
+                if(request.unread)LLFloaterReg::showInstance("preferences",llsd::map("tab","local_assistant"),true);
+                else bridge.reviewPending();
+            }
+            if(request.kind==Kind::AssistantInfo && request.unread==0 && !request.title.empty())assistantProfile=boundedText(request.title,128);
+            bridge.refreshSession();
+            if(request.kind==Kind::AssistantInfo && request.unread==2)
+            {
+                if(assistantCheck){reply(request,"A connection check is already running.");break;}
+                LLProcess::Params params;params.executable=FSPanelPreferenceLocalAssistant::installedSidecar();
+                params.args.add("--diagnose").add("--viewer-pid").add(std::to_string(LLApp::getPid()))
+                    .add("--discovery").add(bridge.discoveryDirectory()).add("--viewer-session").add(bridge.sessionReference());
+                params.files.add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe")).add(LLProcess::FileParam("pipe"));
+                params.attached=true;params.autokill=true;params.desc="Hosted Local Assistant connection check";
+                assistantCheckRequest=request;assistantCheckOutput.clear();assistantCheckSession=bridge.sessionReference();assistantCheckTimer.reset();
+                assistantCheck=LLProcess::create(params);
+                if(!assistantCheck)reply(request,"Unable to start the matching MCP sidecar.");
+                break;
+            }
+            auto response=assistantStatus(request);
+            if(request.kind==Kind::AssistantInfo && request.unread==1)
+            {
+                std::string error;response.text=FSPanelPreferenceLocalAssistant::hostConfiguration(request.text,error);
+                if(!error.empty() || response.text.size()>3071){reply(request,error.empty()?"MCP configuration is too large":error);break;}
+            }
+            pipe.send(response);break;
+        }
         case Kind::Poll: reply(request); break;
         case Kind::SetMode:
         {
             if (request.unread > 2 || (request.unread && (request.width < 250 || request.width > 2000 || request.height < 16 || request.height > 96)) || request.account != gAgentID.asString() || request.grid != loginGrid)
             { reply(request, "Invalid transition policy or changed account."); break; }
             const HWND popup = window ? GetLastActivePopup(window) : nullptr;
-            if ((request.mode == Mode::Active && !ready()) || !readyApplied || gFocusMgr.focusLocked() ||
-                (popup && popup != window && IsWindowVisible(popup)) || LLFloaterReg::instanceVisible("preferences"))
+            if (sessionModeBlocked(request.mode,ready(),readyApplied,gFocusMgr.focusLocked(),
+                popup && popup != window && IsWindowVisible(popup),LLFloaterReg::instanceVisible("preferences")))
             { reply(request, "Close Preferences or the modal dialog, or wait for login before switching."); break; }
             const bool previousGrant = inputGranted;
             releaseInput();
@@ -747,6 +1027,9 @@ struct Worker : LLIMSessionObserver
             else reply(request, unembed() ? "" : "Unable to restore the separate window.");
             break;
         case Kind::Focus: focusHostedClient(); reply(request); break;
+        case Kind::Contacts:
+        case Kind::ContactSearch:
+        case Kind::OpenIM: contactCommand(request); break;
         case Kind::CloseChat:
         case Kind::Events:
         case Kind::SendChat:
@@ -858,6 +1141,7 @@ bool FSSessionWorker::initialize()
     const auto lease = env(L"FOLDERSTORM_SESSION_LOCK");
     const auto frames = env(L"FOLDERSTORM_SESSION_FRAMES");
     const auto frameMutex = env(L"FOLDERSTORM_SESSION_FRAME_MUTEX");
+    const auto assistantPause=env(L"FOLDERSTORM_SESSION_ASSISTANT_PAUSE");
     const auto settingsSource = env(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE",32768);
     const auto profileSource = env(L"FOLDERSTORM_SESSION_PROFILE_SOURCE",32768);
     const auto toolbarSource = env(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE",32768);
@@ -868,18 +1152,20 @@ bool FSSessionWorker::initialize()
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_LOCK", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAMES", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_FRAME_MUTEX", nullptr);
+    SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_ASSISTANT_PAUSE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_SETTINGS_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_PROFILE_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_TOOLBARS_SOURCE", nullptr);
     SetEnvironmentVariableW(L"FOLDERSTORM_SESSION_COPY_GROUPS", nullptr);
-    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty() && profileSource.empty() && toolbarSource.empty() && copyGroups.empty() && !explicitCopy) return true;
+    if (inherited.empty() && identity.empty() && lease.empty() && frames.empty() && frameMutex.empty() && settingsSource.empty() && profileSource.empty() && toolbarSource.empty() && copyGroups.empty() && !explicitCopy && assistantPause.empty()) return true;
     if (inherited.empty() || identity.size() != 32 || lease.empty() || frames.empty() || frameMutex.empty()) return false;
     if ((explicitCopy && (copyGroups.empty() || profileSource.empty() || !settingsSource.empty())) ||
         (!profileSource.empty() && !explicitCopy) ||
         (!settingsSource.empty() && !std::filesystem::path(settingsSource).is_absolute()) ||
         (!profileSource.empty() && !std::filesystem::path(profileSource).is_absolute()) ||
         (!toolbarSource.empty() && !std::filesystem::path(toolbarSource).is_absolute())) return false;
-    auto value = std::make_unique<Worker>();
+    if(!assistantPause.empty() && assistantPause!=L"0" && assistantPause!=L"1")return false;
+    auto value = std::make_unique<Worker>();value->assistantHold=assistantPause==L"1";
     for (std::size_t i = 0; i < 16; ++i)
     {
         const auto digit = [](wchar_t c) -> int { return c >= L'0' && c <= L'9' ? c - L'0' : c >= L'a' && c <= L'f' ? c - L'a' + 10 : -1; };
@@ -915,6 +1201,23 @@ bool FSSessionWorker::initialize()
     return true;
 }
 bool FSSessionWorker::managed() { return worker && !worker->detached; }
+LLSD FSSessionWorker::assistantIdentity()
+{
+    if(!worker)return LLSD::emptyMap();
+    if(worker->detached)return llsd::map("profile",worker->assistantProfile);
+    LLUUID workerId;
+    std::copy(worker->id.begin(), worker->id.end(), workerId.mData);
+    return llsd::map("worker",workerId.asString(),"generation",std::to_string(worker->generation),
+        "profile",worker->assistantProfile,"name",worker->loginName,"grid",worker->loginGrid);
+}
+bool FSSessionWorker::assistantPaused() {return managed() && worker->assistantHold;}
+bool FSSessionWorker::assistantActiveAllowed(bool allowTeleport)
+{
+    if(!managed())return true;
+    const HWND popup=worker->window?GetLastActivePopup(worker->window):nullptr;
+    return !(popup && popup!=worker->window && IsWindowVisible(popup)) && worker->ready() && worker->inputGranted && worker->mode==Mode::Active && !worker->promoting && !worker->demoting &&
+        !worker->transition.active() && (allowTeleport || !gTeleportDisplay) && !gFocusMgr.focusLocked() && !LLFloaterReg::instanceVisible("preferences");
+}
 void FSSessionWorker::importProfileSettings()
 {
     if (!managed()) return;
@@ -1177,6 +1480,8 @@ void FSSessionWorker::tick()
     if (!managed()) return;
     auto& value = *worker;
     ++value.maintenance;
+    if(connectionOverdue(GetTickCount64(),value.lastCommand,ControlSilenceMs))value.pauseControl();
+    value.pollAssistantCheck();
     if (gViewerWindow && gViewerWindow->getWindow()) value.window = static_cast<HWND>(gViewerWindow->getWindow()->getPlatformWindow());
     if (value.session != gAgentSessionID)
     {
@@ -1185,6 +1490,7 @@ void FSSessionWorker::tick()
         value.releaseInput(); value.unembed();
         if (wasReady && value.window) { EnableWindow(value.window, FALSE); ShowWindow(value.window, SW_HIDE); }
         value.session = gAgentSessionID; ++value.generation;
+        value.contactSearch.reset();value.friendSnapshot.clear();value.friendToken=0;
         value.events.resetSession(); value.attention.clear(); value.shortcuts = value.shellShortcuts = false;
         value.previewCap = {}; value.previewRate = 0; value.previewError.clear();
         value.preview.publish(value.status(Message{}), nullptr, 0);
@@ -1195,7 +1501,7 @@ void FSSessionWorker::tick()
     }
     if (gDisconnected && !value.recoveryShown)
     {
-        value.recoveryShown = true;
+        value.recoveryShown = true;value.contactSearch.reset();value.friendSnapshot.clear();value.friendToken=0;
         value.transition.cancel();
         value.releaseInput(); value.unembed(); value.mode = Mode::Warm;
         if (value.window) { EnableWindow(value.window, TRUE); ShowWindow(value.window, SW_SHOWNOACTIVATE); }
@@ -1260,7 +1566,7 @@ void FSSessionWorker::tick()
     {
         value.connectChat();
         const bool blocked = !value.sharingAllowed();
-        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.chatBlocked = blocked; }
+        if (blocked != value.chatBlocked) { value.events.clear(); value.attention.clear(); value.contactSearch.reset(); value.friendSnapshot.clear(); value.friendToken=0; value.chatBlocked = blocked; }
         if (blocked && value.previewRate)
         {
             value.previewError = "Preview unavailable while names or locations are restricted.";
@@ -1268,9 +1574,14 @@ void FSSessionWorker::tick()
         }
     }
     Message request;
+    if(value.recoveryReplyPending && !value.pipe.writing())
+    {
+        value.recoveryReplyPending=false;
+        value.reply(value.recoveryReply,"Switch paused while the controller was unresponsive.");
+    }
     // Visual-only cancellation has no reply and names the exact pending mode
     // request. It cannot acquire input or cancel a later switch.
-    if (!value.pipe.writing() && value.pipe.receive(request))
+    if (!value.recoveryReplyPending && !value.pipe.writing() && value.pipe.receive(request))
     {
         if (request.kind == Kind::CancelTransition)
         {
@@ -1285,8 +1596,10 @@ void FSSessionWorker::tick()
         else if (!value.promoting && !value.demoting) value.command(request);
         else { value.detach(); value.pipe.close(); } // Single-response contract violated.
     }
-    if (!value.pipe.alive() || GetTickCount64() - value.lastCommand > 15000)
+    if (!value.pipe.alive())
     {
+        LL_WARNS("SessionConnection") << "Control pipe closed; returning to separate viewer; sequence "
+            << value.sequence << "; generation " << value.generation << LL_ENDL;
         if (!value.detach()) { value.releaseInput(); value.mode = Mode::Warm; value.promoting = value.demoting = false; value.transition.cancel(); }
         value.pipe.close();
     }
@@ -1411,6 +1724,12 @@ bool FSSessionWorker::inputAllowed()
     return !managed() || gDisconnected || !worker->readyApplied || (worker->mode == Mode::Active && worker->inputGranted && !worker->promoting && !worker->demoting);
 }
 bool FSSessionWorker::voiceAllowed() { return !managed() || worker->voiceAllowed(); }
+bool FSSessionWorker::nativeChatReadAllowed()
+{
+    if(!managed())return true;
+    return fs_session::nativeChatReadAllowed(true,worker->ready(),worker->inputGranted && worker->mode==Mode::Active,
+        gFocusMgr.getAppHasFocus(),worker->window && IsWindowVisible(worker->window) && !IsIconic(worker->window),worker->promoting || worker->demoting);
+}
 bool FSSessionWorker::backgroundAudioMuted()
 {
     return managed() && worker->readyApplied && (worker->mode != Mode::Active || worker->promoting || worker->demoting) && worker->muteBackground;
@@ -1530,6 +1849,7 @@ void FSSessionWorker::shutdown()
         worker->inputGranted = false;
         if (worker->window) RemovePropW(worker->window, InputLeaseProperty);
         if (worker->window) RemovePropW(worker->window, FocusLeaseProperty);
+        worker->contactSearch.reset();worker->friendSnapshot.clear();
         worker->disconnectSessionObserver();worker->chatConnection.disconnect();worker->notificationConnection.disconnect();
         worker->pipe.close(); worker->detached = true;
     }
@@ -1539,6 +1859,10 @@ void FSSessionWorker::shutdown()
 #else
 bool FSSessionWorker::initialize() { return true; }
 bool FSSessionWorker::managed() { return false; }
+LLSD FSSessionWorker::assistantIdentity() {return LLSD::emptyMap();}
+bool FSSessionWorker::assistantPaused() {return false;}
+bool FSSessionWorker::assistantActiveAllowed(bool) {return true;}
+bool FSSessionWorker::nativeChatReadAllowed() { return true; }
 void FSSessionWorker::configure() {}
 void FSSessionWorker::importProfileSettings() {}
 void FSSessionWorker::importProfileAccountSettings() {}

@@ -63,6 +63,15 @@ public:
         mHoverGlowStrength = 0.f;
         mDropShadowedText = false;
     }
+    void setSound(bool sound)
+    {
+        if (sound == mSound) return;
+        mSound = sound;
+        const LLColor4 tint = mCustomColor ? mOutline : mUnselectedLabelColor.get();
+        setImageOverlay(std::string(sound ? "Inv_Sound" : ""), LLFontGL::LEFT, tint);
+        mImageOverlaySelectedColor = mCustomColor ? mOutline : mSelectedLabelColor.get();
+        mImageOverlayDisabledColor = mCustomColor ? mOutline : mDisabledLabelColor.get();
+    }
     void draw() override
     {
         LLButton::draw();
@@ -76,13 +85,29 @@ public:
         }
     }
 private:
+    bool mSound = false;
     bool mCustomColor;
     LLColor4 mOutline;
 };
-LLSD pickerKey(const std::string& board, const LLSD& expected)
-{ LLSD key; key["board"] = board; key["expected"] = expected; return key; }
+LLSD pickerKey(FSFloaterGestureBoard* owner, const LLSD& expected)
+{
+    LLSD key; key["board"] = owner->selectedBoard(); key["expected"] = expected;
+    key["window"] = owner->getKey(); key["owner"] = owner->windowID(); return key;
+}
 bool sameSession(const LLUUID& account, const LLUUID& session)
 { return account == gAgent.getID() && session == gAgent.getSessionID() && FSGestureBoardController::instance().available(); }
+FSFloaterGestureBoard* ownerWindow(const LLSD& key)
+{
+    auto* owner = LLFloaterReg::findTypedInstance<FSFloaterGestureBoard>("gesture_board", key["window"]);
+    return owner && owner->windowID() == key["owner"].asUUID() && owner->selectedBoard() == key["board"].asString() && owner->current() ? owner : nullptr;
+}
+constexpr size_t MAX_BOARD_WINDOWS = 16;
+size_t windowCount()
+{
+    size_t count = 0;
+    for (auto* window : LLFloaterReg::getFloaterList("gesture_board")) if (!window->isDead()) ++count;
+    return count;
+}
 }
 class FSGestureBoardTile final : public FSGestureBoardButton
 {
@@ -98,12 +123,14 @@ public:
     {
         auto& controller = FSGestureBoardController::instance();
         LLUUID item, asset; std::string name, reason;
-        if (!controller.resolve(LLUUID(tile.item), item, asset, name, reason)) name = owner() ? owner()->getString("missing_tile") : "";
+        LLAssetType::EType type = LLAssetType::AT_NONE;
+        if (!controller.resolve(LLUUID(tile.item), item, asset, name, reason, &type)) name = owner() ? owner()->getString("missing_tile") : "";
+        setSound(type == LLAssetType::AT_SOUND);
         const std::string label = tile.label.empty() ? name : tile.label;
         setLabel(LLStringExplicit(label));
         const auto state = controller.tileState(tile);
         const std::string state_text = owner() ? owner()->getString("tile_" + state) : "";
-        setToolTip(label + "\n" + name + "\n" + make_inventory_path(LLUUID(tile.item)) +
+        setToolTip(label + "\n" + name + (type == LLAssetType::AT_SOUND && owner() ? "\n" + owner()->getString("sound_item") : "") + "\n" + make_inventory_path(LLUUID(tile.item)) +
                    (state_text.empty() ? "" : "\n" + state_text));
         setToggleState(state == "playing");
     }
@@ -139,37 +166,47 @@ private:
     bool mDragging = false;
 };
 FSFloaterGestureBoard::~FSFloaterGestureBoard()
-{ FSGestureBoardController::instance().cancelPending(); if (auto* menu = mMenu.get()) menu->die(); }
+{ closeEditors(); if (auto* menu = mMenu.get()) menu->die(); }
 bool FSFloaterGestureBoard::postBuild()
 {
     getChild<LLButton>("options")->setCommitCallback([this](LLUICtrl*, const LLSD&) { optionsMenu(); });
     getChild<LLButton>("previous_page")->setCommitCallback([this](LLUICtrl*, const LLSD&) { changePage(-1); });
     getChild<LLButton>("next_page")->setCommitCallback([this](LLUICtrl*, const LLSD&) { changePage(1); });
-    getChild<LLButton>("add_gestures")->setCommitCallback([this](LLUICtrl*, const LLSD&) { addGestures(); });
-    getChild<LLButton>("stop")->setCommitCallback([this](LLUICtrl*, const LLSD&) { if (current()) FSGestureBoardController::instance().stopBoard(); });
+    getChild<LLButton>("add_items")->setCommitCallback([this](LLUICtrl*, const LLSD&) { addItems(); });
+    getChild<LLButton>("stop")->setCommitCallback([this](LLUICtrl*, const LLSD&) { if (current()) FSGestureBoardController::instance().stopBoard(mBoard); });
     getChild<LLComboBox>("boards")->setCommitCallback([this](LLUICtrl*, const LLSD&)
     {
         if (!current()) return;
-        closeEditors(); FSGestureBoardController::instance().selectBoard(getChild<LLComboBox>("boards")->getValue().asString()); refresh(true);
+        selectBoard(getChild<LLComboBox>("boards")->getValue().asString());
     });
     mBuilt = true; refresh(true); return LLFloater::postBuild();
 }
-void FSFloaterGestureBoard::onOpen(const LLSD&)
+void FSFloaterGestureBoard::onOpen(const LLSD& key)
 {
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
+    if (windowCount() > MAX_BOARD_WINDOWS) { controller.setStatus("windows_full"); closeFloater(false); return; }
     if (controller.valid() && controller.data().boards.empty() && controller.snapshot().size() == 0)
     {
         Collection data; Board board; board.id = LLUUID::generateNewID().asString(); board.name = getString("default_board");
         data.selected = board.id; data.boards.push_back(board);
         controller.commit(data, controller.snapshot(), gAgent.getID(), gAgent.getSessionID());
     }
+    if (key.has("board") && findBoard(controller.data(), key["board"].asString())) mBoard = key["board"].asString();
     refresh(true);
+}
+void FSFloaterGestureBoard::selectBoard(const std::string& id)
+{
+    auto& controller = FSGestureBoardController::instance(); controller.refresh();
+    if (!current() || !findBoard(controller.data(), id)) return;
+    if (mBoard != id) closeEditors();
+    mBoard = id; controller.selectBoard(id); refresh(true);
 }
 void FSFloaterGestureBoard::closeEditors()
 {
-    FSGestureBoardController::instance().cancelPending();
+    FSGestureBoardController::instance().cancelPendingForWindow(mWindowID);
     for (const char* name : {"gesture_board_picker", "gesture_board_editor"})
-        if (auto* floater = LLFloaterReg::findInstance(name)) floater->closeFloater(false);
+        if (auto* floater = LLFloaterReg::findInstance(name))
+            if (floater->getKey()["owner"].asUUID() == mWindowID) floater->closeFloater(false);
     if (auto* menu = mMenu.get()) menu->hide();
 }
 void FSFloaterGestureBoard::onClose(bool) { closeEditors(); }
@@ -189,22 +226,30 @@ void FSFloaterGestureBoard::refresh(bool force)
 {
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
     if (mAccount != gAgent.getID() || mSession != gAgent.getSessionID())
-    { closeEditors(); mFocusReference.setNull(); mAccount = gAgent.getID(); mSession = gAgent.getSessionID(); force = true; }
-    if (force || mDisplayed != controller.snapshot())
+    { closeEditors(); mBoard.clear(); mFocusReference.setNull(); mAccount = gAgent.getID(); mSession = gAgent.getSessionID(); force = true; }
+    if (!findBoard(controller.data(), mBoard))
+    {
+        const auto& data = controller.data();
+        const auto next = findBoard(data, data.selected) ? data.selected : data.boards.empty() ? "" : data.boards.front().id;
+        if (next != mBoard) { closeEditors(); mBoard = next; force = true; }
+    }
+    if (force || !controller.matchesSnapshot(mDisplayed))
     {
         mDisplayed = controller.snapshot();
         auto* boards = getChild<LLComboBox>("boards"); boards->removeall();
         for (const auto& board : controller.data().boards) boards->add(board.name, LLSD(board.id));
-        boards->setValue(controller.data().selected); rebuild();
+        boards->setValue(mBoard); rebuild();
     }
     const bool ready = controller.valid();
-    const auto* board = findBoard(controller.data(), controller.data().selected);
-    for (const char* name : {"add_gestures", "stop"}) getChild<LLButton>(name)->setEnabled(ready && board);
+    const auto* board = findBoard(controller.data(), mBoard);
+    LLStringUtil::format_map_t title; title["NAME"] = board ? board->name : getString("default_board");
+    setTitle(getString("board_title", title));
+    for (const char* name : {"add_items", "stop"}) getChild<LLButton>(name)->setEnabled(ready && board);
     getChild<LLButton>("options")->setEnabled(ready);
     getChild<LLComboBox>("boards")->setEnabled(ready && board);
     getChild<LLTextBox>("empty")->setVisible(!board || board->tiles.empty());
     const std::string status = ready ? controller.status() : controller.available() ? "invalid_data" : "logged_out";
-    const bool warning = status != "ready" && status != "saved" && status != "playing" && status != "loading" &&
+    const bool warning = status != "ready" && status != "saved" && status != "playing" && status != "sound_played" && status != "loading" &&
         status != "stopped" && status != "cancelled";
     auto* indicator = getChild<LLTextBox>("status"); indicator->setVisible(warning);
     indicator->setToolTip(getString(status));
@@ -224,8 +269,8 @@ void FSFloaterGestureBoard::rebuild()
     mTiles.clear(); grid->deleteAllChildren();
     mGridWidth = getRect().getWidth(); mGridHeight = getRect().getHeight();
     const auto& data = FSGestureBoardController::instance().data();
-    const auto* board = findBoard(data, data.selected);
-    if (data.selected != mDisplayedBoard) { mPage = 0; mDisplayedBoard = data.selected; }
+    const auto* board = findBoard(data, mBoard);
+    if (mBoard != mDisplayedBoard) { mPage = 0; mDisplayedBoard = mBoard; }
     // LLFloater adds legacy header stretch after building XML children without
     // translating them. Lay out every surface from the same final dimensions;
     // mixing those XML positions with runtime tile positions covers the strip.
@@ -251,7 +296,7 @@ void FSFloaterGestureBoard::rebuild()
     { view->setShape(LLRect(rect.x, parent_height - rect.y, rect.x + rect.width, parent_height - rect.y - rect.height)); };
     position_view(getChild<LLComboBox>("boards"), frame.boards, mGridHeight);
     position_view(getChild<LLTextBox>("status"), frame.status, mGridHeight);
-    position_view(getChild<LLButton>("add_gestures"), frame.add, mGridHeight);
+    position_view(getChild<LLButton>("add_items"), frame.add, mGridHeight);
     position_view(getChild<LLButton>("stop"), frame.stop, mGridHeight);
     position_view(getChild<LLButton>("options"), frame.options, mGridHeight);
     position_view(grid, frame.grid, mGridHeight);
@@ -286,15 +331,15 @@ void FSFloaterGestureBoard::optionsMenu()
     if (!current() || !gMenuHolder) return;
     if (auto* prior = mMenu.get()) prior->die();
     auto& controller = FSGestureBoardController::instance();
-    const auto id = controller.data().selected; const LLSD expected = controller.snapshot();
+    const auto id = mBoard; const LLSD expected = controller.snapshot();
     const auto handle = getHandle(); const auto account = mAccount, session = mSession;
     const auto* board = findBoard(controller.data(), id);
     LLContextMenu::Params p; p.name = "gesture_board_options";
     auto* menu = LLUICtrlFactory::create<LLContextMenu>(p); gMenuHolder->addChild(menu); mMenu = menu->getHandle();
-    for (const char* action : {"new", "rename", "duplicate", "delete"})
+    for (const char* action : {"window", "new", "rename", "duplicate", "delete"})
     {
         LLMenuItemCallGL::Params item; item.name = action; item.label = getString(std::string("board_") + action);
-        item.enabled = std::string(action) == "new" ? controller.data().boards.size() < static_cast<size_t>(MAX_BOARDS) : board != nullptr;
+        item.enabled = std::string(action) == "window" ? windowCount() < MAX_BOARD_WINDOWS : std::string(action) == "new" ? controller.data().boards.size() < static_cast<size_t>(MAX_BOARDS) : board != nullptr;
         item.on_click.function([handle, id, expected, action, account, session](LLUICtrl*, const LLSD&)
         { if (!sameSession(account, session)) return; if (auto* self = dynamic_cast<FSFloaterGestureBoard*>(handle.get())) self->boardAction(action, id, expected); });
         menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
@@ -310,8 +355,14 @@ void FSFloaterGestureBoard::boardAction(const std::string& action, const std::st
 {
     if (!current()) return;
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
-    if (controller.snapshot() != expected || controller.data().selected != id) { controller.setStatus("changed"); return; }
-    if (action == "compact")
+    if (!controller.matchesSnapshot(expected) || mBoard != id) { controller.setStatus("changed"); return; }
+    if (action == "window")
+    {
+        if (windowCount() >= MAX_BOARD_WINDOWS) { controller.setStatus("windows_full"); return; }
+        LLSD key; key["window"] = LLUUID::generateNewID(); key["board"] = mBoard;
+        LLFloaterReg::showInstance("gesture_board", key);
+    }
+    else if (action == "compact")
     {
         auto data = controller.data(); auto* board = findBoard(data, id); if (!board) return;
         board->compact = !board->compact; controller.commit(data, expected, mAccount, mSession);
@@ -322,31 +373,33 @@ void FSFloaterGestureBoard::boardAction(const std::string& action, const std::st
 void FSFloaterGestureBoard::playTile(const std::string& tile)
 {
     if (!current()) return;
-    auto& controller = FSGestureBoardController::instance(); controller.play(controller.data().selected, tile);
+    auto& controller = FSGestureBoardController::instance(); controller.play(mBoard, tile, mWindowID);
 }
-void FSFloaterGestureBoard::addGestures()
+void FSFloaterGestureBoard::addItems()
 {
     if (!current()) return;
     closeEditors(); auto& controller = FSGestureBoardController::instance();
-    LLFloaterReg::showInstance("gesture_board_picker", pickerKey(controller.data().selected, controller.snapshot()));
+    LLFloaterReg::showInstance("gesture_board_picker", pickerKey(this, controller.snapshot()));
 }
 void FSFloaterGestureBoard::editBoard(const std::string& mode)
 {
     if (!current()) return;
     closeEditors(); auto& controller = FSGestureBoardController::instance();
-    auto key = pickerKey(controller.data().selected, controller.snapshot()); key["mode"] = mode;
+    auto key = pickerKey(this, controller.snapshot()); key["mode"] = mode;
     LLFloaterReg::showInstance("gesture_board_editor", key);
 }
 void FSFloaterGestureBoard::deleteBoard()
 {
     if (!current()) return;
     closeEditors(); auto& controller = FSGestureBoardController::instance();
-    const auto* board = findBoard(controller.data(), controller.data().selected); if (!board) return;
+    const auto* board = findBoard(controller.data(), mBoard); if (!board) return;
     const auto id = board->id; const LLSD expected = controller.snapshot(); const auto account = mAccount, session = mSession;
-    LLSD args; args["NAME"] = board->name;
-    LLNotificationsUtil::add("ConfirmGestureBoardDelete", args, LLSD(), [id, expected, account, session](const LLSD& notification, const LLSD& response)
+    LLSD args; args["NAME"] = board->name; const auto handle = getHandle();
+    LLNotificationsUtil::add("ConfirmGestureBoardDelete", args, LLSD(), [id, expected, account, session, handle](const LLSD& notification, const LLSD& response)
     {
-        if (LLNotificationsUtil::getSelectedOption(notification, response) != 0 || !sameSession(account, session)) return false;
+        auto* owner = dynamic_cast<FSFloaterGestureBoard*>(handle.get());
+        if (LLNotificationsUtil::getSelectedOption(notification, response) != 0 || !sameSession(account, session) ||
+            !owner || !owner->current() || owner->selectedBoard() != id) return false;
         auto& controller = FSGestureBoardController::instance(); controller.refresh(); auto data = controller.data();
         data.boards.erase(std::remove_if(data.boards.begin(), data.boards.end(), [&](const Board& board) { return board.id == id; }), data.boards.end());
         if (data.selected == id) data.selected = data.boards.empty() ? "" : data.boards.front().id;
@@ -358,7 +411,7 @@ void FSFloaterGestureBoard::tileMenu(const std::string& tile, LLView* view, S32 
     if (!current() || !gMenuHolder) return;
     if (auto* prior = mMenu.get()) prior->die();
     auto& controller = FSGestureBoardController::instance();
-    const auto board = controller.data().selected; const LLSD expected = controller.snapshot(); const auto handle = getHandle(); const auto account = mAccount, session = mSession;
+    const auto board = mBoard; const LLSD expected = controller.snapshot(); const auto handle = getHandle(); const auto account = mAccount, session = mSession;
     LLContextMenu::Params p; p.name = "gesture_board_tile_menu";
     auto* menu = LLUICtrlFactory::create<LLContextMenu>(p); gMenuHolder->addChild(menu); mMenu = menu->getHandle();
     for (const char* action : {"edit", "replace", "up", "down", "remove"})
@@ -374,10 +427,10 @@ void FSFloaterGestureBoard::tileAction(const std::string& action, const std::str
 {
     if (!current()) return;
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
-    if (controller.snapshot() != expected || controller.data().selected != id) { controller.setStatus("changed"); return; }
+    if (!controller.matchesSnapshot(expected) || mBoard != id) { controller.setStatus("changed"); return; }
     if (action == "edit" || action == "replace")
     {
-        closeEditors(); auto key = pickerKey(id, expected); key["mode"] = "tile"; key["tile"] = tile_id;
+        closeEditors(); auto key = pickerKey(this, expected); key["mode"] = "tile"; key["tile"] = tile_id;
         key["replace"] = action == "replace"; LLFloaterReg::showInstance("gesture_board_editor", key); return;
     }
     auto data = controller.data(); auto* board = findBoard(data, id); if (!board) return;
@@ -398,7 +451,7 @@ void FSFloaterGestureBoard::dragTile(const std::string& id, S32 sx, S32 sy, bool
         if (!finish) view->setToggleState(target);
         if (finish && target && view->id() != id)
         {
-            auto data = controller.data(); auto* board = findBoard(data, data.selected); if (!board) return;
+            auto data = controller.data(); auto* board = findBoard(data, mBoard); if (!board) return;
             const auto it = std::find_if(board->tiles.begin(), board->tiles.end(), [&](const Tile& tile) { return tile.id == view->id(); });
             if (it != board->tiles.end() && moveTile(*board, id, static_cast<int>(it - board->tiles.begin()))) controller.commit(data, controller.snapshot(), mAccount, mSession);
             return;
@@ -412,16 +465,16 @@ bool FSFloaterGestureBoard::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop
     *accept = ACCEPT_NO;
     auto& controller = FSGestureBoardController::instance();
     const auto source = LLToolDragAndDrop::getInstance()->getSource();
-    if (!pointInView(x, y) || !current() || !findBoard(controller.data(), controller.data().selected) ||
+    if (!pointInView(x, y) || !current() || !findBoard(controller.data(), mBoard) ||
         (source != LLToolDragAndDrop::SOURCE_AGENT && source != LLToolDragAndDrop::SOURCE_LIBRARY) ||
-        (type != DAD_GESTURE && type != DAD_LINK) || !cargo) return true;
+        (type != DAD_GESTURE && type != DAD_SOUND && type != DAD_LINK) || !cargo) return true;
     const auto* reference = static_cast<LLInventoryItem*>(cargo);
     LLUUID item, asset; std::string name, reason;
     if (!controller.resolve(reference->getUUID(), item, asset, name, reason)) { tooltip = getString(reason); return true; }
     *accept = ACCEPT_YES_COPY_MULTI;
     if (drop)
     {
-        if (controller.addItems(controller.data().selected, {reference->getUUID()}, controller.snapshot(), mAccount, mSession)) focusGesture(reference->getUUID());
+        if (controller.addItems(mBoard, {reference->getUUID()}, controller.snapshot(), mAccount, mSession)) focusItem(reference->getUUID());
         else *accept = ACCEPT_NO;
     }
     return true; // Inventory drags add; Replace is an explicit picker action.
@@ -430,7 +483,7 @@ bool FSFloaterGestureBoard::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop
 bool FSFloaterGesturePicker::postBuild()
 {
     auto* panel = getChild<LLInventoryPanel>("inventory");
-    panel->setFilterTypes(1ULL << LLInventoryType::IT_GESTURE);
+    panel->setFilterTypes((1ULL << LLInventoryType::IT_GESTURE) | (1ULL << LLInventoryType::IT_SOUND));
     panel->setShowFolderState(LLInventoryFilter::SHOW_NON_EMPTY_FOLDERS); panel->setSuppressOpenItemAction(true);
     getChild<LLFilterEditor>("search")->setCommitCallback([panel](LLUICtrl*, const LLSD& value) { panel->setFilterSubString(value.asString()); });
     getChild<LLButton>("add")->setCommitCallback([this](LLUICtrl*, const LLSD&) { acceptSelection(); });
@@ -439,22 +492,22 @@ bool FSFloaterGesturePicker::postBuild()
 }
 void FSFloaterGesturePicker::onOpen(const LLSD& key)
 {
-    auto& controller = FSGestureBoardController::instance(); controller.refresh(); controller.cancelPending();
+    auto& controller = FSGestureBoardController::instance(); controller.refresh(); controller.cancelPendingForWindow(key["owner"].asUUID());
     mKey = key; mExpected = key["expected"]; mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
     getChild<LLInventoryPanel>("inventory")->clearSelection();
     getChild<LLTextBox>("status")->setText(getString("picker_help"));
 }
-void FSFloaterGesturePicker::onClose(bool) { FSGestureBoardController::instance().cancelPending(); }
+void FSFloaterGesturePicker::onClose(bool) { FSGestureBoardController::instance().cancelPendingForWindow(mKey["owner"].asUUID()); }
 void FSFloaterGesturePicker::draw()
 {
-    const bool current = sameSession(mAccount, mSession) && FSGestureBoardController::instance().valid();
+    const bool current = sameSession(mAccount, mSession) && ownerWindow(mKey) && FSGestureBoardController::instance().valid();
     getChild<LLButton>("add")->setEnabled(current && gInventory.isInventoryUsable() && !getChild<LLInventoryPanel>("inventory")->getSelectedItems().empty());
     if (!current) { closeFloater(false); return; }
     LLFloater::draw();
 }
 void FSFloaterGesturePicker::acceptSelection()
 {
-    if (!sameSession(mAccount, mSession)) return;
+    if (!sameSession(mAccount, mSession) || !ownerWindow(mKey)) return;
     std::vector<LLUUID> selected;
     for (auto* item : getChild<LLInventoryPanel>("inventory")->getSelectedItems())
         if (const auto* model = dynamic_cast<LLFolderViewModelItemInventory*>(item->getViewModelItem())) selected.push_back(model->getUUID());
@@ -463,12 +516,12 @@ void FSFloaterGesturePicker::acceptSelection()
     {
         if (selected.size() != 1) { getChild<LLTextBox>("status")->setText(getString("select_one")); return; }
         auto* editor = LLFloaterReg::findTypedInstance<FSFloaterGestureTileEditor>("gesture_board_editor");
-        if (editor && editor->replaceGesture(selected.front(), mKey)) closeFloater(false);
+        if (editor && editor->replaceItem(selected.front(), mKey)) closeFloater(false);
         else getChild<LLTextBox>("status")->setText(getString(controller.status()));
     }
     else if (controller.addItems(mKey["board"].asString(), selected, mExpected, mAccount, mSession))
     {
-        if (!selected.empty()) if (auto* board = LLFloaterReg::findTypedInstance<FSFloaterGestureBoard>("gesture_board")) board->focusGesture(selected.front());
+        if (!selected.empty()) if (auto* board = ownerWindow(mKey)) board->focusItem(selected.front());
         closeFloater(false);
     }
     else getChild<LLTextBox>("status")->setText(getString(controller.status()));
@@ -493,7 +546,7 @@ bool FSFloaterGestureTileEditor::postBuild()
 void FSFloaterGestureTileEditor::onOpen(const LLSD& key)
 {
     getChild<LLColorSwatchCtrl>("color")->closeFloaterColorPicker();
-    auto& controller = FSGestureBoardController::instance(); controller.refresh(); controller.cancelPending();
+    auto& controller = FSGestureBoardController::instance(); controller.refresh(); controller.cancelPendingForWindow(key["owner"].asUUID());
     mKey = key; mExpected = key["expected"]; mAccount = gAgent.getID(); mSession = gAgent.getSessionID(); mToken = LLUUID::generateNewID();
     const auto* board = findBoard(controller.data(), key["board"].asString());
     const bool tile_mode = key["mode"].asString() == "tile";
@@ -522,25 +575,27 @@ void FSFloaterGestureTileEditor::onOpen(const LLSD& key)
 }
 void FSFloaterGestureTileEditor::onClose(bool)
 {
-    mToken.setNull(); getChild<LLColorSwatchCtrl>("color")->closeFloaterColorPicker(); FSGestureBoardController::instance().cancelPending();
-    if (auto* picker = LLFloaterReg::findInstance("gesture_board_picker")) picker->closeFloater(false);
+    const auto token = mToken; mToken.setNull(); getChild<LLColorSwatchCtrl>("color")->closeFloaterColorPicker();
+    FSGestureBoardController::instance().cancelPendingForWindow(mKey["owner"].asUUID());
+    if (auto* picker = LLFloaterReg::findInstance("gesture_board_picker"))
+        if (token.notNull() && picker->getKey()["editor_token"].asUUID() == token) picker->closeFloater(false);
 }
 void FSFloaterGestureTileEditor::draw()
 {
-    if (!sameSession(mAccount, mSession)) { closeFloater(false); return; }
+    if (!sameSession(mAccount, mSession) || !ownerWindow(mKey)) { closeFloater(false); return; }
     LLFloater::draw();
 }
 void FSFloaterGestureTileEditor::replace()
 {
-    if (!sameSession(mAccount, mSession) || mTile.id.empty()) return;
-    auto key = pickerKey(mKey["board"].asString(), mExpected); key["tile"] = mTile.id; key["editor_token"] = mToken;
-    FSGestureBoardController::instance().cancelPending(); LLFloaterReg::showInstance("gesture_board_picker", key);
+    if (!sameSession(mAccount, mSession) || !ownerWindow(mKey) || mTile.id.empty()) return;
+    auto key = mKey; key["expected"] = mExpected; key["tile"] = mTile.id; key["editor_token"] = mToken;
+    FSGestureBoardController::instance().cancelPendingForWindow(mKey["owner"].asUUID()); LLFloaterReg::showInstance("gesture_board_picker", key);
 }
-bool FSFloaterGestureTileEditor::replaceGesture(const LLUUID& reference, const LLSD& key)
+bool FSFloaterGestureTileEditor::replaceItem(const LLUUID& reference, const LLSD& key)
 {
     auto& controller = FSGestureBoardController::instance(); controller.refresh();
-    if (!LLView::getVisible() || !sameSession(mAccount, mSession) || mToken.isNull() || key["editor_token"].asUUID() != mToken ||
-        key["tile"].asString() != mTile.id || key["board"] != mKey["board"] || controller.snapshot() != mExpected)
+    if (!LLView::getVisible() || !sameSession(mAccount, mSession) || !ownerWindow(mKey) || key["owner"] != mKey["owner"] || mToken.isNull() || key["editor_token"].asUUID() != mToken ||
+        key["tile"].asString() != mTile.id || key["board"] != mKey["board"] || !controller.matchesSnapshot(mExpected))
     { controller.setStatus("changed"); return false; }
     LLUUID item, asset; std::string name, reason;
     if (!controller.resolve(reference, item, asset, name, reason)) { controller.setStatus(reason); return false; }
@@ -565,10 +620,10 @@ void FSFloaterGestureTileEditor::updatePreview()
     getChild<LLSpinCtrl>("tile_width")->setEnabled(!board_size); getChild<LLSpinCtrl>("tile_height")->setEnabled(!board_size);
     mTile.width = board_size ? 0 : getChild<LLSpinCtrl>("tile_width")->getValue().asInteger();
     mTile.height = board_size ? 0 : getChild<LLSpinCtrl>("tile_height")->getValue().asInteger();
-    LLUUID item, asset; std::string name, reason;
-    if (!FSGestureBoardController::instance().resolve(LLUUID(mTile.item), item, asset, name, reason)) name = getString("missing_tile");
-    getChild<LLTextBox>("gesture_name")->setText(LLStringExplicit(name));
-    getChild<LLTextBox>("gesture_name")->setToolTip(name);
+    LLUUID item, asset; std::string name, reason; LLAssetType::EType type = LLAssetType::AT_NONE;
+    if (!FSGestureBoardController::instance().resolve(LLUUID(mTile.item), item, asset, name, reason, &type)) name = getString("missing_tile");
+    getChild<LLTextBox>("item_name")->setText(LLStringExplicit(name));
+    getChild<LLTextBox>("item_name")->setToolTip(name);
     // Recreate only the editor's sample so theme reset restores every button
     // state, rather than retaining a prior custom tint.
     auto* sample = getChild<LLView>("sample"); sample->deleteAllChildren();
@@ -579,11 +634,11 @@ void FSFloaterGestureTileEditor::updatePreview()
     p.label = mTile.label.empty() ? name : mTile.label; p.use_ellipses = true; p.auto_resize = false;
     const S32 top = sample->getRect().getHeight();
     p.rect = LLRect(0, top, width, top - height); p.tab_stop = false;
-    auto* button = new FSGestureBoardButton(p, mTile); sample->addChild(button);
+    auto* button = new FSGestureBoardButton(p, mTile); button->setSound(type == LLAssetType::AT_SOUND); sample->addChild(button);
 }
 void FSFloaterGestureTileEditor::save()
 {
-    if (!sameSession(mAccount, mSession)) return;
+    if (!sameSession(mAccount, mSession) || !ownerWindow(mKey)) return;
     auto& controller = FSGestureBoardController::instance(); controller.refresh(); auto data = controller.data();
     const auto mode = mKey["mode"].asString(); auto* board = findBoard(data, mKey["board"].asString());
     if (mode == "tile")
@@ -608,6 +663,10 @@ void FSFloaterGestureTileEditor::save()
         }
         else { controller.setStatus("changed"); getChild<LLTextBox>("status")->setText(getString("changed")); return; }
     }
-    if (controller.commit(data, mExpected, mAccount, mSession)) closeFloater(false);
+    if (controller.commit(data, mExpected, mAccount, mSession))
+    {
+        if (mode == "new" || mode == "duplicate") if (auto* owner = ownerWindow(mKey)) owner->selectBoard(data.selected);
+        closeFloater(false);
+    }
     else getChild<LLTextBox>("status")->setText(getString(controller.status()));
 }

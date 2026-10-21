@@ -26,18 +26,137 @@
 
 #include <boost/algorithm/string.hpp>
 #include "fsposeranimator.h"
+#include "fsposepolicy.h"
+#include "fssharedposepolicy.h"
 #include "llcharacter.h"
 #include "llagent.h"
+#include "llvoavatarself.h"
 #include "llagentcamera.h"
 #include "fsposingmotion.h"
 #include "fssharedposemanager.h"
 
 std::map<LLUUID, LLAssetID> FSPoserAnimator::sAvatarIdToRegisteredAnimationId;
+namespace {
+// Process-lifetime registry: animator instances in other translation units may
+// be destroyed after this file's static objects.
+std::map<LLUUID,FSPoserAnimator*>& assistantOwners()
+{static auto* owners=new std::map<LLUUID,FSPoserAnimator*>;return *owners;}
+}
+FSPoserAnimator::~FSPoserAnimator()
+{for(auto it=assistantOwners().begin();it!=assistantOwners().end();)if(it->second==this)it=assistantOwners().erase(it);else ++it;}
+void FSPoserAnimator::invalidateAssistantPose(LLVOAvatar* avatar)
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID)return;
+    const auto found=assistantOwners().find(gAgentID);if(found==assistantOwners().end())return;
+    auto* owner=found->second;const auto motion=owner->mAssistantMotions.find(gAgentID);
+    if(motion!=owner->mAssistantMotions.end())owner->stopAssistantPose(avatar,motion->second);
+}
+void FSPoserAnimator::tickAssistantPoses(LLVOAvatar* avatar)
+{
+    // Runs from the main-thread idle callback even if the motion controller
+    // culls this fully covered motion and never invokes onUpdate.
+    const auto owned=mAssistantMotions;
+    for(const auto& entry:owned)
+    {
+        if(!avatar || avatar!=gAgentAvatarp || entry.first!=gAgentID || avatar->getID()!=gAgentID)
+        {mAssistantMotions.erase(entry.first);const auto it=assistantOwners().find(entry.first);if(it!=assistantOwners().end() && it->second==this)assistantOwners().erase(it);continue;}
+        auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(entry.second));
+        if(!motion || !motion->assistantRotationOnly() || motion->isStopped() || !motion->assistantAuthorityValid())stopAssistantPose(avatar,entry.second);
+    }
+}
+bool FSPoserAnimator::assistantRestorationComplete(LLVOAvatar* avatar,const LLUUID& id) const
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID)return false;
+    const auto owned=mAssistantMotions.find(gAgentID);if(owned==mAssistantMotions.end() || owned->second!=id)return false;
+    const auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(id));return motion && motion->assistantRestorationComplete();
+}
 
-FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
+
+LLUUID FSPoserAnimator::startAssistantPose(LLVOAvatar* avatar,std::function<bool()> allowed,std::function<void(bool)> stopped)
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID || avatar->isControlAvatar() ||
+       !isAvatarSafeToUse(avatar) || isPosingAvatar(avatar) || FSSharedPoseManager::instance().isShared(gAgentID) ||
+       !allowed || !allowed())return LLUUID::null;
+    const auto existing=mAssistantMotions.find(gAgentID);
+    if(existing!=mAssistantMotions.end())
+    {const auto old=existing->second;stopAssistantPose(avatar,old);}
+    const LLUUID id=LLUUID::generateNewID();
+    if(!avatar->registerMotion(id,FSPosingMotion::create))return LLUUID::null;
+    auto* motion=dynamic_cast<FSPosingMotion*>(avatar->createMotion(id));
+    if(!motion)return LLUUID::null;
+    motion->configureAssistantRotations(std::move(allowed),std::move(stopped));
+    mAssistantMotions[gAgentID]=id;assistantOwners()[gAgentID]=this;
+    if(!avatar->startMotion(id)){avatar->removeMotion(id);mAssistantMotions.erase(gAgentID);assistantOwners().erase(gAgentID);return LLUUID::null;}
+    return id;
+}
+bool FSPoserAnimator::assistantPoseActive(LLVOAvatar* avatar,const LLUUID& id) const
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID || !isAvatarSafeToUse(avatar))return false;
+    const auto found=mAssistantMotions.find(gAgentID);
+    if(found==mAssistantMotions.end() || found->second!=id)return false;
+    const auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(id));
+    return motion && motion->assistantRotationOnly() && !motion->isStopped();
+}
+bool FSPoserAnimator::updateAssistantPose(LLVOAvatar* avatar,const LLUUID& id,
+    const std::map<std::string,LLQuaternion>& rotations,std::function<bool()> allowed)
+{
+    if(!assistantPoseActive(avatar,id) || isPosingAvatar(avatar) || FSSharedPoseManager::instance().isShared(gAgentID))return false;
+    if(rotations.size()>fs_pose::jointLimit)return false;
+    for(const auto& rotation:rotations)
+    {
+        fs_pose::Rotation bounded{{rotation.second.mQ[0],rotation.second.mQ[1],rotation.second.mQ[2],rotation.second.mQ[3]}};
+        if(!fs_pose::jointName(rotation.first) || !fs_pose::normalize(bounded))return false;
+        const auto* joint=getPoserJointByName(rotation.first);
+        if(!joint || joint->boneType()==WHOLEAVATAR || joint->boneType()==COL_VOLUMES)return false;
+    }
+    return static_cast<FSPosingMotion*>(avatar->findMotion(id))->setAssistantRotations(rotations,std::move(allowed));
+}
+bool FSPoserAnimator::stopAssistantPose(LLVOAvatar* avatar,const LLUUID& id)
+{
+    if(!avatar || avatar!=gAgentAvatarp || avatar->getID()!=gAgentID)return false;
+    const auto found=mAssistantMotions.find(gAgentID);
+    if(found==mAssistantMotions.end() || found->second!=id)return false;
+    // LLCharacter's explicit local path never notifies the simulator. Private
+    // onDeactivate restores only unchanged owned rotations before dropping ROT.
+    avatar->LLCharacter::stopMotion(id,true);avatar->removeMotion(id);mAssistantMotions.erase(found);
+    const auto owner=assistantOwners().find(gAgentID);if(owner!=assistantOwners().end() && owner->second==this)assistantOwners().erase(owner);return true;
+}
+FSSharedPose::Pose FSPoserAnimator::captureAssistantPose(LLVOAvatar* avatar,const LLUUID& id) const
 {
     FSSharedPose::Pose result;
-    auto* motion = getPosingMotion(avatar);
+    if(!assistantPoseActive(avatar,id))return result;
+    auto* motion=static_cast<FSPosingMotion*>(avatar->findMotion(id));
+    for(const auto& definition:PoserJoints)
+    {
+        if(definition.boneType()==WHOLEAVATAR || definition.boneType()==COL_VOLUMES)continue;
+        const auto* joint=motion->getJointPoseByJointName(definition.jointName());if(!joint)continue;
+        const auto q=joint->getJointState()->getJoint()->getRotation();FSSharedPose::Joint value;
+        value.transform[0]=q.mQ[0];value.transform[1]=q.mQ[1];value.transform[2]=q.mQ[2];value.transform[3]=q.mQ[3];
+        value.enabled=(joint->getJointState()->getUsage() & LLJointState::ROT)!=0;
+        result.emplace(definition.jointName(),value);
+    }
+    return result;
+}
+
+LLUUID FSPoserAnimator::nativePoseGeneration(LLVOAvatar* avatar) const
+{auto* motion=getPosingMotion(avatar);return motion && !motion->isStopped()?motion->activationGeneration():LLUUID::null;}
+
+FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
+{return capturePose(getPosingMotion(avatar));}
+bool FSPoserAnimator::stopReceivedPose(LLVOAvatar* avatar,const fs_pose::ReceivedOverlay& owned)
+{
+    // Cleanup may run synchronously after gAgent has moved to another region.
+    // Match the live object's exact registered native motion/generation rather
+    // than using a current-region lookup or stopping a replacement/manual pose.
+    if(!avatar || avatar->isSelf() || avatar->getID()==gAgentID || avatar->isDead() || avatar->isControlAvatar() || !owned.owned())return false;
+    const auto registered=sAvatarIdToRegisteredAnimationId.find(avatar->getID());if(registered==sAvatarIdToRegisteredAnimationId.end())return false;
+    auto* motion=dynamic_cast<FSPosingMotion*>(avatar->findMotion(registered->second));
+    if(!motion || motion->assistantRotationOnly() || motion->isStopped() || !owned.canRelease(motion->activationGeneration().asString(),capturePose(motion)))return false;
+    mPosingState.purgeMotionStates(avatar);avatar->LLCharacter::stopMotion(registered->second,true);return true;
+}
+FSSharedPose::Pose FSPoserAnimator::capturePose(FSPosingMotion* motion) const
+{
+    FSSharedPose::Pose result;
     if (!motion) return result;
     for (const auto& definition : PoserJoints)
     {
@@ -58,6 +177,29 @@ FSSharedPose::Pose FSPoserAnimator::captureSharedPose(LLVOAvatar* avatar) const
         result.emplace(definition.jointName(), value);
     }
     return result;
+}
+
+bool FSPoserAnimator::applyAssistantSharedRotations(LLVOAvatar* avatar,const FSSharedPose::Pose& before,
+    const fs_pose::Rotations& rotations,const std::function<bool()>& allowed)
+{
+    if(!avatar || avatar->isControlAvatar() || !isAvatarSafeToUse(avatar) || !isPosingAvatar(avatar) ||
+       !allowed || !allowed() || before.size()!=rotations.size() || !fs_pose::valid(rotations))return false;
+    auto* motion=getPosingMotion(avatar);if(!motion)return false;
+    const auto current=captureSharedPose(avatar);
+    for(const auto& rotation:rotations)
+    {
+        const auto snapshot=before.find(rotation.first),live=current.find(rotation.first);
+        auto* joint=motion->getJointPoseByJointName(rotation.first);
+        if(snapshot==before.end() || live==current.end() || !fs_pose::sameSharedJoint(snapshot->second,live->second) || !joint ||
+           !live->second.enabled || live->second.mirrored || live->second.worldLocked)return false;
+    }
+    for(const auto& rotation:rotations)
+    {
+        if(!allowed())return false;
+        const auto& q=rotation.second;
+        motion->getJointPoseByJointName(rotation.first)->setAssistantTargetRotation(LLQuaternion(static_cast<F32>(q[0]),static_cast<F32>(q[1]),static_cast<F32>(q[2]),static_cast<F32>(q[3])));
+    }
+    return true;
 }
 
 void FSPoserAnimator::applySharedPose(LLVOAvatar* avatar, const FSSharedPose::Pose& pose)
@@ -1614,6 +1756,10 @@ bool FSPoserAnimator::tryPosingAvatar(LLVOAvatar* avatar)
 {
     if (!isAvatarSafeToUse(avatar))
         return false;
+
+    // Invalidate before capturing/creating native Poser state, including a
+    // start-and-stop between idle ticks. The private source cannot resume.
+    invalidateAssistantPose(avatar);
 
     FSPosingMotion* posingMotion = findOrCreatePosingMotion(avatar);
     if (!posingMotion)

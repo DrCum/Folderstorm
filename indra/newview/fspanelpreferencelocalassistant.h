@@ -31,6 +31,9 @@ class FSPanelPreferenceLocalAssistant : public LLPanelPreference
 {
 public:
     ~FSPanelPreferenceLocalAssistant() override;
+    static std::string installedSidecar();
+    static bool sessionScoped();
+    static std::string hostConfiguration(const std::string& client, std::string& error);
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
     void draw() override;

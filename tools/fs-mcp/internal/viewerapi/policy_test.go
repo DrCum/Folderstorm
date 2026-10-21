@@ -69,3 +69,14 @@ func TestWorkspaceCapabilityAndSafeDefault(t *testing.T) {
 		t.Fatal("unknown workspace protocol accepted")
 	}
 }
+
+func TestPoseSavingHasSeparatePermission(t *testing.T) {
+	policy, ok := ParseStatusPolicy([]byte(`{"permissions":{"pose_edit":"allow","pose_save":"deny"}}`))
+	if !ok || policy.Level(ClassPoseEdit) != "allow" || policy.Level(ClassPoseSave) != "deny" {
+		t.Fatal("pose editing granted preset writes")
+	}
+	policy, _ = ParseStatusPolicy([]byte(`{"permissions":{"pose_edit":"allow"}}`))
+	if policy.Level(ClassPoseSave) != "ask" {
+		t.Fatal("missing pose save must Ask")
+	}
+}

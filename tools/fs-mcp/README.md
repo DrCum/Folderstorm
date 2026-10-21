@@ -38,17 +38,32 @@ Address inventory by UUID. Names and paths are not unique. `inventory_resolve_pa
 
 ## What it will not do
 
-The viewer allowlist is `LLInventory`, `LLAppearance`, and `LLCamera`. Any other Event API is rejected with HTTP 403, including teleport, chat, gestures, `UI.call`, and window or input injection.
+The viewer uses a closed manifest of typed inventory, appearance, camera, workspace and curated feature APIs. Generic `UI.call`, arbitrary Event APIs and window/input injection are rejected. New feature tools require their advertised capability version and native permission classes.
 
 Also out of scope:
 
 - Task inventory (objects you are sitting on or editing in-world).
 - Marketplace listings and purchases.
 - Remote or multi-user access. The HTTP listener is `127.0.0.1` only.
-- Saving notecard or script edits. Reads are capped and report `asset_id` and `stale`.
 - Push notifications. `inventory_changes` is request/response. Poll it with the `generation` from `viewer_status`.
 
 Restrained Love locks are honored. A locked wearable, attachment, or folder returns an error instead of changing the avatar or the inventory.
+
+## Building and inventory next-owner permissions
+
+`build_object_get` returns a 120-second `expected_revision` for a loaded root volume. Supply that revision to `build_object_transform`, `build_object_surface`, or `build_object_material`. Positions use region coordinates; rotations are normalized `[x,y,z,w]` quaternions. Edits require an owned, modifiable, movable, nonphysical root and the active managed character. Linked roots can move/rotate; resize linked sets and edit PBR overrides in native Build. Inventory-backed textures/materials must have full owner permissions.
+
+`build_rez_primitive` creates cube/sphere/cylinder/cone shapes with explicit position/rotation/scale. `build_rez_inventory` copies a copyable inventory object into the world. Both are limited to the current buildable parcel and 64m. Neither changes native selection or guesses the new UUID. Results distinguish queued/submitted from simulator confirmation; inspect the original receipt and world before another action.
+
+`inventory_permissions_get` returns native masks and a revision for a finished owned item outside Trash/Library. `inventory_next_owner_set` accepts that revision and explicit `copy`, `modify`, `transfer` booleans. Native Properties eligibility, base rights, fair-use and object slam flags apply; other masks and sale information stay unchanged. These tools have separate Ask-capable permissions in Local assistant. World reads remain opt-in. Update the viewer and sidecar together (`building_tools: 1`).
+
+## Navigation
+
+`navigation_status` reads location and the last assistant-owned outcome. `navigation_move_to` accepts global `[x,y,z]`, explicit `walk`/`fly`, `stop_distance` (0.25–4m), and `timeout_seconds` (1–30). Movement stays within the current region and 64m. Stand first; finish existing native pilot/follow/teleport actions first. Land before requesting a walk. Native autopilot handles movement and can fail to reach a destination.
+
+`navigation_flying_set` explicitly takes off or lands. `navigation_teleport` submits one global-coordinate teleport. Delayed maturity callbacks retain the original authority and cannot retry a submitted request. `navigation_stop` uses the exact returned `operation_id` and stops only that assistant action. Teleport cancellation after submission is best effort. Poll status; inspect the original operation receipt after uncertainty and never replay it.
+
+Enable opt-in World read and the separate Ask-capable avatar movement/teleport permissions in Local assistant. All navigation targets an exact `viewer_session`; managed mutations require its active character. Switching, revocation, source/region changes, restrictions, timeout or manual replacement stop owned movement. Matching viewer/sidecar versions must advertise `navigation_tools: 1`.
 
 ## Build
 
@@ -421,3 +436,10 @@ Viewers advertising `capabilities.workspace_tools: 1` expose these tools:
 Each accepts an optional `viewer_pid`. Read tools require Read. Switching requires the new **Switch workspaces and layouts** permission (default Ask); workspaces with camera/HUD groups also require Camera/Wear. Any Never value blocks the compound switch, and the viewer owns approval. Changing the saved definition, resolved preset, worn HUD state or login while approval is pending invalidates it.
 
 Finish Preferences before switching. Check status after a switch: `accepted` means the viewer accepted the arrangement, while missing HUDs remain Pending until observed or timed out. Previous restores compatible settings/geometry but does not detach added HUDs. Older viewers return Unsupported; these tools never fall back to arbitrary settings writes or raw appearance operations.
+
+
+### Exact login targets
+
+`viewer_list` now returns an opaque `viewer_session` for updated viewers. Pass it to any account tool to pin the operation to that exact login. A PID can accompany the reference only when it identifies the same viewer. Missing selected viewers and changed logins fail instead of selecting the remaining viewer. Older ordinary viewers retain PID targeting; managed characters require an explicit session reference and matching managed-session capability. Managed listeners now use the profile’s existing opt-in Local Assistant setting. Host setup lives under Character settings → Local Assistant; background approvals stay queued until reviewed in their native owner. Host protocol 16 requires matching binaries. Camera mutation, snapshots and workspace application require the active owner; choosing an MCP target never switches the world. Explicit discovery overrides remain scoped; recopy setup configuration if an older entry points only at the ordinary viewer.
+
+Managed availability: native item creation and outfit wear/detach now use durable source-bound guards. Receipts include an operation_id; assistant_operation_status reports pending/submitted/partial state, attempted submission steps and known result IDs. “Submitted” does not prove final simulator state. Pause/reconnect/detach invalidate the binding and stop subsequent steps; already submitted changes may finish. No uncertain mutation replay or automatic rollback. Native-only bulk history stays intact. Cold outfits load without submitting a mutation and require an explicit retry; outfits are bounded to64folders/256items, individual wear/detach requests to50items. Library/template copying also requires Create/Move permission as applicable. Matching current viewer/sidecar binaries and native Windows acceptance are required.

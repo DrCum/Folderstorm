@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsgesturelistener.h"
 #include "llviewermessage.h"
 
 // Linden libraries
@@ -3391,9 +3392,18 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             const std::string to_lang = LLTranslate::getTranslateLanguage();
 
             LLTranslate::instance().logCharsSent(mesg.size());
+            const LLUUID source_account=gAgentID,source_login=gAgent.getSessionID();
             LLTranslate::translateMessage(from_lang, to_lang, mesg,
-                boost::bind(&translateSuccess, chat, args, mesg, from_lang, _1, _2),
-                boost::bind(&translateFailure, chat, args, _1, _2));
+                [=](const std::string& translated,const std::string& detected)
+                {
+                    if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                    translateSuccess(chat,args,mesg,from_lang,translated,detected);
+                },
+                [=](int status,const std::string& error)
+                {
+                    if(source_account!=gAgentID || source_login!=gAgent.getSessionID() || gDisconnected)return;
+                    translateFailure(chat,args,status,error);
+                });
 
         }
         else
@@ -5276,6 +5286,15 @@ void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
             // </FS:Zi>
 
             avatarp->mSignaledAnimations[animation_id] = anim_sequence_id;
+
+            // Object sources can be unloaded and absent from mAnimationSources.
+            // Unknown provenance is conservative: retain native state and report
+            // incomplete assistant cleanup instead of stopping an unrelated anim.
+            LLUUID assistant_source;
+            if (i < num_source_blocks)
+                mesgsys->getUUIDFast(_PREHASH_AnimationSourceList, _PREHASH_ObjectID, assistant_source, i);
+            if (assistant_source != gAgent.getID())
+                fs_assistant_animation_request(animation_id);
 
             // *HACK: Disabling flying mode if it has been enabled shortly before the agent
             // stand up animation is signaled. In this case we don't get a signal to start

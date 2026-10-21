@@ -925,6 +925,25 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Run only during uninstall, before its installation's sidecar disappears.
         self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
         self.path(self.stage_session_host(), "folderstorm-session-host.exe")
+        self.path(os.path.join(self.get_build_prefix(), "folderstorm-bundle.json"), "folderstorm-bundle.json")
+        if self.args.get('velopack', 'OFF') == 'ON':
+            config = self.args.get("configuration") or ""
+            candidates = [os.path.join(self.get_build_prefix(), part, "folderstorm-update.exe") for part in ([config, ""] if config else [""])]
+            helper = next((path for path in candidates if os.path.isfile(path)), None)
+            if helper is None:
+                raise ManifestError("The matching whole-application updater was not built.")
+            self.path(helper, "folderstorm-update.exe")
+        # SDK reporting is optional. The CMake marker makes a missing matching
+        # handler a packaging error instead of silently shipping a broken build.
+        if os.path.isfile(os.path.join(self.get_build_prefix(), "folderstorm-crash-reporting.enabled")):
+            config = self.args.get("configuration") or ""
+            candidates = [os.path.join(self.get_build_prefix(), part,
+                          "folderstorm-crashpad-handler.exe") for part in ([config, ""] if config else [""])]
+            handler = next((path for path in candidates if os.path.isfile(path)), None)
+            if handler is None:
+                raise ManifestError("The matching Folderstorm Sentry crash handler was not built.")
+            self.path(handler, "folderstorm-crashpad-handler.exe")
+            self.path(os.path.join(self.get_build_prefix(), "sentry-licenses"), "sentry-licenses")
         # Packaging renames firestorm-bin.exe. The controller uses only this
         # installation-local basename; it never searches PATH for a viewer.
         self.put_in_file(((self.final_exe() if self.is_packaging_viewer() else "firestorm-bin.exe") + "\n").encode("utf-8"),
@@ -1050,7 +1069,11 @@ class Windows_x86_64_Manifest(ViewerManifest):
     def velopack_package_finish(self):
         # packId determines install folder: %LocalAppData%\{packId}
         # Uses same naming as NSIS INSTNAME for channel separation
-        pack_id = self.app_name_oneword()  # "SecondLife", "SecondLifeBeta", etc.
+        with open(os.path.join(self.get_dst_prefix(), "folderstorm-bundle.json"), encoding="utf-8") as manifest:
+            bundle = json.load(manifest)
+        if bundle.get("installer") != "velopack":
+            raise ManifestError("Velopack packaging requires a matching Velopack viewer/host bundle.")
+        pack_id = bundle["app_id"]
         # Velopack requires SemVer2. Use major.minor.patch-buildnumber so that
         # Velopack can distinguish builds and order them correctly.
         pack_version = '.'.join(self.args['version'][:3])

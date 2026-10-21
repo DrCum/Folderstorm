@@ -1,0 +1,90 @@
+# Host friends, New IM and monitor tools
+
+Implemented above PR #40 on `feat/host-friends-monitor-tools`.
+Private protocol **15** requires matching host and viewer binaries.
+
+## Completed
+
+- [x] Ctrl+A selects all in shared, detached and monitor Chat composers and transcripts. Read-only history remains read-only; selecting history pauses automatic following.
+- [x] New IM in shared and monitor Chat opens a character-bound friends/resident chooser. The sending account is shown explicitly. Open IM/double-click creates or reuses a native private conversation; sending remains a separate action.
+- [x] Display names and usernames appear together. Friends sort online first, then alphabetically; offline friends remain eligible for IM.
+- [x] Collapsible right friends sidebars in shared and monitor Chat, initially hidden, with filtering, status and an IM action.
+- [x] Independent friends windows for each logged-in character, available through New IM or the sidebar pop-out button. Windows have the host theme, character accent, Always on top, keyboard navigation and window recovery.
+- [x] Contacts/search results stay in memory. Worker, account, grid, generation and query tokens guard results and selections; teardown/restrictions clear stale information. A different panel's search invalidates the previous panel's results rather than silently changing its chosen resident.
+- [x] Native start/send/receive and support-contact restrictions are rechecked when opening IM. Failed searches and refusals leave messages unsent. Older native Close events cannot reverse an explicit reopen.
+- [x] Open all inactive monitors; Tile as grid and Arrange as row on the invoked screen's work area. Existing individual image size/rate and character exchange remain available.
+- [x] Four fixed monitors plus one separate cycling window. Play/Pause, Previous/Next and an interval control; default 10 seconds, bounded to 2–3,600. Eligible inactive characters cycle in configured card order, without changing the active world.
+- [x] Cycling clears/presents the previous image before changing the source label. It skips unavailable/restricted/active characters, suspends navigation during handoffs, Preferences and open selectors, and preserves source-owned drafts.
+- [x] Duplicate views share one worker stream. The existing aggregate **10 FPS** preview cap, supported resolutions and conservative in-flight rate reservations remain. Hiding/minimizing windows releases unused capture policies.
+- [x] Default “Pause to chat.” locks cycling Chat interaction. Advanced → Require pause to chat can relax this; entering the composer then pauses before typing, with explicit Play to resume. Cycling does not automatically mark its changing Chat read.
+- [x] Interval/safety/pins/placements use existing transactional Preferences and autosave. FSX1–FSX3 choices migrate to FSX4 with default safety enabled. Named session sets continue capturing only the four fixed assignments; contacts, searches and drafts are never stored in them.
+
+## Implementation limits
+
+Contacts are bounded to 2,048 friends and 100 search results per character; fixed UTF-8 IPC pages remain under 3,072 bytes. Only visible contacts surfaces refresh friends, at five-second intervals. Direct IM visibility must be enabled to open an IM in host Chat; a visibility change while opening never redirects the destination to Nearby. Resident-name search uses the native `AvatarPickerSearch` capability with a 20-second timeout and one outstanding HTTP search per worker. Regions without that capability report unavailable search; friends still work. Name-cache misses show “Name loading” with a unique resident ID until the next refresh. A new query attempted while HTTP is pending reports that it is still running and can be retried.
+
+No credentials, conversations, Inventory contents, filters, selections or search results are added to persisted profiles. The interval, safety choice, window placements and pins are ordinary host preferences. Opening IM does not promote a background character, leave a group, terminate a call or replay an uncertain send.
+
+## Actual focused validation
+
+Compiled and executed these twelve production-helper checks with GCC C++17, `-Wall -Wextra -Werror -pedantic -UNDEBUG`:
+
+`contacts`, `monitor_tools`, `chat_lifecycle`, `monitor_chat`, `monitors`, `protocol`, `experience`, `preferences`, `presentation`, `preview`, `sets`, `chat_behavior`.
+
+Checks cover online-first ordering/offline eligibility, bounded UTF-8 pages, stale worker/account/grid/generation/query rejection, pending/error searches, explicit reopen/older Close ordering, cycling order/timing/typing pause and retained drafts, negative-coordinate screen tiling, duplicate-source budgets, fixed-monitor swapping, settings migration and transaction rejection. `git diff --check` passed. Reviewed native name-cache/search/IM APIs, window/source lifetimes, message routing, painting and rate admission.
+
+No native Windows compiler/runtime was available. No viewer/host build, installer/packaging, GitHub build, unrelated Go tests, broad suite or subagents were run. Native compile/link and graphical behavior remain pending acceptance.
+
+## Windows acceptance
+
+1. Build/install the matching protocol-15 host and viewer. Start two, then five characters. Confirm older/mixed binaries refuse the private protocol cleanly.
+2. In shared Chat, select the sending account, choose New IM, filter friends, search a resident name and open a result. Check display-name/username disambiguation, online-first ordering, an offline friend, existing/closed conversations, and explicit Send. Verify the target native account receives the outgoing message and another account never sends it.
+3. Repeat from detached Chat and every monitor. Toggle the right sidebar; pop it out for multiple characters. Check theme/character colors, Pin, Tab/Shift+Tab, filtering, resizing, 100/150/200% DPI, and recovery onto reachable work areas.
+4. Search from two panels for the same character. Start a new search, disconnect/restart/log out, and change restrictions while requests are pending. Old results/selections must clear or report a refusal; no stale account sends. Check a failed/unavailable search and normal recovery through another query.
+5. With five logged-in characters, Open all inactive monitors. Add the cycling monitor while four fixed views are open. Tile on each screen (including negative desktop coordinates), then arrange as row. Size/rate/pin choices and explicit exchanges should remain intact.
+6. Cycle at 2, 10 and 3,600 seconds; reorder character cards; pause, go backward/forward and resume. Disconnect or promote its selected character. Confirm the active world never changes automatically, and an old image is cleared before the new character's label appears.
+7. Leave default safety on: cycling Chat says “Pause to chat.” and cannot send/change/mark read until paused. Save drafts under two accounts/conversations, navigate and return; each draft stays with its owner. With safety off, focus the composer and type immediately: rotation must pause first. Play must resume explicitly.
+8. Show the same character in a fixed and cycling monitor. Check one native preview stream and total acknowledged/pending preview rates at or below 10 FPS; minimize/hide/close views and check release. Watch for flicker, stale images and source-label mismatch.
+9. Ctrl+A, copy/paste, Enter to send, Shift+Enter and IME input in each Chat surface; history selection must preserve reading position. Reopen the host and check interval, safety, pins and placements. Verify Preferences Cancel discards edits and Apply autosaves them.
+
+## Post-review fixes
+
+Both #41 findings were confirmed against the published head and corrected in separate commits.
+
+- An invalid paused cycling assignment stays disabled until explicit Next/Previous or Play. It clears its image and removes composer focus without adopting another sender. Reconnection alone does not re-enable the binding; the original session's private draft remains with that conversation.
+- Source changes and automatic conversation fallback cancel unfinished composition and move focus to the neutral monitor window. Queued typing, paste, Unicode/IME and Enter require a focused, paused, source-owned composer. The message loop rejects stale editor input before dialog navigation can activate another button.
+- Grid/row tiling validates every rectangle against the same minimum helper used by `WM_GETMINMAXINFO`, at destination-screen DPI and host text scaling, before moving any monitor. Unknown scaling or insufficient space produces a refusal with positions untouched. Cross-screen `WM_DPICHANGED` keeps the validated tile rectangles while updating fonts and layout.
+
+Four affected portable checks passed with strict C++17 warnings/assertions: `monitor_tools`, `monitor_chat`, `chat_behavior`, `monitors`. The added regressions cover paused private IM → disconnect → attempted typing/send, reconnect without implicit re-enabling, stale unfocused Enter after explicit recovery, 200% DPI refusal on 1920×1040, successful 4K layouts, differing cycling minimums and larger text. Diff hygiene passed. Protocol remains 15. No native viewer/host/build/packaging or unrelated checks were run.
+
+Additional Windows acceptance:
+
+1. Pause cycling on a private IM, type an unsent draft, then disconnect that character while another remains ready. Continue typing/Enter and try a queued/held Return, paste and unfinished IME input. No text may enter another character's Nearby draft or send publicly; Next/Play are explicit recovery actions. Reconnect without using those actions and verify it remains disabled.
+2. Resume/advance while Chat was focused, then pause: old keyboard input must be dropped until the new composer receives fresh focus. Close/hide its selected conversation while typing; automatic fallback must also remove focus and preserve the original draft.
+3. At 200% DPI, five Chat-enabled windows on a 1920×1040 work area must refuse both arrangements without moving any window. Check a fitting two-window layout, Chat-hidden previews, 4K screens and increased text size. Move between screens with different DPI; successful rectangles must retain their validated sizes without overlaps or off-screen windows.
+
+## First-use Chat pop-out correction
+
+The Friends sidebar is created on demand. Including its null window in the Chat control list made the first pop-out call `SetParent` on a nonexistent control, producing “Could not move the panel controls; docking was retained.” Opening Friends once created the window and masked the failure. The control list now includes the sidebar only after creation, including when it is hidden.
+
+A focused C++17 harness compiled the actual production control-list and docking-loop snippets against mocked parent APIs, reproducing the failure before the fix and successful first-use pop-out afterward. Existing/hidden sidebars, creation after detachment, repeated docking and rollback after a genuine move refusal passed with `-Wall -Wextra -Werror -pedantic -UNDEBUG`. This checks the docking logic, not native Windows window behavior. Diff hygiene passed; protocol remains 15. No broad or native builds were run.
+
+Windows retest: start the host with Friends never opened, pop out shared Chat, dock it again, open/hide Friends and repeat. Also reopen a host with detached Chat saved; its panel should restore without requiring Friends. Check that the sidebar follows Chat after being created while detached and that the draft, selection and tooltips survive docking.
+
+## Friends status presentation
+
+Shared/monitor sidebars and standalone Friends windows now show counted Online/Offline section headings, larger green filled online dots, hollow gray offline circles and softer offline text. Selected rows retain readable selection colors, and High Contrast uses system text/colors plus the distinct shapes and headings. Native accessible row labels also include status. The Online only checkbox beside the filter defaults Off and is a per-pane session choice. Search results stay ungrouped and ignore that filter because resident searches do not provide reliable presence.
+
+Headers cannot open an IM. Keyboard arrows, Home/End, Page Up/Down and first-letter navigation skip them. Selection and the top visible resident survive refresh by resident ID, including when online status changes the grouping. Offline friends remain messageable with the filter Off, and hiding a selected friend clears the selection instead of choosing somebody else. Contact ownership/restriction checks and private protocol 15 remain unchanged.
+
+The affected `contacts` check passed with strict C++17 warnings/assertions. Added cases cover both group counts, heading/invalid selection rejection, offline and online-only filtering, search behavior, navigation across headings and preserving the recipient when presence changes. Diff hygiene passed. No broad/native builds or unrelated tests were run.
+
+Windows retest: compare Midnight, Daylight and High Contrast in shared/monitor sidebars and standalone Friends; resize and use larger text/100–200% DPI. Test Online only with the name filter, switch to Search and back, select a friend who changes status, click/double-click a heading and navigate with arrows/Home/End/Page keys/letters. Confirm offline IMs still work and selection never silently changes recipients.
+
+## First-letter message routing correction
+
+Confirmed the review finding against Microsoft's `WM_CHARTOITEM` documentation: owner-drawn lists with `LBS_HASSTRINGS` do not receive that message. Friends retains native strings for accessibility and now subclasses the list itself to consume printable `WM_CHAR` input through the resident-only first-letter helper. Unmatched characters cannot fall through to native heading search. Selection changes explicitly refresh Open IM because `LB_SETCURSEL` does not emit `LBN_SELCHANGE`. Disabled/rebuilding lists ignore printable input; control characters and other navigation retain normal handling. Subclass installation is checked and the callback removes itself on destruction.
+
+A focused C++17 harness compiled the actual production subclass and first-letter helper against mocked Win32 APIs, passing `O`/`o` resident cycling across both headings, unmatched-selection preservation, explicit IM-state refresh, disabled/rebuild guards, control-key routing and teardown with strict warnings/assertions. This validates message-routing logic, not native Windows delivery. Diff hygiene passed; no broad/native builds or unrelated tests. Protocol stays 15.
+
+Windows retest: focus Friends in each sidebar/window, type `O` repeatedly with online and offline matching names, then a letter with no match. No heading should become selected, and Open IM should follow the selected resident. Repeat with Online only, Search, lowercase letters and normal Tab/arrow/Page-key navigation.

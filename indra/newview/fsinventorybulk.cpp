@@ -364,6 +364,7 @@ LLSD preview(const LLSD& request, std::string& error)
     if (current_session.empty()) { error = "Inventory session is unavailable"; return {}; }
     auto prepared = std::make_shared<Plan>();
     prepared->id = LLUUID::generateNewID().asString(); prepared->session = current_session;
+    prepared->assistant=request.has("__assistant_guard") || request.has("__assistant_epoch");
     const auto op = request["op"].asString();
     if (op == "previewBulkUndo")
     {
@@ -372,6 +373,7 @@ LLSD preview(const LLSD& request, std::string& error)
         for (const LLSD& id : llsd::inArray(request["ids"])) ids.push_back(id.asUUID().asString());
         if (!store->previewUndo(request["operation_id"].asUUID().asString(), ids, prepared->id, now(), error)) return {};
         auto inverse = store->plan(prepared->id, now());
+        inverse->assistant=inverse->assistant || prepared->assistant;
         for (auto& row : inverse->rows)
             if (auto* dest = gInventory.getCategory(LLUUID(row.destination))) row.destination_type = dest->getPreferredType();
         if (!validate(prepared->id, error)) return {};
@@ -519,6 +521,7 @@ void executeNative(const std::string& id, std::function<void(const LLSD&)> compl
     execute(id, context, std::move(completed));
 }
 void clear() { sync(); store->clear(); }
+void retireAssistant() { store->retireAssistant(); }
 void stop(const std::string& id) { sync(); store->stop(id); }
 void permissionsChanged()
 {

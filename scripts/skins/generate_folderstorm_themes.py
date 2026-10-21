@@ -96,6 +96,12 @@ def write_colors(folder, p, skin="firestorm"):
             next(c for c in root if c.get("name") == name).set("reference", "ThemeGold")
         for name in ("ScrollSelectedFGColor", "MenuItemHighlightFgColor"):
             next(c for c in root if c.get("name") == name).set("reference", "ThemeInk")
+        # Unread tabs and conversation rows keep their pale labels while
+        # flashing. Use dark fills for both ordinary messages and mentions.
+        next(c for c in root if c.get("name") == "ButtonFlashBgColor").set("reference", "ThemeInventory")
+        for name, source in (("MenuItemFlashBgColor", "inventory"),
+                             ("MentionFlashBgColor", "title")):
+            ET.SubElement(root, "color", name=name, reference="Theme" + source.title())
     for name, source, alpha in (("EmphasisColor_13", "accent", .13),
                                 ("EmphasisColor_35", "accent", .35),
                                 ("SchemeLightest_35", "accent", .35),

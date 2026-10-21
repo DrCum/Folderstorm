@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fscontentupload.h"
 
 #include "llpreviewnotecard.h"
 #include "llnotecard.h" // <FS> Byte counter
@@ -312,6 +313,12 @@ bool LLPreviewNotecard::handleKeyHere(KEY key, MASK mask)
 }
 
 // virtual
+bool LLPreviewNotecard::assistantSourceBusy() const
+{
+    return fs_content::nativeSourceBusy({!mEditor, false, mEditor && !mEditor->isPristine(),
+        mLiveFile != nullptr, false, mSaveDialogShown, false, false});
+}
+
 bool LLPreviewNotecard::canClose()
 {
     if(mForceClose || !mEditor || mEditor->isPristine())
@@ -589,10 +596,12 @@ struct LLSaveNotecardInfo
     LLUUID mObjectUUID;
     LLTransactionID mTransactionID;
     LLPointer<LLInventoryItem> mCopyItem;
+    std::shared_ptr<void> mPendingSource;
     LLSaveNotecardInfo(LLPreviewNotecard* self, const LLUUID& item_id, const LLUUID& object_id,
                        const LLTransactionID& transaction_id, LLInventoryItem* copyitem) :
         mSelf(self), mItemUUID(item_id), mObjectUUID(object_id), mTransactionID(transaction_id), mCopyItem(copyitem)
     {
+        if(object_id.isNull())mPendingSource=LLViewerAssetUpload::trackLegacyInventoryUpload(item_id);
     }
 };
 
@@ -791,7 +800,7 @@ void LLPreviewNotecard::onSaveComplete(const LLUUID& asset_uuid, void* user_data
                 LLPointer<LLViewerInventoryItem> new_item = new LLViewerInventoryItem(item);
                 new_item->setAssetUUID(asset_uuid);
                 new_item->setTransactionID(info->mTransactionID);
-                new_item->updateServer(false);
+                new_item->updateServer(false,info->mPendingSource);
                 gInventory.updateItem(new_item);
                 gInventory.notifyObservers();
             }
