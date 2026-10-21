@@ -30,6 +30,7 @@
 #include "llworld.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
+#include "rlvmodifiers.h"
 #include <sstream>
 
 namespace
@@ -230,7 +231,7 @@ void packAgent(LLMessageSystem* msg)
 { msg->nextBlockFast(_PREHASH_AgentData); msg->addUUIDFast(_PREHASH_AgentID,gAgent.getID()); msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID()); }
 void rez(const LLSD& request)
 {
-    auto* region=gAgent.getRegion(); auto* msg=gMessageSystem; const auto pos=ll_vector3_from_sd(request["position"]);
+    auto* region=gAgent.getRegion(); LLMessageSystem* msg=gMessageSystem; const auto pos=ll_vector3_from_sd(request["position"]);
     if(request["op"].asString()=="rezInventory")
     {
         auto* target=item(request["id"]);
@@ -261,7 +262,7 @@ void transform(LLViewerObject* target,const LLSD& request)
     if(request.has("position")) { target->setPositionRegion(ll_vector3_from_sd(request["position"])); put(target->getPosition(),UPD_POSITION); }
     if(request.has("rotation")) { target->setRotation(ll_quaternion_from_sd(request["rotation"])); put(target->getRotation().packToVector3(),UPD_ROTATION); }
     if(request.has("scale")) { target->setScale(ll_vector3_from_sd(request["scale"])); put(target->getScale(),UPD_SCALE); }
-    auto* msg=gMessageSystem; msg->newMessageFast(_PREHASH_MultipleObjectUpdate); packAgent(msg); msg->nextBlockFast(_PREHASH_ObjectData);
+    LLMessageSystem* msg=gMessageSystem; msg->newMessageFast(_PREHASH_MultipleObjectUpdate); packAgent(msg); msg->nextBlockFast(_PREHASH_ObjectData);
     msg->addU32Fast(_PREHASH_ObjectLocalID,target->getLocalID()); msg->addU8Fast(_PREHASH_Type,type); msg->addBinaryDataFast(_PREHASH_Data,data,offset); msg->sendReliable(target->getRegion()->getHost());
 }
 }
@@ -317,7 +318,7 @@ void FSBuildListener::dispatch(const LLSD& request)
     if(readOp(op))
     {
         const auto revision=ticket(service().revisions,state); if(revision.empty()) return response.error("busy: too many live revisions; wait for expiry");
-        result["target"]=state; result["expected_revision"]=revision; result["status"]="observed"; entry->executed=true; response.result(result); return;
+        result["target"]=state; result["expected_revision"]=revision; result["status"]="observed"; entry->executed=true; response.setResponse(result); return;
     }
     if(op=="material")
     {
@@ -342,7 +343,7 @@ void FSBuildListener::dispatch(const LLSD& request)
             if(status && reply["success"].asBoolean()) task->guard()->acknowledge("material_http_accepted");
             else task->guard()->cancel("material_transport_failed_or_unconfirmed");
         });
-        result["status"]="queued"; result["confirmation"]="inspect operation receipt and native object; no automatic retry"; response.result(result); return;
+        result["status"]="queued"; result["confirmation"]="inspect operation receipt and native object; no automatic retry"; response.setResponse(result); return;
     }
     // Inventory updateServer owns its actual AIS/UDP submission count.
     // An AIS queue entry is not yet a transport submission.
@@ -373,6 +374,6 @@ void FSBuildListener::dispatch(const LLSD& request)
         if(request.has("texture_item")) target->setTETexture(face,item(request["texture_item"])->getAssetUUID());
         target->sendTEUpdate();
     }
-    result["status"]=op=="nextOwnerSet"?"queued":"submitted"; result["simulator_confirmed"]=false; response.result(result);
+    result["status"]=op=="nextOwnerSet"?"queued":"submitted"; result["simulator_confirmed"]=false; response.setResponse(result);
 }
 void fs_initialize_build_api() { static FSBuildListener listener; }

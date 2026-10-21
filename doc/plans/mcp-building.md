@@ -27,3 +27,14 @@ Windows: matching viewer/sidecar, Ask allow/deny/revoke; owned versus foreign/lo
 ## Checkpoint validation
 
 Passed: five affected portable C++ targets (including ticket/revision model, permission defaults, feature manifest, async authority and session guards), four native boundary source contracts, affected Go building/schema/permission tests. Strict C++17 warnings and Release assertions retained; XML and diff checks pass. An attempted native syntax-only check stopped at missing Boost headers, before compiling the listener. No native viewer build, installer or live simulator mutation was performed.
+
+## Windows listener compiler compatibility
+
+Reviewed the retained 7.2.5.82173 build patch against native declarations. The
+building listener now includes `rlvmodifiers.h`, explicitly converts the wrapped
+`gMessageSystem` value to `LLMessageSystem*`, and uses the existing Response
+`setResponse()` API. The resulting source blob exactly matches the user's local
+patch result. Reply delivery still uses the Response destructor and original
+request; native guards, packing and action behavior are unchanged. Focused native
+source checks pass. The user reported successful Windows compilation and focused
+checks with this patch; live building acceptance remains pending.
