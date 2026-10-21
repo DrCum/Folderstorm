@@ -43,6 +43,7 @@
 #include "llsdutil.h"
 #include "llviewerassetupload.h"
 #include "fscontentupload.h"
+#include "fsfileuploadmodel.h"
 #include <map>
 #include "llappviewer.h"
 #include "llviewerstats.h"
@@ -988,6 +989,17 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
             HandleUploadError(status, result, uploadInfo);
             if (uploadInfo->showUploadDialog())
                 LLUploadDialog::modalUploadFinished();
+            return;
+        }
+
+        // An assistant approval is a spending ceiling, including a zero-cost
+        // Premium quote. Never transfer bytes after a higher server quote.
+        if (uploadInfo->assistantOwned() && !fs_file_upload::serverQuoteAccepted(
+            uploadInfo->requiresQuotedUploadPrice(), result.has("upload_price"),
+            result["upload_price"].isInteger(), uploadInfo->getExpectedUploadCost(), result["upload_price"].asInteger()))
+        {
+            uploadInfo->assistantStopped(result,"price_increased");
+            if (uploadInfo->showUploadDialog()) LLUploadDialog::modalUploadFinished();
             return;
         }
 

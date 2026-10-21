@@ -50,7 +50,7 @@ defaults without changing Preferences.
 ## Bounds and validation
 
 Start with 32 files, 64 MiB per file, 128 MiB total staged bytes, depth 8, four
-plans and 32 receipts. Keep source data in session memory; no persisted local
+plans, 64 created folders and 32 receipts. Keep source data in session memory; no persisted local
 paths or content logs. Release staging on expiration/completion/account change.
 Copy source bytes into unique temporary native-codec inputs; delete on every
 exit. Retain encoded cache artifacts only while needed. No URL inputs or external
@@ -64,3 +64,14 @@ portable models with strict warnings; run affected Go tests/vet and native sourc
 contracts. Independent Sol 6.1 Extra High review follows implementation. No broad
 viewer/packaging/GitHub builds. Windows native codec, Premium/server fees, folder
 import and mesh review acceptance remain explicit until tested.
+
+## Implemented checkpoint
+
+The automatic types, directory workflow, price gates, durable status/cancel and
+native mesh review above are implemented. Encoding uses immutable verified bytes;
+source paths are not retained in automatic plan receipts. Exact created-folder
+ancestry is rechecked by the durable guard at queued AIS submission. Missing server
+quotes refuse new-file binary transfer, without changing existing notecard/script
+update endpoints that legitimately omit a price. Animation validation removes
+its temporary decoded keyframe cache. Read the [validation checklist](mcp-file-uploads-validation.md)
+for completed focused checks and pending native acceptance.
