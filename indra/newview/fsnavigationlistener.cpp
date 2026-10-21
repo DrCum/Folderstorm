@@ -229,17 +229,17 @@ void FSNavigationListener::dispatch(const LLSD& request)
         std::string error;
         if(FSEventAPIBridge::getPermissionLevel("world_read")!="allow") return response.error("not_permitted: World read is required");
         if(!arguments(request,error) || !native(request,error)) return response.error(error);
-        response.result(status()); return;
+        response.setResponse(status()); return;
     }
     auto& self=service();
     auto* entry=self.prepared.get(request["__navigation_prepared"].asString(),source(),now()); std::string error;
     if(!entry || entry->executed || !llsd_equals(entry->value["material"],material(request))) return response.error("session_changed: exact unconsumed navigation preparation required");
     if(!arguments(request,error) || !native(request,error)) return response.error(error);
     if(!llsd_equals(entry->value["baseline"],approvalBaseline(request))) return response.error("conflict: navigation baseline changed");
-    if(op=="stop") { entry->executed=true; finish("cancelled","explicit_stop",true); response.result(status()); return; }
+    if(op=="stop") { entry->executed=true; finish("cancelled","explicit_stop",true); response.setResponse(status()); return; }
     if(op!="teleport" && !fs_assistant::asyncSubmit()) return response.error("not_permitted: navigation revoked before execution");
     entry->executed=true;
-    if(op=="flyingSet") { gAgent.setFlying(request["flying"].asBoolean()); LLSD result=status(); result["state"]=gAgent.getFlying()==request["flying"].asBoolean()?"applied":"refused"; response.result(result); return; }
+    if(op=="flyingSet") { gAgent.setFlying(request["flying"].asBoolean()); LLSD result=status(); result["state"]=gAgent.getFlying()==request["flying"].asBoolean()?"applied":"refused"; response.setResponse(result); return; }
     self.source=source(); self.region=gAgent.getRegion()->getRegionID().asString(); self.token="assistant-nav-"+LLUUID::generateNewID().asString(); self.destination=ll_vector3d_from_sd(request["position"]);
     self.teleport=op=="teleport"; self.flying=request["mode"].asString()=="fly"; self.reason.clear(); self.state=self.teleport?"teleport_pending":"moving"; self.deadline=now()+(self.teleport?60.:request["timeout_seconds"].asInteger()); self.task=fs_assistant::asyncTask();
     if(self.teleport) gAgent.teleportViaLocation(self.destination);
@@ -252,6 +252,6 @@ void FSNavigationListener::dispatch(const LLSD& request)
             if(current.task && !current.teleport && gAgent.getAutoPilotBehaviorName()==current.token) finish(success?"arrived":"ended",success?"native_autopilot_target_reached":"native_autopilot_ended",false);
         },nullptr,static_cast<F32>(request["stop_distance"].asReal()),.03f,self.flying);
     }
-    fs_navigation_tick(); response.result(status());
+    fs_navigation_tick(); response.setResponse(status());
 }
 void fs_initialize_navigation_api() { static FSNavigationListener listener; }

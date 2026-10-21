@@ -43,3 +43,13 @@ succeed. Another 1,024 polls leave the live mutation record intact. The same
 harness rejects changed account/login/grid/worker sources, non-ready or restricted
 reads, and changed read material. Native source contracts verify guarded read
 routing precedes mutation-cache lookup. Windows runtime acceptance remains pending.
+
+## Windows listener compiler compatibility
+
+Navigation replies now use the native Response `setResponse()` API. Reviewed
+its declaration and destructor: the original request still supplies the reply
+pump and request ID, so status, Stop, flight and movement replies keep their
+existing structure and guarded delivery. The source exactly matches the user's
+retained compiler patch for successful Windows build 7.2.5.82173. The six focused
+navigation source/extracted checks pass, including polling capacity and delayed
+teleport authority. This does not establish live navigation acceptance.
