@@ -417,6 +417,10 @@ are not upload inputs.
    cannot undo accepted uploads or charges. Do not create a replacement plan to
    retry an uncertain upload automatically.
 
+Cancelled receipts remain queryable while native work is outstanding. The
+bounded history can replace settled terminal receipts only when admitting a new
+plan; polling never evicts them for capacity.
+
 `inventory_upload_mesh_review` takes one absolute Collada `.dae` `path` and a
 destination `folder_id`. It opens the active character's native mesh importer
 for LOD, physics, rigging and server fee review. It does **not** upload: the result

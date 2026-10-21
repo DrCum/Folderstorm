@@ -17,6 +17,10 @@ not an automatic mesh uploader. Host IPC/version is unchanged.
   helpers. Covers queued revocation, lost capability response, late confirmed
   IDs/charges, cancelled folder creation, completed final-file ordering,
   fail-stop batches, and moved parent folders before native queued submission.
+- At the 32-plan limit, repeated status lookups retain cancelled uploads and
+  folder operations through late confirmation and callback-owner cleanup.
+  Outstanding native work blocks capacity eviction; only admitting a new plan
+  can replace terminal history after its native work settles.
 - Registered Go MCP tools: manifest hierarchy/hashes, count/depth limits,
   unsupported/duplicate/linked/oversized sources, explicit session targeting,
   stale/denied/unsupported viewers, and absence of agent-supplied price bypasses.

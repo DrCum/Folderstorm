@@ -248,8 +248,19 @@ struct Plan
     std::map<std::string,LLUUID> folders;
     model::Progress progress;
     fs_assistant::AsyncTaskPtr task;
+    std::size_t nativePending=0;
     double expires=0;
     U32 nextOwner=0,group=0,everyone=0;
+};
+// Retain receipts until every native owner of a callback/upload is released.
+// Cancellation revokes submission authority; it does not end an in-flight reply.
+struct NativeWork
+{
+    std::shared_ptr<Plan> plan;
+    explicit NativeWork(std::shared_ptr<Plan> owner):plan(std::move(owner)){++plan->nativePending;}
+    ~NativeWork(){--plan->nativePending;}
+    NativeWork(const NativeWork&)=delete;
+    NativeWork& operator=(const NativeWork&)=delete;
 };
 std::map<LLUUID,std::shared_ptr<Plan>> plans;
 std::string plansSource;
@@ -280,12 +291,23 @@ void prune()
         if(plan->progress.state==model::State::Prepared && now()>=plan->expires)it=plans.erase(it);
         else ++it;
     }
+}
+bool admitPlan()
+{
+    // Status, cancellation, polling and durable validation never evict receipts
+    // for capacity. Only admission of a new plan may replace settled history.
+    prune();
     while(plans.size()>=32)
     {
-        const auto old=std::find_if(plans.begin(),plans.end(),[](const auto& entry){return entry.second->progress.state==model::State::Complete || entry.second->progress.state==model::State::Stopped;});
-        if(old==plans.end())break;
+        const auto old=std::find_if(plans.begin(),plans.end(),[](const auto& entry)
+        {
+            const auto& plan=entry.second;
+            return plan->nativePending==0 && (plan->progress.state==model::State::Complete || plan->progress.state==model::State::Stopped);
+        });
+        if(old==plans.end())return false;
         plans.erase(old);
     }
+    return true;
 }
 std::shared_ptr<Plan> findPlan(const LLSD& request,std::string& error)
 {
@@ -354,8 +376,10 @@ void advance(const std::shared_ptr<Plan>& plan)
             const auto priorIDs=folderTask->guard()->ids();
             const auto priorSubmissions=folderTask->guard()->submitted();
             plan->receipt["folder_in_flight"]=true;
-            gInventory.createNewCategory(parent,LLFolderType::FT_NONE,part,[plan,prefix,parent,part,folderTask,priorIDs,priorSubmissions](const LLUUID& suppliedID)
+            const auto nativeWork=std::make_shared<NativeWork>(plan);
+            gInventory.createNewCategory(parent,LLFolderType::FT_NONE,part,[plan,prefix,parent,part,folderTask,priorIDs,priorSubmissions,nativeWork](const LLUUID& suppliedID)
             {
+                (void)nativeWork; // Keep the native callback lease through its owner's cleanup.
                 fs_assistant::AsyncScope callbackScope(folderTask->guard());
                 LLUUID id=suppliedID;
                 // Native wrappers hide the result after revocation, but first
@@ -389,8 +413,10 @@ void advance(const std::shared_ptr<Plan>& plan)
     }
     if(!destination(parent,error) || (parent!=plan->destination && !gInventory.isObjectDescendentOf(parent,plan->destination)))
     {stop(plan,error.empty()?"Created upload folder moved outside the chosen destination":error);return;}
-    auto finished=[plan,index](LLUUID asset,LLSD result)
+    const auto nativeWork=std::make_shared<NativeWork>(plan);
+    auto finished=[plan,index,nativeWork](LLUUID asset,LLSD result)
     {
+        (void)nativeWork;
         if(!plan->progress.running() || plan->progress.next!=index)return;
         auto& row=plan->receipt["files"][static_cast<S32>(index)];
         row["asset_id"]=asset;row["item_id"]=result["new_inventory_item"];row["state"]="complete";
@@ -402,16 +428,18 @@ void advance(const std::shared_ptr<Plan>& plan)
         {plan->progress.complete(plan->files.size());plan->receipt["state"]="complete";releaseBytes(plan);plan->task.reset();return;}
         schedule(plan);
     };
-    auto failed=[plan,index](LLUUID,LLSD,const std::string& reason)
+    auto failed=[plan,index,nativeWork](LLUUID,LLSD,const std::string& reason)
     {
+        (void)nativeWork;
         plan->receipt["files"][static_cast<S32>(index)]["state"]=plan->progress.submissionStarted?"submitted_unknown":"failed";
         stop(plan,reason);return true;
     };
     LLResourceUploadInfo::ptr_t upload=std::make_shared<AssistantUploadInfo>(file.encoded,LLUUID::generateNewID(),
         file.name,"",0,file.folder,file.inventory,file.asset,plan->nextOwner,plan->group,plan->everyone,file.cost,parent,false,finished,failed);
     const auto task=plan->task;
-    upload->setAssistantHooks({[plan,task,index,parent](const std::string& stage,bool submit)
+    upload->setAssistantHooks({[plan,task,index,parent,nativeWork](const std::string& stage,bool submit)
     {
+        (void)nativeWork;
         std::string error;
         if(!plan->progress.running() || plan->progress.next!=index || !fs_assistant::asyncTaskAllowed(task) || !live(plan,error,true) || !destination(parent,error) ||
            (parent!=plan->destination && !gInventory.isObjectDescendentOf(parent,plan->destination)))return false;
@@ -421,8 +449,9 @@ void advance(const std::shared_ptr<Plan>& plan)
         if(stage=="source" && submit)
         {plan->progress.sourceSubmitted=true;plan->receipt["files"][static_cast<S32>(index)]["state"]="submitted_unknown";plan->receipt["uncertain"]=true;}
         return true;
-    },[plan,index](const LLSD& result,const std::string& stage)
+    },[plan,index,nativeWork](const LLSD& result,const std::string& stage)
     {
+        (void)nativeWork;
         auto& row=plan->receipt["files"][static_cast<S32>(index)];
         if(plan->origin==source() && result["state"].asString()=="complete" && result["new_asset"].asUUID().notNull())
         {row["state"]="server_confirmed";row["asset_id"]=result["new_asset"];row["item_id"]=result["new_inventory_item"];if(result.has("upload_price"))row["charged_cost"]=result["upload_price"];plan->receipt["uncertain"]=false;plan->progress.sourceSubmitted=false;plan->progress.submissionStarted=false;}
@@ -507,7 +536,7 @@ public:
             std::size_t staged=0;unsigned prepared=0;
             for(const auto& entry:plans)
             {if(entry.second->progress.state==model::State::Prepared)++prepared;for(const auto& file:entry.second->files)staged+=file.encoded.size();}
-            if(prepared>=4 || plans.size()>=32)return response.error("Upload plan capacity reached; cancel or wait for expiration");
+            if(prepared>=4)return response.error("Upload plan capacity reached; cancel or wait for expiration");
             auto plan=std::make_shared<Plan>();plan->id=LLUUID::generateNewID();plan->destination=request["folder_id"].asUUID();
             plan->origin=source();plan->epoch=request["__assistant_epoch"].asString();plan->evidence=destinationEvidence(plan->destination);
             plan->expires=now()+120.;plan->nextOwner=LLFloaterPerms::getNextOwnerPerms("Uploads");plan->group=LLFloaterPerms::getGroupPerms("Uploads");plan->everyone=LLFloaterPerms::getEveryonePerms("Uploads");
@@ -535,6 +564,7 @@ public:
             plan->receipt["next_owner_mask"]=LLSD::Integer(plan->nextOwner);plan->receipt["group_mask"]=LLSD::Integer(plan->group);plan->receipt["everyone_mask"]=LLSD::Integer(plan->everyone);
             plan->summary=llsd::map("op","execute","action","Upload local files","subject_count",static_cast<S32>(plan->files.size()),"cost",total,"destination",gInventory.getCategory(plan->destination)->getName(),"subjects",LLSD::emptyArray(),"value","Next owner: "+std::to_string(plan->nextOwner)+"; group: "+std::to_string(plan->group)+"; everyone: "+std::to_string(plan->everyone));
             for(const auto& row:llsd::inArray(plan->receipt["files"]))plan->summary["subjects"].append(llsd::map("name",row["name"],"path",row["relative_folder"],"after_name",row["asset_type"].asString()+" · L$"+row["cost"].asString()));
+            if(!admitPlan())return response.error("Upload receipt capacity reached; wait for pending native work to finish");
             plans.emplace(plan->id,plan);response.setResponse(plan->receipt);return;
         }
         if(op=="meshReview")
