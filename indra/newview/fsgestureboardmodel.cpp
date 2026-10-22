@@ -48,58 +48,95 @@ namespace
 {
 bool id(const LLSD& value) { return value.isUUID() && value.asUUID().notNull(); }
 }
+namespace
+{
+bool readStyle(const LLSD& row, Style& style)
+{
+    if (row.has("color"))
+    {
+        if (!row["color"].isArray() || row["color"].size() != 3) return false;
+        for (int c = 0; c < 3; ++c)
+        {
+            if (!row["color"][c].isReal() && !row["color"][c].isInteger()) return false;
+            const double value = row["color"][c].asReal();
+            if (!std::isfinite(value) || value < 0. || value > 1.) return false;
+            style.color[c] = static_cast<float>(value);
+        }
+        style.custom_color = true;
+    }
+    if (row.has("theme_color"))
+    {
+        if (!row["theme_color"].isBoolean()) return false;
+        style.theme_color = row["theme_color"].asBoolean();
+        if (style.custom_color && style.theme_color) return false;
+    }
+    if (row.has("width") || row.has("height"))
+    {
+        if (!row["width"].isInteger() || !row["height"].isInteger()) return false;
+        style.width = row["width"].asInteger(); style.height = row["height"].asInteger();
+        if (style.width < MIN_TILE_WIDTH || style.width > MAX_TILE_WIDTH ||
+            style.height < MIN_TILE_HEIGHT || style.height > MAX_TILE_HEIGHT) return false;
+    }
+    return true;
+}
+bool readDefaults(const LLSD& row, Style& style)
+{
+    if (!row.isMap() || row.size() > 4) return false;
+    for (auto it = row.beginMap(); it != row.endMap(); ++it)
+        if (it->first != "color" && it->first != "theme_color" && it->first != "width" && it->first != "height") return false;
+    return readStyle(row, style);
+}
+void writeStyle(LLSD& row, const Style& style)
+{
+    if (style.custom_color) { row["color"] = LLSD::emptyArray(); for (float c : style.color) row["color"].append(LLSD::Real(c)); }
+    if (style.theme_color) row["theme_color"] = true;
+    if (style.width || style.height) { row["width"] = style.width; row["height"] = style.height; }
+}
+void writeDefaults(LLSD& row, const Style& style)
+{
+    if (style.custom_color || style.theme_color || style.width || style.height)
+    { row["defaults"] = LLSD::emptyMap(); writeStyle(row["defaults"], style); }
+}
+}
 bool decode(const LLSD& data, Collection& result)
 {
     Collection parsed;
     if (data.isMap() && data.size() == 0) { result = parsed; return true; }
-    if (!data.isMap() || data.size() != 3 || !data["version"].isInteger() ||
-        (data["version"].asInteger() != 1 && data["version"].asInteger() != VERSION) ||
+    if (!data.isMap() || data.size() < 3 || data.size() > 4 || !data["version"].isInteger() ||
+        data["version"].asInteger() < 1 || data["version"].asInteger() > VERSION ||
         !data["boards"].isArray() || data["boards"].size() > static_cast<size_t>(MAX_BOARDS) || !data["selected"].isUUID()) return false;
+    const bool modern = data["version"].asInteger() >= 3;
+    for (auto it = data.beginMap(); it != data.endMap(); ++it)
+        if (it->first != "version" && it->first != "boards" && it->first != "selected" && (it->first != "defaults" || !modern)) return false;
+    if (data.has("defaults") && !readDefaults(data["defaults"], parsed.defaults)) return false;
     parsed.selected = data["selected"].asUUID().asString();
     if (data["selected"].asUUID().isNull()) parsed.selected.clear();
     std::set<std::string> board_ids, tile_ids, names;
     for (S32 b = 0; b < static_cast<S32>(data["boards"].size()); ++b)
     {
         const auto& entry = data["boards"][b];
-        if (!entry.isMap() || entry.size() < 3 || entry.size() > 4 || !id(entry["id"]) || !entry["name"].isString() ||
+        if (!entry.isMap() || entry.size() < 3 || entry.size() > 5 || !id(entry["id"]) || !entry["name"].isString() ||
             !validText(entry["name"].asString()) || !entry["tiles"].isArray() || entry["tiles"].size() > static_cast<size_t>(MAX_TILES)) return false;
         Board board; board.id = entry["id"].asUUID().asString(); board.name = entry["name"].asString();
         if (entry.has("compact"))
         { if (!entry["compact"].isBoolean()) return false; board.compact = entry["compact"].asBoolean(); }
         for (auto it = entry.beginMap(); it != entry.endMap(); ++it)
-            if (it->first != "id" && it->first != "name" && it->first != "tiles" && it->first != "compact") return false;
+            if (it->first != "id" && it->first != "name" && it->first != "tiles" && it->first != "compact" && (it->first != "defaults" || !modern)) return false;
+        if (entry.has("defaults") && !readDefaults(entry["defaults"], board.defaults)) return false;
         if (!board_ids.insert(board.id).second || !names.insert(board.name).second) return false;
         std::set<std::string> items;
         for (S32 t = 0; t < static_cast<S32>(entry["tiles"].size()); ++t)
         {
             const auto& row = entry["tiles"][t];
-            if (!row.isMap() || row.size() < 2 || row.size() > 6 || !id(row["id"]) || !id(row["item"])) return false;
+            if (!row.isMap() || row.size() < 2 || row.size() > 7 || !id(row["id"]) || !id(row["item"])) return false;
             Tile tile; tile.id = row["id"].asUUID().asString(); tile.item = row["item"].asUUID().asString();
             if (!tile_ids.insert(tile.id).second || !items.insert(tile.item).second) return false;
             if (row.has("label"))
             { if (!row["label"].isString() || !validText(row["label"].asString(), true)) return false; tile.label = row["label"].asString(); }
-            if (row.has("color"))
-            {
-                if (!row["color"].isArray() || row["color"].size() != 3) return false;
-                for (int c = 0; c < 3; ++c)
-                {
-                    if (!row["color"][c].isReal() && !row["color"][c].isInteger()) return false;
-                    const double value = row["color"][c].asReal();
-                    if (!std::isfinite(value) || value < 0. || value > 1.) return false;
-                    tile.color[c] = static_cast<float>(value);
-                }
-                tile.custom_color = true;
-            }
-            if (row.has("width") || row.has("height"))
-            {
-                if (!row["width"].isInteger() || !row["height"].isInteger()) return false;
-                tile.width = row["width"].asInteger(); tile.height = row["height"].asInteger();
-                if (tile.width < MIN_TILE_WIDTH || tile.width > MAX_TILE_WIDTH ||
-                    tile.height < MIN_TILE_HEIGHT || tile.height > MAX_TILE_HEIGHT) return false;
-            }
+            if (!readStyle(row, tile)) return false;
             for (auto it = row.beginMap(); it != row.endMap(); ++it)
                 if (it->first != "id" && it->first != "item" && it->first != "label" && it->first != "color" &&
-                    it->first != "width" && it->first != "height") return false;
+                    it->first != "width" && it->first != "height" && (it->first != "theme_color" || !modern)) return false;
             board.tiles.push_back(tile);
         }
         parsed.boards.push_back(std::move(board));
@@ -110,33 +147,77 @@ bool decode(const LLSD& data, Collection& result)
 LLSD encode(const Collection& collection)
 {
     LLSD data; data["version"] = VERSION; data["selected"] = LLUUID(collection.selected); data["boards"] = LLSD::emptyArray();
+    writeDefaults(data, collection.defaults);
     for (const auto& board : collection.boards)
     {
         LLSD entry; entry["id"] = LLUUID(board.id); entry["name"] = board.name; entry["tiles"] = LLSD::emptyArray();
-        entry["compact"] = board.compact;
+        entry["compact"] = board.compact; writeDefaults(entry, board.defaults);
         for (const auto& tile : board.tiles)
         {
             LLSD row; row["id"] = LLUUID(tile.id); row["item"] = LLUUID(tile.item);
             if (!tile.label.empty()) row["label"] = tile.label;
-            if (tile.custom_color) { row["color"] = LLSD::emptyArray(); for (float c : tile.color) row["color"].append(LLSD::Real(c)); }
-            if (tile.width || tile.height) { row["width"] = tile.width; row["height"] = tile.height; }
-            entry["tiles"].append(row);
+            writeStyle(row, tile); entry["tiles"].append(row);
         }
         data["boards"].append(entry);
     }
     return data;
 }
-std::vector<Page> paginate(const Board& board, int width, int height)
+Tile presentation(const Collection& collection, const Board& board, const Tile& tile)
 {
-    std::vector<Page> pages(1);
+    Tile result = tile; result.custom_color = false; result.theme_color = true;
+    result.width = board.compact ? 100 : 132; result.height = board.compact ? 28 : 44;
+    for (const Style* style : {&collection.defaults, &board.defaults, static_cast<const Style*>(&tile)})
+    {
+        if (style->custom_color || style->theme_color)
+        { result.custom_color = style->custom_color; result.theme_color = style->theme_color; result.color = style->color; }
+        if (style->width && style->height) { result.width = style->width; result.height = style->height; }
+    }
+    return result;
+}
+bool applyStyle(Board& board, const std::set<std::string>& ids, const Style& style, bool color, bool size)
+{
+    if (ids.empty() || (!color && !size) || (style.custom_color && style.theme_color)) return false;
+    for (float c : style.color) if (!std::isfinite(c) || c < 0.f || c > 1.f) return false;
+    if (size && (style.width || style.height) &&
+        (style.width < MIN_TILE_WIDTH || style.width > MAX_TILE_WIDTH || style.height < MIN_TILE_HEIGHT || style.height > MAX_TILE_HEIGHT)) return false;
+    // Validate the complete selection before editing anything.
+    size_t found = 0; for (const auto& tile : board.tiles) if (ids.count(tile.id)) ++found;
+    if (found != ids.size()) return false;
+    for (auto& tile : board.tiles) if (ids.count(tile.id))
+    {
+        if (color) { tile.custom_color = style.custom_color; tile.theme_color = style.theme_color; tile.color = style.color; }
+        if (size) { tile.width = style.width; tile.height = style.height; }
+    }
+    return true;
+}
+void Selection::choose(const Board& board, const std::string& id, bool range)
+{
+    const auto target = std::find_if(board.tiles.begin(), board.tiles.end(), [&](const Tile& tile) { return tile.id == id; });
+    if (target == board.tiles.end()) return;
+    const auto start = std::find_if(board.tiles.begin(), board.tiles.end(), [&](const Tile& tile) { return tile.id == anchor; });
+    if (range && start != board.tiles.end())
+        for (auto it = std::min(start, target); it <= std::max(start, target); ++it) ids.insert(it->id);
+    else { if (!ids.erase(id)) ids.insert(id); anchor = id; }
+}
+void Selection::retain(const Board& board)
+{
+    std::set<std::string> live; for (const auto& tile : board.tiles) live.insert(tile.id);
+    for (auto it = ids.begin(); it != ids.end();) if (!live.count(*it)) it = ids.erase(it); else ++it;
+    if (!live.count(anchor)) anchor.clear();
+}
+void Selection::all(const Board& board)
+{ ids.clear(); for (const auto& tile : board.tiles) ids.insert(tile.id); anchor = board.tiles.empty() ? "" : board.tiles.front().id; }
+std::vector<Page> paginate(const Board& board, int width, int height, const Style& defaults)
+{
+    std::vector<Page> pages(1); Collection collection; collection.defaults = defaults;
     width = std::max(1, width); height = std::max(1, height);
     int x = 0, y = 0, row_height = 0;
     constexpr int gap = 4;
     for (int i = 0; i < static_cast<int>(board.tiles.size()); ++i)
     {
-        const auto& tile = board.tiles[i];
-        const int w = std::clamp(tile.width ? tile.width : board.compact ? 100 : 132, 1, width);
-        const int h = std::clamp(tile.height ? tile.height : board.compact ? 28 : 44, 1, height);
+        const auto tile = presentation(collection, board, board.tiles[i]);
+        const int w = std::clamp(tile.width, 1, width);
+        const int h = std::clamp(tile.height, 1, height);
         if (x && x + w > width) { x = 0; y += row_height + gap; row_height = 0; }
         if (y + h > height)
         { pages.emplace_back(); x = 0; y = 0; row_height = 0; }
@@ -145,10 +226,10 @@ std::vector<Page> paginate(const Board& board, int width, int height)
     }
     return pages;
 }
-Frame layoutFrame(int width, int height, int header_height, bool multiple_pages)
+Frame layoutFrame(int width, int height, int header_height, bool multiple_pages, bool selecting)
 {
     const int controls_top = header_height + 4;
-    const int grid_top = controls_top + 22 + 4;
+    const int grid_top = controls_top + 22 + 4 + (selecting ? 26 : 0);
     const int grid_width = std::max(1, width - 16);
     const int grid_height = std::max(1, height - grid_top - 6 - (multiple_pages ? 26 : 0));
     Frame frame;
@@ -157,6 +238,10 @@ Frame layoutFrame(int width, int height, int header_height, bool multiple_pages)
     frame.add = {width - 86, controls_top, 24, 22};
     frame.stop = {width - 60, controls_top, 24, 22};
     frame.options = {width - 32, controls_top, 24, 22};
+    frame.selection = {8, controls_top + 26, grid_width, 22};
+    frame.selected_count = {0, 2, std::max(1, grid_width - 152), 18};
+    frame.edit_selected = {grid_width - 148, 0, 96, 22};
+    frame.done_selecting = {grid_width - 48, 0, 48, 22};
     frame.grid = {8, grid_top, grid_width, grid_height};
     frame.empty = {12, grid_top + 4, std::max(1, grid_width - 8), std::min(24, grid_height - 4)};
     frame.pagination = {8, height - 28, grid_width, 22};
@@ -175,12 +260,11 @@ const Tile* findTile(const Board& board, const std::string& id)
 { for (const auto& tile : board.tiles) if (tile.id == id) return &tile; return nullptr; }
 bool sameBoard(const Board& left, const Board& right)
 {
-    if (left.id != right.id || left.name != right.name || left.compact != right.compact || left.tiles.size() != right.tiles.size()) return false;
+    if (left.id != right.id || left.name != right.name || left.compact != right.compact || !sameStyle(left.defaults, right.defaults) || left.tiles.size() != right.tiles.size()) return false;
     for (size_t i = 0; i < left.tiles.size(); ++i)
     {
         const auto& a = left.tiles[i]; const auto& b = right.tiles[i];
-        if (a.id != b.id || a.item != b.item || a.label != b.label || a.custom_color != b.custom_color ||
-            a.color != b.color || a.width != b.width || a.height != b.height) return false;
+        if (a.id != b.id || a.item != b.item || a.label != b.label || !sameStyle(a, b)) return false;
     }
     return true;
 }

@@ -15,30 +15,52 @@
  <string name="load_failed">The gesture could not be loaded. Try again or replace its tile.</string>
  <string name="timeout">The gesture did not load within 30 seconds. No delayed play is queued.</string>
  <string name="changed">The board, item or login changed. Reopen the editor/picker and try again.</string>
- <string name="full">Maximum: 16 boards and 64 tiles per board. Your saved setup was kept.</string>
+ <string name="full">Maximum: 16 boards and 1,024 tiles per board. Your saved setup was kept.</string>
  <string name="exists">That board name is already used. Choose another name.</string>
  <string name="invalid_name">Use 1–64 characters for board names and up to 64 for tile text; avoid control characters.</string>
  <string name="saved">Board configuration saved. Inventory items were unchanged.</string>
  <string name="duplicate_tile">That item already has a tile on this board.</string>
  <string name="missing_tile">Unavailable item</string>
- <string name="editor_help">Text and colors belong to this tile. Save applies them; Cancel keeps the original tile.</string>
+ <string name="editor_help">Tile overrides take priority over defaults. Save applies changes; Cancel discards them.</string>
+ <string name="bulk_help">Only checked properties change. Names, Inventory references and other tile settings stay as they are.</string>
+ <string name="global_help">Defaults for every board for this character. Board and tile overrides take priority.</string>
+ <string name="defaults_help">Defaults for this board. Tile overrides take priority.</string>
+ <string name="choose_properties">Choose Change color and/or Change size before saving.</string>
+ <string name="theme_default">Theme color</string>
+ <string name="global_default">Use all-boards default</string>
+ <string name="board_default">Use board default</string>
+ <string name="density_size">Compact / regular size</string>
+ <string name="custom_color">Custom color</string>
+ <string name="custom_size">Custom size</string>
+ <string name="sample_label">Sample tile</string>
+ <string name="title_tile">Edit tile</string>
+ <string name="title_bulk">Edit [COUNT] selected tiles</string>
+ <string name="title_global">Defaults for all boards</string>
+ <string name="title_defaults">Board defaults</string>
+ <string name="title_board">Edit board</string>
  <string name="board_help">Choose a board name. This changes the board configuration, not Inventory.</string>
  <panel name="board_controls" left="12" top="32" right="-12" height="64" layout="topleft" follows="left|right|top">
   <text name="board_name_label" left="0" top="0" right="-1" height="18" layout="topleft" follows="left|right|top">Board name</text>
   <line_editor name="board_name" left="0" top="24" right="-1" height="24" max_length="64" layout="topleft" follows="left|right|top"/>
  </panel>
- <panel name="tile_controls" left="12" top="32" right="-12" height="430" layout="topleft" follows="left|right|top">
+ <panel name="tile_controls" left="12" top="32" right="-12" height="140" layout="topleft" follows="left|right|top">
   <text use_ellipses="true" name="item_name" left="0" top="0" right="-1" height="20" layout="topleft" follows="left|right|top"/>
   <button name="replace" label="Replace gesture / sound…" left="0" top="28" right="-1" height="24" layout="topleft" follows="left|right|top"/>
   <text name="label_caption" left="0" top="60" right="-1" height="18" layout="topleft" follows="left|right|top">Display text (blank uses the Inventory name)</text>
   <line_editor name="label" left="0" top="84" right="-1" height="24" max_length="64" layout="topleft" follows="left|right|top"/>
   <button name="reset_label" label="Use Inventory name" left="0" top="116" right="-1" height="24" layout="topleft" follows="left|right|top"/>
-  <check_box name="custom_color" label="Custom tile color (off uses theme color)" left="0" top="148" width="310" height="24" layout="topleft" follows="left|top"/>
-  <color_swatch name="color" label="Color" left="320" top="148" width="80" height="48" can_apply_immediately="true" layout="topleft" follows="left|top"/>
-  <check_box name="board_size" label="Use board tile size" left="0" top="198" width="310" height="24" layout="topleft" follows="left|top"/>
-  <spinner name="tile_width" label="Width (px)" left="0" top="230" width="190" height="24" label_width="100" min_val="48" max_val="320" initial_value="100" increment="1" decimal_digits="0" layout="topleft" follows="left|top"/>
-  <spinner name="tile_height" label="Height (px)" left="204" top="230" width="190" height="24" label_width="100" min_val="24" max_val="160" initial_value="28" increment="1" decimal_digits="0" layout="topleft" follows="left|top"/>
-  <panel name="sample" left="0" top="266" right="-1" height="160" layout="topleft" follows="left|right|top"/>
+ </panel>
+ <panel name="style_controls" left="12" top="180" right="-12" height="282" layout="topleft" follows="left|right|top">
+  <text name="color_caption" left="0" top="12" width="140" height="18">Color</text>
+  <check_box name="apply_color" label="Change color" left="0" top="8" width="140" height="24" visible="false"/>
+  <combo_box name="color_mode" left="144" top="8" width="156" height="24" tool_tip="Inherit the parent color, use the current skin, or choose a custom color."/>
+  <color_swatch name="color" label="Color" left="320" top="0" width="80" height="48" can_apply_immediately="true"/>
+  <text name="size_caption" left="0" top="62" width="140" height="18">Size</text>
+  <check_box name="apply_size" label="Change size" left="0" top="58" width="140" height="24" visible="false"/>
+  <combo_box name="size_mode" left="144" top="58" right="-1" height="24" tool_tip="Inherit the parent size or set dimensions for this scope. Compact/regular is the fallback."/>
+  <spinner name="tile_width" label="Width (px)" left="0" top="90" width="190" height="24" label_width="100" min_val="48" max_val="320" initial_value="100" increment="1" decimal_digits="0"/>
+  <spinner name="tile_height" label="Height (px)" left="204" top="90" width="190" height="24" label_width="100" min_val="24" max_val="160" initial_value="28" increment="1" decimal_digits="0"/>
+  <panel name="sample" left="0" top="122" right="-1" height="160"/>
  </panel>
  <text name="status" left="12" bottom="-48" right="-12" height="40" wrap="true" follows="left|right|bottom" layout="topleft"/>
  <button name="save" label="Save" left="12" bottom="-12" width="110" height="24" follows="left|bottom" layout="topleft"/>

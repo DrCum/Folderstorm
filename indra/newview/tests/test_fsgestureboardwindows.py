@@ -65,12 +65,14 @@ int main(){
     now+=1.f;c.poll();assert(c.mPending.empty()&&c.mStarted.empty());gAgent.session=LLUUID("session");
     // Every persisted board field participates in edit invalidation.
     assert(sameBoard(ba,ba));
-    for(int changed=0;changed<10;++changed){auto copy=ba;
+    for(int changed=0;changed<13;++changed){auto copy=ba;
         switch(changed){case 0:copy.name="renamed";break;case 1:copy.compact=false;break;
         case 2:copy.tiles[0].label="label";break;case 3:copy.tiles[0].item="replacement";break;
         case 4:copy.tiles[0].custom_color=true;break;case 5:copy.tiles[0].color[0]=1.f;break;
         case 6:copy.tiles[0].width=100;break;case 7:copy.tiles[0].height=28;break;
-        case 8:std::swap(copy.tiles[0],copy.tiles[1]);break;case 9:copy.tiles.pop_back();break;}
+        case 8:std::swap(copy.tiles[0],copy.tiles[1]);break;case 9:copy.tiles.pop_back();break;
+        case 10:copy.defaults.width=100;copy.defaults.height=28;break;case 11:copy.defaults.theme_color=true;break;
+        case 12:copy.tiles[0].theme_color=true;break;}
         assert(!sameBoard(ba,copy));}
 }
 '''
@@ -104,8 +106,10 @@ namespace FSGestureBoard {
 // the actual snapshot, account/session and invalidation decisions.
 bool reject=false;
 LLSD encode(const Collection& c){LLSD raw;raw["selected"]=c.selected;
-    std::string names;for(const auto& b:c.boards){names+=b.id+":"+b.name+std::to_string(b.compact)+";";
-        for(const auto& t:b.tiles){names+=t.id+t.item+t.label+std::to_string(t.custom_color)+std::to_string(t.width)+std::to_string(t.height);
+    const auto style=[](const Style& s){std::string v=std::to_string(s.custom_color)+std::to_string(s.theme_color)+std::to_string(s.width)+std::to_string(s.height);
+        for(float color:s.color){v+=std::to_string(color);}return v;};
+    std::string names=style(c.defaults);for(const auto& b:c.boards){names+=b.id+":"+b.name+std::to_string(b.compact)+style(b.defaults)+";";
+        for(const auto& t:b.tiles){names+=t.id+t.item+t.label+style(t);
             for(float color:t.color)names+=std::to_string(color);}}
     raw["boards"]=names;raw.decoded=c;raw.encoded=true;return raw;}
 bool decode(const LLSD& raw,Collection& c){if(reject||!raw.encoded)return false;c=raw.decoded;return true;}
@@ -129,7 +133,7 @@ struct FakeFloater{LLSD key;int closes=0;virtual ~FakeFloater()=default;const LL
     void closeFloater(bool){++closes;}};
 struct Menu{void hide(){}};struct MenuHandle{Menu* get(){return nullptr;}};
 struct FSFloaterGestureBoard:FakeFloater{
-    LLUUID mWindowID;std::string mBoard;bool live=true;int refreshes=0;MenuHandle mMenu;
+    LLUUID mWindowID;std::string mBoard;FSGestureBoard::Selection mSelection;bool mSelecting=false;bool live=true;int refreshes=0;MenuHandle mMenu;
     const LLUUID& windowID()const{return mWindowID;}const std::string& selectedBoard()const{return mBoard;}
     bool current()const{return live;}void refresh(bool){++refreshes;}
     void closeEditors();void selectBoard(const std::string&);
@@ -155,7 +159,8 @@ int main(){
     FSFloaterGestureBoard a,b;a.key=LLSD();b.key=LLSD("secondary");a.mWindowID=LLUUID("wa");b.mWindowID=LLUUID("wb");
     a.mBoard=ba.id;b.mBoard=bb.id;windows={&a,&b};
     picker.key["owner"]=b.mWindowID;editor.key["owner"]=b.mWindowID;
-    a.selectBoard(bb.id);assert(a.mBoard==bb.id&&b.mBoard==bb.id&&picker.closes==0&&editor.closes==0);
+    a.mSelection.ids.insert("old-tile");a.mSelecting=true;
+    a.selectBoard(bb.id);assert(a.mSelection.ids.empty()&&!a.mSelecting);assert(a.mBoard==bb.id&&b.mBoard==bb.id&&picker.closes==0&&editor.closes==0);
     assert(c.mData.selected==bb.id&&c.matchesSnapshot(original)); // Selection alone does not invalidate a draft.
     auto changed=original;changed["boards"]="edited";assert(!c.matchesSnapshot(changed));
     a.selectBoard(ba.id);assert(b.mBoard==bb.id);
@@ -182,6 +187,11 @@ int main(){
     assert(gSavedPerAccountSettings.writes==writes&&c.cancelledBoards.empty());
     auto added=c.mData;Board third;third.id="third";third.name="Third";added.boards.push_back(third);
     assert(c.commit(added,c.mRaw,c.mAccount,c.mSession)&&c.cancelledBoards.empty());
+    auto defaults=c.mData;defaults.defaults.custom_color=true;defaults.defaults.color={.7f,.2f,.8f};
+    const auto beforeDefaults=c.mRaw;
+    assert(c.commit(defaults,c.mRaw,c.mAccount,c.mSession));
+    assert(c.cancelledBoards==std::vector<std::string>({"a","b","third"}));c.cancelledBoards.clear();
+    assert(!c.commit(defaults,beforeDefaults,c.mAccount,c.mSession)); // Another view's stale draft cannot erase defaults.
     auto removed=c.mData;removed.boards.erase(removed.boards.begin()+1);
     assert(c.commit(removed,c.mRaw,c.mAccount,c.mSession));assert(c.cancelledBoards==std::vector<std::string>{"b"});
 }
