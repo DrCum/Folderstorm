@@ -50,6 +50,7 @@ struct Binding{
  std::string id="binding";Handle button;S32 rightInset=0;bool dragOver=false;std::string error;LLUUID conversation{"private-im"};unsigned generation=0;bool allowed=true;Editor* editor=nullptr;std::string target="private-im";
  Editor* input()const{return editor;}bool valid()const{return allowed&&editor;}std::string stamp()const{return target;}
 };
+void layoutAttachment(const std::shared_ptr<Binding>&){}
 struct Dir{std::string getCAFile(){return {};}}dir;Dir* gDirUtilp=&dir;
 struct Callbacks{void addFunction(void(*)(void*),void*){}}gIdleCallbacks;
 '''

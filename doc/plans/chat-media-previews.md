@@ -4,6 +4,15 @@ Status: native chat and sharing-site implementation on `feat/native-chat-media`,
 
 Scope update: the user deferred host Chat. This branch implements the native viewer and sharing-site adapters together; the host sections below remain future design only. Zipline deployment and upload integration remain separate work. See `chat-media-previews-validation.md` for actual behavior, checks and limits.
 
+Presentation follow-up (`fix/native-chat-media-polish`, above #82): loaded inline
+images have no Open preview footer. Click the image to enlarge it; an animation
+has a small play/pause control over its lower-left corner. Loaded cards use their
+aspect ratio rather than reserving a fixed-height row. Preferences → Chat →
+Media → Previews adds **Hide image links after loading**, off by default. It
+collapses raw URL spans only while their image is available; captions, original
+text, copied selections and logs remain intact. Right-click the image to copy or
+open its link. Load/Retry remains available before a usable preview exists.
+
 ## Goal and scope
 
 Show compact image previews beneath image links in native Nearby, direct IM, group and conference chat, and in shared, detached and monitor Chat in the session host. Clicking a preview opens a larger in-app image viewer. Keep the original link available for copying and for recipients using other viewers.

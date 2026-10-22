@@ -44,12 +44,18 @@ reviewing, queued, uploading or awaiting server processing.
 - Windows is the initial platform for paste/drop. Other platform implementations
   keep safe unsupported defaults; Choose image remains available through their
   existing file picker. A native Windows compile/runtime test is still needed.
+- The presentation follow-up registers Conversations composers even when their
+  auto-sized layout is initially narrow. Only attachment-button placement waits
+  for a usable width; clipboard callbacks and destination binding register at
+  once. Polling reserves button space once, rather than repeatedly shrinking
+  the composer. This addresses the toolbar-working/Conversations-missing report.
 
 ## Checks
 
-- Ten focused tests pass: the five media tests plus upload policy/response,
+- Twelve focused tests pass: media policy/decoder/transport/resolver, production
+  service/presentation harnesses, and upload policy/response,
   HTTP early rejection, bitmap parsing, production Job/Controller harness and
-  production drop routing/hit-testing harness.
+  production drop routing/hit-testing and composer-registration harnesses.
 - The controller harness compiles production bodies unchanged with viewer and
   transport boundaries stubbed. Twelve scenarios cover cancellation/late receipt,
   login change, normal insertion, edited draft, revoked send authority, changed
@@ -57,6 +63,10 @@ reviewing, queued, uploading or awaiting server processing.
   multi-image order, cursor movement and selected text. The drop harness adds
   eleven destination/lifecycle scenarios including opaque overlays and no Nearby
   fallback after a session/login/grid/configuration change.
+- The composer harness compiles production bind/layout bodies and starts both
+  Nearby and private composers at 32 pixels wide. It checks immediate paste
+  registration, correct recipient, delayed button placement, resize/collapse/
+  restore, repeated polling, conversation rebind and disabled upload settings.
 - Bitmap layout/overflow/alpha/orientation tests also pass ASan/UBSan, with
   LeakSanitizer disabled because this sandbox cannot inspect its threads.
 - Affected native source syntax checks pass against available Linux viewer
@@ -106,3 +116,8 @@ subject to the supplied expiry/oldest-first policy; no cleanup is claimed.
    tab/login/grid/recipient mid-drag cannot send to a replacement conversation.
 8. Test custom proxies: the feature explains unavailable transport and does not
    silently bypass a configured proxy. Original text chat remains functional.
+9. Hide toolbar Nearby chat. Open the normal Conversations window to Nearby and
+   a private IM, both docked and torn off. Test the attachment button, image-only
+   Ctrl+V, mixed-format Ctrl+Shift+V, menu Paste image and file drop. Start narrow,
+   expand/collapse and resize repeatedly; the button must appear without reopening
+   Chat, must not consume the composer over time, and must retain the recipient.

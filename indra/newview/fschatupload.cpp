@@ -50,6 +50,7 @@ struct Binding
     LLUUID conversation;
     unsigned generation = 0;
     S32 rightInset = 0;
+    bool layoutReady = false;
     bool dragOver = false;
     std::string error;
     std::function<bool()> available;
@@ -83,6 +84,26 @@ struct Binding
         return tr("FSChatUploadNearby") + (destination ? " · " + destination() : "");
     }
 };
+// Registration must work before an auto-sized layout panel gets its final width.
+// Only the visual button's space reservation waits for a usable layout.
+void layoutAttachment(const std::shared_ptr<Binding>& binding)
+{
+    auto* editor = binding->input(); auto* button = dynamic_cast<LLButton*>(binding->button.get());
+    if (!editor || !button || !editor->getParent()) return;
+    const auto rect = editor->getRect(); const auto parentWidth = editor->getParent()->getRect().getWidth();
+    if (!binding->layoutReady)
+    {
+        if (rect.getWidth() < 70 || parentWidth < 70) { button->setVisible(false); return; }
+        binding->rightInset = (std::max)(0, parentWidth - rect.mRight); binding->layoutReady = true;
+    }
+    const auto width = parentWidth - binding->rightInset - 26 - rect.mLeft;
+    button->setVisible(editor->getVisible() && width >= 40);
+    if (width < 40) return;
+    if (rect.getWidth() != width) editor->reshape(width, rect.getHeight());
+    const auto placed = editor->getRect(); button->setOrigin(placed.mRight + 2, placed.mBottom);
+    button->reshape(24, (std::min)(24, placed.getHeight()));
+}
+
 struct Work
 {
     std::shared_ptr<std::vector<unsigned char>> bytes;
@@ -264,14 +285,7 @@ struct Controller
         {
             auto* editor = binding->input(); auto* button = dynamic_cast<LLButton*>(binding->button.get());
             if (!editor || !button) continue;
-            if (const auto* parent = editor->getParent())
-            {
-                const auto width = parent->getRect().getWidth() - binding->rightInset - 26 - editor->getRect().mLeft;
-                button->setVisible(editor->getVisible() && width >= 40);
-                if (width >= 40 && editor->getRect().getWidth() != width) editor->reshape(width, editor->getRect().getHeight());
-            }
-            const auto rect = editor->getRect(); button->setOrigin(rect.mRight + 2, rect.mBottom);
-            button->reshape(24, (std::min)(24, rect.getHeight()));
+            layoutAttachment(binding);
             unsigned pending = 0; for (const auto& job : jobs) if (job->binding == binding && fs_chat_upload::blocksSend(job->state)) ++pending;
             if (!pending && binding->error == tr("FSChatUploadPending")) binding->error.clear();
             button->setLabel(LLStringExplicit(pending ? std::to_string(pending) : ""));
@@ -343,13 +357,10 @@ void FSChatUpload::bind(LLChatEntry* editor, const LLUUID& conversation, std::fu
     auto& c = controller(); auto b = c.find(editor);
     if (!b)
     {
-        auto rect = editor->getRect(); if (rect.getWidth() < 70) return;
         b = std::make_shared<Binding>(); b->editor = editor->getHandle(); c.bindings.push_back(b);
-        b->rightInset = editor->getParent()->getRect().getWidth() - rect.mRight;
-        editor->reshape(rect.getWidth() - 26, rect.getHeight());
-        LLButton::Params p; p.name = "chat_attach_image"; p.rect = LLRect(rect.mRight - 24, rect.mBottom + 22, rect.mRight, rect.mBottom);
+        LLButton::Params p; p.name = "chat_attach_image"; p.rect = LLRect(0, 22, 24, 0);
         p.follows.flags = FOLLOWS_RIGHT | FOLLOWS_BOTTOM; p.image_overlay = LLUI::getUIImage("Icon_File_Upload"); p.tool_tip = tr("FSChatUploadAttach");
-        auto* button = LLUICtrlFactory::create<LLButton>(p); editor->getParent()->addChild(button); b->button = button->getHandle();
+        auto* button = LLUICtrlFactory::create<LLButton>(p); button->setVisible(false); editor->getParent()->addChild(button); b->button = button->getHandle();
         button->setCommitCallback([b](LLUICtrl*, const LLSD&) { show(b); });
     }
     if (b->conversation != conversation) ++b->generation;
