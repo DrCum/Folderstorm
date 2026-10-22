@@ -98,6 +98,7 @@ void FSNearbyChatControl::onKeystroke(LLTextEditor* caller)
 
 void FSNearbyChatControl::paste()
 {
+    if (!LLTextEditor::canPaste() && canPasteImage()) { pasteImage(); return; }
     LLChatEntry::paste();
 
     // Keep nearby chat on one visual line by flattening paragraph markers from paste.
