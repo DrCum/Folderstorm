@@ -29,9 +29,12 @@ reviewing, queued, uploading or awaiting server processing.
 - Eight focused tests pass: the five media tests plus upload policy/response,
   HTTP early rejection and production Job/Controller lifecycle harness.
 - The controller harness compiles production bodies unchanged with viewer and
-  transport boundaries stubbed. Nine scenarios cover cancellation/late receipt,
+  transport boundaries stubbed. Eleven scenarios cover cancellation/late receipt,
   login change, normal insertion, edited draft, revoked send authority, changed
   binding generation, replacement destination and current insertion authority.
+  Conference admission and ongoing validation use the production permission
+  check with the current speaker list, including late joins, departed initial
+  participants, self exclusion, missing speakers and late upload receipts.
 - Affected native source syntax checks pass against available Linux viewer
   headers, including uploader, IM, Nearby, toolbar, registration and Preferences.
   Existing `llappviewer.cpp` CEF SDK absence still prevents its standalone check.

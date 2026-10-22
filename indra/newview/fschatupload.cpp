@@ -19,6 +19,7 @@
 #include "llfloaterreg.h"
 #include "llimage.h"
 #include "llimview.h"
+#include "llspeakers.h"
 #include "llproxy.h"
 #include "llspinctrl.h"
 #include "llstartup.h"
@@ -61,7 +62,11 @@ struct Binding
         if (!session || !session->mTextIMPossible || !FSData::instance().canSendToIMContact(session->mType, gAgent.getID(), session->mOtherParticipantID)) return false;
         if (session->isGroupSessionType()) return gAgent.isInGroup(conversation) && RlvActions::canSendIM(conversation);
         if (session->isP2PSessionType()) return RlvActions::canSendIM(session->mOtherParticipantID);
-        for (const auto& id : session->mInitialTargetIDs) if (!RlvActions::canSendIM(id)) return false;
+        if (!session->mSpeakers) return false;
+        LLSpeakerMgr::speaker_list_t speakers;
+        session->mSpeakers->getSpeakerList(&speakers, true);
+        for (const auto& speaker : speakers)
+            if (speaker->mID != gAgent.getID() && !RlvActions::canSendIM(speaker->mID)) return false;
         return true;
     }
     std::string stamp() const

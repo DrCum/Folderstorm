@@ -14,8 +14,23 @@ STUBS = r'''
 using namespace fs_chat_upload;
 using S32=int;
 using LLWString=std::wstring;
-struct LLUUID {std::string value; LLUUID()=default; LLUUID(const char* s):value(s){} std::string asString()const{return value;} bool operator==(const LLUUID& b)const{return value==b.value;} bool isNull()const{return value.empty();} static LLUUID generateNewID(){return LLUUID("generated-id");}};
-struct Agent {LLUUID account{"account"},login{"login"};LLUUID getID()const{return account;}LLUUID getSessionID()const{return login;}}gAgent;
+struct LLUUID {std::string value; LLUUID()=default; LLUUID(const char* s):value(s){} std::string asString()const{return value;} bool operator==(const LLUUID& b)const{return value==b.value;} bool operator!=(const LLUUID& b)const{return !(*this==b);} bool isNull()const{return value.empty();} static LLUUID generateNewID(){return LLUUID("generated-id");}};
+struct Agent {LLUUID account{"account"},login{"login"};LLUUID getID()const{return account;}LLUUID getSessionID()const{return login;}bool isInGroup(const LLUUID&)const{return true;}}gAgent;
+struct Speaker {LLUUID mID;};
+struct LLSpeakerMgr {
+ using speaker_list_t=std::vector<std::shared_ptr<Speaker>>;speaker_list_t current;
+ void getSpeakerList(speaker_list_t* out,bool includeText){assert(includeText);*out=current;}
+};
+struct Session {
+ bool mTextIMPossible=true;int mType=0;LLUUID mOtherParticipantID{"contact"};
+ std::vector<LLUUID> mInitialTargetIDs{LLUUID("contact")};LLSpeakerMgr* mSpeakers=nullptr;bool conference=false;
+ bool isGroupSessionType()const{return false;}bool isP2PSessionType()const{return !conference;}
+};
+struct LLIMModel {Session session;static LLIMModel* getInstance(){static LLIMModel v;return &v;}Session* findIMSession(const LLUUID&){return &session;}};
+struct FSData {static FSData& instance(){static FSData v;return v;}bool canSendToIMContact(int,const LLUUID&,const LLUUID&)const{return true;}};
+constexpr int RLV_BHVR_SENDCHAT=1,RLV_BHVR_REDIRCHAT=2;
+struct RlvHandler {bool hasBehaviour(int)const{return false;}}gRlvHandler;
+struct RlvActions {static bool canSendIM(const LLUUID& id){return id.value!="restricted"&&id.value!="account";}};
 struct LLApp {static bool isExiting(){return false;}};
 bool gDisconnected=false;
 constexpr int STATE_STARTED=1;
@@ -29,6 +44,7 @@ std::string LLStringExplicit(const std::string& v){return v;}
 struct Handle{LLView* pointer=nullptr;LLView* get()const{return pointer;}};
 struct Editor:LLView{
  std::wstring text;int cursor=0;
+ bool getEnabled()const{return true;}bool getReadOnly()const{return false;}
  std::string getText()const{return std::string(text.begin(),text.end());}
  const std::wstring& getWText()const{return text;}
  int getMaxTextLength()const{return 1023;}
@@ -45,8 +61,10 @@ int wstring_utf8_length(const std::wstring& v){return static_cast<int>(v.size())
 std::string tr(const char* key){return key;}
 Config savedConfig(){return {};}
 struct Binding{
+ std::function<bool()> available;
  std::string id="binding";Handle button;S32 rightInset=0;LLUUID conversation{"private-im"};unsigned generation=0;bool allowed=true;Editor* editor=nullptr;std::string target="private-im";
- Editor* input()const{return editor;}bool valid()const{return allowed&&editor;}std::string stamp()const{return target;}
+ Editor* input()const{return editor;}bool currentAuthority()const;
+ bool valid()const{return allowed&&currentAuthority();}std::string stamp()const{return target;}
 };
 struct Dir{std::string getCAFile(){return {};}}dir;Dir* gDirUtilp=&dir;
 struct Callbacks{void addFunction(void(*)(void*),void*){}}gIdleCallbacks;
@@ -78,9 +96,25 @@ int main(){
  {Editor editor;Controller c;auto job=jobFor(editor);job->state=State::Queued;c.jobs.push_back(job);job->binding->target="Nearby";c.poll();assert(job->state==State::Cancelled&&editor.text.empty());}
  {Editor editor;Controller c;auto job=jobFor(editor);job->state=State::Queued;c.jobs.push_back(job);c.config.folder="other-folder";c.poll();assert(job->state==State::Cancelled&&!job->progress->submitted);}
  {Editor editor;Controller c;auto job=jobFor(editor);job->reply=success().reply;job->state=State::Complete;job->binding->allowed=false;assert(!c.insert(job,true)&&editor.text.empty());}
+ {Editor editor;Controller c;auto job=jobFor(editor);job->state=State::Queued;c.jobs={job};
+  auto& session=LLIMModel::getInstance()->session;LLSpeakerMgr speakers;session.conference=true;session.mSpeakers=&speakers;
+  speakers.current={std::make_shared<Speaker>(Speaker{LLUUID("account")}),std::make_shared<Speaker>(Speaker{LLUUID("contact")})};
+  assert(job->binding->valid()); // Self is excluded, as in native Send.
+  speakers.current.push_back(std::make_shared<Speaker>(Speaker{LLUUID("restricted")}));
+  assert(!job->binding->valid());c.poll();assert(job->state==State::Cancelled&&!job->progress->submitted);
+  speakers.current.pop_back();session.mInitialTargetIDs.push_back(LLUUID("restricted"));
+  assert(job->binding->valid()); // A departed initial participant no longer blocks admission.
+  session.mSpeakers=nullptr;assert(!job->binding->valid());session=Session{};}
+ {Editor editor;Controller c;auto job=jobFor(editor);c.jobs={job};std::promise<Work> result;job->work=result.get_future();
+  auto& session=LLIMModel::getInstance()->session;LLSpeakerMgr speakers;session.conference=true;session.mSpeakers=&speakers;
+  assert(job->binding->valid());speakers.current.push_back(std::make_shared<Speaker>(Speaker{LLUUID("restricted")}));
+  result.set_value(success());c.poll();assert(job->state==State::Cancelled&&job->reply.id=="confirmed-id"&&!job->inserted&&editor.text.empty());session=Session{};}
 }
 '''
 source=(ROOT/'fschatupload.cpp').read_text()
+# Use the production permission check for admission and ongoing Job validation.
+authority=source[source.index('    bool valid() const\n'):source.index('    std::string stamp() const\n')]
+authority=authority.replace('    bool valid() const', 'bool Binding::currentAuthority() const', 1)
 body=source[source.index('struct Work\n'):source.index('Controller* active =')]
 # The production Work and Job precede the stubbed asynchronous entry points.
 prepare_at=body.index('Work prepare(')
@@ -88,8 +122,8 @@ controller_at=body.index('struct Controller')
 preamble=body[:prepare_at]
 controller=body[controller_at:]
 with tempfile.TemporaryDirectory(prefix='fs-upload-controller-') as temp:
-    path=Path(temp)/'test.cpp';path.write_text(STUBS+preamble+BOUNDARIES+controller+TESTS)
+    path=Path(temp)/'test.cpp';path.write_text(STUBS+authority+preamble+BOUNDARIES+controller+TESTS)
     exe=Path(temp)/'test'
     subprocess.run([os.environ.get('CXX','c++'),'-std=c++17','-Wall','-Wextra','-Werror','-pthread','-I',str(ROOT),str(path),'-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)
-print('Production upload controller: 9 lifecycle/draft scenarios passed')
+print('Production upload controller: 11 lifecycle/draft/participant scenarios passed')
