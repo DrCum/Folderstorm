@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="chat_image_preview" title="Chat image" width="760" height="620"
+ can_resize="true" min_width="360" min_height="300" can_minimize="true" single_instance="false" reuse_instance="false">
+ <panel name="image_area" left="12" top="32" right="-12" bottom="-48" follows="all"/>
+ <text name="help" left="12" bottom="-16" right="-272" height="24" follows="left|right|bottom"
+  tool_tip="Scroll to zoom, drag to pan. Fit image resets the view. Escape closes this window.">Scroll to zoom · Drag to pan</text>
+ <button name="copy" label="Copy link" right="-144" bottom="-12" width="120" height="24" follows="right|bottom"/>
+ <button name="original" label="Open original" right="-12" bottom="-12" width="120" height="24" follows="right|bottom"/>
+</floater>

@@ -1887,6 +1887,7 @@ bool LLIMModel::addToHistory(const LLUUID& session_id,
         // FS:LO FIRE-5230 - Chat Console Improvement: Replacing the "IM" in front of group chat messages with the actual group name
         chat.mChatType = CHAT_TYPE_IM;
         chat.mFromID = from_id;
+        chat.mSessionID = session_id; // Preserve IM ownership when mirrored to Nearby.
         //chat.mFromName = from;
         static LLCachedControl<S32> group_name_length(gSavedSettings, "FSShowGroupNameLength");
         if(group_name_length != 0 && session->isGroupSessionType())

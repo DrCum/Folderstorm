@@ -90,6 +90,7 @@
 #include "llfloaterhowto.h"
 #include "llfloaterhud.h"
 #include "llfloaterimagepreview.h"
+#include "fschatmedia.h"
 #include "llfloaterimsession.h"
 #include "llfloaterinspect.h"
 #include "llfloaterinventorysettings.h"
@@ -504,6 +505,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("inventory_bulk_review", "floater_inventory_bulk.xml", &LLFloaterReg::build<FSFloaterInventoryBulk>);
     LLFloaterReg::add("workspace_tools", "floater_workspace_tools.xml", &LLFloaterReg::build<FSFloaterWorkspaceTools>);
     LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
+    LLFloaterReg::add("chat_image_preview", "floater_chat_image_preview.xml", &LLFloaterReg::build<FSFloaterChatMedia>);
     LLFloaterReg::add("gesture_board", "floater_gesture_board.xml", &LLFloaterReg::build<FSFloaterGestureBoard>);
     LLFloaterReg::add("gesture_board_picker", "floater_gesture_board_picker.xml", &LLFloaterReg::build<FSFloaterGesturePicker>);
     LLFloaterReg::add("gesture_board_editor", "floater_gesture_board_editor.xml", &LLFloaterReg::build<FSFloaterGestureTileEditor>);
