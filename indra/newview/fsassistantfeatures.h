@@ -6,7 +6,7 @@
 #include <vector>
 namespace fs_assistant {
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 67> featureOperations {{
+inline constexpr std::array<FeatureOperation, 72> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -74,6 +74,11 @@ inline constexpr std::array<FeatureOperation, 67> featureOperations {{
     {"FSNavigation","flyingSet","navigation_tools","navigation_move",false,true,"world_read"},
     {"FSNavigation","teleport","navigation_tools","navigation_teleport",false,true,"world_read"},
     {"FSNavigation","stop","navigation_tools","world_read",false,false,"world_read"},
+    {"FSUpload","preview","file_uploads","read",true,false,"read"},
+    {"FSUpload","execute","file_uploads","upload",false,false,"read"},
+    {"FSUpload","status","file_uploads","read",true,false,"read"},
+    {"FSUpload","cancel","file_uploads","read",false,false,"read"},
+    {"FSUpload","meshReview","file_uploads","upload",false,true,"read"},
 }};
 inline const FeatureOperation* featureOperation(const std::string& api,const std::string& op)
 {for(const auto& entry:featureOperations)if(api==entry.api && op==entry.op)return &entry;return nullptr;}
