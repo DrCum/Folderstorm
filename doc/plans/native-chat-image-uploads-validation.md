@@ -1,13 +1,17 @@
 # Native chat uploads: validation and Windows acceptance
 
-Checkpoint 1 adds Choose image and an attachment popup beside actual native IM,
-Nearby and toolbar composers. Public-upload review is the default. Paste/drop
-is the next dependent checkpoint. Host Chat and grid inventory uploads are unchanged.
+PR #81 adds Choose image and an attachment popup beside actual native IM, Nearby
+and toolbar composers. The dependent follow-up adds Windows clipboard image/file
+paste and local file drops. Public-upload review is the default. Host Chat and
+grid inventory uploads are unchanged. Both inherit #80’s offscreen texture fix.
 
 The anonymous destination is preconfigured from the supplied server handoff:
 `https://images.sodie.online/api/upload`, folder `jkydgzspc7t9snhxy7c32yvo`.
-Limits: 10 MiB/image, 16 megapixels, four pending attachments, 32 MiB staged
-encoded data, one active preparation/upload per viewer, 24 retained job receipts.
+Limits: 10 MiB/image, 16 megapixels, four pending attachments per draft, 32 MiB staged
+encoded data per viewer, one active preparation/upload, 24 retained job receipts.
+Windows bitmap clipboard input has one separate bounded slot (up to 64 MiB plus
+headers); conversion temporarily needs a second RGBA canvas before PNG encoding.
+PNG/JPEG/GIF/WebP parsing retains the decoder’s existing canvas/frame limits.
 Upload thumbnails use only one frame at up to 320 pixels. The shared decoder
 serializes preview/upload work internally. Original file bytes are preserved.
 
@@ -20,20 +24,45 @@ Failed uploads keep their bytes until Cancel, explicit Retry, or bounded receipt
 admission eviction. Retry first returns to review, including a duplicate warning;
 it never automatically replays POST. A cancelled in-flight job keeps its future
 and any later confirmed receipt until completion. Login, source, destination,
-restriction and consent changes prevent stale insertion. Modified drafts require
-explicit Insert links. Send guards stop Enter/button paths while preparing,
+restriction and consent changes prevent stale insertion. Modified drafts, moved cursors or active selections require explicit Insert
+links. One confirmed insertion advances other attachments’ original anchors;
+this preserves batch order without mistaking a user edit for our own insertion. Send guards stop Enter/button paths while preparing,
 reviewing, queued, uploading or awaiting server processing.
+
+## Paste and drop behavior
+
+- Normal Paste prefers native text. An image-only clipboard stages an image;
+  context-menu Paste image, the popup’s Paste image button, and Ctrl+Shift+V
+  explicitly select an image from mixed clipboard formats.
+- Windows prefers registered PNG, then DIBV5/DIB; bitmap data becomes PNG.
+  Explorer copied files preserve original file bytes. File drops are typed
+  separately from existing URL/SLURL drops and use the frontmost native Chat
+  destination. Enter/hover only highlights the target; Drop stages it.
+- Escape/closing an unconfirmed popup cancels its staged review. Approved
+  background work can continue without stealing focus. Completed receipts can
+  be copied or inserted manually. Closed popups release their thumbnail texture.
+- Windows is the initial platform for paste/drop. Other platform implementations
+  keep safe unsupported defaults; Choose image remains available through their
+  existing file picker. A native Windows compile/runtime test is still needed.
 
 ## Checks
 
-- Eight focused tests pass: the five media tests plus upload policy/response,
-  HTTP early rejection and production Job/Controller lifecycle harness.
+- Ten focused tests pass: the five media tests plus upload policy/response,
+  HTTP early rejection, bitmap parsing, production Job/Controller harness and
+  production drop routing/hit-testing harness.
 - The controller harness compiles production bodies unchanged with viewer and
-  transport boundaries stubbed. Nine scenarios cover cancellation/late receipt,
+  transport boundaries stubbed. Twelve scenarios cover cancellation/late receipt,
   login change, normal insertion, edited draft, revoked send authority, changed
-  binding generation, replacement destination and current insertion authority.
+  binding generation, replacement destination, current insertion authority,
+  multi-image order, cursor movement and selected text. The drop harness adds
+  eleven destination/lifecycle scenarios including opaque overlays and no Nearby
+  fallback after a session/login/grid/configuration change.
+- Bitmap layout/overflow/alpha/orientation tests also pass ASan/UBSan, with
+  LeakSanitizer disabled because this sandbox cannot inspect its threads.
 - Affected native source syntax checks pass against available Linux viewer
-  headers, including uploader, IM, Nearby, toolbar, registration and Preferences.
+  headers, including uploader, IM, Nearby, toolbar, registration, Preferences,
+  text-editor/chat-entry integration, window callback dispatch and UI hit testing.
+  Windows OLE/clipboard code cannot be compiled or run with this Linux setup.
   Existing `llappviewer.cpp` CEF SDK absence still prevents its standalone check.
 - Updated settings, strings, Preferences and popup XML parse; diff checks pass.
 - No viewer/link/packaging/GitHub build or native Windows UI/GPU run performed.
@@ -69,5 +98,11 @@ subject to the supplied expiry/oldest-first policy; no cleanup is claimed.
    server-side pending results and shutdown without an unbounded wait.
 6. Test Preferences Apply/Cancel, first-use bypass, destination-change reset,
    restart persistence, alternate skins, UI scaling and narrow composers.
-7. Test custom proxies: the feature explains unavailable transport and does not
+7. Windows paste/drop: test Snipping Tool PNG, DIBV5 transparency, older opaque
+   DIB screenshots, browser Copy image, mixed text/image formats, ordinary text
+   paste, menu Paste image, Ctrl+Shift+V and Explorer copy/paste. Test Unicode
+   paths, four-file drops, rejected larger batches, drag Escape, overlays and
+   custom viewport/DPI coordinates. Hover never starts an upload; changing a
+   tab/login/grid/recipient mid-drag cannot send to a replacement conversation.
+8. Test custom proxies: the feature explains unavailable transport and does not
    silently bypass a configured proxy. Original text chat remains functional.

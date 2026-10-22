@@ -216,6 +216,7 @@ public:
     /*virtual*/ bool handleOtherMouseUp(LLWindow *window, LLCoordGL pos, MASK mask, S32 button);
     bool handleOtherMouse(LLWindow *window, LLCoordGL pos, MASK mask, S32 button, bool down);
     /*virtual*/ LLWindowCallbacks::DragNDropResult handleDragNDrop(LLWindow *window, LLCoordGL pos, MASK mask, LLWindowCallbacks::DragNDropAction action, std::string data);
+    LLWindowCallbacks::DragNDropResult handleFileDragNDrop(LLWindow*, LLCoordGL, MASK, DragNDropAction, const std::vector<std::string>&) override;
                 void handleMouseMove(LLWindow *window,  LLCoordGL pos, MASK mask);
                 void handleMouseDragged(LLWindow *window,  LLCoordGL pos, MASK mask);
     /*virtual*/ void handleMouseLeave(LLWindow *window);

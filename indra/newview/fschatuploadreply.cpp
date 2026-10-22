@@ -38,7 +38,8 @@ Reply parseReply(const Config& config, const std::string& json, const std::strin
     const auto parsed = fs_chat_media::parse(address), origin = fs_chat_media::parse(config.base());
     if (id.empty() || id.size() > 128 || name.empty() || name.size() > 255 || type != expectedMime || !parsed ||
         !origin || parsed->host != origin->host || !fs_chat_media::imagePath(*parsed) ||
-        name.find_first_of("/\\?#\r\n") != std::string::npos) return {};
+        name.find_first_of("/\\?#\r\n") != std::string::npos || name == "." || name == ".." ||
+        std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 32 || c == 127; })) return {};
     // File names are encoded as one path segment, never concatenated as a path.
     std::string escaped; constexpr char hex[] = "0123456789ABCDEF";
     for (unsigned char c : name)
@@ -50,6 +51,8 @@ Reply parseReply(const Config& config, const std::string& json, const std::strin
     if (origin->host == "images.sodie.online") url = config.base() + "/raw/" + escaped;
     // Other Zipline servers must return a direct image URL; do not accept API links.
     else if (parsed->path.compare(0, 5, "/api/") == 0 || parsed->path.compare(0, 6, "/view/") == 0) return {};
+    const auto direct = fs_chat_media::parse(url);
+    if (!direct || !fs_chat_media::imagePath(*direct)) return {};
     const auto* pending = file.if_contains("pending");
     if (pending && !pending->is_bool()) return {};
     Reply reply; reply.id = id; reply.url = url; reply.error.clear();

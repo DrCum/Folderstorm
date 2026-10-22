@@ -264,8 +264,19 @@ void LLChatEntry::enableSingleLineMode(bool single_line_mode)
 
 // <FS:Ansariel> Fix linefeed pasting
 //virtual
+bool LLChatEntry::canPasteImage() const
+{ return !getReadOnly() && getEnabled() && mImageAvailable && mImageAvailable(); }
+bool LLChatEntry::canPaste() const
+{ return LLTextEditor::canPaste() || canPasteImage(); }
+void LLChatEntry::pasteImage() { if (canPasteImage() && mImagePaste) mImagePaste(); }
+bool LLChatEntry::handleKeyHere(KEY key, MASK mask)
+{
+    if (key == 'V' && mask == (MASK_CONTROL | MASK_SHIFT) && canPasteImage()) { pasteImage(); return true; }
+    return LLTextEditor::handleKeyHere(key, mask);
+}
 void LLChatEntry::paste()
 {
+    if (!LLTextEditor::canPaste() && canPasteImage()) { pasteImage(); return; }
     LLTextEditor::paste();
 
     if (mSingleLineMode)

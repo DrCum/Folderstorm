@@ -29,6 +29,7 @@
 
 #define LLTEXTEDITOR_CPP
 #include "lltexteditor.h"
+#include "lltrans.h"
 
 #include "llfontfreetype.h" // for LLFontFreetype::FIRST_CHAR
 #include "llfontgl.h"
@@ -2481,6 +2482,15 @@ void LLTextEditor::showContextMenu(S32 x, S32 y, bool set_cursor_pos)
         }
         mContextMenuHandle = menu->getHandle();
     }
+
+    auto* image_item = menu->findChild<LLMenuItemCallGL>("Paste image");
+    if (!image_item && hasImagePasteHandler())
+    {
+        LLMenuItemCallGL::Params p; p.name = "Paste image"; p.label = LLTrans::getString("FSChatUploadPaste");
+        image_item = LLUICtrlFactory::create<LLMenuItemCallGL>(p); menu->addChild(image_item);
+        image_item->setCommitCallback([this](LLUICtrl*, const LLSD&) { pasteImage(); });
+    }
+    if (image_item) { image_item->setVisible(hasImagePasteHandler()); image_item->setEnabled(canPasteImage()); }
 
     // Route menu to this class
     // previously this was done in ::handleRightMoseDown:

@@ -28,6 +28,7 @@
 #include "fssessionworker.h"
 #include "fsquietui.h"
 #include "llviewerwindow.h"
+#include "fschatupload.h"
 
 
 // system library includes
@@ -1330,6 +1331,13 @@ bool LLViewerWindow::handleMiddleMouseDown(LLWindow *window,  LLCoordGL pos, MAS
 
     // Always handled as far as the OS is concerned.
     return true;
+}
+
+LLWindowCallbacks::DragNDropResult LLViewerWindow::handleFileDragNDrop(LLWindow*, LLCoordGL pos, MASK, DragNDropAction action, const std::vector<std::string>& files)
+{
+    const auto x = ll_round(static_cast<F32>(pos.mX) / mDisplayScale.mV[VX]);
+    const auto y = ll_round(static_cast<F32>(pos.mY) / mDisplayScale.mV[VY]);
+    return FSChatUpload::fileDrop(x, y, action, files) ? DND_COPY : DND_NONE;
 }
 
 LLWindowCallbacks::DragNDropResult LLViewerWindow::handleDragNDrop( LLWindow *window, LLCoordGL pos, MASK mask, LLWindowCallbacks::DragNDropAction action, std::string data)

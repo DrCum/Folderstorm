@@ -29,6 +29,7 @@ set(llwindow_SOURCE_FILES
     )
 
 set(llwindow_HEADER_FILES
+    llclipboardimage.h
     CMakeLists.txt
 
     llcursortypes.h

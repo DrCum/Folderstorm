@@ -3414,4 +3414,8 @@ Your current position: [AVATAR_POS]
   <string name="FSChatUploadProxy">Uploads are unavailable with this viewer HTTP proxy configuration.</string>
   <string name="FSChatUploadChoose">Choose an image to attach. Sending stays explicit.</string>
   <string name="FSChatUploadRetryWarning">Review retry — this may create another file. Click Upload to continue.</string>
+  <string name="FSChatUploadPaste">Paste image</string>
+  <string name="FSChatUploadDrop">Drop images into this conversation</string>
+  <string name="FSChatUploadTooMany">Up to four pending images and 32 MiB total. Finish or cancel existing uploads first.</string>
+  <string name="FSChatUploadClipboardBusy">Preparing another clipboard image. Try pasting again when it finishes.</string>
 </strings>

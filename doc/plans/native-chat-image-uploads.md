@@ -1,6 +1,6 @@
 # Native chat image uploads: clipboard and drag/drop
 
-Status: implementation checkpoint 1, 2026-10-22. Native uploader/Choose image is implemented; paste/drop follows in a second PR. No VPS changes made.
+Status: both implementation checkpoints complete, 2026-10-22. PR #81 adds the uploader/Choose image; its follow-up adds Windows paste and file drop. Native Windows acceptance remains pending. No VPS changes made.
 Build above PR #80 while it remains unmerged, or current main after it merges.
 Preserve published history and unrelated work.
 
@@ -45,6 +45,8 @@ Server handoff received: folder `jkydgzspc7t9snhxy7c32yvo`, anonymous uploads, 1
 - Verify an unauthenticated multipart test returns a publicly readable image
   link. This test waits for implementation/testing authorization and uses a
   deliberately chosen fixture, not clipboard contents or a user's photo.
+
+Live PNG/GIF fixture uploads and identical public downloads passed. The upload headers, folder ID and service policy are implemented.
 
 The folder ID is a public upload destination, not an administrator secret.
 Never put a shared Zipline account/admin token in the viewer or its settings.
