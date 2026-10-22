@@ -27,6 +27,8 @@
 #define LLWINDOWCALLBACKS_H
 
 #include "llcoord.h"
+#include <string>
+#include <vector>
 class LLWindow;
 
 class LLWindowCallbacks
@@ -87,6 +89,7 @@ public:
         DND_LINK        // Drop accepted would result in a "link" operation
     };
     virtual DragNDropResult handleDragNDrop(LLWindow *window, LLCoordGL pos, MASK mask, DragNDropAction action, std::string data);
+    virtual DragNDropResult handleFileDragNDrop(LLWindow*, LLCoordGL, MASK, DragNDropAction, const std::vector<std::string>&);
 
     virtual void handlePingWatchdog(LLWindow *window, const char * msg);
     virtual void handlePauseWatchdog(LLWindow *window);

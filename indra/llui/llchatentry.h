@@ -33,6 +33,7 @@
 #define LLCHATENTRY_H_
 
 #include "lltexteditor.h"
+#include <functional>
 
 class LLChatEntry : public LLTextEditor
 {
@@ -76,6 +77,13 @@ public:
 
     // <FS:Ansariel> Fix linefeed pasting
     /*virtual*/ void    paste();
+    bool canPaste() const override;
+    bool hasImagePasteHandler() const override { return bool(mImagePaste); }
+    bool canPasteImage() const override;
+    void pasteImage() override;
+    bool handleKeyHere(KEY key, MASK mask) override;
+    void setImagePasteCallbacks(std::function<bool()> available, std::function<void()> paste)
+    { mImageAvailable = std::move(available); mImagePaste = std::move(paste); }
 
 private:
 
@@ -96,6 +104,9 @@ private:
 
     bool    handleSpecialKey(const KEY key, const MASK mask);
 
+
+    std::function<bool()> mImageAvailable;
+    std::function<void()> mImagePaste;
 
     // Fired when text height expanded to mExpandLinesCount
     commit_signal_t*            mTextExpandedSignal;

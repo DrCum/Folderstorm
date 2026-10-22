@@ -21,6 +21,8 @@ int main()
     { auto value = valid; const auto at = value.find(old); assert(at != std::string::npos); value.replace(at, old.size(), next); return value; };
     assert(parseReply(config, replace("https://images.sodie.online/view/", "https://attacker.example.org/"), "image/png").state == State::Failed);
     assert(parseReply(config, replace("hello world.png", "../private.png"), "image/png").state == State::Failed);
+    assert(parseReply(config, replace("hello world.png", ".."), "image/png").state == State::Failed);
+    assert(parseReply(config, replace("hello world.png", "not-image.html"), "image/png").state == State::Failed);
     assert(parseReply(config, replace("image/png", "text/html"), "image/png").state == State::Failed);
     assert(parseReply(config, replace("\"type\"", "\"pending\":true,\"type\""), "image/png").state == State::Processing);
     auto other = config; other.origin = "https://other.example.org/"; assert(other.valid() && !sameDestination(config, other));

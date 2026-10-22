@@ -190,6 +190,9 @@ bool LLWindowCallbacks::handleTimerEvent(LLWindow *window)
     return false;
 }
 
+LLWindowCallbacks::DragNDropResult LLWindowCallbacks::handleFileDragNDrop(LLWindow*, LLCoordGL, MASK, DragNDropAction, const std::vector<std::string>&)
+{ return DND_NONE; }
+
 bool LLWindowCallbacks::handleDeviceChange(LLWindow *window, const std::string& change_type, bool deviceIsJoystick, bool deviceRemoved) // <FS:Dax/> [FIRE-10419] Added deviceRemoved bool to prevent reinitialize on disconnect.
 {
     return false;

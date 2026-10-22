@@ -82,6 +82,8 @@ public:
     void captureMouse() override;
     void releaseMouse() override;
     void setMouseClipping( bool b ) override;
+    bool isClipboardImageAvailable() override;
+    bool pasteImageFromClipboard(struct LLClipboardImage& image) override;
     bool isClipboardTextAvailable() override;
     bool pasteTextFromClipboard(LLWString &dst) override;
     bool copyTextToClipboard(const LLWString &src) override;
@@ -126,6 +128,7 @@ public:
     F32 getSystemUISize() override;
 
     LLWindowCallbacks::DragNDropResult completeDragNDropRequest( const LLCoordGL gl_coord, const MASK mask, LLWindowCallbacks::DragNDropAction action, const std::string url );
+    LLWindowCallbacks::DragNDropResult completeFileDragNDropRequest(LLCoordGL pos, MASK mask, LLWindowCallbacks::DragNDropAction action, const std::vector<std::string>& files);
 
     static std::vector<std::string> getDisplaysResolutionList();
     static std::vector<std::string> getDynamicFallbackFontList();

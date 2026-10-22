@@ -27,6 +27,7 @@
 #ifndef LL_LLWINDOW_H
 #define LL_LLWINDOW_H
 
+#include "llclipboardimage.h"
 #include "llrect.h"
 #include "llcoord.h"
 #include "llstring.h"
@@ -142,6 +143,8 @@ public:
     virtual void releaseMouse() = 0;
     virtual void setMouseClipping( bool b ) = 0;
 
+    virtual bool isClipboardImageAvailable() { return false; }
+    virtual bool pasteImageFromClipboard(struct LLClipboardImage&) { return false; }
     virtual bool isClipboardTextAvailable() = 0;
     virtual bool pasteTextFromClipboard(LLWString &dst) = 0;
     virtual bool copyTextToClipboard(const LLWString &src) = 0;
