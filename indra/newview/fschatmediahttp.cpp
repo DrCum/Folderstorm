@@ -73,7 +73,7 @@ std::size_t readHeader(char* bytes, std::size_t size, std::size_t count, void* o
 int progress(void* opaque, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
 { return static_cast<const std::atomic<bool>*>(opaque)->load() ? 1 : 0; }
 }
-Response fetch(const std::string& original, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled)
+Response fetch(const std::string& original, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled, bool head)
 {
     if (limit > MaxImageBytes) return {};
     auto address = original;
@@ -95,6 +95,7 @@ Response fetch(const std::string& original, const std::string& caFile, std::size
         if (curl_easy_setopt(handle, CURLOPT_PROTOCOLS, static_cast<long>(CURLPROTO_HTTPS)) != CURLE_OK) return {};
 #endif
         if (curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 0L) != CURLE_OK) return {};
+        if (head && curl_easy_setopt(handle, CURLOPT_NOBODY, 1L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2L) != CURLE_OK) return {};
         if (!caFile.empty() && curl_easy_setopt(handle, CURLOPT_CAINFO, caFile.c_str()) != CURLE_OK) return {};

@@ -13,7 +13,7 @@ struct Image
     std::vector<Frame> frames;
     std::size_t bytes() const { return std::size_t(width) * height * 4 * frames.size(); }
 };
-// Caller serializes decode work. No viewer, GL, networking or filesystem access.
-std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes);
+// Serialized internally across previews/uploads. No viewer, GL, network or file access.
+std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes, int maxDimension = 1024, bool firstFrame = false);
 }
 #endif

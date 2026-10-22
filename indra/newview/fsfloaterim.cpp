@@ -28,6 +28,7 @@
 // Original file: llimfloater.cpp
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatupload.h"
 
 #include "fsfloaterim.h"
 
@@ -367,6 +368,7 @@ void FSFloaterIM::onVisibilityChange(bool new_visibility)
 
 void FSFloaterIM::sendMsgFromInputEditor(EChatType type)
 {
+    if (FSChatUpload::blocksSend(mInputEditor)) return;
     if (gAgent.isGodlike()
         || (mDialog != IM_NOTHING_SPECIAL)
         || !mOtherParticipantUUID.isNull())
@@ -991,6 +993,7 @@ bool FSFloaterIM::postBuild()
     // </AO>
 
     mInputEditor = getChild<LLChatEntry>("chat_editor");
+    FSChatUpload::bind(mInputEditor, mSessionID);
     mChatHistory = getChild<FSChatHistory>("chat_history");
     mChatLayoutPanel = getChild<LLLayoutPanel>("chat_layout_panel");
     mInputPanels = getChild<LLLayoutStack>("input_panels");
@@ -2377,6 +2380,7 @@ void FSFloaterIM::initIMSession(const LLUUID& session_id)
     setKey(session_id);
 
     mSessionID = session_id;
+    FSChatUpload::bind(mInputEditor, mSessionID);
     LLIMModel::LLIMSession* session = LLIMModel::instance().findIMSession(mSessionID);
 
     if (session)

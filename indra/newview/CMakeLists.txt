@@ -1965,8 +1965,8 @@ list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp fsinstallviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsinstallviewer.h)
 list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
 add_subdirectory(third_party/chat_media)
-list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp)
-list(APPEND viewer_HEADER_FILES fschatmedia.h fschatmediapolicy.h fschatmediacodec.h fschatmediahttp.h fschatmediaresolver.h)
+list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp fschatupload.cpp fschatuploadhttp.cpp fschatuploadreply.cpp)
+list(APPEND viewer_HEADER_FILES fschatmedia.h fschatmediapolicy.h fschatmediacodec.h fschatmediahttp.h fschatmediaresolver.h fschatupload.h fschatuploadpolicy.h)
 list(APPEND viewer_HEADER_FILES fsreleasepolicy.h fsreleaseprefs.h fsreleaseviewer.h ${CMAKE_CURRENT_BINARY_DIR}/fsreleasebuild.h)
 # </FS:TS>
 
