@@ -171,9 +171,9 @@ class NativeServiceTests(unittest.TestCase):
         text = (ROOT / "fschatmedia.cpp").read_text()
         source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
         service = text[text.index("class Service\n"):text.index("Service& service()")]
-        attach = text[text.index("    void attach("):text.index("    bool playing()")]
+        attach = text[text.index("    void attach("):text.index("    void setLinkHidden(")]
         visible = text[text.index("    bool visibleInChat()"):text.index("    void activate()")]
-        card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();int mFrame=0;bool mRequested=true;\n" + attach + visible + "};\n"
+        card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();int mFrame=0;bool mRequested=true;void syncLinkVisibility(){}\n" + attach + visible + "};\n"
         with tempfile.TemporaryDirectory(prefix="fs-chat-textures-") as tmp:
             cpp = Path(tmp) / "textures.cpp"
             exe = Path(tmp) / "textures"

@@ -1,21 +1,31 @@
 # Native chat media previews: validation and Windows acceptance
 
 Implementation branch: `feat/native-chat-media`, based on main `8a217b6b72`.
-Host Chat, GIF search and clipboard/file uploads are deferred. No session protocol
-change, release, installer or VPS configuration is included.
+Host Chat and GIF search are deferred. Upload/paste/drop follow-ups are documented
+in `native-chat-image-uploads-validation.md`. No session protocol change, release,
+installer or VPS configuration is included.
 
 ## Behavior
 
 - Preferences → Chat → Media controls native Nearby, direct IM, group and
   conference history. Original message text and links stay selectable/copyable.
-- Default: Click to load. A compact Load image row expands when clicked, reserving
-  space before the download finishes. Up to three supported links per message
+- Default: Click to load. A compact Load image row expands to the loaded image's
+  aspect ratio. Up to three supported links per message
   have cards; other links remain ordinary links.
 - PNG/JPEG, GIF and WebP are decoded in a worker. GIF/WebP animation, transparency,
   JPEG EXIF orientation and non-power-of-two source dimensions are supported.
   Preview pixels are capped at 1024 per dimension; Open original accesses the
   source resolution. The larger viewer supports scroll-to-zoom, drag-to-pan,
   Fit image, Play/Pause, Copy link, Open original and normal floater close keys.
+- Loaded inline images have no Open preview button or footer. Clicking the
+  image opens it; Enter/Space also works when focused. Animated images have a
+  small play/pause overlay in the lower-left corner. Its click cannot also open
+  the image. Right-click offers Copy image link and Open original link.
+- **Hide image links after loading** is off by default and uses committed
+  Preferences values. It collapses raw URL layout only while a preview is ready,
+  restoring links on failure, clear, eviction or revoked access. Descriptive link
+  captions stay visible. The underlying message, copied selections and chat logs
+  keep their URLs; separately styled query segments collapse together.
 - Automatic loading is separately opt-in for selected sites or all supported
   image links. These choices take effect through Preferences Apply/OK, so
   changing a draft and pressing Cancel cannot initiate automatic downloads.
@@ -103,6 +113,11 @@ change, release, installer or VPS configuration is included.
 - Updated settings, strings, preferences and floater XML parse successfully.
   Diff/whitespace checks are clean. Dependency notices are included in the three
   platform license files already staged by the installer manifest.
+- The presentation follow-up compiles production text-segment, URL-replacement,
+  visibility, sizing and interaction bodies against stubbed font/UI boundaries.
+  Cases cover query colors, captions, message-range isolation, copied text,
+  source invalidation, failed/cleared entries, width changes and pause/image click
+  dispatch. This does not substitute for native font/GL or Windows acceptance.
 - The supplied public `images.sodie.online` PNG, view page and GIF returned
   HTTP 200 with the expected image/HTML content types. The PNG and GIF were
   decoded with the production decoder, and the view-to-raw adapter has fixture
@@ -157,8 +172,17 @@ when Python is available, or run it directly with
    loading; remove an old history line; close its window. Late results must not
    restore hidden media, cross logins or change IM/Nearby destinations.
 10. Resize narrow/wide, use larger text and multiple DPI scales/themes/skins.
-    Footer controls and original links must remain accessible. Load more than
+    Image actions and original links must remain accessible. Load more than
     48 distinct images over time to verify old offscreen entries yield capacity.
 11. With a configured proxy, verify this version leaves links as text rather
     than making a direct preview connection. Quit during pending loads and
     check normal shutdown, including managed viewers.
+12. Enable Hide image links after loading with Apply; Cancel a subsequent draft
+    change. Test direct/share URLs, long queries, captions and repeated URLs in
+    Nearby, IM, group and conference history. Only loaded image URLs collapse;
+    Copy/Ctrl+A and logs retain them. Clear/evict/fail/restrict a preview and
+    verify its link returns. Disable the option to restore all links.
+13. Verify no loaded inline Open preview row or spare footer remains. Click an
+    image and use keyboard focus/Enter; pause/play from the lower-left overlay
+    without opening another window. Resize portrait, landscape and small images
+    while reading old chat; check scroll position and selection are preserved.
