@@ -22,6 +22,9 @@
  tab_min_width="50"
  tab_position="top" >
 
+
+
+
         <!-- Chat: Visuals -->
         <panel
          top_pad="1"
@@ -2598,5 +2601,22 @@
 	  width="90"/>
   </panel>
 
+        <panel label="Media" name="ChatMedia" top_pad="1" bottom="-1" left="1" right="-1" follows="all" layout="topleft">
+          <text name="intro" left="20" top="14" right="-20" height="42" wrap="true" follows="left|top|right">Preview image links in native chat. Click a thumbnail to enlarge it; the original link stays in the message.</text>
+          <text name="mode_label" left="20" top="68" width="130" height="22">Image previews</text>
+          <combo_box name="media_mode" control_name="FSChatMediaMode" left="160" top="64" right="-20" height="24" follows="left|right|top" tool_tip="Automatic loading contacts the image host and reveals your IP address. Apply or OK enables your choice.">
+            <combo_box.item label="Off" value="0"/>
+            <combo_box.item label="Click to load" value="1"/>
+            <combo_box.item label="Automatic: selected sites" value="2"/>
+            <combo_box.item label="Automatic: all supported image links" value="3"/>
+          </combo_box>
+          <text name="privacy" left="20" top="102" right="-20" height="38" wrap="true" follows="left|right|top">Loading an image shares your IP address with its site. Automatic loading is off by default.</text>
+          <check_box name="media_animate" control_name="FSChatMediaAutoplay" label="Play animations in visible thumbnails" left="20" top="156" right="-20" height="24"/>
+          <spinner name="media_size" control_name="FSChatMediaSize" label="Thumbnail width" label_width="150" left="20" top="198" width="270" height="24" min_val="160" max_val="480" increment="40" decimal_digits="0"/>
+          <text name="sites_label" left="20" top="246" right="-20" height="20" follows="left|right|top">Selected sites</text>
+          <line_editor name="media_sites" control_name="FSChatMediaSites" left="20" top="274" right="-20" height="24" follows="left|right|top" max_length_bytes="2048" tool_tip="Comma-separated hostnames. Include your Zipline hostname to preview its share pages. Subdomains are included."/>
+          <button name="clear_media" label="Clear preview cache" left="20" top="322" width="190" height="24"><button.commit_callback function="Pref.ClearChatMedia"/></button>
+          <text name="memory" left="20" top="366" right="-20" height="42" wrap="true" follows="left|right|top">Previews stay in memory for this login. Private or unsupported links can still be opened in your browser.</text>
+        </panel>
 </tab_container>
 </panel>

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatmedia.h"
 #include "fsworkspacecontroller.h"
 
 #include "llappviewer.h"
@@ -2063,6 +2064,7 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    FSChatMedia::shutdown(); // Cancel external previews before HTTP/GL cleanup.
     fs_crash::shutdown();
 #if LL_VELOPACK
     // Windows updates belong to the whole installation, never one worker exit.

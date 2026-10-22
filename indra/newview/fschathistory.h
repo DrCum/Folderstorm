@@ -123,6 +123,7 @@ class FSChatHistory : public LLTextEditor   // <FS:Zi> FIRE-8600: TAB out of cha
          * @param input_append_params - font style.
          */
         void appendMessage(const LLChat& chat, const LLSD &args = LLSD(), const LLStyle::Params& input_append_params = LLStyle::Params());
+        void reshape(S32 width, S32 height, bool called_from_parent = true) override;
         void clear() override;
         void draw() override;
 
@@ -138,6 +139,7 @@ class FSChatHistory : public LLTextEditor   // <FS:Zi> FIRE-8600: TAB out of cha
         LLDate mLastMessageTime;
         bool mIsLastMessageFromLog;
         bool mScrollToBottom;
+        int mMediaLayoutKey = -1;
 
         std::string mMessageHeaderFilename;
         std::string mMessageSeparatorFilename;

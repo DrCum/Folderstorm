@@ -29,6 +29,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fschathistory.h"
+#include "fschatmedia.h"
 
 #include "llavatarnamecache.h"
 #include "llinstantmessage.h"
@@ -1950,6 +1951,9 @@ void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
         //prependNewLineState = false;
     }
 
+    if (!teleport_separator && !is_conversation_log)
+        FSChatMedia::append(this, chat, is_local);
+
     blockUndo();    // <FS:Zi> FIRE-8600: TAB out of chat history
 
     // automatically scroll to end when receiving chat from myself
@@ -1985,8 +1989,16 @@ bool FSChatHistory::handleUnicodeCharHere(llwchar uni_char)
     return LLTextEditor::handleUnicodeCharHere(uni_char);
 }
 
+void FSChatHistory::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    LLTextEditor::reshape(width, height, called_from_parent);
+    FSChatMedia::resize(this);
+}
+
 void FSChatHistory::draw()
 {
+    if (mMediaLayoutKey != FSChatMedia::layoutKey())
+    { mMediaLayoutKey = FSChatMedia::layoutKey(); FSChatMedia::resize(this); }
     LLTextEditor::draw();
     // Ansa: FIRE-12754: Hack around a weird issue where the doc size magically increases by 1px
     //       during draw if the doc exceeds the visible space and the scrollbar is getting visible.

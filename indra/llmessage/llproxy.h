@@ -254,6 +254,8 @@ public:
     // Apply the current proxy settings to a curl request. Doesn't do anything if mHTTPProxyEnabled is false.
     // Safe to call from any thread.
     static void applyProxySettings(CURL* handle);
+    // Read-only query for optional external media that must not bypass a proxy.
+    bool isHTTPProxyEnabled() const { return mHTTPProxyEnabled; }
     // Start a connection to the SOCKS 5 proxy. Call from main thread only.
     S32 startSOCKSProxy(LLHost host);
 

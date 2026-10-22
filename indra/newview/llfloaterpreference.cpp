@@ -32,6 +32,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatmedia.h"
 #include "fspreferenceslistener.h"
 #include "fssessionworker.h"
 
@@ -485,6 +486,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.OK",                 boost::bind(&LLFloaterPreference::onBtnOK, this, _2));
 
     mCommitCallbackRegistrar.add("Pref.ClearCache",             boost::bind(&LLFloaterPreference::onClickClearCache, this));
+    mCommitCallbackRegistrar.add("Pref.ClearChatMedia", [](LLUICtrl*, const LLSD&) { FSChatMedia::clear(); });
     mCommitCallbackRegistrar.add("Pref.WebClearCache",          boost::bind(&LLFloaterPreference::onClickBrowserClearCache, this));
     // <FS:Ansariel> Clear inventory cache button
     mCommitCallbackRegistrar.add("Pref.InvClearCache",          boost::bind(&LLFloaterPreference::onClickInventoryClearCache, this));
@@ -1008,6 +1010,7 @@ void LLFloaterPreference::saveSettings()
 
 void LLFloaterPreference::apply()
 {
+    FSChatMedia::applyPreferences();
     LLAvatarPropertiesProcessor::getInstance()->addObserver( gAgent.getID(), this );
 
     LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
@@ -1147,6 +1150,7 @@ void LLFloaterPreference::onOpen(const LLSD& key)
     // MCP previews must be discarded before any panel or saveSettings() takes
     // the independently owned native Preferences baseline.
     FSPreferencesNativeOpening assistant_preview;
+    FSChatMedia::preferencesOpening();
     // this variable and if that follows it are used to properly handle do not disturb mode response message
     static bool initialized = false;
     // if user is logged in and we haven't initialized do not disturb mode response yet, do it
