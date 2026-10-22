@@ -111,7 +111,7 @@ int main()
         {
             auto entry=std::make_shared<Entry>();entry->source=source();entry->url="https://cdn.example.org/"+std::to_string(i)+".png";
             entry->finished=true;entry->image=load("","","",*entry->cancelled);
-            entry->lastSeen=Clock::now()-std::chrono::seconds(3);entry->releaseViews.push_back([&]{++purged;});
+            entry->lastSeen=Clock::now()-std::chrono::seconds(3);entry->releaseViews.push_back([&](bool discard){if(discard)++purged;return true;});
             host.entries[entry->source.key(entry->url)]=entry;held.push_back(entry);
         }
         auto fresh=host.request(source(),"https://cdn.example.org/new.png");assert(fresh);
@@ -132,7 +132,55 @@ int main()
 '''
 
 
+
+CACHED_STUBS = r"""
+struct Rect {
+ int left=0,top=100,right=100,bottom=0;
+ void intersectWith(const Rect& b){left=(std::max)(left,b.left);top=(std::min)(top,b.top);right=(std::min)(right,b.right);bottom=(std::max)(bottom,b.bottom);}
+ bool isEmpty()const{return left>=right||bottom>=top;}
+};
+struct LLView;
+struct Handle{std::weak_ptr<LLView*> ref;LLView* get()const{const auto p=ref.lock();return p?*p:nullptr;}};
+struct LLView{
+ std::shared_ptr<LLView*> life=std::make_shared<LLView*>(this);bool visible=true;Rect rect;LLView* parent=nullptr;
+ virtual ~LLView(){*life=nullptr;}Handle getHandle(){return {life};}
+ bool isInVisibleChain()const{return visible&&(!parent||parent->isInVisibleChain());}
+ Rect calcScreenRect()const{return rect;}LLView* getParent()const{return parent;}
+};
+struct LLScrollContainer:LLView{};
+struct Texture{static inline unsigned live=0;Texture(){++live;}~Texture(){--live;}};
+"""
+CACHED_CASES = r"""
+int main(){
+ Service host;auto entry=std::make_shared<Entry>();entry->source.account=gAgent.getID();entry->source.login=gAgent.getSessionID();entry->source.grid="grid";
+ entry->finished=true;entry->image=std::make_shared<Image>();entry->image->width=1024;entry->image->height=1024;entry->image->frames.resize(1);host.entries["same-url"]=entry;
+ LLScrollContainer viewport;std::vector<std::unique_ptr<ImageCard>> cards;
+ for(unsigned i=0;i<100;++i){auto card=std::make_unique<ImageCard>();card->parent=&viewport;card->attach(entry);cards.push_back(std::move(card));}
+ assert(Texture::live==100&&host.entries.size()==1&&host.memory()==4u*1024*1024);
+ for(unsigned i=1;i<100;++i)cards[i]->rect={0,1100,100,1000};
+ host.poll();assert(Texture::live==1);for(unsigned i=1;i<100;++i)assert(!cards[i]->mTexture&&cards[i]->mFrame==-1&&cards[i]->mRequested);
+ cards[0]->visible=false;host.poll();assert(Texture::live==0);
+ // A returning card has its frame invalidated for the normal draw upload.
+ cards[0]->visible=true;cards[0]->mTexture=std::make_shared<Texture>();cards[0]->mFrame=0;host.poll();assert(Texture::live==1);
+ cards.resize(1);host.poll();assert(entry->releaseViews.size()==1);host.clear();assert(Texture::live==0&&!cards[0]->mRequested);
+}
+"""
+
 class NativeServiceTests(unittest.TestCase):
+    def test_repeated_url_offscreen_textures(self):
+        text = (ROOT / "fschatmedia.cpp").read_text()
+        source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
+        service = text[text.index("class Service\n"):text.index("Service& service()")]
+        attach = text[text.index("    void attach("):text.index("    bool playing()")]
+        visible = text[text.index("    bool visibleInChat()"):text.index("    void activate()")]
+        card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();int mFrame=0;bool mRequested=true;\n" + attach + visible + "};\n"
+        with tempfile.TemporaryDirectory(prefix="fs-chat-textures-") as tmp:
+            cpp = Path(tmp) / "textures.cpp"
+            exe = Path(tmp) / "textures"
+            cpp.write_text(STUBS + source + service + CACHED_STUBS + card + CACHED_CASES)
+            subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-pthread", "-I", str(ROOT), str(cpp), "-o", str(exe)], check=True, timeout=45)
+            subprocess.run([str(exe)], check=True, timeout=20)
+
     def test_production_controller(self):
         text = (ROOT / "fschatmedia.cpp").read_text()
         source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
