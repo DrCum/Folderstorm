@@ -243,17 +243,22 @@ public:
             auto& entry = *at->second; const auto key = at->first; ++at;
             if (*entry.cancelled || !entry.image || !entry.image->animation || entry.animationStopped || entry.animationJob.valid() ||
                 Clock::now() - entry.animationDemand > std::chrono::milliseconds(250) || Clock::now() < entry.animationDue) continue;
-            const auto source = entry.image->animation; const auto cancelled = entry.cancelled; auto decoder = entry.decoder; const auto loop = entry.animationLoop;
+            const auto source = entry.image->animation; const auto cancelled = entry.cancelled; auto decoder = std::move(entry.decoder); const auto loop = entry.animationLoop;
             try
             {
                 if (!frameWorkers) frameWorkers = std::make_unique<FrameWorkers>();
-                entry.animationJob = frameWorkers->submit([source, cancelled, decoder, loop]() mutable
+                entry.animationJob = frameWorkers->submit([source, cancelled, decoder = std::move(decoder), loop]() mutable
                 {
                     Entry::AnimationResult result; result.loop = loop;
                     if (!decoder) decoder = std::make_shared<AnimationDecoder>(source);
                     result.frame = decoder->next(*cancelled);
                     if (!result.frame && decoder->ended() && !*cancelled && (!source->loops || loop + 1 < source->loops))
-                    { decoder = std::make_shared<AnimationDecoder>(source); ++result.loop; result.frame = decoder->next(*cancelled); }
+                    {
+                        // The old compositor can nearly fill the scratch pool.
+                        // Release it before reserving the next loop's decoder.
+                        decoder.reset(); decoder = std::make_shared<AnimationDecoder>(source);
+                        ++result.loop; result.frame = decoder->next(*cancelled);
+                    }
                     result.stopped = !result.frame; result.decoder = std::move(decoder); return result;
                 });
                 ++active; animationCursor = key;
@@ -411,6 +416,9 @@ public:
     }
     bool handleKeyHere(KEY key, MASK mask) override
     {
+        // Child buttons process their own Space/Enter; bubbling those keys must
+        // not also toggle the card or open/insert its image.
+        if (gFocusMgr.getKeyboardFocus() != this) return LLPanel::handleKeyHere(key, mask);
         if (mBoard && mask == MASK_NONE && key == ' ') { mPlaying = !playing(); mPlaybackSet = true; return true; }
         if (mBoard && mask == MASK_NONE && key == KEY_RETURN && mInsert) { mInsert(); return true; }
         if (mask == MASK_NONE && (key == KEY_RETURN || key == ' ')) { activate(); return true; }
@@ -498,10 +506,22 @@ private:
             if (dynamic_cast<LLScrollContainer*>(parent)) rect.intersectWith(parent->calcScreenRect());
         return !rect.isEmpty();
     }
+    void retryLoad()
+    {
+        if (mEntry) *mEntry->cancelled = true;
+        mEntry.reset(); mTexture = nullptr; mTextureReservation.reset(); mFrame = -1; mRequested = true;
+        for (auto* parent = getParent(); parent; parent = parent->getParent())
+            if (auto* history = dynamic_cast<FSChatHistory*>(parent)) { FSChatMedia::resize(history); break; }
+    }
     void activate()
     {
-        if (mBoard && mSelect) { mSelect(); return; }
-        if (!mSource.valid() || !service().prefs.mode) return;
+        if (!mSource.valid() || (!mBoard && !mSource.personal && !service().prefs.mode)) return;
+        if (mBoard && mSelect)
+        {
+            mSelect();
+            if (mEntry && mEntry->finished && !mEntry->image) retryLoad();
+            return;
+        }
         if (mEntry && mEntry->image)
         {
             if (mLarge) { fitImage(); return; }
@@ -509,13 +529,7 @@ private:
                 LLFloaterReg::showInstance("chat_image_preview", mEntry->token);
         }
         else if (mEntry && !mEntry->finished) return;
-        else
-        {
-            if (mEntry) *mEntry->cancelled = true;
-            mEntry.reset(); mTexture = nullptr; mTextureReservation.reset(); mFrame = -1; mRequested = true;
-            for (auto* parent = getParent(); parent; parent = parent->getParent())
-                if (auto* history = dynamic_cast<FSChatHistory*>(parent)) { FSChatMedia::resize(history); break; }
-        }
+        else retryLoad();
     }
     Source mSource; std::string mUrl, mLabel; bool mLarge = false, mRequested = false, mPlaying = false, mPlaybackSet = false;
     std::shared_ptr<Entry> mEntry;

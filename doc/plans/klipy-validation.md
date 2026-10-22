@@ -93,6 +93,18 @@ fixtures and reports. Fixtures also follow the official
 Windows UI/GL, provider approval and native linking remain unverified. No broad
 build, packaging, GitHub build or unrelated tests ran.
 
+Review follow-up: all three reported failures and the child-button keyboard
+issue reproduced before the fixes. The production service now transfers its
+decoder into the worker and releases it before restarting a loop. A real
+2048×2048 GIF regression completes three loop restarts within the existing
+64 MiB scratch limit and releases its reservations after cancellation. Opaque
+partial-frame background/disposal fixtures match independently generated Pillow
+pixels; transparent disposal remains covered and invalid background indices
+never dereference the palette. Failed board tiles use the common retry path,
+including with incoming previews disabled. Card shortcuts require direct focus,
+so child buttons cannot trigger a second card action. All 16 focused checks and
+both changed native translation units' Linux syntax checks pass after these fixes.
+
 Windows acceptance with a test key:
 
 1. Open GIFs from normal Nearby, toolbar Chat, IM, group and conference. Search
@@ -110,6 +122,10 @@ Windows acceptance with a test key:
    the compact picker and larger resizable pop-out in each supported skin/DPI.
    Test arrow navigation followed by Enter/Space, including unavailable tiles
    and newly scrolled rows, and each source's right-click menu.
+   Check a large GIF across several loops, opaque partial-frame backgrounds,
+   and Space/Enter on child controls without a second card action.
 5. Change key/enable options with Apply/Cancel while searches run. Confirm late
    responses are discarded, closing/reopening preserves useful My GIFs state,
    and My GIFs works when KLIPY is disabled, unconfigured or unavailable.
+   Fail a board download, disable incoming-chat previews, then Retry: it should
+   start a fresh request while loaded/pending tiles continue without restarting.

@@ -9,6 +9,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from test_fschatupload_composers import function
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -184,13 +185,52 @@ int main(){
 }
 """
 
+LOOP_CASES = r'''
+int main(){
+ {
+  Service host;auto entry=std::make_shared<Entry>();
+  entry->source={gAgent.getID(),gAgent.getSessionID(),LLUUID("sender"),LLUUID("conversation"),"grid"};
+  entry->finished=true;entry->image=decode(largeLoopBytes,64);assert(entry->image&&entry->image->animation);
+  host.entries["large"]=entry;
+  for(unsigned step=0;step<16&&entry->animationLoop<3;++step){
+   entry->animationDemand=Clock::now();entry->animationDue={};host.poll();
+   if(entry->animationJob.valid())entry->animationJob.wait();
+   host.poll();
+   assert(!entry->animationStopped);
+   assert(animationMemory().scratch<=MaxDecodedBytes);
+  }
+  assert(entry->animationLoop>=3); // Restart within 64 MiB, not just the first pass.
+  host.clear();if(entry->animationJob.valid())entry->animationJob.wait();host.poll();
+ }
+ const auto used=animationMemory();assert(used.scratch==0&&used.encoded==0&&used.decoded==0);
+}
+'''
+
 class NativeServiceTests(unittest.TestCase):
+    def test_large_gif_loop_uses_production_decoder(self):
+        libraries = os.environ.get("FS_CHAT_MEDIA_TEST_LIB_DIR")
+        if not libraries:
+            self.skipTest("Run through CTest to link the production media decoder")
+        text = (ROOT / "fschatmedia.cpp").read_text()
+        source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
+        service = text[text.index("class FrameWorkers\n"):text.index("Service& service()")]
+        start = STUBS.index("namespace fs_chat_media {\nclass AnimationSource")
+        end = STUBS.index("using Clock =", start)
+        stubs = STUBS[:start] + '#include "fschatanimation.h"\n#include "tests/fixtures/chat_animation_regressions.inc"\n' + STUBS[end:]
+        with tempfile.TemporaryDirectory(prefix="fs-chat-large-loop-") as tmp:
+            cpp, exe = Path(tmp) / "loop.cpp", Path(tmp) / "loop"
+            cpp.write_text(stubs + source + service + LOOP_CASES)
+            subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", "-Wall", "-Wextra", "-Werror", "-pthread", "-I", str(ROOT), str(cpp)] +
+                           [str(Path(libraries) / name) for name in ("libfs_chat_media_codec.a", "libfs_chat_webp.a", "libfs_chat_gif.a")] +
+                           ["-o", str(exe)], check=True, timeout=45)
+            subprocess.run([str(exe)], check=True, timeout=20)
+
     def test_repeated_url_offscreen_textures(self):
         text = (ROOT / "fschatmedia.cpp").read_text()
         source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
         service = text[text.index("class FrameWorkers\n"):text.index("Service& service()")]
         attach = text[text.index("    void attach("):text.index("    void setLinkHidden(")]
-        visible = text[text.index("    bool visibleInChat()"):text.index("    void activate()")]
+        visible = function(text, "    bool visibleInChat()")
         card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();std::shared_ptr<void> mTextureReservation;int mFrame=0;bool mRequested=true;void syncLinkVisibility(){}\n" + attach + visible + "};\n"
         with tempfile.TemporaryDirectory(prefix="fs-chat-textures-") as tmp:
             cpp = Path(tmp) / "textures.cpp"
