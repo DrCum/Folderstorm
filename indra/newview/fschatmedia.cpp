@@ -15,6 +15,8 @@
 #include "llimview.h"
 #include "lllocalcliprect.h"
 #include "llmutelist.h"
+#include "llmenugl.h"
+#include "llviewermenu.h"
 #include "llpanel.h"
 #include "llproxy.h"
 #include "llscrollcontainer.h"
@@ -45,12 +47,13 @@ struct Preferences
     int mode = 1, size = 320;
     bool animate = false;
     std::string sites = DefaultSites;
+    bool hideLinks = false;
 };
 Preferences savedPreferences()
 {
     return {std::clamp(gSavedSettings.getS32("FSChatMediaMode"), 0, 3),
         std::clamp(gSavedSettings.getS32("FSChatMediaSize"), 160, 480),
-        gSavedSettings.getBOOL("FSChatMediaAutoplay"), gSavedSettings.getString("FSChatMediaSites")};
+        gSavedSettings.getBOOL("FSChatMediaAutoplay"), gSavedSettings.getString("FSChatMediaSites"), gSavedSettings.getBOOL("FSChatMediaHideLinks")};
 }
 struct Source
 {
@@ -147,19 +150,19 @@ public:
         for (auto iter = entries.begin(); iter != entries.end();)
         {
             auto& entry = *iter->second;
-            entry.releaseViews.erase(std::remove_if(entry.releaseViews.begin(), entry.releaseViews.end(),
-                [](const auto& maintain) { return !maintain(false); }), entry.releaseViews.end());
             if (!prefs.mode || !entry.source.valid() || (!entry.finished && iter->second.use_count() == 1))
             { if (entry.image) used -= entry.image->bytes(); if (!*entry.cancelled) ++layoutRevision; entry.discard(); }
             if (entry.job.valid() && entry.job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
                 std::shared_ptr<Image> image;
                 try { image = entry.job.get(); } catch (...) { }
-                entry.finished = true;
+                entry.finished = true; ++layoutRevision;
                 if (image && image->bytes() > MaxDecodedBytes - used) { evict(image->bytes(), false, &entry); used = memory(); }
                 if (image && !*entry.cancelled && prefs.mode && entry.source.valid() && image->bytes() <= MaxDecodedBytes - used)
                 { used += image->bytes(); entry.image = std::move(image); }
             }
+            entry.releaseViews.erase(std::remove_if(entry.releaseViews.begin(), entry.releaseViews.end(),
+                [](const auto& maintain) { return !maintain(false); }), entry.releaseViews.end());
             if ((!entry.job.valid() && *entry.cancelled) || (iter->second.use_count() == 1 && entry.finished)) iter = entries.erase(iter);
             else ++iter;
         }
@@ -199,32 +202,39 @@ bool automaticMotion()
 class ImageCard final : public LLPanel
 {
 public:
-    ImageCard(const Source& source, std::string address, bool large = false) : LLPanel(Params()), mSource(source), mUrl(std::move(address)), mLarge(large)
+    ImageCard(const Source& source, std::string address, bool large = false, FSChatHistory* history = nullptr) : LLPanel(Params()), mSource(source), mUrl(std::move(address)), mLarge(large)
     {
-        setMouseOpaque(true); setBackgroundVisible(false);
+        setMouseOpaque(true); setBackgroundVisible(false); setTabStop(true);
+        if (history) mHistory = history->getHandle();
         LLButton::Params p; p.name = "image_preview"; p.rect = LLRect(0, 24, 220, 0); p.label = tr("FSChatMediaLoad");
         p.follows.flags = FOLLOWS_LEFT | FOLLOWS_BOTTOM; p.tool_tip = tr("FSChatMediaPrivacy");
         mAction = LLUICtrlFactory::create<LLButton>(p); addChild(mAction);
         mAction->setCommitCallback([this](LLUICtrl*, const LLSD&) { activate(); });
-        p.name = "animation"; p.rect = LLRect(226, 24, 310, 0); p.label = "GIF";
+        p.name = "animation"; p.rect = LLRect(4, 24, 24, 4); p.label = ""; p.image_overlay = LLUI::getUIImage("Play_Off");
         mPlay = LLUICtrlFactory::create<LLButton>(p); addChild(mPlay); mPlay->setVisible(false);
         mPlay->setToolTip(tr("FSChatMediaAnimationTip"));
         mPlay->setCommitCallback([this](LLUICtrl*, const LLSD&) { mPlaying = !playing(); mPlaybackSet = true; mEpoch = Clock::now(); });
         setToolTip(parse(mUrl)->host + "\n" + tr("FSChatMediaPrivacy"));
     }
+    ~ImageCard() override
+    {
+        setLinkHidden(false);
+        if (auto* menu = mMenu.get()) menu->die();
+    }
+    const std::shared_ptr<bool>& linkHidden() const { return mLinkHidden; }
     void bind(std::shared_ptr<Entry> entry) { attach(std::move(entry)); mRequested = true; mPlaying = mLarge; mPlaybackSet = mLarge; }
     void fitImage() { mZoom = 1.f; mPanX = mPanY = 0; }
-    S32 desiredHeight() const
+    S32 desiredHeight(S32 width = 0) const
     {
         const auto& prefs = service().prefs; if (!prefs.mode) return 0;
-        const auto url = parse(mUrl);
-        const bool automatic = prefs.mode == 3 || (prefs.mode == 2 && url && selectedSite(*url, prefs.sites));
-        return mRequested || (mEntry && !*mEntry->cancelled) || automatic ? 206 : 28;
+        if (mEntry && !*mEntry->cancelled && mEntry->image)
+            return (std::max)(24, fit(mEntry->image->width, mEntry->image->height, width ? width : getRect().getWidth(), 200).height);
+        return 28;
     }
     void reshape(S32 width, S32 height, bool calledFromParent = true) override
     {
         LLPanel::reshape(width, height, calledFromParent);
-        mAction->reshape((std::max)(40, width < 180 ? width : width - 90), 24); mPlay->setOrigin((std::max)(0, width - 84), 0);
+        mAction->reshape(mLarge ? (std::min)(width, 110) : (std::max)(24, width), 24);
     }
     void draw() override
     {
@@ -236,18 +246,23 @@ public:
         if (!mEntry && visibleInChat() && (mRequested || automatic) && state.prefs.mode && mSource.valid()) attach(state.request(mSource, mUrl));
         if (mEntry && visibleInChat()) mEntry->lastSeen = Clock::now();
         const auto image = mEntry ? mEntry->image : std::shared_ptr<Image>{};
+        if (!mLarge && image && getRect().getHeight() != desiredHeight()) ++state.layoutRevision;
         mAction->setEnabled(state.prefs.mode && mSource.valid());
-        const auto label = image ? tr(mLarge ? "FSChatMediaFit" : "FSChatMediaOpen") : mEntry && !mEntry->finished ? tr("FSChatMediaLoading") :
+        mAction->setVisible(!image || mLarge);
+        syncLinkVisibility();
+        const auto label = image ? tr("FSChatMediaFit") : mEntry && !mEntry->finished ? tr("FSChatMediaLoading") :
             mEntry && mEntry->finished ? tr("FSChatMediaRetry") : mRequested ? tr("FSChatMediaLoading") : tr("FSChatMediaLoad");
         if (mLabel != label) { mLabel = label; mAction->setLabel(LLStringExplicit(label)); }
-        mPlay->setVisible(image && image->frames.size() > 1 && getRect().getWidth() >= 180);
-        mPlay->setLabel(LLStringExplicit(playing() ? tr("FSChatMediaPause") : image && image->gif ? "GIF ▶" : tr("FSChatMediaPlay")));
+        mPlay->setVisible(image && image->frames.size() > 1 && getRect().getWidth() >= 24 && getRect().getHeight() >= 24);
+        mPlay->setImageOverlay(playing() ? "Pause_Off" : "Play_Off");
+        mPlay->setToolTip(tr(playing() ? "FSChatMediaPause" : "FSChatMediaPlay") + " · " + tr("FSChatMediaAnimationTip"));
         const auto bg = LLUIColorTable::instance().getColor("TextBgReadOnlyColor").get();
-        gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 28, bg);
+        const S32 footer = mLarge ? 28 : 0;
+        gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), footer, bg);
         if (image && visibleInChat())
         {
             int frame = 0;
-            if (playing() && (mLarge || state.animateInline()) && image->frames.size() > 1)
+            if (image->frames.size() > 1 && playing() && (mLarge || state.animateInline()))
             {
                 unsigned duration = 0; for (const auto& item : image->frames) duration += item.delay;
                 auto elapsed = static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - mEpoch).count()) % duration;
@@ -265,20 +280,48 @@ public:
                 mUV = LLRectf(0.f, static_cast<F32>(image->height) / static_cast<F32>(texHeight), static_cast<F32>(image->width) / static_cast<F32>(texWidth), 0.f);
                 mFrame = frame;
             }
-            const auto size = fit(image->width, image->height, getRect().getWidth(), (std::max)(1, getRect().getHeight() - 30));
+            const auto size = fit(image->width, image->height, getRect().getWidth(), (std::max)(1, getRect().getHeight() - footer));
             const auto width = static_cast<S32>(size.width * mZoom), height = static_cast<S32>(size.height * mZoom);
             const auto x = (getRect().getWidth() - width) / 2 + mPanX;
-            const auto y = 30 + (getRect().getHeight() - 30 - height) / 2 + mPanY;
-            LLLocalClipRect clip(LLRect(0, getRect().getHeight(), getRect().getWidth(), 28));
+            const auto y = footer + (getRect().getHeight() - footer - height) / 2 + mPanY;
+            mPlay->setOrigin(std::clamp(x + 4, 0, (std::max)(0, getRect().getWidth() - 20)),
+                std::clamp(y + 4, footer, (std::max)(footer, getRect().getHeight() - 20)));
+            LLLocalClipRect clip(LLRect(0, getRect().getHeight(), getRect().getWidth(), footer));
             if (mTexture) gl_draw_scaled_image(x, y, width, height, mTexture, LLColor4::white, mUV);
         }
         LLPanel::draw();
     }
     bool handleMouseDown(S32 x, S32 y, MASK mask) override
     {
-        if (y <= 28) return LLPanel::handleMouseDown(x, y, mask);
-        if (!mLarge) { activate(); return true; }
+        if (childrenHandleMouseDown(x, y, mask)) return true;
+        if (mLarge && y <= 28) return true;
+        if (!mLarge) { setFocus(true); activate(); return true; }
         mDragX = x; mDragY = y; gFocusMgr.setMouseCapture(this); return true;
+    }
+    bool handleKeyHere(KEY key, MASK mask) override
+    {
+        if (mask == MASK_NONE && (key == KEY_RETURN || key == ' ')) { activate(); return true; }
+        return LLPanel::handleKeyHere(key, mask);
+    }
+    bool handleRightMouseDown(S32 x, S32 y, MASK) override
+    {
+        if (!mSource.valid() || !gMenuHolder) return true;
+        if (auto* prior = mMenu.get()) prior->die();
+        LLContextMenu::Params p; p.name = "chat_image_menu";
+        auto* menu = LLUICtrlFactory::create<LLContextMenu>(p); gMenuHolder->addChild(menu); mMenu = menu->getHandle();
+        const auto handle = getHandle();
+        for (const char* action : {"FSChatMediaCopyLink", "FSChatMediaOriginal"})
+        {
+            LLMenuItemCallGL::Params item; item.name = action; item.label = tr(action);
+            item.on_click.function([handle, copy = std::string(action) == "FSChatMediaCopyLink"](LLUICtrl*, const LLSD&)
+            {
+                auto* card = dynamic_cast<ImageCard*>(handle.get()); if (!card || !card->mSource.valid()) return;
+                if (copy) gViewerWindow->getWindow()->copyTextToClipboard(utf8str_to_wstring(card->mUrl));
+                else LLWeb::loadURLExternal(card->mUrl);
+            });
+            menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
+        }
+        S32 sx, sy; localPointToScreen(x, y, &sx, &sy); menu->show(sx, sy, this); return true;
     }
     bool handleMouseUp(S32 x, S32 y, MASK mask) override
     { if (hasMouseCapture()) { gFocusMgr.setMouseCapture(nullptr); return true; } return LLPanel::handleMouseUp(x, y, mask); }
@@ -303,11 +346,20 @@ private:
                     card->mTexture = nullptr; card->mFrame = -1;
                     if (discard) card->mRequested = false;
                 }
+                card->syncLinkVisibility();
                 return true;
             }
             return false;
         });
     }
+    void setLinkHidden(bool hidden)
+    {
+        if (*mLinkHidden == hidden) return;
+        *mLinkHidden = hidden;
+        if (auto* history = dynamic_cast<FSChatHistory*>(mHistory.get())) history->needsReflow();
+    }
+    void syncLinkVisibility()
+    { setLinkHidden(service().prefs.hideLinks && service().prefs.mode && mEntry && !*mEntry->cancelled && mEntry->image && mSource.valid()); }
     bool playing() const { return mPlaybackSet ? mPlaying : !mLarge && service().prefs.animate && automaticMotion(); }
     bool visibleInChat() const
     {
@@ -339,12 +391,15 @@ private:
     std::shared_ptr<Entry> mEntry;
     LLPointer<LLViewerTexture> mTexture;
     LLRectf mUV;
+    LLHandle<LLView> mHistory;
+    LLHandle<LLContextMenu> mMenu;
+    std::shared_ptr<bool> mLinkHidden = std::make_shared<bool>(false);
     LLButton* mAction = nullptr; LLButton* mPlay = nullptr;
     int mFrame = -1; float mZoom = 1.f; S32 mPanX = 0, mPanY = 0, mDragX = 0, mDragY = 0;
     Clock::time_point mEpoch = Clock::now();
 };
 }
-void FSChatMedia::append(FSChatHistory* history, const LLChat& chat, bool nearby)
+void FSChatMedia::append(FSChatHistory* history, const LLChat& chat, bool nearby, S32 bodyStart)
 {
     auto& state = service(); state.start();
     if (!state.prefs.mode || chat.mMuted || chat.mNotifId.notNull() || chat.mRlvNamesFiltered || chat.mRlvLocFiltered || chat.mFromID.isNull()) return;
@@ -355,9 +410,11 @@ void FSChatMedia::append(FSChatHistory* history, const LLChat& chat, bool nearby
     const bool group = session ? session->isGroupSessionType() : chat.mChatType == CHAT_TYPE_IM_GROUP;
     Source source{gAgent.getID(), gAgent.getSessionID(), chat.mFromID, chat.mSessionID, LLGridManager::getInstance()->getGrid(), !im, group};
     if (!source.valid()) return;
+    const auto bodyEnd = history->getLength();
     for (const auto& url : discover(chat.mText, state.prefs.sites))
     {
-        auto* card = new ImageCard(source, url);
+        auto* card = new ImageCard(source, url, false, history);
+        history->collapseMediaLink(bodyStart, bodyEnd, url, card->linkHidden());
         card->reshape((std::min)(state.prefs.size, (std::max)(80, history->getRect().getWidth() - 32)), card->desiredHeight());
         LLInlineViewSegment::Params p; p.view = card; p.left_pad = 4; p.right_pad = 4; p.top_pad = 4; p.bottom_pad = 4;
         history->appendWidget(p, "\n", false);
@@ -369,8 +426,12 @@ void FSChatMedia::resize(FSChatHistory* history)
     const auto width = (std::min)(service().prefs.size, (std::max)(80, history->getRect().getWidth() - 32));
     bool changed = false;
     for (auto* child : *history->getDocumentView()->getChildList())
-        if (auto* card = dynamic_cast<ImageCard*>(child); card && (card->getRect().getWidth() != width || card->getRect().getHeight() != card->desiredHeight()))
-        { const auto height = card->desiredHeight(); card->setVisible(height != 0); card->reshape(width, height); changed = true; }
+        if (auto* card = dynamic_cast<ImageCard*>(child))
+        {
+            const auto height = card->desiredHeight(width);
+            if (card->getRect().getWidth() != width || card->getRect().getHeight() != height)
+            { card->setVisible(height != 0); card->reshape(width, height); changed = true; }
+        }
     if (changed) history->needsReflow();
 }
 int FSChatMedia::layoutKey()

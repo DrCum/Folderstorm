@@ -6,7 +6,7 @@ class FSChatHistory;
 class LLChat;
 namespace FSChatMedia
 {
-void append(FSChatHistory* history, const LLChat& chat, bool nearby);
+void append(FSChatHistory* history, const LLChat& chat, bool nearby, S32 bodyStart);
 void resize(FSChatHistory* history);
 int layoutKey();
 void applyPreferences();

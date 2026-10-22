@@ -68,6 +68,7 @@ struct Binding{
  Editor* input()const{return editor;}bool currentAuthority()const;
  bool valid()const{return allowed&&currentAuthority();}std::string stamp()const{return target;}
 };
+void layoutAttachment(const std::shared_ptr<Binding>&){}
 struct Dir{std::string getCAFile(){return {};}}dir;Dir* gDirUtilp=&dir;
 struct Callbacks{void addFunction(void(*)(void*),void*){}}gIdleCallbacks;
 struct FSSessionWorker{static bool inputAllowed(){return true;}};
