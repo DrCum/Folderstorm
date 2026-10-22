@@ -162,6 +162,7 @@
 #include "llfloatervoicevolume.h"
 #include "llfloaterwhitelistentry.h"
 #include "llfloaterwindowsize.h"
+#include "fsfloatergifboard.h"
 #include "llfloaterworldmap.h"
 #include "llfloaterimcontainer.h"
 #include "llinspectavatar.h"
@@ -508,6 +509,8 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
     LLFloaterReg::add("chat_upload", "floater_chat_upload.xml", &LLFloaterReg::build<FSFloaterChatUpload>);
     LLFloaterReg::add("chat_image_preview", "floater_chat_image_preview.xml", &LLFloaterReg::build<FSFloaterChatMedia>);
+    LLFloaterReg::add("gif_board", "floater_gif_board.xml", &LLFloaterReg::build<FSFloaterGifBoard>);
+    LLFloaterReg::add("gif_item", "floater_gif_item.xml", &LLFloaterReg::build<FSFloaterGifItem>);
     LLFloaterReg::add("gesture_board", "floater_gesture_board.xml", &LLFloaterReg::build<FSFloaterGestureBoard>);
     LLFloaterReg::add("gesture_board_picker", "floater_gesture_board_picker.xml", &LLFloaterReg::build<FSFloaterGesturePicker>);
     LLFloaterReg::add("gesture_board_editor", "floater_gesture_board_editor.xml", &LLFloaterReg::build<FSFloaterGestureTileEditor>);

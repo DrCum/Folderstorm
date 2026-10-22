@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="gif_item" title="Save GIF" width="440" height="300" can_resize="false" single_instance="true" reuse_instance="true" layout="topleft">
+ <text name="url_label" left="14" top="36" height="20" width="90">Link</text>
+ <line_editor name="url" left="100" top="32" right="-14" height="24" max_length_bytes="4096"/>
+ <text name="title_label" left="14" top="72" height="20" width="90">Name</text>
+ <line_editor name="title" left="100" top="68" right="-14" height="24" max_length_bytes="128"/>
+ <text name="tags_label" left="14" top="108" height="20" width="90">Tags</text>
+ <line_editor name="tags" left="100" top="104" right="-14" height="24" max_length_bytes="256"/>
+ <text name="collection_label" left="14" top="144" height="20" width="90">Collection</text>
+ <line_editor name="collection" left="100" top="140" right="-14" height="24" max_length_bytes="64"/>
+ <check_box name="favourite" label="Favourite" left="100" top="178" height="24"/>
+ <text name="status" left="14" top="212" right="-14" height="36" wrap="true"/>
+ <button name="save" label="Save" right="-106" bottom="-12" width="88" height="24"/>
+ <button name="cancel" label="Cancel" right="-14" bottom="-12" width="88" height="24"/>
+</floater>

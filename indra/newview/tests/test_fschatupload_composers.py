@@ -43,7 +43,7 @@ struct LLChatEntry:LLView{Parent parent;std::function<bool()> available;std::fun
  Parent* getParent(){return &parent;}bool getVisible()const{return visible;}
  void setImagePasteCallbacks(std::function<bool()> a,std::function<void()> p){available=std::move(a);paste=std::move(p);}};
 struct LLButton:LLView{
- struct Params{std::string name,tool_tip,image_overlay;LLRect rect;struct{int flags=0;}follows;};
+ struct Params{std::string name,tool_tip,image_overlay,label;LLRect rect;struct{int flags=0;}follows;};
  explicit LLButton(const Params& p){rect=p.rect;}void setVisible(bool v){visible=v;}
  void setOrigin(int x,int y){auto w=rect.getWidth(),h=rect.getHeight();rect=LLRect(x,y+h,x+w,y);}
  template<class F>void setCommitCallback(F){}
@@ -59,7 +59,7 @@ struct Clipboard{bool isClipboardImageAvailable(){return true;}};
 struct Viewer{Clipboard clipboard;Clipboard* getWindow(){return &clipboard;}}viewer;
 Viewer* gViewerWindow=&viewer;
 std::string tr(const char* p){return p;}
-struct Binding{Handle editor,button;S32 rightInset=0;bool layoutReady=false;LLUUID conversation;unsigned generation=0;
+struct Binding{Handle editor,button,gifButton;S32 rightInset=0;bool layoutReady=false;LLUUID conversation;unsigned generation=0;
  std::function<bool()> available;std::function<std::string()> destination;
  LLChatEntry* input()const{return dynamic_cast<LLChatEntry*>(editor.get());}
  bool valid()const{return input()!=nullptr;}};
@@ -70,7 +70,8 @@ struct Controller{Config config;std::vector<std::shared_ptr<Binding>> bindings;
 Controller& controller(){return host;}
 void show(const std::shared_ptr<Binding>&){}
 int pastes=0;LLChatEntry* pastedInto=nullptr;
-struct FSChatUpload{static void bind(LLChatEntry*,const LLUUID&,std::function<bool()>,std::function<std::string()>);
+struct FSFloaterGifBoard{static void open(const LLSD&){} };
+struct FSChatUpload{static LLSD captureTarget(LLChatEntry*){return {};}static void bind(LLChatEntry*,const LLUUID&,std::function<bool()>,std::function<std::string()>);
  static void pasteImage(LLChatEntry* p){++pastes;pastedInto=p;}};
 '''
 CASES = r'''
@@ -85,14 +86,14 @@ int main(){
   layoutAttachment(binding);assert(!binding->layoutReady&&!button->visible&&editor.rect.getWidth()==24);
   editor.parent.rect.mRight=600;editor.rect.mRight=599;layoutAttachment(binding);
   assert(binding->layoutReady&&button->visible&&binding->rightInset==1);
-  const auto width=editor.rect.getWidth();assert(button->rect.mLeft==editor.rect.mRight+2&&button->rect.mRight==599);
+  const auto width=editor.rect.getWidth();assert(button->rect.mLeft==editor.rect.mRight+2&&button->rect.mRight==565);
   for(int i=0;i<20;++i){layoutAttachment(binding);}assert(editor.rect.getWidth()==width); // Reserve once, never shrink on polling.
-  editor.parent.rect.mRight=1000;editor.rect.mRight+=400;layoutAttachment(binding);assert(button->rect.mRight==999);
+  editor.parent.rect.mRight=1000;editor.rect.mRight+=400;layoutAttachment(binding);assert(button->rect.mRight==965);
   editor.parent.rect.mRight=50;layoutAttachment(binding);assert(!button->visible&&editor.available());
   editor.parent.rect.mRight=600;editor.rect.mRight=599;layoutAttachment(binding);assert(button->visible&&editor.rect.getWidth()==width);
   const auto generation=binding->generation;
   FSChatUpload::bind(&editor,LLUUID("replacement-im"),{},{});
-  assert(host.bindings.size()==1&&editor.parent.children.size()==1&&binding->generation==generation+1);
+  assert(host.bindings.size()==1&&editor.parent.children.size()==2&&binding->generation==generation+1);
   editor.paste();assert(pastedInto==&editor);
   host.config.enabled=false;assert(!editor.available());host.config.enabled=true;
  }
