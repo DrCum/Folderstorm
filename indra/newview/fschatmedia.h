@@ -14,7 +14,8 @@ void applyPreferences();
 void preferencesOpening();
 void clear();
 void shutdown();
-LLPanel* createBoardTile(const std::string& url, std::function<void()> select, std::function<void()> insert);
+LLPanel* createBoardTile(const std::string& url, std::function<void()> select, std::function<void()> insert,
+                        std::function<void(S32, S32)> context = {});
 void boardPlayback(LLPanel* tile, bool play, bool visible = true);
 void boardPreview(LLPanel* tile);
 bool automaticMotionEnabled();

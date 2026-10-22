@@ -511,6 +511,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("chat_image_preview", "floater_chat_image_preview.xml", &LLFloaterReg::build<FSFloaterChatMedia>);
     LLFloaterReg::add("gif_board", "floater_gif_board.xml", &LLFloaterReg::build<FSFloaterGifBoard>);
     LLFloaterReg::add("gif_item", "floater_gif_item.xml", &LLFloaterReg::build<FSFloaterGifItem>);
+    LLFloaterReg::add("gif_report", "floater_gif_report.xml", &LLFloaterReg::build<FSFloaterGifReport>);
     LLFloaterReg::add("gesture_board", "floater_gesture_board.xml", &LLFloaterReg::build<FSFloaterGestureBoard>);
     LLFloaterReg::add("gesture_board_picker", "floater_gesture_board_picker.xml", &LLFloaterReg::build<FSFloaterGesturePicker>);
     LLFloaterReg::add("gesture_board_editor", "floater_gesture_board_editor.xml", &LLFloaterReg::build<FSFloaterGestureTileEditor>);

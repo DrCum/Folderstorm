@@ -10,6 +10,7 @@
 #include <curl/curl.h>
 #include <chrono>
 #include <memory>
+#include <ctime>
 
 namespace fs_chat_media
 {
@@ -66,6 +67,13 @@ std::size_t readHeader(char* bytes, std::size_t size, std::size_t count, void* o
         const auto name = lower(line.substr(0, colon));
         if (name == "location") transfer.response.location = value;
         if (name == "content-type") transfer.response.type = lower(value.substr(0, value.find(';')));
+        if (name == "retry-after")
+        {
+            long seconds=0;
+            if(!value.empty()&&value.size()<10&&std::all_of(value.begin(),value.end(),[](unsigned char c){return c>='0'&&c<='9';})) seconds=std::stol(value);
+            else {const auto date=curl_getdate(value.c_str(),nullptr);if(date>=0)seconds=static_cast<long>(std::clamp(date-std::time(nullptr),std::time_t{0},std::time_t{3600}));}
+            transfer.response.retryAfter=static_cast<unsigned>(std::clamp(seconds,1L,3600L));
+        }
         return length;
     }
     catch (...) { return 0; }
@@ -73,12 +81,12 @@ std::size_t readHeader(char* bytes, std::size_t size, std::size_t count, void* o
 int progress(void* opaque, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
 { return static_cast<const std::atomic<bool>*>(opaque)->load() ? 1 : 0; }
 }
-Response fetch(const std::string& original, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled, bool head)
+static Response performTransfer(const std::string& original, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled, bool head, unsigned maximumRedirects, const std::string& json)
 {
     if (limit > MaxImageBytes) return {};
     auto address = original;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    for (unsigned redirects = 0; redirects <= 3 && !cancelled; ++redirects)
+    for (unsigned redirects = 0; redirects <= maximumRedirects && !cancelled; ++redirects)
     {
         const auto url = parse(address); if (!url) return {};
         const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
@@ -96,6 +104,13 @@ Response fetch(const std::string& original, const std::string& caFile, std::size
 #endif
         if (curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 0L) != CURLE_OK) return {};
         if (head && curl_easy_setopt(handle, CURLOPT_NOBODY, 1L) != CURLE_OK) return {};
+        std::unique_ptr<curl_slist,decltype(&curl_slist_free_all)> headers(nullptr,curl_slist_free_all);
+        if(!json.empty())
+        {
+            headers.reset(curl_slist_append(nullptr,"Content-Type: application/json"));if(!headers)return {};
+            if(curl_easy_setopt(handle,CURLOPT_HTTPHEADER,headers.get())!=CURLE_OK||curl_easy_setopt(handle,CURLOPT_POST,1L)!=CURLE_OK||
+               curl_easy_setopt(handle,CURLOPT_POSTFIELDS,json.c_str())!=CURLE_OK||curl_easy_setopt(handle,CURLOPT_POSTFIELDSIZE,static_cast<long>(json.size()))!=CURLE_OK)return {};
+        }
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2L) != CURLE_OK) return {};
         if (!caFile.empty() && curl_easy_setopt(handle, CURLOPT_CAINFO, caFile.c_str()) != CURLE_OK) return {};
@@ -110,10 +125,11 @@ Response fetch(const std::string& original, const std::string& caFile, std::size
         if (curl_easy_setopt(handle, CURLOPT_NOPROGRESS, 0L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_XFERINFOFUNCTION, progress) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_XFERINFODATA, &cancelled) != CURLE_OK) return {};
-        if (curl_easy_perform(handle) != CURLE_OK || cancelled) return {};
+        if (cancelled || curl_easy_perform(handle) != CURLE_OK || cancelled) return {};
         if (curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &transfer.response.status) != CURLE_OK) return {};
         if (transfer.response.status >= 300 && transfer.response.status <= 399)
         {
+            if(!maximumRedirects)return std::move(transfer.response);
             address = resolve(*url, transfer.response.location); if (address.empty()) return {};
             continue;
         }
@@ -121,5 +137,13 @@ Response fetch(const std::string& original, const std::string& caFile, std::size
         return std::move(transfer.response);
     }
     return {};
+}
+Response fetch(const std::string& original,const std::string& ca,std::size_t limit,const std::atomic<bool>& cancelled,bool head)
+{ return performTransfer(original,ca,limit,cancelled,head,3,""); }
+Response klipyRequest(const std::string& address,const std::string& ca,const std::string& body,const std::atomic<bool>& cancelled)
+{
+    const auto url=parse(address);
+    if(!url||url->host!="api.klipy.com"||url->path.compare(0,8,"/api/v1/")!=0||body.size()>2048)return {};
+    return performTransfer(address,ca,MaxMetadataBytes,cancelled,false,0,body);
 }
 }

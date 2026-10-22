@@ -27,14 +27,24 @@ public:
 private:
     void layoutTiles();
     void clearTiles();
-    void options();
+    void options(S32 x = -1, S32 y = -1);
     void popOut();
     void preview();
     void transfer(bool save);
+    void sourceChanged();
+    void providerSearch(bool append = false);
+    void updateProvider();
     LLSD mTarget;
     LLUUID mAccount, mLogin;
     std::string mGrid, mSelected, mStatus;
     bool mExpanded = false, mValid = false;
+    bool mProvider = false;
+    bool mOpened = false;
+    bool mProviderConfigured = false;
+    unsigned mProviderRevision = ~0u, mProviderPage = 1;
+    std::string mMyQuery,mProviderQuery;
+    std::map<std::string,std::string> mShareURLs;
+    std::vector<std::string> mProviderCategories;
     std::vector<fs_gif_board::Item> mLibrary, mItems;
     LLScrollContainer* mScroll = nullptr;
     LLPanel* mDocument = nullptr;
@@ -52,5 +62,14 @@ private:
     void save();
     LLUUID mAccount, mLogin;
     std::string mGrid, mID;
+};
+class FSFloaterGifReport final : public LLFloater
+{
+public:
+    explicit FSFloaterGifReport(const LLSD& key):LLFloater(key){}
+    bool postBuild() override;
+    void onOpen(const LLSD& key) override;
+private:
+    LLUUID mAccount,mLogin;std::string mGrid,mSlug;
 };
 #endif
