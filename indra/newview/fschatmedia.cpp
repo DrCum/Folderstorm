@@ -81,11 +81,13 @@ struct Entry
     std::shared_ptr<Image> image;
     bool finished = false;
     Clock::time_point lastSeen = Clock::now();
-    std::vector<std::function<void()>> releaseViews;
+    // Weak subscribers: false maintains offscreen views; true discards all.
+    // Returning false removes dead or rebound cards from the subscriber list.
+    std::vector<std::function<bool(bool)>> releaseViews;
     void discard()
     {
         *cancelled = true; image.reset();
-        for (const auto& release : releaseViews) release();
+        for (const auto& release : releaseViews) release(true);
         releaseViews.clear();
     }
 };
@@ -145,6 +147,8 @@ public:
         for (auto iter = entries.begin(); iter != entries.end();)
         {
             auto& entry = *iter->second;
+            entry.releaseViews.erase(std::remove_if(entry.releaseViews.begin(), entry.releaseViews.end(),
+                [](const auto& maintain) { return !maintain(false); }), entry.releaseViews.end());
             if (!prefs.mode || !entry.source.valid() || (!entry.finished && iter->second.use_count() == 1))
             { if (entry.image) used -= entry.image->bytes(); if (!*entry.cancelled) ++layoutRevision; entry.discard(); }
             if (entry.job.valid() && entry.job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
@@ -290,10 +294,18 @@ private:
     {
         mEntry = std::move(entry); if (!mEntry) return;
         const auto handle = getHandle(); const auto* identity = mEntry.get();
-        mEntry->releaseViews.emplace_back([handle, identity]
+        mEntry->releaseViews.emplace_back([handle, identity](bool discard)
         {
             if (auto* card = dynamic_cast<ImageCard*>(handle.get()); card && card->mEntry.get() == identity)
-            { card->mTexture = nullptr; card->mFrame = -1; card->mRequested = false; }
+            {
+                if (discard || !card->visibleInChat())
+                {
+                    card->mTexture = nullptr; card->mFrame = -1;
+                    if (discard) card->mRequested = false;
+                }
+                return true;
+            }
+            return false;
         });
     }
     bool playing() const { return mPlaybackSet ? mPlaying : !mLarge && service().prefs.animate && automaticMotion(); }

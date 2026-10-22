@@ -65,6 +65,10 @@ change, release, installer or VPS configuration is included.
   are limited before decoding. These working buffers and encoded transfers are
   additional to the retained-pixel cache budget. Oversized animations can use a
   first frame or fail safely rather than allocate unbounded frame history.
+- Idle maintenance releases every offscreen card texture, including repeated
+  cards sharing a single decoded image; no offscreen draw call is required.
+  Returning cards upload again without collapsing their reserved history rows.
+  Weak subscribers for destroyed/rebound cards are pruned.
 - Offscreen cache entries are evicted when needed, releasing their GL textures
   through weak view handles. Pending jobs remain retained until their futures
   settle; Clear/Apply never waits synchronously for the network.
@@ -83,6 +87,9 @@ change, release, installer or VPS configuration is included.
   login change, group restriction, sender-specific Nearby restriction, clear
   while work is pending, four-job admission, offscreen capacity eviction and
   refusal to evict visible pinned entries. It also checks mute and proxy gates.
+  A second case compiles the actual attach/visibility/idle-maintenance bodies,
+  seeds 100 textures for one 4 MiB decoded image, and checks offscreen release,
+  visible retention, frame reset and dead-subscriber pruning.
 - The four C++ suites passed AddressSanitizer and UndefinedBehaviorSanitizer.
   LeakSanitizer is disabled for this run because this sandbox prevents its
   thread inspection; no leak-check claim is made.
