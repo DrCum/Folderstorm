@@ -49,6 +49,24 @@ int main()
     assert(resolveMedia("https://uploads.folderstorm.com/view/moved", "uploads.folderstorm.com", fetcher).status == 200);
     assert(calls.back() == "https://cdn.folderstorm.com/path/image.png");
 
+    // Zipline's verified view routes are script-only pages, even with a .png
+    // extension. Use the instance's public raw route without executing HTML.
+    calls.clear();
+    fixtures["https://images.sodie.online/raw/sodie-sample.png"] = result("PNG fixture", "image/png");
+    assert(resolveMedia("https://images.sodie.online/view/sodie-sample.png", DefaultSites, fetcher).type == "image/png");
+    assert(calls.size() == 1 && calls[0] == "https://images.sodie.online/raw/sodie-sample.png");
+    calls.clear();
+    fixtures["https://images.sodie.online/raw/sodie-sample.gif?token=a&x=b"] = result("GIF fixture", "image/gif");
+    assert(resolveMedia("https://images.sodie.online/view/sodie-sample.gif?token=a&x=b", DefaultSites, fetcher).type == "image/gif");
+    assert(calls.size() == 1 && calls[0] == "https://images.sodie.online/raw/sodie-sample.gif?token=a&x=b");
+    calls.clear();
+    assert(resolveMedia("https://images.sodie.online/raw/sodie-sample.png", DefaultSites, fetcher).type == "image/png" && calls.size() == 1);
+    calls.clear();
+    assert(!resolveMedia("https://images.sodie.online.attacker.example.org/view/sodie-sample.png", DefaultSites, fetcher).status);
+    assert(calls.size() == 1 && calls[0] == "https://images.sodie.online.attacker.example.org/view/sodie-sample.png");
+    calls.clear();
+    assert(!resolveMedia("https://images.sodie.online/view/deleted.png", DefaultSites, fetcher).status && calls.size() == 1);
+
     calls.clear(); fixtures["https://i.gyazo.com/not-an-image.png"] = result("<meta property='og:image' content='https://i.gyazo.com/actual.gif'>", "text/html");
     assert(!resolveMedia("https://i.gyazo.com/not-an-image.png", DefaultSites, fetcher).status && calls.size() == 1);
     calls.clear(); assert(!resolveMedia("https://unknown.example.org/share/abc", DefaultSites, fetcher).status && calls.empty());

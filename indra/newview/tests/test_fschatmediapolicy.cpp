@@ -17,6 +17,8 @@ int main()
     assert(provider(*parse("https://i.snipboard.io/AbC123.jpg")) == Provider::Direct);
     assert(provider(*parse("https://snipboard.io/AbC123")) == Provider::Snipboard);
     assert(provider(*parse("https://uploads.folderstorm.com/view/hello"), "uploads.folderstorm.com") == Provider::Custom);
+    assert(provider(*parse("https://images.sodie.online/view/sodie-sample.png")) == Provider::Zipline);
+    assert(provider(*parse("https://images.sodie.online/raw/sodie-sample.png")) == Provider::Direct);
     assert(!selectedSite(*parse("https://notgyazo.com/x.gif"), "gyazo.com"));
     assert(selectedSite(*parse("https://i.gyazo.com/x.gif"), " snipboard.io, gyazo.com "));
     const auto found = discover("Hi (https://cdn.example.org/a.gif), https://gyazo.com/abc https://gyazo.com/abc https://jmp.sh/foo https://imgur.com/extra");

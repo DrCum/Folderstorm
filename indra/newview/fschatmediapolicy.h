@@ -19,7 +19,7 @@ constexpr unsigned MaxFrames = 120;
 constexpr unsigned MaxCards = 3;
 constexpr unsigned MaxJobs = 4;
 constexpr unsigned MaxEntries = 48;
-constexpr const char* DefaultSites = "gyazo.com,jmp.sh,jumpshare.com,snipboard.io,imgur.com,ibb.co,imgbb.com,imgchest.com";
+constexpr const char* DefaultSites = "gyazo.com,jmp.sh,jumpshare.com,snipboard.io,imgur.com,ibb.co,imgbb.com,imgchest.com,images.sodie.online";
 inline std::string lower(std::string text)
 { for (auto& c : text) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A')); return text; }
 inline bool ends(const std::string& text, const std::string& suffix)
@@ -64,7 +64,7 @@ inline bool publicV6(const unsigned char* ip)
 }
 inline bool site(const std::string& host, const char* name)
 { return host == name || ends(host, std::string(".") + name); }
-enum class Provider { Direct, Gyazo, Jumpshare, Snipboard, Imgur, ImgBB, ImageChest, Custom };
+enum class Provider { Direct, Gyazo, Jumpshare, Snipboard, Imgur, ImgBB, ImageChest, Zipline, Custom };
 inline bool imagePath(const Url& url)
 {
     const auto path = lower(url.path.substr(0, url.path.find('?')));
@@ -90,6 +90,8 @@ inline std::optional<Provider> provider(const Url& url, const std::string& sites
     if (url.host == "snipboard.io" || url.host == "www.snipboard.io") return Provider::Snipboard;
     if (url.host == "gyazo.com" || url.host == "www.gyazo.com") return Provider::Gyazo;
     if (url.host == "imgur.com" || url.host == "www.imgur.com") return Provider::Imgur;
+    if (url.host == "images.sodie.online" && url.path.compare(0, 6, "/view/") == 0 && imagePath(url)) return Provider::Zipline;
+    if (url.path.compare(0, 6, "/view/") == 0 && selectedSite(url, sites)) return Provider::Custom;
     if (imagePath(url)) return Provider::Direct;
     if (site(url.host, "gyazo.com")) return Provider::Gyazo;
     if (site(url.host, "jumpshare.com") || site(url.host, "jmp.sh")) return Provider::Jumpshare;

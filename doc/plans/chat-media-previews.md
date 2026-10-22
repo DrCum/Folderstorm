@@ -99,4 +99,4 @@ Use focused portable unit/fixture tests and affected-path checks. Do not run bro
 
 ## Zipline handoff
 
-The setup agent only needs to provide the final public HTTPS hostname, a sample direct image URL, a sample share/view URL and a sample animated GIF URL. Use non-sensitive fixtures. Confirm whether public files and metadata are accessible without login and what expiry limits are configured. No administrator token or upload secret is needed to implement previews.
+Received and checked the public handoff: `images.sodie.online`, `/raw/sodie-sample.png`, `/view/sodie-sample.png` and `/raw/sodie-sample.gif`. The samples have no expiration. This instance's view page has no image metadata, so its adapter uses the verified `/view/` → `/raw/` route instead. The hostname is included in the selected-site defaults; uploads and VPS administration remain separate work. No administrator token or upload secret is required.

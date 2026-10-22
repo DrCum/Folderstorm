@@ -89,7 +89,11 @@ Response fetch(const std::string& original, const std::string& caFile, std::size
         if (curl_easy_setopt(handle, CURLOPT_URL, address.c_str()) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_USERAGENT, "Folderstorm image preview/1") != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_PROXY, "") != CURLE_OK) return {}; // Caller refuses configured proxies.
+#if LIBCURL_VERSION_NUM >= 0x075500
         if (curl_easy_setopt(handle, CURLOPT_PROTOCOLS_STR, "https") != CURLE_OK) return {};
+#else
+        if (curl_easy_setopt(handle, CURLOPT_PROTOCOLS, static_cast<long>(CURLPROTO_HTTPS)) != CURLE_OK) return {};
+#endif
         if (curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 0L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1L) != CURLE_OK) return {};
         if (curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2L) != CURLE_OK) return {};

@@ -38,9 +38,11 @@ change, release, installer or VPS configuration is included.
   `.jpg`; it does not guess CDN filenames.
 - Imgur, ImgBB/ibb.co and Image Chest public pages use Open Graph/Twitter image
   metadata. Albums initially use the representative image, not a gallery.
-- Adding the public Zipline hostname under Selected sites enables metadata
-  previews for its extensionless/share routes. Existing direct image links work
-  without adding it. No upload secret or admin token belongs in this setting.
+- `images.sodie.online` is included in Selected sites. Its `/view/name.png`
+  pages use the verified `/raw/name.png` route because the public view page is
+  a JavaScript shell without image metadata. Original share links remain intact.
+  Other public hosts can be added for metadata-based share pages; direct image
+  links need no extra configuration. No upload secret or admin token is used.
 - Deleted/private pages, login walls, script-only pages, unsupported formats and
   provider blocks retain the original URL and offer a retry when applicable.
   Provider fixtures test the actual resolver, but live-provider compatibility
@@ -86,12 +88,18 @@ change, release, installer or VPS configuration is included.
   thread inspection; no leak-check claim is made.
 - Linux syntax checks against available viewer/prebuilt headers passed for
   `fschatmedia.cpp`, `fschathistory.cpp`, `llfloaterpreference.cpp`,
-  `llviewerfloaterreg.cpp` and `llimview.cpp`.
+  `llviewerfloaterreg.cpp` and `llimview.cpp`. The HTTP adapter also passes with
+  the available libcurl 7.54.1 prebuilt headers and current system headers;
+  both keep the same HTTPS-only transport policy.
 - `llappviewer.cpp` syntax checking stops at missing pre-existing
   `cef/dullahan_version.h`; only its include and early-cleanup hook changed.
 - Updated settings, strings, preferences and floater XML parse successfully.
   Diff/whitespace checks are clean. Dependency notices are included in the three
   platform license files already staged by the installer manifest.
+- The supplied public `images.sodie.online` PNG, view page and GIF returned
+  HTTP 200 with the expected image/HTML content types. The PNG and GIF were
+  decoded with the production decoder, and the view-to-raw adapter has fixture
+  regressions for PNG, animated GIF, signed queries and deleted files.
 
 No viewer build, link, packaging, GitHub build, unrelated suite, native Windows
 UI or GPU run was performed. This is a draft native-testing checkpoint.
@@ -128,8 +136,10 @@ when Python is available, or run it directly with
 5. Test actual public Gyazo, Snipboard (including `.jpg` share-page URLs),
    Jumpshare, Imgur, ImgBB and Image Chest examples. Deleted/private pages must
    remain usable as original links, with no repeated automatic retry loop.
-6. Add the Zipline public hostname and test a direct image, view/share page and
-   GIF. No token should be needed for public image previews.
+6. Test the supplied public samples (no token required):
+   - `https://images.sodie.online/raw/sodie-sample.png`
+   - `https://images.sodie.online/view/sodie-sample.png`
+   - `https://images.sodie.online/raw/sodie-sample.gif`
 7. Change automatic-loading mode in a Preferences draft and Cancel: it must not
    begin loading. Apply selected-sites mode and confirm unrelated sites remain
    click-to-load. Test Off, Clear cache and persistence after restart.

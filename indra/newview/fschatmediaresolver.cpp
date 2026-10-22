@@ -21,6 +21,10 @@ Response resolveMedia(const std::string& address, const std::string& sites, cons
     const auto url = parse(address); if (!url) return {};
     const auto kind = provider(*url, sites); if (!kind) return {};
     std::string media = address;
+    // This public Zipline instance supplies /raw/ images but its /view/ pages
+    // contain only a JavaScript shell, with no Open Graph image metadata.
+    if (*kind == Provider::Zipline)
+        media = resolve(*url, "/raw/" + url->path.substr(6));
     if (*kind == Provider::Gyazo)
     {
         const auto response = fetcher("https://api.gyazo.com/api/oembed?url=" + encode(address), MaxMetadataBytes);
