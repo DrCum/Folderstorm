@@ -4,7 +4,7 @@ Status: implemented on `feat/gesture-board`, stacked on open PR #8 (`feat/worksp
 
 Inventory-sound follow-up: `feat/gesture-board-sounds`, stacked above PR #70. The picker and Inventory drag/drop accept gestures and sounds, including links. Replacement can switch between the two. Sound tiles use the native Inventory **Play** path for one-shot in-world audio at normal gain; their hover text explains that Stop cannot recall an emitted sound. Gesture playback, loading and stopping retain their existing restrictions. Gesture-only preferences do not disable native sound-item playback. Availability also rejects disconnected sessions, and delayed gesture loads verify the resolved item is still a gesture.
 
-The account-local version-two format is unchanged: tiles store Inventory references and presentation only, and resolve their type at use time. Existing boards remain readable, and sounds share label/color/size/reorder/duplicate behavior. This adds no desktop audio-file playback, voice injection, IPC or MCP command. Native acceptance and the portable controller-boundary checks are recorded in the validation document.
+At the inventory-sound checkpoint, the account-local version-two format was unchanged: tiles store Inventory references and presentation only, and resolve their type at use time. Existing boards remain readable, and sounds share label/color/size/reorder/duplicate behavior. This adds no desktop audio-file playback, voice injection, IPC or MCP command. Native acceptance and the portable controller-boundary checks are recorded in the validation document.
 
 Planning source: `feat/workspace-context` at `34ab510d3d`, the current PR #8 worktree. PR #8 was verified open/unmerged and current main remained `33e371fb3f`; implementation uses a separate worktree at `/workspace/Folderstorm-gesture-board` from the PR #8 head plus the plan-only commit `aa828a9447`. Preserve user edits and published history. Do not mix this feature into a workspace/snapshot fix without an explicit delivery decision.
 
@@ -55,7 +55,7 @@ Account-local, versioned data:
 - Board: stable generated ID, bounded name, ordered tiles and compact/regular density. Renaming does not change the ID.
 - Tile: stable generated tile ID, gesture Inventory item reference, optional custom label, optional custom RGB color and optional paired width/height in pixels. An absent label/color means current Inventory name/current skin styling.
 - Board settings: collection and selected board ID in `settings_per_account.xml`; definitions contain references and presentation choices only.
-- Initial limits: 16 boards, 64 tiles per board; board names and custom labels up to 64 Unicode characters with a bounded UTF-8 representation. Reject malformed IDs, nonfinite/out-of-range color channels, unknown versions and excessive collections. Keep malformed stored data for diagnosis rather than silently replacing it with an empty save.
+- Current limits: 16 boards, 1,024 tiles per board; board names and custom labels up to 64 Unicode characters with a bounded UTF-8 representation. Reject malformed IDs, nonfinite/out-of-range color channels, unknown versions and excessive collections. Keep malformed stored data for diagnosis rather than silently replacing it with an empty save.
 - Resolve gesture links at playback time, revalidate the authoritative item type/asset, and handle a renamed, moved, deleted or broken link. Resolve aliases to one underlying item for duplicate-play protection. Adding an existing gesture on the same board selects its tile instead of creating an accidental duplicate; the same gesture can appear on different boards.
 - Do not serialize gesture asset contents, sounds, chat commands, conversation content, Inventory contents, Inventory filters or item selections. No export/import or MCP endpoint is part of this first implementation.
 
@@ -130,3 +130,37 @@ Included in PR #9 after the user tested the first Windows delivery:
 Actual checks and pending native acceptance are in the validation document. No native viewer build was run for this refinement.
 
 The compact board's entire frame is now positioned at runtime from final window dimensions and the actual skin header height. This accounts for the viewer's legacy header stretch, which leaves initial XML controls unmoved, and prevents tiles from covering the control strip. Page controls are footer-local; the XML Next fallback uses negative right-edge anchoring. Final-frame, populated-tile and click-area bounds checks are recorded in the validation document; native Windows acceptance remains pending.
+
+
+## Defaults, bulk editing and larger boards (2026-10-22)
+
+Implemented on `feat/gesture-board-customization`, independently above main through
+PR #78. The former 64-tile cap was a conservative stored-data bound, not an engine
+constraint. Each board now accepts 1,024 gesture/sound tiles. Only the current page
+creates native buttons; name/label, color, dimension and board-count limits remain
+bounded. Adding many Inventory references uses one existing-target set rather
+than repeatedly resolving every existing tile for every incoming item.
+
+**Options → Defaults for all boards…** controls the current character's defaults;
+**Board defaults…** can override color and size separately. Individual tile
+settings take priority. Theme color can be selected explicitly at board/tile
+level even when a parent uses a custom color. Resetting size restores inheritance;
+compact/regular density remains the fallback when neither default specifies size.
+Defaults update existing inherited tiles as well as newly added tiles. Tile
+Inventory references, names and custom overrides remain intact. All changes use
+Save/Cancel and the existing account/login/snapshot guard.
+
+**Options → Select tiles** or Ctrl-click enters selection mode; clicks toggle
+selection without playing items. Shift-click selects an ordered range, including
+other pages. Ctrl+A / Select all includes every page. The selection strip offers
+**Edit selected** and **Done**; Esc also leaves selection mode. Bulk editing has
+separate **Change color** and **Change size** checks, initially off. Unchecked
+properties and unselected tiles retain their original values. Selection belongs
+to its window and board, remains in memory only, and is cleared on board/login
+changes. Deleted tiles are pruned by stable ID. The same actions apply to sounds.
+
+The account-local format is version 3, with optional collection/board defaults
+and explicit theme overrides. Versions 1 and 2 remain readable with their prior
+appearance until defaults are changed. Saving uses version 3; older builds cannot
+read that format and retain it without overwriting it. No IPC or MCP change.
+See the latest acceptance section in [gesture-board-validation.md](gesture-board-validation.md).

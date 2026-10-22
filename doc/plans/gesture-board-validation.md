@@ -12,7 +12,7 @@ Branch: `feat/gesture-board`, separate worktree `/workspace/Folderstorm-gesture-
 - [x] Tile context menu: edit, replace through Inventory selection, move earlier/later, remove. Dragging tiles changes order without triggering Play; dropping Inventory gestures adds them at the end rather than silently replacing a tile.
 - [x] Custom plain display text and RGB tile colors through the existing color picker, with gesture-name and theme-color fallbacks. Automatic light/dark foreground choice, standard button states/focus styling and a pressed playing state and non-ready state details on hover. Long tile text truncates with a full tooltip containing the Inventory name/path. Original gestures are unchanged.
 - [x] Editor Save/Cancel stages label/color/replacement choices, detaches the color picker on closure/reuse and guards replacement with an editor token and login/definition checks. Stale editors, menus and deletion confirmations cannot overwrite a changed definition or another account's collection.
-- [x] Create, rename, duplicate, delete and switch saved boards. Ordered tiles and the selected board are account-local. Board/tile IDs remain stable on rename and are regenerated on duplication. Delete confirms only deletion of board configuration. Limits: 16 boards, 64 tiles each, 64 Unicode characters per name/label, finite RGB channels in [0,1]. Malformed stored data is preserved without a silent overwrite.
+- [x] Create, rename, duplicate, delete and switch saved boards. Ordered tiles and the selected board are account-local. Board/tile IDs remain stable on rename and are regenerated on duplication. Delete confirms only deletion of board configuration. Limits: 16 boards, 1,024 tiles each, 64 Unicode characters per name/label, finite RGB channels in [0,1]. Malformed stored data is preserved without a silent overwrite.
 - [x] Only item references, ordered presentation fields and selected board identity are serialized. No gesture asset contents, chat commands, Inventory contents/filters/selections or conversation history. Management floaters remain outside workspace supported roles and do not commit pending Preferences settings. No new keybindings, MCP endpoint or import/export format was added.
 
 ## Actual focused checks
@@ -41,7 +41,7 @@ LD_LIBRARY_PATH=/workspace/Folderstorm-theme-build/build-linux-x86_64/packages/l
 ## Remaining Windows and skin acceptance
 
 1. Compile/package with the user's normal Windows build. Add the Gesture board toolbar button and use the World-menu/Preferences launcher. At minimum size and larger UI scale, inspect Folderstorm/default and Anastorm, mixed-size tiles, truncated labels, color contrast, focus/hover/pressed states, compact strip and page navigation.
-2. Add ordinary, linked and no-copy gestures with the picker and Inventory drag/drop. Add a duplicate, choose several gestures, hit the 64-tile limit, replace through the editor and try broken/deleted/trashed references. Confirm no gesture plays merely from selecting or editing tiles.
+2. Add ordinary, linked and no-copy gestures with the picker and Inventory drag/drop. Add a duplicate, choose several gestures, hit the 1,024-tile limit, replace through the editor and try broken/deleted/trashed references. Confirm no gesture plays merely from selecting or editing tiles.
 3. Play a known sound/chat/animation gesture, an inactive gesture and an already loading one. Check activation, loaded state and repeated clicks, click-to-stop and Stop board gestures without stopping unrelated IDs. Disable gestures/change restrictions, cancel during loading, switch boards, replace/remove, close and log out before completion; verify no stale play. Check missing/load failure and one timed-out asset.
 4. Edit Unicode/long text and colors. Save and Cancel, including a color picker left open while cancelling/reusing the editor. Reset to gesture-name/theme defaults, rename the Inventory item, switch skins and confirm labels/fallbacks follow those changes. Reorder by drag/context menu without playing.
 5. Create/rename/duplicate/delete boards and relogin to the same/different account. Confirm independent order/styles and selected board, stable references, Preferences Cancel after board edits and workspace saves excluding the board/editor/picker.
@@ -122,7 +122,7 @@ position. Additional windows cascade through the native floater group. Closing
 one destroys that window; multiple open windows are not automatically restored
 on login. The normal toolbar/World/Preferences launcher still opens the primary
 board. Its next opening uses the saved last selection. Existing account-local
-board definitions and their version-two format are unchanged.
+board definitions and their version-two format were unchanged at that checkpoint.
 
 A selection changes only the initiating window; the saved last-selection
 preference is ignored for definition-conflict checks. Real definition edits still
@@ -183,3 +183,58 @@ Windows acceptance remains pending:
    contrast on light/dark custom fills, editor samples and sound ↔ gesture
    replacement. Each explicit sound click still plays once using Inventory Play's
    native path; the badge must not cause playback itself.
+
+
+## Defaults, selection and 1,024-item boards (2026-10-22)
+
+Implemented on `feat/gesture-board-customization`, based on current main through
+PR #78. This follow-up is independent of the image-preview/upload PRs.
+
+Actual focused validation:
+
+```sh
+python3 -m unittest discover -s indra/newview/tests -p 'test_fsgestureboard*.py' -v
+git diff --check
+```
+
+Seven tests pass. The customization suite compiles the entire production board
+model and its C++ test with C++17 strict warnings, using small typed LLSD/UUID
+fixtures at the native storage boundary. It covers version-one/two migration,
+version-three defaults/theme/size roundtrip, malformed defaults, the 1,024-item
+boundary and over-cap rejection, independent color/size inheritance, atomic bulk
+changes, missing IDs, mixed sizes, identity/reference/label preservation, reset
+to inheritance, selection/ranges/pruning, and paginated layout at minimum window
+sizes with and without the selection strip. A source-extracted native selection
+harness checks that selection clicks/keyboard commits cannot reach Play and that
+leaving selection restores normal playback. It also checks editor preview scope.
+
+Existing production-body controller/window harnesses still pass. Their additional
+cases cover board-default and explicit-theme invalidation, global-default changes
+cancelling affected pending plays, stale drafts not erasing defaults, and board
+switches clearing selection. Sound, gesture, multi-window and account/session
+regressions remain green. Changed native model/controller/floater translation
+units pass Linux C++20 syntax checks against viewer headers; all three XUI files
+parse. No broad viewer/link, packaging, GitHub build, unrelated tests or subagent
+was used. The portable storage fixtures do not establish real LLSD disk
+serialization/persistence, native Windows input, display scaling or GPU rendering.
+
+Windows acceptance remains pending:
+
+1. Load existing boards before editing. Check labels, colors, compact/regular
+   fallback and saved individual sizes. Add more than 64 gestures/sounds, navigate
+   pages and resize. Check duplicate links and the 1,024 limit without partial Add.
+2. Set all-board color/size defaults; give one board its own color and another
+   its own size. Check inherited old/new tiles, custom tile overrides, explicit
+   theme color, density fallback, editor previews, Save/Cancel and relog.
+3. Ctrl-click or Select tiles, select/toggle/range across pages, and Select all /
+   Ctrl+A. Verify no gesture/sound plays, including Space/Enter on focused tiles.
+   Edit only color, only size, both, and reset to defaults. Check mixed sizes,
+   text, Inventory references, unselected tiles and Cancel. Use Done/Esc to resume
+   normal click-to-play and drag reorder.
+4. Open the same board in multiple windows and another board separately. Confirm
+   edits refresh their proper views while selections remain independent. Close,
+   replace/delete tiles or change account/session during a bulk editor; stale
+   Save must not alter a different source or undo a newer edit.
+5. At minimum board size and larger UI scale in Folderstorm/alternate skins,
+   inspect selection count/tools, checkmarks, text contrast, sound badges and
+   editor controls. Check retained color-picker cancel/disable/reuse behavior.
