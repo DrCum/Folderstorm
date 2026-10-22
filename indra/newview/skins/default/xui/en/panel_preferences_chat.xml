@@ -2621,6 +2621,18 @@
           <button name="clear_media" label="Clear preview cache" left="20" top="320" width="190" height="24"><button.commit_callback function="Pref.ClearChatMedia"/></button>
           <text name="memory" left="20" top="360" right="-20" height="42" wrap="true" follows="left|right|top">Previews stay in memory for this login. Private or unsupported links can still be opened in your browser.</text>
                     </panel>
+            <panel name="gif_board_settings" label="GIF Board" follows="all" layout="topleft">
+ <text left="20" top="16" right="-20" height="38" wrap="true">Search or save GIFs, then insert a link into your chat. Pop out the board to keep browsing while chatting.</text>
+ <text left="20" top="72" width="130" height="24">Board playback</text>
+ <combo_box name="gif_playback" control_name="FSGifBoardPlayback" left="160" top="68" right="-20" height="24">
+  <combo_box.item label="Autoplay visible tiles" value="0"/><combo_box.item label="Hover or selection only" value="1"/><combo_box.item label="Manual" value="2"/>
+ </combo_box>
+ <spinner name="gif_visible" control_name="FSGifBoardVisiblePercent" label="Visible before autoplay (%)" label_width="210" left="20" top="114" width="310" height="24" min_val="1" max_val="100" increment="5" decimal_digits="0" tool_tip="Default: 80%. Hidden or minimized boards do not animate. Reduced-motion preferences are respected."/>
+ <check_box name="klipy_enabled" control_name="FSKlipyEnabled" label="Enable KLIPY search" left="20" top="160" height="24"/>
+ <text left="20" top="202" right="-20" height="40" wrap="true">Searches and GIF previews contact KLIPY. My GIFs bookmarks do not extend the original host's retention.</text>
+ <text left="20" top="266" right="-20" height="20">Application key override (optional)</text>
+ <line_editor name="klipy_key" control_name="FSKlipyAppKey" left="20" top="292" right="-20" height="24" max_length_bytes="256" is_password="true" tool_tip="For developers or private builds. Leave empty to use the configured desktop app key. Never enter partner or dashboard credentials."/>
+</panel>
             <panel name="media_uploads" label="Uploads" follows="all" layout="topleft">
               <text name="upload_intro" left="20" top="14" right="-20" height="42" wrap="true" follows="left|top|right">Choose, paste or drop an image to upload a public link. You choose when to send it.</text>
               <check_box name="uploads_enabled" control_name="FSChatUploadEnabled" label="Enable chat image uploads" left="20" top="66" height="24"/>

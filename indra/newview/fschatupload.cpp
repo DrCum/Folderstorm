@@ -4,11 +4,15 @@
 #include "fschatuploadpolicy.h"
 #include "fschatmediacodec.h"
 #include "fschatmediahttp.h"
+#include "fsfloatergifboard.h"
+#include "fsgiflibrary.h"
+#include "fsklipyclient.h"
 #include "fsdata.h"
 #include "fsfloaterim.h"
 #include "fsfloaternearbychat.h"
 #include "fssessionworker.h"
 #include "llagent.h"
+#include "llavatarnamecache.h"
 #include "llapp.h"
 #include "llbutton.h"
 #include "llcallbacklist.h"
@@ -40,6 +44,9 @@
 
 namespace
 {
+LLHandle<LLView> sendingEditor;
+struct GifSelection{LLSD target;std::string url,slug,query;};
+std::vector<GifSelection> gifSelections;
 using namespace fs_chat_upload;
 Config savedConfig()
 { return {gSavedSettings.getBOOL("FSChatUploadEnabled"), gSavedSettings.getBOOL("FSChatUploadAutomatic"), gSavedSettings.getString("FSChatUploadHost"), gSavedSettings.getString("FSChatUploadFolder")}; }
@@ -48,6 +55,7 @@ struct Binding
 {
     std::string id = LLUUID::generateNewID().asString();
     LLHandle<LLView> editor, button;
+    LLHandle<LLView> gifButton;
     LLUUID conversation;
     unsigned generation = 0;
     S32 rightInset = 0;
@@ -101,12 +109,15 @@ void layoutAttachment(const std::shared_ptr<Binding>& binding)
         if (rect.getWidth() < 70 || parentWidth < 70) { button->setVisible(false); return; }
         binding->rightInset = (std::max)(0, parentWidth - rect.mRight); binding->layoutReady = true;
     }
-    const auto width = parentWidth - binding->rightInset - 26 - rect.mLeft;
+    const auto width = parentWidth - binding->rightInset - 60 - rect.mLeft;
     button->setVisible(editor->getVisible() && width >= 40);
+    if (auto* gif = dynamic_cast<LLButton*>(binding->gifButton.get())) gif->setVisible(editor->getVisible() && width >= 40);
     if (width < 40) return;
     if (rect.getWidth() != width) editor->reshape(width, rect.getHeight());
     const auto placed = editor->getRect(); button->setOrigin(placed.mRight + 2, placed.mBottom);
     button->reshape(24, (std::min)(24, placed.getHeight()));
+    if (auto* gif = dynamic_cast<LLButton*>(binding->gifButton.get()))
+    { gif->setOrigin(placed.mRight + 28, placed.mBottom); gif->reshape(32, (std::min)(24, placed.getHeight())); }
 }
 
 struct Work
@@ -132,6 +143,7 @@ struct Job
     State state = State::Preparing;
     Reply reply;
     bool uploadWork = false, checkWork = false, inserted = false, invalidated = false, dib = false;
+    bool saveGif = true, libraryHandled = false;
     unsigned checks = 0;
     std::chrono::steady_clock::time_point checkAfter{};
     bool valid() const
@@ -174,6 +186,7 @@ Work prepare(std::shared_ptr<std::vector<unsigned char>> bytes, const std::strin
     if (work.image) { work.image->frames.resize(1); work.bytes = std::move(bytes); }
     return work;
 }
+void saveGifLink(const std::string& url) { FSFloaterGifBoard::saveLink(url); }
 struct Controller
 {
     Config config = savedConfig();
@@ -264,6 +277,8 @@ struct Controller
         std::vector<const Binding*> pendingBindings;
         for (const auto& job : jobs)
         {
+            if (!job->libraryHandled && job->state == State::Complete && job->valid() && job->type == "image/gif")
+            { job->libraryHandled = true; if (job->saveGif) saveGifLink(job->reply.url); }
             const auto* binding = job->binding.get();
             if (std::find(pendingBindings.begin(), pendingBindings.end(), binding) != pendingBindings.end()) continue;
             if (fs_chat_upload::blocksSend(job->state)) pendingBindings.push_back(binding);
@@ -390,6 +405,9 @@ void FSChatUpload::bind(LLChatEntry* editor, const LLUUID& conversation, std::fu
         p.follows.flags = FOLLOWS_RIGHT | FOLLOWS_BOTTOM; p.image_overlay = LLUI::getUIImage("Icon_File_Upload"); p.tool_tip = tr("FSChatUploadAttach");
         auto* button = LLUICtrlFactory::create<LLButton>(p); button->setVisible(false); editor->getParent()->addChild(button); b->button = button->getHandle();
         button->setCommitCallback([b](LLUICtrl*, const LLSD&) { show(b); });
+        p.name = "chat_gif_picker"; p.image_overlay = LLUI::getUIImage(""); p.label = "GIF"; p.tool_tip = tr("FSGifOpen");
+        auto* gif = LLUICtrlFactory::create<LLButton>(p); gif->setVisible(false); editor->getParent()->addChild(gif); b->gifButton = gif->getHandle();
+        gif->setCommitCallback([b](LLUICtrl*, const LLSD&) { FSFloaterGifBoard::open(FSChatUpload::captureTarget(b->input())); });
     }
     if (b->conversation != conversation) ++b->generation;
     b->conversation = conversation; b->available = std::move(available); b->destination = std::move(destination);
@@ -402,6 +420,78 @@ void FSChatUpload::bind(LLChatEntry* editor, const LLUUID& conversation, std::fu
 }
 void FSChatUpload::bindNearby(LLChatEntry* editor) { if (!registered(editor)) bind(editor); }
 bool FSChatUpload::registered(LLChatEntry* editor) { return active && bool(active->find(editor)); }
+LLSD FSChatUpload::captureTarget(LLChatEntry* editor)
+{
+    const auto b = controller().find(editor); LLSD target; if (!b) return target;
+    target["editor"] = b->id; target["account"] = gAgent.getID(); target["login"] = gAgent.getSessionID();
+    target["grid"] = LLGridManager::getInstance()->getGrid(); target["generation"] = static_cast<S32>(b->generation); target["stamp"] = b->stamp(); return target;
+}
+namespace
+{
+std::shared_ptr<Binding> gifTarget(const LLSD& target)
+{
+    if (!active || gDisconnected || LLStartUp::getStartupState() != STATE_STARTED || !FSSessionWorker::inputAllowed()) return {};
+    auto b = active->find(target["editor"].asString());
+    if (!b) return {};
+    const fs_gif_board::Identity current{gAgent.getID().asString(),gAgent.getSessionID().asString(),LLGridManager::getInstance()->getGrid(),b->id,b->stamp(),b->generation};
+    const fs_gif_board::Identity expected{target["account"].asUUID().asString(),target["login"].asUUID().asString(),target["grid"].asString(),target["editor"].asString(),target["stamp"].asString(),static_cast<unsigned>(target["generation"].asInteger())};
+    return current==expected && b->valid() ? b : std::shared_ptr<Binding>{};
+}
+}
+std::string FSChatUpload::targetLabel(const LLSD& target)
+{
+    const auto b = gifTarget(target); if (!b) return tr("FSGifNoTarget");
+    LLAvatarName name; LLAvatarNameCache::get(gAgent.getID(), &name);
+    return name.getUserName() + " → " + b->label();
+}
+bool FSChatUpload::insertLink(const LLSD& target, const std::string& url, const std::string& slug, const std::string& query)
+{
+    const auto b = gifTarget(target); if (!b || !fs_chat_media::parse(url)) return false;
+    auto* editor = b->input(); const auto value = utf8str_to_wstring(url); const auto before = editor->getWText();
+    const auto selection = utf8str_to_wstring(editor->getSelectionString());
+    if (wstring_utf8_length(before) + wstring_utf8_length(value) + 2 > editor->getMaxTextLength() + wstring_utf8_length(selection)) return false;
+    // Native user insertion preserves undo and replaces the current selection.
+    editor->setFocus(true); editor->insertText(" " + url + " ");
+    if(!slug.empty()&&fs_klipy::slugValid(slug)&&fs_klipy::mediaURL(url)&&fs_gif_board::text(query,256))
+    {
+        gifSelections.erase(std::remove_if(gifSelections.begin(),gifSelections.end(),[&](const auto& old){return !gifTarget(old.target)||(old.target["editor"]==target["editor"]&&old.url==url);}),gifSelections.end());
+        if(gifSelections.size()>=32)gifSelections.erase(gifSelections.begin());
+        gifSelections.push_back({target,url,slug,query});
+    }
+    return true;
+}
+FSChatUpload::SendScope::SendScope(LLChatEntry* editor):mPrevious(sendingEditor){sendingEditor=editor?editor->getHandle():LLHandle<LLView>();}
+FSChatUpload::SendScope::~SendScope(){sendingEditor=mPrevious;}
+namespace
+{
+bool containsGif(const std::string& text,const std::string& url)
+{
+    for(std::size_t at=0;(at=text.find(url,at))!=std::string::npos;++at)
+    {
+        const auto end=at+url.size();
+        if((at==0||std::isspace(static_cast<unsigned char>(text[at-1]))||std::string("([<\"").find(text[at-1])!=std::string::npos)&&
+           (end==text.size()||std::isspace(static_cast<unsigned char>(text[end]))||std::string(")]>,.;!\"").find(text[end])!=std::string::npos))return true;
+    }
+    return false;
+}
+void acceptedGif(const LLUUID& conversation,const std::string& text)
+{
+    auto* editor=dynamic_cast<LLChatEntry*>(sendingEditor.get());if(!editor)return;
+    for(auto at=gifSelections.begin();at!=gifSelections.end();)
+    {
+        const auto b=gifTarget(at->target);
+        if(!b){at=gifSelections.erase(at);continue;}
+        if(b->input()==editor&&b->conversation==conversation)
+        {
+            if(containsGif(text,at->url)&&containsGif(editor->getText(),at->url))FSKlipy::acceptedShare(at->slug,at->query,at->target["account"].asUUID(),at->target["login"].asUUID(),at->target["grid"].asString());
+            at=gifSelections.erase(at);
+        }
+        else ++at;
+    }
+}
+}
+void FSChatUpload::acceptedNearby(const std::string& text){acceptedGif(LLUUID::null,text);}
+void FSChatUpload::acceptedIM(const LLUUID& conversation,const std::string& text){acceptedGif(conversation,text);}
 bool FSChatUpload::blocksSend(LLChatEntry* editor)
 {
     if (!active) return false;
@@ -525,6 +615,7 @@ void FSChatUpload::shutdown()
     if (active->running) { gIdleCallbacks.deleteFunction(Controller::idle, active); active->running = false; }
     for (const auto& job : active->jobs) if (job->work.valid()) { try { job->work.get(); } catch (...) { } }
     active->jobs.clear();
+    gifSelections.clear();
 }
 bool FSFloaterChatUpload::postBuild()
 {
@@ -535,7 +626,8 @@ bool FSFloaterChatUpload::postBuild()
     {
         auto& c = controller(); const auto b = c.find(mBinding); if (!b || !b->valid()) return;
         if (getChild<LLCheckBoxCtrl>("automatic")->get()) { c.config.automatic = true; gSavedSettings.setBOOL("FSChatUploadAutomatic", true); }
-        for (const auto& job : c.jobs) if (job->binding == b && job->valid() && job->state == State::Review) job->state = State::Queued;
+        for (const auto& job : c.jobs) if (job->binding == b && job->valid() && job->state == State::Review)
+        { job->saveGif = getChild<LLCheckBoxCtrl>("save_gif")->get(); job->state = State::Queued; }
         if (b->input() && FSSessionWorker::inputAllowed()) b->input()->setFocus(true);
     });
     getChild<LLButton>("cancel")->setCommitCallback([this](LLUICtrl*, const LLSD&)
@@ -557,7 +649,7 @@ bool FSFloaterChatUpload::postBuild()
     getChild<LLButton>("settings")->setCommitCallback([](LLUICtrl*, const LLSD&) { LLFloaterReg::showInstance("preferences"); });
     return true;
 }
-void FSFloaterChatUpload::onOpen(const LLSD& key) { mBinding = key.asString(); getChild<LLCheckBoxCtrl>("automatic")->set(false); }
+void FSFloaterChatUpload::onOpen(const LLSD& key) { mBinding = key.asString(); getChild<LLCheckBoxCtrl>("automatic")->set(false); getChild<LLCheckBoxCtrl>("save_gif")->set(true); }
 void FSFloaterChatUpload::onClose(bool app_quitting)
 {
     auto& c = controller();

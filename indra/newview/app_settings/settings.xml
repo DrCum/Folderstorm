@@ -2,6 +2,15 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+ <key>FSKlipyEnabled</key><map><key>Comment</key><string>Enable deliberate KLIPY searches in the GIF Board.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>1</integer></map>
+ <key>FSKlipyAppKey</key><map><key>Backup</key><integer>0</integer><key>HideFromEditor</key><integer>1</integer><key>Comment</key><string>Optional public KLIPY desktop app key override. Never use a partner/dashboard credential.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/></map>
+
+ <key>FSGifBoardExpanded</key><map><key>Comment</key><string>Keep the GIF Board popped out.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
+ <key>FSGifBoardSource</key><map><key>Comment</key><string>Last selected GIF source tab.</string><key>Persist</key><integer>1</integer><key>Type</key><string>S32</string><key>Value</key><integer>0</integer></map>
+
+ <key>FSGifBoardPlayback</key><map><key>Comment</key><string>GIF Board playback: 0 visible tiles, 1 hover/selection, 2 manual.</string><key>Persist</key><integer>1</integer><key>Type</key><string>S32</string><key>Value</key><integer>0</integer></map>
+ <key>FSGifBoardVisiblePercent</key><map><key>Comment</key><string>Minimum visible tile percentage for GIF Board autoplay.</string><key>Persist</key><integer>1</integer><key>Type</key><string>S32</string><key>Value</key><integer>80</integer></map>
+ <key>FSGifBoardTileSize</key><map><key>Comment</key><string>GIF Board thumbnail size.</string><key>Persist</key><integer>1</integer><key>Type</key><string>S32</string><key>Value</key><integer>160</integer></map>
  <key>FSChatMediaHideLinks</key><map><key>Comment</key><string>Collapse raw image-link text only while its native chat preview is available. Logs and copied text retain the link.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
  <key>FSChatUploadEnabled</key><map><key>Comment</key><string>Enable native chat image uploads after explicit user action.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>1</integer></map>
  <key>FSChatUploadAutomatic</key><map><key>Comment</key><string>Upload images without a confirmation after pasting/dropping. Never sends chat.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>

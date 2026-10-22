@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="gif_board" title="GIF Board" width="680" height="580" min_width="380" min_height="340" can_resize="true" save_rect="true" single_instance="true" reuse_instance="true" layout="topleft">
+ <text name="target" left="10" top="30" right="-10" height="20" follows="left|top|right" use_ellipses="true"/>
+ <tab_container name="sources" left="8" top="56" right="-8" height="28" tab_position="top" tab_height="24" follows="left|top|right">
+  <panel name="my" label="My GIFs"/>
+  <panel name="klipy" label="KLIPY"/>
+ </tab_container>
+ <filter_editor name="search" left="10" top="90" right="-100" height="24" follows="left|top|right" label="Search My GIFs"/>
+ <combo_box name="tile_size" right="-10" top="90" width="82" height="24" follows="right|top" tool_tip="Thumbnail size">
+  <combo_box.item label="Small" value="120"/><combo_box.item label="Medium" value="160"/><combo_box.item label="Large" value="220"/>
+ </combo_box>
+ <combo_box name="collection" left="10" top="122" right="-120" height="24" follows="left|top|right" tool_tip="Collection"/>
+ <check_box name="favourites" label="Favourites" right="-10" top="122" width="104" height="24" follows="right|top"/>
+ <text name="provider" right="-10" top="126" width="104" height="20" follows="right|top" font="SansSerifSmall" visible="false" tool_tip="Searches and previews contact KLIPY directly.">Powered by KLIPY</text>
+ <scroll_container name="scroll" left="8" top="154" right="-8" bottom="-82" follows="all" opaque="false"/>
+ <text name="status" left="10" right="-94" bottom="-59" height="20" follows="left|right|bottom" use_ellipses="true"/>
+ <button name="more" label="More" right="-10" bottom="-58" width="72" height="22" follows="right|bottom" visible="false" tool_tip="Load more KLIPY results"/>
+ <check_box name="keep_open" label="Keep open" left="10" bottom="-30" width="104" height="24" follows="left|bottom" tool_tip="Keep the compact picker open after inserting a GIF"/>
+ <button name="preview" label="Preview" right="-196" bottom="-30" width="68" height="24" follows="right|bottom"/>
+ <button name="insert" label="Insert" right="-122" bottom="-30" width="68" height="24" follows="right|bottom" tool_tip="Insert the link into the named chat draft. Does not send."/>
+ <button name="options" label="…" right="-84" bottom="-30" width="30" height="24" follows="right|bottom" tool_tip="Add, edit, favourite, remove, import and export"/>
+ <button name="pop_out" label="↗" right="-10" bottom="-30" width="30" height="24" follows="right|bottom" tool_tip="Pop out the GIF Board"/>
+</floater>

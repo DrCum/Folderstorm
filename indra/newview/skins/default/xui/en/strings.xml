@@ -4,6 +4,24 @@
      For example, the strings used in avatar chat bubbles, and strings
      that are returned from one component and may appear in many places-->
 <strings>
+ <string name="FSGifReport">Report to KLIPY…</string>
+ <string name="FSGifOpen">Open GIF picker</string>
+ <string name="FSGifNoTarget">Open GIFs from a chat to choose its destination.</string>
+ <string name="FSGifSave">Save to My GIFs</string>
+ <string name="FSGifUntitled">GIF</string>
+ <string name="FSGifAllCollections">All collections</string>
+ <string name="FSGifLoggedOut">Log in to use GIFs.</string>
+ <string name="FSGifEmpty">Add a link or save a GIF from chat.</string>
+ <string name="FSGifKlipyUnavailable">KLIPY search is not configured yet. My GIFs is available.</string>
+ <string name="FSGifCompact">Return to compact picker</string>
+ <string name="FSGifPopOut">Pop out the GIF Board</string>
+ <string name="FSGifSaved">My GIFs saved.</string>
+ <string name="FSGifAdd">Add link…</string>
+ <string name="FSGifEdit">Edit…</string>
+ <string name="FSGifFavourite">Toggle favourite</string>
+ <string name="FSGifRemove">Remove bookmark</string>
+ <string name="FSGifImport">Import My GIFs…</string>
+ <string name="FSGifExport">Export My GIFs…</string>
  <string name="Command_GestureBoard_Label">Gesture board</string>
  <string name="Command_GestureBoard_Tooltip">Play selected Inventory gestures from customizable tiles.</string>
 

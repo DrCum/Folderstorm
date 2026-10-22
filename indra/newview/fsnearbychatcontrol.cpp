@@ -333,7 +333,7 @@ bool FSNearbyChatControl::handleKeyHere(KEY key, MASK mask)
         updateHistory();
 
         // send chat to nearby chat hub
-        FSNearbyChat::instance().sendChat(getConvertedText(), type);
+        { FSChatUpload::SendScope gifSend(this); FSNearbyChat::instance().sendChat(getConvertedText(), type); }
 
         setText(LLStringExplicit(""));
         autohide(true);
