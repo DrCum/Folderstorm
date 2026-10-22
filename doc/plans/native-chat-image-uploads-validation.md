@@ -26,7 +26,8 @@ it never automatically replays POST. A cancelled in-flight job keeps its future
 and any later confirmed receipt until completion. Login, source, destination,
 restriction and consent changes prevent stale insertion. Modified drafts, moved cursors or active selections require explicit Insert
 links. One confirmed insertion advances other attachments’ original anchors;
-this preserves batch order without mistaking a user edit for our own insertion. Send guards stop Enter/button paths while preparing,
+completed links flush in staging order per draft, including when an earlier
+upload awaits server processing. Send guards stop Enter/button paths while preparing,
 reviewing, queued, uploading or awaiting server processing.
 
 ## Paste and drop behavior
@@ -57,12 +58,20 @@ reviewing, queued, uploading or awaiting server processing.
   HTTP early rejection, bitmap parsing, production Job/Controller harness and
   production drop routing/hit-testing and composer-registration harnesses.
 - The controller harness compiles production bodies unchanged with viewer and
-  transport boundaries stubbed. Twelve scenarios cover cancellation/late receipt,
+  transport boundaries stubbed. Twenty-two scenarios cover cancellation/late receipt,
   login change, normal insertion, edited draft, revoked send authority, changed
   binding generation, replacement destination, current insertion authority,
   multi-image order, cursor movement and selected text. The drop harness adds
   eleven destination/lifecycle scenarios including opaque overlays and no Nearby
   fallback after a session/login/grid/configuration change.
+  Conference admission and ongoing validation use the production permission
+  check with the current speaker list, including late joins, departed initial
+  participants, self exclusion, missing speakers and late upload receipts.
+  Production admission/preparation checks cover three 9 MiB encoded inputs,
+  worker-held bytes, file/DIB output reservations and cancellation during work.
+  Delayed server processing preserves attachment order without blocking another
+  conversation or bypassing draft-edit guards. In-flight reservations remain
+  counted against the 32 MiB encoded limit until the worker result is collected.
 - The composer harness compiles production bind/layout bodies and starts both
   Nearby and private composers at 32 pixels wide. It checks immediate paste
   registration, correct recipient, delayed button placement, resize/collapse/
@@ -106,6 +115,10 @@ subject to the supplied expiry/oldest-first policy; no cleanup is claimed.
 5. Interrupt connectivity after submission and cancel in flight. Check bounded
    receipts, Copy links, explicit Retry warning, quota/rate-limit failures,
    server-side pending results and shutdown without an unbounded wait.
+   Stage three 9 MiB clipboard images and verify preparation progresses. Hold
+   the first upload in server processing while a second completes; verify links
+   appear in staging order. Have a restricted participant join a conference
+   during preparation/POST and verify cancellation without automatic insertion.
 6. Test Preferences Apply/Cancel, first-use bypass, destination-change reset,
    restart persistence, alternate skins, UI scaling and narrow composers.
 7. Windows paste/drop: test Snipping Tool PNG, DIBV5 transparency, older opaque

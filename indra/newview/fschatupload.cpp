@@ -21,6 +21,7 @@
 #include "llfloaterreg.h"
 #include "llimage.h"
 #include "llimview.h"
+#include "llspeakers.h"
 #include "llproxy.h"
 #include "llspinctrl.h"
 #include "llstartup.h"
@@ -66,7 +67,11 @@ struct Binding
         if (!session || !session->mTextIMPossible || !FSData::instance().canSendToIMContact(session->mType, gAgent.getID(), session->mOtherParticipantID)) return false;
         if (session->isGroupSessionType()) return gAgent.isInGroup(conversation) && RlvActions::canSendIM(conversation);
         if (session->isP2PSessionType()) return RlvActions::canSendIM(session->mOtherParticipantID);
-        for (const auto& id : session->mInitialTargetIDs) if (!RlvActions::canSendIM(id)) return false;
+        if (!session->mSpeakers) return false;
+        LLSpeakerMgr::speaker_list_t speakers;
+        session->mSpeakers->getSpeakerList(&speakers, true);
+        for (const auto& speaker : speakers)
+            if (speaker->mID != gAgent.getID() && !RlvActions::canSendIM(speaker->mID)) return false;
         return true;
     }
     std::string stamp() const
@@ -120,6 +125,7 @@ struct Job
     std::shared_ptr<Binding> binding;
     std::shared_ptr<Progress> progress = std::make_shared<Progress>();
     std::future<Work> work;
+    std::size_t workBytes = 0; // Encoded bytes retained/reserved by outstanding work.
     std::shared_ptr<std::vector<unsigned char>> bytes;
     std::shared_ptr<fs_chat_media::Image> image;
     Config config;
@@ -182,6 +188,13 @@ struct Controller
     { for (const auto& b : bindings) if (b->id == id) return b; return {}; }
     bool connection() const
     { return !(LLProxy::instanceExists() && LLProxy::getInstance()->isHTTPProxyEnabled()); }
+    std::size_t retainedBytes() const
+    {
+        std::size_t retained = 0;
+        for (const auto& job : jobs)
+            retained += (std::max)(job->workBytes, job->bytes && !job->dib ? job->bytes->size() : std::size_t{0});
+        return retained;
+    }
     void cancel(const std::shared_ptr<Job>& job, bool invalid = false)
     {
         job->progress->cancelled = true; job->invalidated |= invalid;
@@ -210,7 +223,6 @@ struct Controller
     void poll()
     {
         bool busy = false;
-        std::size_t retained = 0;
         for (const auto& job : jobs)
         {
             if (!job->valid() || !config.enabled || !sameDestination(config, job->config) || !connection())
@@ -218,12 +230,13 @@ struct Controller
             if (job->work.valid() && job->work.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
                 Work result; try { result = job->work.get(); } catch (...) { }
+                job->workBytes = 0;
                 if (job->checkWork)
                 {
                     job->checkWork = false;
                     if (!job->progress->cancelled)
                     {
-                        if (result.reply.state == State::Complete) { job->state = State::Complete; insert(job, false); job->bytes.reset(); }
+                        if (result.reply.state == State::Complete) { job->state = State::Complete; job->bytes.reset(); }
                         else if (job->checks >= 5) { job->state = State::Uncertain; job->status = tr("FSChatUploadProcessing"); }
                         job->checkAfter = std::chrono::steady_clock::now() + std::chrono::seconds(3);
                     }
@@ -234,7 +247,7 @@ struct Controller
                     if (!job->progress->cancelled)
                     {
                         job->state = job->reply.state; job->status = job->reply.error;
-                        if (job->state == State::Complete) { insert(job, false); job->bytes.reset(); }
+                        if (job->state == State::Complete) job->bytes.reset();
                     }
                 }
                 else if (!job->progress->cancelled)
@@ -245,10 +258,20 @@ struct Controller
                 }
             }
             if (job->work.valid()) busy = true;
-            if (job->bytes && !job->dib) retained += job->bytes->size();
+        }
+        // Flush each conversation in staging order after collecting all completions.
+        // Pending work holds back only later attachments in the same draft.
+        std::vector<const Binding*> pendingBindings;
+        for (const auto& job : jobs)
+        {
+            const auto* binding = job->binding.get();
+            if (std::find(pendingBindings.begin(), pendingBindings.end(), binding) != pendingBindings.end()) continue;
+            if (fs_chat_upload::blocksSend(job->state)) pendingBindings.push_back(binding);
+            else if (job->state == State::Complete) insert(job, false);
         }
         if (!busy)
         {
+            const auto retained = retainedBytes();
             for (const auto& job : jobs)
             {
                 if (job->progress->cancelled || !job->valid()) continue;
@@ -261,11 +284,15 @@ struct Controller
                     catch (...) { job->state = State::Uncertain; job->status = tr("FSChatUploadProcessing"); }
                     break;
                 }
-                if (job->state == State::Preparing && retained <= MaxStagedBytes - MaxFileBytes)
+                const auto extra = job->bytes && !job->dib ? std::size_t{0} : MaxFileBytes;
+                if (job->state == State::Preparing && retained <= MaxStagedBytes - extra)
                 {
+                    // Moving encoded input to the worker needs no second allocation.
+                    // Keep its bytes (or a file/DIB output reservation) counted until get().
+                    job->workBytes = extra ? extra : job->bytes->size();
                     const auto path = std::move(job->path); auto bytes = std::move(job->bytes); const auto dib = job->dib;
                     try { job->work = std::async(std::launch::async, [path, bytes = std::move(bytes), dib]() mutable { return prepare(std::move(bytes), path, dib); }); }
-                    catch (...) { job->state = State::Failed; job->status = tr("FSChatUploadFailed"); }
+                    catch (...) { job->workBytes = 0; job->state = State::Failed; job->status = tr("FSChatUploadFailed"); }
                     break;
                 }
                 if (job->state == State::Queued)
@@ -274,9 +301,10 @@ struct Controller
                     const auto type = job->type, boundary = LLUUID::generateNewID().asString(), ca = gDirUtilp->getCAFile();
                     auto token = boundary; token.erase(std::remove(token.begin(), token.end(), '-'), token.end());
                     job->uploadWork = true; job->state = State::Uploading;
+                    job->workBytes = bytes->size(); // Cancellation can drop the UI's shared reference.
                     try { job->work = std::async(std::launch::async, [bytes, progress, cfg, type, token, ca]
                         { Work result; result.reply = upload(cfg, *bytes, type, token, ca, *progress); return result; }); }
-                    catch (...) { job->state = State::Failed; job->status = tr("FSChatUploadFailed"); }
+                    catch (...) { job->workBytes = 0; job->state = State::Failed; job->status = tr("FSChatUploadFailed"); }
                     break;
                 }
             }
@@ -401,8 +429,7 @@ void FSChatUpload::stageBytes(LLChatEntry* editor, std::vector<unsigned char> by
 {
     const auto b = controller().find(editor);
     if (bytes.size() > MaxFileBytes) { if (b) { b->error = tr("FSChatUploadInvalidImage"); show(b); } return; }
-    std::size_t retained = bytes.size();
-    for (const auto& job : controller().jobs) if (job->bytes && !job->dib) retained += job->bytes->size();
+    const auto retained = bytes.size() + controller().retainedBytes();
     if (retained > MaxStagedBytes) { if (b) { b->error = tr("FSChatUploadTooMany"); show(b); } return; }
     if (const auto job = newJob(editor)) job->bytes = std::make_shared<std::vector<unsigned char>>(std::move(bytes));
 }
