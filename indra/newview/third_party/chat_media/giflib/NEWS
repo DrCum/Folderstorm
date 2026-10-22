@@ -231,7 +231,7 @@ Version 5.1.8
 
 * Address SF bug #121: make: getversion: Command not found
 
-* Address SF bug #120: 5.1.7 does not build a proper library - no 
+* Address SF bug #120: 5.1.7 does not build a proper library - no
 
 ==============================================================================
 
@@ -280,7 +280,7 @@ Code Fixes
 Build Fixes
 -----------
 
-The horrible old autoconf build system has been removed with extreme prejudice. 
+The horrible old autoconf build system has been removed with extreme prejudice.
 You now build this simply by running "make" from the top-level directory.
 
 ==============================================================================
@@ -431,14 +431,14 @@ Retirements
 Version 5.0.6
 =============
 
-Minor fix for a rare memory leak (SF bug #55).  
+Minor fix for a rare memory leak (SF bug #55).
 
 MinGW port fixes.
 
 Repair the internal quantization function used in gif2rgb so it's
 less vulnerable to cross-platform skew due to qsort() being unstable.
 This shouldn't affect production use, it's just a cross-platform
-issue for regression testing 
+issue for regression testing
 
 ==============================================================================
 
@@ -454,8 +454,8 @@ pages are not to be installed.
 Version 5.0.4
 =============
 
-Fix for a rare misrendering bug when a GIF overruns the decompression-code 
-table. The image on which this was spotted was a relatively long-running 
+Fix for a rare misrendering bug when a GIF overruns the decompression-code
+table. The image on which this was spotted was a relatively long-running
 animated GIF; still images of ordinary size should have been immune.
 
 ==============================================================================
@@ -498,7 +498,7 @@ Code Fixes
   the beginning of EGifGetGifVersion(); this occasionally led to an
   incorrect version prefix being issued dependent on the state of
   malloced memory.
-* An EGifSetGifVersion() function taking a GifFile argument has been 
+* An EGifSetGifVersion() function taking a GifFile argument has been
   added for use with the low-level sequential API. This change requires
   a bump of the library revision number.
 
@@ -526,7 +526,7 @@ Thread Safety
 The library is now completely re-entrant and thread-safe.
 
 * Library error handling no longer uses a static cell to store the last
-  error code registered; that made the library thread-unsafe.  For functions 
+  error code registered; that made the library thread-unsafe.  For functions
   other than GIF file openers, the code is now put in an Error member of
   the GifFileType structure.  The GifError() and GifLastError() functions
   that referenced that static cell are gone, and the GifErrorString()
@@ -535,7 +535,7 @@ The library is now completely re-entrant and thread-safe.
 * GIF file openers - DGifOpenFileName(), DGifOpenFileHandle(), DGifOpen(),
   EGifOpenFileName(), EGifOpenFileHandle(), and EGifOpen() - all now take
   a final integer address argument.  If non-null, this is used to pass
-  back an error code when the function returns NULL. 
+  back an error code when the function returns NULL.
 
 Extensions
 ~~~~~~~~~~
@@ -546,7 +546,7 @@ extension handling in earlier versions.
   no following image file.
 * Three documented functions - EGifPutExtensionFirst(), EGifPutExtensionNext(),
   and EGifPutExtensionLast() - have been relaced by new functions
-  EGifPutExtensionLeader(), EGifPutExtensionBlock(), and 
+  EGifPutExtensionLeader(), EGifPutExtensionBlock(), and
   EGifPutExtensionTrailer().  See the Compatibility section of
   the library API documentation for details.
 * New functions DGifSavedExtensionToGCB() and EGifGCBToSavedExtension()
@@ -573,9 +573,9 @@ Other changes
 * Six undocumented functions have been renamed; five of these take additional
   or slightly different argument types. See the Compatibility section of
   the library API documentation for details.
-* There's now an EGifGetGifVersion() that computes the version EGifSpew() 
+* There's now an EGifGetGifVersion() that computes the version EGifSpew()
   will write.
-* QuantizeBuffer() has been returned to the core library as GifQuantizeBuffer() 
+* QuantizeBuffer() has been returned to the core library as GifQuantizeBuffer()
   - turns out some important applications (notably mplayer) were using it.
 * TRUE and FALSE macros are gone, also VoidPtr.  No more namespace pollution.
 * Various arguments have been made const where possible.
@@ -612,7 +612,7 @@ Utilities
 	gifspnge -> gifsponge
 	icon2gif -> gifbuild
 	text2gif -> gifecho
-  	raw2gif  -> gif2raw
+    raw2gif  -> gif2raw
 
 * To go with its new name, gif2raw now dumps raw pixels from a GIF if the
   (previously required) size option is missing.
@@ -620,7 +620,7 @@ Utilities
 * giftext displays the parsed contents of GIF89 graphics control blocks.
 * gifbuild handles GIF89 graphics control blocks and Netscape animation
   loop blocks; it can can display and update either.
-* gifrotate and other filter utilities now preserve extension blocks, 
+* gifrotate and other filter utilities now preserve extension blocks,
   including the graphics control information for transparency and delay time.
 * A new utility, giftool, supports a wide variety of filtering operations
   on GIFs, including: setting background and transparency colors, changing
@@ -632,12 +632,12 @@ Utilities
 Documentation and polish
 ------------------------
 * The history.txt and build.txt and files from 4.2.0 now have .asc extensions
-  to indicate that they use asciidoc markup, contrasting with the txt 
+  to indicate that they use asciidoc markup, contrasting with the txt
   standards files from CompuServe.
 * The documentation now includes "What's In A GIF", a very detailed narrative
   description of the file format.
 * The -A option of gifasm (for inserting a loop control block) is documented.
-* The documentation directory includes a copy of the original GIF87 
+* The documentation directory includes a copy of the original GIF87
   specification as well as GIF89's.
 * The project now has a logo.
 
@@ -660,19 +660,19 @@ Code Fixes
 New API Features
 ----------------
 * The default GIF version to write is now computed at write time from
-  the types of an image's extension blocks, but can be overridden with 
+  the types of an image's extension blocks, but can be overridden with
   EGifSetGifVersion().
-* EGifSpew() is now thread-safe. 
+* EGifSpew() is now thread-safe.
 * Two new functions, GifError() and GifErrorString(),
   return the error state in a form that can be used by programs.
 * Two library functions - EGifOpenFileName() and EGifPutImageDesc() -
   now have bool rather than int flag arguments. Since bool is a
-  typedef of int and TRUE/FALSE have been redefined to true/false, 
+  typedef of int and TRUE/FALSE have been redefined to true/false,
   both source and object compatibility with older library versions
-  should be preserved. 
+  should be preserved.
 * GAGetArgs(), used only in the utilities, now returns bool rather
-  than int. 
-* The undocumented GIF_LIB_VERSION symbol is gone from the library header.  
+  than int.
+* The undocumented GIF_LIB_VERSION symbol is gone from the library header.
   It has been replaced with three documented symbols: GIFLIB_MAJOR,
   GIFLIB_MINOR, and GIFLIB_RELEASE.
 
@@ -683,15 +683,15 @@ Retirements
   platform-independent GIF viewers in the world that these weren't
   adding any value. Removing these gets rid of a dependency on GL.
 * The rle2gif, gif2rle, and gif2ps utilities are also gone. There are enough
-  multiformat image converters in the world that these weren't adding 
+  multiformat image converters in the world that these weren't adding
   any value either.  Removing them reduces the codebase's dependencies.
 * The undocumented DumpScreen2Gif() is gone from the library.  The
   only non-obsolete capture mode it supported was through X, and that
   probably hasn't been used in years and is replaceable by any number
-  of capture utilities.  Dropping this code makes the library's 
+  of capture utilities.  Dropping this code makes the library's
   portability issues go away.
-* QuantizeBuffer(), GifQprintf(), PrintGifError(), GIF_ERROR() 
-  and GIF_MESSAGE() have been removed from the core library.  
+* QuantizeBuffer(), GifQprintf(), PrintGifError(), GIF_ERROR()
+  and GIF_MESSAGE() have been removed from the core library.
   They were used only by the utilities. QuantizeBuffer() has been
   inlined where it was used and the latter three are now part of the
   utility support library.
@@ -711,7 +711,7 @@ Behavior changes
 Testing
 -------
 * There is now a proper regression-test suite; run 'make' in tests/.
-  The old test-unx script is now tests/visual-check and can be run 
+  The old test-unx script is now tests/visual-check and can be run
   occasionally for a check with the Mark One Eyeball.
 
 Documentation
@@ -813,14 +813,14 @@ Version 4.1.2
 * Complete deprecation list is now in the README file
 * Audited the sources with gcc -Wall. Everything detectable has now been fixed.
 * Ran the library code through indent.
-  
+
 ==============================================================================
 
 Version 4.1.1
 =============
 * Merge in many bug fixes that were sent in while I was hiking the
   Appalachian Trail.
-* The qprintf methods of the library are now deprecated.  Do not use 
+* The qprintf methods of the library are now deprecated.  Do not use
   GifQuietPrint or GifQprintf.  These should have been pushed out into the
   utility helper library instead of sitting around in the library proper at
   the same time as the getarg functions were moved out.  Getting rid of these
@@ -1023,5 +1023,3 @@ Version 1.1
 * Support for the new gif89a format has been added.
 
 ==============================================================================
-
-

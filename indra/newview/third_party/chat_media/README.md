@@ -18,5 +18,6 @@ Update these pins when upstream publishes security fixes.
   `a8e3114a81f0987a61d06a41c99fd7cc2d58232c` (6.1.3 plus the subsequent
   SF #199/CVE-2026-26740 and #203 fixes), from
   https://github.com/aseprite/giflib. MIT licence in `giflib/COPYING`.
+  Trailing whitespace in NEWS/gifalloc.c is normalized; decoder logic is unchanged.
   Uses the public incremental `DGifGetImageHeader`/`DGifGetLine` APIs; no
   `DGifSlurp`, raster history, CLI, encoder or runtime DLL dependency.

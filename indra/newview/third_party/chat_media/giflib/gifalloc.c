@@ -360,7 +360,7 @@ SavedImage *GifMakeSavedImage(GifFileType *GifFile,
 			sp->RasterBits = NULL;
 			sp->ExtensionBlocks = NULL;
 			sp->ExtensionBlockCount = 0;
- 
+
 			/* first, the local color map */
 			if (CopyFrom->ImageDesc.ColorMap != NULL) {
 				sp->ImageDesc.ColorMap = GifMakeMapObject(
