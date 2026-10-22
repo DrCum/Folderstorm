@@ -1,0 +1,2 @@
+// Generated into the build directory. This is a public desktop app key, never a partner credential.
+#define FS_KLIPY_APP_KEY "@FOLDERSTORM_KLIPY_APP_KEY@"

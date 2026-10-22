@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llimview.h"
+#include "fschatupload.h"
 
 #include "llavatarnamecache.h"  // IDEVO
 #include "llavataractions.h"
@@ -2326,6 +2327,7 @@ void LLIMModel::sendMessage(const std::string& utf8_text,
     }
     //</FS:TS> FIRE-787
 
+    FSChatUpload::acceptedIM(im_session_id,utf8_text);
     if((dialog == IM_NOTHING_SPECIAL) &&
        (other_participant_id.notNull()))
     {

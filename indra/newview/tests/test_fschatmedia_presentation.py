@@ -18,9 +18,9 @@ STUBS = r'''
 using S32=int;using F32=float;using MASK=int;using KEY=int;
 constexpr MASK MASK_NONE=0;constexpr KEY KEY_RETURN=13;
 struct LLRectf{float mLeft=0;};struct Rect{int width=320;int getWidth()const{return width;}};
-struct LLView{virtual ~LLView()=default;Rect rect;const Rect& getRect()const{return rect;}};
+struct LLView{virtual ~LLView()=default;Rect rect;const Rect& getRect()const{return rect;}LLView* getParent()const{return nullptr;}};
 struct LLPanel:LLView{bool childHandled=false;void setFocus(bool){}bool childrenHandleMouseDown(int,int,int){return childHandled;}bool handleKeyHere(KEY,MASK){return false;}};
-struct Focus{LLView* owner=nullptr;void setMouseCapture(LLView* p){owner=p;}}gFocusMgr;
+struct Focus{LLView* owner=nullptr;LLView* keyboard=nullptr;LLView* getKeyboardFocus()const{return keyboard;}void setMouseCapture(LLView* p){owner=p;}}gFocusMgr;
 template<class T>struct Ptr{std::shared_ptr<T> value;Ptr()=default;Ptr(T* p):value(p){}T* get()const{return value.get();}
  T* operator->(){return value.get();}const T* operator->()const{return value.get();}bool notNull()const{return bool(value);}};
 struct Style{std::string href;int color=0;bool isLink()const{return !href.empty();}const std::string& getLinkHREF()const{return href;}};
@@ -97,11 +97,15 @@ int main(){
 CARD_STUBS = r'''
 struct Handle{LLView* p=nullptr;LLView* get()const{return p;}};
 struct Prefs{bool hideLinks=false,animate=false;int mode=1;};bool automaticMotion(){return true;}struct Service{Prefs prefs;};Service host;Service& service(){return host;}
-struct Source{bool allowed=true;bool valid()const{return allowed;}};
-struct Entry{std::shared_ptr<std::atomic<bool>> cancelled=std::make_shared<std::atomic<bool>>(false);std::shared_ptr<fs_chat_media::Image> image;};
+struct Source{bool allowed=true,personal=false;bool valid()const{return allowed;}};
+struct Entry{std::shared_ptr<std::atomic<bool>> cancelled=std::make_shared<std::atomic<bool>>(false);std::shared_ptr<fs_chat_media::Image> image;bool finished=false;std::string token="image";};
+struct LLFloaterReg{static inline unsigned opens=0;static void* findInstance(const char*,const std::string&){return nullptr;}static std::vector<int> getFloaterList(const char*){return {};}static void showInstance(const char*,const std::string&){++opens;}};
+namespace FSChatMedia{static unsigned resizes=0;void resize(FSChatHistory*){++resizes;}}
 struct ImageCard:LLPanel{
  Source mSource;std::shared_ptr<Entry> mEntry;std::shared_ptr<bool> mLinkHidden=std::make_shared<bool>(false);Handle mHistory;
  bool mLarge=false,mRenderUnavailable=false,mBoard=false,mBoardPlay=false,mBoardVisible=false,mPlaying=false,mPlaybackSet=false;std::function<void()> mInsert;bool playing()const;int opens=0,mDragX=0,mDragY=0;
+ std::function<void()> mSelect;std::shared_ptr<int> mTexture;std::shared_ptr<void> mTextureReservation;int mFrame=-1;bool mRequested=false;
+ void fitImage(){}
  void activate(){++opens;}void setLinkHidden(bool);void syncLinkVisibility();
  S32 desiredHeight(S32 width=0)const;
  bool handleMouseDown(S32,S32,MASK);bool handleKeyHere(KEY,MASK);
@@ -123,11 +127,37 @@ int main(){
  host.prefs.mode=1;c.syncLinkVisibility();assert(*c.mLinkHidden);c.mEntry->image.reset();c.syncLinkVisibility();assert(!*c.mLinkHidden&&c.desiredHeight()==28);
  c.childHandled=true;c.handleMouseDown(5,5,0);assert(c.opens==0); // Pause/play dispatch must not also open a preview.
  c.childHandled=false;c.handleMouseDown(5,5,0);assert(c.opens==1);
- c.handleKeyHere(KEY_RETURN,0);assert(c.opens==2);
+ gFocusMgr.keyboard=&c;c.handleKeyHere(KEY_RETURN,0);assert(c.opens==2);
+ LLPanel button;gFocusMgr.keyboard=&button;
+ assert(!c.handleKeyHere(' ',0)&&!c.handleKeyHere(KEY_RETURN,0)&&c.opens==2); // Child buttons own their shortcuts.
+ gFocusMgr.keyboard=&c;
  c.mLarge=true;c.handleMouseDown(5,10,0);assert(!gFocusMgr.owner);c.handleMouseDown(5,100,0);assert(gFocusMgr.owner==&c);
  c.mBoard=true;c.mBoardVisible=true;assert(!c.playing());c.handleKeyHere(' ',0);assert(c.playing()); // Explicit Play works in Manual/reduced-motion mode.
  c.mBoardVisible=false;assert(!c.playing());c.mBoardVisible=true;c.handleKeyHere(' ',0);c.mBoardPlay=true;assert(!c.playing()); // Explicit Pause beats autoplay.
  int inserts=0;c.mInsert=[&]{++inserts;};c.handleKeyHere(KEY_RETURN,0);assert(inserts==1);
+ gFocusMgr.keyboard=&button;const bool prior=c.playing();
+ assert(!c.handleKeyHere(' ',0)&&c.playing()==prior&&!c.handleKeyHere(KEY_RETURN,0)&&inserts==1);
+}
+'''
+
+RETRY_CASES = r'''
+int main(){
+ ImageCard c;c.mBoard=true;c.mSource.personal=true;host.prefs.mode=0;
+ unsigned selections=0;c.mSelect=[&]{++selections;};
+ auto failed=std::make_shared<Entry>();failed->finished=true;c.mEntry=failed;
+ c.mTexture=std::make_shared<int>(1);c.mTextureReservation=std::make_shared<int>(1);c.mFrame=5;
+ c.activate();assert(selections==1&&*failed->cancelled&&!c.mEntry&&c.mRequested&&!c.mTexture&&!c.mTextureReservation&&c.mFrame==-1);
+ // Selecting a loaded or pending tile must never restart its transfer.
+ auto loaded=std::make_shared<Entry>();loaded->finished=true;loaded->image=std::make_shared<Image>();c.mEntry=loaded;c.mRequested=false;
+ c.activate();assert(selections==2&&c.mEntry==loaded&&!*loaded->cancelled&&!c.mRequested);
+ auto pending=std::make_shared<Entry>();c.mEntry=pending;c.activate();assert(selections==3&&c.mEntry==pending&&!*pending->cancelled);
+ // A lost source cannot request data merely because the board has independent loading.
+ c.mSource.allowed=false;c.mEntry=failed;c.mRequested=false;c.activate();assert(c.mEntry==failed&&!c.mRequested);
+ // Incoming-chat Load/Retry remains subject to its own disabled preference.
+ c.mSource.allowed=true;c.mSource.personal=false;c.mBoard=false;c.activate();assert(c.mEntry==failed&&!c.mRequested);
+ host.prefs.mode=1;c.activate();assert(!c.mEntry&&c.mRequested);
+ // Explicit preview of a personal board result works with incoming previews off.
+ host.prefs.mode=0;c.mSource.personal=true;c.mEntry=loaded;c.activate();assert(LLFloaterReg::opens==1);
 }
 '''
 
@@ -153,6 +183,18 @@ class PresentationTests(unittest.TestCase):
             methods = methods.replace(' '+name+'(', ' ImageCard::'+name+'(', 1)
         methods = methods.replace(' override', '')
         self.run_cpp(STUBS + CARD_STUBS + methods + CARD_CASES)
+
+    def test_board_retry_with_incoming_previews_disabled(self):
+        text = (ROOT / 'fschatmedia.cpp').read_text()
+        methods = ''
+        # retryLoad is extracted once the production fix adds the shared path;
+        # the same test fails against activate() before that fix.
+        for name in ('retryLoad', 'activate'):
+            if '    void '+name+'(' in text:
+                body = function(text, '    void '+name+'(')
+                methods += body.replace(' '+name+'(', ' ImageCard::'+name+'(', 1)
+        stubs = CARD_STUBS.replace('void activate(){++opens;}', 'void activate();void retryLoad();')
+        self.run_cpp(STUBS + stubs + methods + RETRY_CASES)
 
 
 if __name__ == '__main__':

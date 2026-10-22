@@ -19,7 +19,19 @@ void stageBytes(LLChatEntry* editor, std::vector<unsigned char> bytes);
 bool registered(LLChatEntry* editor);
 LLSD captureTarget(LLChatEntry* editor);
 std::string targetLabel(const LLSD& target);
-bool insertLink(const LLSD& target, const std::string& url);
+bool insertLink(const LLSD& target, const std::string& url, const std::string& klipySlug = "", const std::string& query = "");
+class SendScope
+{
+public:
+    explicit SendScope(LLChatEntry* editor);
+    ~SendScope();
+    SendScope(const SendScope&) = delete;
+    SendScope& operator=(const SendScope&) = delete;
+private:
+    LLHandle<LLView> mPrevious;
+};
+void acceptedNearby(const std::string& text);
+void acceptedIM(const LLUUID& conversation, const std::string& text);
 void applyPreferences();
 void preferencesOpening();
 void shutdown();

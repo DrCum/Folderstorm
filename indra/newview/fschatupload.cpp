@@ -6,6 +6,7 @@
 #include "fschatmediahttp.h"
 #include "fsfloatergifboard.h"
 #include "fsgiflibrary.h"
+#include "fsklipyclient.h"
 #include "fsdata.h"
 #include "fsfloaterim.h"
 #include "fsfloaternearbychat.h"
@@ -43,6 +44,9 @@
 
 namespace
 {
+LLHandle<LLView> sendingEditor;
+struct GifSelection{LLSD target;std::string url,slug,query;};
+std::vector<GifSelection> gifSelections;
 using namespace fs_chat_upload;
 Config savedConfig()
 { return {gSavedSettings.getBOOL("FSChatUploadEnabled"), gSavedSettings.getBOOL("FSChatUploadAutomatic"), gSavedSettings.getString("FSChatUploadHost"), gSavedSettings.getString("FSChatUploadFolder")}; }
@@ -440,15 +444,54 @@ std::string FSChatUpload::targetLabel(const LLSD& target)
     LLAvatarName name; LLAvatarNameCache::get(gAgent.getID(), &name);
     return name.getUserName() + " → " + b->label();
 }
-bool FSChatUpload::insertLink(const LLSD& target, const std::string& url)
+bool FSChatUpload::insertLink(const LLSD& target, const std::string& url, const std::string& slug, const std::string& query)
 {
     const auto b = gifTarget(target); if (!b || !fs_chat_media::parse(url)) return false;
     auto* editor = b->input(); const auto value = utf8str_to_wstring(url); const auto before = editor->getWText();
     const auto selection = utf8str_to_wstring(editor->getSelectionString());
     if (wstring_utf8_length(before) + wstring_utf8_length(value) + 2 > editor->getMaxTextLength() + wstring_utf8_length(selection)) return false;
     // Native user insertion preserves undo and replaces the current selection.
-    editor->setFocus(true); editor->insertText(" " + url + " "); return true;
+    editor->setFocus(true); editor->insertText(" " + url + " ");
+    if(!slug.empty()&&fs_klipy::slugValid(slug)&&fs_klipy::mediaURL(url)&&fs_gif_board::text(query,256))
+    {
+        gifSelections.erase(std::remove_if(gifSelections.begin(),gifSelections.end(),[&](const auto& old){return !gifTarget(old.target)||(old.target["editor"]==target["editor"]&&old.url==url);}),gifSelections.end());
+        if(gifSelections.size()>=32)gifSelections.erase(gifSelections.begin());
+        gifSelections.push_back({target,url,slug,query});
+    }
+    return true;
 }
+FSChatUpload::SendScope::SendScope(LLChatEntry* editor):mPrevious(sendingEditor){sendingEditor=editor?editor->getHandle():LLHandle<LLView>();}
+FSChatUpload::SendScope::~SendScope(){sendingEditor=mPrevious;}
+namespace
+{
+bool containsGif(const std::string& text,const std::string& url)
+{
+    for(std::size_t at=0;(at=text.find(url,at))!=std::string::npos;++at)
+    {
+        const auto end=at+url.size();
+        if((at==0||std::isspace(static_cast<unsigned char>(text[at-1]))||std::string("([<\"").find(text[at-1])!=std::string::npos)&&
+           (end==text.size()||std::isspace(static_cast<unsigned char>(text[end]))||std::string(")]>,.;!\"").find(text[end])!=std::string::npos))return true;
+    }
+    return false;
+}
+void acceptedGif(const LLUUID& conversation,const std::string& text)
+{
+    auto* editor=dynamic_cast<LLChatEntry*>(sendingEditor.get());if(!editor)return;
+    for(auto at=gifSelections.begin();at!=gifSelections.end();)
+    {
+        const auto b=gifTarget(at->target);
+        if(!b){at=gifSelections.erase(at);continue;}
+        if(b->input()==editor&&b->conversation==conversation)
+        {
+            if(containsGif(text,at->url)&&containsGif(editor->getText(),at->url))FSKlipy::acceptedShare(at->slug,at->query,at->target["account"].asUUID(),at->target["login"].asUUID(),at->target["grid"].asString());
+            at=gifSelections.erase(at);
+        }
+        else ++at;
+    }
+}
+}
+void FSChatUpload::acceptedNearby(const std::string& text){acceptedGif(LLUUID::null,text);}
+void FSChatUpload::acceptedIM(const LLUUID& conversation,const std::string& text){acceptedGif(conversation,text);}
 bool FSChatUpload::blocksSend(LLChatEntry* editor)
 {
     if (!active) return false;
@@ -572,6 +615,7 @@ void FSChatUpload::shutdown()
     if (active->running) { gIdleCallbacks.deleteFunction(Controller::idle, active); active->running = false; }
     for (const auto& job : active->jobs) if (job->work.valid()) { try { job->work.get(); } catch (...) { } }
     active->jobs.clear();
+    gifSelections.clear();
 }
 bool FSFloaterChatUpload::postBuild()
 {
