@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatupload.h"
 
 #include "fsnearbychatcontrol.h"
 #include "fsnearbychathub.h"
@@ -138,6 +139,7 @@ void FSNearbyChatControl::setFocus(bool focus)
 
 void FSNearbyChatControl::draw()
 {
+    FSChatUpload::bindNearby(this);
     applyTextPadding();
     drawBackground();
     LLChatEntry::draw();
@@ -282,6 +284,7 @@ bool FSNearbyChatControl::handleKeyHere(KEY key, MASK mask)
     }
     else if (KEY_RETURN == key)
     {
+        if (FSChatUpload::blocksSend(this)) return true;
         if (mask == MASK_CONTROL && gSavedSettings.getBOOL("FSUseCtrlShout"))
         {
             // shout

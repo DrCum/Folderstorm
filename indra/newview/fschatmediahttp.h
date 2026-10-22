@@ -8,6 +8,6 @@ namespace fs_chat_media
 {
 struct Response { std::vector<unsigned char> body; std::string type, location; long status = 0; std::string url; };
 // Isolated handle: no cookies, credentials, redirects, browser or proxy state.
-Response fetch(const std::string& url, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled);
+Response fetch(const std::string& url, const std::string& caFile, std::size_t limit, const std::atomic<bool>& cancelled, bool head = false);
 }
 #endif

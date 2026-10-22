@@ -2602,6 +2602,8 @@
   </panel>
 
         <panel label="Media" name="ChatMedia" top_pad="1" bottom="-1" left="1" right="-1" follows="all" layout="topleft">
+          <tab_container name="media_tabs" top="2" bottom="-2" left="2" right="-2" follows="all" tab_position="top" tab_height="22" layout="topleft">
+            <panel name="media_previews" label="Previews" follows="all" layout="topleft">
           <text name="intro" left="20" top="14" right="-20" height="42" wrap="true" follows="left|top|right">Preview image links in native chat. Click a thumbnail to enlarge it; the original link stays in the message.</text>
           <text name="mode_label" left="20" top="68" width="130" height="22">Image previews</text>
           <combo_box name="media_mode" control_name="FSChatMediaMode" left="160" top="64" right="-20" height="24" follows="left|right|top" tool_tip="Automatic loading contacts the image host and reveals your IP address. Apply or OK enables your choice.">
@@ -2617,6 +2619,19 @@
           <line_editor name="media_sites" control_name="FSChatMediaSites" left="20" top="274" right="-20" height="24" follows="left|right|top" max_length_bytes="2048" tool_tip="Comma-separated hostnames. Include your Zipline hostname to preview its share pages. Subdomains are included."/>
           <button name="clear_media" label="Clear preview cache" left="20" top="322" width="190" height="24"><button.commit_callback function="Pref.ClearChatMedia"/></button>
           <text name="memory" left="20" top="366" right="-20" height="42" wrap="true" follows="left|right|top">Previews stay in memory for this login. Private or unsupported links can still be opened in your browser.</text>
+                    </panel>
+            <panel name="media_uploads" label="Uploads" follows="all" layout="topleft">
+              <text name="upload_intro" left="20" top="14" right="-20" height="42" wrap="true" follows="left|top|right">Choose, paste or drop an image to upload a public link. You choose when to send it.</text>
+              <check_box name="uploads_enabled" control_name="FSChatUploadEnabled" label="Enable chat image uploads" left="20" top="66" height="24"/>
+              <check_box name="uploads_automatic" control_name="FSChatUploadAutomatic" label="Upload without asking after paste or drop" left="20" top="102" height="24" tool_tip="Off by default. This skips the public-upload confirmation, never the Send action. Changing destination resets this choice."/>
+              <text name="upload_host_label" left="20" top="152" height="22" width="180">Upload host</text>
+              <line_editor name="upload_host" control_name="FSChatUploadHost" left="20" top="178" right="-20" follows="left|right|top" height="24" max_length_bytes="256"/>
+              <text name="upload_folder_label" left="20" top="222" width="180" height="22">Upload folder</text>
+              <line_editor name="upload_folder" control_name="FSChatUploadFolder" left="20" top="248" right="-20" follows="left|right|top" height="24" max_length_bytes="128" tool_tip="An upload-enabled Zipline folder ID. No account, cookie or token is needed."/>
+              <text name="upload_limits" left="20" top="298" right="-20" height="58" follows="left|right|top" wrap="true">PNG, JPEG, GIF or WebP · up to 10 MiB each. Anyone with a link can view it. Folderstorm-hosted files last up to 180 days and may be cleaned up earlier.</text>
+              <text name="upload_metadata" left="20" top="370" right="-20" height="38" follows="left|right|top" wrap="true">Original files keep their embedded metadata. Uploads do not create inventory textures or spend L$.</text>
+            </panel>
+          </tab_container>
         </panel>
 </tab_container>
 </panel>
