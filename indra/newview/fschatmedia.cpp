@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fschatmedia.h"
 #include "fschatmediacodec.h"
+#include "fschatanimation.h"
 #include "fschatmediaresolver.h"
 #include "fschathistory.h"
 #include "llagent.h"
@@ -34,6 +35,9 @@
 #include <future>
 #include <mutex>
 #include <cstring>
+#include <condition_variable>
+#include <queue>
+#include <thread>
 #if LL_WINDOWS
 #include "llwin32headers.h"
 #endif
@@ -77,11 +81,19 @@ struct Source
 };
 struct Entry
 {
+    struct AnimationResult { std::shared_ptr<AnimationDecoder> decoder; std::shared_ptr<const Frame> frame; unsigned loop = 0; bool stopped = false; };
     Source source;
     std::string url, token;
     std::shared_ptr<std::atomic<bool>> cancelled = std::make_shared<std::atomic<bool>>(false);
     std::future<std::shared_ptr<Image>> job;
     std::shared_ptr<Image> image;
+    std::future<AnimationResult> animationJob;
+    std::shared_ptr<AnimationDecoder> decoder;
+    std::shared_ptr<const Frame> animationFrame;
+    unsigned animationLoop = 0;
+    int animationSerial = 0;
+    bool animationStopped = false;
+    Clock::time_point animationDemand{}, animationDue{};
     bool finished = false;
     Clock::time_point lastSeen = Clock::now();
     // Weak subscribers: false maintains offscreen views; true discards all.
@@ -89,7 +101,7 @@ struct Entry
     std::vector<std::function<bool(bool)>> releaseViews;
     void discard()
     {
-        *cancelled = true; image.reset();
+        *cancelled = true; image.reset(); decoder.reset(); animationFrame.reset();
         for (const auto& release : releaseViews) release(true);
         releaseViews.clear();
     }
@@ -104,6 +116,37 @@ std::shared_ptr<Image> load(const std::string& address, const std::string& sites
     std::lock_guard<std::mutex> lock(decodeMutex);
     return cancelled ? std::shared_ptr<Image>{} : decode(response.body);
 }
+class FrameWorkers
+{
+public:
+    FrameWorkers()
+    {
+        try { for (int i = 0; i < 2; ++i) threads.emplace_back([this]
+        {
+            for (;;)
+            {
+                std::function<void()> task;
+                { std::unique_lock<std::mutex> lock(mutex); ready.wait(lock, [this] { return stopping || !tasks.empty(); });
+                  if (stopping && tasks.empty()) return;
+                  task = std::move(tasks.front()); tasks.pop(); }
+                task();
+            }
+        }); }
+        catch (...) { stop(); throw; }
+    }
+    ~FrameWorkers() { stop(); }
+    std::future<Entry::AnimationResult> submit(std::function<Entry::AnimationResult()> function)
+    {
+        auto task = std::make_shared<std::packaged_task<Entry::AnimationResult()>>(std::move(function)); auto future = task->get_future();
+        { std::lock_guard<std::mutex> lock(mutex); if (stopping || tasks.size() >= 2) throw std::runtime_error("Animation worker capacity"); tasks.emplace([task] { (*task)(); }); }
+        ready.notify_one(); return future;
+    }
+private:
+    void stop()
+    { { std::lock_guard<std::mutex> lock(mutex); stopping = true; } ready.notify_all(); for (auto& thread : threads) if (thread.joinable()) thread.join(); }
+    std::mutex mutex; std::condition_variable ready; bool stopping = false;
+    std::queue<std::function<void()>> tasks; std::vector<std::thread> threads;
+};
 class Service
 {
 public:
@@ -113,6 +156,8 @@ public:
     U32 animationFrame = ~0u;
     unsigned animations = 0;
     U32 layoutRevision = 0;
+    std::string animationCursor;
+    std::unique_ptr<FrameWorkers> frameWorkers;
     bool animateInline()
     {
         const auto frame = LLFrameTimer::getFrameCount();
@@ -137,7 +182,7 @@ public:
         {
             auto oldest = entries.end();
             for (auto at = entries.begin(); at != entries.end(); ++at)
-                if (at->second.get() != except && at->second->finished && Clock::now() - at->second->lastSeen > std::chrono::seconds(2) &&
+                if (at->second.get() != except && at->second->finished && !at->second->animationJob.valid() && Clock::now() - at->second->lastSeen > std::chrono::seconds(2) &&
                     (oldest == entries.end() || at->second->lastSeen < oldest->second->lastSeen)) oldest = at;
             if (oldest == entries.end()) return;
             oldest->second->discard(); entries.erase(oldest); ++layoutRevision;
@@ -161,10 +206,52 @@ public:
                 if (image && !*entry.cancelled && prefs.mode && entry.source.valid() && image->bytes() <= MaxDecodedBytes - used)
                 { used += image->bytes(); entry.image = std::move(image); }
             }
+            if (entry.animationJob.valid() && entry.animationJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            {
+                Entry::AnimationResult result;
+                try { result = entry.animationJob.get(); } catch (...) { result.stopped = true; }
+                if (!*entry.cancelled)
+                {
+                    entry.decoder = std::move(result.decoder); entry.animationLoop = result.loop; entry.animationStopped = result.stopped;
+                    if (result.frame)
+                    {
+                        entry.animationFrame = std::move(result.frame); ++entry.animationSerial;
+                        entry.animationDue = Clock::now() + std::chrono::milliseconds(entry.animationFrame->delay);
+                    }
+                }
+            }
+            if (!entry.animationJob.valid() && Clock::now() - entry.animationDemand > std::chrono::seconds(1))
+            { entry.decoder.reset(); entry.animationFrame.reset(); entry.animationLoop = 0; }
             entry.releaseViews.erase(std::remove_if(entry.releaseViews.begin(), entry.releaseViews.end(),
                 [](const auto& maintain) { return !maintain(false); }), entry.releaseViews.end());
-            if ((!entry.job.valid() && *entry.cancelled) || (iter->second.use_count() == 1 && entry.finished)) iter = entries.erase(iter);
+            if (!entry.animationJob.valid() && ((!entry.job.valid() && *entry.cancelled) || (iter->second.use_count() == 1 && entry.finished))) iter = entries.erase(iter);
             else ++iter;
+        }
+        unsigned active = 0; for (const auto& pair : entries) if (pair.second->animationJob.valid()) ++active;
+        // Rotate admission so more than two visible animations all get turns.
+        auto at = entries.upper_bound(animationCursor);
+        for (std::size_t visited = 0; visited < entries.size() && active < 2; ++visited)
+        {
+            if (at == entries.end()) at = entries.begin();
+            auto& entry = *at->second; const auto key = at->first; ++at;
+            if (*entry.cancelled || !entry.image || !entry.image->animation || entry.animationStopped || entry.animationJob.valid() ||
+                Clock::now() - entry.animationDemand > std::chrono::milliseconds(250) || Clock::now() < entry.animationDue) continue;
+            const auto source = entry.image->animation; const auto cancelled = entry.cancelled; auto decoder = entry.decoder; const auto loop = entry.animationLoop;
+            try
+            {
+                if (!frameWorkers) frameWorkers = std::make_unique<FrameWorkers>();
+                entry.animationJob = frameWorkers->submit([source, cancelled, decoder, loop]() mutable
+                {
+                    Entry::AnimationResult result; result.loop = loop;
+                    if (!decoder) decoder = std::make_shared<AnimationDecoder>(source);
+                    result.frame = decoder->next(*cancelled);
+                    if (!result.frame && decoder->ended() && !*cancelled && (!source->loops || loop + 1 < source->loops))
+                    { decoder = std::make_shared<AnimationDecoder>(source); ++result.loop; result.frame = decoder->next(*cancelled); }
+                    result.stopped = !result.frame; result.decoder = std::move(decoder); return result;
+                });
+                ++active; animationCursor = key;
+            }
+            catch (...) { entry.animationStopped = true; }
         }
     }
     std::shared_ptr<Entry> request(const Source& source, const std::string& address)
@@ -213,7 +300,12 @@ public:
         p.name = "animation"; p.rect = LLRect(4, 24, 24, 4); p.label = ""; p.image_overlay = LLUI::getUIImage("Play_Off");
         mPlay = LLUICtrlFactory::create<LLButton>(p); addChild(mPlay); mPlay->setVisible(false);
         mPlay->setToolTip(tr("FSChatMediaAnimationTip"));
-        mPlay->setCommitCallback([this](LLUICtrl*, const LLSD&) { mPlaying = !playing(); mPlaybackSet = true; mEpoch = Clock::now(); });
+        mPlay->setCommitCallback([this](LLUICtrl*, const LLSD&)
+        {
+            mPlaying = !playing(); mPlaybackSet = true;
+            if (mPlaying && mEntry && mEntry->animationStopped && !mEntry->animationJob.valid())
+            { mEntry->animationStopped = false; mEntry->decoder.reset(); mEntry->animationLoop = 0; }
+        });
         setToolTip(parse(mUrl)->host + "\n" + tr("FSChatMediaPrivacy"));
     }
     ~ImageCard() override
@@ -240,7 +332,7 @@ public:
     {
         auto& state = service();
         if (!state.prefs.mode || !mSource.valid() || (mEntry && *mEntry->cancelled))
-        { mEntry.reset(); mTexture = nullptr; mFrame = -1; mRequested = false; }
+        { mEntry.reset(); mTexture = nullptr; mTextureReservation.reset(); mFrame = -1; mRequested = false; }
         const auto url = parse(mUrl);
         const bool automatic = state.prefs.mode == 3 || (state.prefs.mode == 2 && url && selectedSite(*url, state.prefs.sites));
         if (!mEntry && visibleInChat() && (mRequested || automatic) && state.prefs.mode && mSource.valid()) attach(state.request(mSource, mUrl));
@@ -253,7 +345,7 @@ public:
         const auto label = image ? tr("FSChatMediaFit") : mEntry && !mEntry->finished ? tr("FSChatMediaLoading") :
             mEntry && mEntry->finished ? tr("FSChatMediaRetry") : mRequested ? tr("FSChatMediaLoading") : tr("FSChatMediaLoad");
         if (mLabel != label) { mLabel = label; mAction->setLabel(LLStringExplicit(label)); }
-        mPlay->setVisible(image && image->frames.size() > 1 && getRect().getWidth() >= 24 && getRect().getHeight() >= 24);
+        mPlay->setVisible(image && image->animation && getRect().getWidth() >= 24 && getRect().getHeight() >= 24);
         mPlay->setImageOverlay(playing() ? "Pause_Off" : "Play_Off");
         mPlay->setToolTip(tr(playing() ? "FSChatMediaPause" : "FSChatMediaPlay") + " · " + tr("FSChatMediaAnimationTip"));
         const auto bg = LLUIColorTable::instance().getColor("TextBgReadOnlyColor").get();
@@ -262,19 +354,20 @@ public:
         if (image && visibleInChat())
         {
             int frame = 0;
-            if (image->frames.size() > 1 && playing() && (mLarge || state.animateInline()))
-            {
-                unsigned duration = 0; for (const auto& item : image->frames) duration += item.delay;
-                auto elapsed = static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - mEpoch).count()) % duration;
-                while (frame + 1 < static_cast<int>(image->frames.size()) && elapsed >= image->frames[frame].delay) { elapsed -= image->frames[frame].delay; ++frame; }
-            }
+            const Frame* pixels = &image->frames.front();
+            if (image->animation && playing() && (mLarge || state.animateInline()))
+            { mEntry->animationDemand = Clock::now(); if (mEntry->animationFrame) { pixels = mEntry->animationFrame.get(); frame = mEntry->animationSerial; } }
+            else if (mFrame >= 0) frame = mFrame; // Pause retains the currently uploaded pixels.
             if (mFrame != frame)
             {
                 const auto texWidth = textureExtent(image->width), texHeight = textureExtent(image->height);
+                if (!mTextureReservation) mTextureReservation = reserveAnimationTexture(std::size_t(texWidth) * texHeight * 4);
+                if (!mTextureReservation) { mRenderUnavailable = true; setLinkHidden(false); LLPanel::draw(); return; }
+                mRenderUnavailable = false;
                 LLPointer<LLImageRaw> raw = new LLImageRaw(static_cast<U16>(texWidth), static_cast<U16>(texHeight), 4);
                 std::memset(raw->getData(), 0, std::size_t(texWidth) * texHeight * 4);
                 for (int row = 0; row < image->height; ++row)
-                    std::memcpy(raw->getData() + std::size_t(row) * texWidth * 4, image->frames[frame].rgba.data() + std::size_t(row) * image->width * 4, std::size_t(image->width) * 4);
+                    std::memcpy(raw->getData() + std::size_t(row) * texWidth * 4, pixels->rgba.data() + std::size_t(row) * image->width * 4, std::size_t(image->width) * 4);
                 if (!mTexture) mTexture = LLViewerTextureManager::getLocalTexture(raw.get(), false);
                 else mTexture->setSubImage(raw.get(), 0, 0, texWidth, texHeight);
                 mUV = LLRectf(0.f, static_cast<F32>(image->height) / static_cast<F32>(texHeight), static_cast<F32>(image->width) / static_cast<F32>(texWidth), 0.f);
@@ -343,7 +436,7 @@ private:
             {
                 if (discard || !card->visibleInChat())
                 {
-                    card->mTexture = nullptr; card->mFrame = -1;
+                    card->mTexture = nullptr; card->mTextureReservation.reset(); card->mFrame = -1;
                     if (discard) card->mRequested = false;
                 }
                 card->syncLinkVisibility();
@@ -359,7 +452,7 @@ private:
         if (auto* history = dynamic_cast<FSChatHistory*>(mHistory.get())) history->needsReflow();
     }
     void syncLinkVisibility()
-    { setLinkHidden(service().prefs.hideLinks && service().prefs.mode && mEntry && !*mEntry->cancelled && mEntry->image && mSource.valid()); }
+    { setLinkHidden(!mRenderUnavailable && service().prefs.hideLinks && service().prefs.mode && mEntry && !*mEntry->cancelled && mEntry->image && mSource.valid()); }
     bool playing() const { return mPlaybackSet ? mPlaying : !mLarge && service().prefs.animate && automaticMotion(); }
     bool visibleInChat() const
     {
@@ -382,7 +475,7 @@ private:
         else
         {
             if (mEntry) *mEntry->cancelled = true;
-            mEntry.reset(); mTexture = nullptr; mFrame = -1; mRequested = true;
+            mEntry.reset(); mTexture = nullptr; mTextureReservation.reset(); mFrame = -1; mRequested = true;
             for (auto* parent = getParent(); parent; parent = parent->getParent())
                 if (auto* history = dynamic_cast<FSChatHistory*>(parent)) { FSChatMedia::resize(history); break; }
         }
@@ -390,13 +483,14 @@ private:
     Source mSource; std::string mUrl, mLabel; bool mLarge = false, mRequested = false, mPlaying = false, mPlaybackSet = false;
     std::shared_ptr<Entry> mEntry;
     LLPointer<LLViewerTexture> mTexture;
+    std::shared_ptr<void> mTextureReservation;
     LLRectf mUV;
     LLHandle<LLView> mHistory;
     LLHandle<LLContextMenu> mMenu;
     std::shared_ptr<bool> mLinkHidden = std::make_shared<bool>(false);
+    bool mRenderUnavailable = false;
     LLButton* mAction = nullptr; LLButton* mPlay = nullptr;
     int mFrame = -1; float mZoom = 1.f; S32 mPanX = 0, mPanY = 0, mDragX = 0, mDragY = 0;
-    Clock::time_point mEpoch = Clock::now();
 };
 }
 void FSChatMedia::append(FSChatHistory* history, const LLChat& chat, bool nearby, S32 bodyStart)
@@ -449,9 +543,13 @@ void FSChatMedia::shutdown()
     if (!activeService) return;
     auto& state = *activeService; state.clear();
     if (state.registered) { gIdleCallbacks.deleteFunction(Service::idle, &state); state.registered = false; }
-    for (const auto& pair : state.entries) if (pair.second->job.valid())
-    { try { pair.second->job.get(); } catch (...) { } }
+    for (const auto& pair : state.entries)
+    {
+        if (pair.second->job.valid()) { try { pair.second->job.get(); } catch (...) { } }
+        if (pair.second->animationJob.valid()) { try { pair.second->animationJob.get(); } catch (...) { } }
+    }
     state.entries.clear();
+    state.frameWorkers.reset();
 }
 void FSFloaterChatMedia::onOpen(const LLSD& key)
 {

@@ -22,7 +22,14 @@ STUBS = r'''
 #include <functional>
 #include <atomic>
 #include <thread>
+#include <condition_variable>
+#include <queue>
 using namespace fs_chat_media;
+namespace fs_chat_media {
+class AnimationSource { public: unsigned loops=0; };
+class AnimationDecoder { unsigned count=0; public: explicit AnimationDecoder(std::shared_ptr<const AnimationSource>){} std::shared_ptr<Frame> next(const std::atomic<bool>& cancelled){if(cancelled||count++>=3)return {};auto frame=std::make_shared<Frame>();frame->rgba={1,2,3,255};return frame;}bool ended()const{return count>=3;} };
+}
+
 using Clock = std::chrono::steady_clock;
 using U32 = std::uint32_t;
 struct LLUUID {
@@ -58,7 +65,7 @@ std::shared_future<void> workerRelease;
 std::shared_ptr<Image> load(const std::string&,const std::string&,const std::string&,const std::atomic<bool>&)
 {
     workerRelease.wait(); // Deliberately return a late result even after cancel.
-    auto image=std::make_shared<Image>();image->width=image->height=1;image->frames.push_back({{1,2,3,255},100});return image;
+    auto image=std::make_shared<Image>();image->width=image->height=1;image->frames.push_back({{1,2,3,255},100,{}});return image;
 }
 '''
 
@@ -126,6 +133,17 @@ int main()
         assert(!host.request(source(),"https://cdn.example.org/new.png")); // Visible entries stay pinned.
         assert(host.entries.size()==MaxEntries);
     }
+    {
+        Service host;std::vector<std::shared_ptr<Entry>> held;
+        for(int i=0;i<6;++i){auto entry=std::make_shared<Entry>();entry->source=source();entry->finished=true;
+          entry->image=std::make_shared<Image>();entry->image->width=entry->image->height=1;entry->image->frames.resize(1);
+          entry->image->animation=std::make_shared<AnimationSource>();entry->animationDemand=Clock::now();
+          held.push_back(entry);host.entries[std::to_string(i)]=entry;}
+        for(int pass=0;pass<10;++pass){host.poll();unsigned pending=0;for(auto& entry:held)if(entry->animationJob.valid()){++pending;entry->animationJob.wait();}
+          assert(pending<=2);}
+        for(const auto& entry:held)assert(entry->animationSerial>0); // Fair admission, not the first two only.
+        host.clear();host.poll();for(const auto& entry:held)assert(*entry->cancelled&&!entry->animationFrame);
+    }
     LLProxy::getInstance()->enabled=true;assert(!source().valid());LLProxy::getInstance()->enabled=false;
     LLMuteList::getInstance()->muted=true;assert(!source().valid());LLMuteList::getInstance()->muted=false;
 }
@@ -170,10 +188,10 @@ class NativeServiceTests(unittest.TestCase):
     def test_repeated_url_offscreen_textures(self):
         text = (ROOT / "fschatmedia.cpp").read_text()
         source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
-        service = text[text.index("class Service\n"):text.index("Service& service()")]
+        service = text[text.index("class FrameWorkers\n"):text.index("Service& service()")]
         attach = text[text.index("    void attach("):text.index("    void setLinkHidden(")]
         visible = text[text.index("    bool visibleInChat()"):text.index("    void activate()")]
-        card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();int mFrame=0;bool mRequested=true;void syncLinkVisibility(){}\n" + attach + visible + "};\n"
+        card = "class ImageCard:public LLView {public:std::shared_ptr<Entry> mEntry;std::shared_ptr<Texture> mTexture=std::make_shared<Texture>();std::shared_ptr<void> mTextureReservation;int mFrame=0;bool mRequested=true;void syncLinkVisibility(){}\n" + attach + visible + "};\n"
         with tempfile.TemporaryDirectory(prefix="fs-chat-textures-") as tmp:
             cpp = Path(tmp) / "textures.cpp"
             exe = Path(tmp) / "textures"
@@ -184,7 +202,7 @@ class NativeServiceTests(unittest.TestCase):
     def test_production_controller(self):
         text = (ROOT / "fschatmedia.cpp").read_text()
         source = text[text.index("struct Source\n"):text.index("std::mutex decodeMutex;")]
-        service = text[text.index("class Service\n"):text.index("Service& service()")]
+        service = text[text.index("class FrameWorkers\n"):text.index("Service& service()")]
         with tempfile.TemporaryDirectory(prefix="fs-chat-service-") as tmp:
             cpp = Path(tmp) / "service.cpp"
             exe = Path(tmp) / "service"

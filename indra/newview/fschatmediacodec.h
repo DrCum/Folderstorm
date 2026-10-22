@@ -5,12 +5,14 @@
 #include <memory>
 namespace fs_chat_media
 {
-struct Frame { std::vector<unsigned char> rgba; unsigned delay = 100; };
+class AnimationSource;
+struct Frame { std::vector<unsigned char> rgba; unsigned delay = 100; std::shared_ptr<void> reservation = {}; };
 struct Image
 {
     int width = 0, height = 0;
     bool gif = false;
     std::vector<Frame> frames;
+    std::shared_ptr<AnimationSource> animation;
     std::size_t bytes() const { return std::size_t(width) * height * 4 * frames.size(); }
 };
 // Serialized internally across previews/uploads. No viewer, GL, network or file access.
