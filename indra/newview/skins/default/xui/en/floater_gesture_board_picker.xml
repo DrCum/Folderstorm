@@ -15,7 +15,7 @@
  <string name="load_failed">The gesture could not be loaded. Try again or replace its tile.</string>
  <string name="timeout">The gesture did not load within 30 seconds. No delayed play is queued.</string>
  <string name="changed">The board, item or login changed. Reopen the editor/picker and try again.</string>
- <string name="full">Maximum: 16 boards and 64 tiles per board. Your saved setup was kept.</string>
+ <string name="full">Maximum: 16 boards and 1,024 tiles per board. Your saved setup was kept.</string>
  <string name="exists">That board name is already used. Choose another name.</string>
  <string name="invalid_name">Use 1–64 characters for board names and up to 64 for tile text; avoid control characters.</string>
  <string name="saved">Board configuration saved. Inventory items were unchanged.</string>

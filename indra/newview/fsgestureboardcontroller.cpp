@@ -17,6 +17,7 @@
 #include "llsdutil.h"
 #include "rlvactions.h"
 #include <algorithm>
+#include <set>
 FSGestureBoardController& FSGestureBoardController::instance()
 { static FSGestureBoardController controller; return controller; }
 FSGestureBoardController::FSGestureBoardController()
@@ -90,7 +91,7 @@ bool FSGestureBoardController::commit(const FSGestureBoard::Collection& data, co
     for (const auto& prior : mData.boards)
     {
         const auto* next = FSGestureBoard::findBoard(checked, prior.id);
-        if (!next || !FSGestureBoard::sameBoard(prior, *next)) cancelPendingForBoard(prior.id);
+        if (!FSGestureBoard::sameStyle(mData.defaults, checked.defaults) || !next || !FSGestureBoard::sameBoard(prior, *next)) cancelPendingForBoard(prior.id);
     }
     gSavedPerAccountSettings.setLLSD("FSGestureBoards", encoded);
     mRaw = encoded; mData = checked; ++mRevision; setStatus("saved"); return true;
@@ -122,14 +123,15 @@ bool FSGestureBoardController::resolve(const LLUUID& reference, LLUUID& item, LL
 bool FSGestureBoardController::addItems(const std::string& id, const std::vector<LLUUID>& items, const LLSD& expected, const LLUUID& account, const LLUUID& session)
 {
     refresh(); auto data = mData; auto* board = FSGestureBoard::findBoard(data, id);
-    if (!valid() || !board || items.empty() || items.size() > static_cast<size_t>(FSGestureBoard::MAX_TILES)) return false;
+    if (!valid() || !board || items.empty()) return false;
+    if (items.size() > static_cast<size_t>(FSGestureBoard::MAX_TILES)) { setStatus("full"); return false; }
+    std::set<LLUUID> existing;
+    for (const auto& tile : board->tiles) existing.insert(gInventory.getLinkedItemID(LLUUID(tile.item)));
     for (const auto& reference : items)
     {
         LLUUID item, asset; std::string name, error;
         if (!resolve(reference, item, asset, name, error)) { setStatus(error); return false; }
-        bool exists = false;
-        for (const auto& tile : board->tiles) if (gInventory.getLinkedItemID(LLUUID(tile.item)) == item) { exists = true; break; }
-        if (exists) continue;
+        if (!existing.insert(item).second) continue;
         if (board->tiles.size() >= static_cast<size_t>(FSGestureBoard::MAX_TILES)) { setStatus("full"); return false; }
         FSGestureBoard::Tile tile; tile.id = LLUUID::generateNewID().asString(); tile.item = reference.asString(); board->tiles.push_back(tile);
     }
