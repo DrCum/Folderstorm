@@ -371,7 +371,7 @@ void LLFloaterIMContainer::addFloater(LLFloater* floaterp,
         icon = LLUICtrlFactory::instance().create<LLGroupIconCtrl>(icon_params);
         icon_id = session_id;
 
-        mSessions[session_id] = floaterp;
+        mSessions[session_id] = floaterp->getHandle();
         floaterp->mCloseSignal.connect(boost::bind(&LLFloaterIMContainer::onCloseFloater, this, session_id));
     }
     else
@@ -383,7 +383,7 @@ void LLFloaterIMContainer::addFloater(LLFloater* floaterp,
         icon = LLUICtrlFactory::instance().create<LLAvatarIconCtrl>(icon_params);
         icon_id = avatar_id;
 
-        mSessions[session_id] = floaterp;
+        mSessions[session_id] = floaterp->getHandle();
         floaterp->mCloseSignal.connect(boost::bind(&LLFloaterIMContainer::onCloseFloater, this, session_id));
     }
 
@@ -410,7 +410,8 @@ void LLFloaterIMContainer::onCloseFloater(LLUUID& id)
 void LLFloaterIMContainer::onNewMessageReceived(const LLSD& data)
 {
     LLUUID session_id = data["session_id"].asUUID();
-    LLFloater* floaterp = get_ptr_in_map(mSessions, session_id);
+    avatarID_panel_map_t::iterator iter = mSessions.find(session_id);
+    LLFloater* floaterp = (iter != mSessions.end()) ? iter->second.get() : nullptr;
     LLFloater* current_floater = LLMultiFloater::getActiveFloater();
 
     if(floaterp && current_floater && floaterp != current_floater)
