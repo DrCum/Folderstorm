@@ -17,6 +17,9 @@ bool fileDrop(S32 x, S32 y, LLWindowCallbacks::DragNDropAction action, const std
 void stageFiles(LLChatEntry* editor, const std::vector<std::string>& paths);
 void stageBytes(LLChatEntry* editor, std::vector<unsigned char> bytes);
 bool registered(LLChatEntry* editor);
+LLSD captureTarget(LLChatEntry* editor);
+std::string targetLabel(const LLSD& target);
+bool insertLink(const LLSD& target, const std::string& url);
 void applyPreferences();
 void preferencesOpening();
 void shutdown();

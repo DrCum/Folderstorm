@@ -3,6 +3,8 @@
 #include "fschatmedia.h"
 #include "fschatmediacodec.h"
 #include "fschatanimation.h"
+#include "fsgiflibrary.h"
+#include "fsfloatergifboard.h"
 #include "fschatmediaresolver.h"
 #include "fschathistory.h"
 #include "llagent.h"
@@ -52,24 +54,29 @@ struct Preferences
     bool animate = false;
     std::string sites = DefaultSites;
     bool hideLinks = false;
+    FSChatMedia::BoardOptions board;
 };
 Preferences savedPreferences()
 {
     return {std::clamp(gSavedSettings.getS32("FSChatMediaMode"), 0, 3),
         std::clamp(gSavedSettings.getS32("FSChatMediaSize"), 160, 480),
-        gSavedSettings.getBOOL("FSChatMediaAutoplay"), gSavedSettings.getString("FSChatMediaSites"), gSavedSettings.getBOOL("FSChatMediaHideLinks")};
+        gSavedSettings.getBOOL("FSChatMediaAutoplay"), gSavedSettings.getString("FSChatMediaSites"), gSavedSettings.getBOOL("FSChatMediaHideLinks"),
+        {std::clamp(gSavedSettings.getS32("FSGifBoardPlayback"),0,2), std::clamp(gSavedSettings.getS32("FSGifBoardVisiblePercent"),1,100), std::clamp(gSavedSettings.getS32("FSGifBoardTileSize"),100,240)}};
 }
 struct Source
 {
     LLUUID account, login, sender, conversation;
     std::string grid;
     bool nearby = false, group = false;
+    bool personal = false;
+    int dimension = 1024;
     bool valid() const
     {
         if (LLApp::isExiting() || gDisconnected || LLStartUp::getStartupState() != STATE_STARTED ||
             account != gAgent.getID() || login != gAgent.getSessionID() || grid != LLGridManager::getInstance()->getGrid() ||
             (LLProxy::instanceExists() && LLProxy::getInstance()->isHTTPProxyEnabled())) return false;
         if (sender.notNull() && LLMuteList::getInstance()->isMuted(sender, LLMute::flagTextChat)) return false;
+        if (personal) return true;
         if (nearby)
             return !gRlvHandler.hasBehaviour(RLV_BHVR_RECVCHAT) && !gRlvHandler.hasBehaviour(RLV_BHVR_RECVEMOTE) &&
                 !gRlvHandler.isException(RLV_BHVR_RECVCHATFROM, sender) && !gRlvHandler.isException(RLV_BHVR_RECVEMOTEFROM, sender) &&
@@ -77,7 +84,7 @@ struct Source
         return RlvActions::canReceiveIM(sender) && (!group || RlvActions::canReceiveIM(conversation));
     }
     std::string key(const std::string& url) const
-    { return grid + '\n' + account.asString() + login.asString() + conversation.asString() + sender.asString() + (nearby ? "n" : "i") + url; }
+    { return grid + '\n' + account.asString() + login.asString() + conversation.asString() + sender.asString() + (personal ? "p" + std::to_string(dimension) : nearby ? "n" : "i") + url; }
 };
 struct Entry
 {
@@ -107,14 +114,14 @@ struct Entry
     }
 };
 std::mutex decodeMutex;
-std::shared_ptr<Image> load(const std::string& address, const std::string& sites, const std::string& caFile, const std::atomic<bool>& cancelled)
+std::shared_ptr<Image> load(const std::string& address, const std::string& sites, const std::string& caFile, const std::atomic<bool>& cancelled, int dimension)
 {
     const auto response = resolveMedia(address, sites, [&](const std::string& url, std::size_t limit)
     { return fetch(url, caFile, limit, cancelled); });
     if (cancelled || response.status != 200) return {};
     // Never decode on the UI thread; serialize decoder working memory.
     std::lock_guard<std::mutex> lock(decodeMutex);
-    return cancelled ? std::shared_ptr<Image>{} : decode(response.body);
+    return cancelled ? std::shared_ptr<Image>{} : decode(response.body, dimension);
 }
 class FrameWorkers
 {
@@ -195,7 +202,7 @@ public:
         for (auto iter = entries.begin(); iter != entries.end();)
         {
             auto& entry = *iter->second;
-            if (!prefs.mode || !entry.source.valid() || (!entry.finished && iter->second.use_count() == 1))
+            if ((!prefs.mode && !entry.source.personal) || !entry.source.valid() || (!entry.finished && iter->second.use_count() == 1))
             { if (entry.image) used -= entry.image->bytes(); if (!*entry.cancelled) ++layoutRevision; entry.discard(); }
             if (entry.job.valid() && entry.job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
@@ -203,7 +210,7 @@ public:
                 try { image = entry.job.get(); } catch (...) { }
                 entry.finished = true; ++layoutRevision;
                 if (image && image->bytes() > MaxDecodedBytes - used) { evict(image->bytes(), false, &entry); used = memory(); }
-                if (image && !*entry.cancelled && prefs.mode && entry.source.valid() && image->bytes() <= MaxDecodedBytes - used)
+                if (image && !*entry.cancelled && (prefs.mode || entry.source.personal) && entry.source.valid() && image->bytes() <= MaxDecodedBytes - used)
                 { used += image->bytes(); entry.image = std::move(image); }
             }
             if (entry.animationJob.valid() && entry.animationJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
@@ -257,7 +264,7 @@ public:
     std::shared_ptr<Entry> request(const Source& source, const std::string& address)
     {
         start(); poll();
-        if (!prefs.mode || !source.valid()) return {};
+        if ((!prefs.mode && !source.personal) || !source.valid()) return {};
         const auto key = source.key(address); const auto found = entries.find(key);
         if (found != entries.end()) return *found->second->cancelled ? std::shared_ptr<Entry>{} : found->second;
         unsigned jobs = 0; for (const auto& pair : entries) if (pair.second->job.valid()) ++jobs;
@@ -266,7 +273,8 @@ public:
         if (entries.size() >= MaxEntries) return {};
         auto entry = std::make_shared<Entry>(); entry->source = source; entry->url = address; entry->token = LLUUID::generateNewID().asString();
         const auto cancelled = entry->cancelled; const auto sites = prefs.sites; const auto caFile = gDirUtilp->getCAFile();
-        try { entry->job = std::async(std::launch::async, [address, sites, caFile, cancelled] { return load(address, sites, caFile, *cancelled); }); }
+        const auto dimension=source.dimension;
+        try { entry->job = std::async(std::launch::async, [address, sites, caFile, cancelled, dimension] { return load(address, sites, caFile, *cancelled, dimension); }); }
         catch (...) { entry->finished = true; }
         entries[key] = entry; return entry;
     }
@@ -314,6 +322,16 @@ public:
         if (auto* menu = mMenu.get()) menu->die();
     }
     const std::shared_ptr<bool>& linkHidden() const { return mLinkHidden; }
+    void board(std::function<void()> select, std::function<void()> insert)
+    { mBoard = true; mSelect = std::move(select); mInsert = std::move(insert); }
+    void boardPlay(bool play, bool visible) { mBoardPlay = play; mBoardVisible = visible; }
+    void preview()
+    {
+        if (!mSource.valid()) return;
+        if (mEntry && mEntry->image)
+        { if (LLFloaterReg::findInstance("chat_image_preview", mEntry->token) || LLFloaterReg::getFloaterList("chat_image_preview").size() < 4) LLFloaterReg::showInstance("chat_image_preview", mEntry->token); }
+        else mRequested = true;
+    }
     void bind(std::shared_ptr<Entry> entry) { attach(std::move(entry)); mRequested = true; mPlaying = mLarge; mPlaybackSet = mLarge; }
     void fitImage() { mZoom = 1.f; mPanX = mPanY = 0; }
     S32 desiredHeight(S32 width = 0) const
@@ -331,15 +349,15 @@ public:
     void draw() override
     {
         auto& state = service();
-        if (!state.prefs.mode || !mSource.valid() || (mEntry && *mEntry->cancelled))
+        if ((!state.prefs.mode && !mBoard && !mSource.personal) || !mSource.valid() || (mEntry && *mEntry->cancelled))
         { mEntry.reset(); mTexture = nullptr; mTextureReservation.reset(); mFrame = -1; mRequested = false; }
         const auto url = parse(mUrl);
-        const bool automatic = state.prefs.mode == 3 || (state.prefs.mode == 2 && url && selectedSite(*url, state.prefs.sites));
-        if (!mEntry && visibleInChat() && (mRequested || automatic) && state.prefs.mode && mSource.valid()) attach(state.request(mSource, mUrl));
+        const bool automatic = mBoard || state.prefs.mode == 3 || (state.prefs.mode == 2 && url && selectedSite(*url, state.prefs.sites));
+        if (!mEntry && visibleInChat() && (mRequested || automatic) && (mBoard || state.prefs.mode) && mSource.valid()) attach(state.request(mSource, mUrl));
         if (mEntry && visibleInChat()) mEntry->lastSeen = Clock::now();
         const auto image = mEntry ? mEntry->image : std::shared_ptr<Image>{};
-        if (!mLarge && image && getRect().getHeight() != desiredHeight()) ++state.layoutRevision;
-        mAction->setEnabled(state.prefs.mode && mSource.valid());
+        if (!mBoard && !mLarge && image && getRect().getHeight() != desiredHeight()) ++state.layoutRevision;
+        mAction->setEnabled((mBoard || mSource.personal || state.prefs.mode) && mSource.valid());
         mAction->setVisible(!image || mLarge);
         syncLinkVisibility();
         const auto label = image ? tr("FSChatMediaFit") : mEntry && !mEntry->finished ? tr("FSChatMediaLoading") :
@@ -355,7 +373,7 @@ public:
         {
             int frame = 0;
             const Frame* pixels = &image->frames.front();
-            if (image->animation && playing() && (mLarge || state.animateInline()))
+            if (image->animation && playing() && (mLarge || mBoard || state.animateInline()))
             { mEntry->animationDemand = Clock::now(); if (mEntry->animationFrame) { pixels = mEntry->animationFrame.get(); frame = mEntry->animationSerial; } }
             else if (mFrame >= 0) frame = mFrame; // Pause retains the currently uploaded pixels.
             if (mFrame != frame)
@@ -393,9 +411,13 @@ public:
     }
     bool handleKeyHere(KEY key, MASK mask) override
     {
+        if (mBoard && mask == MASK_NONE && key == ' ') { mPlaying = !playing(); mPlaybackSet = true; return true; }
+        if (mBoard && mask == MASK_NONE && key == KEY_RETURN && mInsert) { mInsert(); return true; }
         if (mask == MASK_NONE && (key == KEY_RETURN || key == ' ')) { activate(); return true; }
         return LLPanel::handleKeyHere(key, mask);
     }
+    bool handleDoubleClick(S32, S32, MASK) override
+    { if (mBoard && mInsert) { mInsert(); return true; } preview(); return true; }
     bool handleRightMouseDown(S32 x, S32 y, MASK) override
     {
         if (!mSource.valid() || !gMenuHolder) return true;
@@ -403,13 +425,15 @@ public:
         LLContextMenu::Params p; p.name = "chat_image_menu";
         auto* menu = LLUICtrlFactory::create<LLContextMenu>(p); gMenuHolder->addChild(menu); mMenu = menu->getHandle();
         const auto handle = getHandle();
-        for (const char* action : {"FSChatMediaCopyLink", "FSChatMediaOriginal"})
+        for (const char* action : {"FSChatMediaCopyLink", "FSChatMediaOriginal", "FSGifSave"})
         {
+            if (std::string(action) == "FSGifSave" && (!mEntry || !mEntry->image || (!mEntry->image->animation && !mEntry->image->gif))) continue;
             LLMenuItemCallGL::Params item; item.name = action; item.label = tr(action);
-            item.on_click.function([handle, copy = std::string(action) == "FSChatMediaCopyLink"](LLUICtrl*, const LLSD&)
+            item.on_click.function([handle, action = std::string(action)](LLUICtrl*, const LLSD&)
             {
                 auto* card = dynamic_cast<ImageCard*>(handle.get()); if (!card || !card->mSource.valid()) return;
-                if (copy) gViewerWindow->getWindow()->copyTextToClipboard(utf8str_to_wstring(card->mUrl));
+                if (action == "FSGifSave") FSFloaterGifBoard::saveLink(card->mUrl);
+                else if (action == "FSChatMediaCopyLink") gViewerWindow->getWindow()->copyTextToClipboard(utf8str_to_wstring(card->mUrl));
                 else LLWeb::loadURLExternal(card->mUrl);
             });
             menu->addChild(LLUICtrlFactory::create<LLMenuItemCallGL>(item));
@@ -453,7 +477,7 @@ private:
     }
     void syncLinkVisibility()
     { setLinkHidden(!mRenderUnavailable && service().prefs.hideLinks && service().prefs.mode && mEntry && !*mEntry->cancelled && mEntry->image && mSource.valid()); }
-    bool playing() const { return mPlaybackSet ? mPlaying : !mLarge && service().prefs.animate && automaticMotion(); }
+    bool playing() const { return mBoard ? mBoardVisible && (mPlaybackSet ? mPlaying : mBoardPlay) : mPlaybackSet ? mPlaying : !mLarge && service().prefs.animate && automaticMotion(); }
     bool visibleInChat() const
     {
         if (!isInVisibleChain()) return false;
@@ -464,6 +488,7 @@ private:
     }
     void activate()
     {
+        if (mBoard && mSelect) { mSelect(); return; }
         if (!mSource.valid() || !service().prefs.mode) return;
         if (mEntry && mEntry->image)
         {
@@ -489,10 +514,24 @@ private:
     LLHandle<LLContextMenu> mMenu;
     std::shared_ptr<bool> mLinkHidden = std::make_shared<bool>(false);
     bool mRenderUnavailable = false;
+    bool mBoard = false, mBoardPlay = false, mBoardVisible = false;
+    std::function<void()> mSelect, mInsert;
     LLButton* mAction = nullptr; LLButton* mPlay = nullptr;
     int mFrame = -1; float mZoom = 1.f; S32 mPanX = 0, mPanY = 0, mDragX = 0, mDragY = 0;
 };
 }
+LLPanel* FSChatMedia::createBoardTile(const std::string& url, std::function<void()> select, std::function<void()> insert)
+{
+    if (!parse(url)) return nullptr;
+    Source source{gAgent.getID(), gAgent.getSessionID(), LLUUID::null, LLUUID::null, LLGridManager::getInstance()->getGrid(), false, false, true};
+    source.dimension=320;
+    auto* card = new ImageCard(source, url); card->board(std::move(select), std::move(insert)); return card;
+}
+void FSChatMedia::boardPlayback(LLPanel* tile, bool play, bool visible) { if (auto* card = dynamic_cast<ImageCard*>(tile)) card->boardPlay(play, visible); }
+void FSChatMedia::boardPreview(LLPanel* tile) { if (auto* card = dynamic_cast<ImageCard*>(tile)) card->preview(); }
+bool FSChatMedia::automaticMotionEnabled() { return automaticMotion(); }
+FSChatMedia::BoardOptions FSChatMedia::boardOptions() { return service().prefs.board; }
+void FSChatMedia::boardSize(int size) { service().prefs.board.size=std::clamp(size,100,240);gSavedSettings.setS32("FSGifBoardTileSize",service().prefs.board.size); }
 void FSChatMedia::append(FSChatHistory* history, const LLChat& chat, bool nearby, S32 bodyStart)
 {
     auto& state = service(); state.start();
@@ -556,7 +595,7 @@ void FSFloaterChatMedia::onOpen(const LLSD& key)
     std::shared_ptr<Entry> entry;
     for (const auto& pair : service().entries) if (pair.second->token == key.asString()) entry = pair.second;
     auto* area = getChild<LLPanel>("image_area"); area->deleteAllChildren();
-    if (!entry || !entry->source.valid() || !service().prefs.mode) { closeFloater(); return; }
+    if (!entry || !entry->source.valid() || (!service().prefs.mode && !entry->source.personal)) { closeFloater(); return; }
     auto* card = new ImageCard(entry->source, entry->url, true); card->setFollowsAll();
     card->reshape(area->getRect().getWidth(), area->getRect().getHeight()); card->bind(entry); area->addChild(card);
     getChild<LLButton>("copy")->setCommitCallback([entry](LLUICtrl*, const LLSD&)

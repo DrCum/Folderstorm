@@ -62,7 +62,7 @@ Dir* gDirUtilp=&directory;
 struct Callbacks {void addFunction(void(*)(void*),void*){}void deleteFunction(void(*)(void*),void*){}} gIdleCallbacks;
 struct LLFrameTimer {static U32 getFrameCount(){return 1;}};
 std::shared_future<void> workerRelease;
-std::shared_ptr<Image> load(const std::string&,const std::string&,const std::string&,const std::atomic<bool>&)
+std::shared_ptr<Image> load(const std::string&,const std::string&,const std::string&,const std::atomic<bool>&,int=1024)
 {
     workerRelease.wait(); // Deliberately return a late result even after cancel.
     auto image=std::make_shared<Image>();image->width=image->height=1;image->frames.push_back({{1,2,3,255},100,{}});return image;
