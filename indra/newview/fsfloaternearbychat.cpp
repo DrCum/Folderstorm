@@ -29,6 +29,7 @@
 // Original file: LLFloaterNearbyChat.cpp
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatupload.h"
 #include "fssessionworker.h"
 #include "fseventapibridge.h"
 
@@ -148,6 +149,13 @@ bool FSFloaterNearbyChat::postBuild()
     setIsSingleInstance(true);
 
     mInputEditor = getChild<LLChatEntry>("chat_box");
+    const auto uploadHandle = getHandle();
+    FSChatUpload::bind(mInputEditor, LLUUID::null, {}, [uploadHandle]
+    {
+        const auto* floater = dynamic_cast<FSFloaterNearbyChat*>(uploadHandle.get());
+        const auto* channel = floater ? floater->findChild<LLSpinCtrl>("ChatChannel") : nullptr;
+        return channel && gSavedSettings.getBOOL("FSShowChatChannel") ? channel->getValue().asString() : "0";
+    });
     mInputEditor->setAutoreplaceCallback(boost::bind(&LLAutoReplace::autoreplaceCallback, LLAutoReplace::getInstance(), _1, _2, _3, _4, _5));
     mInputEditor->setCommitCallback(boost::bind(&FSFloaterNearbyChat::onChatBoxCommit, this));
     mInputEditor->setKeystrokeCallback(boost::bind(&FSFloaterNearbyChat::onChatBoxKeystroke, this));
@@ -852,6 +860,7 @@ void FSFloaterNearbyChat::reshapeChatLayoutPanel()
 
 void FSFloaterNearbyChat::sendChat( EChatType type )
 {
+    if (FSChatUpload::blocksSend(mInputEditor)) return;
     if (mInputEditor)
     {
         LLWString text = mInputEditor->getConvertedText();

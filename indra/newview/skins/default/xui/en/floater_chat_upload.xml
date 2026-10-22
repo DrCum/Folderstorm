@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="chat_upload" title="Chat images" width="480" height="402" min_width="480" min_height="402" can_resize="false" can_minimize="true" single_instance="false" reuse_instance="true" layout="topleft">
+  <text name="source" top="32" left="16" right="-16" height="22" follows="left|right|top" ellipses="true"/>
+  <text name="host" top="58" left="16" right="-16" height="20" follows="left|right|top"/>
+  <text name="public" top="84" left="16" right="-16" height="22">Anyone with the link can view this image.</text>
+  <text name="status" top="118" left="210" right="-16" height="124" wrap="true" follows="left|right|top"/>
+  <text name="retention" top="250" left="16" right="-16" height="34" wrap="true">Files last up to 180 days and may be cleaned up earlier. Original files can retain embedded metadata.</text>
+  <check_box name="automatic" label="Upload future pasted/dropped images without asking" left="16" top="290" height="22" tool_tip="Chat still requires Send. Change this later in Preferences → Chat → Media → Uploads."/>
+  <button name="choose" label="Choose image…" left="16" top="326" width="126" height="24"/>
+  <button name="upload" label="Upload" left="152" top="326" width="94" height="24"/>
+  <button name="cancel" label="Cancel upload" left="256" top="326" width="122" height="24"/>
+  <button name="insert" label="Insert links" left="16" top="364" width="112" height="24"/>
+  <button name="copy" label="Copy links" left="138" top="364" width="92" height="24"/>
+  <button name="retry" label="Retry…" left="240" top="364" width="88" height="24" tool_tip="Review failed or uncertain uploads before trying again. An uncertain upload may already exist on the server."/>
+  <button name="settings" label="Settings…" left="338" top="364" width="100" height="24"/>
+</floater>

@@ -27,6 +27,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "fschatupload.h"
 #include "fsfloatersquirtynotes.h"
 
 #include "llfloaterreg.h"
@@ -505,6 +506,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("inventory_bulk_review", "floater_inventory_bulk.xml", &LLFloaterReg::build<FSFloaterInventoryBulk>);
     LLFloaterReg::add("workspace_tools", "floater_workspace_tools.xml", &LLFloaterReg::build<FSFloaterWorkspaceTools>);
     LLFloaterReg::add("workspace_preview", "floater_workspace_preview.xml", &LLFloaterReg::build<FSFloaterWorkspacePreview>);
+    LLFloaterReg::add("chat_upload", "floater_chat_upload.xml", &LLFloaterReg::build<FSFloaterChatUpload>);
     LLFloaterReg::add("chat_image_preview", "floater_chat_image_preview.xml", &LLFloaterReg::build<FSFloaterChatMedia>);
     LLFloaterReg::add("gesture_board", "floater_gesture_board.xml", &LLFloaterReg::build<FSFloaterGestureBoard>);
     LLFloaterReg::add("gesture_board_picker", "floater_gesture_board_picker.xml", &LLFloaterReg::build<FSFloaterGesturePicker>);

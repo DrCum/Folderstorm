@@ -3395,4 +3395,23 @@ Your current position: [AVATAR_POS]
  <string name="FSChatMediaAnimationTip">Play or pause this animation. Hidden images stop updating.</string>
  <string name="FSChatMediaPlay">Play ▶</string>
  <string name="FSChatMediaFit">Fit image</string>
+  <string name="FSChatUploadAttach">Attach image / upload progress</string>
+  <string name="FSChatUploadPending">Image upload pending. Open to review or cancel before sending.</string>
+  <string name="FSChatUploadUnavailable">Chat is unavailable.</string>
+  <string name="FSChatUploadNearby">Nearby Chat</string>
+  <string name="FSChatUploadMayRemain">Cancelled. A submitted image may remain on the server.</string>
+  <string name="FSChatUploadCancelled">Cancelled.</string>
+  <string name="FSChatUploadProcessing">Server is processing the image. Copy its link to check later; do not upload again.</string>
+  <string name="FSChatUploadInvalidImage">Use a valid PNG, JPEG, GIF or WebP up to 10 MiB and 16 megapixels.</string>
+  <string name="FSChatUploadFailed">Upload failed.</string>
+  <string name="FSChatUploadPreparing">Preparing image…</string>
+  <string name="FSChatUploadReady">Ready for upload</string>
+  <string name="FSChatUploadQueued">Queued</string>
+  <string name="FSChatUploadUploading">Uploading…</string>
+  <string name="FSChatUploadInserted">Link added to draft</string>
+  <string name="FSChatUploadComplete">Uploaded — insert or copy link</string>
+  <string name="FSChatUploadSetup">Set a valid HTTPS host and upload-enabled folder in Chat → Media → Uploads.</string>
+  <string name="FSChatUploadProxy">Uploads are unavailable with this viewer HTTP proxy configuration.</string>
+  <string name="FSChatUploadChoose">Choose an image to attach. Sending stays explicit.</string>
+  <string name="FSChatUploadRetryWarning">Review retry — this may create another file. Click Upload to continue.</string>
 </strings>
