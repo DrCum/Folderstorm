@@ -67,7 +67,7 @@ target_link_libraries(
         llxml
     )
 
-# <FS:Perf> Exercise actual joint caches and SIMD skinning math when testing.
+# <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   add_executable(avatar_joint_matrix_cache tests/lljoint_matrix_cache_test.cpp)
   target_link_libraries(avatar_joint_matrix_cache PRIVATE llcharacter)
@@ -77,6 +77,19 @@ if(LL_TESTS)
 
   find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
+    set(curve_source "${CMAKE_CURRENT_BINARY_DIR}/curve_sampling.cpp")
+    add_custom_command(OUTPUT "${curve_source}"
+      COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_curve_sampling.py" --output "${curve_source}"
+      DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_curve_sampling.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/llkeyframemotion.cpp"
+      VERBATIM)
+    add_executable(avatar_curve_sampling "${curve_source}")
+    target_link_libraries(avatar_curve_sampling PRIVATE llmath llcommon)
+    target_compile_definitions(avatar_curve_sampling PRIVATE FS_EXPECT_CONST_CURVES=1)
+    add_custom_command(TARGET avatar_curve_sampling POST_BUILD
+      COMMAND $<TARGET_FILE:avatar_curve_sampling> VERBATIM)
+
     foreach(mode IN ITEMS tracked benchmark)
       set(skinning_source "${CMAKE_CURRENT_BINARY_DIR}/skinning_generation_${mode}.cpp")
       add_custom_command(OUTPUT "${skinning_source}"

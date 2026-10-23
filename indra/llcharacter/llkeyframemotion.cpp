@@ -151,8 +151,10 @@ LLKeyframeMotion::ScaleCurve::~ScaleCurve()
 //-----------------------------------------------------------------------------
 // getValue()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
+LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLVector3 value;
 
     if (mKeys.empty())
@@ -161,7 +163,8 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -176,16 +179,21 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        ScaleKey& scale_before = left->second;
-        ScaleKey& scale_after = right->second;
-        if (right == mKeys.end())
-        {
-            scale_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // ScaleKey& scale_before = left->second;
+        // ScaleKey& scale_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     scale_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const ScaleKey& scale_before = left->second;
+        const ScaleKey& scale_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, scale_before, scale_after);
@@ -196,7 +204,8 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, ScaleKey& before, ScaleKey& after)
+// <FS:Perf> LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, ScaleKey& before, ScaleKey& after)
+LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, const ScaleKey& before, const ScaleKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -231,8 +240,10 @@ LLKeyframeMotion::RotationCurve::~RotationCurve()
 //-----------------------------------------------------------------------------
 // RotationCurve::getValue()
 //-----------------------------------------------------------------------------
-LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
+LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLQuaternion value;
 
     if (mKeys.empty())
@@ -241,7 +252,8 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -256,16 +268,21 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        RotationKey& rot_before = left->second;
-        RotationKey& rot_after = right->second;
-        if (right == mKeys.end())
-        {
-            rot_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // RotationKey& rot_before = left->second;
+        // RotationKey& rot_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     rot_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const RotationKey& rot_before = left->second;
+        const RotationKey& rot_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, rot_before, rot_after);
@@ -276,7 +293,8 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, RotationKey& before, RotationKey& after)
+// <FS:Perf> LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, RotationKey& before, RotationKey& after)
+LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, const RotationKey& before, const RotationKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -312,8 +330,10 @@ LLKeyframeMotion::PositionCurve::~PositionCurve()
 //-----------------------------------------------------------------------------
 // PositionCurve::getValue()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
+LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLVector3 value;
 
     if (mKeys.empty())
@@ -322,7 +342,8 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -337,16 +358,21 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        PositionKey& pos_before = left->second;
-        PositionKey& pos_after = right->second;
-        if (right == mKeys.end())
-        {
-            pos_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // PositionKey& pos_before = left->second;
+        // PositionKey& pos_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     pos_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const PositionKey& pos_before = left->second;
+        const PositionKey& pos_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, pos_before, pos_after);
@@ -360,7 +386,8 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, PositionKey& before, PositionKey& after)
+// <FS:Perf> LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, PositionKey& before, PositionKey& after)
+LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, const PositionKey& before, const PositionKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -742,6 +769,7 @@ bool LLKeyframeMotion::onUpdate(F32 time, U8* joint_mask)
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::applyKeyframes(F32 time)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // </FS:Perf> Attribute curve sampling and state application.
     llassert_always (mJointMotionList->getNumJointMotions() <= mJointStates.size());
     for (U32 i=0; i<mJointMotionList->getNumJointMotions(); i++)
     {
