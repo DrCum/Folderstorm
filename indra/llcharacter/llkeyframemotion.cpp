@@ -2245,7 +2245,7 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
 
     for (U32 i = 0; i < mJointMotionList->getNumJointMotions(); i++)
     {
-        JointMotion* joint_motionp = mJointMotionList->getJointMotion(i);
+        const JointMotion* joint_motionp = mJointMotionList->getJointMotion(i);
         success &= dp.packString(joint_motionp->mJointName, "joint_name");
         success &= dp.packS32(joint_motionp->mPriority, "joint_priority");
         success &= dp.packS32(static_cast<S32>(joint_motionp->mRotationCurve.mKeys.size()), "num_rot_keys");
@@ -2254,9 +2254,9 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
             << " name: " << joint_motionp->mJointName
             << " Rotation keys: " << joint_motionp->mRotationCurve.mKeys.size()
             << " Position keys: " << joint_motionp->mPositionCurve.mKeys.size() << LL_ENDL;
-        for (RotationCurve::key_map_t::value_type& rot_pair : joint_motionp->mRotationCurve.mKeys)
+        for (const RotationCurve::key_map_t::value_type& rot_pair : joint_motionp->mRotationCurve.mKeys)
         {
-            RotationKey& rot_key = rot_pair.second;
+            const RotationKey& rot_key = rot_pair.second;
             U16 time_short = F32_to_U16(rot_key.mTime, 0.f, mJointMotionList->mDuration);
             success &= dp.packU16(time_short, "time");
 
@@ -2275,28 +2275,31 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
         }
 
         success &= dp.packS32(static_cast<S32>(joint_motionp->mPositionCurve.mKeys.size()), "num_pos_keys");
-        for (PositionCurve::key_map_t::value_type& pos_pair : joint_motionp->mPositionCurve.mKeys)
+        for (const PositionCurve::key_map_t::value_type& pos_pair : joint_motionp->mPositionCurve.mKeys)
         {
-            PositionKey& pos_key = pos_pair.second;
+            const PositionKey& pos_key = pos_pair.second;
             U16 time_short = F32_to_U16(pos_key.mTime, 0.f, mJointMotionList->mDuration);
             success &= dp.packU16(time_short, "time");
 
             U16 x, y, z;
-            pos_key.mPosition.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            x = F32_to_U16(pos_key.mPosition.mV[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            y = F32_to_U16(pos_key.mPosition.mV[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            z = F32_to_U16(pos_key.mPosition.mV[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            // <FS:Perf> Export and size queries must not quantize shared live keys.
+            LLVector3 position = pos_key.mPosition;
+            position.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            x = F32_to_U16(position.mV[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            y = F32_to_U16(position.mV[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            z = F32_to_U16(position.mV[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            // </FS:Perf>
             success &= dp.packU16(x, "pos_x");
             success &= dp.packU16(y, "pos_y");
             success &= dp.packU16(z, "pos_z");
 
-            LL_DEBUGS("BVH") << "  pos: t " << pos_key.mTime << " pos " << pos_key.mPosition.mV[VX] <<","<< pos_key.mPosition.mV[VY] <<","<< pos_key.mPosition.mV[VZ] << LL_ENDL;
+            LL_DEBUGS("BVH") << "  pos: t " << pos_key.mTime << " pos " << position.mV[VX] <<","<< position.mV[VY] <<","<< position.mV[VZ] << LL_ENDL;
         }
     }
 
     success &= dp.packS32(static_cast<S32>(mJointMotionList->mConstraints.size()), "num_constraints");
     LL_DEBUGS("BVH") << "num_constraints " << mJointMotionList->mConstraints.size() << LL_ENDL;
-    for (JointConstraintSharedData* shared_constraintp : mJointMotionList->mConstraints)
+    for (const JointConstraintSharedData* shared_constraintp : mJointMotionList->mConstraints)
     {
         success &= dp.packU8(shared_constraintp->mChainLength, "chain_length");
         success &= dp.packU8(shared_constraintp->mConstraintType, "constraint_type");
