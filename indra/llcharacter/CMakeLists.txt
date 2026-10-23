@@ -90,6 +90,20 @@ if(LL_TESTS)
     add_custom_command(TARGET avatar_curve_sampling POST_BUILD
       COMMAND $<TARGET_FILE:avatar_curve_sampling> VERBATIM)
 
+    set(storage_source "${CMAKE_CURRENT_BINARY_DIR}/curve_storage.cpp")
+    add_custom_command(OUTPUT "${storage_source}"
+      COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_curve_storage.py" --output "${storage_source}"
+      DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_curve_storage.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_curve_sampling.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/llkeyframemotion.cpp"
+      VERBATIM)
+    add_executable(avatar_curve_storage_experiment "${storage_source}")
+    target_link_libraries(avatar_curve_storage_experiment PRIVATE llmath llcommon)
+    target_compile_definitions(avatar_curve_storage_experiment PRIVATE FS_EXPECT_CONST_CURVES=1)
+    add_custom_command(TARGET avatar_curve_storage_experiment POST_BUILD
+      COMMAND $<TARGET_FILE:avatar_curve_storage_experiment> VERBATIM)
+
     foreach(mode IN ITEMS tracked benchmark)
       set(skinning_source "${CMAKE_CURRENT_BINARY_DIR}/skinning_generation_${mode}.cpp")
       add_custom_command(OUTPUT "${skinning_source}"
