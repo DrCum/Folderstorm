@@ -72,6 +72,18 @@ by their call paths without adding names/UUIDs to captures.
 
 ## Results
 
-Implementation and focused compilation pending. Hardware capture/acceptance
-pending. Next plan: remove a demonstrably redundant avatar CPU operation with
-production-path equivalence and operation-count evidence.
+Implemented six additional avatar-category boundaries in `llvoavatar.cpp`.
+MSVC 19.51 C++20/AVX2 native syntax checks pass for that complete translation unit
+with Tracy disabled and enabled. The profiling check uses the repository-pinned
+Tracy v0.11.1 Windows package, with its SHA-1 verified, in a separate validation
+directory. Existing build dependencies were read only; the shared cache was not
+configured, built or modified. The compiler emits the existing Boost
+`WIN32_LEAN_AND_MEAN` redefinition warning.
+
+Whitespace checks and diff review pass: formulas, calls, ordering and cache
+policy are unchanged. No macro-presence-only tests added. Full viewer linking,
+hardware capture, visual equivalence and overhead acceptance remain pending.
+
+Next plan: avoid joint lookup for unused entries while computing rigged avatar
+bounds, with production-block equivalence and lookup-count evidence. This does
+not require a speculative new cache or thread ownership change.

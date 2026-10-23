@@ -5466,6 +5466,7 @@ void LLVOAvatar::updateTimeStep()
 
 void LLVOAvatar::updateRootPositionAndRotation(LLAgent& agent, F32 speed, bool was_sit_ground_constrained)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
     if (!(isSitting() && getParent()))
     {
         // This case includes all configurations except sitting on an
@@ -5665,6 +5666,7 @@ bool LLVOAvatar::computeNeedsUpdate()
 //------------------------------------------------------------------------
 bool LLVOAvatar::updateCharacter(LLAgent &agent)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
     updateDebugText();
 
     if (!mIsBuilt)
@@ -5789,8 +5791,13 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
     // Generate footstep sounds when feet hit the ground
     updateFootstepSounds();
 
-    // Update child joints as needed.
-    mRoot->updateWorldMatrixChildren();
+    // <FS:Perf> Profile the whole traversal rather than every recursive joint.
+    {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar child world matrices");
+        // Update child joints as needed.
+        mRoot->updateWorldMatrixChildren();
+    }
+    // </FS:Perf>
 
     if (visible)
     {
@@ -5806,6 +5813,7 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
 //-----------------------------------------------------------------------------
 void LLVOAvatar::updateHeadOffset()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
     // since we only care about Z, just grab one of the eyes
     LLVector3 midEyePt = mEyeLeftp->getWorldPosition();
     midEyePt -= mDrawable.notNull() ? mDrawable->getWorldPosition() : mRoot->getWorldPosition();
@@ -11265,35 +11273,43 @@ const LLVOAvatar::MatrixPaletteCache& LLVOAvatar::updateSkinInfoMatrixPalette(co
         //build matrix palette
         U32 count = LLSkinningUtil::getMeshJointCount(skin);
         entry.mMatrixPalette.resize(count);
-        LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
-
-        const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
-
-        entry.mGLMp.resize(count * 12);
-
-        F32* mp = &(entry.mGLMp[0]);
-
-        for (U32 i = 0; i < count; ++i)
+        // <FS:Perf> Separate matrix calculation from packing on cache misses.
         {
-            F32* m = (F32*)mat[i].mMatrix[0].getF32ptr();
-
-            U32 idx = i * 12;
-
-            mp[idx + 0] = m[0];
-            mp[idx + 1] = m[1];
-            mp[idx + 2] = m[2];
-            mp[idx + 3] = m[12];
-
-            mp[idx + 4] = m[4];
-            mp[idx + 5] = m[5];
-            mp[idx + 6] = m[6];
-            mp[idx + 7] = m[13];
-
-            mp[idx + 8] = m[8];
-            mp[idx + 9] = m[9];
-            mp[idx + 10] = m[10];
-            mp[idx + 11] = m[14];
+            LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar skinning matrices");
+            LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
         }
+
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar palette packing");
+            const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
+
+            entry.mGLMp.resize(count * 12);
+
+            F32* mp = &(entry.mGLMp[0]);
+
+            for (U32 i = 0; i < count; ++i)
+            {
+                F32* m = (F32*)mat[i].mMatrix[0].getF32ptr();
+
+                U32 idx = i * 12;
+
+                mp[idx + 0] = m[0];
+                mp[idx + 1] = m[1];
+                mp[idx + 2] = m[2];
+                mp[idx + 3] = m[12];
+
+                mp[idx + 4] = m[4];
+                mp[idx + 5] = m[5];
+                mp[idx + 6] = m[6];
+                mp[idx + 7] = m[13];
+
+                mp[idx + 8] = m[8];
+                mp[idx + 9] = m[9];
+                mp[idx + 10] = m[10];
+                mp[idx + 11] = m[14];
+            }
+        }
+        // </FS:Perf>
     }
 
     return entry;
