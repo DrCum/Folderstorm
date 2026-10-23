@@ -11285,16 +11285,19 @@ const LLVOAvatar::MatrixPaletteCache& LLVOAvatar::updateSkinInfoMatrixPalette(co
         // <FS:Perf> Separate matrix calculation from packing on cache misses.
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar skinning matrices");
-            LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
+            // <FS:Perf> LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
+            LLSkinningUtil::initSkinningMatrixPalette(entry.mMatrixPalette.data(), count, skin, this);
         }
 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar palette packing");
-            const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
+            // <FS:Perf> const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
+            const LLMatrix4a* mat = entry.mMatrixPalette.data();
 
             entry.mGLMp.resize(count * 12);
 
-            F32* mp = &(entry.mGLMp[0]);
+            // <FS:Perf> F32* mp = &(entry.mGLMp[0]);
+            F32* mp = entry.mGLMp.data();
 
             for (U32 i = 0; i < count; ++i)
             {

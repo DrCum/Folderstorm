@@ -67,12 +67,32 @@ target_link_libraries(
         llxml
     )
 
-# <FS:Perf> Exercise actual joint/transform/SIMD cache coherence when testing.
+# <FS:Perf> Exercise actual joint caches and SIMD skinning math when testing.
 if(LL_TESTS)
   add_executable(avatar_joint_matrix_cache tests/lljoint_matrix_cache_test.cpp)
   target_link_libraries(avatar_joint_matrix_cache PRIVATE llcharacter)
   target_include_directories(avatar_joint_matrix_cache PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_custom_command(TARGET avatar_joint_matrix_cache POST_BUILD
     COMMAND $<TARGET_FILE:avatar_joint_matrix_cache> VERBATIM)
+
+  find_package(Python3 QUIET COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    foreach(mode IN ITEMS tracked benchmark)
+      set(skinning_source "${CMAKE_CURRENT_BINARY_DIR}/skinning_generation_${mode}.cpp")
+      add_custom_command(OUTPUT "${skinning_source}"
+        COMMAND "${Python3_EXECUTABLE}"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../newview/tests/test_skinning_generation.py"
+          --mode "${mode}" --output "${skinning_source}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../newview/tests/test_skinning_generation.py"
+          "${CMAKE_CURRENT_SOURCE_DIR}/../newview/llskinningutil.cpp"
+          "${CMAKE_CURRENT_SOURCE_DIR}/lljoint.h"
+        VERBATIM)
+      add_executable(avatar_skinning_generation_${mode} "${skinning_source}")
+      target_link_libraries(avatar_skinning_generation_${mode} PRIVATE llmath llcommon)
+    endforeach()
+    target_compile_definitions(avatar_skinning_generation_tracked PRIVATE FS_NATIVE_SKINNING_MATH=1)
+    add_custom_command(TARGET avatar_skinning_generation_tracked POST_BUILD
+      COMMAND $<TARGET_FILE:avatar_skinning_generation_tracked> VERBATIM)
+  endif()
 endif()
 # </FS:Perf>
