@@ -60,6 +60,10 @@ Never present a missing hardware result as a successful test.
   in the viewer. Plan 13 accounts for complete costs before any production caller
   or scheduler change. The historical Windows scheduler CPU issue needs sustained
   load/idle, coroutine/fairness and shutdown testing before considering a change.
+- Checkpoint 13 compares complete sampling costs over generated assets. Immediate
+  consumption mostly falls back; larger batches benefit with synthetic independent
+  work. A real sufficient overlap window and total CPU/FPS improvement remain
+  unproven. Plan 14 maps actual motion/pose dependencies before any live dispatch.
 
 ## Results
 
