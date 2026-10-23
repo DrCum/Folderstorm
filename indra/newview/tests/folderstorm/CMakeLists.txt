@@ -38,6 +38,22 @@ function(folderstorm_check name)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/PaletteArchitecture.cmake")
+folderstorm_palette_needs_sse2neon(palette_needs_sse2neon)
+add_test(NAME avatar_palette_architecture COMMAND "${CMAKE_COMMAND}"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/../test_palette_architecture.cmake")
+if(palette_needs_sse2neon)
+  find_path(FS_PALETTE_SSE2NEON_INCLUDE_DIR sse2neon.h)
+endif()
+if(NOT palette_needs_sse2neon OR FS_PALETTE_SSE2NEON_INCLUDE_DIR)
+  folderstorm_check(avatar_palette_packing ../test_fsavatarpalette.cpp)
+  if(FS_PALETTE_SSE2NEON_INCLUDE_DIR)
+    target_include_directories(avatar_palette_packing PRIVATE "${FS_PALETTE_SSE2NEON_INCLUDE_DIR}")
+  endif()
+else()
+  message(STATUS "Skipping avatar palette test: set FS_PALETTE_SSE2NEON_INCLUDE_DIR on ARM")
+endif()
+
 if(Python3_Interpreter_FOUND)
   set(avatar_bounds_source "${CMAKE_CURRENT_BINARY_DIR}/avatar_rigged_bounds.cpp")
   add_custom_command(OUTPUT "${avatar_bounds_source}"

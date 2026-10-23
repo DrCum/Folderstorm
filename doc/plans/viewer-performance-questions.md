@@ -32,7 +32,13 @@ Never present a missing hardware result as a successful test.
   posing, avatar arrival/departure, teleport/logout and exit.
 - Track exact head, settings, scene conditions, logs and reproduction steps for
   each regression. Do not overwrite retained builds.
+- Investigate `initSkinningMatrixPalette`: the missing-joint branch sets an
+  output fallback, then the later multiply loop uses that joint's uninitialized
+  temporary world matrix. Create a deterministic reproduction and preserve the
+  intended inverse-bind fallback when removing the temporary array.
 
 ## Results
 
-No hardware captures or local acceptance results received yet.
+No in-world captures or runtime acceptance results received yet. A native
+Ryzen 5 3600 palette-packing microbenchmark was collected for checkpoint 4;
+its scope and results are documented in that plan and do not establish FPS gains.

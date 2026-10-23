@@ -133,5 +133,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   8,013 actual-class coherence comparisons; see
   `viewer-performance-03-matrix-cache.md`. Full linking/visual/performance
   acceptance remains pending.
+- Stage 2c: bit-exact SIMD palette packing passes 188 layout/guard comparisons
+  in default x64 and AVX2 builds. A Ryzen 5 3600 microbenchmark shows lower
+  kernel time; see `viewer-performance-04-palette-packing.md`. Whole-frame
+  performance, ARM execution and visual acceptance remain pending.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

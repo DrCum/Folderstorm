@@ -1012,6 +1012,7 @@ set(viewer_HEADER_FILES
     fsassistantsettings.h
     fsassistantpolicy.h
     fsfloaterinventorybulk.h
+    fsavatarpalette.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
     fsblocklistmenu.h
