@@ -48,5 +48,79 @@ ownership still prevents borrowing these containers in asynchronous jobs.
 
 ## Results
 
-Not implemented yet. Production storage and sampling algorithms remain those of
-#95. Worker snapshot ownership and dispatch remain later roadmap gates.
+Implemented in the native experiment with `test_curve_storage.py --refined`.
+The production viewer retains #95's map storage and sampling algorithm. The
+candidate takes a direct one-key return after empty handling and uses the
+bundled ordered-unique-range constructor on a temporary map. The temporary map
+uses original per-timestamp assignment, preserving last-write-wins duplicates.
+No reservation trusts serialized counts, and no permanent second cache is added.
+
+Build `avatar_curve_bulk_loading_experiment` with `LL_TESTS` and Python. Default
+post-build execution performs correctness checks only; `--benchmark` is opt-in.
+Three fixture sampling suites each pass **56,232** comparisons and **293,004**
+cross-container cases compare naive/refined flat storage with the frozen map
+oracle. The refined loader is exercised by those cross-container cases. Key
+ordering, duplicate values, metadata and sampled bytes match, including empty,
+single/multiple keys and all interpolation modes. Native MSVC linking/run passes.
+
+Review follow-up: preserve the production finiteness assertion on the one-key
+position shortcut. Nine focused NaN/+infinity/-infinity cases, queried before,
+exactly at and after the key, now observe that diagnostic in the correctness
+fixture. A native negative variant omitting the assertion fails the new check,
+and the corrected fixture passes. Timing fixtures still use release assertion
+behavior; this diagnostic fix does not supply new performance measurements.
+
+### Measurement and limits
+
+The method, CPU, compiler and timing boundaries match checkpoint 7. Staged load
+timing includes scratch-map construction/insertion, bulk conversion, release of
+scratch nodes, and fresh curve objects. It excludes source decoding/I/O and final
+curve destruction. Scratch and destination allocations share one counter in
+separate untimed probes, so overlapping bytes and retained capacity are measured
+together. Timing fixtures use default allocators and release assertion behavior.
+Allocation probes check that nonempty inputs produce observed live key storage.
+
+Two finalized nine-sample alternating runs are retained in
+`results/curve-bulk-ryzen3600-run1.txt` and
+`results/curve-bulk-ryzen3600-run2.txt`. These are synthetic workloads with
+uncontrolled desktop activity. In the second run the 128-key position case has a
+clear timing disturbance (both candidates much slower); keep that evidence and
+do not discard it as if every case had stable absolute timing.
+
+Representative forward-playback medians, ns/sample:
+
+| Curve | Keys | Original map, run 1 / 2 | Refined flat, run 1 / 2 |
+| --- | ---: | ---: | ---: |
+| Position | 1 | 5.391 / 5.072 | 3.296 / 3.471 |
+| Position | 32 | 27.728 / 27.396 | 13.338 / 13.483 |
+| Rotation | 1 | 3.154 / 3.378 | 3.589 / 3.786 |
+| Rotation | 32 | 56.073 / 57.458 | 43.364 / 44.426 |
+| Rotation | 128 | 76.125 / 77.289 | 48.758 / 49.261 |
+
+The one-key shortcut removes most of naive flat rotation's penalty, but it still
+costs about 0.4 ns more than the original map in these cases. It improves
+one-key position sampling. Longer-curve advantages persist; no claim is made
+about the actual distribution of curve lengths in the user's crowded scenes.
+
+At 1,024 rotation keys, reverse loading medians are 65.3–67.3 us for map and
+87.7–87.9 us for staged flat; shuffled loads are 103.6–104.9 versus
+140.4–140.7 us. This avoids naive flat's 240–262 us unordered-loading behavior,
+but still adds conversion and scratch teardown cost. Single-key loading is about
+63–64 ns for map versus 154–156 ns for staged flat. The experiment does not
+justify claiming faster asset loading.
+
+The 1,024-key rotation fixture retains 57,400 requested key bytes for map and
+24,576 for staged flat. Peak key bytes rise to **81,976** (about 43% higher than
+map); total allocation calls are 1,025 versus 1,026. Scratch is released at the
+end of each curve load. Those bytes exclude allocator bookkeeping and fixture
+objects, and do not establish whole-viewer peak memory.
+
+### Decision
+
+Do not enable the candidate in normal builds yet. It is suitable for a separate
+experimental full-viewer build because it preserves tested values and offers a
+plausible steady-sampling benefit, with explicit loading/peak-memory tradeoffs.
+Plan 9 introduces an off-by-default build option so the building agent can retain
+matched map/contiguous variants. Real asset distributions, full linking,
+animation/pose/preview lifecycle checks, crowd timing and arrival/rez behavior
+remain required. Worker snapshot ownership and dispatch remain later gates.

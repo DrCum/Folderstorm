@@ -150,5 +150,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   faster, but naive flat storage regresses single-key sampling and unordered
   loading. Production storage is unchanged; see
   `viewer-performance-07-curve-storage.md` and the bulk-loading follow-up plan.
+- Stage 3c: refined bulk loading and one-key sampling pass 293,004 cross-container
+  cases plus three sampling suites. Bulk loading avoids quadratic insertion but
+  adds loading cost and transient bytes. Normal viewer storage is unchanged;
+  plan 9 proposes an off-by-default experimental build for runtime acceptance.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
