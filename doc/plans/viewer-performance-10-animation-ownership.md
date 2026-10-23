@@ -60,6 +60,13 @@ remain measurement gates on the Ryzen 5 3600.
 
 Initial source audit completed; ownership code has not been changed yet.
 
+Implementation sequencing update: a closer audit found two prerequisites for
+releasing old assets safely. Character hand-pose/priority entries currently point
+inside assets, and setupPose appends per-motion constraints rather than clearing
+old ones. Checkpoint 10a makes hand-pose values character-owned in a separate PR;
+owned adoption will explicitly clear obsolete constraints before old-owner
+release. Do not assume retaining an owner only through setupPose is sufficient.
+
 | Worker-readable field | Writers found | Publication rule |
 | --- | --- | --- |
 | Curve key maps and values | Constructors/destructors and the two validated builder paths in deserialize | New motion list remains private until all keys/constraints validate. |
