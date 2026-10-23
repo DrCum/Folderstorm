@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(FolderstormRegressionTests LANGUAGES CXX)
 
-# These production helpers have no viewer/prebuilt dependencies. This project
+# These production helpers have no viewer runtime dependencies. This project
 # can run in ordinary CI without configuring or downloading the entire viewer.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,21 @@ function(folderstorm_check name)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+folderstorm_check(avatar_animation_keys_map ../../../llcharacter/tests/test_fsanimationkeys.cpp)
+target_include_directories(avatar_animation_keys_map PRIVATE ../../../llcharacter)
+target_compile_definitions(avatar_animation_keys_map PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=0)
+add_test(NAME avatar_animation_keys_configuration COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/animation-keys-configuration"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/tests/test_animation_keys_config.cmake")
+find_path(FS_ANIMATION_BOOST_INCLUDE_DIR boost/container/flat_map.hpp)
+if(FS_ANIMATION_BOOST_INCLUDE_DIR)
+  folderstorm_check(avatar_animation_keys_contiguous ../../../llcharacter/tests/test_fsanimationkeys.cpp)
+  target_include_directories(avatar_animation_keys_contiguous PRIVATE ../../../llcharacter "${FS_ANIMATION_BOOST_INCLUDE_DIR}")
+  target_compile_definitions(avatar_animation_keys_contiguous PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=1)
+else()
+  message(STATUS "Skipping contiguous animation-key helper test: set FS_ANIMATION_BOOST_INCLUDE_DIR to bundled Boost headers")
+endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/PaletteArchitecture.cmake")
 folderstorm_palette_needs_sse2neon(palette_needs_sse2neon)

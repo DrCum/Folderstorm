@@ -37,6 +37,10 @@ Never present a missing hardware result as a successful test.
   fallback overwrite. Typed and actual-SIMD generation checks pass; a known
   legacy-mesh visual reproduction would be useful later. No such asset is needed
   to continue source work.
+- Checkpoint 9 needs separately retained map/contiguous builds with the CMake
+  option explicitly OFF/ON. Include arrival/rez latency and peak memory alongside
+  steady crowd frame times; the candidate has measured loading/memory tradeoffs.
+  Full asset-parser/preview/pose behavior and ARM/macOS execution remain pending.
 
 ## Results
 

@@ -65,8 +65,19 @@ is const or storage is contiguous.
 
 ## Results
 
-Implementation has started with the deserialization publication/lifetime audit.
-No viewer option, aliases or loader changes have been implemented yet.
+Implemented with `FS_CONTIGUOUS_ANIMATION_KEYS` default OFF. `llcharacter` exposes
+its 0/1 definition publicly so linked layout consumers, including the viewer's
+target-based PCH, use the same setting. `fsanimationkeys.h` supplies the selected
+map alias and a scoped builder. Normal builds forward writes to std::map without
+scratch storage; experimental builds stage validated keys in an ordinary map,
+bulk-convert once, then reset scratch before decoding the next curve. RAII
+handles parse exits and conversion exceptions. Builders are single-use and
+intended for the fresh empty curves allocated by deserialization.
+
+The experimental one-key paths retain existing values and position finiteness
+assertions. Serialization, all validation/decoding branches, duplicate-count
+diagnostics, loop/hand-pose timing and final cache publication stay in place.
+Nothing samples on worker threads in this checkpoint.
 
 - `deserialize` owns a newly created `JointMotionList` with `unique_ptr` and adds
   each newly allocated joint motion to that list immediately. Its destructor
@@ -87,3 +98,61 @@ No viewer option, aliases or loader changes have been implemented yet.
   on early returns. In the OFF configuration it forwards writes to the existing
   map and adds no scratch representation. Test the actual helper rather than
   assuming the earlier prototype establishes its behavior.
+
+### Verification completed
+
+- The actual helper passes 3,576 ordered key/value comparisons in map mode and
+  3,579 in contiguous mode. Payload lifetime checks cover scoped partial/truncated
+  exits, non-finite time rejection in a fixture parser, empty/long/reverse/shuffled
+  loads, duplicate replacement, signed-zero timestamp identity, scratch release
+  at commit and an injected conversion-copy exception. These are actual-builder
+  tests, not full malformed-asset/LLDataPacker integration tests.
+- Both build-selected aliases with the actual six production sampler methods
+  pass 56,232 byte-exact actual-math comparisons each, plus state-immutability and
+  const-signature checks. The position shortcut retains its debug assertion.
+- A CMake fixture evaluates the actual option declaration and llcharacter target
+  with placeholder unrelated libraries. Default/OFF resolve to 0 and ON to 1 in
+  a linked consumer's generated compile definitions. It checks propagation, not
+  full viewer configuration or linking.
+- Complete `llkeyframemotion.cpp` and `fsposingmotion.cpp` native syntax checks
+  pass in all four storage OFF/ON and Tracy OFF/ON combinations. The isolated pose
+  check supplies `<chrono>` for the existing `fsjointpose.h` dependency, as in
+  checkpoint 6. MSVC 19.51.36244, x64 AVX2; shared build data read only.
+- The previous refined storage experiment still passes its three sampling
+  suites and 293,004 cross-container checks. It explicitly selects reference
+  storage and excludes the new build-conditional shortcut so its original
+  map/flat control remains reproducible.
+
+No full viewer build, installer, ARM/macOS execution or live scene acceptance has
+been performed here. The builder uses the same staged-map/ordered-range algorithm
+as the measured prototype; the prototype's timing/byte figures are not whole
+viewer measurements of this helper. Actual memory behavior during asset arrival
+and sustained crowds remains part of the build handoff.
+
+### Exact build variants for the local building agent
+
+After the normal repository bootstrap, configure the map control explicitly:
+
+```text
+autobuild configure -A 64 -c ReleaseFS_open_AVX2 -- --package --chan Nightly -DFS_CONTIGUOUS_ANIMATION_KEYS:BOOL=OFF
+autobuild build -A 64 -c ReleaseFS_open_AVX2 --no-configure
+```
+
+Retain its installer and runnable package, then configure/build the experimental
+variant serially with the same source/flags and the option ON:
+
+```text
+autobuild configure -A 64 -c ReleaseFS_open_AVX2 -- --package --chan Nightly -DFS_CONTIGUOUS_ANIMATION_KEYS:BOOL=ON
+autobuild build -A 64 -c ReleaseFS_open_AVX2 --no-configure
+```
+
+The configure script passes these CMake arguments through. Reconfigure explicitly
+when switching modes; do not reuse object/PCH output compiled with the opposite
+definition. Build normally through CMake so its dependencies rebuild. Use distinct
+archive variant suffixes such as `animation-map` and `animation-contiguous` under
+the project's retained PR build directory. Do not overwrite completed archives.
+The source-work agent has not executed these viewer build commands.
+
+Plan 10 audits canonical asset ownership and adds owned leases before any worker
+dispatch. Loop metadata may remain mutable on the main thread; it must never be
+read opportunistically by a job that is only entitled to immutable key data.

@@ -154,5 +154,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   cases plus three sampling suites. Bulk loading avoids quadratic insertion but
   adds loading cost and transient bytes. Normal viewer storage is unchanged;
   plan 9 proposes an off-by-default experimental build for runtime acceptance.
+- Stage 3d: `FS_CONTIGUOUS_ANIMATION_KEYS` supplies that off-by-default variant,
+  with actual-helper lifecycle checks, exact sampling checks in both modes,
+  CMake usage propagation and native caller checks in both Tracy configurations.
+  Plan 9 contains explicit matched build instructions. No worker dispatch or
+  default storage change; plan 10 addresses canonical asset ownership next.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

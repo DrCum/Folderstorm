@@ -163,6 +163,14 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration) const
         return value;
     }
 
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        return mKeys.begin()->second.mScale;
+    }
+#endif
+    // </FS:Perf>
     // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
     key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
@@ -252,6 +260,14 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration) c
         return value;
     }
 
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        return mKeys.begin()->second.mRotation;
+    }
+#endif
+    // </FS:Perf>
     // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
     key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
@@ -342,6 +358,16 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration) cons
         return value;
     }
 
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        value = mKeys.begin()->second.mPosition;
+        llassert(value.isFinite());
+        return value;
+    }
+#endif
+    // </FS:Perf>
     // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
     key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
@@ -1595,6 +1621,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
         // scan rotation curve keys
         //---------------------------------------------------------------------
         RotationCurve *rCurve = &joint_motion->mRotationCurve;
+        FSAnimationKeys::Builder<RotationCurve::key_map_t> rotation_keys(rCurve->mKeys); // </FS:Perf>
 
         for (S32 k = 0; k < joint_motion->mRotationCurve.mNumKeys; k++)
         {
@@ -1696,8 +1723,10 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
                 return false;
             }
 
-            rCurve->mKeys[time] = rot_key;
+            // <FS:Perf> rCurve->mKeys[time] = rot_key;
+            rotation_keys.set(time, rot_key); // </FS:Perf>
         }
+        rotation_keys.commit(); // </FS:Perf> Publish keys and release per-curve scratch.
 
         if (joint_motion->mRotationCurve.mNumKeys > joint_motion->mRotationCurve.mKeys.size())
         {
@@ -1727,6 +1756,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
         // scan position curve keys
         //---------------------------------------------------------------------
         PositionCurve *pCurve = &joint_motion->mPositionCurve;
+        FSAnimationKeys::Builder<PositionCurve::key_map_t> position_keys(pCurve->mKeys); // </FS:Perf>
         bool is_pelvis = joint_motion->mJointName == "mPelvis";
         for (S32 k = 0; k < joint_motion->mPositionCurve.mNumKeys; k++)
         {
@@ -1805,7 +1835,8 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
                 return false;
             }
 
-            pCurve->mKeys[pos_key.mTime] = pos_key;
+            // <FS:Perf> pCurve->mKeys[pos_key.mTime] = pos_key;
+            position_keys.set(pos_key.mTime, pos_key); // </FS:Perf>
 
             if (is_pelvis)
             {
@@ -1813,6 +1844,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
             }
         }
 
+        position_keys.commit(); // </FS:Perf> Publish keys and release per-curve scratch.
         if (joint_motion->mPositionCurve.mNumKeys > joint_motion->mPositionCurve.mKeys.size())
         {
             position_duplicates++;
