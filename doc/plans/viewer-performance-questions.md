@@ -55,6 +55,11 @@ Never present a missing hardware result as a successful test.
 - Checkpoint 11 supplies pure owned sampling data, with no playback dispatch or
   live version-counter wiring. Queue/wake overhead, bounded fallback and full
   preparation/application cost are measured next; runtime FPS remains unproven.
+- Checkpoint 12's bounded executor and wake benchmark are test-only. Its focused
+  lifecycle checks pass in both curve modes, but do not establish useful overlap
+  in the viewer. Plan 13 accounts for complete costs before any production caller
+  or scheduler change. The historical Windows scheduler CPU issue needs sustained
+  load/idle, coroutine/fairness and shutdown testing before considering a change.
 
 ## Results
 
