@@ -65,4 +65,25 @@ is const or storage is contiguous.
 
 ## Results
 
-Not implemented yet. Deserialization publication/lifetime audit is the first step.
+Implementation has started with the deserialization publication/lifetime audit.
+No viewer option, aliases or loader changes have been implemented yet.
+
+- `deserialize` owns a newly created `JointMotionList` with `unique_ptr` and adds
+  each newly allocated joint motion to that list immediately. Its destructor
+  deletes the joint motions and constraints on a failed parse.
+- Only after keys and constraints finish validation does the function release the
+  list to `mJointMotionList`, insert it into the cache and mark the asset loaded.
+  Staged key data must be committed before this existing publication boundary.
+- `mJointStates` is cleared/reserved and populated earlier in deserialization;
+  the current function is not transactional over every character field. Preserve
+  its existing failure handling and do not infer an asynchronous safe boundary.
+- Legacy rotation times are checked for finiteness. Quantized time decoding and
+  existing time/value validity checks must stay in their current order. Both
+  rotation and position loops write validated keys by timestamp, with duplicate
+  diagnostics afterward. No parallel decoding is proposed.
+- Use a scoped builder per curve. In the ON configuration it stages into an
+  ordinary map, constructs the ordered unique flat range at commit, then releases
+  scratch nodes before the next curve. Its destructor must release scratch data
+  on early returns. In the OFF configuration it forwards writes to the existing
+  map and adds no scratch representation. Test the actual helper rather than
+  assuming the earlier prototype establishes its behavior.
