@@ -169,5 +169,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   eviction/replacement, constraint cleanup and background final release. The
   36 hand-pose checks remain green. Plan 11 defines owned sample inputs/outputs;
   no production worker scheduling is enabled.
+- Stage 4c: move-owned sample inputs/results pass 24,193 byte-exact pose
+  comparisons and 109,806 checks in each curve mode, with stale-context,
+  malformed-shape, buffer-move and background lifetime coverage. No playback
+  caller uses the sampler yet. Plan 12 measures bounded execution and full cost,
+  including the existing Windows pool's sleep/wake behavior.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

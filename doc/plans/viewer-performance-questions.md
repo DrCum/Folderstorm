@@ -52,6 +52,9 @@ Never present a missing hardware result as a successful test.
   clears obsolete constraints on adoption. Test repeated preview/reload,
   constraints/sitting, active cache removal and shutdown. Memory should release
   after the last motion/lease ends, rather than at cache eviction alone.
+- Checkpoint 11 supplies pure owned sampling data, with no playback dispatch or
+  live version-counter wiring. Queue/wake overhead, bounded fallback and full
+  preparation/application cost are measured next; runtime FPS remains unproven.
 
 ## Results
 

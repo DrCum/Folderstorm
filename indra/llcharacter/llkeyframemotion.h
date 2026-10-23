@@ -447,6 +447,69 @@ public:
     };
 
 protected:
+    // <FS:Perf> Owned pure-sampling payloads. These do not schedule or apply viewer work.
+    struct SamplingIdentity
+    {
+        U64 instance = 0;
+        U64 activation = 0;
+        U64 frame = 0;
+        U64 skeleton = 0;
+        U64 edit = 0;
+        bool operator==(const SamplingIdentity& other) const
+        {
+            return instance == other.instance && activation == other.activation && frame == other.frame &&
+                skeleton == other.skeleton && edit == other.edit;
+        }
+    };
+
+    struct SamplingRequest
+    {
+        SamplingRequest() = default;
+        SamplingRequest(SamplingRequest&&) = default;
+        SamplingRequest& operator=(SamplingRequest&&) = default;
+        SamplingRequest(const SamplingRequest&) = delete;
+        SamplingRequest& operator=(const SamplingRequest&) = delete;
+
+        std::shared_ptr<const JointMotionList> asset;
+        SamplingIdentity identity;
+        F32 time = 0.f;
+        F32 duration = 0.f;
+        std::vector<U32> usage;
+    };
+
+    struct SampledJoint
+    {
+        U32 usage = 0; // Only flagged channels are meaningful; others may retain reused values.
+        LLVector3 scale;
+        LLQuaternion rotation;
+        LLVector3 position;
+    };
+
+    class SamplingResult
+    {
+        friend class LLKeyframeMotion;
+    public:
+        SamplingResult() = default;
+        SamplingResult(SamplingResult&&) = default;
+        SamplingResult& operator=(SamplingResult&&) = default;
+        SamplingResult(const SamplingResult&) = delete;
+        SamplingResult& operator=(const SamplingResult&) = delete;
+
+        bool isReady() const { return mReady && mRequest.asset; }
+        const SamplingRequest& getRequest() const { return mRequest; }
+        const std::vector<SampledJoint>& getJoints() const { return mJoints; }
+        SamplingRequest takeRequest(); // Exclusive access only; consumes readiness and recycles input capacity.
+    private:
+        SamplingRequest mRequest;
+        std::vector<SampledJoint> mJoints;
+        bool mReady = false;
+    };
+
+    static bool sampleKeyframes(SamplingRequest request, SamplingResult& result);
+    // Current inputs/versions must be prepared independently on the main thread, not read back from the result.
+    static bool samplingResultMatches(const SamplingResult& result, const SamplingRequest& current);
+    // </FS:Perf>
+
     // <FS:Perf> Main-thread adoption/lease creation; jobs never access the cache or live motion.
     void adoptJointMotionList(std::shared_ptr<JointMotionList> data);
     std::shared_ptr<const JointMotionList> getKeyframeSamplingLease() const;
