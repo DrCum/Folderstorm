@@ -126,5 +126,8 @@ and comparison. Normal release builds remain valid without Tracy enabled.
 - Stage 1: avatar profiling implemented; complete affected translation unit passes
   native MSVC syntax checks with Tracy off/on. See
   `viewer-performance-01-profiling.md` for capture and acceptance instructions.
+- Stage 2a: rigged bounds skip irrelevant joint lookups; 4,013 production-block
+  comparisons and native Tracy off/on syntax checks pass. Hardware gain and
+  visual acceptance pending; see `viewer-performance-02-rigged-bounds.md`.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

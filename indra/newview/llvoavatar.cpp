@@ -1666,16 +1666,21 @@ void LLVOAvatar::calculateSpatialExtents(LLVector4a& newMin, LLVector4a& newMax)
     if (box_detail>=3)
     {
         updateRiggingInfo();
-        for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS; joint_num++)
+        // <FS:Perf> Retrieve only joints that can contribute to rigged bounds.
+        // for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS; joint_num++)
+        // Originally getJoint() ran before the table/rigged checks below.
+        for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS &&
+                               joint_num < mJointRiggingInfoTab.size(); joint_num++)
         {
-            LLJoint *joint = getJoint(joint_num);
-            LLJointRiggingInfo *rig_info = NULL;
-            if (joint_num < mJointRiggingInfoTab.size())
+            LLJointRiggingInfo *rig_info = &mJointRiggingInfoTab[joint_num];
+            if (!rig_info->isRiggedTo())
             {
-                rig_info = &mJointRiggingInfoTab[joint_num];
+                continue;
             }
 
-            if (joint && rig_info && rig_info->isRiggedTo())
+            LLJoint *joint = getJoint(joint_num);
+            if (joint)
+            // </FS:Perf>
             {
                 LLViewerJointAttachment *as_joint_attach = dynamic_cast<LLViewerJointAttachment*>(joint);
                 if (as_joint_attach && as_joint_attach->getIsHUDAttachment())
