@@ -29,6 +29,7 @@
 //-----------------------------------------------------------------------------
 #include "linden_common.h"
 #include <utility> // </FS:Perf> Move canonical asset owners without another reference-count copy.
+#include <cstring> // </FS:Perf> Exact query-input comparison before sample application.
 
 #include "llmath.h"
 #include "llanimationstates.h"
@@ -524,6 +525,74 @@ std::shared_ptr<const LLKeyframeMotion::JointMotionList> LLKeyframeMotion::getKe
 {
     // Embedded/borrowed subclass data is not eligible for asynchronous sampling.
     return mJointMotionOwner.get() == mJointMotionList ? mJointMotionOwner : nullptr;
+}
+// </FS:Perf>
+
+// <FS:Perf> Pure sampling reads only owned inputs and immutable curve fields.
+LLKeyframeMotion::SamplingRequest LLKeyframeMotion::SamplingResult::takeRequest()
+{
+    mReady = false;
+    auto request = std::move(mRequest);
+    mRequest = SamplingRequest{};
+    return request;
+}
+
+bool LLKeyframeMotion::sampleKeyframes(SamplingRequest request, SamplingResult& result)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    result.mReady = false;
+    result.mRequest = std::move(request);
+    const auto& input = result.mRequest;
+    if (!input.asset || !llfinite(input.time) || !llfinite(input.duration) ||
+        input.asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        input.usage.size() != input.asset->mJointMotionArray.size())
+    {
+        result.mJoints.clear();
+        return false;
+    }
+
+    result.mJoints.resize(input.usage.size());
+    for (U32 i = 0; i < input.usage.size(); ++i)
+    {
+        const JointMotion* joint = input.asset->getJointMotion(i);
+        if (!joint)
+        {
+            result.mJoints.clear();
+            return false;
+        }
+        auto& output = result.mJoints[i];
+        const U32 usage = input.usage[i];
+        output.usage = 0;
+        if ((usage & LLJointState::SCALE) && joint->mScaleCurve.mNumKeys)
+        {
+            output.scale = joint->mScaleCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::SCALE;
+        }
+        if ((usage & LLJointState::ROT) && joint->mRotationCurve.mNumKeys)
+        {
+            output.rotation = joint->mRotationCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::ROT;
+        }
+        if ((usage & LLJointState::POS) && joint->mPositionCurve.mNumKeys)
+        {
+            output.position = joint->mPositionCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::POS;
+        }
+    }
+    result.mReady = true;
+    return true;
+}
+
+bool LLKeyframeMotion::samplingResultMatches(const SamplingResult& result, const SamplingRequest& current)
+{
+    const auto& input = result.mRequest;
+    return result.isReady() && current.asset && input.asset.get() == current.asset.get() &&
+        !input.asset.owner_before(current.asset) && !current.asset.owner_before(input.asset) &&
+        input.identity == current.identity &&
+        std::memcmp(&input.time, &current.time, sizeof(F32)) == 0 &&
+        std::memcmp(&input.duration, &current.duration, sizeof(F32)) == 0 &&
+        input.usage == current.usage && result.mJoints.size() == current.usage.size() &&
+        current.usage.size() == current.asset->mJointMotionArray.size();
 }
 // </FS:Perf>
 

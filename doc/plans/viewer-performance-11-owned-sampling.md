@@ -57,9 +57,77 @@ latency; thread count alone is not an optimization.
 
 ## Results
 
-Initial application-oracle audit started; no request/result code or dispatch has
-been added yet. Plan 10b provides owned lifetime but does not make live metadata
-or whole motion methods safe to run on workers.
+Implemented as protected move-only request/result types and a static sampler.
+No normal playback path calls it and no viewer jobs are scheduled. Requests own
+the const asset lease, masks, finite time/duration and five identity fields:
+instance, activation, frame, skeleton and edit. Results retain the original
+request by move, plus sampled values and applied-channel bits. Only flagged
+channels are meaningful; unrequested values may remain in reusable storage.
+
+The sampler reads selected immutable curve fields, preserves scale/rotation/
+position order and mNumKeys gates, and touches no live character, joint state,
+constraints or cache. One avatar-category scope attributes the whole request,
+without per-key profiler events. Empty owned assets produce empty ready results;
+null assets/joints, non-finite query scalars, over-limit joint counts and mask
+shape mismatches fail with no ready output. Readiness is invalidated before
+allocation/computation; allocation/curve exceptions still propagate to a future
+executor and must be contained there.
+
+Matching requires readiness, the same asset pointer/control block, all identity
+fields, exact time/duration representations (including signed zero), full mask
+equality and output shape. Current expectations must be prepared independently
+from main-thread state; using the result's saved request only tests consistency,
+not freshness. Instance/activation/edit counters are caller responsibilities and
+are not wired to playback yet. No stale-result rejection is claimed integrated
+into the viewer's existing main-thread application.
+
+`takeRequest` consumes readiness and returns owned inputs/mask capacity for reuse;
+sample capacity remains with the result. Moves transfer readiness to the
+destination, and a moved-from result is not ready. Exclusive access is required
+during sampling, result consumption and buffer recycling. A bounded pool and
+complete allocation budget belong to plan 12; this API makes no allocation-free
+frame claim.
+
+### Verification completed
+
+`avatar_owned_sampling`, enabled with LL_TESTS, links actual llcharacter code.
+Both map and contiguous builds pass **24,193** byte-exact pose comparisons against
+actual `JointMotion::update`/LLJointState setters and **109,806** total checks.
+Systematic cases cover 36 assets with one through six joints, 0/1/2/4/15/32/65
+keys, repeated timestamps, all three interpolation modes, eight channel masks
+plus unknown bits, null-state encoding, key-count/container-size differences,
+range/exact/interpolated queries, three durations and changed list metadata.
+Unrequested transforms, usage, weight and priority remain unchanged.
+
+Additional checks cover moved/recycled inputs and outputs, retained buffer
+addresses/capacity, no extra retained asset references on submission, every stale
+identity field, same-pointer/different-control-block ownership, exact query bits,
+changed masks/shapes, malformed requests, empty requests and failed-result reuse.
+An owned request is moved to a test thread after cache eviction, its moved-from
+source is reused, and output still matches the serial oracle. The result keeps
+the asset alive until its returned lease is released. That test thread calls no
+live character/joint-state/cache/renderer APIs.
+
+Isolated native validation compiles fresh complete character/controller/keyframe
+sources with the test, linking cached unchanged dependencies read only. It does
+not instantiate stale-layout cached avatar subclasses or run a viewer. Full
+keyframe/poser syntax checks pass with Tracy and contiguous keys; standalone test
+translation-unit checks separately verify includes rather than relying on the
+combined native harness. The pose check supplies its existing chrono dependency.
+MSVC 19.51.36244, x64 AVX2, `/O2 /fp:precise`. Full viewer linking, runtime/visual
+acceptance, ARM/macOS and sanitizer execution remain pending.
+
+### Handoff and next work
+
+This is a contract/test checkpoint; a new installer is optional because existing
+playback is unchanged. A native LL_TESTS build of `avatar_owned_sampling` is the
+focused integration check. If building the combined viewer head, retain it as
+usual and set `FS_CONTIGUOUS_ANIMATION_KEYS=OFF` explicitly for the map control.
+The preceding ownership and hand-pose runtime checkpoints still need acceptance.
+Plan 12 implements bounded execution and benchmarks full costs before dispatch
+or application can be connected to the viewer.
+
+### Application-oracle audit retained from planning
 
 - `JointMotion::update` returns immediately for a null joint-state pointer. For a
   real state it reads usage once, then updates scale, rotation and position in
