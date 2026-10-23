@@ -2303,13 +2303,13 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
     {
         success &= dp.packU8(shared_constraintp->mChainLength, "chain_length");
         success &= dp.packU8(shared_constraintp->mConstraintType, "constraint_type");
-        char source_volume[16]; /* Flawfinder: ignore */
+        char source_volume[16] = {}; /* Flawfinder: ignore */
         snprintf(source_volume, sizeof(source_volume), "%s",    /* Flawfinder: ignore */
                  mCharacter->findCollisionVolume(shared_constraintp->mSourceConstraintVolume)->getName().c_str());
 
         success &= dp.packBinaryDataFixed((U8*)source_volume, 16, "source_volume");
         success &= dp.packVector3(shared_constraintp->mSourceConstraintOffset, "source_offset");
-        char target_volume[16]; /* Flawfinder: ignore */
+        char target_volume[16] = {}; /* Flawfinder: ignore */
         if (shared_constraintp->mConstraintTargetType == CONSTRAINT_TARGET_TYPE_GROUND)
         {
             snprintf(target_volume,sizeof(target_volume), "%s", "GROUND");  /* Flawfinder: ignore */

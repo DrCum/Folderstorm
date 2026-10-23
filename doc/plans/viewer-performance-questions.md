@@ -69,8 +69,9 @@ Never present a missing hardware result as a successful test.
   source pose should stay stable while the exported pose retains expected format
   quantization. Generated fixtures cannot replace that workflow acceptance.
 - The export audit also found uninitialized trailing bytes in short fixed-width
-  constraint-name fields. A separate padding/determinism checkpoint is planned;
-  the curve-immutability fixtures use full-width names to isolate their oracle.
+  constraint-name fields. Checkpoint 14b fixes that padding; verify export/re-open
+  with short ordinary volume names and ground constraints. The preceding frozen
+  byte fixtures still use full-width names to isolate their old-byte oracle.
 
 ## Results
 

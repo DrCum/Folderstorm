@@ -36,4 +36,44 @@ export acceptance remains a separately recorded requirement.
 
 ## Results
 
-Not implemented yet.
+Implemented by value-initializing the two existing 16-byte arrays. Formatting,
+truncation, field order/width and the GROUND branch remain unchanged. No motion
+update, worker, settings or scheduler behavior changes.
+
+### Reproduction and validation
+
+The actual pre-fix serializer fails the new test with nonzero trailing bytes.
+The fix passes **11,270 padding/decoding/layout/failure checks in each storage
+mode**. The fixture covers empty, one-character, short, 15-character,
+16-character and overlong names, with independently selected source and body
+target names, ground targets, rejected writes and repeated serialization.
+Successful name fields are unpacked from the actual binary buffer and checked
+byte for byte, including zero tail, decoded/truncated string and field offsets.
+Failure returns and live curve/scalar state are preserved.
+
+Checkpoint 14a's **896 export/size/pose checks plus 10,000 concurrent owned samples
+also pass in each storage mode**. Its five frozen full-width packets remain
+byte-identical. Previously indeterminate bytes for shorter names become zero;
+there is no attempt to preserve those old stack-dependent bytes.
+
+Native execution uses fresh complete character/controller/keyframe sources and
+cached dependencies read only, MSVC 19.51.36244, x64 AVX2, `/O2 /fp:precise`,
+assertions enabled. The complete keyframe source and new test pass independent
+Tracy/contiguous syntax checks. The shared serializer fixture accepts LLCharacter
+so this test can provide named collision volumes without an avatar or renderer.
+Full viewer linking, export/re-open workflows, sanitizers and ARM/macOS remain
+pending. No shared-cache configure/build or in-world run was performed.
+
+### Build handoff and continuation
+
+Retain a separately testable exact-head build using x64 ReleaseFS_open_AVX2,
+Nightly and NSIS defaults, with contiguous keys explicitly OFF for the map
+control. The focused LL_TESTS target is `avatar_animation_constraint_names`;
+retain the preceding serialization target as a regression check. Do not add
+newer feature heads implicitly or overwrite previous packages/installers.
+
+Workflow acceptance: export/re-open an animation with ordinary short collision
+volume names and a ground constraint. Intended names and constraint behavior
+should remain unchanged; repeated binary output should have deterministic name
+padding. Then continue checkpoint 14c's base-motion prepare/apply contract, with
+no live dispatcher or default worker change yet.
