@@ -45,6 +45,9 @@ Thread count or kernel-only speed is insufficient evidence for integration.
    running abandonment, ready consumption, exception/failure and close behavior.
    Main-thread reuse is allowed only after exclusive ownership is proven. Keep
    samples invalid until fully published with release/acquire synchronization.
+   Bound outstanding callbacks as well as payload slots: cancellation must not
+   permit repeated resubmission while old callbacks remain queued/unacknowledged.
+   Generation checks prevent stale access but do not alone bound queue growth.
 3. When work is not ready at an application barrier, preserve deterministic
    same-frame serial behavior. Queued work can be claimed/cancelled safely;
    already running work must retain exclusive buffers and be discarded later.
