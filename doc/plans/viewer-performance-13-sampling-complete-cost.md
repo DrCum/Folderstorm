@@ -66,3 +66,32 @@ questions remain in `viewer-performance-questions.md`.
 
 Not implemented yet. Checkpoint 12 establishes protocol correctness and shows
 that worker wake-up can dominate small jobs; the full-cost decision remains open.
+
+### Initial source audit and implementation decisions
+
+- The actual serial oracle is `JointMotion::update` on each motion's own joint
+  states. It reads usage, then applies scale/rotation/position gated by mNumKeys.
+  Preserve that motion/joint order for result application and direct serial
+  fallback. A fallback should not silently pay for an extra owned-sampler round
+  trip when the original direct update suffices.
+- A batch must own all its request/result vectors. Moving the outer request
+  vector into a callback and destroying it after sampling would introduce one
+  hidden container allocation per resubmission. Retain its moved-from request
+  envelope with the batch output, then return/repopulate it from each result's
+  takeRequest when recycling on the owner thread. Measure initial warm-up and
+  later capacity growth separately rather than assuming reuse worked.
+- The bounded executor clears discarded outputs on worker completion. A batch's
+  discard operation must release leases without allocating or depending on its
+  owner/executor; restoring reusable envelopes belongs to the owner after take.
+  A partially failed batch must not expose earlier rows as a successful batch.
+- Keep authoritative current masks/versions independently on the owner thread.
+  Result-owned copies cannot serve as the stale-result check. Count the copy or
+  rebuild cost, reference-count operations and per-row validation in total time.
+- WorkQueue tryPush uses a try-lock as well as capacity/closed checks; a false
+  enqueue can mean contention even below capacity. Count it as admission failure
+  and use serial fallback rather than retrying in a main-thread loop. Outstanding
+  callbacks remain limited by executor slots across repeated barrier misses.
+- GetThreadTimes reports cumulative quantized CPU time. Aggregate long enough
+  and report its resolution/zero readings honestly; per-frame wall-stage timing
+  is a different metric. Allocation probes must run separately from timing,
+  with requested bytes distinguished from allocator/OS resident-memory costs.
