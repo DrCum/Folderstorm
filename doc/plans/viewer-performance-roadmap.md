@@ -164,5 +164,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   checks pass in both curve modes; prior pointer behavior fails the regression
   check. Plan 10a covers runtime hand-morph acceptance; plan 10b covers asset
   leases and obsolete per-motion constraints before any worker dispatch.
+- Stage 4b: canonical cache/motion owners and protected const leases pass 34
+  actual ownership checks in both curve modes, including decode failure,
+  eviction/replacement, constraint cleanup and background final release. The
+  36 hand-pose checks remain green. Plan 11 defines owned sample inputs/outputs;
+  no production worker scheduling is enabled.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

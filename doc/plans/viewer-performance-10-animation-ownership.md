@@ -58,7 +58,11 @@ remain measurement gates on the Ryzen 5 3600.
 
 ## Results
 
-Initial source audit completed; ownership code has not been changed yet.
+The audit and implementation are complete at this ownership boundary. Checkpoint
+10a owns character hand-pose values, and checkpoint 10b owns cached animation data
+and protects per-motion constraints during replacement. Their detailed native
+checks and pending runtime acceptance are recorded in those plans. No viewer
+sampling jobs are dispatched yet; plan 11 defines owned request/result data next.
 
 Implementation sequencing update: a closer audit found two prerequisites for
 releasing old assets safely. Character hand-pose/priority entries currently point
@@ -87,7 +91,7 @@ one. Existing replacement assigns a raw pointer without deleting the old entry;
 remove/clear directly delete entries. Do not reinterpret these raw pointers as
 independent shared owners.
 
-Preferred implementation: retain the existing raw `mJointMotionList` view for
+Implemented approach: retain the existing raw `mJointMotionList` view for
 hot accesses and subclass compatibility; add a shared owner for ordinary cached
 assets. Centralize owned adoption and provide a protected owned const lease only
 when owner.get() matches the current raw view. The poser constructor's embedded
@@ -109,9 +113,9 @@ on update. Inspect motion removal/replacement ordering before releasing an old
 list; leases protect key reads, not these character-side raw aliases. There is no
 claim that all character metadata is immutable or independently thread safe.
 
-Planned verification uses an LL_TESTS target linked to actual llcharacter cache
-and motion code, with a derived probe exposing protected adoption/lease hooks.
-Test cache eviction/replacement/clear and final destruction, borrowed dummy views,
-and failed publication. Isolated native validation may compile the updated complete
-llkeyframemotion.cpp with that test and cached unchanged dependencies; it must
-not be reported as a full viewer link or exercise stale-layout cached subclasses.
+The LL_TESTS target links actual llcharacter cache and motion code, with a derived
+probe exposing protected adoption/lease hooks. It verifies eviction/replacement,
+clear, final destruction, borrowed dummy views and failed publication. Isolated
+native validation compiles fresh character/controller/keyframe sources and cached
+unchanged dependencies; this is not a full viewer link or a test of cached
+stale-layout subclasses.

@@ -48,6 +48,10 @@ Never present a missing hardware result as a successful test.
   morphs, competing priority/equal-priority animations, editing tools and preview
   edits/close/reload. Native checks cover data/lifetime ordering, not rendered
   hand shapes or complete avatar lifecycle acceptance.
+- Checkpoint 10b retains active asset data across cache eviction/replacement and
+  clears obsolete constraints on adoption. Test repeated preview/reload,
+  constraints/sitting, active cache removal and shutdown. Memory should release
+  after the last motion/lease ends, rather than at cache eviction alone.
 
 ## Results
 

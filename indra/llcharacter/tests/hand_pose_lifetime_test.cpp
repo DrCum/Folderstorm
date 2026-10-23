@@ -2,6 +2,7 @@
 #include "linden_common.h"
 #include "llcharacter.h"
 #include "llkeyframemotion.h"
+#include "keyframe_test_character.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -14,40 +15,18 @@ void require(bool condition, const char* message)
     if (!condition) { std::cerr << message << '\n'; std::exit(1); }
     ++checks;
 }
-class Character final : public LLCharacter
-{
-public:
-    const char* getAnimationPrefix() override { return "test"; }
-    LLJoint* getRootJoint() override { return nullptr; }
-    LLVector3 getCharacterPosition() override { return LLVector3(); }
-    LLQuaternion getCharacterRotation() override { return LLQuaternion(); }
-    LLVector3 getCharacterVelocity() override { return LLVector3(); }
-    LLVector3 getCharacterAngularVelocity() override { return LLVector3(); }
-    void getGround(const LLVector3&, LLVector3& position, LLVector3& normal) override
-    { position = LLVector3(); normal = LLVector3(0,0,1); }
-    LLJoint* getCharacterJoint(U32) override { return nullptr; }
-    F32 getTimeDilation() override { return 1.f; }
-    F32 getPixelArea() const override { return 1.f; }
-    LLPolyMesh* getHeadMesh() override { return nullptr; }
-    LLPolyMesh* getUpperBodyMesh() override { return nullptr; }
-    LLVector3d getPosGlobalFromAgent(const LLVector3&) override { return LLVector3d(); }
-    LLVector3 getPosAgentFromGlobal(const LLVector3d&) override { return LLVector3(); }
-    void addDebugText(const std::string&) override {}
-    const LLUUID& getID() const override { return mID; }
-private:
-    LLUUID mID{"51abb30a-f75f-4bca-9bb0-167ce8c60974"};
-};
+using Character = FSKeyframeTests::Character;
 class Motion final : public LLKeyframeMotion
 {
 public:
     using Asset = JointMotionList;
-    Motion(Character& character, const LLUUID& id, Asset* asset) : LLKeyframeMotion(id)
-    { setCharacter(&character); mJointMotionList = asset; }
+    Motion(Character& character, const LLUUID& id, std::shared_ptr<Asset> data) : LLKeyframeMotion(id)
+    { setCharacter(&character); adoptJointMotionList(std::move(data)); }
     void publish() { applyKeyframes(0.f); }
 };
-Motion::Asset* asset(const LLUUID& id, LLHandMotion::eHandPose pose, LLJoint::JointPriority priority)
+std::shared_ptr<Motion::Asset> asset(const LLUUID& id, LLHandMotion::eHandPose pose, LLJoint::JointPriority priority)
 {
-    auto* data = new Motion::Asset;
+    auto data = std::make_shared<Motion::Asset>();
     data->mHandPose = pose; data->mMaxPriority = priority;
     LLKeyframeDataCache::addKeyframeData(id, data);
     return data;
@@ -74,9 +53,9 @@ int run()
     const LLUUID idC("00000000-0000-0000-0000-000000000003");
     const LLUUID idD("00000000-0000-0000-0000-000000000004");
     Character first, second;
-    auto* a = asset(idA, LLHandMotion::HAND_POSE_FIST, LLJoint::MEDIUM_PRIORITY);
-    auto* b = asset(idB, LLHandMotion::HAND_POSE_RELAXED, LLJoint::LOW_PRIORITY);
-    auto* c = asset(idC, LLHandMotion::HAND_POSE_POINT, LLJoint::MEDIUM_PRIORITY);
+    auto a = asset(idA, LLHandMotion::HAND_POSE_FIST, LLJoint::MEDIUM_PRIORITY);
+    auto b = asset(idB, LLHandMotion::HAND_POSE_RELAXED, LLJoint::LOW_PRIORITY);
+    auto c = asset(idC, LLHandMotion::HAND_POSE_POINT, LLJoint::MEDIUM_PRIORITY);
     Motion ma(first,idA,a), mb(first,idB,b), mc(first,idC,c), shared(second,idA,a);
     ma.publish();
     expect(first,LLHandMotion::HAND_POSE_FIST,LLJoint::MEDIUM_PRIORITY);
@@ -120,13 +99,13 @@ int run()
     expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
     require(first.getAnimationData("Hand Pose") != &legacyPose, "Winning request did not own its value");
 
-    // Do not update through an evicted raw asset; test the already published values.
+    // Already published values remain character-owned when the cache drops its owner.
     LLKeyframeDataCache::removeKeyframeData(idA);
     expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
     expect(second,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
     consume(first); consume(second);
     {
-        auto* d = asset(idD,LLHandMotion::HAND_POSE_FIST,LLJoint::HIGHEST_PRIORITY);
+        auto d = asset(idD,LLHandMotion::HAND_POSE_FIST,LLJoint::HIGHEST_PRIORITY);
         Motion temporary(first,idD,d);
         temporary.publish();
     }

@@ -32,6 +32,7 @@
 //-----------------------------------------------------------------------------
 
 #include <string>
+#include <memory> // </FS:Perf> Canonical animation asset ownership.
 #include "fsanimationkeys.h" // </FS:Perf> Build-selected key storage.
 
 #include "llassetstorage.h"
@@ -437,12 +438,21 @@ public:
         JointMotionList();
         ~JointMotionList();
         U32 dumpDiagInfo();
-        JointMotion* getJointMotion(U32 index) const { llassert(index < mJointMotionArray.size()); return mJointMotionArray[index]; }
+        // <FS:Perf> Const leases expose a const joint through the sampling accessor.
+        // JointMotion* getJointMotion(U32 index) const { llassert(index < mJointMotionArray.size()); return mJointMotionArray[index]; }
+        JointMotion* getJointMotion(U32 index) { llassert(index < mJointMotionArray.size()); return mJointMotionArray[index]; }
+        const JointMotion* getJointMotion(U32 index) const { llassert(index < mJointMotionArray.size()); return mJointMotionArray[index]; }
+        // </FS:Perf>
         U32 getNumJointMotions() const { return static_cast<U32>(mJointMotionArray.size()); }
     };
 
 protected:
+    // <FS:Perf> Main-thread adoption/lease creation; jobs never access the cache or live motion.
+    void adoptJointMotionList(std::shared_ptr<JointMotionList> data);
+    std::shared_ptr<const JointMotionList> getKeyframeSamplingLease() const;
+    // </FS:Perf>
     JointMotionList*                mJointMotionList;
+    std::shared_ptr<JointMotionList> mJointMotionOwner; // </FS:Perf> Canonical owner for ordinary motions.
     std::vector<LLPointer<LLJointState> > mJointStates;
     LLJoint*                        mPelvisp;
     LLCharacter*                    mCharacter;
@@ -464,11 +474,18 @@ public:
     LLKeyframeDataCache(){};
     ~LLKeyframeDataCache();
 
-    typedef std::map<LLUUID, class LLKeyframeMotion::JointMotionList*> keyframe_data_map_t;
+    // <FS:Perf> Cache and motions share the same owner; raw subclasses may still borrow embedded lists.
+    // typedef std::map<LLUUID, class LLKeyframeMotion::JointMotionList*> keyframe_data_map_t;
+    using asset_ptr_t = std::shared_ptr<LLKeyframeMotion::JointMotionList>;
+    using keyframe_data_map_t = std::map<LLUUID, asset_ptr_t>;
+    // </FS:Perf>
     static keyframe_data_map_t sKeyframeDataMap;
 
-    static void addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList*);
-    static LLKeyframeMotion::JointMotionList* getKeyframeData(const LLUUID& id);
+    // <FS:Perf> static void addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList*);
+    // static LLKeyframeMotion::JointMotionList* getKeyframeData(const LLUUID& id);
+    static void addKeyframeData(const LLUUID& id, asset_ptr_t data);
+    static asset_ptr_t getKeyframeData(const LLUUID& id);
+    // </FS:Perf>
     static bool hasEmbeddedEmote(const LLUUID& id);
 
     static void removeKeyframeData(const LLUUID& id);

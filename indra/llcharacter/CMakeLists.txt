@@ -75,6 +75,12 @@ target_link_libraries(
 
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
+  find_package(Threads REQUIRED)
+  add_executable(avatar_keyframe_asset_ownership tests/keyframe_asset_ownership_test.cpp)
+  target_link_libraries(avatar_keyframe_asset_ownership PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_keyframe_asset_ownership POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_keyframe_asset_ownership> VERBATIM)
+
   add_executable(avatar_hand_pose_lifetime tests/hand_pose_lifetime_test.cpp)
   target_link_libraries(avatar_hand_pose_lifetime PRIVATE llcharacter)
   add_custom_command(TARGET avatar_hand_pose_lifetime POST_BUILD
