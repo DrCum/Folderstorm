@@ -57,5 +57,25 @@ latency; thread count alone is not an optimization.
 
 ## Results
 
-Not implemented yet. Plan 10b provides the owned data lifetime but does not make
-live metadata or whole motion methods safe to run on workers.
+Initial application-oracle audit started; no request/result code or dispatch has
+been added yet. Plan 10b provides owned lifetime but does not make live metadata
+or whole motion methods safe to run on workers.
+
+- `JointMotion::update` returns immediately for a null joint-state pointer. For a
+  real state it reads usage once, then updates scale, rotation and position in
+  that order, gated by each usage bit and the curve's mNumKeys value. Null states
+  can be represented by zero usage in a prepared request.
+- LLJointState setters assert their corresponding usage bit and assign values;
+  they do not enable usage or modify weight/priority. Seed all three transforms
+  with known values before reducing masks in the oracle, and verify unrequested
+  transforms, usage, weight and priority stay unchanged.
+- Honor mNumKeys independently of map size, as the original method does. Include
+  empty/default behavior and duplicate count/unique-size differences; do not
+  invent a new gate based only on container emptiness.
+- Prefer a static sampler taking an owned request value, with move submission.
+  The result can retain the original request (lease, masks and identity) by move,
+  avoiding a second mask copy. Mark a reused result invalid before shape checks
+  or sampling. Exact current-input/version comparison must precede application.
+- Worker sampling must never read list duration/loop/priority/hand-pose metadata
+  opportunistically. The query owns the already computed time/duration. The
+  const joint accessor and curve samplers provide the selected read boundary.
