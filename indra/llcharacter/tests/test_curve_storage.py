@@ -17,9 +17,11 @@ struct AllocationStats
 };
 struct MapTag { inline static AllocationStats stats; };
 struct FlatTag { inline static AllocationStats stats; };
+struct BulkTag { inline static AllocationStats stats; };
 template<class T, class Tag> struct CountingAllocator
 {
     using value_type = T;
+    using counter_tag = Tag;
     using is_always_equal = std::true_type;
     CountingAllocator() = default;
     template<class U> CountingAllocator(const CountingAllocator<U,Tag>&) {}
@@ -81,14 +83,41 @@ template<class Key> std::vector<Key> keys(unsigned count, unsigned seed, unsigne
 template<class Curve, class Keys> void load(Curve& curve, const Keys& input)
 {
     curve.mKeys.clear(); curve.mNumKeys=static_cast<S32>(input.size());
-    for(const auto& source:input)
+    auto insert=[&](auto& destination)
     {
-        typename Curve::key_type key;
-        key.mTime=source.mTime; value(key)=value(source);
-        curve.mKeys[key.mTime]=key;
+        for(const auto& source:input)
+        {
+            typename Curve::key_type key;
+            key.mTime=source.mTime; value(key)=value(source);
+            destination[key.mTime]=key;
+        }
+    };
+    if constexpr(requires { Curve::bulk_load; })
+    {
+        using Entry=std::pair<const F32,typename Curve::key_type>;
+        using Alloc=typename std::allocator_traits<typename Curve::key_map_t::allocator_type>::template rebind_alloc<Entry>;
+        std::map<F32,typename Curve::key_type,std::less<F32>,Alloc> scratch;
+        insert(scratch);
+        curve.mKeys=typename Curve::key_map_t(boost::container::ordered_unique_range,scratch.begin(),scratch.end());
     }
+    else insert(curve.mKeys);
     curve.mLoopInKey={}; curve.mLoopOutKey={};
     curve.mLoopInKey.mTime=0.375f; curve.mLoopOutKey.mTime=1.625f;
+}
+template<class Curve> std::vector<unsigned char> storageState(const Curve& curve)
+{
+    std::vector<unsigned char> bytes;
+    auto scalar=[&](const auto& v) {CurveMapFixture::append(bytes,&v,sizeof(v));};
+    auto key=[&](const auto& k)
+    {
+        scalar(k.mTime);
+        const auto& v=value(k);
+        CurveMapFixture::append(bytes,CurveMapFixture::data(v),CurveMapFixture::lanes(v)*sizeof(F32));
+    };
+    scalar(curve.mInterpolationType); scalar(curve.mNumKeys);
+    key(curve.mLoopInKey); key(curve.mLoopOutKey);
+    for(const auto& item:curve.mKeys) {scalar(item.first);key(item.second);}
+    return bytes;
 }
 template<class MapCurve,class FlatCurve> void equivalence()
 {
@@ -99,11 +128,11 @@ template<class MapCurve,class FlatCurve> void equivalence()
                 const auto input=keys<typename MapCurve::key_type>(count,0x46534353+count,order,true);
                 MapCurve map; FlatCurve flat;
                 load(map,input); load(flat,input);
-                map.mInterpolationType=static_cast<CurveMapFixture::InterpolationType>(mode);
-                flat.mInterpolationType=static_cast<CurveFlatFixture::InterpolationType>(mode);
+                map.mInterpolationType=static_cast<decltype(map.mInterpolationType)>(mode);
+                flat.mInterpolationType=static_cast<decltype(flat.mInterpolationType)>(mode);
                 auto reference=map;
-                const auto before=CurveMapFixture::state(map);
-                CurveMapFixture::require(before==CurveFlatFixture::state(flat),"Storage changed sorted keys/duplicate replacement");
+                const auto before=storageState(map);
+                CurveMapFixture::require(before==storageState(flat),"Storage changed sorted keys/duplicate replacement");
                 const F32 end=static_cast<F32>(count)/30.f;
                 std::vector<F32> times={-10.f,-0.f,0.f,end*0.25f,end*0.5f,end,end+1.f,1.e6f};
                 for(const auto& item:map.mKeys)
@@ -119,7 +148,7 @@ template<class MapCurve,class FlatCurve> void equivalence()
                         CurveMapFixture::exact(expected,flat.getValue(time,3.f)),"Container sampling differs from frozen map behavior");
                     ++crossComparisons;
                 }
-                CurveMapFixture::require(before==CurveMapFixture::state(map) && before==CurveFlatFixture::state(flat),
+                CurveMapFixture::require(before==storageState(map) && before==storageState(flat),
                     "Container sampling changed key/metadata state");
                 // Loop keys can be edited independently of the container.
                 map.mLoopInKey.mTime=flat.mLoopInKey.mTime=0.75f;
@@ -217,6 +246,7 @@ template<class Curve,class Tag> AllocationStats allocationProbe(const std::vecto
     CurveMapFixture::require(Tag::stats.live==0,"Live key allocations before counter reset");
     Tag::stats={};
     Curve curve; load(curve,input);
+    CurveMapFixture::require(input.empty() || (Tag::stats.calls>0 && Tag::stats.live>0),"Allocation probe missed live key storage");
     return Tag::stats;
 }
 template<class MapCurve,class FlatCurve,class TrackedMap,class TrackedFlat> void loadingBench(const char* kind)
@@ -226,7 +256,8 @@ template<class MapCurve,class FlatCurve,class TrackedMap,class TrackedFlat> void
         const auto mapInput=keys<typename MapCurve::key_type>(count,0x46534353,order,true);
         const auto flatInput=keys<typename FlatCurve::key_type>(count,0x46534353,order,true);
         const auto mapStats=allocationProbe<TrackedMap,MapTag>(keys<typename TrackedMap::key_type>(count,0x46534353,order,true));
-        const auto flatStats=allocationProbe<TrackedFlat,FlatTag>(keys<typename TrackedFlat::key_type>(count,0x46534353,order,true));
+        using FlatCounter=typename TrackedFlat::key_map_t::allocator_type::counter_tag;
+        const auto flatStats=allocationProbe<TrackedFlat,FlatCounter>(keys<typename TrackedFlat::key_type>(count,0x46534353,order,true));
         std::vector<double> mapTimes,flatTimes;
         for(unsigned repeat=0;repeat<9;++repeat)
         {
@@ -273,7 +304,24 @@ int main(int argc,char** argv)
 """
 
 
-def generate(source: Path) -> str:
+def refined_fixture(fixture: str) -> str:
+    marker = "template<class Key> struct CurveData\n{\n"
+    if fixture.count(marker) != 1:
+        raise ValueError("Sampling fixture data contract changed")
+    fixture = fixture.replace(marker, marker + "    inline static constexpr bool bulk_load=true;\n")
+    for kind in test_curve_sampling.KINDS:
+        value = "LLQuaternion" if kind == "Rotation" else "LLVector3"
+        method = test_curve_sampling.function(fixture, f"{value} LLKeyframeMotion::{kind}Curve::getValue(")
+        point = "    key_map_t::const_iterator right = mKeys.lower_bound(time);"
+        if method.count(point) != 1:
+            raise ValueError("Single-key experiment insertion point changed")
+        field = {"Scale": "mScale", "Position": "mPosition", "Rotation": "mRotation"}[kind]
+        candidate = method.replace(point, f"    if (mKeys.size() == 1) return mKeys.begin()->second.{field};\n\n" + point)
+        fixture = fixture.replace(method, candidate, 1)
+    return fixture
+
+
+def generate(source: Path, refined: bool = False) -> str:
     baseline = test_curve_sampling.generate(source)
     main = "int main() { return CurveFixture::run(); }"
     if baseline.count(main) != 1:
@@ -298,12 +346,35 @@ def generate(source: Path) -> str:
         raise ValueError("Sampling harness assertion contract changed")
     map_timing = map_timing.replace(assertion, "#define llassert(condition) ((void)0)")
     flat_timing = flat_timing.replace(assertion, "#define llassert(condition) ((void)0)")
-    return map_fixture[:boundary] + PREFIX + map_fixture[boundary:] + flat_fixture + map_timing + flat_timing + EXPERIMENT
+    fixtures = map_fixture[boundary:] + flat_fixture + map_timing + flat_timing
+    experiment = EXPERIMENT
+    if refined:
+        fixtures += refined_fixture(flat_fixture.replace("CurveFlatFixture", "CurveBulkFixture").replace("FlatTag", "BulkTag"))
+        fixtures += refined_fixture(flat_timing.replace("CurveFlatTiming", "CurveBulkTiming"))
+        extra_checks = "    CurveBulkFixture::run();\n"
+        extra_bench = ""
+        for kind in test_curve_sampling.KINDS:
+            extra_checks += (f"    equivalence<CurveMapFixture::LLKeyframeMotion::{kind}Curve,"
+                             f"CurveBulkFixture::LLKeyframeMotion::{kind}Curve>();\n")
+        for kind in ("Position", "Rotation"):
+            extra_bench += (f'    samplingBench<CurveMapTiming::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkTiming::LLKeyframeMotion::{kind}Curve>("{kind.lower()}_bulk");\n')
+            extra_bench += (f'    loadingBench<CurveMapTiming::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkTiming::LLKeyframeMotion::{kind}Curve,CurveMapFixture::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkFixture::LLKeyframeMotion::{kind}Curve>("{kind.lower()}_bulk");\n')
+        check_point = '    std::cout<<crossComparisons'
+        bench_point = '    return 0;\n}\n}'
+        if experiment.count(check_point) != 1 or experiment.count(bench_point) != 1:
+            raise ValueError("Storage experiment entry points changed")
+        experiment = experiment.replace(check_point, extra_checks + check_point, 1)
+        experiment = experiment.replace(bench_point, extra_bench + bench_point, 1)
+    return map_fixture[:boundary] + PREFIX + fixtures + experiment
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=test_curve_sampling.ROOT / "llkeyframemotion.cpp")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--refined", action="store_true", help="Include staged bulk loading and single-key sampling candidate")
     args = parser.parse_args()
-    args.output.write_text(generate(args.source), encoding="utf-8")
+    args.output.write_text(generate(args.source, args.refined), encoding="utf-8")
