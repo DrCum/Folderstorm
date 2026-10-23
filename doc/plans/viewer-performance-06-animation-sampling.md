@@ -49,6 +49,8 @@ barriers and measured task overhead.
 4. Confirm repeated sampling leaves keys and metadata unchanged. Compile-check
    affected native translation units and audit member-function pointer uses.
    Include a full-build focused native target so local linking can be verified.
+   Add one avatar-category scope around `applyKeyframes` for attribution without
+   generating a profiler event per key or joint.
 5. Publish this checkpoint separately with animation/preview/posing acceptance
    instructions. Write the next implementation plan from the audit and tests.
 
@@ -74,3 +76,17 @@ workers stay gated by the roadmap's ownership and performance requirements.
 
 Initial source audit started. No sampling signatures, storage or scheduling
 changes implemented yet.
+
+- External curve sampling also occurs in `FSPosingMotion`, including loading
+  position/rotation/scale values for poses. Include those native callers and
+  pose-loading behavior in compilation and local acceptance.
+- `JointMotionList` and `LLKeyframeDataCache::sKeyframeDataMap` use raw pointers.
+  A future worker cannot extend a curve's lifetime merely by holding a const
+  pointer. An owned immutable snapshot or a proven ownership upgrade is required.
+- `setLoopIn`, `setLoopOut`, ease/loop setters and hand-pose changes mutate shared
+  motion-list metadata. Freeze query inputs and version edit/replacement events
+  before any concurrent sampling experiment.
+- Existing `onUpdate` computes loop time, applies keyframes, then constraints;
+  `applyKeyframes` writes hand-pose metadata. Those application points remain
+  on the main thread. No explicit curve member-function-pointer uses were found
+  by the initial source search.
