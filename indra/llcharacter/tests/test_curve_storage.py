@@ -9,6 +9,7 @@ PREFIX = r"""
 #include <chrono>
 #include <iomanip>
 #include <memory>
+#include <limits>
 #include <boost/container/flat_map.hpp>
 
 struct AllocationStats
@@ -303,6 +304,25 @@ int main(int argc,char** argv)
 }
 """
 
+POSITION_DIAGNOSTICS = r"""
+namespace CurveBulkFixture
+{
+void checkPositionDiagnostics()
+{
+    for(F32 bad:{std::numeric_limits<F32>::infinity(),-std::numeric_limits<F32>::infinity(),std::numeric_limits<F32>::quiet_NaN()})
+        for(F32 time:{-1.f,0.75f,10.f})
+        {
+            LLKeyframeMotion::PositionCurve curve;
+            setKeys(curve,{position(0.75f,LLVector3(bad,0.f,0.f))});
+            bool diagnosed=false;
+            try {curve.getValue(time,3.f);} catch(const CurveAssertion&) {diagnosed=true;}
+            require(diagnosed,"One-key position sampling skipped finiteness diagnostic");
+        }
+    std::cout<<"9 non-finite one-key position diagnostics passed\n";
+}
+}
+"""
+
 
 def refined_fixture(fixture: str) -> str:
     marker = "template<class Key> struct CurveData\n{\n"
@@ -316,8 +336,20 @@ def refined_fixture(fixture: str) -> str:
         if method.count(point) != 1:
             raise ValueError("Single-key experiment insertion point changed")
         field = {"Scale": "mScale", "Position": "mPosition", "Rotation": "mRotation"}[kind]
-        candidate = method.replace(point, f"    if (mKeys.size() == 1) return mKeys.begin()->second.{field};\n\n" + point)
+        shortcut = f"    if (mKeys.size() == 1) return mKeys.begin()->second.{field};\n\n"
+        if kind == "Position":
+            shortcut = ("    if (mKeys.size() == 1)\n    {\n"
+                        "        value = mKeys.begin()->second.mPosition;\n"
+                        "        llassert(value.isFinite());\n        return value;\n    }\n\n")
+        candidate = method.replace(point, shortcut + point)
         fixture = fixture.replace(method, candidate, 1)
+    assertion = '#define llassert(condition) require(bool(condition), "Production curve assertion failed")'
+    if assertion in fixture:
+        # Let the correctness fixture observe the diagnostic without terminating the process.
+        fixture = fixture.replace(assertion,
+            'struct CurveAssertion {};\n'
+            'void curveAssertion(bool condition) {if(!condition) throw CurveAssertion{};}\n'
+            '#define llassert(condition) curveAssertion(bool(condition))', 1)
     return fixture
 
 
@@ -351,7 +383,8 @@ def generate(source: Path, refined: bool = False) -> str:
     if refined:
         fixtures += refined_fixture(flat_fixture.replace("CurveFlatFixture", "CurveBulkFixture").replace("FlatTag", "BulkTag"))
         fixtures += refined_fixture(flat_timing.replace("CurveFlatTiming", "CurveBulkTiming"))
-        extra_checks = "    CurveBulkFixture::run();\n"
+        fixtures += POSITION_DIAGNOSTICS
+        extra_checks = "    CurveBulkFixture::run();\n    CurveBulkFixture::checkPositionDiagnostics();\n"
         extra_bench = ""
         for kind in test_curve_sampling.KINDS:
             extra_checks += (f"    equivalence<CurveMapFixture::LLKeyframeMotion::{kind}Curve,"

@@ -63,6 +63,13 @@ oracle. The refined loader is exercised by those cross-container cases. Key
 ordering, duplicate values, metadata and sampled bytes match, including empty,
 single/multiple keys and all interpolation modes. Native MSVC linking/run passes.
 
+Review follow-up: preserve the production finiteness assertion on the one-key
+position shortcut. Nine focused NaN/+infinity/-infinity cases, queried before,
+exactly at and after the key, now observe that diagnostic in the correctness
+fixture. A native negative variant omitting the assertion fails the new check,
+and the corrected fixture passes. Timing fixtures still use release assertion
+behavior; this diagnostic fix does not supply new performance measurements.
+
 ### Measurement and limits
 
 The method, CPU, compiler and timing boundaries match checkpoint 7. Staged load
