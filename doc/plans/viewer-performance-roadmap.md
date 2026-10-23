@@ -123,6 +123,8 @@ and comparison. Normal release builds remain valid without Tracy enabled.
 
 - Stage 0: roadmap and baseline prepared; all ten open feature heads 79 through
   88 verified as ancestors. Documentation-only checkpoint; no viewer build needed.
-- Stage 1: implementation plan follows in `viewer-performance-01-profiling.md`.
+- Stage 1: avatar profiling implemented; complete affected translation unit passes
+  native MSVC syntax checks with Tracy off/on. See
+  `viewer-performance-01-profiling.md` for capture and acceptance instructions.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
