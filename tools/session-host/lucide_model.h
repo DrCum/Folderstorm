@@ -23,6 +23,7 @@ inline bool iconAlpha(const IconMask& mask,std::vector<std::uint8_t>& alpha)
 inline Icon commandIcon(unsigned int command)
 {
     using namespace fs_session;
+    if (characterQuickSlot(command) >= 0) return Icon::UserPlus;
     switch(command)
     {
     case MonitorSelected:return Icon::Cctv;
