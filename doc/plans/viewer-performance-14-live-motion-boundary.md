@@ -55,5 +55,36 @@ change without matched real-viewer performance and visual/lifecycle evidence.
 
 ## Results
 
-Not implemented yet. Source inspection and eligibility/dependency mapping come
-before any live dispatch change.
+Initial source audit started; no phase contract or live dispatch is implemented.
+
+### First dependency findings
+
+- `LLMotionController::updateMotions` samples an LLFrameTimer, updates animation
+  time, purges/loads motions, then processes additive and regular motions before
+  blending/applying their poses. `updateMotionsByType` traverses active motions
+  chronologically, changes signatures/weights/fades, may request stops or
+  deactivate motions, calls each virtual onUpdate, then adds it to the blender.
+  These operations cannot simply be moved into worker callbacks.
+- `LLKeyframeMotion::onUpdate` computes looped time and immediately calls
+  applyKeyframes followed by applyConstraints, updates last time and returns its
+  continuation decision. applyKeyframes also publishes hand-pose priority. There
+  is no substantial independent gap inside that existing method. A late result
+  must fall back before constraints, preserving the original ordered effects.
+- `LLVOAvatar::updateCharacter` can reset appearance/skeleton state, change
+  sitting state and update root position/orientation before motions. It chooses
+  hidden/forced/normal motion updates and then consumes results for sitting,
+  head offset and footsteps. A global speculative prepass must tolerate all of
+  those changes through independently prepared current inputs and lifetime/
+  skeleton versions, rather than deferring the existing pose consumers.
+- The controller's clock is an LLFrameTimer. Its elapsed-time accessor uses
+  static frame time, not a fresh wall-clock sample per avatar. LLAppViewer::idle
+  updates that frame time. This may allow exact same-frame time prediction, but
+  controller factors, pause/loading/activation state and all frame-time update
+  call sites still require audit before relying on it.
+- Walk adjusts time before calling base onUpdate; stand/fall perform additional
+  work around base behavior. Initial eligibility must be explicit and conservative
+  about factories/subclasses, rather than inferred from a base-class pointer.
+
+Next: complete the frame/clock and subclass/mutation audit, then choose a serial
+phase contract or reject the candidate boundary from source evidence. The
+synthetic 2 ms overlap window remains unproven in the real update flow.
