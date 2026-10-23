@@ -64,14 +64,21 @@ instance, activation, frame, skeleton and edit. Results retain the original
 request by move, plus sampled values and applied-channel bits. Only flagged
 channels are meaningful; unrequested values may remain in reusable storage.
 
-The sampler reads selected immutable curve fields, preserves scale/rotation/
-position order and mNumKeys gates, and touches no live character, joint state,
+The sampler reads selected curve fields under the publication/immutability
+contract, preserves the original scale, rotation and position order and mNumKeys
+gates, and touches no live character, joint state,
 constraints or cache. One avatar-category scope attributes the whole request,
 without per-key profiler events. Empty owned assets produce empty ready results;
 null assets/joints, non-finite query scalars, over-limit joint counts and mask
 shape mismatches fail with no ready output. Readiness is invalidated before
 allocation/computation; allocation/curve exceptions still propagate to a future
 executor and must be contained there.
+
+The later checkpoint-14 mutation audit found an existing const serializer writing
+stored position keys. Checkpoint 14a removes that writer, including size queries;
+include that prerequisite before live sampling jobs. A const shared lease alone
+does not enforce the absence of other writers. The fixtures in this checkpoint
+were immutable and no production caller dispatched them.
 
 Matching requires readiness, the same asset pointer/control block, all identity
 fields, exact time/duration representations (including signed zero), full mask

@@ -7,7 +7,7 @@
 namespace FSKeyframeTests
 {
 // No avatar, renderer, account or network dependencies.
-class Character final : public LLCharacter
+class Character : public LLCharacter
 {
 public:
     const char* getAnimationPrefix() override { return "test"; }

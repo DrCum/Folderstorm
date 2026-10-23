@@ -64,6 +64,13 @@ Never present a missing hardware result as a successful test.
   consumption mostly falls back; larger batches benefit with synthetic independent
   work. A real sufficient overlap window and total CPU/FPS improvement remain
   unproven. Plan 14 maps actual motion/pose dependencies before any live dispatch.
+- Checkpoint 14a fixes live position changes caused by size/export calls. Check
+  repeated export/preview of a loaded animation and re-open its encoded packet;
+  source pose should stay stable while the exported pose retains expected format
+  quantization. Generated fixtures cannot replace that workflow acceptance.
+- The export audit also found uninitialized trailing bytes in short fixed-width
+  constraint-name fields. A separate padding/determinism checkpoint is planned;
+  the curve-immutability fixtures use full-width names to isolate their oracle.
 
 ## Results
 

@@ -183,5 +183,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   unsuitable for the existing pool; synthetic overlap can help larger batches.
   Separate allocation probes count cancellation churn and retained buffers.
   Plan 14 audits real update ordering before any playback integration.
+- Stage 4f prerequisite: the real update/mutation audit found size/export calls
+  quantizing live cached positions. Checkpoint 14a quantizes a local copy; 896
+  export/pose checks and 10,000 concurrent owned samples pass in each storage
+  mode, retaining frozen first-packet bytes. No live dispatch is enabled.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

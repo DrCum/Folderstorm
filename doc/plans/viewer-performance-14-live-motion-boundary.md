@@ -57,6 +57,11 @@ change without matched real-viewer performance and visual/lifecycle evidence.
 
 Initial source audit started; no phase contract or live dispatch is implemented.
 
+The mutation audit found that const serialization quantized stored positions,
+including during getFileSize. Checkpoint 14a isolates and fixes that writer before
+any live worker use; its native export/pose/packet checks pass in both curve
+modes. Shared ownership alone had not made those positions immutable.
+
 ### First dependency findings
 
 - `LLMotionController::updateMotions` samples an LLFrameTimer, updates animation
@@ -81,6 +86,14 @@ Initial source audit started; no phase contract or live dispatch is implemented.
   updates that frame time. This may allow exact same-frame time prediction, but
   controller factors, pause/loading/activation state and all frame-time update
   call sites still require audit before relying on it.
+- The additional clock audit confirms updateFrameTime is called by modal file/
+  directory pickers without a matching updateFrameCount. Frame count alone is
+  not a complete current-context token; application must validate actual current
+  query/time plus a context epoch that tolerates re-entrant/modal work.
+- Startup initializes SSE flush-to-zero/nearest mode before creating the General
+  pool. WorkQueue delivery does not restore a captured floating-point context per
+  job. That remains a worker-context requirement before live dispatch, rather
+  than assuming any previous queue work preserved the needed mode.
 - Walk adjusts time before calling base onUpdate; stand/fall perform additional
   work around base behavior. Initial eligibility must be explicit and conservative
   about factories/subclasses, rather than inferred from a base-class pointer.
