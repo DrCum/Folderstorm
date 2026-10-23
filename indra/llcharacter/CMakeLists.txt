@@ -76,6 +76,19 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  add_executable(avatar_sampling_batch tests/sampling_batch_test.cpp)
+  target_link_libraries(avatar_sampling_batch PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_sampling_batch POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_sampling_batch> VERBATIM)
+
+  foreach(probe IN ITEMS benchmark allocations)
+    add_executable(avatar_sampling_cost_${probe} tests/sampling_cost_benchmark.cpp)
+    target_link_libraries(avatar_sampling_cost_${probe} PRIVATE llcharacter Threads::Threads)
+    if(probe STREQUAL "allocations")
+      target_compile_definitions(avatar_sampling_cost_${probe} PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+    endif()
+  endforeach()
+
   add_executable(avatar_bounded_sampling tests/bounded_sampling_test.cpp)
   target_link_libraries(avatar_bounded_sampling PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_bounded_sampling POST_BUILD

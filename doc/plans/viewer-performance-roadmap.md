@@ -178,5 +178,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   checks in each storage mode, plus negative checks for callback growth and stale
   generation claims. Private-pool wake/idle-CPU measurement is opt-in. No live
   playback or scheduler change; plan 13 measures complete sampling costs next.
+- Stage 4e: complete-cost batching passes 1,734 correctness/reuse/fallback checks
+  in each storage mode. Two 120-trial timing runs show immediate consumption is
+  unsuitable for the existing pool; synthetic overlap can help larger batches.
+  Separate allocation probes count cancellation churn and retained buffers.
+  Plan 14 audits real update ordering before any playback integration.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
