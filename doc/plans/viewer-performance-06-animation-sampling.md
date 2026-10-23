@@ -74,8 +74,37 @@ workers stay gated by the roadmap's ownership and performance requirements.
 
 ## Results
 
-Initial source audit started. No sampling signatures, storage or scheduling
-changes implemented yet.
+Sampling/interpolation methods are now const, with const iterators and key
+references. The unreachable inner end branch is preserved as an upstream
+comparison comment. Time/duration signatures, lookup ordering, interpolation
+math, defaults and clamping behavior are retained. One avatar profiling scope
+covers `applyKeyframes`; state application and constraints retain their existing
+execution order and ownership. No storage or scheduling changes are included.
+
+`tests/test_curve_sampling.py` extracts the six actual production methods and
+generates a native harness linked to the viewer's vector/quaternion math. Both
+the unchanged baseline and the const implementation pass **56,232** byte-exact
+comparisons against frozen lookup/interpolation behavior. Independent expected
+values cover empty defaults, clamping, exact keys, step/linear/spline midpoint
+results and identity rotations. Seeded curves add single/multiple keys,
+neighboring float queries, duplicate timestamps, signed vectors, quaternion
+hemisphere changes and edited loop metadata across four duration arguments.
+Serialized field comparisons confirm key/metadata state remains unchanged;
+compile-time assertions require const samplers and const interpolation inputs.
+
+With `LL_TESTS` and Python available, build `avatar_curve_sampling` to regenerate,
+link and run the focused native regression target. Local validation uses MSVC
+19.51.36244, `/O2 /arch:AVX2 /fp:precise` and existing read-only cached math/common
+libraries. Full viewer linking and live scene tests remain the building agent's
+handoff. This contract checkpoint makes no timing or FPS claim.
+
+The complete `llkeyframemotion.cpp` translation unit passes native syntax checks
+with Tracy disabled and enabled. The isolated `fsposingmotion.cpp` check exposed
+an existing missing `<chrono>` dependency in `fsjointpose.h`; supply that header
+to the standalone check rather than folding an unrelated pose-header edit into
+this checkpoint. With `<chrono>` supplied, the complete pose caller also passes
+both Tracy configurations. These checks do not replace full viewer/PCH build
+acceptance.
 
 - External curve sampling also occurs in `FSPosingMotion`, including loading
   position/rotation/scale values for poses. Include those native callers and
@@ -90,3 +119,25 @@ changes implemented yet.
   `applyKeyframes` writes hand-pose metadata. Those application points remain
   on the main thread. No explicit curve member-function-pointer uses were found
   by the initial source search.
+- Deserialization is the only production key-map writer found: rotation and
+  position entries are assigned by timestamp, so duplicates replace earlier
+  values. Serialization reads entries in timestamp order; no key iterator is
+  retained between loading, sampling or serialization calls in the audited
+  callers. `mNumKeys` can exceed unique timestamps and retains its existing
+  diagnostic behavior. No untrusted-count reservation was introduced.
+- Cache removal/clear deletes raw motion-list pointers. Upload validation,
+  animation preview/reload and shutdown are important future worker lifetime
+  boundaries. Preview/loop/hand-pose edits also require result invalidation.
+
+## Local acceptance for this checkpoint
+
+Compare the exact checkpoint head against #94's current head with identical
+settings. Exercise ordinary animations, looping/non-looping previews and changed
+loop points, gesture playback, poses including position/rotation/scale loading,
+sit/stand and animesh. Check crowd arrival/departure and preview close/reload for
+crashes or pose changes. For Tracy captures compare `applyKeyframes` alongside
+the earlier avatar scopes, with the same profiling configuration on both sides.
+Do not treat profiler overhead or this const change as an FPS improvement.
+
+The next plan is `viewer-performance-07-curve-storage.md`. Contiguous-storage
+experiments precede any production container change or worker dispatch.

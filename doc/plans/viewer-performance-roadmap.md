@@ -141,5 +141,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   fallback error, eliminates temporary copies and reduces compiled stack
   reservation. Both typed and actual-SIMD variants pass 1,252 comparisons; see
   `viewer-performance-05-skinning-generation.md`. Runtime acceptance is pending.
+- Stage 3a: read-only animation sampling retains exact results across 56,232
+  actual-math comparisons and unchanged key/metadata state; see
+  `viewer-performance-06-animation-sampling.md`. A separate contiguous-storage
+  experiment is planned before any container change or worker dispatch.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

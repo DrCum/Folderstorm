@@ -327,8 +327,12 @@ public:
     public:
         ScaleCurve();
         ~ScaleCurve();
-        LLVector3 getValue(F32 time, F32 duration);
-        LLVector3 interp(F32 u, ScaleKey& before, ScaleKey& after);
+        // <FS:Perf> Sampling does not modify shared curve data.
+        // LLVector3 getValue(F32 time, F32 duration);
+        // LLVector3 interp(F32 u, ScaleKey& before, ScaleKey& after);
+        LLVector3 getValue(F32 time, F32 duration) const;
+        LLVector3 interp(F32 u, const ScaleKey& before, const ScaleKey& after) const;
+        // </FS:Perf>
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
@@ -346,8 +350,12 @@ public:
     public:
         RotationCurve();
         ~RotationCurve();
-        LLQuaternion getValue(F32 time, F32 duration);
-        LLQuaternion interp(F32 u, RotationKey& before, RotationKey& after);
+        // <FS:Perf> Sampling does not modify shared curve data.
+        // LLQuaternion getValue(F32 time, F32 duration);
+        // LLQuaternion interp(F32 u, RotationKey& before, RotationKey& after);
+        LLQuaternion getValue(F32 time, F32 duration) const;
+        LLQuaternion interp(F32 u, const RotationKey& before, const RotationKey& after) const;
+        // </FS:Perf>
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
@@ -365,8 +373,12 @@ public:
     public:
         PositionCurve();
         ~PositionCurve();
-        LLVector3 getValue(F32 time, F32 duration);
-        LLVector3 interp(F32 u, PositionKey& before, PositionKey& after);
+        // <FS:Perf> Sampling does not modify shared curve data.
+        // LLVector3 getValue(F32 time, F32 duration);
+        // LLVector3 interp(F32 u, PositionKey& before, PositionKey& after);
+        LLVector3 getValue(F32 time, F32 duration) const;
+        LLVector3 interp(F32 u, const PositionKey& before, const PositionKey& after) const;
+        // </FS:Perf>
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
