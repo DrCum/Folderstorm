@@ -41,6 +41,9 @@ Never present a missing hardware result as a successful test.
   option explicitly OFF/ON. Include arrival/rez latency and peak memory alongside
   steady crowd frame times; the candidate has measured loading/memory tradeoffs.
   Full asset-parser/preview/pose behavior and ARM/macOS execution remain pending.
+- Ownership audit: verify preview/reload and motion removal around character
+  hand-pose/priority pointers. LLHandMotion normally consumes and clears those
+  entries per update; they must stay under main-thread lifetime handling.
 
 ## Results
 
