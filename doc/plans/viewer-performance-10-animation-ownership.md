@@ -58,5 +58,60 @@ remain measurement gates on the Ryzen 5 3600.
 
 ## Results
 
-Not implemented yet. Initial evidence from plan 6 identifies raw pointer ownership
-as a blocker for borrowing curves on workers; this plan resolves that boundary.
+Initial source audit completed; ownership code has not been changed yet.
+
+Implementation sequencing update: a closer audit found two prerequisites for
+releasing old assets safely. Character hand-pose/priority entries currently point
+inside assets, and setupPose appends per-motion constraints rather than clearing
+old ones. Checkpoint 10a makes hand-pose values character-owned in a separate PR;
+owned adoption will explicitly clear obsolete constraints before old-owner
+release. Do not assume retaining an owner only through setupPose is sufficient.
+
+| Worker-readable field | Writers found | Publication rule |
+| --- | --- | --- |
+| Curve key maps and values | Constructors/destructors and the two validated builder paths in deserialize | New motion list remains private until all keys/constraints validate. |
+| Curve interpolation modes and key counts | Constructors/destructors, deserialize header unpack/mode assignment | No post-publication key/count/mode writers found in production callers. |
+| Joint-motion vector and pointers | Construction, deserialize append and list destruction | Stable after publication while the list is alive. |
+| Loop keys/points, priority, hand pose, ease and emote data | Existing main-thread setters/setup | Mutable; exclude from worker reads and capture needed scalars on the main thread. |
+
+`JointMotion::update` reads per-instance joint usage, curve counts and sample
+results, then writes live joint state. A future query must own the usage bits and
+time/duration inputs; it must not invoke that method on a worker. Const sampler
+methods read keys and interpolation mode, with no loop-key reads. Serialization
+also reads key maps without retaining iterators.
+
+The cache map is only accessed inside llkeyframemotion.cpp. Other production
+callers remove entries or clear the cache for upload validation, preview/reload
+and shutdown. Only onInitialize gets an entry, and successful deserialize adds
+one. Existing replacement assigns a raw pointer without deleting the old entry;
+remove/clear directly delete entries. Do not reinterpret these raw pointers as
+independent shared owners.
+
+Preferred implementation: retain the existing raw `mJointMotionList` view for
+hot accesses and subclass compatibility; add a shared owner for ordinary cached
+assets. Centralize owned adoption and provide a protected owned const lease only
+when owner.get() matches the current raw view. The poser constructor's embedded
+dummy list remains a borrowed view with no sampling lease. Change cache values
+to shared owners and remove manual deletes; getters return the same owner.
+Reference-count copies belong at attachment/request boundaries, not per key.
+
+List destruction deletes joint-motion objects, key containers and constraint
+shared-data objects. The latter only delete an owned index array; no character,
+UI or GL action was found in those destructors. Per-motion constraints reference
+that shared data and are deleted in the motion destructor before its members.
+Delete obsolete per-motion constraints during owned adoption before releasing
+the previous owner. Retaining it only through setupPose is insufficient because
+that method currently appends constraints. Verify this ordering in actual tests.
+
+Hand pose and priority pointers temporarily published through character animation
+data are another main-thread alias: LLHandMotion consumes and removes both entries
+on update. Inspect motion removal/replacement ordering before releasing an old
+list; leases protect key reads, not these character-side raw aliases. There is no
+claim that all character metadata is immutable or independently thread safe.
+
+Planned verification uses an LL_TESTS target linked to actual llcharacter cache
+and motion code, with a derived probe exposing protected adoption/lease hooks.
+Test cache eviction/replacement/clear and final destruction, borrowed dummy views,
+and failed publication. Isolated native validation may compile the updated complete
+llkeyframemotion.cpp with that test and cached unchanged dependencies; it must
+not be reported as a full viewer link or exercise stale-layout cached subclasses.
