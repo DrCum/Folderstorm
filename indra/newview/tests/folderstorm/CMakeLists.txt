@@ -64,6 +64,15 @@ if(Python3_Interpreter_FOUND)
       "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/lljoint.h"
     VERBATIM)
   folderstorm_check(avatar_rigged_bounds "${avatar_bounds_source}")
+  set(skinning_generation_source "${CMAKE_CURRENT_BINARY_DIR}/skinning_generation.cpp")
+  add_custom_command(OUTPUT "${skinning_generation_source}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_skinning_generation.py"
+      --output "${skinning_generation_source}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../test_skinning_generation.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../llskinningutil.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/lljoint.h"
+    VERBATIM)
+  folderstorm_check(skinning_generation "${skinning_generation_source}")
 endif()
 
 add_subdirectory(../../third_party/chat_media chat_media_dependencies)

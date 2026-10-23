@@ -137,5 +137,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   in default x64 and AVX2 builds. A Ryzen 5 3600 microbenchmark shows lower
   kernel time; see `viewer-performance-04-palette-packing.md`. Whole-frame
   performance, ARM execution and visual acceptance remain pending.
+- Stage 2d: single-pass skinning generation fixes the reproduced missing-joint
+  fallback error, eliminates temporary copies and reduces compiled stack
+  reservation. Both typed and actual-SIMD variants pass 1,252 comparisons; see
+  `viewer-performance-05-skinning-generation.md`. Runtime acceptance is pending.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

@@ -20,6 +20,7 @@ Never present a missing hardware result as a successful test.
 | Q3 | Usually one active viewer or several hosted characters? | Existing processes share the six physical cores. | Final worker admission/default tuning. |
 | Q4 | Can a matched baseline/checkpoint profiling capture be collected once stage 1 is built? | Select the first expensive kernel from evidence. | Default enablement of major threading changes. |
 | Q5 | Any existing animation, attachment, posing or character-switch defects to distinguish from regressions? | Keep quality checks attributable. | Acceptance triage only. |
+| Q6 | Any known legacy meshes/animesh that become unstable while loading or changing outfits? | Optional in-world validation of the missing-joint fallback fix. | Acceptance only. |
 
 ## Local debugging and acceptance queue
 
@@ -32,10 +33,10 @@ Never present a missing hardware result as a successful test.
   posing, avatar arrival/departure, teleport/logout and exit.
 - Track exact head, settings, scene conditions, logs and reproduction steps for
   each regression. Do not overwrite retained builds.
-- Investigate `initSkinningMatrixPalette`: the missing-joint branch sets an
-  output fallback, then the later multiply loop uses that joint's uninitialized
-  temporary world matrix. Create a deterministic reproduction and preserve the
-  intended inverse-bind fallback when removing the temporary array.
+- Checkpoint 5 reproduces and fixes the `initSkinningMatrixPalette` missing-joint
+  fallback overwrite. Typed and actual-SIMD generation checks pass; a known
+  legacy-mesh visual reproduction would be useful later. No such asset is needed
+  to continue source work.
 
 ## Results
 
