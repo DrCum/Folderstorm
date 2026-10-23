@@ -24,6 +24,10 @@ inline unsigned int visibleAccent(unsigned int stored,unsigned int background,un
     return foreground;
 }
 enum ShellCommand : unsigned int { RestoreShell=140, RecoverShell=141, MonitorSelected=150, NextAttention=151, PreviousAttention=152, Details=153, AppearanceSettings=154, QuickSettings=155, SelectedActions=156, ViewActions=157, SettingsActions=158, SetActions=159, AttentionSettings=160 };
+constexpr unsigned int CharacterQuickBase = 900;
+// Stable profile slots, independent of card order and the management selection.
+inline int characterQuickSlot(unsigned int command)
+{ return command >= CharacterQuickBase && command < CharacterQuickBase + MaxCharacters ? static_cast<int>(command - CharacterQuickBase) : -1; }
 struct ShellCommandInfo { unsigned int id; const wchar_t* label; const wchar_t* tip; const wchar_t* icon; };
 inline const std::vector<ShellCommandInfo>& shellCommands()
 {
@@ -48,7 +52,12 @@ inline const std::vector<ShellCommandInfo>& shellCommands()
         {SettingsActions,L"Preferences",L"Open host Preferences",L"⚙"},
         {SetActions,L"Session sets",L"Save, open or manage a named session set",L"▦"},
         {AppearanceSettings,L"Appearance",L"Edit host appearance, audio and switching settings",L"◐"},
-        {QuickSettings,L"Quick actions",L"Customize the order of the optional quick buttons",L"≡"}};
+        {QuickSettings,L"Quick actions",L"Customize the order of the optional quick buttons",L"≡"},
+        {CharacterQuickBase,L"Character 1",L"Switch to this character or open its login",L"1"},
+        {CharacterQuickBase+1,L"Character 2",L"Switch to this character or open its login",L"2"},
+        {CharacterQuickBase+2,L"Character 3",L"Switch to this character or open its login",L"3"},
+        {CharacterQuickBase+3,L"Character 4",L"Switch to this character or open its login",L"4"},
+        {CharacterQuickBase+4,L"Character 5",L"Switch to this character or open its login",L"5"}};
     return commands;
 }
 inline const ShellCommandInfo* shellCommand(unsigned int id)
