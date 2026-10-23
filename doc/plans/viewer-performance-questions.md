@@ -44,6 +44,10 @@ Never present a missing hardware result as a successful test.
 - Ownership audit: verify preview/reload and motion removal around character
   hand-pose/priority pointers. LLHandMotion normally consumes and clears those
   entries per update; they must stay under main-thread lifetime handling.
+- Checkpoint 10a makes those published values character-owned. Validate hand
+  morphs, competing priority/equal-priority animations, editing tools and preview
+  edits/close/reload. Native checks cover data/lifetime ordering, not rendered
+  hand shapes or complete avatar lifecycle acceptance.
 
 ## Results
 

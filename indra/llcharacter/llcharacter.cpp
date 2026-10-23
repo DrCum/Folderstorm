@@ -242,6 +242,16 @@ void LLCharacter::setAnimationData(std::string name, void *data)
     mAnimationData[name] = data;
 }
 
+// <FS:Perf> Hand-morph inputs belong to the character, independently of asset eviction.
+void LLCharacter::setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority)
+{
+    mAnimationHandPose = pose;
+    mAnimationHandPosePriority = priority;
+    setAnimationData("Hand Pose", &mAnimationHandPose);
+    setAnimationData("Hand Pose Priority", &mAnimationHandPosePriority);
+}
+// </FS:Perf>
+
 //-----------------------------------------------------------------------------
 // getAnimationData()
 //-----------------------------------------------------------------------------

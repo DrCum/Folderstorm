@@ -75,6 +75,11 @@ target_link_libraries(
 
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
+  add_executable(avatar_hand_pose_lifetime tests/hand_pose_lifetime_test.cpp)
+  target_link_libraries(avatar_hand_pose_lifetime PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_hand_pose_lifetime POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_hand_pose_lifetime> VERBATIM)
+
   foreach(storage IN ITEMS map contiguous)
     add_executable(avatar_animation_keys_${storage} tests/test_fsanimationkeys.cpp)
     target_link_libraries(avatar_animation_keys_${storage} PRIVATE llcommon)

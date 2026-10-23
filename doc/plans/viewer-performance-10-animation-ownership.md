@@ -99,8 +99,9 @@ List destruction deletes joint-motion objects, key containers and constraint
 shared-data objects. The latter only delete an owned index array; no character,
 UI or GL action was found in those destructors. Per-motion constraints reference
 that shared data and are deleted in the motion destructor before its members.
-Retain the previous owner through pose/constraint rebinding on asset replacement
-until this lifetime ordering is verified in actual ownership tests.
+Delete obsolete per-motion constraints during owned adoption before releasing
+the previous owner. Retaining it only through setupPose is insufficient because
+that method currently appends constraints. Verify this ordering in actual tests.
 
 Hand pose and priority pointers temporarily published through character animation
 data are another main-thread alias: LLHandMotion consumes and removes both entries

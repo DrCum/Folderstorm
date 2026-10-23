@@ -159,5 +159,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   CMake usage propagation and native caller checks in both Tracy configurations.
   Plan 9 contains explicit matched build instructions. No worker dispatch or
   default storage change; plan 10 addresses canonical asset ownership next.
+- Stage 4a prerequisite: hand-pose values now belong to the character, removing
+  transient pointers into cached assets. Thirty-six actual character/keyframe
+  checks pass in both curve modes; prior pointer behavior fails the regression
+  check. Plan 10a covers runtime hand-morph acceptance; plan 10b covers asset
+  leases and obsolete per-motion constraints before any worker dispatch.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

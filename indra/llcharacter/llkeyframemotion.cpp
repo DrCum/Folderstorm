@@ -809,14 +809,20 @@ void LLKeyframeMotion::applyKeyframes(F32 time)
     {
         if (mJointMotionList->mMaxPriority >= *pose_priority)
         {
-            mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
-            mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+            // <FS:Perf> Copy the winning values into character-owned storage.
+            // mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
+            // mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+            mCharacter->setHandPoseAnimationData(mJointMotionList->mHandPose, mJointMotionList->mMaxPriority);
+            // </FS:Perf>
         }
     }
     else
     {
-        mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
-        mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+        // <FS:Perf> Copy the winning values into character-owned storage.
+        // mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
+        // mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+        mCharacter->setHandPoseAnimationData(mJointMotionList->mHandPose, mJointMotionList->mMaxPriority);
+        // </FS:Perf>
     }
 }
 

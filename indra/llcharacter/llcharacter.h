@@ -33,6 +33,7 @@
 #include <string>
 
 #include "lljoint.h"
+#include "llhandmotion.h" // </FS:Perf> Typed character-owned hand-pose data.
 #include "llmotioncontroller.h"
 #include "llvisualparam.h"
 #include "llstringtable.h"
@@ -185,6 +186,10 @@ public:
 
     void setAnimationData(std::string name, void *data);
 
+    // <FS:Perf> Publish main-thread values without borrowing a cached asset's lifetime.
+    void setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority);
+    // </FS:Perf>
+
     void *getAnimationData(std::string name);
 
     void removeAnimationData(std::string name);
@@ -314,6 +319,10 @@ private:
     static LLStringTable sVisualParamNames;
 
     LLVector3 mHoverOffset;
+    // <FS:Perf> Keep the existing animation-data pointers valid for the character's lifetime.
+    LLHandMotion::eHandPose mAnimationHandPose = LLHandMotion::HAND_POSE_RELAXED;
+    LLJoint::JointPriority mAnimationHandPosePriority = LLJoint::LOW_PRIORITY;
+    // </FS:Perf>
 };
 
 #endif // LL_LLCHARACTER_H
