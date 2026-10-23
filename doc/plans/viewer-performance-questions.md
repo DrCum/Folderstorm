@@ -43,3 +43,6 @@ Never present a missing hardware result as a successful test.
 No in-world captures or runtime acceptance results received yet. A native
 Ryzen 5 3600 palette-packing microbenchmark was collected for checkpoint 4;
 its scope and results are documented in that plan and do not establish FPS gains.
+Native skinning generation and animation-storage experiments are also documented
+in plans 5 and 7. The naive storage candidate is not adopted because single-key
+sampling and unordered insertion regress despite longer-curve sampling gains.

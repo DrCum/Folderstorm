@@ -145,5 +145,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   actual-math comparisons and unchanged key/metadata state; see
   `viewer-performance-06-animation-sampling.md`. A separate contiguous-storage
   experiment is planned before any container change or worker dispatch.
+- Stage 3b: the opt-in map/flat storage experiment passes 146,502 cross-container
+  comparisons plus the sampling suite for each container. Longer curves sample
+  faster, but naive flat storage regresses single-key sampling and unordered
+  loading. Production storage is unchanged; see
+  `viewer-performance-07-curve-storage.md` and the bulk-loading follow-up plan.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
