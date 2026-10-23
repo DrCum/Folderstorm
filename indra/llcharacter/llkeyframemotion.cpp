@@ -28,6 +28,7 @@
 // Header Files
 //-----------------------------------------------------------------------------
 #include "linden_common.h"
+#include <utility> // </FS:Perf> Move canonical asset owners without another reference-count copy.
 
 #include "llmath.h"
 #include "llanimationstates.h"
@@ -507,6 +508,25 @@ LLKeyframeMotion::~LLKeyframeMotion()
     mConstraints.clear();
 }
 
+// <FS:Perf> Keep live constraints from outliving their shared asset data during replacement.
+void LLKeyframeMotion::adoptJointMotionList(std::shared_ptr<JointMotionList> data)
+{
+    if (mJointMotionList != data.get())
+    {
+        for_each(mConstraints.begin(), mConstraints.end(), DeletePointer());
+        mConstraints.clear();
+    }
+    mJointMotionOwner = std::move(data);
+    mJointMotionList = mJointMotionOwner.get();
+}
+
+std::shared_ptr<const LLKeyframeMotion::JointMotionList> LLKeyframeMotion::getKeyframeSamplingLease() const
+{
+    // Embedded/borrowed subclass data is not eligible for asynchronous sampling.
+    return mJointMotionOwner.get() == mJointMotionList ? mJointMotionOwner : nullptr;
+}
+// </FS:Perf>
+
 //-----------------------------------------------------------------------------
 // create()
 //-----------------------------------------------------------------------------
@@ -582,12 +602,14 @@ LLMotion::LLMotionInitStatus LLKeyframeMotion::onInitialize(LLCharacter *charact
         break;
     }
 
-    LLKeyframeMotion::JointMotionList* joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID());
+    // <FS:Perf> LLKeyframeMotion::JointMotionList* joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID());
+    auto joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID()); // </FS:Perf>
 
     if(joint_motion_list)
     {
         // motion already existed in cache, so grab it
-        mJointMotionList = joint_motion_list;
+        // <FS:Perf> mJointMotionList = joint_motion_list;
+        adoptJointMotionList(std::move(joint_motion_list)); // </FS:Perf>
 
         mJointStates.reserve(mJointMotionList->getNumJointMotions());
 
@@ -2104,8 +2126,12 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
     }
 
     // *FIX: support cleanup of old keyframe data
-    mJointMotionList = joint_motion_list.release(); // release from unique_ptr to member;
-    LLKeyframeDataCache::addKeyframeData(getID(),  mJointMotionList);
+    // <FS:Perf> Create one owner at successful publication, then share that owner with the cache.
+    // mJointMotionList = joint_motion_list.release(); // release from unique_ptr to member;
+    // LLKeyframeDataCache::addKeyframeData(getID(),  mJointMotionList);
+    adoptJointMotionList(std::shared_ptr<JointMotionList>(std::move(joint_motion_list)));
+    LLKeyframeDataCache::addKeyframeData(getID(), mJointMotionOwner);
+    // </FS:Perf>
     mAssetStatus = ASSET_LOADED;
 
     setupPose();
@@ -2589,7 +2615,8 @@ void LLKeyframeDataCache::dumpDiagInfo()
     {
         U32 joint_motion_kb;
 
-        LLKeyframeMotion::JointMotionList *motion_list_p = data_pair.second;
+        // <FS:Perf> LLKeyframeMotion::JointMotionList *motion_list_p = data_pair.second;
+        LLKeyframeMotion::JointMotionList* motion_list_p = data_pair.second.get(); // </FS:Perf>
 
         LL_INFOS() << "Motion: " << data_pair.first << LL_ENDL;
 
@@ -2609,10 +2636,13 @@ void LLKeyframeDataCache::dumpDiagInfo()
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::addKeyframeData()
 //--------------------------------------------------------------------
-void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList* joint_motion_listp)
+// <FS:Perf> void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList* joint_motion_listp)
+void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, asset_ptr_t data)
 {
-    sKeyframeDataMap[id] = joint_motion_listp;
+    // sKeyframeDataMap[id] = joint_motion_listp;
+    sKeyframeDataMap[id] = std::move(data);
 }
+// </FS:Perf>
 
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::removeKeyframeData()
@@ -2622,7 +2652,8 @@ void LLKeyframeDataCache::removeKeyframeData(const LLUUID& id)
     keyframe_data_map_t::iterator found_data = sKeyframeDataMap.find(id);
     if (found_data != sKeyframeDataMap.end())
     {
-        delete found_data->second;
+        // <FS:Perf> delete found_data->second;
+        // Outstanding motion/request owners keep this asset alive. </FS:Perf>
         sKeyframeDataMap.erase(found_data);
     }
 }
@@ -2630,7 +2661,8 @@ void LLKeyframeDataCache::removeKeyframeData(const LLUUID& id)
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::getKeyframeData()
 //--------------------------------------------------------------------
-LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LLUUID& id)
+// <FS:Perf> LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LLUUID& id)
+LLKeyframeDataCache::asset_ptr_t LLKeyframeDataCache::getKeyframeData(const LLUUID& id) // </FS:Perf>
 {
     keyframe_data_map_t::iterator found_data = sKeyframeDataMap.find(id);
     if (found_data == sKeyframeDataMap.end())
@@ -2643,7 +2675,7 @@ LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LL
 bool LLKeyframeDataCache::hasEmbeddedEmote(const LLUUID& id)
 {
     const auto found=sKeyframeDataMap.find(id);
-    const auto* data=found==sKeyframeDataMap.end()?nullptr:found->second;
+    const auto* data=found==sKeyframeDataMap.end()?nullptr:found->second.get(); // </FS:Perf> Owned cache value.
     return data && (!data->mEmoteName.empty() || data->mEmoteID.notNull());
 }
 
@@ -2660,7 +2692,8 @@ LLKeyframeDataCache::~LLKeyframeDataCache()
 //-----------------------------------------------------------------------------
 void LLKeyframeDataCache::clear()
 {
-    for_each(sKeyframeDataMap.begin(), sKeyframeDataMap.end(), DeletePairedPointer());
+    // <FS:Perf> for_each(sKeyframeDataMap.begin(), sKeyframeDataMap.end(), DeletePairedPointer());
+    // Drop cache owners; outstanding motions/requests retain their assets. </FS:Perf>
     sKeyframeDataMap.clear();
 }
 
