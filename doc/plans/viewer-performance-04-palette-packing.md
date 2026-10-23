@@ -77,6 +77,11 @@ scalar assignments are preserved in the production comment and benchmark path.
   default x64 instructions and explicit AVX2. Includes an independent lane map,
   zero/small/110/216/4,096-matrix batches, input/output offsets, input immutability,
   signed zero, subnormal, infinity and NaN payload/signaling patterns.
+- Review follow-up: standalone architecture detection now checks explicit macOS
+  target slices, including `arm64;x86_64`, before the configure host, and handles
+  Visual Studio ARM targets. Thirteen configuration checks cover both universal
+  orders, Intel-on-ARM cross builds, ARM64e and VS platform selection. Native
+  macOS universal compilation remains pending.
 - The 4,013 production bounds checks still pass after caller integration.
 - Complete `llvoavatar.cpp` passes native MSVC C++20/AVX2 syntax checks with
   Tracy off/on. Whitespace and source review pass. Normal compatibility warnings
