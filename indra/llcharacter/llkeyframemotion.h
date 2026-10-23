@@ -32,6 +32,7 @@
 //-----------------------------------------------------------------------------
 
 #include <string>
+#include "fsanimationkeys.h" // </FS:Perf> Build-selected key storage.
 
 #include "llassetstorage.h"
 #include "llbboxlocal.h"
@@ -336,7 +337,8 @@ public:
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
-        typedef std::map<F32, ScaleKey> key_map_t;
+        // <FS:Perf> typedef std::map<F32, ScaleKey> key_map_t;
+        using key_map_t = FSAnimationKeys::KeyMap<F32, ScaleKey>; // </FS:Perf>
         key_map_t           mKeys;
         ScaleKey            mLoopInKey;
         ScaleKey            mLoopOutKey;
@@ -359,7 +361,8 @@ public:
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
-        typedef std::map<F32, RotationKey> key_map_t;
+        // <FS:Perf> typedef std::map<F32, RotationKey> key_map_t;
+        using key_map_t = FSAnimationKeys::KeyMap<F32, RotationKey>; // </FS:Perf>
         key_map_t       mKeys;
         RotationKey     mLoopInKey;
         RotationKey     mLoopOutKey;
@@ -382,7 +385,8 @@ public:
 
         InterpolationType   mInterpolationType;
         S32                 mNumKeys;
-        typedef std::map<F32, PositionKey> key_map_t;
+        // <FS:Perf> typedef std::map<F32, PositionKey> key_map_t;
+        using key_map_t = FSAnimationKeys::KeyMap<F32, PositionKey>; // </FS:Perf>
         key_map_t       mKeys;
         PositionKey     mLoopInKey;
         PositionKey     mLoopOutKey;

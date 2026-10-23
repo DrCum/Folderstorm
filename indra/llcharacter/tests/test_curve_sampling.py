@@ -11,6 +11,7 @@ HARNESS = r"""
 #include "llmath.h"
 #include "llquaternion.h"
 #include "v3math.h"
+#include "fsanimationkeys.h"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -61,7 +62,7 @@ template<class Key> struct CurveData
 {
     using key_type = Key;
     using value_type = typename Traits<Key>::Value;
-    using key_map_t = std::map<F32, Key>;
+    using key_map_t = FSAnimationKeys::KeyMap<F32, Key>;
     InterpolationType mInterpolationType = IT_LINEAR;
     S32 mNumKeys = 0;
     key_map_t mKeys;
@@ -257,15 +258,24 @@ def function(text: str, signature: str) -> str:
     raise ValueError("Unterminated production method")
 
 
-def generate(source: Path) -> str:
+def generate(source: Path, reference_storage: bool = False) -> str:
     text = source.read_text(encoding="utf-8")
     result = HARNESS
+    if reference_storage:
+        # The container experiment controls storage independently of the viewer build option.
+        result = result.replace('#include "fsanimationkeys.h"\n', '')
+        result = result.replace('FSAnimationKeys::KeyMap<F32, Key>', 'std::map<F32, Key>')
     methods = []
     for kind in KINDS:
         value = "LLQuaternion" if kind == "Rotation" else "LLVector3"
         for name, tag in (("getValue", "GET"), ("interp", "INTERP")):
             prefix = f"{value} LLKeyframeMotion::{kind}Curve::{name}("
             method = function(text, prefix)
+            if reference_storage:
+                method = re.sub(r'    // <FS:Perf> Direct one-key sampling only in the experimental build\.\n'
+                                r'#if FS_CONTIGUOUS_ANIMATION_KEYS\n.*?#endif\n    // </FS:Perf>\n', '', method, flags=re.S)
+                if "FS_CONTIGUOUS_ANIMATION_KEYS" in method:
+                    raise ValueError("Reference experiment could not isolate the original sampling path")
             declaration = re.sub(r"//[^\n]*", "", method[:method.index("{")]).strip()
             declaration = declaration.replace(f"LLKeyframeMotion::{kind}Curve::", "", 1)
             result = result.replace(f"@{kind.upper()}_{tag}_DECL@", declaration)

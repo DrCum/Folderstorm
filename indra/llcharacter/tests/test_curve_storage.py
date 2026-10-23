@@ -354,7 +354,7 @@ def refined_fixture(fixture: str) -> str:
 
 
 def generate(source: Path, refined: bool = False) -> str:
-    baseline = test_curve_sampling.generate(source)
+    baseline = test_curve_sampling.generate(source, reference_storage=True)
     main = "int main() { return CurveFixture::run(); }"
     if baseline.count(main) != 1:
         raise ValueError("Sampling harness entry point changed")

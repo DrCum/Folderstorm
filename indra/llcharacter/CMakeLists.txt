@@ -30,6 +30,8 @@ set(llcharacter_SOURCE_FILES
 set(llcharacter_HEADER_FILES
     CMakeLists.txt
 
+    fsanimationkeys.h
+
     llanimationstates.h
     llbvhloader.h
     llbvhconsts.h
@@ -57,6 +59,10 @@ list(APPEND llcharacter_SOURCE_FILES ${llcharacter_HEADER_FILES})
 
 add_library (llcharacter ${llcharacter_SOURCE_FILES})
 target_include_directories( llcharacter  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
+# <FS:Perf> Curve layout must match in every consumer, including viewer/PCH targets.
+target_compile_definitions(llcharacter PUBLIC
+    FS_CONTIGUOUS_ANIMATION_KEYS=$<BOOL:${FS_CONTIGUOUS_ANIMATION_KEYS}>)
+# </FS:Perf>
 
 target_link_libraries(
         llcharacter
@@ -69,6 +75,19 @@ target_link_libraries(
 
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
+  foreach(storage IN ITEMS map contiguous)
+    add_executable(avatar_animation_keys_${storage} tests/test_fsanimationkeys.cpp)
+    target_link_libraries(avatar_animation_keys_${storage} PRIVATE llcommon)
+    target_include_directories(avatar_animation_keys_${storage} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(storage STREQUAL "contiguous")
+      target_compile_definitions(avatar_animation_keys_${storage} PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=1)
+    else()
+      target_compile_definitions(avatar_animation_keys_${storage} PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=0)
+    endif()
+    add_custom_command(TARGET avatar_animation_keys_${storage} POST_BUILD
+      COMMAND $<TARGET_FILE:avatar_animation_keys_${storage}> VERBATIM)
+  endforeach()
+
   add_executable(avatar_joint_matrix_cache tests/lljoint_matrix_cache_test.cpp)
   target_link_libraries(avatar_joint_matrix_cache PRIVATE llcharacter)
   target_include_directories(avatar_joint_matrix_cache PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -86,7 +105,9 @@ if(LL_TESTS)
       VERBATIM)
     add_executable(avatar_curve_sampling "${curve_source}")
     target_link_libraries(avatar_curve_sampling PRIVATE llmath llcommon)
-    target_compile_definitions(avatar_curve_sampling PRIVATE FS_EXPECT_CONST_CURVES=1)
+    target_include_directories(avatar_curve_sampling PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(avatar_curve_sampling PRIVATE FS_EXPECT_CONST_CURVES=1
+      FS_CONTIGUOUS_ANIMATION_KEYS=$<BOOL:${FS_CONTIGUOUS_ANIMATION_KEYS}>)
     add_custom_command(TARGET avatar_curve_sampling POST_BUILD
       COMMAND $<TARGET_FILE:avatar_curve_sampling> VERBATIM)
 
