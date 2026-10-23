@@ -61,6 +61,9 @@ The mutation audit found that const serialization quantized stored positions,
 including during getFileSize. Checkpoint 14a isolates and fixes that writer before
 any live worker use; its native export/pose/packet checks pass in both curve
 modes. Shared ownership alone had not made those positions immutable.
+Checkpoint 14b separately makes short constraint-name tails deterministic; its
+name/format checks and the prior export suite pass in both storage modes.
+Checkpoint 14c specifies the next protected base-motion phase contract.
 
 ### First dependency findings
 

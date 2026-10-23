@@ -27,7 +27,7 @@ public:
     using Request = SamplingRequest;
     using Result = SamplingResult;
     using Row = SampledJoint;
-    Probe(Character& character, std::shared_ptr<Asset> data): LLKeyframeMotion(LLUUID::null)
+    Probe(LLCharacter& character, std::shared_ptr<Asset> data): LLKeyframeMotion(LLUUID::null)
     { setCharacter(&character); adoptJointMotionList(std::move(data)); }
     static bool sample(Request request, Result& result) { return sampleKeyframes(std::move(request), result); }
 };

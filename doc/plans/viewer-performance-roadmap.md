@@ -187,5 +187,8 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   quantizing live cached positions. Checkpoint 14a quantizes a local copy; 896
   export/pose checks and 10,000 concurrent owned samples pass in each storage
   mode, retaining frozen first-packet bytes. No live dispatch is enabled.
+- Stage 4g prerequisite: constraint export now zero-fills fixed-width name tails.
+  11,270 name/decoding/layout checks pass per storage mode, retaining the preceding
+  export/pose suite. Plan 14c proceeds to the protected base-motion phase contract.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

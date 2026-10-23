@@ -76,6 +76,11 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  add_executable(avatar_animation_constraint_names tests/animation_constraint_names_test.cpp)
+  target_link_libraries(avatar_animation_constraint_names PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_animation_constraint_names POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_animation_constraint_names> VERBATIM)
+
   add_executable(avatar_readonly_animation_serialization tests/animation_serialization_test.cpp)
   target_link_libraries(avatar_readonly_animation_serialization PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_readonly_animation_serialization POST_BUILD
