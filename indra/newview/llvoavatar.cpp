@@ -1688,9 +1688,12 @@ void LLVOAvatar::calculateSpatialExtents(LLVector4a& newMin, LLVector4a& newMax)
                     // Ignore bounding box of HUD joints
                     continue;
                 }
-                LLMatrix4a mat;
                 LLVector4a new_extents[2];
-                mat.loadu(joint->getWorldMatrix());
+                // <FS:Perf> Reuse the joint's existing aligned matrix cache.
+                // LLMatrix4a mat;
+                // mat.loadu(joint->getWorldMatrix());
+                const LLMatrix4a& mat = joint->getWorldMatrix4a();
+                // </FS:Perf>
                 matMulBoundBox(mat, rig_info->getRiggedExtents(), new_extents);
                 update_min_max(newMin, newMax, new_extents[0]);
                 update_min_max(newMin, newMax, new_extents[1]);

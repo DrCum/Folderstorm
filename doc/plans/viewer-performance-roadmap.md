@@ -129,5 +129,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
 - Stage 2a: rigged bounds skip irrelevant joint lookups; 4,013 production-block
   comparisons and native Tracy off/on syntax checks pass. Hardware gain and
   visual acceptance pending; see `viewer-performance-02-rigged-bounds.md`.
+- Stage 2b: rigged bounds reuse the existing aligned joint matrix cache after
+  8,013 actual-class coherence comparisons; see
+  `viewer-performance-03-matrix-cache.md`. Full linking/visual/performance
+  acceptance remains pending.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.

@@ -66,3 +66,13 @@ target_link_libraries(
         llfilesystem
         llxml
     )
+
+# <FS:Perf> Exercise actual joint/transform/SIMD cache coherence when testing.
+if(LL_TESTS)
+  add_executable(avatar_joint_matrix_cache tests/lljoint_matrix_cache_test.cpp)
+  target_link_libraries(avatar_joint_matrix_cache PRIVATE llcharacter)
+  target_include_directories(avatar_joint_matrix_cache PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  add_custom_command(TARGET avatar_joint_matrix_cache POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_joint_matrix_cache> VERBATIM)
+endif()
+# </FS:Perf>

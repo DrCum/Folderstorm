@@ -45,5 +45,26 @@ linking and in-world performance/visual acceptance remain the local agent's work
 
 ## Results
 
-Investigation and native matrix-cache verification pending. No production matrix
-access change is authorized by this plan's gate until the coherence test passes.
+The gate passed before the production change. The native test executable links
+read-only existing Release libraries for the actual `LLJoint`, transform and SIMD
+classes, whose source is unchanged from the frozen baseline. It passes 8,013
+bit-for-bit comparisons, including an external parent transform that models
+sitting and getting off an object. Outputs stay in the separate validation
+directory. The test source is committed and its `avatar_joint_matrix_cache`
+build-and-run target is available when the full viewer is configured with
+`LL_TESTS=ON`; that fresh full-build integration remains pending.
+
+The bounds path now passes a const reference to the existing aligned matrix.
+The source audit found both getters share `updateWorldMatrixParent()`, which
+refreshes both representations together. Direct joint-transform accesses in the
+viewer do not separately rewrite the legacy world matrix behind this cache.
+
+The 4,013 production bounds comparisons still pass, and the complete changed
+`llvoavatar.cpp` passes native MSVC C++20/AVX2 syntax checks with Tracy off/on.
+Whitespace review passes. Existing compiler warnings are unchanged. This proves
+coherence/equivalence and removes an explicit source-level load; it does not
+establish a frame-time gain or how much copying the optimizer already removed.
+
+Full viewer linking, live visual acceptance and comparative crowd captures remain
+pending. Next plan: isolate and benchmark palette layout conversion with a
+bit-exact reference before considering a SIMD replacement or worker dispatch.
