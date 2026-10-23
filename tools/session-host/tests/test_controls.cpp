@@ -16,6 +16,11 @@ int main()
     state.voice=true;assert(commandVisual(204,state).icon==Icon::Mic && *commandVisual(204,state).checked);
     state.chatDetached=true;visual=commandVisual(270,state);assert(!visual.checked && visual.icon==Icon::ArrowDownLeft);
     assert(!commandVisual(240,state).checked); // Reusing an audio slot for Restart must restore action semantics.
+    for(int i=0;i<fs_session::MaxCharacters;++i)
+    {
+        visual=commandVisual(fs_session::CharacterQuickBase+static_cast<unsigned int>(i),state);
+        assert(visual.icon==Icon::UserPlus && !visual.checked); // Switching is an action, not an audio toggle.
+    }
     std::vector<VoiceCandidate> candidates{{0,true,true,true,true,true},{1,true,true,false,false,true}};
     assert(voiceStatus(true,false,0,candidates).display==VoiceDisplay::Assigned);
     assert(voiceStatus(true,false,0,candidates).slot==0);
