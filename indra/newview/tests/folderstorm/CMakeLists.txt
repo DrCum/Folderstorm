@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 enable_testing()
 enable_language(C)
+find_package(Python3 QUIET COMPONENTS Interpreter)
 if(NOT WIN32)
-  find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
     add_test(NAME session_character_actions COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../tools/session-host/tests/test_character_actions.py")
     set_tests_properties(session_character_actions PROPERTIES ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}")
@@ -37,6 +37,18 @@ function(folderstorm_check name)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+if(Python3_Interpreter_FOUND)
+  set(avatar_bounds_source "${CMAKE_CURRENT_BINARY_DIR}/avatar_rigged_bounds.cpp")
+  add_custom_command(OUTPUT "${avatar_bounds_source}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_avatar_rigged_bounds.py"
+      --output "${avatar_bounds_source}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../test_avatar_rigged_bounds.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../llvoavatar.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/lljoint.h"
+    VERBATIM)
+  folderstorm_check(avatar_rigged_bounds "${avatar_bounds_source}")
+endif()
 
 add_subdirectory(../../third_party/chat_media chat_media_dependencies)
 folderstorm_check(chat_upload_clipboard ../test_fsclipboardimage.cpp)
