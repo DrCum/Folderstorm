@@ -74,9 +74,14 @@ struct LLJoint
 {
     virtual ~LLJoint() = default;
     Matrix matrix{};
+    LLMatrix4a aligned;
     int id = 0;
     std::vector<int>* transformed = nullptr;
     const Matrix& getWorldMatrix() { transformed->push_back(id); return matrix; }
+    const LLMatrix4a& getWorldMatrix4a()
+    {
+        transformed->push_back(id); aligned.loadu(matrix); return aligned;
+    }
 };
 struct LLViewerJointAttachment : LLJoint
 {
