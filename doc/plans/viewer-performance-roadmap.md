@@ -174,5 +174,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   malformed-shape, buffer-move and background lifetime coverage. No playback
   caller uses the sampler yet. Plan 12 measures bounded execution and full cost,
   including the existing Windows pool's sleep/wake behavior.
+- Stage 4d: test-only bounded execution passes 1,140 ownership/admission/lifecycle
+  checks in each storage mode, plus negative checks for callback growth and stale
+  generation claims. Private-pool wake/idle-CPU measurement is opt-in. No live
+  playback or scheduler change; plan 13 measures complete sampling costs next.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
