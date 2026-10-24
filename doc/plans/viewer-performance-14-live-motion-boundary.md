@@ -98,8 +98,10 @@ first-activation mask in the existing controller constructor.
   query/time plus a context epoch that tolerates re-entrant/modal work.
 - Startup initializes SSE flush-to-zero/nearest mode before creating the General
   pool. WorkQueue delivery does not restore a captured floating-point context per
-  job. That remains a worker-context requirement before live dispatch, rather
-  than assuming any previous queue work preserved the needed mode.
+  job. Checkpoint 14e's native startup probe observes different owner/fresh-thread
+  controls on this Windows runtime, so initialization order does not establish
+  inheritance either. Per-job capture/restoration remains required before live
+  dispatch; the probe does not measure the logged-in viewer's actual pool state.
 - Walk adjusts time before calling base onUpdate; stand/fall perform additional
   work around base behavior. Initial eligibility must be explicit and conservative
   about factories/subclasses, rather than inferred from a base-class pointer.

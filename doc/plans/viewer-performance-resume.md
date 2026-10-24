@@ -1,11 +1,14 @@
 # Performance work: shutdown handoff
 
 Resumed by the user on October 24. Current checkpoint branch:
-`codex/perf-initial-motion-mask`, based on PR 106 at
-`244086fea86c6138b9614e9d76f1ec0b2a7e0de9`. Checkpoint 14c is implemented and
+`codex/perf-sampling-fp-context`, based on PR 107 at
+`14b9f8471bf3cb97de35601fc19b89de9e104705`. Checkpoint 14c is implemented and
 passes 5,956 checks/1,474 frozen-update comparisons in each storage mode.
 Checkpoint 14d implements the initial controller-mask fix found during those
-tests. The next plan is 14e's per-job numeric context. Build monitoring remains
+tests. PRs 106 and 107 have completed automated review with no findings at their
+published heads. Plan 14e's numeric-context audit is started; its native probe
+observes different owner/fresh-thread controls and 64 exact fenv round trips.
+No numeric-context implementation exists yet. Build monitoring remains
 stopped. The shutdown details below are history;
 read the current roadmap and latest checkpoint plans before continuing.
 

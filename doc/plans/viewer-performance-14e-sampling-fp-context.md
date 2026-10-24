@@ -60,4 +60,43 @@ Native fixtures do not establish real crowd FPS or rendered/lifecycle acceptance
 
 ## Results
 
-Not implemented yet.
+Implementation has not started. Initial audit and native context probe completed.
+
+### Initial evidence
+
+- `LLVector4a::initClass` sets SSE flush-to-zero and nearest rounding. It does
+  not explicitly set DAZ. The General pool starts three `std::thread` workers
+  through `ThreadPoolBase::start`; neither that entry point nor queue delivery
+  establishes an owned sampling environment per job.
+- CMake selects `/fp:precise`, and the retained generated llcharacter project
+  confirms `FloatingPointModel=Precise`. Microsoft's compiler contract still
+  requires explicit environment-access handling for mode changes; a wrapper
+  cannot assume arbitrary inherited rounding is supported just because the
+  source is built precise. See [compiler floating-point behavior](https://learn.microsoft.com/en-us/cpp/build/reference/fp-specify-floating-point-behavior?view=msvc-170)
+  and [fenv_access](https://learn.microsoft.com/en-us/cpp/preprocessor/fenv-access?view=msvc-170).
+- A native x64 MSVC probe deliberately sets its owner to nearest rounding with
+  FTZ and DAZ enabled: MXCSR `0x00009fc0`. Its fresh `std::thread` reads
+  `0x00001f80`. This is an observed test-process startup difference, not a
+  measurement of the logged-in viewer/General queue. It disproves relying on
+  this runtime to inherit those owner controls at thread creation.
+- The Windows SDK UCRT header defines `fenv_t` as control/status fields. A native
+  probe with environment access enabled tests four rounding modes, four FTZ/DAZ
+  combinations and four status patterns, all with exceptions masked. All 64
+  fegetenv/fesetenv round trips restore the complete tested MXCSR exactly, with
+  zero mismatches and the probe's caller state restored. This is evidence for
+  this Windows runtime only, not a cross-platform guarantee or an unmasked-
+  exception/actual-kernel equivalence test. See [fesetenv](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fesetenv1?view=msvc-170).
+- `_controlfp_s` alone is insufficient as a presumed full-state restore: its
+  documented denormal-exception-mask behavior differs from `_control87`, and
+  x64 precision/infinity controls are unsupported. See
+  [Microsoft's control-word contract](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/controlfp-s?view=msvc-170).
+
+Probe source/log: sibling `performance-validation/fp-context-audit14e.cpp` and
+`fp-context-audit14e.log`. It runs with optimized precise x64 AVX2 settings and
+`fenv_access(on)`, and does not access a viewer, shared build outputs or accounts.
+
+Next: establish supported owner modes explicitly (reject/fall back where the
+compiler/runtime contract cannot be honored), define the semantic descriptor and
+exact worker restoration boundary, and test actual curve math under deliberately
+different worker modes. No sampling payload, kernel or runtime caller has been
+changed in this audit commit.
