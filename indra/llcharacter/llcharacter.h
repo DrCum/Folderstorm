@@ -295,6 +295,9 @@ public:
     virtual void    setHoverOffset(const LLVector3& hover_offset, bool send_update=true) { mHoverOffset = hover_offset; }
     const LLVector3& getHoverOffset() const { return mHoverOffset; }
 
+    // Experimental owner context: generic/preview characters have no scene sampling permission.
+    virtual bool allowsOwnedKeyframeSampling() const { return false; }
+
 protected:
     LLMotionController  mMotionController;
 

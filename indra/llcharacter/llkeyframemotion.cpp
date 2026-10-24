@@ -30,6 +30,8 @@
 #include "linden_common.h"
 #include <utility> // </FS:Perf> Move canonical asset owners without another reference-count copy.
 #include <cstring> // </FS:Perf> Exact query-input comparison before sample application.
+#include <array>
+#include "llframetimer.h"
 
 #include "llmath.h"
 #include "llanimationstates.h"
@@ -51,6 +53,7 @@
 // Static Definitions
 //-----------------------------------------------------------------------------
 LLKeyframeDataCache::keyframe_data_map_t    LLKeyframeDataCache::sKeyframeDataMap;
+static std::atomic<U64> sSamplingInstanceIDs{1};
 
 //-----------------------------------------------------------------------------
 // Globals
@@ -514,6 +517,9 @@ void LLKeyframeMotion::adoptJointMotionList(std::shared_ptr<JointMotionList> dat
 {
     if (mJointMotionList != data.get())
     {
+        invalidateOwnedSampling();
+        mSamplingAuthority.bindings.clear();
+        mSamplingAuthority.character = nullptr;
         for_each(mConstraints.begin(), mConstraints.end(), DeletePointer());
         mConstraints.clear();
     }
@@ -594,15 +600,25 @@ bool LLKeyframeMotion::sampleKeyframes(SamplingRequest request, SamplingResult& 
 
 bool LLKeyframeMotion::samplingResultMatches(const SamplingResult& result, const SamplingRequest& current)
 {
+    return samplingInputsMatch(result, current.asset, current.identity, current.numericContext,
+                               current.time, current.duration, current.usage.data(), current.usage.size());
+}
+
+bool LLKeyframeMotion::samplingInputsMatch(const SamplingResult& result, const std::shared_ptr<const JointMotionList>& asset,
+    const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+    const U32* usage, size_t count)
+{
+    if (count && !usage) return false;
     const auto& input = result.mRequest;
-    return result.isReady() && current.asset && input.asset.get() == current.asset.get() &&
-        !input.asset.owner_before(current.asset) && !current.asset.owner_before(input.asset) &&
-        input.identity == current.identity && current.numericContext.isSupported() &&
-        input.numericContext == current.numericContext &&
-        std::memcmp(&input.time, &current.time, sizeof(F32)) == 0 &&
-        std::memcmp(&input.duration, &current.duration, sizeof(F32)) == 0 &&
-        input.usage == current.usage && result.mJoints.size() == current.usage.size() &&
-        current.usage.size() == current.asset->mJointMotionArray.size();
+    if (!(result.isReady() && asset && input.asset.get() == asset.get() &&
+        !input.asset.owner_before(asset) && !asset.owner_before(input.asset) &&
+        input.identity == identity && numeric_context.isSupported() && input.numericContext == numeric_context &&
+        std::memcmp(&input.time, &time, sizeof(F32)) == 0 &&
+        std::memcmp(&input.duration, &duration, sizeof(F32)) == 0 &&
+        input.usage.size() == count && result.mJoints.size() == count && count == asset->mJointMotionArray.size()))
+        return false;
+    for (size_t i = 0; i < count; ++i) if (input.usage[i] != usage[i]) return false;
+    return true;
 }
 // </FS:Perf>
 
@@ -611,7 +627,86 @@ bool LLKeyframeMotion::samplingResultMatches(const SamplingResult& result, const
 //-----------------------------------------------------------------------------
 LLMotion *LLKeyframeMotion::create(const LLUUID &id)
 {
-    return new LLKeyframeMotion(id);
+    auto* motion = new LLKeyframeMotion(id);
+    motion->mSamplingAuthority.instance = FSSampling::takeIdentity(sSamplingInstanceIDs);
+    return motion;
+}
+
+LLKeyframeMotion::SamplingAuthority& LLKeyframeMotion::SamplingAuthority::operator=(const SamplingAuthority& other)
+{
+    if (this != &other)
+    {
+        instance = 0; lifecycle = 1; bindings.clear(); character = nullptr; skeleton = 0;
+    }
+    return *this;
+}
+
+bool LLKeyframeMotion::permitsOwnedSampling() const
+{
+    return mSamplingAuthority.instance != 0 && mSamplingAuthority.lifecycle != 0 &&
+        mCharacter && mCharacter->allowsOwnedKeyframeSampling();
+}
+
+void LLKeyframeMotion::invalidateOwnedSampling()
+{
+    if (mSamplingAuthority.instance) FSSampling::advanceGeneration(mSamplingAuthority.lifecycle);
+}
+
+bool LLKeyframeMotion::captureOwnedSamplingIdentity(SamplingIdentity& identity)
+{
+    if (!permitsOwnedSampling() || !isActive() || !mCharacter || mAssetStatus != ASSET_LOADED ||
+        !mJointMotionOwner || mJointMotionOwner.get() != mJointMotionList ||
+        !mJointMotionList->getSamplingRevision() ||
+        mJointMotionList->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        mJointMotionList->mJointMotionArray.size() > mJointStates.size()) return false;
+
+    auto& authority = mSamplingAuthority;
+    const size_t count = mJointMotionList->mJointMotionArray.size();
+    const U32 skeleton = mCharacter->getSkeletonSerialNum();
+    bool changed = authority.bindings.size() != count || authority.character != mCharacter || authority.skeleton != skeleton;
+    for (size_t i = 0; !changed && i < count; ++i)
+        changed = authority.bindings[i].state != mJointStates[i] ||
+            authority.bindings[i].joint != (mJointStates[i] ? mJointStates[i]->getJoint() : nullptr);
+    if (changed)
+    {
+        invalidateOwnedSampling();
+        if (!permitsOwnedSampling()) return false;
+        authority.bindings.resize(count);
+        for (size_t i = 0; i < count; ++i)
+        {
+            authority.bindings[i].state = mJointStates[i];
+            authority.bindings[i].joint = mJointStates[i] ? mJointStates[i]->getJoint() : nullptr;
+        }
+        authority.character = mCharacter; authority.skeleton = skeleton;
+    }
+    const F64 clock = LLFrameTimer::getElapsedSeconds();
+    if (!llfinite(clock)) return false;
+    identity = {authority.instance, authority.lifecycle, LLFrameTimer::getFrameCount(), skeleton,
+                mJointMotionList->getSamplingRevision()};
+    static_assert(sizeof(clock) == sizeof(identity.frameTimeBits));
+    std::memcpy(&identity.frameTimeBits, &clock, sizeof(clock));
+    std::memcpy(&identity.stopTimeBits, &mStopTimestamp, sizeof(mStopTimestamp));
+    identity.appearance = mCharacter->getAppearanceSerialNum();
+    identity.stopped = mStopped;
+    return true;
+}
+
+bool LLKeyframeMotion::prepareOwnedSampling(F32 time, SamplingRequest& request)
+{
+    SamplingIdentity identity;
+    if (!captureOwnedSamplingIdentity(identity)) { request = SamplingRequest{}; return false; }
+    return prepareKeyframeSampling(time, identity, request);
+}
+
+bool LLKeyframeMotion::updateWithOwnedSampling(F32 time, U8* joint_mask, const SamplingResult& result, bool& sample_applied)
+{
+    SamplingIdentity identity;
+    if (!captureOwnedSamplingIdentity(identity))
+    {
+        sample_applied = false;
+        return onUpdate(time, joint_mask); // Keep virtual subclass behavior on every ineligible path.
+    }
+    return updateWithSample(time, joint_mask, result, identity, sample_applied);
 }
 
 //-----------------------------------------------------------------------------
@@ -819,6 +914,7 @@ bool LLKeyframeMotion::setupPose()
 //-----------------------------------------------------------------------------
 bool LLKeyframeMotion::onActivate()
 {
+    invalidateOwnedSampling();
     // If the keyframe anim has an associated emote, trigger it.
     if (mJointMotionList->mEmoteID.notNull())
     {
@@ -940,14 +1036,30 @@ bool LLKeyframeMotion::prepareKeyframeSampling(F32 time, const SamplingIdentity&
     return buildKeyframeSamplingRequest(resolveKeyframeUpdateTime(time).sampleTime, identity, request);
 }
 
+bool LLKeyframeMotion::matchesCurrentSampling(const SamplingResult& result, F32 sample_time, const SamplingIdentity& identity) const
+{
+    const auto asset = getKeyframeSamplingLease();
+    if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
+        !llfinite(sample_time) || !llfinite(asset->mDuration) ||
+        asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        asset->mJointMotionArray.size() > mJointStates.size()) return false;
+    // Only the fully initialized prefix is inspected; the view never escapes this owner call.
+    std::array<U32, LL_CHARACTER_MAX_ANIMATED_JOINTS> usage;
+    for (size_t i = 0; i < asset->mJointMotionArray.size(); ++i)
+    {
+        if (!asset->mJointMotionArray[i]) return false;
+        usage[i] = mJointStates[i] ? mJointStates[i]->getUsage() : 0;
+    }
+    return samplingInputsMatch(result, asset, identity, FSSampling::NumericContext::capture(),
+                               sample_time, asset->mDuration, usage.data(), asset->mJointMotionArray.size());
+}
+
 bool LLKeyframeMotion::updateWithSample(F32 time, U8* joint_mask, const SamplingResult& result,
                                        const SamplingIdentity& current_identity, bool& sample_applied)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     const auto resolved = resolveKeyframeUpdateTime(time);
-    SamplingRequest current;
-    sample_applied = buildKeyframeSamplingRequest(resolved.sampleTime, current_identity, current) &&
-        samplingResultMatches(result, current);
+    sample_applied = matchesCurrentSampling(result, resolved.sampleTime, current_identity);
     mLastLoopedTime = resolved.sampleTime;
     if (sample_applied)
     {
@@ -1046,6 +1158,7 @@ void LLKeyframeMotion::applyConstraints(F32 time, U8* joint_mask)
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::onDeactivate()
 {
+    invalidateOwnedSampling();
     for (JointConstraint* constraintp : mConstraints)
     {
         deactivateConstraint(constraintp);
@@ -1058,6 +1171,7 @@ void LLKeyframeMotion::onDeactivate()
 // time is in seconds since character creation
 void LLKeyframeMotion::setStopTime(F32 time)
 {
+    invalidateOwnedSampling();
     LLMotion::setStopTime(time);
 
     if (mJointMotionList->mLoop && mJointMotionList->mLoopOutPoint != mJointMotionList->mDuration)
@@ -2537,6 +2651,7 @@ void LLKeyframeMotion::setPriority(S32 priority)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         S32 priority_delta = priority - mJointMotionList->mBasePriority;
         mJointMotionList->mBasePriority = (LLJoint::JointPriority)priority;
         mJointMotionList->mMaxPriority = mJointMotionList->mBasePriority;
@@ -2558,6 +2673,7 @@ void LLKeyframeMotion::setPriority(S32 priority)
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::setEmote(const LLUUID& emote_id)
 {
+    mJointMotionList->invalidateSampling();
     const char* emote_name = gAnimLibrary.animStateToString(emote_id);
     if (emote_name)
     {
@@ -2578,6 +2694,7 @@ void LLKeyframeMotion::setEaseIn(F32 ease_in)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mEaseInDuration = llmax(ease_in, 0.f);
     }
 }
@@ -2589,6 +2706,7 @@ void LLKeyframeMotion::setEaseOut(F32 ease_in)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mEaseOutDuration = llmax(ease_in, 0.f);
     }
 }
@@ -2610,6 +2728,7 @@ void LLKeyframeMotion::setLoop(bool loop)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoop = loop;
         mSendStopTimestamp = F32_MAX;
     }
@@ -2623,6 +2742,7 @@ void LLKeyframeMotion::setLoopIn(F32 in_point)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoopInPoint = in_point;
 
         // set up loop keys
@@ -2652,6 +2772,7 @@ void LLKeyframeMotion::setLoopOut(F32 out_point)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoopOutPoint = out_point;
 
         // set up loop keys
