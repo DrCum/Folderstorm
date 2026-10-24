@@ -77,17 +77,27 @@ struct Sampler
 };
 using Executor = FSSamplingTest::BoundedExecutor<Sampler>;
 using Status = Executor::Status;
-enum class Mode { Direct, Owned, OwnedRetained, Default, Event };
+enum class Mode { Direct, Owned, OwnedRetained, Default, Event, EventFirstRetained, EventLaterRetained, DefaultLaterRetained };
 bool isOwned(Mode mode) { return mode == Mode::Owned || mode == Mode::OwnedRetained; }
+bool isQueued(Mode mode) { return mode != Mode::Direct && !isOwned(mode); }
+bool usesEventWait(Mode mode)
+{ return mode == Mode::Event || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained; }
+bool retainsBindings(Mode mode)
+{ return mode == Mode::OwnedRetained || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained || mode == Mode::DefaultLaterRetained; }
+bool checksLaterCallbacks(Mode mode) { return mode == Mode::EventLaterRetained || mode == Mode::DefaultLaterRetained; }
 const char* name(Mode mode)
 {
     switch (mode) { case Mode::Direct: return "direct"; case Mode::Owned: return "owned";
     case Mode::OwnedRetained: return "owned-retained";
+    case Mode::EventFirstRetained: return "event-first-retained";
+    case Mode::EventLaterRetained: return "event-later-retained";
+    case Mode::DefaultLaterRetained: return "default-later-retained";
     case Mode::Default: return "default"; default: return "event"; }
 }
 Mode parseMode(const std::string& value)
 {
-    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event}) if (value == name(mode)) return mode;
+    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event,
+                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained}) if (value == name(mode)) return mode;
     throw std::runtime_error("Unknown mode");
 }
 class Controls
@@ -110,7 +120,7 @@ class Pool : public LL::ThreadPool
 #endif
 public:
     explicit Pool(Mode mode): LL::ThreadPool("FSEventSamplingPrivate", 3, 1024 * 1024, false,
-        mode == Mode::Event ? Policy::EventWaitSingleWorker : Policy::PlatformDefault) {}
+        usesEventWait(mode) ? Policy::EventWaitSingleWorker : Policy::PlatformDefault) {}
     void startMeasured()
     {
         start();
@@ -226,6 +236,7 @@ struct Row
     std::array<U64, StageCount> ns{};
     unsigned predicted = 0, masked = 0, excluded = 0, rejected = 0, accepted = 0;
     unsigned callbacks = 0, applied = 0, fallback = 0, stale = 0;
+    unsigned readinessChecks = 0, pendingMisses = 0, failedBatches = 0, firstReadyCallback = 0;
 };
 struct Callback
 {
@@ -334,12 +345,21 @@ struct Frame
         const auto consume = Clock::now();
         if (!consumed)
         {
-            consumed = true;
             if (ticket)
             {
-                ready = executor->take(*ticket, output) == Status::Ready;
-                if (!ready) executor->cancel(*ticket);
+                ++row.readinessChecks;
+                const auto status = executor->take(*ticket, output);
+                ready = status == Status::Ready;
+                const bool pending = status == Status::Queued || status == Status::Running;
+                if (pending) ++row.pendingMisses;
+                if (status == Status::Failed) ++row.failedBatches;
+                // One nonblocking observation per actual callback. Early misses
+                // keep direct execution; only the private later modes retain work.
+                consumed = ready || !pending || !checksLaterCallbacks(mode);
+                if (!ready && consumed) executor->cancel(*ticket);
             }
+            else consumed = true;
+            if (ready) row.firstReadyCallback = row.callbacks;
         }
         size_t index = count;
         if (ready && motion) for (size_t i = 0; i < count; ++i)
@@ -356,7 +376,7 @@ struct Frame
         const auto begin = Clock::now();
         if (ticket && !consumed) executor->cancel(*ticket);
         if (ready) input = output.recycle();
-        if (mode != Mode::OwnedRetained) for (size_t i = 0; i < count; ++i)
+        if (!retainsBindings(mode)) for (size_t i = 0; i < count; ++i)
         {
             auto* base = entries[i].owner->findMotion(entries[i].id); auto* motion = dynamic_cast<Motion*>(base);
             if (motion) motion->releaseOwnedSamplingBindings(entries[i].instance);
@@ -388,16 +408,24 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     FSCurrentMotion::Clock::set(100.0); Assets assets; Scene scene(avatars), expected(avatars);
     Controls controls; std::unique_ptr<Pool> pool; std::unique_ptr<Executor> executor;
     std::promise<void> release, entered; auto gate = release.get_future().share(); auto started = entered.get_future();
-    if (mode == Mode::Default || mode == Mode::Event)
+    if (isQueued(mode))
     {
         pool = std::make_unique<Pool>(mode); pool->startMeasured();
         require(pool->getWidth() == 1, "Configured private pool width differs");
-        require(pool->getWaitPolicy() == (mode == Mode::Event ? Policy::EventWaitSingleWorker : Policy::PlatformDefault), "Production policy differs");
+        require(pool->getWaitPolicy() == (usesEventWait(mode) ? Policy::EventWaitSingleWorker : Policy::PlatformDefault), "Production policy differs");
         auto ready = std::make_shared<std::promise<void>>(); auto warm = ready->get_future();
         require(pool->getQueue().tryPost([ready] { ready->set_value(); }), "Warm task rejected"); await(warm);
         if (load == "busy") { require(pool->getQueue().tryPost([&entered, gate] { entered.set_value(); gate.wait(); }), "Blocker rejected"); await(started); }
         if (load == "closed") pool->close();
-        executor = std::make_unique<Executor>(1, FSSamplingTest::queueSubmitter(pool->getQueue().getWeak(), 1));
+        Executor::Submit submit = FSSamplingTest::queueSubmitter(pool->getQueue().getWeak(), 1);
+        if (correctness)
+        {
+            // The ready/stale oracle requires admitted work. tryPost may reject
+            // transient lock contention; timed cases retain that nonblocking path.
+            const auto queue = pool->getQueue().getWeak();
+            submit = [queue](const Executor::Work& work) { auto live = queue.lock(); return live && live->post(work); };
+        }
+        executor = std::make_unique<Executor>(1, std::move(submit));
     }
     Summary summary; summary.rows.reserve(frames); summary.traces.reserve(frames);
     for (unsigned i = 0; i < frames; ++i) summary.traces.push_back(std::make_shared<Measurement>());
@@ -435,7 +463,13 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
             actualCallbacks.clear(); expectedCallbacks.clear();
             require(row.applied + row.fallback == row.callbacks, "Callback accounting lost work");
             if (mode == Mode::Owned || (mode != Mode::Direct && load == "normal"))
-            { require(mutation ? row.applied == 0 && row.stale > 0 : row.applied > 0, "Ready/current or stale oracle not exercised"); }
+            {
+                const bool exercised = mutation ? row.applied == 0 && row.stale > 0 : row.applied > 0;
+                if (!exercised) std::cerr << "case=" << name(mode) << ",avatars=" << avatars << ",frame=" << i << ",mutation=" << mutation
+                    << ",accepted=" << row.accepted << ",rejected=" << row.rejected << ",applied=" << row.applied << ",stale=" << row.stale
+                    << ",checks=" << row.readinessChecks << ",misses=" << row.pendingMisses << ",failed=" << row.failedBatches << '\n';
+                require(exercised, "Ready/current or stale oracle not exercised");
+            }
             if (load != "normal") require(!row.applied && row.fallback > 0, "Busy/closed path applied unavailable work");
         }
     }
@@ -449,7 +483,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
         auto* motion = static_cast<Motion*>(base); const auto bytes = motion->ownedSamplingBindingBytes();
         summary.retainedBindingBytes += bytes; summary.retainedBindingMotions += bytes != 0;
     }
-    if (mode == Mode::OwnedRetained)
+    if (retainsBindings(mode))
     {
         require(summary.retainedBindingMotions <= avatars && summary.retainedBindingBytes <= avatars * 32 * sizeof(void*) * 2,
                 "Controlled binding retention exceeded one bounded motion per character");
@@ -472,7 +506,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
 }
 void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, const std::string& load)
 {
-    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,final_binding_cleanup_ns\n";
+    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,final_binding_cleanup_ns,readiness_checks,pending_misses,failed_batches,first_ready_callback,sampled_unused_joints\n";
     for (size_t i = 0; i < summary.rows.size(); ++i)
     {
         const auto& row = summary.rows[i]; const auto& measurement = *summary.traces[i]; const auto& trace = measurement.trace;
@@ -483,14 +517,16 @@ void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, co
                   << ',' << (trace.sampled ? nanos(trace.started - trace.queued) : 0) << ',' << (trace.sampled ? nanos(trace.finished - trace.started) : 0)
                   << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << ',' << summary.ownerWindowCycles
                   << ',' << summary.retainedBindingBytes << ',' << summary.retainedBindingMotions << ',' << summary.bindingBytesAfterCleanup
-                  << ',' << summary.finalBindingCleanupNs << '\n';
+                  << ',' << summary.finalBindingCleanupNs << ',' << row.readinessChecks << ',' << row.pendingMisses
+                  << ',' << row.failedBatches << ',' << row.firstReadyCallback << ',' << trace.joints - row.applied * 32 << '\n';
     }
 }
 int check()
 {
-    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event})
+    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event,
+                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained})
         for (unsigned avatars : {1u, 8u, 32u}) run(mode, avatars, 0, 64, "normal", true);
-    for (auto mode : {Mode::Default, Mode::Event})
+    for (auto mode : {Mode::Default, Mode::Event, Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained})
     {
         for (const auto* load : {"busy", "closed"}) run(mode, 8, 0, 3, load, true);
         for (unsigned mutation : {1u, 2u, 3u, 4u}) run(mode, 8, 0, 1, "normal", true, mutation);
@@ -525,7 +561,8 @@ int main(int argc, char** argv)
         else print(result, mode, avatars, gap, load);
         return 0;
     }
-    std::cout << "Use --check, or --benchmark direct|owned|owned-retained|default|event avatars gap_us frames normal|busy|closed.\n"
+    std::cout << "Use --check, or --benchmark mode avatars gap_us frames normal|busy|closed.\n"
+                 "Modes: direct, owned, owned-retained, default, event, event-first-retained, event-later-retained, default-later-retained.\n"
                  "Separate allocation build uses --allocations. Synthetic gaps/private cohorts do not establish viewer FPS or a live deadline.\n";
     return argc == 1 ? 0 : 1;
 }
