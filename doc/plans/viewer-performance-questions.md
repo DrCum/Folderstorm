@@ -33,6 +33,12 @@ Never present a missing hardware result as a successful test.
   rendered/lifecycle/crowd acceptance remains pending for the stack.
 - Collect matched solo/crowd frame-time samples and profiler captures as described
   in the roadmap. Raw captures may contain user data; share only deliberately.
+- Native 14l density controls varied by more than twofold even in raw thread
+  cycles. The cause is not identified. Preserve those records as inconclusive;
+  a quiet repeatable workload/process environment or matched real scene evidence
+  is needed before reconsidering that cache. No process/affinity changes were
+  made, and the prototype is withdrawn. Q3 remains relevant; no new answer is
+  required for independent preparation work.
 - Watch attachment/skeleton alignment, sitting/constraints, animesh, outfit swaps,
   posing, avatar arrival/departure, teleport/logout and exit.
 - Track exact head, settings, scene conditions, logs and reproduction steps for

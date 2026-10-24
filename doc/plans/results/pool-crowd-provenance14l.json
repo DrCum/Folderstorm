@@ -1,0 +1,125 @@
+{
+  "decision": "Decline inline hint cache: no stable complete-path/memory balance established; restore exact PR114 runtime source",
+  "production_parent": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "rejected_prototype_commit": "b298d5cb894a7761ffedbcebb272a8a38dcf1053",
+  "prior_measurement_commit": "ea64b77bcab4112c43d0b0f16999746cc61e54f2",
+  "restored_runtime_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d"
+  },
+  "historical_compiled_prototype_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "02492d2482eb2677daa15a23af0c9132081b3fef87a764476d072261fd6e295b",
+    "indra/llcharacter/llpose.h": "9f4240325ac5c773a5bd0fb173786a73c4725801aa19489a2aa34476f7961a82"
+  },
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/CMakeLists.txt": "cd34734a43c5746660fd6ad85dd1f20f342aa13ea3f4895612911f7071f44428",
+    "indra/llcharacter/tests/blender_pool_multimotion_benchmark.cpp": "4507dad8d5c7e9c4ab61c2b577672b14e555d960955a36c5dfa2f115605fd0ea",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c"
+  },
+  "reports_sha256_normalized_lf": {
+    "pool-crowd-256-r1-14l.csv": "adf6cb604ed471a13881d60169da48a78e190776c85924b0c66992a04e11cfd5",
+    "pool-crowd-256-r2-14l.csv": "8921460f146c90a5602cfdf1fb0bfc0304bc52f6b05da88f17b556171ad869b4",
+    "pool-crowd-64-r1-14l.csv": "044d85df67a930692df4a48db0e7280ad5b9eb9a1d770aca20a6a4e80e8199e8",
+    "pool-crowd-64-r2-14l.csv": "48aaa88b90969e619b60c86879cef8882dd0a6a546dfe768d1ebab2e6168e39e",
+    "pool-crowd-parent-drift14l.csv": "f9a065c70d9e654c999d2f050f48770e0366e9b5e2d22f170369194e82a3ef28",
+    "pool-crowd-parent-r1-14l.csv": "fad20bc12b83bc5f3bd22e87ffb5923672fb8f727c775694a456d7650e642245",
+    "pool-crowd-parent-r2-14l.csv": "6470cbb7cad489de866b9812d40e78e9d34d84d6618430aa6bb7a6bacae4a2d2",
+    "pool-crowd-summary14l.csv": "1a925f6dd4a24ba2aad082e1cc5bd251027a9d1fbaac969166628d82a811e210"
+  },
+  "scratch_artifact_sha256": {
+    "pool-crowd-parent-14l.exe": "57811ae6e8ac3294fbf17a54afc28ef2fb2f8f5e37631ebf9a725c624ff381cb",
+    "pool-crowd-parent-14l.log": "20b81acc5d59797789b3ba4cda8ca0c1813e818a1c930ae1ccf74fbdaf1a0a19",
+    "pool-crowd-parent-14l.rsp": "dd49220868d65dac045eb36e8e3cf7ba5d981ffb0df9a14713dd4806eb3e5336",
+    "pool-crowd-64-14l.exe": "840916173706e7c3f5f3ee589fa99bc8e3d7ed520b583695ad916bb812e9fe39",
+    "pool-crowd-64-14l.log": "fe0e807891917e5b21dce9bee941c5d03b339ad6bc2a2bc36e03db4bf391a165",
+    "pool-crowd-64-14l.rsp": "e180433495832cdc4af567fc084776e932a3c1c900dbde4b57f5d76af838a884",
+    "pool-crowd-256-14l.exe": "8b2066d961f88b4710fa5256e4e936c2ac739cd5c32555a24219d94b6b1f30ff",
+    "pool-crowd-256-14l.log": "6845242d794012acdf6ae5eb891f02c5c1af185dc02701acc078f3d722f1cc92",
+    "pool-crowd-256-14l.rsp": "635f826ff47a35bb8ceac36dc3d60ab06d8cd3cba85ea3a10451dcec2d55482c",
+    "pool-multi-native14l.cpp": "7f3ee4815193c462875b177df94e56066a28320b1e7aecc3219fa9fa5e087d7b",
+    "pool-multi-parent-native14l.cpp": "a2bf55be0d3d09660a94a5c7c2f1b0e95b40d4af2eaf0b728fffa9a3d008e79a",
+    "measure-pool-crowd14l.ps1": "b0616c650abf391ef35f23e5617c2c5e7bed7c1034d79be27ffc262b9f8682ad"
+  },
+  "immutable_dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "verified_libraries": 32,
+  "timing": {
+    "startedUtc": "2026-10-24T15:00:07.3540638Z",
+    "finishedUtc": "2026-10-24T15:01:25.5059944Z",
+    "checks": "State/worker idle and complete native build/package process inventory empty before/after each run",
+    "order": "P,64,256,256,64,P per case",
+    "exe_sha256": {
+      "parent": "57811ae6e8ac3294fbf17a54afc28ef2fb2f8f5e37631ebf9a725c624ff381cb",
+      "64": "840916173706e7c3f5f3ee589fa99bc8e3d7ed520b583695ad916bb812e9fe39",
+      "256": "8b2066d961f88b4710fa5256e4e936c2ac739cd5c32555a24219d94b6b1f30ff"
+    },
+    "reports": [
+      {
+        "file": "pool-crowd-parent-r1-14l.csv",
+        "rows": 324
+      },
+      {
+        "file": "pool-crowd-parent-r2-14l.csv",
+        "rows": 324
+      },
+      {
+        "file": "pool-crowd-64-r1-14l.csv",
+        "rows": 324
+      },
+      {
+        "file": "pool-crowd-64-r2-14l.csv",
+        "rows": 324
+      },
+      {
+        "file": "pool-crowd-256-r1-14l.csv",
+        "rows": 324
+      },
+      {
+        "file": "pool-crowd-256-r2-14l.csv",
+        "rows": 324
+      }
+    ],
+    "scope": "1/16/64 independent heap-owned controllers, shared parsed assets, serial round robin, 1024 character updates per sample, pose/weight validation outside timer; no renderer/account/worker"
+  },
+  "rows": 1944,
+  "character_updates": 1990656,
+  "cases": 36,
+  "actors": [
+    1,
+    16,
+    64
+  ],
+  "sizes": {
+    "scene_parent": 1824,
+    "scene64": 2848,
+    "scene256": 5920,
+    "controller_parent": 688,
+    "controller64": 1712,
+    "controller256": 4784
+  },
+  "max_absolute_parent_cycle_drift_percent": 131.87781512220775,
+  "largest_drift_case": {
+    "joints": "128",
+    "motions": "1",
+    "workload": "saturated_overlap",
+    "actors": "64",
+    "wall_drift_pct": "134.71075132718383",
+    "cycle_drift_pct": "131.87781512220775"
+  },
+  "eligible_for_adoption": false,
+  "validation": "All actor poses/weights validated outside timing after four initial round-robin passes and after every sample. Source scene/correctness fixture matches the prior six-executable frozen-frame evidence. Every executable also passes 38971 direct/shadow checks across 252 changing-time frames.",
+  "reproduction": "Historical cache binaries used b298 pose implementation/header before withdrawal. Rebuild only from that frozen prototype plus the recorded fixture/core source; current restored pose code has no hint macro. Source hashes intentionally distinguish compiled prototype from final runtime restore.",
+  "limits": "Large positive/negative combined medians cannot establish causality with over twofold unchanged-parent drift, including raw cycles. Cause not identified. No process/priority/affinity changes. No whole-viewer FPS, rendered or other-platform acceptance; no workers, primary source/shared-cache writes, account actions or build-monitor changes.",
+  "next_plan": "viewer-performance-14m-shadow-mask-admission.md"
+}

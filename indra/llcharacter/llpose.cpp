@@ -496,25 +496,15 @@ bool LLPoseBlender::addMotion(LLMotion* motion)
     for(LLJointState* jsp = pose->getFirstJointState(); jsp; jsp = pose->getNextJointState())
     {
         LLJoint *jointp = jsp->getJoint();
-        LLJointStateBlender* joint_blender = nullptr;
-#if FS_TEST_BLENDER_POOL_HINT_SLOTS
-        auto& hint = mPoolHints[(reinterpret_cast<std::uintptr_t>(jointp) >> 4) & (FS_TEST_BLENDER_POOL_HINT_SLOTS - 1)];
-        if (hint.first == jointp) joint_blender = hint.second;
-        if (!joint_blender)
-#endif
+        LLJointStateBlender* joint_blender;
+        const auto found = mJointStateBlenderPool.find(jointp);
+        if (found == mJointStateBlenderPool.end())
         {
-            const auto found = mJointStateBlenderPool.find(jointp);
-            if (found == mJointStateBlenderPool.end())
-            {
-                joint_blender = createPooledBlender(mJointStateBlenderPool, jointp);
-            }
-            else
-            {
-                joint_blender = found->second;
-            }
-#if FS_TEST_BLENDER_POOL_HINT_SLOTS
-            hint = {jointp, joint_blender};
-#endif
+            joint_blender = createPooledBlender(mJointStateBlenderPool, jointp);
+        }
+        else
+        {
+            joint_blender = found->second;
         }
 
         if (jsp->getPriority() == LLJoint::USE_MOTION_PRIORITY)

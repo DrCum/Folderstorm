@@ -150,17 +150,46 @@ void timing(unsigned count, unsigned motions, unsigned mode, bool cold)
         warm.weights(mode);
     }
 }
+void crowdTiming(unsigned count, unsigned motions, unsigned mode, unsigned actorCount)
+{
+    std::vector<std::unique_ptr<Scene>> actors;
+    actors.reserve(actorCount);
+    for (unsigned i = 0; i < actorCount; ++i) actors.push_back(std::make_unique<Scene>(count,motions,mode));
+    for (unsigned round = 0; round < 4; ++round) for (auto& actor : actors) actor->update();
+    auto validate = [&]
+    {
+        const auto expected = actors.front()->snapshot();
+        for (auto& actor : actors) { actor->weights(mode); require(actor->snapshot() == expected); }
+    };
+    validate();
+    const unsigned rounds = 1024 / actorCount;
+    for (unsigned sample = 0; sample < 9; ++sample)
+    {
+        const U64 before = threadCycles();
+        const auto start = std::chrono::steady_clock::now();
+        for (unsigned round = 0; round < rounds; ++round) for (auto& actor : actors) actor->update();
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
+        const U64 cycles = threadCycles() - before;
+        std::cout << count << ',' << motions << ',' << name(mode) << ',' << actorCount << ',' << sample
+            << ',' << rounds << ',' << rounds * actorCount << ',' << ns << ',' << cycles << ',' << LL_WINDOWS
+            << ',' << sizeof(Scene) << ',' << sizeof(LLMotionController) << '\n';
+        validate();
+    }
+}
 int run(int argc, char** argv)
 {
     LLVector4a::initClass();
     const std::string option = argc >= 2 ? argv[1] : "";
     const bool benchmark = option == "--benchmark", cold = option == "--cold-benchmark", trace = option == "--trace";
-    if ((argc != 1 && argc != 2 && argc != 5) || (argc >= 2 && !benchmark && !cold && !trace)) return 1;
-    unsigned selected[3]{};
-    if (argc == 5)
+    const bool crowd = option == "--crowd-benchmark";
+    if ((argc != 1 && argc != 2 && argc != 5 && argc != 6) ||
+        (argc >= 2 && !benchmark && !cold && !trace && !crowd) ||
+        (crowd && argc != 6) || (argc == 6 && !crowd)) return 1;
+    unsigned selected[4]{};
+    if (argc >= 5)
     {
-        if (!benchmark && !cold) return 1;
-        for (unsigned i = 0; i < 3; ++i)
+        if (!benchmark && !cold && !crowd) return 1;
+        for (unsigned i = 0; i < unsigned(argc - 2); ++i)
         {
             char* end = nullptr; const auto value = std::strtoul(argv[i + 2], &end, 10);
             if (end == argv[i + 2] || *end || value > 128) return 1;
@@ -169,18 +198,21 @@ int run(int argc, char** argv)
         if ((selected[0] != 3 && selected[0] != 32 && selected[0] != 128) ||
             (selected[1] != 1 && selected[1] != 4 && selected[1] != 8) ||
             selected[1] > selected[0] || selected[2] > SATURATED) return 1;
+        if (crowd && selected[3] != 1 && selected[3] != 16 && selected[3] != 64) return 1;
     }
     require(FSSampling::NumericContext::capture().isSupported());
     if (benchmark || cold) std::cout << "phase,joints,motions,workload,sample,iterations,elapsed_ns,thread_cycles,cycles_available\n";
+    if (crowd) std::cout << "joints,motions,workload,actors,sample,rounds,updates,elapsed_ns,thread_cycles,cycles_available,scene_bytes,controller_bytes\n";
     for (unsigned count : {3u,32u,128u}) for (unsigned motions : {1u,4u,8u})
         if (motions <= count) for (unsigned mode = 0; mode < 3; ++mode)
         {
-            if (argc == 5 && (count != selected[0] || motions != selected[1] || mode != selected[2])) continue;
+            if (argc >= 5 && (count != selected[0] || motions != selected[1] || mode != selected[2])) continue;
             prepare(count,motions,mode);
-            if (benchmark || cold) timing(count,motions,mode,cold); else correctness(count,motions,mode,trace);
+            if (crowd) crowdTiming(count,motions,mode,selected[3]);
+            else if (benchmark || cold) timing(count,motions,mode,cold); else correctness(count,motions,mode,trace);
             LLKeyframeDataCache::clear();
         }
-    if (!benchmark && !cold) std::cout << checks << " multi-motion checks across 252 frames\n";
+    if (!benchmark && !cold && !crowd) std::cout << checks << " multi-motion checks across 252 frames\n";
     return 0;
 }
 }

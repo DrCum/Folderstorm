@@ -258,3 +258,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   candidate is rejected; production retains the tree. Plan 14k retains 2,016
   matched timing rows and the memory/failure evidence. Plan 14l measures bounded
   read-through hints with explicit memory/miss limits before another proposal.
+- Stage 4r experiment: bounded lookup hints preserve native poses/ownership but
+  add up to 4 KiB/controller. Revised single-controller costs show modest gains;
+  many-controller parent drift exceeds twofold, so a stable complete-path balance
+  is unproved. The cache is declined and production pose files restore PR 114.
+  Plan 14l retains all trials. Plan 14m addresses the observed eight-query/one-
+  callback preparation waste without enabling dispatch or changing playback.

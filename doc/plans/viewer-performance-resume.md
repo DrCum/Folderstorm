@@ -9,8 +9,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
 - Branch: `codex/perf-blender-pool-hints`, from committed/rejected 14k evidence
   `54e250406c88fffa659dbb30fe7a8f71828ec38b`, backed up on its own remote branch.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
-  The native-only hint prototype defaults to zero slots, is partially validated,
-  and is not ready for a PR. Do not enable it in a viewer build.
+  The 14l inline hint prototype is now declined and withdrawn. Runtime pose
+  source/header exactly match PR 114; stop pool-container work. Its final
+  evidence/decision must be committed before starting the new 14m branch.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -207,6 +208,21 @@ Updated October 24, 2026. The user resumed the performance program; the October
   No default activation or new PR. Next decisive step is 1/16/64-controller
   round-robin density testing, before selected-candidate broader regressions.
   All new probe sessions are terminal: 45933, 32486, 60016, 38912, 7921.
+- The 36-case many-controller matrix completed 1,944 rows / 1,990,656 character
+  updates across 1/16/64 heap-owned actors. All actor poses/weights were checked
+  outside timing. However unchanged-parent raw-cycle drift reaches ~132%, so
+  apparent large gains/losses are not causal adoption evidence. The cause is
+  unknown; no process/affinity/priority changes were made. Storage costs are
+  certain: +1/4 KiB per controller. The inline cache is declined, not claimed
+  universally slower. Both production pose files now hash exactly to PR114.
+  Prototype source is preserved at b298 and scratch `frozen-pool-hints-b298`;
+  historical cache-labeled binaries must not be rebuilt against restored code.
+  Final data/identities are in `results/pool-crowd-provenance14l.json`.
+  Probe sessions 13000 and 73682 are terminal. No PR was opened for 14l;
+  GitHub head search confirmed none, and PR114 review still has no findings.
+  Plan 14m is written before implementation. The real-controller oracle's
+  eight predictions / one actual saturated callback identifies preparation
+  waste; record baseline counts, then audit mask/reset/advisory semantics.
 
 ## Next sequence
 
@@ -217,16 +233,13 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Continue `viewer-performance-14l-pool-lookup-hints.md` on its separate branch.
-   Lookups, one-motion and revised multi-motion costs are measured; map-mode
-   equivalence/failure checks pass. Add the planned round-robin density test
-   before accepting 4 KiB/controller, then any selected candidate's broader
-   checks. Cold costs remain noisy. Verify actual builder idleness first. Integrate only a
-   complete-path winner; otherwise remove the prototype and stop pool-container
-   work for another measured cost. Do not present partial native checks as FPS.
-   Keep frozen one-motion and initial multi-motion series intact. Preserve the
-   current cycle fixture snapshot before extending it for density; the next
-   plan section already specifies workload/counter/control requirements.
+3. Finish/verify 14l's decision commit and remote backup, then create
+   `codex/perf-shadow-mask-admission` from that exact head for plan 14m. Preserve
+   the rejected data and restore; do not resume container tuning or revive the
+   cache macro. Record initial preparation allocation/buffer/key counts before
+   implementing advisory mask admission. Unknown/custom callbacks, reentry,
+   independent mask resets and actually observed pruned motions need explicit
+   handling. Normal playback/diagnostic default remain unchanged.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
    Manual shadow coverage/first-gap capture remains a threading gate; do not

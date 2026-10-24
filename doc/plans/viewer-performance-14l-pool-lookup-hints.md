@@ -43,7 +43,9 @@ the independent private builder or its cache.
 
 Lookup-only experiment implemented on `codex/perf-blender-pool-hints`, from the
 14k evidence commit `54e250406c88fffa659dbb30fe7a8f71828ec38b`. Conditional
-real-controller prototypes are compiled and partially measured, not accepted.
+real-controller prototypes were evaluated and declined for adoption. Production
+pose source/header are restored byte-for-byte to PR 114. The records below
+describe the historical trials; the final density decision is at the end.
 
 The independent actual-pointer fixture is
 `indra/llcharacter/tests/blender_pool_hint_experiment.cpp`. It leaves the prior
@@ -84,7 +86,7 @@ fallback adds work at every size. No size is accepted from these results alone.
 The full reports retain absent/empty/single-key and all larger cases as well.
 
 Source inspection finds no production pool erasure or replacement before
-destruction. The conditional prototype in `llpose.h/.cpp` uses
+destruction. During evaluation the conditional prototype in `llpose.h/.cpp` used
 `FS_TEST_BLENDER_POOL_HINT_SLOTS`, default **0**, with no CMake/viewer option.
 Only fresh native wrappers may enable it while evaluating complete costs.
 Never mix a cached old-layout controller implementation with an enabled header.
@@ -132,7 +134,8 @@ selectively discard this first series or infer crowd FPS from it.
 Contiguous-mode/full-outer/other regressions are still pending for any candidate
 selected from complete costs. No PR or default enablement until the complete-
 path and quality/stability evidence justifies a change. The conditional
-prototype defaults to zero, remains experimental and may be removed entirely.
+prototype initially defaulted to zero; it has now been withdrawn after the
+density gate below. Historical native executables remain preserved.
 
 ### Multi-motion fixture and measurement controls
 
@@ -205,4 +208,42 @@ and a fixed total number of character updates per sample. Validate each actor's
 pose/weight outside timing. Record actor/controller sizes and per-run parent
 drift alongside both metrics. Test the working-set tradeoff before broader
 candidate regressions and any PR; reject the design if it is not a useful
-complete-path balance. The current prototype remains default-off.
+complete-path balance. That density gate is now complete as an experiment.
+
+### Density decision
+
+The 36-case density matrix completed all six matched runs per case: 1/16/64
+independent heap-owned controllers, 32/128 joints, one/eight motions and all
+three workloads. Every sample performs 1,024 serial character updates; pose
+and weight validation for every actor occurs outside timing. Parsed assets are
+shared; live joints, motion state and blender ownership are independent.
+All 1,944 raw rows and per-run summaries/drift remain in `results/pool-crowd-*`.
+
+Control variation invalidates the apparent large gains/losses. The unchanged
+128-joint, one-motion saturated parent at 64 actors differs by about 132% in
+per-run thread-cycle medians. A 32-joint/eight-motion partial case differs by
+about 77%. Counter agreement shows this is not explained by wall-time
+descheduling alone; the data do not identify a cause or isolate allocation
+geometry, CPU state or competing work. No processes, priorities or affinity
+were changed to obtain favorable samples. These density timings are not
+adoption evidence and do not prove that every cache use would lose.
+
+The persistent costs are certain: scene fixtures grow 1,824 to 2,848/5,920 bytes,
+and controllers 688 to 1,712/4,784 bytes for 64/256 slots. At 64 controllers the
+256-slot choice adds 256 KiB of cache storage before allocator overhead. A
+stable complete-path/memory balance has not been established. The trial is
+therefore declined, rather than default-enabled from favorable subcases.
+
+Both `llpose.cpp` and `llpose.h` now exactly match published PR 114; the test-only
+hint macro and storage are removed. Prototype source remains recoverable at
+`b298d5cb894a7761ffedbcebb272a8a38dcf1053` and in scratch
+`frozen-pool-hints-b298`. Historical native commands must use that frozen
+prototype, not rebuild a cache-labeled executable against the restored source.
+The retained fixture/row/source/executable identities are in
+`results/pool-crowd-provenance14l.json`. No viewer PR is opened for this rejected
+runtime experiment. Stop pool-container work here.
+
+Next plan: `viewer-performance-14m-shadow-mask-admission.md`. The actual callback
+oracle exposes eight prepared predictions but only one callback in saturated
+overlap; examine that preparation waste while real crowd/window acceptance
+remains pending. The new work enables no production dispatch.
