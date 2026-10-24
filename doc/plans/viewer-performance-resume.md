@@ -83,26 +83,50 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Implementation commit is `ea82a3c3ea`; evidence head `b8c82e686d` is published
   and attached as PR 112. Its automated review is running at that exact head as
   last read; recheck findings before depending on approval. Read its plan and
-  scratch `*14h*` logs. Plan 14i is written, and its real-blender allocation
-  baseline is measured before implementation. Current branch holds the copied
-  cost fixture and eight allocation rows plus baseline provenance. The prepared
-  uninstrumented parent executable is `active-blender-parent-cost14i.exe`.
-  Production blender source is still unchanged. Freeze the independent outer
-  collection reference next; audit cache membership before implementing.
+  scratch `*14h*` logs. Plan 14i is now implemented with reused pointer storage
+  and pool-owned membership, preserving reverse consumer order and cached
+  lifetimes. Both storage modes pass 26,748 checks / 46 frozen-outer cases.
+  Each candidate mode reproduces the same 216 frozen map-controller frames;
+  4,054 controller checks pass per mode. A wrong cache-order mutant is correctly
+  rejected at case 44. The numerical joint-blender source remains unchanged.
+- Warm collection and full three-joint controller allocations are now zero.
+  Cold/warm/teardown ordinary-new reports and measured object/capacity tradeoffs
+  are recorded in plan 14i. Insertion failure/retry passes 18 separate checks;
+  phase, shadow, purge, mask and diagnostic-failure regressions pass. Every new
+  native controller wrapper includes fresh `llpose.cpp`; do not use cached
+  old-layout pose implementations with the new headers. The containing
+  controller grows 680 to 688 bytes on this MSVC target.
+- Final provenance and publication of 14i remain. The independent builder
+  retained #112 as `7.2.5.82254` at exact `b8c82e686d` and released ownership
+  before the final timings. Script `performance-validation/measure-active-blender14i.ps1`
+  checks state/worker/process inventory around every run. Use parent
+  `active-blender-parent-valid-cost14i.exe` and current
+  `active-blender-current-paired-cost14i.exe`, and complete controller parent
+  `active-blender-controller-parent-fresh14i.exe` / current
+  `active-blender-controller-cost14i.exe`. Earlier pre-valid-joint and no-memory
+  prototypes stay preserved but are not the final timing controls. The first
+  series with a cached parent pose object is preserved in
+  `performance-validation/active-blender-before-fresh-control14i`; final series
+  compiles the full parent from exact PR 112 source under matching flags.
+  It retains 504 rows / 504,000 invocations, with full native-process idleness
+  verified around each run. Direct 3/32/128-joint medians fall from
+  682/5,356/31,498 ns to 545/3,894/16,086 ns; real viewer FPS remains unproved. Initial
+  baseline provenance describes fixture commit `3c04393c54`; final evidence must
+  identify the refined fixture/source/executable hashes. Plan 14j is written.
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Continue
-   14i's collection reference/implementation; do not reimplement 14g/14h or enable
-   workers. Recheck PR 112's automated review and separate build evidence.
+1. Inspect current status/head/PR state and preserve any newer work. Finish
+   14i's final provenance/publication; do not reimplement its validated
+   source or enable workers. Recheck PR 112's review and separate build evidence.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Execute `viewer-performance-14i-active-blenders.md` on its new branch from
-   the published 14h head. The full controller fixture still
-   makes three calls / 72 bytes per warmed three-joint update. Preserve reverse
-   first-admission order, priority/additive behavior and quantum cache lifetimes;
-   compare actual blenders/poses with a frozen reference before a separate PR.
+   the published 14h head. After its separate PR, create another branch from that
+   exact published head for `viewer-performance-14j-blender-pool-lookup.md`.
+   Keep retained capacity, priority/additive and quantum cache behavior stable;
+   improve the remaining duplicate map lookup and test cold insertion ownership.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
    enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;

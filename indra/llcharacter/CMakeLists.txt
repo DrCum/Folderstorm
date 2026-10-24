@@ -122,6 +122,28 @@ if(LL_TESTS)
   add_custom_command(TARGET avatar_initial_motion_mask POST_BUILD
     COMMAND $<TARGET_FILE:avatar_initial_motion_mask> VERBATIM)
 
+  add_executable(avatar_active_blender tests/active_blender_test.cpp)
+  target_link_libraries(avatar_active_blender PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_active_blender POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_active_blender> VERBATIM)
+
+  add_executable(avatar_active_blender_controller tests/active_blender_controller_test.cpp)
+  target_link_libraries(avatar_active_blender_controller PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_active_blender_controller POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_active_blender_controller> VERBATIM)
+
+  add_executable(avatar_active_blender_failures tests/active_blender_test.cpp)
+  target_link_libraries(avatar_active_blender_failures PRIVATE llcharacter)
+  target_compile_definitions(avatar_active_blender_failures PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+
+  foreach(probe IN ITEMS benchmark allocations)
+    add_executable(avatar_active_blender_${probe} tests/active_blender_cost_benchmark.cpp)
+    target_link_libraries(avatar_active_blender_${probe} PRIVATE llcharacter)
+    if(probe STREQUAL "allocations")
+      target_compile_definitions(avatar_active_blender_${probe} PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+    endif()
+  endforeach()
+
   add_executable(avatar_motion_purge tests/motion_purge_test.cpp)
   target_link_libraries(avatar_motion_purge PRIVATE llcharacter)
   add_custom_command(TARGET avatar_motion_purge POST_BUILD
