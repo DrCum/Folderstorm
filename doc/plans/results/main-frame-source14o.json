@@ -1,14 +1,35 @@
 {
   "source_commit": "836f1eed3850dcb55e57ba8e9138a2a21917e7fe",
   "parent_pr": "https://github.com/DrCum/Folderstorm/pull/116",
-  "status": "Partial source phase/ownership audit. No code or worker behavior changed, no new runtime profiling/capture or full build performed.",
+  "status": "Source phase/ownership and candidate decision audit complete; runtime CPU attribution, worker load, query window and rendered acceptance still open",
   "source_sha256_normalized_lf": {
     "indra/newview/llappviewer.cpp": "ffa5901243063b5656fe8f27e4431cb35401980f2ccbe5171e593a1218450dde",
     "indra/newview/llviewerobjectlist.cpp": "913a09284dfc9583f25ef088e639a0f0524f086a2a7105c6a1495a5be2eecfe1",
     "indra/newview/llvoavatar.cpp": "10651fc1e67e1fbffc7f8d15378c8bf427ee291ce5162f52e1c4de64b4e3e46f",
+    "indra/newview/llvoavatar.h": "379d226f7a31d79d745ebec3c9a80a165b7ccc9630ef64c63208132ce857189a",
     "indra/llcharacter/llcharacter.cpp": "8ac509c6dee6d2cdf5aa23a109910279e0f77071874cd13472a820e2a24abae9",
-    "indra/llcharacter/llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3"
+    "indra/llcharacter/llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+    "indra/llcommon/threadpool.cpp": "06dd412f0c93f9200507e75bd19303977f8a22f064255461600c3ac08f83d154",
+    "indra/llcommon/threadpool.h": "7a519eda8895fc78e8db78a310b3df11d3f5b560b19854d613af77ebda3dcb14",
+    "indra/llcommon/workqueue.cpp": "ce349a39683b1a72b87b748b2a396e023652d234bc1dc8cf142647d529276526",
+    "indra/llcommon/workqueue.h": "1368f2f66b6a5884e18a2b7612ffe83b334b21d6eb39dea23185b69ca2741bc4",
+    "indra/llimage/llimageworker.cpp": "7fa5013385cd778e862c41bc315ad466cbe4716d4bae3b71c7aa89543253ecfc",
+    "indra/llrender/llimagegl.cpp": "98a671b9b536c90bed9bc491814fdf27e7470fa54e1f919c57ce00140f5d7241",
+    "indra/newview/llmeshrepository.cpp": "f62272e4a3acdfed1b67039496a1d2cead44b37d7329813076c4de6cacfbf076",
+    "indra/newview/pipeline.cpp": "56e23064c376370d4fb58da934f8656447d5c07c4da893b2c884064533bc7a73",
+    "indra/newview/llvovolume.cpp": "b547c9216d96ff8c8217ff05bd157b1e49a7aa726867646096674b219800b7d2",
+    "indra/newview/llphysicsmotion.cpp": "9db7b6562087428ba3da7f1c88a097bb2614434a1ec580778856e2b0f9b7c65c",
+    "indra/newview/llflexibleobject.cpp": "2dfcc485355b40599635374e8e4e77f29eb7006fe5b095023ca79954babec25b",
+    "indra/newview/llviewerpartsim.cpp": "8403c4131c89d659d7516c2730a6f50fb5e2aad135277eb0f7761f1d886cdf80",
+    "indra/newview/llviewerdisplay.cpp": "679af1eb31aadaaa21224d5e7b600d1d706d2e0817deae61daa9f24972036037",
+    "indra/newview/llworld.cpp": "053a732cea37ab52f8653604d5629ef9c3be02f031f835a7dc37b06b4c5bb331",
+    "indra/newview/llvlmanager.cpp": "8c6fe883498bd8108bcdb39059bdb0d4c40fc2ff77550e363cd1ea82d6417e66",
+    "indra/newview/llsurface.cpp": "2046d8fe9ab740fb81e4c066c0ff9e2150b96dc4ba3084d1ea5f93523b3f2183",
+    "indra/newview/llsurfacepatch.cpp": "1c1dde1c3054122382bbb82713cce87da47002ad3adffbad7f79089f59540698",
+    "indra/newview/llvosurfacepatch.cpp": "251736fe64eed0b0b992fa1baa2d4d33fb8070044e9469da27738700393c3731",
+    "indra/llmessage/patch_idct.cpp": "0c86c085aacacc4fbb0e0cbed643189bcde9e854f1c4c90ead4a25455a0872b0"
   },
-  "reviewed": "doFrame event/idle/display ordering; General/image startup call sites; idle worker reply budget; object idle traversal and deferred cleanup; avatar idle tail and updateCharacter",
-  "open": "Worker constructor/configuration/load, remaining geometry/visibility/simulation/terrain paths, real CPU attribution/coverage/window and rendered acceptance"
+  "scope": "Reviewed relevant entry/owner/publication paths, not every line or a full runtime profile. No production code, worker policy, setting, full build, account or shared cache changed.",
+  "decision": "Plan14p: stronger private bundled-scheduler correctness/idle/load/fiber/shutdown probe before proposing any production scheduler change. Do not duplicate already-threaded texture/mesh work or parallelize whole scene methods.",
+  "evidence": "Existing plans12/13/14e wake/complete-cost data and 14m/14n native evidence retained; no new timing result claimed by this source audit."
 }

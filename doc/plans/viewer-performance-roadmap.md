@@ -279,3 +279,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   morph-math or worker change. Full viewer/FPS/visual acceptance remains pending.
   Plan 14o audits the main-frame phases and existing workers across the viewer
   before choosing further work; real attribution/window evidence is still open.
+- Stage 5 source audit: frame/queue/role/owner boundaries and existing workers
+  are recorded for visibility, geometry, physics, flexible/particle and terrain
+  work. Whole scene methods share mutable state and are not ready-made jobs.
+  Actual hotspot/spare-core evidence remains open. Plan14p extends the measured
+  private bundled-scheduler experiment to sustained CPU/fiber/lifecycle checks;
+  production scheduling and live animation dispatch remain unchanged.

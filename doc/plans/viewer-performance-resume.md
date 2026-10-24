@@ -21,7 +21,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `results/hand-consumer-provenance14n.json`. PR116 is open/mergeable and its
   automated code review completed with no findings at exact `836f1eed38`.
   Its full viewer build/runtime acceptance is pending. Plan 14o's source phase
-  audit has begun; no further production changes or workers are enabled.
+  audit is now complete in `viewer-performance-14o-main-frame-findings.md` and
+  `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
+  acceptance probe is written before implementation. No production scheduling
+  or further viewer behavior changes are enabled.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -317,8 +320,19 @@ Updated October 24, 2026. The user resumed the performance program; the October
   object updates with a time budget; a queue reply alone gives no same-frame
   motion deadline. General startup requests three threads; image-decode sizing
   is configurable and derives from reported hardware concurrency. Actual pool
-  constructor/configuration/load and other worker counts remain open. Review
-  the remaining visibility/geometry/simulation/terrain paths before ranking.
+  constructor overrides and existing image/mesh/conditional-GL workers are now
+  audited. Visibility/geometry/physics/flexible/particle/terrain paths require
+  owned snapshots and owner publication; shared RNG, neighbor patches, decoder
+  globals and drawable/group mutation prevent naive whole-loop parallelism.
+  Source defaults do not prove actual busy load or spare cores. Exact reviewed
+  source identities and candidate decisions are in the completed 14o findings.
+- Plan 14p is written before implementation. Current Windows workers poll with
+  Sleep(1)/empty notify; plan12's private stock round_robin control already has
+  a large measured latency advantage, but two-second CPU samples cannot dismiss
+  historical busy waiting. Strengthen sustained idle/active CPU, timed work,
+  coroutine/fairness, notification/admission/close races and drain/shutdown in
+  private pools. Reuse bundled stock first; no new Win32 backend or production
+  scheduler change yet. Keep timing behind full-host build-idle checks.
 
 ## Next sequence
 
@@ -330,10 +344,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
-   Continue plan 14o on `codex/perf-main-frame-audit`; initial frame/avatar/queue
-   ordering and source hashes are recorded. Trace remaining worker ownership,
-   visibility/detail, geometry, simulation and terrain, then choose the next
-   kernel from evidence. Preserve 14l/14m source
+   Finish backing up completed 14o on `codex/perf-main-frame-audit`, then begin
+   plan14p on a new `codex/perf-worker-wait-probe` branch. Audit-only work needs
+   no extra installer PR. Build a private correctness/sustained-measurement
+   harness with unchanged production pools. Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.

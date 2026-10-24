@@ -56,3 +56,20 @@ private locations, names and raw user captures out of committed documents.
 Existing Q4/Q7 requests remain deferred; the user is working and has not tested
 PR114 yet. Do not ask the same question again while useful independent work
 continues.
+
+## Results and next step
+
+The source audit is complete in
+[main-frame findings](viewer-performance-14o-main-frame-findings.md), with exact
+source hashes in `results/main-frame-source14o.json`. It covers the frame/queue/
+avatar ordering, role/hidden/session differences, configured worker widths,
+existing texture/mesh/GL workers and the remaining visibility, geometry,
+physics, flexible, particle and terrain candidates. No source loop is claimed
+as a runtime hotspot. The viewer's production code and defaults are unchanged.
+
+The decision is [plan 14p](viewer-performance-14p-worker-wait-acceptance.md):
+strengthen the existing private stock-scheduler experiment with sustained CPU,
+real-queue/fiber/lifecycle checks before proposing any production replacement.
+This follows the measured wake bottleneck and preserves the historical CPU
+concern. Runtime scene attribution/coverage/window and quality gates remain
+open for the overall performance objective.
