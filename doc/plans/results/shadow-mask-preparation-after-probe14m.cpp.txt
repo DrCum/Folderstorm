@@ -1,0 +1,50 @@
+#include "../viewer-performance/indra/llcharacter/llpose.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingcontext.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotion.cpp"
+#include "../viewer-performance/indra/llcharacter/llcharacter.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotioncontroller.cpp"
+#include "../viewer-performance/indra/llcharacter/llkeyframemotion.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingshadow.cpp"
+#include "../viewer-performance/indra/llcharacter/tests/sampling_allocation_probe.h"
+// Reuse the recorded scene inputs without running their benchmark entry point.
+#define main fsMultiMotionUnusedMain
+#include "../viewer-performance/indra/llcharacter/tests/blender_pool_multimotion_benchmark.cpp"
+#undef main
+int main()
+{
+    using namespace BlenderPoolMulti;
+    LLVector4a::initClass();
+#if !FS_SAMPLING_ALLOCATION_PROBE || TRACY_ENABLE
+    return 1;
+#endif
+    std::cout << "joints,motions,workload,enabled,predicted,matched,unused,unpredicted,excluded,rejected,buffer_peak,curve_keys_peak,new_calls,requested_bytes,peak_live_delta,end_live_delta,binding_bytes_after,masked,masked_observed,masked_unobserved\n";
+    for(unsigned overlap : {1u,8u}) for(unsigned mode=0;mode<3;++mode) for(bool enabled : {false,true})
+    {
+        prepare(128,overlap,mode);
+        {
+            Scene scene(128,overlap,mode);
+            const auto before=scene.snapshot();
+            require(FSSampling::ShadowScope::resetTotals());
+            FSSamplingAlloc::Stats allocations;
+            FSSampling::ShadowTotals totals;
+            {
+                FSSamplingAlloc::Scope allocationScope;
+                { FSSampling::ShadowScope scope(scene.character.getMotionController(),enabled); scene.update(); }
+                totals=FSSampling::ShadowScope::totals(); allocations=FSSamplingAlloc::snapshot();
+            }
+            size_t bindings=0;
+            for(auto* motion : scene.motions) bindings+=motion->ownedSamplingBindingBytes();
+            require(scene.snapshot()==before && !bindings && allocations.live==allocations.baseline);
+            require(!totals.mismatched && (!enabled || totals.predicted==(mode==2?1u:overlap)));
+            if(!enabled) require(!allocations.calls && !allocations.requested);
+            std::cout << "128," << overlap << ',' << name(mode) << ',' << enabled << ',' << totals.predicted
+                << ',' << totals.matched << ',' << totals.unused << ',' << totals.unpredicted
+                << ',' << totals.excluded << ',' << totals.rejected << ',' << totals.bufferBytesPeak
+                << ',' << totals.retainedKeysPeak << ',' << allocations.calls << ',' << allocations.requested
+                << ',' << allocations.peak-allocations.baseline << ',' << allocations.live-allocations.baseline
+                << ',' << bindings << ',' << totals.masked << ',' << totals.maskedObserved << ',' << totals.maskedUnobserved << '\n';
+        }
+        LLKeyframeDataCache::clear();
+    }
+}
+

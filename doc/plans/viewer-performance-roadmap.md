@@ -264,3 +264,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   is unproved. The cache is declined and production pose files restore PR 114.
   Plan 14l retains all trials. Plan 14m addresses the observed eight-query/one-
   callback preparation waste without enabling dispatch or changing playback.
+- Stage 4s: bounded advisory mask admission reduces saturated diagnostic
+  preparation from eight queries to one, preserving actual callbacks and
+  auditing misses. Both storage modes reproduce 216+252 frozen frames; enabled
+  saturated allocations fall 17 to three, with explicit metadata/CPU overhead
+  when pruning cannot help. Diagnostics stay default FALSE/nonpersistent; no
+  real crowd/window/FPS acceptance or production worker caller is established.
+  Plan 14n measures the remaining normal hand-consumer cleanup allocation.
