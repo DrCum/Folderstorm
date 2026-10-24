@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-worker-wait-probe`, from completed audit `db9be862ab`.
-  Published PR116 head remains
+- Branch: `codex/perf-worker-wait-probe`, integrating PR117 after completed audit
+  `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
   `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
   `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`; both are attached to this chat.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
@@ -21,7 +21,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   pending. Plan 14n is implemented at `7fe77b5aa9` with final provenance in
   `results/hand-consumer-provenance14n.json`. PR116 is open/mergeable and its
   automated code review completed with no findings at exact `836f1eed38`.
-  Its full viewer build/runtime acceptance is pending. Plan 14o's source phase
+  Its exact-head full build is retained as `7.2.5.82273`; installer SHA and the
+  passed focused receipt were verified. Runtime acceptance remains pending.
+  Plan 14o's source phase
   audit is now complete in `viewer-performance-14o-main-frame-findings.md` and
   `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
   acceptance probe is written before implementation. No production scheduling
@@ -334,23 +336,28 @@ Updated October 24, 2026. The user resumed the performance program; the October
   coroutine/fairness, notification/admission/close races and drain/shutdown in
   private pools. Reuse bundled stock first; no new Win32 backend or production
   scheduler change yet. Keep timing behind full-host build-idle checks.
-- Plan14p's private correctness/measurement prototype is now present, but its
-  default correctness test exits 2 at scheduled deadlines (session93670 is
-  terminal). A minimal reproduction shows future work posted to an empty
-  WorkSchedule misses its 20ms due time and 500ms observation in BOTH current
-  and stock pools; a later immediate post rescues it. Initial failure/repro
-  source and executable identities are retained in `results/scheduler-initial-
-  failure14p.json` and `scheduled-wait-repro14p*`. The benchmark compiles, but no
-  timings have been run and no probe PR is open. Do not remove the failing
-  scheduled case or misattribute it to the stock backend.
-- Next prerequisite: plan14p1 must isolate/fix scheduled queue deadline
-  recomputation on a separate branch from completed audit db9be862ab, with
-  ready/timeout/earlier-head/close/drain regression coverage. Current code fixes
-  an adjusted deadline before a condition loop that can wake for new head items
-  without recomputing it; WAITING can also loop on an expired limit. Preserve
-  this initial prototype branch before switching. Native tests of a header fix
-  need fresh `workqueue.cpp` so cached WorkSchedule template instantiations do
-  not silently run the old implementation.
+- The initial private 14p harness is preserved/pushed at `ccad4c341c` on
+  `codex/perf-worker-wait-probe`, with no PR. It stalled at its scheduled case;
+  session93670 is terminal through watchdog exit2. Its smaller reproduction
+  shows both current and stock WorkSchedule pools miss a 20ms due item during
+  500ms observation and deliver only after a later post. This is not a stock
+  acceptance/rejection. No scheduler timings were run; the benchmark compiles.
+  Before-data and identities are in that commit's `scheduler-initial-failure14p`
+  and `scheduled-wait-repro14p*` records. Scratch frozen probe sources are in
+  `performance-validation/frozen-worker-probe-ccad`.
+- Plan14p1 is written before implementing the queue fix on this independent
+  branch. Test scheduled deadline recomputation, caller timeouts, future-head
+  changes, close/drain and lifetimes. Compile fresh `workqueue.cpp` in native
+  wrappers; cached WorkSchedule template instantiations would run the old code.
+- Plan14p1 is implemented at `8720509deb`: 340 focused queue/deadline/drain
+  checks and 6,686 unchanged frozen current/stock harness checks pass. The old
+  same-source fixture fails four checks in 22 and confirms both notification
+  bugs plus caller-deadline consumption. Normal/Tracy compilation passed;
+  fresh workqueue.cpp and 32 reverified immutable libraries prevent stale code.
+  Results and provenance are in `viewer-performance-14p1-scheduled-queue-results.md`
+  and `results/*14p1*`. The next 14p2 continuation plan is written before work.
+  PR116 exact836 is now independently retained as `7.2.5.82273`; verified hash
+  F793FC9A2BC7BEE4E76182884D9E6280041674CB2E3D8CD728AE25DB2AA02B02.
 
 ## Next sequence
 
@@ -362,11 +369,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
-   Back up the initial `codex/perf-worker-wait-probe` prototype/failure evidence,
-   then create `codex/perf-scheduled-queue-deadlines` from audit db9be862ab.
-   Write plan14p1 before the queue fix, verify its independent reproduction,
-   implement/test/publish it separately, then integrate its prerequisite back
-   into the probe branch and finish 14p. Keep production pool policy unchanged.
+   PR117 is published/attached/mergeable at exact22ea4cee92. Its queue fix is
+   integrated into the preserved probe branch. Follow14p2 without
+   deleting the failed scheduled case. Production pool policy remains unchanged.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header

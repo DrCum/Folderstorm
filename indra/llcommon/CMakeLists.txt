@@ -381,6 +381,14 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(tuple "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(workqueue "" "${test_libs}")
 
+  # <FS> Exercise real timed pools without the circular llcommon test harness.
+  add_executable(scheduled_queue_deadline_test tests/scheduled_queue_deadline_test.cpp)
+  target_link_libraries(scheduled_queue_deadline_test PRIVATE llcommon Threads::Threads)
+  add_custom_command(TARGET scheduled_queue_deadline_test POST_BUILD
+    COMMAND $<TARGET_FILE:scheduled_queue_deadline_test>
+    VERBATIM)
+  # </FS>
+
 ## llexception_test.cpp isn't a regression test, and doesn't need to be run
 ## every build. It's to help a developer make implementation choices about
 ## throwing and catching exceptions.

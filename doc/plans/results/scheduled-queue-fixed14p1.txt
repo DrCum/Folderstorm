@@ -1,0 +1,4 @@
+caller_limit_consumed_future=0
+empty_future_without_poke=1
+earlier_head_without_poke=1
+340 scheduled queue checks; 0 failures
