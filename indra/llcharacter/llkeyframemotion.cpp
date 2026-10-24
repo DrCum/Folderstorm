@@ -705,6 +705,10 @@ bool LLKeyframeMotion::prepareOwnedSampling(F32 time, SamplingRequest& request)
     return prepareKeyframeSampling(time, identity, request);
 }
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
 bool LLKeyframeMotion::matchesOwnedSamplingQuery(F32 time, const SamplingRequest& query)
 {
     FSSampling::ScopedNumericContext preserve(FSSampling::NumericContext::capture());
@@ -717,6 +721,10 @@ bool LLKeyframeMotion::matchesOwnedSamplingQuery(F32 time, const SamplingRequest
     return captureOwnedSamplingIdentity(identity) &&
         matchesCurrentQuery(query, resolveKeyframeUpdateTime(time).sampleTime, identity);
 }
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
 
 bool LLKeyframeMotion::releaseOwnedSamplingBindings(U64 instance)
 {

@@ -21,10 +21,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Plan 14f1 is published as PR 110; its automated review completed with no
   findings at exact `4adf6a948e`. Both checkpoint PRs are attached to this chat.
 - Plan 14g's predictor/query checker/bounded scoped observer and default-off
-  nonpersistent setting are implemented, with final validation in progress.
-  Initial native checks pass; read its updated results and scratch `*14g*` logs.
-  No production worker caller exists. Finish source review, final regressions,
-  cost/allocation provenance and docs before publishing a separate PR. Do not
+  nonpersistent setting are implemented and native-validated: 5,063 checks per
+  storage mode, 26 separate allocation/failure checks per mode, 13 unsupported
+  direct/accounting checks, and prior phase/current/mask regressions. Read its
+  final results and scratch `*14g*` logs. No production worker caller exists.
+  Finish final diff review/commit/push and publish a separate PR. Do not
   guess its number. Native tests now use immutable internal-library snapshots
   in `performance-validation/dependencies-shadow-20261024`, avoiding mutable
   archives during the independent builder's work. Source/cache remained untouched.
@@ -59,19 +60,34 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `7.2.5.82247` passed full build and 23 focused checks. Its final receipt is
   `performance-worker-final-20261024-062156-pr108.json` in the parent workspace.
   That build is not evidence for the newer 14f source.
+- The independent builder has now retained 109 (`7.2.5.82248`) and 110
+  (`7.2.5.82249`) separately at their exact published heads; read its state/index
+  for current evidence. Its `activeBuild` is null and worker checkpoint idle as
+  last read. This chat did not control or change its source, caches or monitor.
+- 14g's final paired controller costs are retained in `sampling-shadow-cost-*`:
+  162 rows / 162,000 updates, default direct differences within about 1% of the
+  parent controller control in this fixture; enabled shadow adds ~1-3 us. New
+  disabled collection adds no allocations. Enabled/failure/cancel/destruction
+  paths return owned binding capacity and diagnostic allocations to zero.
+  Real viewer gaps/CPU/frame-time, rendered acceptance and other platforms remain
+  unproved. No setting/account/capture was operated.
 
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. Finish 14g's
-   validation/review/publication, rather than reimplementing its source.
+   review/publication if needed, rather than reimplementing its source.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Continue `viewer-performance-14g-shadow-query-prediction.md`: audit controller
-   arithmetic/order, add nonmutating prediction and shadow comparisons, establish
-   real overlap before any off-by-default bounded worker trial. Bound owner
-   bindings and job buffers together. Never manufacture overlap by changing
-   animation order or adding an animation frame of latency.
+3. Begin `viewer-performance-14h-purge-allocation.md` on a new branch from the
+   published 14g head. The full controller fixture still makes four calls / 120
+   bytes per warmed three-joint update; source points to three active-blender
+   list nodes and an unconditional empty-set sentinel on MSVC. Attribute purge
+   alone, guard collector construction without changing eviction/order, test
+   below/at/over-cap and deprecated ownership against a frozen oracle, then
+   publish separately. Write the active-blender collection plan afterward.
+   Manual shadow coverage/first-gap capture remains a threading gate; do not
+   enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;
    missing captures do not block independent source work. Quality/stability and
    whole-frame CPU/frame-time improvement remain the objective.

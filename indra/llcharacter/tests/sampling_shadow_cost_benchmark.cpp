@@ -30,7 +30,12 @@ struct Runner
     void update(bool shadow)
     {
 #if !FS_SHADOW_PARENT_CONTROL
-        FSSampling::ShadowScope scope(character.getMotionController(), shadow);
+        if (shadow)
+        {
+            FSSampling::ShadowScope scope(character.getMotionController(), true);
+            character.getMotionController().updateMotions();
+            return;
+        }
 #endif
         character.getMotionController().updateMotions();
     }
@@ -71,7 +76,15 @@ int run()
 }
 int main(int argc, char** argv)
 {
-    if (argc == 2 && std::string(argv[1]) == "--benchmark") return SamplingShadowCost::run();
+    if (argc == 2 && std::string(argv[1]) == "--benchmark")
+    {
+        if (!FSSampling::NumericContext::capture().isSupported())
+        {
+            std::cout << "SKIP shadow cost: owned numeric context unsupported; direct playback remains available\n";
+            return 0;
+        }
+        return SamplingShadowCost::run();
+    }
     std::cout << "Opt in with --benchmark; generated controller costs only, no viewer FPS/overlap claim.\n";
     return argc == 1 ? 0 : 1;
 }

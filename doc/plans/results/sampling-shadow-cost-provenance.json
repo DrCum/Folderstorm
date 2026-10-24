@@ -1,0 +1,43 @@
+{
+  "parent_controller_commit": "4adf6a948e32927afbafea78f5e8511ba552297f",
+  "parent_controller_sha256_normalized_lf": "d5c3bfbff7139916ccff5d9cbd26148cecee4fdc31c8b6923ab5bdb0241a6f05",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "recorded_utc": "2026-10-24T09:35:03.392610+00:00",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "storage": "map",
+  "order": [
+    "parent-r1",
+    "current-r1",
+    "current-r2",
+    "parent-r2"
+  ],
+  "rows_total": 162,
+  "iterations_per_row": 1000,
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "0bcae4a8180d1dad541fa5e6abb4b99bc13263f87146f8e566461df46d520762",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447"
+  },
+  "immutable_internal_library_snapshot": {
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+    "scope": "Byte-verified read-only copies; external packages/toolchain remain read-only. No shared-cache configure/build/writes."
+  },
+  "executables_sha256": {
+    "sampling-shadow-parent-measured14g.exe": "2860d9c834e5dc60051b6abb4329bd12998539782356e35a9e682d9003438b89",
+    "sampling-shadow-cost-fallback14g.exe": "1aec89d79f4054077571996fb7e523d639dc061db543004a7e26ff0059b3ea2c"
+  },
+  "allocation_assertions_per_mode": 26,
+  "scope": "Original parent controller body versus instrumented current controller plus collector. Other fresh core sources, class layout, fixture and immutable dependencies match. Disabled path constructs no scope, matching viewer control flow. Warm fixed-time generated four-key curves, one motion/character, no constraints/emote, full controller components only. No real avatar boundary, useful overlap, total viewer CPU or FPS claim. Native-build state null and full native-process inventory empty before measurement."
+}

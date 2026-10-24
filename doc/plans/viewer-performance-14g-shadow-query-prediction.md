@@ -48,16 +48,13 @@ constraint, blending, skeleton or attachment order to create an artificial gap.
 
 ## Results
 
-Prediction/observation source is implemented; final validation and publication
-are in progress. No workers are dispatched and no extra poses are applied.
-Initial native runs pass 4,954 real-controller checks and 23 separate allocation/
-failure checks. Final map/contiguous, unsupported-mode and caller checks are
-being completed. Full viewer build and manual observation/crowd acceptance
-remain pending for this checkpoint.
+Prediction/observation is implemented and native validation is complete. No
+workers are dispatched and no extra poses are applied. The checkpoint still
+needs its own full viewer build and manual observation/crowd acceptance.
 
 The observer is a lexical owner-thread scope at the built-avatar boundary,
 before visibility/appearance/root preparation. Its thread-local stack allows one
-main-scene batch globally, rejects nested opportunities and cancels lookup on
+main-scene batch globally, rejects nested avatar-scope opportunities and cancels lookup on
 controller destruction. It retains owned queries/tokens only and resolves
 cleanup through the controller's current owning containers. Default playback
 creates no shadow buffers. `FSAvatarSamplingShadow` is false and nonpersistent.
@@ -156,8 +153,149 @@ The source audit and implementation sequence below remain the design record.
    before a bounded worker trial. If the source boundary cannot provide useful
    independent work, reject it and select another measured kernel.
 
-These are implementation tasks, not completed results. The initial source audit
-is complete enough to begin the clock/query contract; the complete live
-observation boundary, global memory accounting and runtime measurements still
-need implementation/validation. Parent is PR 110 at
+This sequence was written before implementation. Source/native results and the
+remaining runtime gate follow. Parent is PR 110 at
 `4adf6a948e32927afbafea78f5e8511ba552297f`.
+
+### Native validation
+
+- 5,063 assertions pass in each map/contiguous mode, including 1,440 clock
+  projection cases compared with the actual unchanged controller arithmetic.
+  Tests compare controller state before/after projection, exact poses, active
+  order, stop state, callback arguments/masks/order and hand publication with an
+  unobserved real-controller control.
+- Coverage includes factors, hidden/paused/forced updates, pause-handle release,
+  quantum interpolation/new-pose branches, loading/activation, pre-activation,
+  stop/reactivation, cache eviction, metadata/usage/binding/skeleton/appearance/
+  role, live numeric controls and modal clock changes, removal/replacement, and genuine deprecated
+  duplicate-ID ownership. A repeated controller callback consumes a prediction
+  once and counts the subsequent callback as unpredicted. A nested avatar scope
+  cancels the outer remaining opportunity; it does not reorder the controller.
+- Motion, buffer and logical-key admission limits are exercised independently.
+  Controller destruction drops live lookup authority while the immutable lease
+  survives until scope exit, then releases. Owner binding capacities return to
+  zero after successful, rejected, cancelled and destroyed-owner batches.
+- Separate allocation executables pass 26 checks per mode. Thirty-two warmed
+  controller updates make 128 replacement-new calls / 3,840 requested bytes in
+  both plain and explicitly disabled-scope paths: zero additional allocations.
+  An enabled batch makes seven calls in this three-joint fixture, including
+  four existing controller calls and three diagnostic calls, with zero retained
+  live bytes. Failure injection at state, binding and usage allocation restores
+  the collector, releases partial storage and continues normal playback without
+  propagating the diagnostic allocation failure. Timings use different binaries.
+- Existing phase regression passes 5,956 checks / 1,474 frozen updates per mode;
+  current-owner regression passes 1,203 checks per mode, and initial/current
+  masks pass 241 checks across 15 poisoned-storage cases. The owned suite passes
+  109,806 checks / 24,193 exact poses and batching passes 1,734 checks per mode.
+  Unsupported-context
+  branch coverage passes 13 direct-playback/accounting checks; owned-only
+  coverage is explicitly skipped. This is Windows branch coverage, not native
+  execution on another compiler/platform.
+- Owner numeric controls and status are preserved across projection, preparation
+  and query checking, including clear/all-set sticky status and inexact clock
+  arithmetic. The guarded functions use explicit precise/fenv compiler scopes.
+  No floating-point control operation is added to default playback.
+- Independent Tracy/contiguous syntax checks pass for affected production/test
+  units and the complete avatar caller. The caller also passed normal-map checks;
+  PCH-free caller checks explicitly include `chrono` for an existing transitive
+  requirement. The new setting is valid XML, unique, Boolean, false and
+  nonpersistent.
+
+Native work uses fresh current core sources, optimized MSVC 19.51.36244 x64
+AVX2, precise floating point and assertions enabled. During the independent
+builder's work, 32 internal libraries were copied read-only to an immutable local
+snapshot, each verified before/after copying. External packages/toolchain were
+read only. No shared-cache configure/build/write or primary-source edit was
+performed here. Scratch executables/logs and the snapshot manifest are in the
+sibling `performance-validation` folder. Sanitizers, full viewer integration and
+other-platform execution remain pending.
+
+### Component costs
+
+[Map allocation report](results/sampling-shadow-alloc-map.csv),
+[contiguous report](results/sampling-shadow-alloc-contiguous.csv), and
+[source/executable/dependency provenance](results/sampling-shadow-cost-provenance.json).
+
+The control compiles the original PR 110 controller body against the same fresh
+other core sources, class layout, fixture and immutable dependencies. The current
+binary additionally includes the collector. Disabled timing constructs no scope,
+matching the viewer's default control flow. Order is parent/current/current/
+parent, nine samples of 1,000 updates per stage and size in each run. All 162 rows
+/ 162,000 measured updates have valid accounting; current paired final poses
+match, and all 27,000 shadow queries per current run match their actual callback.
+
+Median ns/update on the verified Ryzen 5 3600:
+
+| Joints | Parent direct | Current direct | Shadow enabled |
+| --- | ---: | ---: | ---: |
+| 3 | 739.50 | 732.85 | 1,769.05 |
+| 32 | 5,416.75 | 5,448.65 | 6,848.15 |
+| 128 | 31,239.70 | 31,384.75 | 34,015.90 |
+
+The direct differences are within about 1% in this fixture; do not attribute
+small variations to a whole-viewer improvement. Shadow collection intentionally
+adds about 1-3 microseconds here. The generated warmed four-key curves use fixed
+time, one motion/character and no constraints/emote. Full controller blending is
+included; real avatar preparation, caller setting/optional handling, rendering,
+worker wake/dispatch and a real overlap window are not. No FPS claim.
+
+Raw runs: [parent 1](results/sampling-shadow-cost-parent-map-r1.csv),
+[current 1](results/sampling-shadow-cost-current-map-r1.csv),
+[current 2](results/sampling-shadow-cost-current-map-r2.csv),
+[parent 2](results/sampling-shadow-cost-parent-map-r2.csv).
+
+### Build and manual observation
+
+Build this checkpoint's exact head separately with the accepted private x64 AVX2
+OpenSim Nightly Velopack configuration, Tracy OFF and contiguous keys OFF. The
+independent builder retained parent PR 110 as `7.2.5.82249`; that is not evidence
+for this newer head. Do not create extra profiling/storage variants automatically.
+
+With LL_TESTS, `avatar_sampling_shadow` runs correctness coverage.
+`avatar_sampling_shadow_allocations --allocations` and
+`avatar_sampling_shadow_cost --benchmark` are separate opt-in executables; the
+allocation binary does not provide timings. Unsupported owned contexts report a
+skip and retain direct playback. Existing phase/current-owner/mask tests remain
+relevant. No account, setting or logged-in viewer was operated here.
+
+Once a retained build is available, the deferred manual request is:
+
+1. With builds idle, warm assets in a repeatable crowded scene. Record the exact
+   build, settings, camera, avatar counts, focus/session count and sample duration.
+   Compare normal FPS/frame times with `FSAvatarSamplingShadow` FALSE.
+2. Deliberately set `FSAvatarSamplingShadow` TRUE in Debug Settings for a short
+   observation interval, then FALSE. It applies no extra poses or workers and
+   adds diagnostic CPU cost. Do not use its enabled FPS as an optimization gain.
+3. Save only the `AvatarSamplingShadow` aggregate line emitted on disable/next
+   avatar update, or shutdown. It contains counts and timing buckets, without
+   avatar names, IDs or locations. Other surrounding log content can be private.
+4. `scopes` counts enabled built-avatar scopes; `batches` counts eligible remote
+   batches. `predicted = matched + mismatched + unused` after all scopes finish.
+   `unpredicted` records ordinary callbacks without an unused matching instance
+   candidate; it can include repeated callbacks. `nested` counts nested avatar
+   observation scopes. No count authorizes forcing a motion callback.
+5. Gap bucket i covers up to `2^i` ns; bucket 31 also includes larger values.
+   The first histogram covers all matching callbacks; the second only matches
+   at the first ordinary callback. Prior measured hook time is subtracted, and
+   the current validation is excluded. Later gaps include earlier animation work
+   a worker might remove. Wall-time gaps and successful query matching do not
+   establish independent CPU time or a useful queue deadline by themselves.
+   Preparation, observation and cleanup are separate costs; validation is a
+   subset of observation and must not be added twice.
+6. Include normal/hidden transitions, appearance/outfit/skeleton changes,
+   sit/stand, animesh/preview/poser, arrival/departure and teleport/logout/exit
+   checks. Turn the diagnostic off afterward. It does not persist across runs.
+
+No real viewer shadow capture, rendered/lifecycle acceptance or whole-frame
+CPU/FPS measurement has been collected. Those gates remain open before a bounded
+worker trial or any default enablement. The native generated gap is not a
+substitute.
+
+### Next plan
+
+The full-controller probe exposes remaining allocation work beyond keyframe
+sampling. [Plan 14h](viewer-performance-14h-purge-allocation.md) separately verifies
+and removes the unconditional idle purge collector allocation on MSVC. After
+that, write the active-blender collection plan from measured costs, preserving
+blend order and quantum behavior. This independent serial work can proceed while
+manual shadow/quality evidence is pending; it does not close the threading gate.

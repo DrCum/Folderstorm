@@ -1305,9 +1305,9 @@ namespace
 void reportAvatarSamplingShadow(bool report_empty = false)
 {
     const auto totals = FSSampling::ShadowScope::totals();
-    if (!FSSampling::ShadowScope::resetTotals() || (!totals.batches && !report_empty)) return;
+    if (!FSSampling::ShadowScope::resetTotals() || (!totals.scopes && !report_empty)) return;
     std::ostringstream report;
-    report << "batches=" << totals.batches << " predicted=" << totals.predicted
+    report << "scopes=" << totals.scopes << " batches=" << totals.batches << " predicted=" << totals.predicted
         << " matched=" << totals.matched << " mismatched=" << totals.mismatched
         << " unused=" << totals.unused << " unpredicted=" << totals.unpredicted
         << " excluded=" << totals.excluded << " rejected=" << totals.rejected

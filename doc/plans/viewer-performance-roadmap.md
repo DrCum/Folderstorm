@@ -222,3 +222,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   post-removal map insertion costs remain explicit. Paired component timings
   are retained in plan 14f1. Proceed to 14g's real controller prediction/overlap
   audit; whole-viewer crowd gain remains unproven.
+- Stage 4m: default-off, nonpersistent avatar shadow collection compares early
+  owned queries with actual virtual callbacks. 5,063 assertions pass per storage
+  mode, plus separate allocation/failure and prior phase/current/mask regressions.
+  Owner state/lifetimes are bounded and cleaned up; no poses or workers are added.
+  Component costs and manual aggregate capture instructions are in plan 14g.
+  Real window/crowd/visual acceptance remains pending. Plan 14h addresses the
+  measured idle purge allocation while that evidence is pending.

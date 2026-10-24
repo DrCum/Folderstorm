@@ -160,6 +160,10 @@ LLMotionController::~LLMotionController()
     deleteAllMotions();
 }
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
 bool LLMotionController::predictSamplingClock(bool force_update, SamplingClock& projected, bool will_unpause) const
 {
     projected = {};
@@ -189,6 +193,10 @@ bool LLMotionController::predictSamplingClock(bool force_update, SamplingClock& 
     else projected.animTime = update_time;
     return llfinite(projected.animTime);
 }
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
 
 bool LLMotionController::predictSamplingTime(LLMotion& motion, const SamplingClock& clock, F32& time) const
 {

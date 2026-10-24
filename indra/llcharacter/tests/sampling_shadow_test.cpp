@@ -9,6 +9,8 @@
 #include <numeric>
 #if defined(_MSC_VER) && defined(_M_X64)
 #include <immintrin.h>
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
 #endif
 
 namespace SamplingShadowTest
@@ -116,12 +118,21 @@ void conservation()
 }
 void mutations()
 {
-    for (unsigned reason = 0; reason < 17; ++reason)
+    for (unsigned reason = 0; reason < 21; ++reason)
     {
         Pair p; require(ShadowScope::resetTotals(), "Previous scope remained live");
         LLAnimPauseRequest held_a, held_b;
+#if defined(_MSC_VER) && defined(_M_X64)
+        const unsigned original_controls = _mm_getcsr();
+#endif
         if (reason == 15 || reason == 16) { held_a = p.actual.requestPause(); held_b = p.expected.requestPause(); }
         if (reason == 16) { held_a = nullptr; held_b = nullptr; }
+        if (reason == 18)
+        {
+            p.motion(p.a).setEaseOut(.5f);
+            p.expected.updateMotions(LLCharacter::NORMAL_UPDATE); p.actual.updateMotions(LLCharacter::NORMAL_UPDATE);
+            Clock::set(100.25);
+        }
         {
             ShadowScope shadow(p.a, true, false, !p.actual.hasMotionPauseRequests());
             require(!ShadowScope::resetTotals(), "Live scope reset aggregate counters");
@@ -147,11 +158,31 @@ void mutations()
             }
             if (reason == 14) { held_a = p.actual.requestPause(); held_b = p.expected.requestPause(); }
             if (reason == 15) { held_a = nullptr; held_b = nullptr; }
+            if (reason == 17)
+            {
+                p.a.removeMotion(p.id); p.b.removeMotion(p.id);
+                p.a.startMotion(p.id, 0.f); p.b.startMotion(p.id, 0.f);
+            }
+            if (reason == 18)
+            {
+                p.a.stopMotionLocally(p.id, false); p.b.stopMotionLocally(p.id, false);
+                p.a.startMotion(p.id, 0.f); p.b.startMotion(p.id, 0.f);
+            }
+#if defined(_MSC_VER) && defined(_M_X64)
+            if (reason == 19) _mm_setcsr(original_controls ^ _MM_FLUSH_ZERO_MASK);
+            if (reason == 20) _mm_setcsr((original_controls & ~_MM_ROUND_MASK) | _MM_ROUND_UP);
+#endif
             const auto kind = reason == 9 ? LLCharacter::HIDDEN_UPDATE : LLCharacter::NORMAL_UPDATE;
             p.expected.updateMotions(kind); p.actual.updateMotions(kind);
+#if defined(_MSC_VER) && defined(_M_X64)
+            _mm_setcsr(original_controls);
+#endif
         }
         p.compare(); conservation();
         require(!p.motion(p.a).ownedSamplingBindingBytes(), "Diagnostic retained owner bindings between batches");
+        for (auto* motion : p.a.getActiveMotions())
+            require(!static_cast<LLKeyframeMotion*>(motion)->ownedSamplingBindingBytes(), "Deprecated active motion retained bindings");
+        if (reason == 18) require(p.a.getActiveMotions().size() == 2, "Fixture did not exercise deprecated duplicate-ID ownership");
         const auto stats = ShadowScope::totals();
         if (reason == 0 || reason == 11 || reason == 16) require(stats.matched == 1, "Unchanged query did not match");
         else if (reason == 9 || reason == 14) require(stats.unused == 1, "Skipped callback forced a query");
@@ -239,10 +270,12 @@ struct Event
 };
 std::vector<Event>* trace = nullptr;
 bool loadingReady = false;
+bool recursiveUpdate = false;
 class Recorder final : public LLNullMotion
 {
 public:
     unsigned label; bool loading;
+    LLCharacter* owner = nullptr;
     Recorder(const LLUUID& id, unsigned value, bool pending = false): LLNullMotion(id), label(value), loading(pending) {}
     bool canDeprecate() override { return false; }
     LLMotionBlendType getBlendType() override { return label == 2 ? ADDITIVE_BLEND : NORMAL_BLEND; }
@@ -250,6 +283,7 @@ public:
     LLMotionInitStatus onInitialize(LLCharacter* character) override
     {
         if (loading && !loadingReady) return STATUS_HOLD;
+        owner = character;
         LLPointer<LLJointState> state = new LLJointState;
         state->setJoint(character->getCharacterJoint(0)); state->setUsage(LLJointState::ROT);
         state->setRotation(LLQuaternion()); state->setPriority(getPriority()); addJointState(state);
@@ -258,6 +292,7 @@ public:
     bool onUpdate(F32 time, U8* mask) override
     {
         if (trace) { Event event{label, bits(time), {}}; std::copy_n(mask, event.mask.size(), event.mask.begin()); trace->push_back(event); }
+        if (label == 1 && recursiveUpdate) { recursiveUpdate = false; owner->getMotionController().updateMotions(true); }
         return true;
     }
 };
@@ -342,6 +377,21 @@ void clockPaths()
     }
 }
 
+void reentry()
+{
+    Pair p; const LLUUID regular("fe000000-0000-0000-0000-0000000014a2");
+    require(p.a.startMotion(regular, 0.f) && p.b.startMotion(regular, 0.f), "Recursive fixture activation failed");
+    ShadowScope::resetTotals(); std::vector<Event> actual, expected;
+    {
+        ShadowScope shadow(p.a, true);
+        trace = &expected; recursiveUpdate = true; p.expected.updateMotions(LLCharacter::NORMAL_UPDATE);
+        trace = &actual; recursiveUpdate = true; p.actual.updateMotions(LLCharacter::NORMAL_UPDATE); trace = nullptr;
+    }
+    require(actual == expected && actual.size() == 2, "Reentrant controller callbacks changed time, mask or order");
+    p.compare(); conservation(); const auto stats = ShadowScope::totals();
+    require(stats.matched == 1 && stats.unpredicted == 1, "Repeated controller callback reused a consumed prediction");
+}
+
 void queryPurity()
 {
     Fixture f; LLKeyframeMotion::SamplingRequest query;
@@ -362,6 +412,25 @@ void queryPurity()
 #endif
 }
 
+void preparationPurity()
+{
+#if defined(_MSC_VER) && defined(_M_X64)
+    Pair p; p.a.setTimeFactor(1.1f); p.a.setUpdateFactor(1.3f);
+    const unsigned original = _mm_getcsr();
+    for (unsigned flags : {0u, unsigned(_MM_EXCEPT_MASK)})
+    {
+        const unsigned expected = (original & ~_MM_EXCEPT_MASK) | flags;
+        _mm_setcsr(expected);
+        { ShadowScope shadow(p.a, true); require(_mm_getcsr() == expected, "Preparation changed owner numeric state"); }
+        require(_mm_getcsr() == expected, "Scope cleanup changed owner numeric state");
+        ProjectionController controller; controller.setCharacter(&p.actual); controller.seed(.1f, 1.1f, 1.3f, false, 0.f, 0);
+        LLMotionController::SamplingClock clock; _mm_setcsr(expected);
+        require(controller.predictSamplingClock(false, clock) && _mm_getcsr() == expected, "Inexact projection leaked owner status");
+    }
+    _mm_setcsr(original);
+#endif
+}
+
 int allocations()
 {
 #if FS_SAMPLING_ALLOCATION_PROBE
@@ -377,15 +446,23 @@ int allocations()
             "Disabled diagnostics created owner bindings");
     for (int failure : {0, 1, 2})
     {
-        bool caught = false; FSSamplingAlloc::Stats result;
+        bool escaped = false; FSSamplingAlloc::Stats result;
+        const auto rejected = ShadowScope::totals().rejected;
         {
             FSSamplingAlloc::Scope probe; FSSamplingAlloc::failureCountdown = failure;
-            try { ShadowScope scope(p.a, true); }
-            catch (const std::bad_alloc&) { caught = true; }
+            try
+            {
+                ShadowScope scope(p.a, true);
+                FSSamplingAlloc::failureCountdown = -1;
+                require(!FSSampling::activeShadow, "Failed collection stayed active");
+                p.a.updateMotions();
+            }
+            catch (const std::bad_alloc&) { escaped = true; }
             FSSamplingAlloc::failureCountdown = -1;
             result = FSSamplingAlloc::snapshot();
         }
-        require(caught && !FSSampling::activeShadow, "Failed constructor left a live collector");
+        require(!escaped && !FSSampling::activeShadow && ShadowScope::totals().rejected > rejected,
+                "Diagnostic allocation failure escaped instead of retaining normal playback");
         require(!p.motion(p.a).ownedSamplingBindingBytes() && result.live == result.baseline,
                 "Failed constructor leaked bindings or diagnostic allocations");
         require(ShadowScope::resetTotals(), "Failed scope prevented the next batch");
@@ -415,7 +492,7 @@ int run()
         std::cout << checks << " unsupported-context direct playback/accounting checks passed\n";
         return 0;
     }
-    LLVector4a::initClass(); projection(); mutations(); lifetimeAndBounds(); storageLimits(); callbacks(); clockPaths(); queryPurity();
+    LLVector4a::initClass(); projection(); mutations(); lifetimeAndBounds(); storageLimits(); callbacks(); clockPaths(); reentry(); queryPurity(); preparationPurity();
     std::cout << checks << " real-controller projection, shadow, lifecycle and bounded-accounting checks passed\n";
     return 0;
 }
@@ -425,7 +502,12 @@ int main(int argc, char** argv)
     if (FS_SAMPLING_ALLOCATION_PROBE)
     {
         LLVector4a::initClass();
+        if (!FSSamplingTest::supportedContext("sampling shadow allocations")) return 0;
         return argc == 2 && std::string(argv[1]) == "--allocations" ? SamplingShadowTest::allocations() : 0;
     }
     return SamplingShadowTest::run();
 }
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif

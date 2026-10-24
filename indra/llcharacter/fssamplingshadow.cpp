@@ -4,6 +4,7 @@
 #include "llkeyframemotion.h"
 #include <chrono>
 #include <algorithm>
+#include <new>
 
 namespace FSSampling
 {
@@ -20,7 +21,7 @@ std::uint64_t shadowElapsed(ShadowClock::time_point start)
 
 struct ShadowScope::Impl
 {
-    struct Entry { LLKeyframeMotion::SamplingRequest query; U64 instance = 0; bool seen = false, admitted = false; };
+    struct Entry { LLKeyframeMotion::SamplingRequest query; LLUUID id; U64 instance = 0; bool seen = false, admitted = false; };
     std::array<Entry, MAX_MOTIONS> entries;
     size_t count = 0, bufferBytes = sizeof(Impl), retainedKeys = 0;
     std::uint64_t observationNs = 0;
@@ -28,9 +29,15 @@ struct ShadowScope::Impl
     ShadowClock::time_point preparedAt;
 };
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
 ShadowScope::ShadowScope(LLMotionController& controller, bool enabled, bool force_update, bool will_unpause)
 {
     if (!enabled) return;
+    const auto start = ShadowClock::now();
+    ++sShadowTotals.scopes;
     mPrevious = activeShadow;
     mRegistered = true;
     activeShadow = this;
@@ -38,12 +45,16 @@ ShadowScope::ShadowScope(LLMotionController& controller, bool enabled, bool forc
     {
         mPrevious->mCancelled = true;
         ++sShadowTotals.nested;
+        sShadowTotals.prepareNs += shadowElapsed(start);
         return; // Nested work suspends observation and invalidates the outer opportunity.
     }
     try
     {
-        if (!controller.mCharacter || !controller.mCharacter->allowsOwnedKeyframeSampling()) return;
-        const auto start = ShadowClock::now();
+        if (!controller.mCharacter || !controller.mCharacter->allowsOwnedKeyframeSampling())
+        {
+            sShadowTotals.prepareNs += shadowElapsed(start);
+            return;
+        }
         mController = &controller;
         {
             ScopedNumericContext preserve(NumericContext::capture());
@@ -65,6 +76,7 @@ ShadowScope::ShadowScope(LLMotionController& controller, bool enabled, bool forc
                 }
                 if (mImpl->count == MAX_MOTIONS) { ++sShadowTotals.rejected; continue; }
                 auto& entry = mImpl->entries[mImpl->count++];
+                entry.id = motion->getID();
                 entry.instance = keyframe->getOwnedSamplingInstance();
                 if (!keyframe->prepareOwnedSampling(time, entry.query))
                 {
@@ -93,8 +105,18 @@ ShadowScope::ShadowScope(LLMotionController& controller, bool enabled, bool forc
         sShadowTotals.prepareNs += shadowElapsed(start);
         mImpl->preparedAt = ShadowClock::now(); // Preparation itself is not independent overlap.
     }
-    catch (...) { finish(); throw; }
+    catch (const std::bad_alloc&)
+    {
+        sShadowTotals.prepareNs += shadowElapsed(start);
+        ++sShadowTotals.rejected;
+        finish(); // Diagnostic memory pressure leaves ordinary playback available.
+    }
+    catch (...) { sShadowTotals.prepareNs += shadowElapsed(start); finish(); throw; }
 }
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
 
 ShadowScope::~ShadowScope()
 {
@@ -119,8 +141,8 @@ void ShadowScope::finish()
                     auto* keyframe = dynamic_cast<LLKeyframeMotion*>(motion);
                     return keyframe && keyframe->releaseOwnedSamplingBindings(entry.instance);
                 };
-                bool found = false;
-                for (const auto& item : mController->mAllMotions) if (release(item.second)) { found = true; break; }
+                const auto canonical = mController->mAllMotions.find(entry.id);
+                const bool found = canonical != mController->mAllMotions.end() && release(canonical->second);
                 if (!found) for (auto* motion : mController->mDeprecatedMotions) if (release(motion)) break;
             }
         }

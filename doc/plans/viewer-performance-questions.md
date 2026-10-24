@@ -21,6 +21,7 @@ Never present a missing hardware result as a successful test.
 | Q4 | Can a matched baseline/checkpoint profiling capture be collected once stage 1 is built? | Select the first expensive kernel from evidence. | Default enablement of major threading changes. |
 | Q5 | Any existing animation, attachment, posing or character-switch defects to distinguish from regressions? | Keep quality checks attributable. | Acceptance triage only. |
 | Q6 | Any known legacy meshes/animesh that become unstable while loading or changing outfits? | Optional in-world validation of the missing-joint fallback fix. | Acceptance only. |
+| Q7 | After the shadow checkpoint has a retained build, can you collect its aggregate line from a warmed crowded scene using plan 14g's deliberate TRUE/FALSE debug-setting interval? | Establish query coverage and a conservative real same-frame window; enabled diagnostics add CPU cost. | A live bounded worker trial and final threading acceptance. |
 
 ## Local debugging and acceptance queue
 
@@ -86,6 +87,12 @@ Never present a missing hardware result as a successful test.
   acceptance item; generated exact poses do not cover visible morphs.
   Both storage modes pass 171 actual publication/lifetime/consumer checks and
   zero repeated allocations; post-removal node/key allocations remain counted.
+- Checkpoint 14g's source/native implementation is complete, with manual viewer
+  observation still pending. Record exact build/settings/duration and only the
+  aggregate `AvatarSamplingShadow` line from the explicit debug setting; keep
+  unrelated logs private. Compare normal FPS with that setting FALSE. No setting
+  or account was operated by this chat. The next purge/blender CPU work can
+  proceed independently; generated tests do not establish a real queue deadline.
 
 ## Results
 
