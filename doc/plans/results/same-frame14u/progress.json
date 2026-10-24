@@ -1,68 +1,12 @@
 {
-  "parent_pr": 122,
-  "parent_head": "b7c60446cfdf3f67565690a0b1ffaa3c7f8048be",
-  "prototype_head": "47d53651ba07850a4cd3a3b2922d68c2238bbf9b",
-  "status": "prototype_basic_checks_only",
-  "current_basic_native_checks": 110001,
-  "accepted_performance_cases": 0,
-  "test_source": {
-    "bytes": 30377,
-    "sha256": "5189d73a78ed8c48b3c017e6fec9738f023b50d9910f1450a8c613c1382f3385"
-  },
-  "artifacts": {
-    "event-sampling14u.cpp": {
-      "bytes": 651,
-      "sha256": "f0fccad51c74f55860117008e4faff385af39cb2b5ff0ae44de009d2b59069fb"
-    },
-    "event-sampling14u-initial.exe": {
-      "bytes": 4500992,
-      "sha256": "639d731441658dcc48af0ccdbfe413bd2c7ffdc23e0df41162dfdf0a31aa19aa"
-    },
-    "event-sampling14u-initial.rsp": {
-      "bytes": 12065,
-      "sha256": "e32f72644a63ad35595e5933b777c7c231bc4e5b4ae103241072fb6bcc4dee7a"
-    },
-    "event-sampling14u-initial.log": {
-      "bytes": 546,
-      "sha256": "0d28e8f1236f585676f6fb23272e6aae6f2663d3ff9f3ab18d93f49805672ae9"
-    },
-    "event-sampling14u-diagnostic2.exe": {
-      "bytes": 4502528,
-      "sha256": "41ec53abebd3c34442b21ecfab44b3d5c82492fde062c0a3b5ba7edc32ade295"
-    },
-    "event-sampling14u-diagnostic2.rsp": {
-      "bytes": 12073,
-      "sha256": "4a7849a0503bf76d39b83ea7a57b0b2438fbc637c0b48c2d73c5d1b88fc296bf"
-    },
-    "event-sampling14u-diagnostic2.log": {
-      "bytes": 655,
-      "sha256": "bca5f7c8f4dcf55fd99f35dd85061b8837737c5b779ab9be245e44271ee764e1"
-    },
-    "event-sampling14u-controlled-admit3.exe": {
-      "bytes": 4504064,
-      "sha256": "4fc13e06dc476762ccba2376b16a965a66bc7742631376e90233599d271d95e6"
-    },
-    "event-sampling14u-controlled-admit3.rsp": {
-      "bytes": 12085,
-      "sha256": "fde7ddc2682114ad63820d893860be31202d5edca95f4653a0182889bb917b5b"
-    },
-    "event-sampling14u-controlled-admit3.log": {
-      "bytes": 667,
-      "sha256": "c28190e58f6e3a8e267a316e82fa0dcf66effb5d2e9299328f3afe68ea64baef"
-    }
-  },
-  "initial_failure": {
-    "exit": 2,
-    "message": "Ready/current or stale oracle not exercised",
-    "case_context_captured": false,
-    "contemporaneous_test_source_hash_available": false,
-    "attribution": "Uncertain. Later diagnostics passed; source proves nonblocking admission can reject, so correctness admission was made deterministic. Do not claim passing reruns explain the original failure."
-  },
-  "pending": [
-    "Deterministic early-miss/later-ready transition and first-consumption control",
-    "No readiness, failure/rejection, between-callback staleness and final cancellation/cleanup",
-    "Allocator and normal/Tracy checks after transition controls",
-    "Freeze/execute/validate matrix with actual callback work and build-idle guards"
-  ],
-  "limits": "Private fixed cohort only. No product/runtime/cache dispatch, timing claim, real scene deadline or FPS acceptance."
+  "status": "complete_test_only_experiment",
+  "implementation_head": "6c5012aadc2fac5a5158e0809f705938deda9399",
+  "current_proof": "provenance.json",
+  "results": "summary.json",
+  "native_checks": 123711,
+  "controlled_transition_cases": 52,
+  "accepted_timing_cases": 16,
+  "accepted_allocation_cases": 8,
+  "historical_partial_proof": "progress-before-transition-controls.json",
+  "viewer_integration": false
 }

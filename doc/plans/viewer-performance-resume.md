@@ -15,8 +15,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
   automated review completed with no findings at that exact head. The independent
   builder retained7.2.5.82290,39 focused checks, at that head with Tracy OFF;
   installer SHA and packaged default-FALSE/Persist0 policy were verified. It is
-  returned idle before the14s/14t measurements. A later worker-state read shows
-  PR121 building; revalidate live ownership/idle before future timing. Keep that published head
+  returned idle before the14s/14t measurements. PR121/122 are now retained as
+  7.2.5.82297/7.2.5.82299,39 focused checks each; both installer hashes and exact
+  heads were verified. The builder returned idle before14u timing. Revalidate
+  ownership/idle before future measurements. Keep that published head
   immutable. Its base is reviewed PR119 exact
   `8952ad421837beb61737a15d999ff14fa1c069b4`, including completed PR118 after audit
   `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
@@ -113,6 +115,26 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Do not publish14u as complete: deterministic early-miss/later-ready, failure/
   between-callback stale and cancellation/cleanup controls are still required.
   Only then do allocator/normal/Tracy checks and freeze the small paired matrix.
+- Plan14u is now completed at6c5012aadc2fac5a5158e0809f705938deda9399.
+  It adds52 deterministic delivery/transition controls with promise/future data
+  only, character/ID/time and byte-exact controller/hand oracles, no readiness,
+  failure/rejection, between-callback frame/skeleton/asset/permission changes and
+  final cancellation/cleanup. Both native variants pass123,711 checks; normal/
+  Tracy syntax passes. Startup controls and the correctness admission oracle use
+  post; timed submissions retain tryPost. No timed request has a gate, hook,
+  forced readiness or synthetic gap. All16 paired/reversed1,024-frame timing
+  cases and8 separate64-frame allocation cases pass exact program/frame/resource/
+  callback/useful-waste and nonoverlap verification. Retained data revalidates.
+  Current proof is results/same-frame14u/provenance.json and summary.json; the
+  old partial proof is preserved as progress-before-transition-controls.json.
+  The initial unlabelled failure remains unattributed; no accepted timing relies
+  on that program. All own native/compile sessions are terminal. Event later
+  consumption applies~48% in32-character cases, with median first ready callback18,
+  but combined cycles rise1.428–1.666x direct and owner savings vary by order.
+  Do not integrate this whole-batch design. Read14u-readiness-results and the
+  prewritten14v owned-row-publication plan. Publish14u as a separate test-only
+  checkpoint, attach/verify its head, then begin14v on a new branch. Q4/Q7 and
+  live General/crowd/quality acceptance stay deferred; no viewer worker is enabled.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -533,11 +555,12 @@ Updated October 24, 2026. The user resumed the performance program; the October
    PR121 and PR122 are published/attached/mergeable at exact81c90614cd and
    b7c60446cf, both without automated review findings. Their84/18-case matrices
    are complete; do not amend those heads or repeat their timings unnecessarily.
-   On this new branch continue14u prototype47d53651ba: add deterministic owned
-   delivery gates for early-miss/later-ready and the remaining transition/failure/
-   stale/cleanup controls before measuring. Read its audit and preserve the initial
-   unlabelled failure. Current corrected-admission110,001-check result is partial,
-   not proof of those missing transitions. No live viewer integration is enabled.
+   Plan14u transition controls and its24-case matrix are now complete/validated
+   at6c5012aadc. Publish its separate test-only checkpoint, attach/verify the exact
+   head and preserve it. Then begin the already-written14v owned-row publication
+   plan on a new branch. Reuse existing generation acknowledgement; no buffer may
+   reset until owner reads end and its exact ticket is Expired or no callback
+   was retained. No live viewer integration is enabled by this research.
    Do not treat synthetic gaps as real scene deadlines or adopt the rejected
    first-consumption batch. No animation worker dispatch or scene/controller
    reordering is enabled here.

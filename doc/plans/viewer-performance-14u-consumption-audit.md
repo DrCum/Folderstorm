@@ -1,4 +1,4 @@
-# 14u consumption implementation, further controls pending
+# 14u consumption implementation and control history
 
 Started from published PR 122 exact
 b7c60446cfdf3f67565690a0b1ffaa3c7f8048be on the separate branch
@@ -25,10 +25,10 @@ callback and sampled-but-unused joints. Complete owner/worker windows, current
 resource bounds and final cleanup remain. No production source, settings,
 readiness policy or animation dispatch changes.
 
-The initial expanded native check still forces readiness before normal correctness
+The initial expanded native check forced readiness before normal correctness
 callbacks. It can validate ready application, stale data, busy/closed fallback
-and cleanup, but cannot prove the new early-miss/later-ready transition. Do not
-publish this as completed or collect the14u timing matrix on that evidence.
+and cleanup, but could not prove the new early-miss/later-ready transition.
+That evidence alone did not authorize timing or publication as completed.
 
 The first native run stopped at the generic unexercised-ready/stale assertion;
 its executable/response/log remain preserved as event-sampling14u-initial.
@@ -42,15 +42,15 @@ adapter and rejection accounting. Busy slot/closed queue controls remain. Rich
 case/mode/frame/admission diagnostics are kept for any further failure. Exact
 initial failure attribution remains uncertain; deterministic transition controls
 and this corrected admission oracle are still required before measurement.
-The corrected-admission build passes110,001 basic controller checks. This remains
-partial validation: no deterministic early-miss/later-ready or between-callback
-stale/failure control has run yet, and no14u performance observation exists.
+The corrected-admission build passed110,001 basic controller checks. That was
+partial validation; deterministic transitions and performance observations were
+still missing at that point.
 Source confirmation: workqueue.cpp's tryPost delegates to tryPush; in
 llthreadsafequeue.h, tryPush delegates to tryLock, whose failed try_lock returns
 false. The normal post path uses pushIfOpen. This proves the admission assumption
 was invalid, without conclusively attributing the original unlabelled failure.
 
-Next add deterministic private delivery controls: owned gate data only, release
+The next implemented step added deterministic private delivery controls: owned gate data only, release
 at a specified callback, with waits restricted to correctness controls. Verify
 early direct callbacks followed by later applications, first-consumption control
 discarding late work, no readiness, failure/rejection, staleness between callback
@@ -60,3 +60,19 @@ Only after those pass freeze the small paired/reversed matrix and measure with
 full-host/private-builder idle. No synthetic gap or live viewer deadline is a
 substitute for this transition proof. General cache/deprecated/reentrant lifetime
 and Q4/Q7/world acceptance are still separate gates.
+
+## Completed control and cost evidence
+
+Implementation6c5012aadc adds52 deterministic transition cases covering callback
+2/middle/last readiness, first-only discard, no readiness, rejection, unsupported
+numeric-context failure, between-callback frame/skeleton/asset/permission changes
+and final cancellation/cleanup. Gates own only promise/future data; callbacks
+and Scene mutations remain on the owner. Both native variants pass123,711 checks
+and normal/Tracy syntax passes. Startup correctness controls now use post, while
+all timed requests retain nonblocking tryPost with no delivery hook/gate/wait.
+The exact initial failure is still not retrospectively attributed.
+
+The frozen24-case matrix is now complete and independently revalidated from
+retained data. Read viewer-performance-14u-readiness-results.md and provenance/
+summary.json in results/same-frame14u. No whole-batch viewer integration is
+supported by these costs. The next14v plan is written before implementation.

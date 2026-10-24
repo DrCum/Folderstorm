@@ -1,0 +1,1663 @@
+{
+  "complete": true,
+  "accepted": 24,
+  "planned": 24,
+  "implementation_head": "6c5012aadc2fac5a5158e0809f705938deda9399",
+  "missing": [],
+  "excluded_or_unrun": [],
+  "cases": [
+    {
+      "cell": [
+        "alloc",
+        1,
+        "default-later-retained",
+        1,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-default-later-retained-a1-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 1,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 83,
+        "requested_bytes": 5696,
+        "baseline_bytes": 0,
+        "live_bytes": 608,
+        "peak_bytes": 1472,
+        "first_frame_calls": 3,
+        "first_frame_bytes": 760,
+        "later_calls": 80,
+        "later_bytes": 4936,
+        "retained_binding_bytes": 512,
+        "retained_binding_motions": 1,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "default-later-retained",
+        32,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-default-later-retained-a32-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 488,
+        "requested_bytes": 195447,
+        "baseline_bytes": 0,
+        "live_bytes": 9535,
+        "peak_bytes": 37582,
+        "first_frame_calls": 74,
+        "first_frame_bytes": 35759,
+        "later_calls": 414,
+        "later_bytes": 159688,
+        "retained_binding_bytes": 16384,
+        "retained_binding_motions": 32,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "direct",
+        1,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-direct-a1-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 1,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 0,
+        "requested_bytes": 0,
+        "baseline_bytes": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "first_frame_calls": 0,
+        "first_frame_bytes": 0,
+        "later_calls": 0,
+        "later_bytes": 0,
+        "retained_binding_bytes": 0,
+        "retained_binding_motions": 0,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "direct",
+        32,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-direct-a32-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 0,
+        "requested_bytes": 0,
+        "baseline_bytes": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "first_frame_calls": 0,
+        "first_frame_bytes": 0,
+        "later_calls": 0,
+        "later_bytes": 0,
+        "retained_binding_bytes": 0,
+        "retained_binding_motions": 0,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "event-first-retained",
+        1,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-event-first-retained-a1-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 1,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 197,
+        "requested_bytes": 21144,
+        "baseline_bytes": 0,
+        "live_bytes": 2040,
+        "peak_bytes": 2872,
+        "first_frame_calls": 3,
+        "first_frame_bytes": 760,
+        "later_calls": 194,
+        "later_bytes": 20384,
+        "retained_binding_bytes": 512,
+        "retained_binding_motions": 1,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "event-first-retained",
+        32,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-event-first-retained-a32-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 2798,
+        "requested_bytes": 1261072,
+        "baseline_bytes": 0,
+        "live_bytes": 360,
+        "peak_bytes": 28407,
+        "first_frame_calls": 74,
+        "first_frame_bytes": 35759,
+        "later_calls": 2724,
+        "later_bytes": 1225313,
+        "retained_binding_bytes": 16384,
+        "retained_binding_motions": 32,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "event-later-retained",
+        1,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-event-later-retained-a1-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 1,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 161,
+        "requested_bytes": 16680,
+        "baseline_bytes": 0,
+        "live_bytes": 2040,
+        "peak_bytes": 2872,
+        "first_frame_calls": 3,
+        "first_frame_bytes": 760,
+        "later_calls": 158,
+        "later_bytes": 15920,
+        "retained_binding_bytes": 512,
+        "retained_binding_motions": 1,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "alloc",
+        1,
+        "event-later-retained",
+        32,
+        64
+      ],
+      "file": "readiness14u-alloc-r1-event-later-retained-a32-f64.json",
+      "exe_sha256": "698F5E9B550003C2DB15DEEE4065E6242D218D5555A84D57726CDC3C184896A9",
+      "allocation": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 218,
+        "requested_bytes": 140365,
+        "baseline_bytes": 0,
+        "live_bytes": 109453,
+        "peak_bytes": 126157,
+        "first_frame_calls": 107,
+        "first_frame_bytes": 85718,
+        "later_calls": 111,
+        "later_bytes": 54647,
+        "retained_binding_bytes": 16384,
+        "retained_binding_motions": 32,
+        "binding_bytes_after_cleanup": 0
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "default-later-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-default-later-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 7000,
+          "p95": 11500,
+          "max": 29200,
+          "p99": 13000
+        },
+        "owner_cycles": {
+          "p50": 26280,
+          "p95": 42480,
+          "max": 78120,
+          "p99": 46440
+        },
+        "capture_ns": {
+          "p50": 600,
+          "p95": 900,
+          "max": 14300,
+          "p99": 1100
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 2000,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3600,
+          "p95": 6100,
+          "max": 16800,
+          "p99": 6900
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 2400,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 31109760,
+      "worker_cycles_window": 683280,
+      "combined_cycles_window": 31793040,
+      "totals": {
+        "accepted": 5,
+        "rejected": 1019,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 5,
+        "pending_misses": 5,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "default-later-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-default-later-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 249300,
+          "p95": 398000,
+          "max": 1043900,
+          "p99": 589500
+        },
+        "owner_cycles": {
+          "p50": 896040,
+          "p95": 1418400,
+          "max": 2626200,
+          "p99": 2034000
+        },
+        "capture_ns": {
+          "p50": 18900,
+          "p95": 39000,
+          "max": 130400,
+          "p99": 53400
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 2200,
+          "max": 5600,
+          "p99": 4200
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1800,
+          "max": 3600,
+          "p99": 2300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 117400,
+          "p95": 183800,
+          "max": 369000,
+          "p99": 244900
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 500,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 1031520600,
+      "worker_cycles_window": 6719400,
+      "combined_cycles_window": 1038240000,
+      "totals": {
+        "accepted": 149,
+        "rejected": 875,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 4768,
+        "pending_misses": 4768,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "direct",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-direct-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 6400,
+          "p95": 7500,
+          "max": 52200,
+          "p99": 11800
+        },
+        "owner_cycles": {
+          "p50": 23760,
+          "p95": 28080,
+          "max": 81360,
+          "p99": 39600
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 4700,
+          "max": 47400,
+          "p99": 5800
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 26067960,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 26067960,
+      "totals": {
+        "accepted": 0,
+        "rejected": 0,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 0,
+        "pending_misses": 0,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "direct",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-direct-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 231900,
+          "p95": 373800,
+          "max": 733200,
+          "p99": 463800
+        },
+        "owner_cycles": {
+          "p50": 833760,
+          "p95": 1338120,
+          "max": 2629080,
+          "p99": 1535400
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 400,
+          "p99": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 19700,
+          "p99": 1400
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 119000,
+          "p95": 198200,
+          "max": 289200,
+          "p99": 212400
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 987051960,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 987051960,
+      "totals": {
+        "accepted": 0,
+        "rejected": 0,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 0,
+        "pending_misses": 0,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "event-first-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-event-first-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 9400,
+          "p95": 11300,
+          "max": 72700,
+          "p99": 14800
+        },
+        "owner_cycles": {
+          "p50": 34560,
+          "p95": 41400,
+          "max": 246240,
+          "p99": 45720
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 3400,
+          "p99": 1600
+        },
+        "submit_ns": {
+          "p50": 2100,
+          "p95": 3100,
+          "max": 18300,
+          "p99": 3700
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 800,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3400,
+          "p95": 4700,
+          "max": 37100,
+          "p99": 5600
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 37051200,
+      "worker_cycles_window": 20330280,
+      "combined_cycles_window": 57381480,
+      "totals": {
+        "accepted": 1011,
+        "rejected": 13,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 1011,
+        "pending_misses": 1011,
+        "sampled_joints": 896,
+        "sampled_unused_joints": 896
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": 0.0,
+      "first_ready_callback": null,
+      "sampled_jobs": 28,
+      "delivery_ns": {
+        "p50": 1300,
+        "p95": 2500,
+        "max": 24700,
+        "p99": 24700
+      },
+      "kernel_ns": {
+        "p50": 4400,
+        "p95": 7600,
+        "max": 12000,
+        "p99": 12000
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "event-first-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-event-first-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 249000,
+          "p95": 328100,
+          "max": 696800,
+          "p99": 384300
+        },
+        "owner_cycles": {
+          "p50": 896400,
+          "p95": 1145160,
+          "max": 2502000,
+          "p99": 1378080
+        },
+        "capture_ns": {
+          "p50": 23600,
+          "p95": 34800,
+          "max": 113400,
+          "p99": 43200
+        },
+        "submit_ns": {
+          "p50": 2800,
+          "p95": 5400,
+          "max": 11000,
+          "p99": 7700
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 3500,
+          "p99": 1400
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 114000,
+          "p95": 139900,
+          "max": 215500,
+          "p99": 169700
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 500,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 947032200,
+      "worker_cycles_window": 29212560,
+      "combined_cycles_window": 976244760,
+      "totals": {
+        "accepted": 1024,
+        "rejected": 0,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 1024,
+        "pending_misses": 1024,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "event-later-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-event-later-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 8400,
+          "p95": 10000,
+          "max": 27900,
+          "p99": 12200
+        },
+        "owner_cycles": {
+          "p50": 30960,
+          "p95": 37080,
+          "max": 78840,
+          "p99": 42480
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 900,
+          "max": 12000,
+          "p99": 1300
+        },
+        "submit_ns": {
+          "p50": 600,
+          "p95": 2200,
+          "max": 7500,
+          "p99": 2500
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 600,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3400,
+          "p95": 4600,
+          "max": 10500,
+          "p99": 5000
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 500,
+          "p99": 200
+        }
+      },
+      "owner_cycles_window": 32867280,
+      "worker_cycles_window": 19763640,
+      "combined_cycles_window": 52630920,
+      "totals": {
+        "accepted": 532,
+        "rejected": 492,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 532,
+        "pending_misses": 532,
+        "sampled_joints": 16864,
+        "sampled_unused_joints": 16864
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": 0.0,
+      "first_ready_callback": null,
+      "sampled_jobs": 527,
+      "delivery_ns": {
+        "p50": 6800,
+        "p95": 7700,
+        "max": 18700,
+        "p99": 8400
+      },
+      "kernel_ns": {
+        "p50": 3900,
+        "p95": 5200,
+        "max": 33200,
+        "p99": 6200
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        1,
+        "event-later-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r1-event-later-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 298600,
+          "p95": 355100,
+          "max": 1154600,
+          "p99": 539500
+        },
+        "owner_cycles": {
+          "p50": 1071360,
+          "p95": 1233000,
+          "max": 2376000,
+          "p99": 1698840
+        },
+        "capture_ns": {
+          "p50": 28100,
+          "p95": 35300,
+          "max": 494600,
+          "p99": 79300
+        },
+        "submit_ns": {
+          "p50": 6100,
+          "p95": 8800,
+          "max": 190000,
+          "p99": 11700
+        },
+        "consume_ns": {
+          "p50": 2900,
+          "p95": 3800,
+          "max": 31100,
+          "p99": 4600
+        },
+        "apply_ns": {
+          "p50": 8900,
+          "p95": 14300,
+          "max": 66200,
+          "p99": 25300
+        },
+        "fallback_ns": {
+          "p50": 86900,
+          "p95": 103300,
+          "max": 210500,
+          "p99": 151400
+        },
+        "cleanup_ns": {
+          "p50": 1800,
+          "p95": 4600,
+          "max": 28000,
+          "p99": 5300
+        }
+      },
+      "owner_cycles_window": 1056165480,
+      "worker_cycles_window": 588174120,
+      "combined_cycles_window": 1644339600,
+      "totals": {
+        "accepted": 1021,
+        "rejected": 3,
+        "callbacks": 32768,
+        "applied": 15744,
+        "fallback": 17024,
+        "readiness_checks": 17943,
+        "pending_misses": 16928,
+        "sampled_joints": 1045504,
+        "sampled_unused_joints": 541696
+      },
+      "applied_fraction": 0.48046875,
+      "used_sampled_fraction": 0.48188050930460335,
+      "first_ready_callback": {
+        "p50": 18,
+        "p95": 23,
+        "max": 29,
+        "p99": 26
+      },
+      "sampled_jobs": 1021,
+      "delivery_ns": {
+        "p50": 14900,
+        "p95": 21900,
+        "max": 282100,
+        "p99": 40200
+      },
+      "kernel_ns": {
+        "p50": 157500,
+        "p95": 182200,
+        "max": 359300,
+        "p99": 207800
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "default-later-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-default-later-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 6800,
+          "p95": 7900,
+          "max": 15200,
+          "p99": 8500
+        },
+        "owner_cycles": {
+          "p50": 25200,
+          "p95": 29520,
+          "max": 56880,
+          "p99": 31680
+        },
+        "capture_ns": {
+          "p50": 600,
+          "p95": 600,
+          "max": 3600,
+          "p99": 700
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 2900,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3400,
+          "p95": 4400,
+          "max": 8700,
+          "p99": 4600
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 27370440,
+      "worker_cycles_window": 490320,
+      "combined_cycles_window": 27860760,
+      "totals": {
+        "accepted": 5,
+        "rejected": 1019,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 5,
+        "pending_misses": 5,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "default-later-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-default-later-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 251600,
+          "p95": 397200,
+          "max": 674300,
+          "p99": 473800
+        },
+        "owner_cycles": {
+          "p50": 904680,
+          "p95": 1423440,
+          "max": 2376000,
+          "p99": 1670760
+        },
+        "capture_ns": {
+          "p50": 20300,
+          "p95": 40800,
+          "max": 108900,
+          "p99": 51500
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 2000,
+          "max": 5400,
+          "p99": 2800
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1800,
+          "max": 2800,
+          "p99": 2200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 116700,
+          "p95": 179900,
+          "max": 260200,
+          "p99": 206400
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 1050286680,
+      "worker_cycles_window": 8503200,
+      "combined_cycles_window": 1058789880,
+      "totals": {
+        "accepted": 206,
+        "rejected": 818,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 6592,
+        "pending_misses": 6592,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "direct",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-direct-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 6400,
+          "p95": 7800,
+          "max": 26700,
+          "p99": 10800
+        },
+        "owner_cycles": {
+          "p50": 23760,
+          "p95": 28800,
+          "max": 74880,
+          "p99": 39240
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 4700,
+          "max": 11900,
+          "p99": 6200
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 26070480,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 26070480,
+      "totals": {
+        "accepted": 0,
+        "rejected": 0,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 0,
+        "pending_misses": 0,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "direct",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-direct-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 217100,
+          "p95": 270200,
+          "max": 403100,
+          "p99": 330000
+        },
+        "owner_cycles": {
+          "p50": 782280,
+          "p95": 949680,
+          "max": 1344240,
+          "p99": 1186200
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        },
+        "consume_ns": {
+          "p50": 700,
+          "p95": 1200,
+          "max": 1600,
+          "p99": 1300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 111500,
+          "p95": 134500,
+          "max": 178600,
+          "p99": 160200
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 823081320,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 823081320,
+      "totals": {
+        "accepted": 0,
+        "rejected": 0,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 0,
+        "pending_misses": 0,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "event-first-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-event-first-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 9500,
+          "p95": 11900,
+          "max": 34400,
+          "p99": 16400
+        },
+        "owner_cycles": {
+          "p50": 34920,
+          "p95": 43920,
+          "max": 104400,
+          "p99": 60480
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 6300,
+          "p99": 1600
+        },
+        "submit_ns": {
+          "p50": 2100,
+          "p95": 3200,
+          "max": 9400,
+          "p99": 4100
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 300,
+          "p99": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 4900,
+          "max": 10900,
+          "p99": 6200
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 2800,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 37636200,
+      "worker_cycles_window": 20639160,
+      "combined_cycles_window": 58275360,
+      "totals": {
+        "accepted": 1010,
+        "rejected": 14,
+        "callbacks": 1024,
+        "applied": 0,
+        "fallback": 1024,
+        "readiness_checks": 1010,
+        "pending_misses": 1010,
+        "sampled_joints": 1440,
+        "sampled_unused_joints": 1440
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": 0.0,
+      "first_ready_callback": null,
+      "sampled_jobs": 45,
+      "delivery_ns": {
+        "p50": 1500,
+        "p95": 2300,
+        "max": 7200,
+        "p99": 7200
+      },
+      "kernel_ns": {
+        "p50": 4400,
+        "p95": 6000,
+        "max": 11900,
+        "p99": 11900
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "event-first-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-event-first-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 246800,
+          "p95": 281300,
+          "max": 521100,
+          "p99": 356700
+        },
+        "owner_cycles": {
+          "p50": 888120,
+          "p95": 977040,
+          "max": 1729800,
+          "p99": 1286280
+        },
+        "capture_ns": {
+          "p50": 24000,
+          "p95": 29900,
+          "max": 60500,
+          "p99": 42100
+        },
+        "submit_ns": {
+          "p50": 2800,
+          "p95": 4600,
+          "max": 9800,
+          "p99": 7300
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 1700,
+          "p99": 1300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 111300,
+          "p95": 123000,
+          "max": 183900,
+          "p99": 153400
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100,
+          "p99": 100
+        }
+      },
+      "owner_cycles_window": 925694640,
+      "worker_cycles_window": 29357640,
+      "combined_cycles_window": 955052280,
+      "totals": {
+        "accepted": 1024,
+        "rejected": 0,
+        "callbacks": 32768,
+        "applied": 0,
+        "fallback": 32768,
+        "readiness_checks": 1024,
+        "pending_misses": 1024,
+        "sampled_joints": 0,
+        "sampled_unused_joints": 0
+      },
+      "applied_fraction": 0.0,
+      "used_sampled_fraction": null,
+      "first_ready_callback": null,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "event-later-retained",
+        1,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-event-later-retained-a1-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 8600,
+          "p95": 11200,
+          "max": 38700,
+          "p99": 14600
+        },
+        "owner_cycles": {
+          "p50": 32040,
+          "p95": 40680,
+          "max": 94320,
+          "p99": 53280
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 4800,
+          "p99": 1700
+        },
+        "submit_ns": {
+          "p50": 1000,
+          "p95": 3300,
+          "max": 17700,
+          "p99": 4000
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 500,
+          "p99": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 1600,
+          "p99": 0
+        },
+        "fallback_ns": {
+          "p50": 3400,
+          "p95": 4700,
+          "max": 9900,
+          "p99": 5700
+        },
+        "cleanup_ns": {
+          "p50": 100,
+          "p95": 200,
+          "max": 800,
+          "p99": 500
+        }
+      },
+      "owner_cycles_window": 34227720,
+      "worker_cycles_window": 21548160,
+      "combined_cycles_window": 55775880,
+      "totals": {
+        "accepted": 573,
+        "rejected": 451,
+        "callbacks": 1024,
+        "applied": 1,
+        "fallback": 1023,
+        "readiness_checks": 573,
+        "pending_misses": 572,
+        "sampled_joints": 17760,
+        "sampled_unused_joints": 17728
+      },
+      "applied_fraction": 0.0009765625,
+      "used_sampled_fraction": 0.0018018018018018018,
+      "first_ready_callback": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "p99": 1
+      },
+      "sampled_jobs": 555,
+      "delivery_ns": {
+        "p50": 6500,
+        "p95": 9600,
+        "max": 22900,
+        "p99": 12300
+      },
+      "kernel_ns": {
+        "p50": 4000,
+        "p95": 5500,
+        "max": 11900,
+        "p99": 8000
+      }
+    },
+    {
+      "cell": [
+        "timing",
+        2,
+        "event-later-retained",
+        32,
+        1024
+      ],
+      "file": "readiness14u-timing-r2-event-later-retained-a32-f1024.json",
+      "exe_sha256": "A567D75FAFF57161A20D0B025F8268514B46867C7FF8FC263B2EC84A96D8C5DB",
+      "costs": {
+        "total_ns": {
+          "p50": 195300,
+          "p95": 240000,
+          "max": 469500,
+          "p99": 334600
+        },
+        "owner_cycles": {
+          "p50": 703440,
+          "p95": 845280,
+          "max": 1557000,
+          "p99": 1148400
+        },
+        "capture_ns": {
+          "p50": 18300,
+          "p95": 22200,
+          "max": 111700,
+          "p99": 31900
+        },
+        "submit_ns": {
+          "p50": 2700,
+          "p95": 4800,
+          "max": 13200,
+          "p99": 7600
+        },
+        "consume_ns": {
+          "p50": 2000,
+          "p95": 2700,
+          "max": 91800,
+          "p99": 3600
+        },
+        "apply_ns": {
+          "p50": 5500,
+          "p95": 7600,
+          "max": 24300,
+          "p99": 13500
+        },
+        "fallback_ns": {
+          "p50": 60700,
+          "p95": 71400,
+          "max": 110300,
+          "p99": 91500
+        },
+        "cleanup_ns": {
+          "p50": 800,
+          "p95": 1900,
+          "max": 5000,
+          "p99": 2500
+        }
+      },
+      "owner_cycles_window": 744253560,
+      "worker_cycles_window": 430851960,
+      "combined_cycles_window": 1175105520,
+      "totals": {
+        "accepted": 1024,
+        "rejected": 0,
+        "callbacks": 32768,
+        "applied": 15734,
+        "fallback": 17034,
+        "readiness_checks": 18058,
+        "pending_misses": 17034,
+        "sampled_joints": 1048576,
+        "sampled_unused_joints": 545088
+      },
+      "applied_fraction": 0.48016357421875,
+      "used_sampled_fraction": 0.48016357421875,
+      "first_ready_callback": {
+        "p50": 18,
+        "p95": 19,
+        "max": 32,
+        "p99": 22
+      },
+      "sampled_jobs": 1024,
+      "delivery_ns": {
+        "p50": 7700,
+        "p95": 15000,
+        "max": 44300,
+        "p99": 19900
+      },
+      "kernel_ns": {
+        "p50": 107000,
+        "p95": 124900,
+        "max": 187600,
+        "p99": 162700
+      }
+    }
+  ],
+  "normalized_lf_sha256": {
+    "readiness14u-alloc-r1-default-later-retained-a1-f64.json": "721539fcc7b06368242fb105899605cbc4e913be7b3e15439882333daec5af4b",
+    "readiness14u-alloc-r1-default-later-retained-a1-f64.csv": "dc08a0fee7bcdcb77819a0a6cb26cccdfaec77ed9c15dca891b41605ad36a89b",
+    "readiness14u-alloc-r1-default-later-retained-a32-f64.json": "0d3322360b0378d5efcd5b3d562b5446937b16180c3264e69fdbbf2b38ea546c",
+    "readiness14u-alloc-r1-default-later-retained-a32-f64.csv": "9b6462547cda70486bf08332dcd6f5f262f65d1520f06038c34e5e9439e97f77",
+    "readiness14u-alloc-r1-direct-a1-f64.json": "7b227de053965368c0fad9e852e3379efb9e18db7b66d9f57f1813ba21d3914b",
+    "readiness14u-alloc-r1-direct-a1-f64.csv": "d88dc551980f96ff7b3884ef4518040c665b77fca787c451499065742ba30767",
+    "readiness14u-alloc-r1-direct-a32-f64.json": "a6a5b06ab99c5610174155e8ccb3deb84215d1659050b4cee6fdd96f774ca184",
+    "readiness14u-alloc-r1-direct-a32-f64.csv": "6b7e671679824c60339beb19259f02ddf06839983dc4162ebe01a715e010e61f",
+    "readiness14u-alloc-r1-event-first-retained-a1-f64.json": "bb0401471b9c7c5ccee4a5d1289061d3b4e794548fee325b4e51fa539d0f1b91",
+    "readiness14u-alloc-r1-event-first-retained-a1-f64.csv": "b69427e8743b1b36c28eb4fee0b61f11909ddf5c217f55995c9c332bfef1e2de",
+    "readiness14u-alloc-r1-event-first-retained-a32-f64.json": "1c84117c45bb9eb1a7eb5522999706dbebd6c1ea1dd6442d991108536ecfb837",
+    "readiness14u-alloc-r1-event-first-retained-a32-f64.csv": "21f3a647e3d1963762198ec0d7305c1a32ab268197ddcb85243355b2cd9ce1e0",
+    "readiness14u-alloc-r1-event-later-retained-a1-f64.json": "45580bbb12fe51ec83dcf39365ef623996b2fe5f108e8869a8879fb0abc49179",
+    "readiness14u-alloc-r1-event-later-retained-a1-f64.csv": "3901ce0e53b96dda34e2a2f40479971e860ddbade73235753a3ffd9ea941486b",
+    "readiness14u-alloc-r1-event-later-retained-a32-f64.json": "c79681930ec450716ada617451860839671d3dea8c9a01d6fc98606435a7b17a",
+    "readiness14u-alloc-r1-event-later-retained-a32-f64.csv": "087bb4637934be08a5c20e087394d5dc54653332b1cec1d5192d31099d1dc10e",
+    "readiness14u-timing-r1-default-later-retained-a1-f1024.json": "3f7cdb6853f7f726d0794b1d8eba908a4ee4f88daf8c4d71baa5cfe5d3327e20",
+    "readiness14u-timing-r1-default-later-retained-a1-f1024.csv": "cfe18a315544d87757093c76de01c3686e9561f3a1ee7b954762e0abbefc095b",
+    "readiness14u-timing-r1-default-later-retained-a32-f1024.json": "8f7b0106e7f935146b98297392981542934132b5b23cd660c4512063ec1e9009",
+    "readiness14u-timing-r1-default-later-retained-a32-f1024.csv": "2ce9cc129b31759e8fd58b8ac3490c1834966afdfde3732fb9898b7e76c8ea8c",
+    "readiness14u-timing-r1-direct-a1-f1024.json": "f303f704d1823686bba40da97209cc5af9a6246d5bbc0f1a0ef00b93d447b67e",
+    "readiness14u-timing-r1-direct-a1-f1024.csv": "993ce3de197a0e76e6c78243eb19fe06899ad4218d6c14ecd1f6e2d19d9055bc",
+    "readiness14u-timing-r1-direct-a32-f1024.json": "c8aaf55fcc6894b5eee9c76eda4d29f02b9232e1e018d1fda8af8a38250be795",
+    "readiness14u-timing-r1-direct-a32-f1024.csv": "0c291e1319dda8b15a559659a377c6dbc7d1476e202854c458016e2f342b6eb8",
+    "readiness14u-timing-r1-event-first-retained-a1-f1024.json": "1e85d6ed7f5bff7efa8c967ce018ef6c5f53dfca045bbab036f03bd26fe72383",
+    "readiness14u-timing-r1-event-first-retained-a1-f1024.csv": "f0b9333fe973f8e03cf278b7f4f2c9b0bf66ca012f846fd8646b7d3b8227e948",
+    "readiness14u-timing-r1-event-first-retained-a32-f1024.json": "e95b9354e3d7f3123219df4bb74487f8ecc2c3136203c9582966eff1bd22e967",
+    "readiness14u-timing-r1-event-first-retained-a32-f1024.csv": "84fb89dbe670982bd0766998c76e013b0dbf71ff695d92d07c546267d22cde96",
+    "readiness14u-timing-r1-event-later-retained-a1-f1024.json": "bec1c8af618cafdc96b7a7e34d67a79b4a521058156b0e0e0ea8f4e58e9076b4",
+    "readiness14u-timing-r1-event-later-retained-a1-f1024.csv": "a029efd77ed70c5cc63de93f563b6616a3973c7ff5bd77b38f42f9cd84646c01",
+    "readiness14u-timing-r1-event-later-retained-a32-f1024.json": "ac748c5ad15f8b5545d49862ea7556ff356056f6b693c04d64686d8d3660c092",
+    "readiness14u-timing-r1-event-later-retained-a32-f1024.csv": "3abbd5559f4c688918681b2ce7e3bf6eec4d60f460a17478d71fbb588c36352d",
+    "readiness14u-timing-r2-default-later-retained-a1-f1024.json": "4062b7ef62418d9820b3cc79fe26af1dc74284283ccf7c76a209d881505cdf40",
+    "readiness14u-timing-r2-default-later-retained-a1-f1024.csv": "c6dc9d8cc8ecd72128037ca1308aa25c003cec1c4d211f2baf4c0e57eaba0756",
+    "readiness14u-timing-r2-default-later-retained-a32-f1024.json": "43fabf78f64f34befc0092b210b21043c0ebaf32a968775bd2772589cefbae5a",
+    "readiness14u-timing-r2-default-later-retained-a32-f1024.csv": "81f6a6c2bd114836cdec2a6487de43e17796b8b6318211dc311ff745f3088147",
+    "readiness14u-timing-r2-direct-a1-f1024.json": "6ccb7bfe2f786f2cd6469f1b817593e5a801e590e4296a62ebcfbdc71e213d10",
+    "readiness14u-timing-r2-direct-a1-f1024.csv": "e43216fb988268ce1bd8286ae179f46f29e6744e52ffeafdffb17959033e136a",
+    "readiness14u-timing-r2-direct-a32-f1024.json": "0ba6e352a8cc300a7160743c8f2a715481fea00ac384298afa55dd51b14ccc34",
+    "readiness14u-timing-r2-direct-a32-f1024.csv": "13b413cddcc70447bc59ce6b07df021ed619ad1f30df503171913a0fb66bc583",
+    "readiness14u-timing-r2-event-first-retained-a1-f1024.json": "f84927edd050ee531a11cc79bcee566211dde69f2a092c321b8fa71bf18efa46",
+    "readiness14u-timing-r2-event-first-retained-a1-f1024.csv": "2b562c1c85326d51e82c0b3027a5d73777ceada188dc7336d2df7dfda29afe25",
+    "readiness14u-timing-r2-event-first-retained-a32-f1024.json": "e4c1fd5a23e5ccad64536a41b60234d17de7cd68331760f1d445f4211f17d207",
+    "readiness14u-timing-r2-event-first-retained-a32-f1024.csv": "81fe495a129a492a9fe7d75e78515c05db0c2d20cca34df9f6f61788e1ec23ac",
+    "readiness14u-timing-r2-event-later-retained-a1-f1024.json": "17fad7f2ceb2d5502d872db998224179c716f92b2dd978a577383fca29472637",
+    "readiness14u-timing-r2-event-later-retained-a1-f1024.csv": "d5994597a0a844152bdefb9d20f809558888cb96a090946c85c0394d8fadd693",
+    "readiness14u-timing-r2-event-later-retained-a32-f1024.json": "cc54924c0bba26948f64b3fd3928d107e9b1610c7a19e035b21f92552b58de76",
+    "readiness14u-timing-r2-event-later-retained-a32-f1024.csv": "6317e46e93016a68d048cae4cf054b3c5da6468fe0286a8c281cf9520cc480e4"
+  },
+  "nonoverlap_verified": true,
+  "limits": [
+    "Controlled private cohort only; no live scene, actual deadline, power or FPS acceptance.",
+    "Timed requests have no delivery gate, callback hook, forced readiness or synthetic gap; startup controls are outside measured windows.",
+    "Binding retention is limited to Scene lifetime; no general deprecated/reentrant viewer lifetime design.",
+    "Cycle windows include bookkeeping, resource checks and final drain/cleanup. Per-job cycles are attribution within them.",
+    "Before/after build/probe idle does not control unrelated desktop load/power/timer policy."
+  ]
+}
