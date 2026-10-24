@@ -15,6 +15,7 @@ struct ShadowTotals
     std::uint64_t scopes = 0;
     std::uint64_t batches = 0, predicted = 0, matched = 0, mismatched = 0, unused = 0;
     std::uint64_t unpredicted = 0, excluded = 0, rejected = 0, nested = 0, destroyed = 0;
+    std::uint64_t masked = 0, maskedObserved = 0, maskedUnobserved = 0;
     std::uint64_t prepareNs = 0, validationNs = 0, observationNs = 0, cleanupNs = 0, firstMatched = 0;
     std::uint64_t bufferBytesPeak = 0, retainedKeysPeak = 0;
     // Bucket i covers gaps <= 2^i ns; the final bucket also includes larger gaps.

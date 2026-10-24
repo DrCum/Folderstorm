@@ -1310,6 +1310,8 @@ void reportAvatarSamplingShadow(bool report_empty = false)
     report << "scopes=" << totals.scopes << " batches=" << totals.batches << " predicted=" << totals.predicted
         << " matched=" << totals.matched << " mismatched=" << totals.mismatched
         << " unused=" << totals.unused << " unpredicted=" << totals.unpredicted
+        << " masked=" << totals.masked << " masked_observed=" << totals.maskedObserved
+        << " masked_unobserved=" << totals.maskedUnobserved
         << " excluded=" << totals.excluded << " rejected=" << totals.rejected
         << " nested=" << totals.nested << " destroyed=" << totals.destroyed
         << " prepare_ns=" << totals.prepareNs << " validation_ns=" << totals.validationNs
