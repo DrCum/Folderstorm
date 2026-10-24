@@ -1,0 +1,8 @@
+FAILED: caller deadline must not consume a later item
+FAILED: timed-out future item must remain queued
+caller_limit_consumed_future=1
+FAILED: future item needs no unrelated submission
+empty_future_without_poke=0
+FAILED: earlier future head must shorten previous wait
+earlier_head_without_poke=0
+22 scheduled queue checks; 4 failures

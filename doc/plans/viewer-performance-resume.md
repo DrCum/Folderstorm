@@ -21,7 +21,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   pending. Plan 14n is implemented at `7fe77b5aa9` with final provenance in
   `results/hand-consumer-provenance14n.json`. PR116 is open/mergeable and its
   automated code review completed with no findings at exact `836f1eed38`.
-  Its full viewer build/runtime acceptance is pending. Plan 14o's source phase
+  Its exact-head full build is retained as `7.2.5.82273`; installer SHA and the
+  passed focused receipt were verified. Runtime acceptance remains pending.
+  Plan 14o's source phase
   audit is now complete in `viewer-performance-14o-main-frame-findings.md` and
   `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
   acceptance probe is written before implementation. No production scheduling
@@ -347,6 +349,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
   branch. Test scheduled deadline recomputation, caller timeouts, future-head
   changes, close/drain and lifetimes. Compile fresh `workqueue.cpp` in native
   wrappers; cached WorkSchedule template instantiations would run the old code.
+- Plan14p1 is implemented at `8720509deb`: 340 focused queue/deadline/drain
+  checks and 6,686 unchanged frozen current/stock harness checks pass. The old
+  same-source fixture fails four checks in 22 and confirms both notification
+  bugs plus caller-deadline consumption. Normal/Tracy compilation passed;
+  fresh workqueue.cpp and 32 reverified immutable libraries prevent stale code.
+  Results and provenance are in `viewer-performance-14p1-scheduled-queue-results.md`
+  and `results/*14p1*`. The next 14p2 continuation plan is written before work.
+  PR116 exact836 is now independently retained as `7.2.5.82273`; verified hash
+  F793FC9A2BC7BEE4E76182884D9E6280041674CB2E3D8CD728AE25DB2AA02B02.
 
 ## Next sequence
 
@@ -358,9 +369,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
-   Implement/test/publish plan14p1 on `codex/perf-scheduled-queue-deadlines` from
+   Publish implemented/native-tested plan14p1 on `codex/perf-scheduled-queue-deadlines` from
    audit db9be862ab, independently of the preserved unfinished probe ccad4c341c.
-   Then integrate the prerequisite into the probe branch and resume14p without
+   Then integrate the prerequisite into the probe branch and follow14p2 without
    deleting the failed scheduled case. Production pool policy remains unchanged.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.

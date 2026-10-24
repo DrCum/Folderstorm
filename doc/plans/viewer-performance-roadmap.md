@@ -285,3 +285,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   Actual hotspot/spare-core evidence remains open. Plan14p extends the measured
   private bundled-scheduler experiment to sustained CPU/fiber/lifecycle checks;
   production scheduling and live animation dispatch remain unchanged.
+- Stage 5 queue prerequisite: the private probe exposed stale scheduled wait
+  deadlines with both existing and stock schedulers. Plan14p1 fixes future-head
+  recomputation and caller timeouts; 340 focused and 6,686 unchanged broader
+  checks pass. Timed close/drain and payload ownership remain intact. Publish
+  separately for full viewer testing, then follow14p2's sustained private CPU
+  comparison before proposing any scheduler policy change.
