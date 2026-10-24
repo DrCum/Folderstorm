@@ -77,15 +77,17 @@ struct Sampler
 };
 using Executor = FSSamplingTest::BoundedExecutor<Sampler>;
 using Status = Executor::Status;
-enum class Mode { Direct, Owned, Default, Event };
+enum class Mode { Direct, Owned, OwnedRetained, Default, Event };
+bool isOwned(Mode mode) { return mode == Mode::Owned || mode == Mode::OwnedRetained; }
 const char* name(Mode mode)
 {
     switch (mode) { case Mode::Direct: return "direct"; case Mode::Owned: return "owned";
+    case Mode::OwnedRetained: return "owned-retained";
     case Mode::Default: return "default"; default: return "event"; }
 }
 Mode parseMode(const std::string& value)
 {
-    for (auto mode : {Mode::Direct, Mode::Owned, Mode::Default, Mode::Event}) if (value == name(mode)) return mode;
+    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event}) if (value == name(mode)) return mode;
     throw std::runtime_error("Unknown mode");
 }
 class Controls
@@ -225,6 +227,14 @@ struct Row
     unsigned predicted = 0, masked = 0, excluded = 0, rejected = 0, accepted = 0;
     unsigned callbacks = 0, applied = 0, fallback = 0, stale = 0;
 };
+struct Callback
+{
+    unsigned character;
+    LLUUID motion;
+    U32 timeBits;
+    bool operator==(const Callback& other) const
+    { return character == other.character && motion == other.motion && timeBits == other.timeBits; }
+};
 struct Frame;
 thread_local Frame* active = nullptr;
 std::atomic<U64> gapSink{0};
@@ -244,7 +254,7 @@ struct Frame
     bool prepared = false, consumed = false, ready = false, forceReady = false;
     unsigned mutation = 0;
     Row row;
-    std::vector<LLUUID>* callbackTrace = nullptr;
+    std::vector<Callback>* callbackTrace = nullptr;
     const std::thread::id owner = std::this_thread::get_id();
     Frame(Scene& value, Mode variant, unsigned gap, Executor* destination, Request& request, Result& reusable,
           std::shared_ptr<Measurement> trace): scene(value), mode(variant), gapUs(gap), executor(destination),
@@ -285,7 +295,7 @@ struct Frame
         if (count)
         {
             measurement->trace.queued = Clock::now();
-            if (mode == Mode::Owned) { ready = Sampler::sample(std::move(input), output); require(ready, "Owner sample failed"); }
+            if (isOwned(mode)) { ready = Sampler::sample(std::move(input), output); require(ready, "Owner sample failed"); }
             else { ticket = executor->trySubmit(input); if (ticket) ++row.accepted; else ++row.rejected; }
             if (forceReady && ticket)
             {
@@ -312,7 +322,14 @@ struct Frame
     bool invoke(LLMotionController& controller, LLMotion& base, F32 time, U8* mask)
     {
         require(std::this_thread::get_id() == owner, "Scene callback left its owner"); ++row.callbacks;
-        if (callbackTrace) callbackTrace->push_back(base.getID());
+        if (callbackTrace)
+        {
+            unsigned character = 0;
+            while (character < scene.characters.size() && &scene.characters[character]->getMotionController() != &controller) ++character;
+            require(character < scene.characters.size(), "Callback controller is outside its private Scene");
+            U32 timeBits; std::memcpy(&timeBits, &time, sizeof(timeBits));
+            callbackTrace->push_back({character, base.getID(), timeBits});
+        }
         auto* motion = dynamic_cast<Motion*>(&base);
         const auto consume = Clock::now();
         if (!consumed)
@@ -339,7 +356,7 @@ struct Frame
         const auto begin = Clock::now();
         if (ticket && !consumed) executor->cancel(*ticket);
         if (ready) input = output.recycle();
-        for (size_t i = 0; i < count; ++i)
+        if (mode != Mode::OwnedRetained) for (size_t i = 0; i < count; ++i)
         {
             auto* base = entries[i].owner->findMotion(entries[i].id); auto* motion = dynamic_cast<Motion*>(base);
             if (motion) motion->releaseOwnedSamplingBindings(entries[i].instance);
@@ -360,6 +377,8 @@ struct Summary
     FSSamplingAlloc::Stats firstFrame;
     U64 poolCycles = 0;
     U64 ownerWindowCycles = 0;
+    size_t retainedBindingBytes = 0, retainedBindingMotions = 0, bindingBytesAfterCleanup = 0;
+    U64 finalBindingCleanupNs = 0;
 };
 Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const std::string& load,
             bool correctness = false, unsigned mutation = 0)
@@ -386,7 +405,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     // Warm controller and hand publication before instrumentation, with a changing clock.
     for (unsigned i = 0; i < 8; ++i)
     { FSCurrentMotion::Clock::set(100.0 + (i + 1) / 64.0); scene.update(); expected.update(); }
-    std::vector<LLUUID> actualCallbacks, expectedCallbacks;
+    std::vector<Callback> actualCallbacks, expectedCallbacks;
     actualCallbacks.reserve(avatars * 4); expectedCallbacks.reserve(avatars * 4);
     FSSamplingAlloc::Scope allocationScope;
     const auto poolBegin = pool ? pool->workerCycles() : 0;
@@ -423,6 +442,29 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     if (executor) executor->close();
     if (load == "busy" && pool) release.set_value();
     if (pool) pool->close(); // Acknowledge abandoned work before reading owned trace fields.
+    // This fixed-cohort experiment bounds retention inside Scene's lifetime.
+    // A general viewer cache/deprecated-motion resolver is deliberately not installed.
+    for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
+    {
+        auto* motion = static_cast<Motion*>(base); const auto bytes = motion->ownedSamplingBindingBytes();
+        summary.retainedBindingBytes += bytes; summary.retainedBindingMotions += bytes != 0;
+    }
+    if (mode == Mode::OwnedRetained)
+    {
+        require(summary.retainedBindingMotions <= avatars && summary.retainedBindingBytes <= avatars * 32 * sizeof(void*) * 2,
+                "Controlled binding retention exceeded one bounded motion per character");
+        const auto cleanup = Clock::now();
+        for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
+        {
+            auto* motion = static_cast<Motion*>(base);
+            if (motion->ownedSamplingBindingBytes()) motion->releaseOwnedSamplingBindings(motion->getOwnedSamplingInstance());
+        }
+        summary.finalBindingCleanupNs = nanos(Clock::now() - cleanup);
+    }
+    else require(summary.retainedBindingBytes == 0, "Released control retained owner bindings");
+    for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
+        summary.bindingBytesAfterCleanup += static_cast<Motion*>(base)->ownedSamplingBindingBytes();
+    require(summary.bindingBytesAfterCleanup == 0, "Private binding cleanup left references behind");
     summary.poolCycles = pool ? pool->workerCycles() - poolBegin : 0;
     summary.ownerWindowCycles = cycles() - ownerBegin;
     summary.allocations = FSSamplingAlloc::snapshot(); allocationScope.stop();
@@ -430,7 +472,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
 }
 void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, const std::string& load)
 {
-    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window\n";
+    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,final_binding_cleanup_ns\n";
     for (size_t i = 0; i < summary.rows.size(); ++i)
     {
         const auto& row = summary.rows[i]; const auto& measurement = *summary.traces[i]; const auto& trace = measurement.trace;
@@ -439,18 +481,21 @@ void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, co
         std::cout << ',' << row.predicted << ',' << row.masked << ',' << row.excluded << ',' << row.rejected << ',' << row.accepted
                   << ',' << row.callbacks << ',' << row.applied << ',' << row.fallback << ',' << row.stale << ',' << measurement.workerCycles
                   << ',' << (trace.sampled ? nanos(trace.started - trace.queued) : 0) << ',' << (trace.sampled ? nanos(trace.finished - trace.started) : 0)
-                  << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << ',' << summary.ownerWindowCycles << '\n';
+                  << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << ',' << summary.ownerWindowCycles
+                  << ',' << summary.retainedBindingBytes << ',' << summary.retainedBindingMotions << ',' << summary.bindingBytesAfterCleanup
+                  << ',' << summary.finalBindingCleanupNs << '\n';
     }
 }
 int check()
 {
-    for (auto mode : {Mode::Direct, Mode::Owned, Mode::Default, Mode::Event})
-        for (unsigned avatars : {1u, 8u, 32u}) run(mode, avatars, 0, 3, "normal", true);
+    for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event})
+        for (unsigned avatars : {1u, 8u, 32u}) run(mode, avatars, 0, 64, "normal", true);
     for (auto mode : {Mode::Default, Mode::Event})
     {
         for (const auto* load : {"busy", "closed"}) run(mode, 8, 0, 3, load, true);
         for (unsigned mutation : {1u, 2u, 3u, 4u}) run(mode, 8, 0, 1, "normal", true, mutation);
     }
+    for (unsigned mutation : {1u, 2u, 3u, 4u}) run(Mode::OwnedRetained, 8, 0, 1, "normal", true, mutation);
     std::cout << checks.load() << " complete-controller, exact-pose/order/hand, current/stale and bounded fallback checks passed\n";
     return 0;
 }
@@ -471,15 +516,16 @@ int main(int argc, char** argv)
         if (FS_SAMPLING_ALLOCATION_PROBE)
         {
             const auto& value = result.allocations;
-            std::cout << "mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes\n"
+            std::cout << "mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup\n"
                       << name(mode) << ',' << avatars << ',' << gap << ',' << load << ',' << frames << ',' << value.calls << ',' << value.requested
                       << ',' << value.baseline << ',' << value.live << ',' << value.peak << ',' << result.firstFrame.calls << ',' << result.firstFrame.requested
-                      << ',' << value.calls - result.firstFrame.calls << ',' << value.requested - result.firstFrame.requested << '\n';
+                      << ',' << value.calls - result.firstFrame.calls << ',' << value.requested - result.firstFrame.requested
+                      << ',' << result.retainedBindingBytes << ',' << result.retainedBindingMotions << ',' << result.bindingBytesAfterCleanup << '\n';
         }
         else print(result, mode, avatars, gap, load);
         return 0;
     }
-    std::cout << "Use --check, or --benchmark direct|owned|default|event avatars gap_us frames normal|busy|closed.\n"
+    std::cout << "Use --check, or --benchmark direct|owned|owned-retained|default|event avatars gap_us frames normal|busy|closed.\n"
                  "Separate allocation build uses --allocations. Synthetic gaps/private cohorts do not establish viewer FPS or a live deadline.\n";
     return argc == 1 ? 0 : 1;
 }
