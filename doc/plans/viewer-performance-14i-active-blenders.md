@@ -55,10 +55,12 @@ actual `llpose.cpp` confirms one 24-byte list-node allocation per admitted joint
 per warm frame on this MSVC target. Counts 3/32/128/256 and 1/8 overlapping
 motions make respectively 96/1,024/4,096/8,192 calls over 32 frames; repeating
 overlapping admissions adds searches without adding nodes. Every case returns
-to its live allocation baseline. The scratch source/report are
-`performance-validation/active-blender-cost-fixture14i.cpp` and
-`active-blender-before-alloc14i.log` in the parent workspace; retain them when
-starting this checkpoint's branch. Timing has not been run during the builder.
+to its live allocation baseline. The source
+`indra/llcharacter/tests/active_blender_cost_benchmark.cpp` and report
+`results/active-blender-before-alloc-map.csv` now retain the baseline in this
+checkpoint's branch, with `active-blender-baseline-provenance.json`. A fresh
+binary using the copied source reproduces all eight rows. The uninstrumented
+parent executable is prepared; timing has not been run for this checkpoint.
 
 The source audit confirms that `blendAndCache` and `interpolate` retain active
 entries and joint-state references. Only `blendAndApply` and `clearBlenders`

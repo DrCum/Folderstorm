@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-idle-motion-purge`, based on published PR 111 at
-  `1ad2444867c70566619913b092b42cde0f2e25ab`.
+- Branch: `codex/perf-active-blenders`, based on published PR 112 at
+  `b8c82e686def15937fdfad1620845d557e995a89`.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -80,19 +80,26 @@ Updated October 24, 2026. The user resumed the performance program; the October
   324 rows / 11,016,000 invocations with verified idle conditions and normalized
   source/report and executable/dependency provenance. Larger full-controller
   fixture differences are sub-percent; no whole-viewer gain is established.
-  Implementation commit is `ea82a3c3ea`; finish evidence/docs commit and publish
-  a separate PR. Read its plan and scratch `*14h*` logs. Plan 14i is written,
-  and its real-blender allocation baseline is measured before implementation.
+  Implementation commit is `ea82a3c3ea`; evidence head `b8c82e686d` is published
+  and attached as PR 112. Its automated review is running at that exact head as
+  last read; recheck findings before depending on approval. Read its plan and
+  scratch `*14h*` logs. Plan 14i is written, and its real-blender allocation
+  baseline is measured before implementation. Current branch holds the copied
+  cost fixture and eight allocation rows plus baseline provenance. The prepared
+  uninstrumented parent executable is `active-blender-parent-cost14i.exe`.
+  Production blender source is still unchanged. Freeze the independent outer
+  collection reference next; audit cache membership before implementing.
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Finish 14h's
-   evidence/docs commit and publication; do not reimplement 14g or enable workers.
+1. Inspect current status/head/PR state and preserve any newer work. Continue
+   14i's collection reference/implementation; do not reimplement 14g/14h or enable
+   workers. Recheck PR 112's automated review and separate build evidence.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. After publishing 14h separately, begin `viewer-performance-14i-active-blenders.md`
-   on a new branch from that published head. The full controller fixture still
+3. Execute `viewer-performance-14i-active-blenders.md` on its new branch from
+   the published 14h head. The full controller fixture still
    makes three calls / 72 bytes per warmed three-joint update. Preserve reverse
    first-admission order, priority/additive behavior and quantum cache lifetimes;
    compare actual blenders/poses with a frozen reference before a separate PR.
