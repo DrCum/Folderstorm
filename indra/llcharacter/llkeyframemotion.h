@@ -35,6 +35,7 @@
 #include <memory> // </FS:Perf> Canonical animation asset ownership.
 #include "fsanimationkeys.h" // </FS:Perf> Build-selected key storage.
 #include "fssamplingcontext.h" // </FS:Perf> Owned numeric controls for pure sampling.
+#include "fssamplingidentity.h"
 
 #include "llassetstorage.h"
 #include "llbboxlocal.h"
@@ -182,7 +183,7 @@ public:
     void setLoopOut(F32 out_point);
 
     void setHandPose(LLHandMotion::eHandPose pose) {
-        if (mJointMotionList) mJointMotionList->mHandPose = pose;
+        if (mJointMotionList) { mJointMotionList->invalidateSampling(); mJointMotionList->mHandPose = pose; }
     }
 
     LLHandMotion::eHandPose getHandPose() {
@@ -445,9 +446,13 @@ public:
         const JointMotion* getJointMotion(U32 index) const { llassert(index < mJointMotionArray.size()); return mJointMotionArray[index]; }
         // </FS:Perf>
         U32 getNumJointMotions() const { return static_cast<U32>(mJointMotionArray.size()); }
+        U64 getSamplingRevision() const { return mSamplingRevision; }
+        void invalidateSampling() { FSSampling::advanceGeneration(mSamplingRevision); }
+    private:
+        U64 mSamplingRevision = 1; // Owner-thread metadata edits; workers never read it.
     };
 
-protected:
+public:
     // <FS:Perf> Owned pure-sampling payloads. These do not schedule or apply viewer work.
     struct SamplingIdentity
     {
@@ -456,10 +461,15 @@ protected:
         U64 frame = 0;
         U64 skeleton = 0;
         U64 edit = 0;
+        U64 frameTimeBits = 0;
+        U32 stopTimeBits = 0;
+        U32 appearance = 0;
+        bool stopped = false;
         bool operator==(const SamplingIdentity& other) const
         {
             return instance == other.instance && activation == other.activation && frame == other.frame &&
-                skeleton == other.skeleton && edit == other.edit;
+                skeleton == other.skeleton && edit == other.edit && frameTimeBits == other.frameTimeBits &&
+                stopTimeBits == other.stopTimeBits && appearance == other.appearance && stopped == other.stopped;
         }
     };
 
@@ -508,8 +518,18 @@ protected:
     };
 
     static bool sampleKeyframes(SamplingRequest request, SamplingResult& result);
+    // Owner-thread APIs. Invoke application only at a valid live motion's normal update point.
+    bool permitsOwnedSampling() const;
+    bool prepareOwnedSampling(F32 time, SamplingRequest& request);
+    bool updateWithOwnedSampling(F32 time, U8* joint_mask, const SamplingResult& result, bool& sample_applied);
+
+protected:
     // Current inputs/versions must be prepared independently on the main thread, not read back from the result.
     static bool samplingResultMatches(const SamplingResult& result, const SamplingRequest& current);
+    static bool samplingInputsMatch(const SamplingResult& result, const std::shared_ptr<const JointMotionList>& asset,
+        const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+        const U32* usage, size_t count);
+    bool matchesCurrentSampling(const SamplingResult& result, F32 sample_time, const SamplingIdentity& identity) const;
 
     struct KeyframeUpdateTime
     {
@@ -545,6 +565,22 @@ protected:
     F32                             mLastUpdateTime;
     F32                             mLastLoopedTime;
     AssetStatus                     mAssetStatus;
+
+private:
+    struct SamplingAuthority
+    {
+        SamplingAuthority() = default;
+        SamplingAuthority(const SamplingAuthority&) {} // Base copies never inherit factory permission or live bindings.
+        SamplingAuthority& operator=(const SamplingAuthority& other);
+        U64 instance = 0;
+        U64 lifecycle = 1;
+        struct Binding { LLPointer<LLJointState> state; const LLJoint* joint = nullptr; };
+        std::vector<Binding> bindings; // Lazy owner-only storage; no live references go to a worker.
+        const LLCharacter* character = nullptr;
+        U32 skeleton = 0;
+    } mSamplingAuthority;
+    void invalidateOwnedSampling();
+    bool captureOwnedSamplingIdentity(SamplingIdentity& identity);
 
 public:
     void setCharacter(LLCharacter* character) { mCharacter = character; }

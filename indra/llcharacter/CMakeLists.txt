@@ -33,6 +33,7 @@ set(llcharacter_HEADER_FILES
 
     fsanimationkeys.h
     fssamplingcontext.h
+    fssamplingidentity.h
 
     llanimationstates.h
     llbvhloader.h
@@ -78,6 +79,19 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  foreach(probe IN ITEMS cost allocations)
+    add_executable(avatar_current_motion_${probe} tests/current_motion_cost_benchmark.cpp)
+    target_link_libraries(avatar_current_motion_${probe} PRIVATE llcharacter Threads::Threads)
+    if(probe STREQUAL "allocations")
+      target_compile_definitions(avatar_current_motion_${probe} PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+    endif()
+  endforeach()
+
+  add_executable(avatar_current_motion_context tests/current_motion_context_test.cpp)
+  target_link_libraries(avatar_current_motion_context PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_current_motion_context POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_current_motion_context> VERBATIM)
+
   add_executable(avatar_sampling_context_cost tests/sampling_context_cost_benchmark.cpp)
   target_link_libraries(avatar_sampling_context_cost PRIVATE llcharacter Threads::Threads)
 

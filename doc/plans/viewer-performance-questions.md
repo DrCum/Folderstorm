@@ -27,6 +27,9 @@ Never present a missing hardware result as a successful test.
 - Baseline and each checkpoint: full native Windows compile/link and runtime
   verification by the building/testing agent; portable helper tests do not cover
   complete viewer integration.
+  The independent agent has retained full native builds through PR 108, including
+  its 23 focused checks. Newer checkpoint heads still need their own build, and
+  rendered/lifecycle/crowd acceptance remains pending for the stack.
 - Collect matched solo/crowd frame-time samples and profiler captures as described
   in the roadmap. Raw captures may contain user data; share only deliberately.
 - Watch attachment/skeleton alignment, sitting/constraints, animesh, outfit swaps,
@@ -72,6 +75,15 @@ Never present a missing hardware result as a successful test.
   constraint-name fields. Checkpoint 14b fixes that padding; verify export/re-open
   with short ordinary volume names and ground constraints. The preceding frozen
   byte fixtures still use full-width names to isolate their old-byte oracle.
+- Checkpoint 14f adds current owner identity and rejects stale results in native
+  factory/controller fixtures. Test successful preview/reload and close/reopen,
+  character/skeleton replacement, stop/reactivate and scene role transitions.
+  The binary replacement fixture proves context publication only, not rendered
+  active-reload pose-map correctness. No live dispatch is enabled.
+- Checkpoint 14f measured two repeated hand-pose key-name allocations per update.
+  Plan 14f1 removes them while preserving priority ties and generic data overrides.
+  Rendered competing hand animations and hand cleanup/republication remain an
+  acceptance item; generated exact poses do not cover visible morphs.
 
 ## Results
 

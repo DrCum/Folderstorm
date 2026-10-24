@@ -114,8 +114,10 @@ Do not combine independent performance PRs or add newer feature heads implicitly
 Build one viewer at a time against the shared cache, as owned by the local
 building agent. Retain each completed installer/package separately.
 
-Project defaults remain 64-bit `ReleaseFS_open_AVX2`, Nightly and NSIS unless
-the user instructs the building agent otherwise. Profiling options needed for a
+The building agent's accepted private configuration is 64-bit
+`ReleaseFS_open_AVX2`, OpenSim Nightly, Velopack, Tracy OFF and contiguous keys
+OFF (October 24). Existing matched profiling/storage variants remain preserved;
+this chat does not change monitoring or shared-cache ownership. Profiling options needed for a
 specific checkpoint must be explicit in that PR and applied equally to baseline
 and comparison. Normal release builds remain valid without Tracy enabled.
 
@@ -206,3 +208,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   116 unguarded mismatches reproduced per storage mode. Complete-cost data and
   isolated guard timings are retained; immediate dispatch remains unsuitable.
   Plan 14f covers factory eligibility and actual current lifecycle/clock context.
+- Stage 4k: ordinary-factory/remote-character permission and independently current
+  lifecycle/clock/skeleton/appearance/asset/binding validation are implemented.
+  1,203 current-owner checks pass in each storage mode with prior suites green.
+  Warm preparation makes no allocations; current application adds none over
+  direct playback. Two existing hand-pose name allocations per update are the
+  next separate optimization (14f1), before 14g's shadow prediction experiment.
+  No production worker caller or real overlap/FPS proof exists yet.

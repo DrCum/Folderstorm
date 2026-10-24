@@ -1,89 +1,81 @@
-# Performance work: shutdown handoff
+# Performance work: current handoff
 
-Resumed by the user on October 24. Current checkpoint branch:
-`codex/perf-sampling-fp-context`, based on PR 107 at
-`14b9f8471bf3cb97de35601fc19b89de9e104705`. Checkpoint 14c is implemented and
-passes 5,956 checks/1,474 frozen-update comparisons in each storage mode.
-Checkpoint 14d implements the initial controller-mask fix found during those
-tests. PRs 106 and 107 have completed automated review with no findings at their
-published heads. Plan 14e's numeric context is implemented and tested: 791 guard
-checks, 829 actual-math/application checks per storage mode, prior regressions
-green, 248 complete-cost trials and isolated guard/capture timings retained.
-Plan 14f covers explicit eligibility/current lifecycle/clock identity and owner
-validation storage before live integration; it is not implemented yet.
-The independent build agent resumed its monitoring under the user's October 24
-instruction and retained 106/107. This chat does not control that monitor/cache.
-The shutdown details below are history;
-read the current roadmap and latest checkpoint plans before continuing.
+Updated October 24, 2026. The user resumed the performance program; the October
+23 shutdown pause is historical. The objective remains active and incomplete.
 
-Saved October 23, 2026 at the user's request before computer shutdown. Pause the
-performance goal after publishing this checkpoint. Do not start further work or
-scheduled runs until the user resumes it.
-
-## Saved checkpoint
+## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Current branch: `codex/perf-animation-constraint-padding`. Its PR is based on
-  `codex/perf-readonly-animation-export`, commit
-  `7e719af9dece7b3987e1c378663a41bd54a8a5d2` (PR 104).
-- PR 104: https://github.com/DrCum/Folderstorm/pull/104. Export/size queries now
-  quantize a local position copy instead of modifying shared live curve keys.
-- This checkpoint zero-initializes both fixed 16-byte constraint-name buffers.
-  Existing field widths, truncation, names and decoded semantics are preserved;
-  previously uninitialized trailing bytes become deterministic zero.
-- Current production change is only those two array initializers. Focused tests,
-  results and the next plan accompany it. No live worker dispatch is enabled.
+- Branch: `codex/perf-current-motion-context`, based on PR 108 at
+  `eea3c55cd0a93ab93dd0b84a90d1fba1ed85fcc1`.
+- Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
+  character permission, independent current lifecycle/frame time/count/skeleton/
+  appearance/asset/binding context, exact current-input validation and direct
+  fallback. No production worker dispatch or controller reordering is enabled.
+- Its private authority resets on base copy/assignment. Owner-only binding
+  snapshots retain bounded joint-state references; jobs never retain live scene
+  pointers. Identity never authorizes dereferencing a dead motion/character.
+- Finish final review, commit/push this branch and resolve its checkpoint PR by
+  branch, not by an assumed PR number. Attach every created PR to this chat.
+- The frozen feature baseline through PR 88 is still
+  `d0f05af90f4ed788cb59a5b2d91dd405ed06717f`; preserve it and published history.
 
-## Validation already completed
+## Evidence already obtained
 
-- New constraint-name test reproduced nonzero padding with the old serializer.
-- Fixed serializer: 11,270 name-padding/decoding/layout/failure checks passed in
-  each of map and contiguous storage modes.
-- Existing read-only serializer regression: 896 checks and 10,000 concurrent
-  owned samples passed in each storage mode. Five frozen packets remain exact.
-- Complete keyframe source and new test passed standalone Tracy/contiguous
-  syntax checks. Native runs used fresh character/controller/keyframe sources,
-  MSVC x64 AVX2, optimized precise floating point, assertions enabled and cached
-  dependencies read only. Scratch results are in the sibling
-  `performance-validation` directory (`*14b*` logs and executables).
-- A final test-only assertion was relaxed to allow a future valid early return
-  on rejected output; current successful runs take the same two-field path.
-- Full viewer builds, export/re-open workflows and in-world acceptance remain
-  pending. PR 104 and this checkpoint still need review/acceptance follow-up.
+- 1,203 actual current-owner checks in each key-storage mode, including three
+  current applications and 25 stale fallbacks in the mutation matrix. Real
+  factory/controller, copy/assignment, destruction, same-ID replacement, binary
+  publication, independent clock updates and counter exhaustion are covered.
+- Prior suites pass in each mode: 5,956 phase checks / 1,474 frozen updates;
+  109,806 owned checks / 24,193 exact poses; 1,734 batch checks; 829 actual numeric
+  checks, including 116 reproduced unguarded mismatches.
+- Allocation probes: cold preparation two allocations; warm preparation zero;
+  current application adds no allocations over direct playback. Both playback
+  paths still make two hand-pose name allocations per update. Raw allocation
+  reports and 81 owner timing rows are in `doc/plans/results/current-motion-*`.
+- Native fresh-source MSVC x64 AVX2 runs and independent Tracy/contiguous source
+  checks passed. Cached dependencies were read only, scratch outputs are in the
+  sibling `performance-validation` folder. Full viewer builds are the other
+  chat's responsibility. No FPS or rendered acceptance claim is established.
+- PR 108 automated code review completed without findings at exact `eea3c55`.
+  The independent builder retained PRs 105-108 separately; latest 108 version
+  `7.2.5.82247` passed full build and 23 focused checks. Its final receipt is
+  `performance-worker-final-20261024-062156-pr108.json` in the parent workspace.
+  That build is not evidence for the newer 14f source.
 
-## Resume sequence
+## Next sequence
 
-1. Inspect git status, branch/head and attached PRs before changing anything.
-   Resolve the current checkpoint PR by its branch rather than guessing a number.
-2. Read `viewer-performance-roadmap.md`, checkpoint 14's audit, checkpoint 14b's
-   results and `viewer-performance-14c-keyframe-phase-contract.md` in this folder.
-   Checkpoint 14c is planned and has no implementation yet.
-3. Review any build-agent results and PR comments. Keep fixes scoped to their
-   own checkpoint; do not merge or silently combine newer feature branches.
-4. Begin 14c on a new `codex/perf-...` branch from this checkpoint. Preserve the
-   legacy timing arithmetic and callback/constraint/pose ordering, validate with
-   a frozen actual-update oracle, keep default playback serial, then publish a
-   separately testable PR and write the following plan.
+1. Inspect current status/head/PR state and preserve any newer work. Publish the
+   14f checkpoint if it has not been published; read its final results and limits.
+2. Begin `viewer-performance-14f1-hand-pose-name-cost.md` on a new `codex/perf-*`
+   branch from 14f. Remove repeated name construction while preserving the
+   animation-data map, priority ties, external overrides/removals and character
+   value lifetime. Test actual publication and repeated allocation behavior in
+   both modes, publish separately and write the following plan before proceeding.
+3. Continue `viewer-performance-14g-shadow-query-prediction.md`: audit controller
+   arithmetic/order, add nonmutating prediction and shadow comparisons, establish
+   real overlap before any off-by-default bounded worker trial. Bound owner
+   bindings and job buffers together. Never manufacture overlap by changing
+   animation order or adding an animation frame of latency.
+4. Record deferred acceptance/questions in `viewer-performance-questions.md`;
+   missing captures do not block independent source work. Quality/stability and
+   whole-frame CPU/frame-time improvement remain the objective.
 
-## Boundaries and pending user evidence
+## Build and ownership boundaries
 
-- Include the frozen current feature stack through PR 88, baseline
-  `d0f05af90f4ed788cb59a5b2d91dd405ed06717f`. Keep the primary feature checkout and
-  shared `D:\Folderstorm-stack-build` cache untouched by this work.
-- Target crowded places and steady FPS on Ryzen 5 3600 / RTX 3060 12 GB.
-  Do not claim a viewer FPS improvement from synthetic sampling timings.
-- The local building agent handles exact-head builds. Defaults are x64
-  `ReleaseFS_open_AVX2`, Nightly, NSIS, contiguous keys OFF for the map control.
-  Retain separate completed builds; do not resume recurring build checks.
-- `viewer-performance-questions.md` records deferred scene, camera, settings,
-  matched Tracy capture and visual/lifecycle debugging requests.
-- For this checkpoint, export and re-open an animation using short collision
-  volume names and a ground constraint; verify intended names/behavior and
-  deterministic repeated output. No account or in-world operation was performed.
-- Before any future live worker, establish immutable key ownership, explicit
-  subclass eligibility, actual current lifecycle/frame/edit identity, worker
-  floating-point context, and a measured independent overlap window. A generation
-  check alone cannot repair a concurrent write or establish those guarantees.
-
-No long-running build/test process or automation was intentionally left running
-at this checkpoint.
+- Primary feature/build checkout and shared cache are not this code worktree.
+  Do not switch/edit `C:\Users\Marty\..Projects\Folderstorm-all` or configure/
+  build/write `D:\Folderstorm-stack-build`. Another chat owns private builds,
+  monitoring, installer archives, packaging and cache/source ownership.
+- Its current accepted private setup is x64 AVX2 OpenSim Nightly Velopack, Tracy
+  OFF and contiguous keys OFF. Existing matched profiling/storage pairs remain
+  preserved. Do not control its monitor or start additional full builds here.
+- Check actual live process ownership before compiling probes using read-only
+  dependencies. Sandboxed `Get-Process` cannot see other chats' processes; a
+  missing sandbox result alone does not prove a worker has stopped. An approved
+  full process inventory can verify ownership when necessary.
+- Do not merge, release, upload artifacts, install or operate logged-in viewer
+  accounts. Do not message another chat without explicit human authorization.
+- Target Ryzen 5 3600 / RTX 3060 12 GB and crowded steady FPS, without lowering
+  quality. Runtime crowd/visual/lifecycle and other-platform acceptance remain
+  pending; no automatic live login or capture has been performed.
