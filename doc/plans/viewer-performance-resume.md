@@ -42,17 +42,23 @@ Updated October 24, 2026. The user resumed the performance program; the October
   at those exact heads. Their separate full builds are retained and verified.
   Keep those
   heads stable. No GitHub PR was merged and no scheduler default changed.
-- Plan14s is implemented/native checked at8b2b248affde3454226e657c37742f377f6791ed
-  (initial implementation b3bec6cd1411cdafe093abf576dea8d07465ed3d).
+- Plan14s is implemented/native checked ated052e24b57a84e75856f886af80c17501bb146b
+  (initial implementation b3bec6cd1411cdafe093abf576dea8d07465ed3d,
+  previous proof8b2b248 preserved in progress-before14s1.json). Plan14s1 corrects
+  reusable result lifetime and includes the complete Frame in owner intervals;
+  raw owner-window cycles now include loop bookkeeping and final drain. No timing
+  was accepted before this correction. Analyzer0c61dc0d34 binds accepted cases
+  to exact native executable identities and verifies the fixed matrix/nonoverlap.
   It is TEST ONLY: a generator adds two explicit private seams to an otherwise
   byte-preserved current controller translation unit; the viewer still compiles
-  the unmodified original.4,192 complete-controller pose/order/hand and stale/
-  bounded fallback checks pass. Five generator checks cover LF/CRLF byte recovery
+  the unmodified original.4,240 complete-controller pose/order/hand and stale/
+  bounded fallback checks pass in both normal and allocation-instrumented builds.
+  Five generator checks cover LF/CRLF byte recovery
   and ambiguous-boundary rejection. Fresh normal/Tracy syntax passes for both
   test translation units.32 immutable native dependencies were reverified.
   See14s-controller-boundary-audit and results/event-sampling14s/progress.json.
   Native source, executable, response, logs and dependency identities are saved;
-  final executables are event-sampling14s-final and event-sampling14s-alloc-final
+  current executables are event-sampling14s-reuse1 and event-sampling14s-alloc-reuse1
   in performance-validation. All own native/compile sessions are terminal.
   No timing case has run: the first precheck at21:42:27Z refused launch when
   PR120 preparation entered NORMAL_PERFORMANCE_QUEUE. Retain that unrun record.
@@ -476,7 +482,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
    and48-case data were reverified after resolving only docs. Both exact heads
    are now independently retained with verified installer/focused receipts.
    PR120 is published/attached at exact55f66ec851, based on119. This separate
-   branch implements14s's private complete-controller experiment at8b2b248aff.
+   branch implements14s's private complete-controller experiment ated052e24b5,
+   with analyzer0c61dc0d34. Use the exact current programs/identities in progress,
+   and the corrected runner, retaining all previous proof and the unrun precheck.
    Resume the prewritten matrix once PR120 is retained and full-host/build state
    is idle. Preserve the blocked precheck and every exclusion; read actual logs/
    exit state and source identities before claiming an accepted case. Analyze

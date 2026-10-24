@@ -27,7 +27,7 @@ function Get-IdleObservation {
         idle=(!$state.activeBuild -and !$worker.current -and $worker.status -eq 'idle' -and
             $monitor.phase -eq 'IDLE_MONITORING' -and $processes.Count -eq 0)}
 }
-$exe=Join-Path $PSScriptRoot $(if($Allocations){'event-sampling14s-alloc-final.exe'}else{'event-sampling14s-final.exe'})
+$exe=Join-Path $PSScriptRoot $(if($Allocations){'event-sampling14s-alloc-reuse1.exe'}else{'event-sampling14s-reuse1.exe'})
 $record=[ordered]@{case=$label;kind=$kind;round=$Round;attempt=$Attempt;mode=$Mode;avatars=$Avatars;gapUs=$Gap;load=$Load;frames=64;
     before=(Get-IdleObservation);after=$null;status='before_check';exit=$null;
     exeSha256=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash;

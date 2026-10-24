@@ -1,9 +1,9 @@
 {
   "parent_pr": 120,
   "parent_head": "55f66ec851701fdc6b9bfd2c81794abc5ee80ccf",
-  "implementation_head": "8b2b248affde3454226e657c37742f377f6791ed",
+  "implementation_head": "ed052e24b57a84e75856f886af80c17501bb146b",
   "status": "native_checked_timing_pending",
-  "native_checks": 4192,
+  "native_checks": 4240,
   "generator_checks": 5,
   "production_cpp_modified": false,
   "viewer_build_acceptance": false,
@@ -12,8 +12,8 @@
   "timing_block": "Before-check refused launch at 2026-10-24T21:42:27Z while independent monitor entered NORMAL_PERFORMANCE_QUEUE for PR120",
   "sources": {
     "indra/llcharacter/tests/event_sampling_cost.cpp": {
-      "bytes": 23794,
-      "sha256": "4d436ab5892ffc25e1deaf07535df7f70be332ccf119e92a1940110b3df9ac89"
+      "bytes": 24077,
+      "sha256": "fd90a609bfc9214bd9650a12eb23f0a1970bfd5334a7636a7cd37a6e67a834e4"
     },
     "indra/llcharacter/tests/make_event_sampling_controller.py": {
       "bytes": 2458,
@@ -98,6 +98,10 @@
     "indra/llcharacter/tests/bounded_sampling_executor.h": {
       "bytes": 9066,
       "sha256": "f90e3acc14de07dbfbae511a6cb71b2c5ed90a14978acda41599c12b542a9092"
+    },
+    "indra/llcharacter/tests/analyze_event_sampling_cost.py": {
+      "bytes": 8750,
+      "sha256": "1a2e7191d9f33a70e85431d9a470ad2f2aa6a1e286ca5287e0e396a75e18d0f2"
     }
   },
   "native_artifacts": {
@@ -178,12 +182,60 @@
       "sha256": "da2ff39ed52b00d335e253ae0140944022eff7fcab2ff2a119a3f7052d9ceea5"
     },
     "run-event-sampling14s.ps1": {
-      "bytes": 3401,
-      "sha256": "c541b7285d495e1c78f06d3a55369c574ae6bdffefa4cfd608f3986b86cbef54"
+      "bytes": 3403,
+      "sha256": "19bbe2a326fcb9b3ff4eb8d8a18773e86a9866c045d235c3b422147078538192"
     },
     "event14s-timing-r1-direct-a1-g0-normal.json": {
       "bytes": 814,
       "sha256": "ea7159daf0f0dc11dcb7966c32ac38163d480a5c01cda356ab3c704dbf965328"
+    },
+    "event-sampling14s-reuse1.exe": {
+      "bytes": 4497408,
+      "sha256": "ea8514747f7868f29e21bc04d99f8bcdc7da9e63fee67f57ca67db06b52c1190"
+    },
+    "event-sampling14s-reuse1.rsp": {
+      "bytes": 12063,
+      "sha256": "edee3d4c32199cccedb640ce0b809b2562282fd03666cbb776bdeba8350d6b36"
+    },
+    "event-sampling14s-reuse1.log": {
+      "bytes": 643,
+      "sha256": "2c317bd69bdc34190b46c9948b71fe4cbf61ca8f30b19213819521a1efc5bb9b"
+    },
+    "event-sampling14s-alloc-reuse1.exe": {
+      "bytes": 4511744,
+      "sha256": "d96954dc737a183c87c82b2f17d294233c0596b23a2013f8c5472afa08bb474f"
+    },
+    "event-sampling14s-alloc-reuse1.rsp": {
+      "bytes": 12108,
+      "sha256": "181e65121c65fbb76ba6c4858581758fc93f498dc13b75bf1e0fc1071de46deb"
+    },
+    "event-sampling14s-alloc-reuse1.log": {
+      "bytes": 780,
+      "sha256": "df587238cdec5aa9d550d083ac4fc5ac5e50eba9215fc1e1052c988b694b9e35"
+    },
+    "event-sampling14s-alloc-reuse1-check.log": {
+      "bytes": 99,
+      "sha256": "6a6f8a5db7b9d2bac87d41bfe90b8f25832fbfa83bc7109e3bef20aba25057f7"
+    },
+    "event_sampling_cost-normal-event14s-reuse.rsp": {
+      "bytes": 4090,
+      "sha256": "ca5a9708180ba06322666674c950b080d823d662e3aa003a32045b2a2b763c55"
+    },
+    "event_sampling_cost-normal-event14s-reuse.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "event_sampling_cost-tracy-event14s-reuse.rsp": {
+      "bytes": 4284,
+      "sha256": "7311030e9bc4f685279a2b8b10eb86eb43f7ac020adbc5f32b7cc64212294a38"
+    },
+    "event_sampling_cost-tracy-event14s-reuse.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "run-event-matrix14s.ps1": {
+      "bytes": 1415,
+      "sha256": "f8cd0d1bd81dec0f1b1f5cfbcdb4deb346871d66007fdb2260e4e2a7b6a083d2"
     }
   },
   "immutable_libraries": {
@@ -197,5 +249,44 @@
     "No full CMake integration, other-platform runtime, live scene/deadline or CPU/FPS acceptance.",
     "Correctness uses explicit ready oracles; timed path has no consumption wait.",
     "Per-job and pool-window raw cycles include instrumentation; no power interpretation."
-  ]
+  ],
+  "analysis_head": "0c61dc0d34b08351b1f3fb72a136122c1c84b7e6",
+  "allocation_instrumented_checks": 4240,
+  "correction": "One reusable owner Result; measure complete Frame lifetime and raw complete-loop owner cycles including final drain",
+  "programs": {
+    "timing": {
+      "name": "event-sampling14s-reuse1.exe",
+      "bytes": 4497408,
+      "sha256": "ea8514747f7868f29e21bc04d99f8bcdc7da9e63fee67f57ca67db06b52c1190"
+    },
+    "alloc": {
+      "name": "event-sampling14s-alloc-reuse1.exe",
+      "bytes": 4511744,
+      "sha256": "d96954dc737a183c87c82b2f17d294233c0596b23a2013f8c5472afa08bb474f"
+    }
+  },
+  "matrix_plan_normalized_sha256": "8d33b67ac3e76b5e25a32549a95c049389c5a387ee8f13cfd483a0095571c57c",
+  "runtime_diff_vs_parent": "",
+  "retained_normalized_lf_sha256": {
+    "event-controller14s-normal-event14s.log": "6ade32b7c12c74bf4000e863fd797fe08a8d83acdd1af37a616036ed7dce7bd4",
+    "event-controller14s-tracy-event14s.log": "6ade32b7c12c74bf4000e863fd797fe08a8d83acdd1af37a616036ed7dce7bd4",
+    "event-controller14s.provenance.json": "bd1e026f6abf763c7b3578d0ddb22b44067b4def00e9315275b802c37406b28d",
+    "event-generator-validation14s.json": "09d5bc7de7abcc59a06910f75b64ace7eec35d4347e1e787d004cf2a410fe965",
+    "event-sampling14s-alloc-final.log": "c33c6eb119c3e71b54ee303e68cee32d3a95f60f301bcb6827998b7e6ca59c01",
+    "event-sampling14s-alloc-reuse1-check.log": "c53ddb12312af8d04d5c705681ad9dde8149ce81825e1f69153e92b5185cc3ed",
+    "event-sampling14s-alloc-reuse1.log": "5640f92d5d94c1e9ccff777519a9759f1af643e8c03ccd37967a7552096e463a",
+    "event-sampling14s-final.log": "6cd3cf64acbb0e8aeb4550b0fc8acdf9f4b29ff92d956b135f6da96400199e28",
+    "event-sampling14s-reuse1.log": "92f32b8ce71def89cd82ac5fc6737c8c38d73b49cb5fa0e02124a7e05502c1eb",
+    "event-sampling14s.cpp.txt": "f0fccad51c74f55860117008e4faff385af39cb2b5ff0ae44de009d2b59069fb",
+    "event14s-timing-r1-direct-a1-g0-normal.json": "0164faf415e7f84df07f8c3933313373348ecf3786beac3f49d58f0cc498e65f",
+    "event_sampling_cost-normal-event14s-final.log": "5c3dec66aa05c1ab88666c2b8b978160aec2b1dcfdb5e4f7df2c7361b6c33fdb",
+    "event_sampling_cost-normal-event14s-reuse.log": "5c3dec66aa05c1ab88666c2b8b978160aec2b1dcfdb5e4f7df2c7361b6c33fdb",
+    "event_sampling_cost-tracy-event14s-final.log": "5c3dec66aa05c1ab88666c2b8b978160aec2b1dcfdb5e4f7df2c7361b6c33fdb",
+    "event_sampling_cost-tracy-event14s-reuse.log": "5c3dec66aa05c1ab88666c2b8b978160aec2b1dcfdb5e4f7df2c7361b6c33fdb",
+    "matrix-plan.json": "8d33b67ac3e76b5e25a32549a95c049389c5a387ee8f13cfd483a0095571c57c",
+    "plan-event-matrix14s.py.txt": "1d4aa414b3ac3311b8a5b2760e88d78ebfa7f07668d3f5b64c38ae46055200c8",
+    "run-event-matrix14s.ps1.txt": "f8cd0d1bd81dec0f1b1f5cfbcdb4deb346871d66007fdb2260e4e2a7b6a083d2",
+    "run-event-sampling14s.ps1.txt": "19bbe2a326fcb9b3ff4eb8d8a18773e86a9866c045d235c3b422147078538192",
+    "validate-event-generator14s.py.txt": "da2ff39ed52b00d335e253ae0140944022eff7fcab2ff2a119a3f7052d9ceea5"
+  }
 }
