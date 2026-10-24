@@ -1,0 +1,14 @@
+{
+  "source_commit": "836f1eed3850dcb55e57ba8e9138a2a21917e7fe",
+  "parent_pr": "https://github.com/DrCum/Folderstorm/pull/116",
+  "status": "Partial source phase/ownership audit. No code or worker behavior changed, no new runtime profiling/capture or full build performed.",
+  "source_sha256_normalized_lf": {
+    "indra/newview/llappviewer.cpp": "ffa5901243063b5656fe8f27e4431cb35401980f2ccbe5171e593a1218450dde",
+    "indra/newview/llviewerobjectlist.cpp": "913a09284dfc9583f25ef088e639a0f0524f086a2a7105c6a1495a5be2eecfe1",
+    "indra/newview/llvoavatar.cpp": "10651fc1e67e1fbffc7f8d15378c8bf427ee291ce5162f52e1c4de64b4e3e46f",
+    "indra/llcharacter/llcharacter.cpp": "8ac509c6dee6d2cdf5aa23a109910279e0f77071874cd13472a820e2a24abae9",
+    "indra/llcharacter/llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3"
+  },
+  "reviewed": "doFrame event/idle/display ordering; General/image startup call sites; idle worker reply budget; object idle traversal and deferred cleanup; avatar idle tail and updateCharacter",
+  "open": "Worker constructor/configuration/load, remaining geometry/visibility/simulation/terrain paths, real CPU attribution/coverage/window and rendered acceptance"
+}

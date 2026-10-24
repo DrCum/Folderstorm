@@ -6,9 +6,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-hand-consumer-cleanup`, from published PR115 head
-  `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`. PR115 targets the committed 14l
-  restore `ef49e4614faa730d5803edc6dcd4a37f599cca52` and is attached to this chat.
+- Branch: `codex/perf-main-frame-audit`, from published PR116 head
+  `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
+  `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`; both are attached to this chat.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
   The 14l inline hint prototype is now declined and withdrawn. Runtime pose
   source/header exactly match PR 114; stop pool-container work. Plan 14m's
@@ -18,8 +18,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
   viewer build is now retained as `7.2.5.82269` at that exact head; its installer
   hash and passed focused verification were read/checked. Runtime acceptance is
   pending. Plan 14n is implemented at `7fe77b5aa9` with final provenance in
-  `results/hand-consumer-provenance14n.json`. Publish its separate evidence head,
-  then begin plan 14o's main-frame/worker candidate audit. No workers enabled.
+  `results/hand-consumer-provenance14n.json`. PR116 is open/mergeable and its
+  automated code review completed with no findings at exact `836f1eed38`.
+  Its full viewer build/runtime acceptance is pending. Plan 14o's source phase
+  audit has begun; no further production changes or workers are enabled.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -305,6 +307,18 @@ Updated October 24, 2026. The user resumed the performance program; the October
   PR115 is now retained at exact 2df5f5bdaf as `7.2.5.82269`; archive identity,
   installer SHA and passed focused receipt were verified. This does not validate
   newer 14n source or rendered/lifecycle/crowd behavior.
+- Plan 14o's first source pass is recorded in
+  `viewer-performance-14o-main-frame-findings.md` with source identities in
+  `results/main-frame-source14o.json`. The active-object loop is serial with a
+  reusable raw-pointer list copied from owning handles, callbacks can change
+  active objects, and dead cleanup follows. It does not establish a global
+  avatar preparation barrier. Existing shadow scope covers a per-avatar window
+  around admission/appearance/root/motion work. Main reply processing precedes
+  object updates with a time budget; a queue reply alone gives no same-frame
+  motion deadline. General startup requests three threads; image-decode sizing
+  is configurable and derives from reported hardware concurrency. Actual pool
+  constructor/configuration/load and other worker counts remain open. Review
+  the remaining visibility/geometry/simulation/terrain paths before ranking.
 
 ## Next sequence
 
@@ -315,11 +329,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Finish publishing/attaching plan 14n's separate exact-head PR from
-   `codex/perf-hand-consumer-cleanup`, based on PR115 at exact `2df5f5bdaf`.
-   Start plan 14o on `codex/perf-main-frame-audit` from that published head after
-   a clean-checkout check. Trace actual main-frame phases and existing worker
-   ownership, then choose the next kernel from evidence. Preserve 14l/14m source
+3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
+   Continue plan 14o on `codex/perf-main-frame-audit`; initial frame/avatar/queue
+   ordering and source hashes are recorded. Trace remaining worker ownership,
+   visibility/detail, geometry, simulation and terrain, then choose the next
+   kernel from evidence. Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
