@@ -93,6 +93,10 @@ Never present a missing hardware result as a successful test.
   unrelated logs private. Compare normal FPS with that setting FALSE. No setting
   or account was operated by this chat. The next purge/blender CPU work can
   proceed independently; generated tests do not establish a real queue deadline.
+- Checkpoint 14h removes idle motion-purge allocation. Native eviction/order and
+  ownership comparisons pass; check cache-heavy travel, animation/outfit changes,
+  arrivals/departures and ordinary/hidden avatar transitions in its retained
+  viewer build. Compare warmed crowded frame times with diagnostics FALSE.
 
 ## Results
 

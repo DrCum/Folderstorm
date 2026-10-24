@@ -58,4 +58,44 @@ source work rather than silently enabling workers or declaring an FPS gain.
 
 ## Results
 
-Not implemented yet.
+Implemented on `codex/perf-idle-motion-purge`, from PR 111 at
+`1ad2444867c70566619913b092b42cde0f2e25ab`. The only production change moves the
+temporary set and its consumption into the existing second over-cap branch.
+The deprecated prepass, cap, final logging bookmark and callback order remain.
+
+Native optimized MSVC x64 AVX2 checks with assertions enabled:
+
+- 5,838 checks / 45 real-controller cases pass in each map/contiguous mode.
+  Cases cover 0/1/31/32/33/64 loaded motions, inactive/mixed/all-active sets,
+  loading motions, genuine deprecated owners with and without same-ID canonical
+  replacements, threshold reduction by the prepass, repeated purge, retained
+  blending, ordinary/minimal updates and complete teardown. UUID-ordered
+  eviction and callback/destructor sequences match the frozen parent function.
+- `motion_purge_reference.h` preserves the parent's exact function except its
+  class name, literal cap spelling and inaccessible private logging bookmark.
+  The latter remains unchanged in production. Restoring those three spellings
+  reproduces the saved parent function; its normalized-LF SHA-256 is
+  `6e79131aff06641f455cb752c9a5ec7e26bc52a1ab245bd76198ed0fded2ad09`.
+  The two fixture clocks are seeded before controller construction.
+- Separate replacement-new binaries: 32 purges at each of 0/1/32 loaded motions
+  fall from 32 calls / 1,536 requested bytes to zero calls/bytes. Both modes
+  return to their allocation live baseline. See `results/motion-purge-*alloc*`.
+- The actual warmed three-joint controller falls from 128 calls / 3,840 bytes
+  to 96 calls / 2,304 bytes over 32 updates. Disabled observation has identical
+  counts; enabled diagnostic/failure cleanup still retains zero owned bytes.
+  The remaining three list-node allocations per update belong to plan 14i.
+- Focused map regressions pass: 5,956 phase checks / 1,474 frozen updates,
+  5,063 shadow checks, 26 allocation/failure/cleanup checks, and 241 mask checks
+  / 15 poisoned-storage cases. Standalone test sources and the affected
+  controller with Tracy/contiguous enabled pass independent source checks.
+
+Tests compile fresh affected sources against the immutable internal-library
+snapshot documented by checkpoint 14g. External packages remain read only.
+Nothing in this chat configures, edits or builds the shared viewer cache.
+
+The allocation attribution is established. Uninstrumented purge and complete
+controller timing executables are prepared; paired runs await the independent
+builder becoming idle. Timing reports will state their component-only scope.
+Full viewer linking, crowded-scene frame times, visible animation quality,
+cache/loading/outfit/arrival/departure and other-platform acceptance remain
+pending. The next source plan is `viewer-performance-14i-active-blenders.md`.

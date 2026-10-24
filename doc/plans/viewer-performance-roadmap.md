@@ -229,3 +229,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   Component costs and manual aggregate capture instructions are in plan 14g.
   Real window/crowd/visual acceptance remains pending. Plan 14h addresses the
   measured idle purge allocation while that evidence is pending.
+- Stage 4n: the idle purge collector is constructed only when eviction is
+  necessary. 5,838 checks / 45 controller cases pass per storage mode against
+  the frozen parent; 32 ordinary purges drop from 32 allocations to zero.
+  Full warmed three-joint updates lose one allocation / 48 requested bytes each.
+  Paired costs and real crowd acceptance remain separate evidence. Plan 14i
+  addresses active-blender list allocation and membership searches next.
