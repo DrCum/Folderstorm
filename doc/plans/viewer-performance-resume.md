@@ -6,7 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-stats-read-lookups`, integrating completed PR118 after audit
+- Branch: `codex/perf-general-event-wait`, from reviewed PR119 exact
+  `8952ad421837beb61737a15d999ff14fa1c069b4`, including completed PR118 after audit
   `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
   `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
   `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`; both are attached to this chat.
@@ -32,9 +33,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
   completed PR118 exact0ec73f05516ec0b2e4e578fadcf5e959ecf185d7. Only roadmap/
   handoff conflicts were resolved; all four native-tested statistics source/
   helper identities still match. The48-case analyzer passes after integration.
-  PR118 is open/attached/mergeable; its own full build is pending. Publish14r
-  separately with PR118 as base, then implement already-written14q from that
-  cumulative stack. No GitHub PR was merged and no scheduler default changed.
+  PR118 and PR119 are open/attached/mergeable. PR119 exact8952ad4218 is based
+  on PR118 exact0ec73f0551; both automated reviews completed without findings
+  at those exact heads. Their separate full builds are pending. Keep those
+  heads stable. No GitHub PR was merged and no scheduler default changed.
+- The14q branch contains only preparation/handoff updates so far; no production
+  wait-policy or new startup setting has been added. Implementation entry points
+  and native-control protocol are recorded in its plan before code. All own
+  sessions are terminal. No viewer or account operation has been performed.
 - PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
   base audit db9. Automated review completed without findings at that head.
   Its exact-head full build is retained as7.2.5.82278; installer hash and37
@@ -429,11 +435,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
    deleting the failed scheduled case. Production pool policy remains unchanged.
    All ten remaining cells are now terminal/passed; no own native session remains.
    PR118 is already published/attached at exact0ec73f0551, based on PR117. It is
-   integrated into this stats14r branch; source identities and48-case data were
-   reverified after resolving docs. Publish this separate cumulative checkpoint.
-   Both need
-   independent full builds. Plan14q is written and is the next implementation,
-   based on that combined stack, with one-worker opt-in only. No default adoption.
+   integrated with stats14r in published PR119 exact8952ad4218; source identities
+   and48-case data were reverified after resolving only docs. Both need their
+   independent full builds. This branch is based on119. Implement14q's explicit
+   constructor policy and immutable resolved-width decision first, then actual
+   production-path native tests with a private CommonControl listener, then the
+   General-only startup flag/log and scope verification. No test-only scheduler
+   override in that fixture. Default/widths/platforms remain unchanged; do not
+   repeat the48-case matrix for unchanged algorithm code. Retain fresh sources
+   and keep timing behind full-host idle checks. No default adoption.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header

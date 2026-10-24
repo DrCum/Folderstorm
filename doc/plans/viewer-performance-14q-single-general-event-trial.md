@@ -52,3 +52,38 @@ Q4/Q7 and the user's runtime findings stay deferred. This adds no animation
 workers, frame delay, job cancellation policy, priority change or new graphics
 context. A failing candidate returns to the existing startup selection and
 retains its evidence. No live login/upload/cache operation is part of this plan.
+
+## Implementation entry points, inspected before code
+
+The new branch is `codex/perf-general-event-wait` from PR119 exact
+`8952ad421837beb61737a15d999ff14fa1c069b4`. PR118 exact0ec73f0551 and PR119
+exact8952ad4218 both completed automated review without findings. Their full
+builds remain the independent builder's work; keep those heads immutable.
+
+Use an explicit constructor enum with PlatformDefault and
+EventWaitSingleWorker, plus an immutable effective-policy member resolved
+after mThreadCount. Default all existing call sites to PlatformDefault. The
+startup installation already occurs in ThreadPoolBase::run(name) before the
+virtual run(); select the bundled round_robin there only for the eligible
+effective policy, retaining sleepy_robin for Windows default. Other platforms
+keep their existing entry-point behavior. Both algorithms are already included.
+
+Proposed startup setting: FSGeneralPoolEventWait, Boolean FALSE/Persist0. General's
+owner can pass the explicit policy with the existing default capacity and
+automatic-shutdown values. Log requested/effective policy and actual width once
+after start. Since the setting is nonpersistent and startup-only, later manual
+tests must use a startup override; toggling a live debug control then restarting
+cannot retain it. Local initConfiguration applies the --set name/value pairs via
+tempSetControl before initThreads. Confirm accepted Boolean spelling when
+documenting the exact launch command; no viewer was launched for this audit.
+
+CommonControl::get sends an immediate LLViewerControl event with op=get,
+group=Global, key=ThreadPoolSizes and a unique reply pump name. A private native
+listener can return response["value"] as the test map. It must never attach to a
+viewer/account. This permits actual constructor override tests and asserting no
+further settings queries occur on workers or after a snapshot's control changes.
+Boost context exposes get_scheduler(), but no public algorithm getter was found
+in the installed scheduler header; avoid depending on its private representation.
+Verify installation through source scope, actual production-path correctness
+and a bounded opt-in delivery comparison if needed, rather than a test-only
+algorithm override. Preserve the completed14p2 source/executable identities.
