@@ -267,6 +267,7 @@ if(LL_TESTS)
     # controller; only these explicit targets contain the generated test seams.
     set(event_controller_source "${CMAKE_CURRENT_BINARY_DIR}/event_sampling_controller.cpp")
     add_custom_command(OUTPUT "${event_controller_source}"
+      BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/event_sampling_controller.provenance.json"
       COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/make_event_sampling_controller.py"
         --source "${CMAKE_CURRENT_SOURCE_DIR}/llmotioncontroller.cpp"

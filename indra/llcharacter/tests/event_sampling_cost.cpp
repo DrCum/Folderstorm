@@ -301,6 +301,9 @@ struct Frame
         row.ns[Submit] += nanos(Clock::now() - submit);
         if (mutation == 1) FSCurrentMotion::Clock::count();
         if (mutation == 2) for (auto& character : scene.characters) character->setSkeletonSerialNum(17);
+        if (mutation == 3) for (auto& character : scene.characters)
+            static_cast<Motion*>(character->getMotionController().findMotion(assetId(3)))->setHandPose(LLHandMotion::HAND_POSE_FIST);
+        if (mutation == 4) for (auto& character : scene.characters) character->allowOwned = false;
         const auto gap = Clock::now(); U64 checksum = 7;
         if (gapUs) while (nanos(Clock::now() - gap) < U64(gapUs) * 1000)
             checksum = (checksum ^ (checksum >> 7)) * 1664525 + 1013904223;
@@ -442,7 +445,7 @@ int check()
     for (auto mode : {Mode::Default, Mode::Event})
     {
         for (const auto* load : {"busy", "closed"}) run(mode, 8, 0, 3, load, true);
-        for (unsigned mutation : {1u, 2u}) run(mode, 8, 0, 1, "normal", true, mutation);
+        for (unsigned mutation : {1u, 2u, 3u, 4u}) run(mode, 8, 0, 1, "normal", true, mutation);
     }
     std::cout << checks.load() << " complete-controller, exact-pose/order/hand, current/stale and bounded fallback checks passed\n";
     return 0;
