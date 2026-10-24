@@ -107,6 +107,8 @@ void conservation()
 {
     const auto stats = ShadowScope::totals();
     require(stats.predicted == stats.matched + stats.mismatched + stats.unused, "Prediction accounting lost an entry");
+    require(stats.masked == stats.maskedObserved + stats.maskedUnobserved,
+            "Masked estimate accounting lost an entry");
     require(stats.bufferBytesPeak <= ShadowScope::MAX_BUFFER_BYTES && stats.retainedKeysPeak <= ShadowScope::MAX_RETAINED_KEYS,
             "Shadow admission exceeded global limits");
     require(std::accumulate(stats.matchedGapNs.begin(), stats.matchedGapNs.end(), U64(0)) == stats.matched,
@@ -214,6 +216,7 @@ void lifetimeAndBounds()
         LLUUID id; id.generate(); LLKeyframeDataCache::addKeyframeData(id, p.data);
         require(p.a.startMotion(id, 0.f), "Bound fixture activation failed");
     }
+    for (auto* motion : p.a.getActiveMotions()) motion->getPose()->setWeight(.5f);
     { ShadowScope shadow(p.a, true); p.a.updateMotions(); }
     conservation(); require(ShadowScope::totals().predicted == ShadowScope::MAX_MOTIONS && ShadowScope::totals().rejected >= 9,
                             "Motion admission was unbounded or silently dropped");

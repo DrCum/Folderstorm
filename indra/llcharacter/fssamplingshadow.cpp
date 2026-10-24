@@ -4,6 +4,7 @@
 #include "llkeyframemotion.h"
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 #include <new>
 
 namespace FSSampling
@@ -23,6 +24,9 @@ struct ShadowScope::Impl
 {
     struct Entry { LLKeyframeMotion::SamplingRequest query; LLUUID id; U64 instance = 0; bool seen = false, admitted = false; };
     std::array<Entry, MAX_MOTIONS> entries;
+    std::array<U64, MAX_MOTIONS> masked{}; // Instance tokens only; zero marks an observed estimate.
+    U8 covered[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]{};
+    size_t maskedCount = 0;
     size_t count = 0, bufferBytes = sizeof(Impl), retainedKeys = 0;
     std::uint64_t observationNs = 0;
     bool ordinaryObserved = false;
@@ -71,7 +75,16 @@ ShadowScope::ShadowScope(LLMotionController& controller, bool enabled, bool forc
                 if (!keyframe || !keyframe->permitsOwnedSampling() || !project ||
                     !controller.predictSamplingTime(*motion, clock, time))
                 {
+                    std::memset(mImpl->covered, 0, sizeof(mImpl->covered));
                     ++sShadowTotals.excluded;
+                    continue;
+                }
+                const bool callback = controller.predictSamplingMask(*motion, mImpl->covered);
+                const U64 instance = keyframe->getOwnedSamplingInstance();
+                if (!callback && instance && mImpl->maskedCount < MAX_MOTIONS)
+                {
+                    mImpl->masked[mImpl->maskedCount++] = instance;
+                    ++sShadowTotals.masked;
                     continue;
                 }
                 if (mImpl->count == MAX_MOTIONS) { ++sShadowTotals.rejected; continue; }
@@ -129,6 +142,8 @@ void ShadowScope::finish()
     const auto start = ShadowClock::now();
     if (mImpl)
     {
+        for (size_t i = 0; i < mImpl->maskedCount; ++i)
+            if (mImpl->masked[i]) ++sShadowTotals.maskedUnobserved;
         for (size_t i = 0; i < mImpl->count; ++i)
         {
             const auto& entry = mImpl->entries[i];
@@ -194,6 +209,13 @@ void ShadowScope::observe(LLMotionController& controller, LLMotion& motion, floa
         else ++sShadowTotals.mismatched;
         return;
     }
+    for (size_t i = 0; i < mImpl->maskedCount; ++i)
+        if (mImpl->masked[i] == instance)
+        {
+            mImpl->masked[i] = 0;
+            ++sShadowTotals.maskedObserved;
+            break;
+        }
     ++sShadowTotals.unpredicted;
 }
 

@@ -274,6 +274,14 @@ Once a retained build is available, the deferred manual request is:
    `unpredicted` records ordinary callbacks without an unused matching instance
    candidate; it can include repeated callbacks. `nested` counts nested avatar
    observation scopes. No count authorizes forcing a motion callback.
+   Starting at checkpoint 14m, `masked` counts bounded advisory estimates for
+   which no query was prepared. After scopes finish,
+   `masked = masked_observed + masked_unobserved`. `masked_observed` counts each
+   recorded instance once if it actually calls back; it is also included in
+   `unpredicted`. Such callbacks still execute normally. `masked_unobserved`
+   includes cancellation/destruction as well as ordinary controller masking;
+   it is not proof of a confirmed callback skip. The negative-record cap falls
+   back to preparing queries, so `masked` does not count every possible estimate.
 5. Gap bucket i covers up to `2^i` ns; bucket 31 also includes larger values.
    The first histogram covers all matching callbacks; the second only matches
    at the first ordinary callback. Prior measured hook time is subtracted, and

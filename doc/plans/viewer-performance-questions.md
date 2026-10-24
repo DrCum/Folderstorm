@@ -8,6 +8,8 @@ Never present a missing hardware result as a successful test.
 - Include the current feature stack, frozen through PR 88 at program start.
 - First priority: many avatars and steady FPS.
 - Test system: Ryzen 5 3600, RTX 3060 12 GB.
+- User confirmed PR 114 runtime testing is still pending. Continue independent
+  source work and retain local testing/capture requests for later.
 - Local builds are handled by a separate agent; performance PRs need explicit
   independent/dependent build instructions and retained versions.
 
@@ -28,8 +30,8 @@ Never present a missing hardware result as a successful test.
 - Baseline and each checkpoint: full native Windows compile/link and runtime
   verification by the building/testing agent; portable helper tests do not cover
   complete viewer integration.
-  The independent agent has retained full native builds through PR 108, including
-  its 23 focused checks. Newer checkpoint heads still need their own build, and
+  The independent agent has retained full native builds through PR 114
+  (`7.2.5.82260` at `514dc0acd4` as last read). Newer heads need their own build, and
   rendered/lifecycle/crowd acceptance remains pending for the stack.
 - Collect matched solo/crowd frame-time samples and profiler captures as described
   in the roadmap. Raw captures may contain user data; share only deliberately.
@@ -114,6 +116,11 @@ Never present a missing hardware result as a successful test.
   pass. Check ordinary cache/animation churn and frame times in its retained
   viewer build; controlled allocation failures are exercised in the dedicated
   native probe, not through an in-world memory-exhaustion test.
+- Checkpoint 14m changes default-off query preparation only. Its aggregate now
+  includes advisory `masked`, `masked_observed` and `masked_unobserved` counters;
+  read the updated 14g interpretation before a later Q7 capture. The user has
+  not yet tested PR114 and is working; keep this request deferred. No live
+  worker trial or default enablement follows from generated matches/gaps.
 
 ## Results
 

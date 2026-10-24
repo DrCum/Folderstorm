@@ -1,0 +1,13 @@
+joints,motions,workload,enabled,predicted,matched,unused,unpredicted,excluded,rejected,buffer_peak,curve_keys_peak,new_calls,requested_bytes,peak_live_delta,end_live_delta,binding_bytes_after
+128,1,partial_overlap,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,1,partial_overlap,1,1,1,0,0,0,0,7472,1536,3,7472,7472,0,0
+128,1,disjoint,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,1,disjoint,1,1,1,0,0,0,0,7472,1536,3,7472,7472,0,0
+128,1,saturated_overlap,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,1,saturated_overlap,1,1,1,0,0,0,0,7472,1536,3,7472,7472,0,0
+128,8,partial_overlap,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,8,partial_overlap,1,8,8,0,0,0,0,25392,12288,17,25392,25392,0,0
+128,8,disjoint,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,8,disjoint,1,8,8,0,0,0,0,7472,1536,17,7472,7472,0,0
+128,8,saturated_overlap,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+128,8,saturated_overlap,1,8,1,7,0,0,0,25392,12288,17,25392,25392,0,0

@@ -33,6 +33,7 @@
 #include "fssamplingcontext.h"
 #include "fssamplingshadow.h"
 #include <limits>
+#include <cstring>
 #include "llfasttimer.h"
 #include "llkeyframemotion.h"
 #include "llmath.h"
@@ -206,6 +207,28 @@ bool LLMotionController::predictSamplingTime(LLMotion& motion, const SamplingClo
     time = clock.animTime >= motion.mActivationTimestamp ? clock.animTime - motion.mActivationTimestamp : 0.f;
     return llfinite(time);
 }
+
+// <FS:Perf> Advisory only for known ordinary normal motions; callbacks can invalidate it.
+bool LLMotionController::predictSamplingMask(const LLMotion& motion,
+    U8 (&covered)[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]) const
+{
+    const F32 weight = motion.mPose.getWeight();
+    if (!llfinite(weight) || weight < 1.f) return true;
+    bool update = false;
+    for (S32 i = 0; i < NUM_JOINT_SIGNATURE_STRIDES; ++i)
+        for (unsigned channel = 0; channel < 2; ++channel)
+        {
+            // Copy words without aliasing or alignment assumptions on the byte arrays.
+            U32 previous, signature;
+            std::memcpy(&previous, &covered[channel][i * 4], sizeof(previous));
+            std::memcpy(&signature, &motion.mJointSignature[channel][i * 4], sizeof(signature));
+            const U32 next = previous | signature;
+            update |= next != previous;
+            std::memcpy(&covered[channel][i * 4], &next, sizeof(next));
+        }
+    return update;
+}
+// </FS:Perf>
 
 inline bool LLMotionController::invokeMotionUpdate(LLMotion& motion, F32 time, U8* mask)
 {

@@ -6,12 +6,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-blender-pool-hints`, from committed/rejected 14k evidence
-  `54e250406c88fffa659dbb30fe7a8f71828ec38b`, backed up on its own remote branch.
+- Branch: `codex/perf-shadow-mask-admission`, from the committed/backed-up 14l
+  decision `ef49e4614faa730d5803edc6dcd4a37f599cca52` on its own branch.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
   The 14l inline hint prototype is now declined and withdrawn. Runtime pose
-  source/header exactly match PR 114; stop pool-container work. Its final
-  evidence/decision must be committed before starting the new 14m branch.
+  source/header exactly match PR 114; stop pool-container work. Plan 14m's
+  advisory admission is implemented at `b7417ea795`, with final provenance in
+  `results/shadow-mask-provenance14m.json`. Publish its evidence head separately,
+  then begin plan 14n on a new branch. No live worker dispatch is enabled.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -223,6 +225,45 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Plan 14m is written before implementation. The real-controller oracle's
   eight predictions / one actual saturated callback identifies preparation
   waste; record baseline counts, then audit mask/reset/advisory semantics.
+- The new 14m baseline is recorded in 12 rows and explicit source/executable
+  provenance. At 128 joints/eight saturated motions: eight predictions, one
+  actual match, seven unused; 17 allocations / 25,392 bytes and 12,288 retained
+  logical keys. Partial overlap also prepares/matches eight; disjoint input
+  prepares/matches eight with 7,472 bytes / 1,536 keys. All disabled rows have
+  zero calls/bytes; every row restores exact pose, binding capacity and counted
+  live bytes. Scratch executable/source: `shadow-mask-preparation-baseline14m`.
+  Probe session 42776 is terminal. This is not timing and has replacement
+  allocators; never use it for timing or link it into a viewer. That baseline
+  predates admission. User confirmed #114 runtime testing is still
+  pending; keep questions/acceptance deferred without blocking independent work.
+- Plan 14m is implemented with bounded advisory negative records, owner-only
+  word mask unions and unchanged actual callbacks. Normal/additive mutation and
+  reentry misses are observed, never suppressed. Both storage modes pass 864
+  new checks, 5,105 shadow checks, 27+26 separate allocation/failure checks,
+  4,054 controller and 38,971 multi-motion checks, reproducing the same 216+252
+  frozen frame streams. Unsupported direct/accounting passes 14 checks. Fresh
+  normal caller and Tracy/contiguous caller/core checks pass. Runtime pose
+  source/header still hash exactly to PR114, and layout stays 544/80/688 bytes.
+- Final enabled saturated 128/eight preparation falls from eight queries to one,
+  17 allocation calls to three and 25,392 requested bytes to 8,168. Query-retained
+  keys fall 12,288 to 1,536. Partial/disjoint cases keep all useful queries and
+  pay 696 extra diagnostic scope bytes. OFF rows still allocate zero; all exits
+  release counted storage and owned bindings. Cancelled/destroyed negative
+  records are not confirmed actual skips. Read amended plan 14g.
+- Both CPU rounds retain 560 rows / 560,000 updates. Final enabled 128/eight
+  saturated median is 18.50 us versus parent 30.55 us; disjoint regresses ~3.93%
+  (23.21 vs 22.34 us). Default direct 128/eight differences are below 1% here.
+  Three-joint controls drift up to 55.06% in raw cycles, making those small-case
+  results inconclusive. No whole-viewer FPS gain follows. Full-host named
+  builder/packager and private-state checks do not prove an idle desktop.
+  Sessions 88428, 31767, 21877, 55089, 70741 and 80926 are terminal. Final word
+  runs use `FS_CONTIGUOUS_ANIMATION_KEYS`; initial runs with the unused
+  `FS_ENABLE_CONTIGUOUS_ANIMATION_KEYS` define are excluded from final evidence.
+- Plan 14n is written before implementation. The real hand consumer still
+  passes a long priority name to a by-value removal API each callback. Measure
+  that consumer, then prefer typed cleanup reusing stable key names while
+  preserving generic map authority. PR112 review still reports running at
+  exact b8c82e6; PR114 completed without findings at exact 514dc0a as last read.
 
 ## Next sequence
 
@@ -233,13 +274,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Finish/verify 14l's decision commit and remote backup, then create
-   `codex/perf-shadow-mask-admission` from that exact head for plan 14m. Preserve
-   the rejected data and restore; do not resume container tuning or revive the
-   cache macro. Record initial preparation allocation/buffer/key counts before
-   implementing advisory mask admission. Unknown/custom callbacks, reentry,
-   independent mask resets and actually observed pruned motions need explicit
-   handling. Normal playback/diagnostic default remain unchanged.
+3. Finish publishing plan 14m's exact evidence head and attach its separate PR.
+   Start plan 14n on `codex/perf-hand-consumer-cleanup` from that head after
+   confirming a clean checkout. Freeze actual consumer allocation/morph outputs
+   before changing cleanup. Preserve 14l's rejected data and final 14m source
+   identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
