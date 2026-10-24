@@ -6,8 +6,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-blender-pool-lookup`, based on published PR 113 at
-  `c7ce8ec6d7769c13a1decba496260feb5dd8bdd7`.
+- Branch: `codex/perf-blender-pool-index`, based on published PR 114 at
+  `514dc0acd4f12e5413718dfafa1c046c778e843e`. The sorted-array experiment
+  remains test-only and is rejected; production still matches that PR.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -141,24 +142,37 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `blender-pool-final-fault-*14j.exe`, timing binaries
   `blender-pool-cold-helper-{collection,controller}14j.exe`. Their source/report
   identities are recorded in `results/blender-pool-provenance.json`, with
-  implementation commit `670008164f`. Finish the evidence/docs commit and
-  publication, then start 14k from the exact published head. Plan 14k is written.
+  implementation commit `670008164f`. Evidence head `514dc0acd4` is published
+  and attached as PR 114; exact remote base/head and mergeability were verified.
+  Automated review completed with no findings at that head. Its independent full
+  viewer build remains separate from these native checks; read the builder's
+  state rather than assuming an older build proves this source.
 - The independent builder retained PR 113 as `7.2.5.82257` at exact `c7ce8ec6d7`
   and released ownership before the final 14j measurement. This proves the 14i
   build, not the newer 14j source. Primary source/cache/monitor remain untouched
   by this chat.
+- Plan 14k is implemented as a test-only index experiment, not a pool change.
+  Both indexes pass 47,517 checks; separate probes pass 21,931 allocation/growth/
+  retry checks, including 32 tree and 10 array failures. Two verified-idle runs
+  retain 2,016 matched-checksum rows. The array saves retained bytes but regresses
+  common warm lookups and 1,024-key reverse cold insertion (270 vs 72 us).
+  Keep the tree. Read the full plan/raw data/provenance, not just favorable
+  append-only or large sequential cases. No new viewer testing PR is needed for
+  a rejected test-only candidate. Plan 14l is written before implementation.
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Finish
-   14j's provenance/commit/publication; do not redo its validated source or
-   enable workers. Recheck PR review/build evidence at exact published heads.
+1. Inspect current status/head/PR state and preserve any newer work. PR 114 is
+   published at `514dc0acd4`; do not amend it or redo its validated source.
+   Recheck review/build evidence at exact published heads, without controlling
+   the independent builder. Complete/verify 14k's evidence commit if necessary.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. After publishing 14j separately, create a new branch from that exact head
-   for `viewer-performance-14k-pool-index.md`. Measure locality/cold/retention
-   and publication/cleanup behavior before considering a container change.
+3. Start `viewer-performance-14l-pool-lookup-hints.md` from the committed 14k
+   experiment on a separate branch. Measure bounded read-through hints while
+   retaining authoritative tree ownership/order. Integrate only a complete-path
+   winner; otherwise stop pool-container work and choose another measured cost.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
    enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;

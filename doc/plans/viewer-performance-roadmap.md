@@ -252,3 +252,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   with a documented ~5 ns regression in the smallest isolated collection case.
   Viewer acceptance remains pending. Plan 14k investigates index locality and
   cold/retention tradeoffs before any further container change.
+- Stage 4q experiment: sorted-array pool indexing preserves canonical/order/
+  failure/retry behavior and reduces retained index bytes, but common warm
+  lookups regress and reverse cold insertion loses badly at 1,024 keys. The
+  candidate is rejected; production retains the tree. Plan 14k retains 2,016
+  matched timing rows and the memory/failure evidence. Plan 14l measures bounded
+  read-through hints with explicit memory/miss limits before another proposal.

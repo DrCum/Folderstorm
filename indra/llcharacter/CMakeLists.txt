@@ -128,6 +128,13 @@ if(LL_TESTS)
   add_custom_command(TARGET avatar_blender_pool_failures POST_BUILD
     COMMAND $<TARGET_FILE:avatar_blender_pool_failures> --allocations VERBATIM)
 
+  # Explicit experiments; neither target changes the production pool.
+  add_executable(avatar_blender_pool_index_experiment EXCLUDE_FROM_ALL tests/blender_pool_index_experiment.cpp)
+  target_link_libraries(avatar_blender_pool_index_experiment PRIVATE llcharacter)
+  add_executable(avatar_blender_pool_index_allocations EXCLUDE_FROM_ALL tests/blender_pool_index_experiment.cpp)
+  target_link_libraries(avatar_blender_pool_index_allocations PRIVATE llcharacter)
+  target_compile_definitions(avatar_blender_pool_index_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+
   add_executable(avatar_active_blender tests/active_blender_test.cpp)
   target_link_libraries(avatar_active_blender PRIVATE llcharacter)
   add_custom_command(TARGET avatar_active_blender POST_BUILD
