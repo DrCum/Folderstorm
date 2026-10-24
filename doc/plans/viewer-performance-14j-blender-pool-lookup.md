@@ -41,4 +41,20 @@ publication if needed. Do not change the numerical blender or active storage.
 
 ## Results
 
-Not implemented yet.
+Not implemented yet. The new branch is `codex/perf-blender-pool-lookup`, from
+published PR 113 at `c7ce8ec6d7769c13a1decba496260feb5dd8bdd7`.
+
+The real cold-failure probe reproduces a pre-existing ownership defect in both
+that head and frozen PR 112. Failing the pool-node allocation after two
+successful joint-cache constructor allocations leaves 112 ordinary-new bytes
+retained after container destruction, with zero published pool entries. Joint
+state references are restored, demonstrating why reference checks alone miss
+this lost owner. The custom aligned blender allocation is outside that byte
+counter. Constructor and active-collection failures clean up normally.
+
+The probe source is `indra/llcharacter/tests/blender_pool_failure_test.cpp`;
+eight-row reports and source/executable identity are in
+`results/blender-pool-failure-*`. Baseline runs explicitly disable the future
+zero-retention assertion with `FS_EXPECT_SAFE_BLENDER_POOL=0`. The default
+assertion must pass after the fix. Preserve these baselines, add retry/reuse
+coverage, and keep this ownership correction with the single-lookup change.
