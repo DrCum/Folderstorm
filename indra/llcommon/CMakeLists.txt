@@ -324,7 +324,7 @@ target_include_directories(llcommon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(llcommon stage_third_party_libs)
 
 if (LL_TESTS)
-  # <FS:Perf> Private scheduler acceptance probes; production pool policy stays unchanged.
+  # <FS:Perf> Private scheduler acceptance probes; production defaults stay unchanged.
   find_package(Threads REQUIRED)
   add_executable(worker_scheduler_acceptance tests/threadpool_scheduler_test.cpp)
   target_link_libraries(worker_scheduler_acceptance PRIVATE llcommon Threads::Threads)
@@ -332,8 +332,13 @@ if (LL_TESTS)
     COMMAND $<TARGET_FILE:worker_scheduler_acceptance> VERBATIM)
   add_executable(worker_scheduler_cost tests/threadpool_scheduler_benchmark.cpp)
   target_link_libraries(worker_scheduler_cost PRIVATE llcommon Threads::Threads)
+  add_executable(worker_wait_policy_test tests/threadpool_wait_policy_test.cpp)
+  target_link_libraries(worker_wait_policy_test PRIVATE llcommon llxml Threads::Threads)
+  add_custom_command(TARGET worker_wait_policy_test POST_BUILD
+    COMMAND $<TARGET_FILE:worker_wait_policy_test> VERBATIM)
   if(WINDOWS)
     target_link_libraries(worker_scheduler_cost PRIVATE winmm)
+    target_link_libraries(worker_wait_policy_test PRIVATE winmm)
   endif()
   # </FS:Perf>
   include(LLAddBuildTest)

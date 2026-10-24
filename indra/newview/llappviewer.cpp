@@ -2667,8 +2667,20 @@ void LLAppViewer::initGeneralThread()
         return;
     }
 
-    mGeneralThreadPool = new LL::ThreadPool("General", 3);
+    // <FS> Explicit startup trial; the constructor applies the resolved-width/platform gate.
+    // mGeneralThreadPool = new LL::ThreadPool("General", 3);
+    using WaitPolicy = LL::ThreadPoolBase::WaitPolicy;
+    const bool request_event_wait = gSavedSettings.getBOOL("FSGeneralPoolEventWait");
+    mGeneralThreadPool = new LL::ThreadPool("General", 3, 1024 * 1024, true,
+        request_event_wait ? WaitPolicy::EventWaitSingleWorker : WaitPolicy::PlatformDefault);
+    // </FS>
     mGeneralThreadPool->start();
+    // <FS> One aggregate startup line also identifies controls that retain the default.
+    LL_INFOS("ThreadPool") << "GeneralWaitPolicy requested=" << (request_event_wait ? "event-single" : "platform-default")
+        << " effective=" << (mGeneralThreadPool->getWaitPolicy() == WaitPolicy::EventWaitSingleWorker ?
+            "event-single" : "platform-default")
+        << " threads=" << mGeneralThreadPool->getWidth() << LL_ENDL;
+    // </FS>
 }
 
 bool LLAppViewer::initThreads()
