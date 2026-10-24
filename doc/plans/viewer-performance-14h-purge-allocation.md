@@ -93,9 +93,30 @@ Tests compile fresh affected sources against the immutable internal-library
 snapshot documented by checkpoint 14g. External packages remain read only.
 Nothing in this chat configures, edits or builds the shared viewer cache.
 
-The allocation attribution is established. Uninstrumented purge and complete
-controller timing executables are prepared; paired runs await the independent
-builder becoming idle. Timing reports will state their component-only scope.
+The allocation attribution is established. Uninstrumented paired measurements
+ran in parent/current/current/parent order after the independent builder released
+ownership. State/worker idle and the full native/package process inventory were
+checked before and after every run. Purge uses a non-inlined wrapper, 100,000
+calls per row; the unchanged full controller fixture uses 1,000 updates per row.
+There are 324 raw rows / 11,016,000 total invocations. Full-controller reports
+also retain enabled-shadow rows; the table uses only ordinary direct rows.
+Source/executable/dependency/report identity is in `results/motion-purge-provenance.json`.
+
+Medians of 18 samples per entry on the Ryzen 5 3600, nanoseconds per invocation:
+
+| Component | Parent | Candidate |
+| --- | ---: | ---: |
+| Purge, 0 loaded | 37.037 | 2.917 |
+| Purge, 1 loaded | 37.408 | 2.917 |
+| Purge, 32 loaded | 37.317 | 2.917 |
+| Full controller, 3 joints | 727.85 | 677.45 |
+| Full controller, 32 joints | 5,470.25 | 5,454.45 |
+| Full controller, 128 joints | 31,469.45 | 31,563.50 |
+
+This isolates an allocation saving and a small controller cost. Larger full
+fixtures differ by less than 0.3% in either direction in this sample; the
+128-joint candidate is slightly slower. These generated fixed-time components
+do not establish a whole-viewer frame-time improvement or a real queue window.
 Full viewer linking, crowded-scene frame times, visible animation quality,
 cache/loading/outfit/arrival/departure and other-platform acceptance remain
 pending. The next source plan is `viewer-performance-14i-active-blenders.md`.

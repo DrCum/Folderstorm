@@ -62,9 +62,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   That build is not evidence for the newer 14f source.
 - The independent builder has now retained 109 (`7.2.5.82248`) and 110
   (`7.2.5.82249`) separately at their exact published heads; read its state/index
-  for current evidence. It is currently building PR 111; defer native timing
-  until its active build and actual process ownership are idle. This chat did
-  not control or change its source, caches or monitor.
+  for current evidence. PR 111 is now also retained as `7.2.5.82252` at its exact
+  published head. It released build ownership before the 14h timing runs. This
+  chat did not control or change its source, caches or monitor.
 - 14g's final paired controller costs are retained in `sampling-shadow-cost-*`:
   162 rows / 162,000 updates, default direct differences within about 1% of the
   parent controller control in this fixture; enabled shadow adds ~1-3 us. New
@@ -76,14 +76,18 @@ Updated October 24, 2026. The user resumed the performance program; the October
   cases in each storage mode, with frozen UUID eviction/callback/lifetime
   comparisons. Purge-only probes drop one allocation / 48 bytes per call; full
   warmed three-joint updates now make three calls / 72 bytes instead of four /
-  120. Phase/shadow/mask regressions pass. Uninstrumented timing binaries are
-  ready; paired runs, final provenance and publication remain. Read its plan
-  and scratch `*14h*` logs. Plan 14i is written before implementation.
+  120. Phase/shadow/mask regressions pass. Eight paired uninstrumented runs retain
+  324 rows / 11,016,000 invocations with verified idle conditions and normalized
+  source/report and executable/dependency provenance. Larger full-controller
+  fixture differences are sub-percent; no whole-viewer gain is established.
+  Implementation commit is `ea82a3c3ea`; finish evidence/docs commit and publish
+  a separate PR. Read its plan and scratch `*14h*` logs. Plan 14i is written,
+  and its real-blender allocation baseline is measured before implementation.
 
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. Finish 14h's
-   timing/provenance/publication; do not reimplement 14g or enable workers.
+   evidence/docs commit and publication; do not reimplement 14g or enable workers.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.

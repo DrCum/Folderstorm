@@ -50,4 +50,19 @@ priority/admission decisions must retain their current behavior.
 
 ## Results
 
-Not implemented yet.
+Not implemented yet. An initial isolated native probe against the unchanged
+actual `llpose.cpp` confirms one 24-byte list-node allocation per admitted joint
+per warm frame on this MSVC target. Counts 3/32/128/256 and 1/8 overlapping
+motions make respectively 96/1,024/4,096/8,192 calls over 32 frames; repeating
+overlapping admissions adds searches without adding nodes. Every case returns
+to its live allocation baseline. The scratch source/report are
+`performance-validation/active-blender-cost-fixture14i.cpp` and
+`active-blender-before-alloc14i.log` in the parent workspace; retain them when
+starting this checkpoint's branch. Timing has not been run during the builder.
+
+The source audit confirms that `blendAndCache` and `interpolate` retain active
+entries and joint-state references. Only `blendAndApply` and `clearBlenders`
+consume the collection. A membership flag must follow that distinction and
+must be set only after pointer insertion succeeds. Preserve reverse traversal
+for all four operations. Measure the aligned blender's size and collection
+capacity rather than assuming the extra flag/storage is free.
