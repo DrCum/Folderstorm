@@ -272,6 +272,12 @@ const LLJoint::JointPriority* LLCharacter::getHandPoseAnimationPriority() const
     const auto found = mAnimationData.find(handPosePriorityDataName());
     return found != mAnimationData.end() ? static_cast<const LLJoint::JointPriority*>(found->second) : nullptr;
 }
+
+void LLCharacter::clearHandPoseAnimationData()
+{
+    mAnimationData.erase(handPoseDataName());
+    mAnimationData.erase(handPosePriorityDataName());
+}
 // </FS:Perf>
 
 //-----------------------------------------------------------------------------

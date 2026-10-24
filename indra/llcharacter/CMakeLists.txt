@@ -234,6 +234,13 @@ if(LL_TESTS)
   target_link_libraries(avatar_hand_pose_lifetime PRIVATE llcharacter)
   add_custom_command(TARGET avatar_hand_pose_lifetime POST_BUILD
     COMMAND $<TARGET_FILE:avatar_hand_pose_lifetime> VERBATIM)
+  add_executable(avatar_hand_consumer tests/hand_consumer_test.cpp)
+  target_link_libraries(avatar_hand_consumer PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_hand_consumer POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_hand_consumer> VERBATIM)
+  add_executable(avatar_hand_consumer_allocations tests/hand_consumer_test.cpp)
+  target_link_libraries(avatar_hand_consumer_allocations PRIVATE llcharacter)
+  target_compile_definitions(avatar_hand_consumer_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
 
   foreach(storage IN ITEMS map contiguous)
     add_executable(avatar_animation_keys_${storage} tests/test_fsanimationkeys.cpp)

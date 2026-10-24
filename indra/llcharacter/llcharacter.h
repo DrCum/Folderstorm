@@ -187,9 +187,10 @@ public:
 
     void setAnimationData(std::string name, void *data);
 
-    // <FS:Perf> Publish main-thread values without borrowing a cached asset's lifetime.
+    // <FS:Perf> Publish and consume character-owned hand inputs through the animation-data map.
     void setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority);
     const LLJoint::JointPriority* getHandPoseAnimationPriority() const;
+    void clearHandPoseAnimationData();
     // </FS:Perf>
 
     void *getAnimationData(std::string name);

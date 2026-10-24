@@ -131,6 +131,22 @@ int run()
         require(!first.getAnimationData("Hand Pose") && !first.getHandPoseAnimationPriority(),
                 "Actual hand consumer did not remove both publication entries");
     }
+
+    int unrelated = 7;
+    first.setAnimationData("other", &unrelated);
+    for (unsigned poseMode = 0; poseMode < 3; ++poseMode)
+        for (unsigned rankMode = 0; rankMode < 3; ++rankMode)
+        {
+            if (poseMode) first.setAnimationData("Hand Pose", poseMode == 1 ? &legacyPose : nullptr);
+            if (rankMode) first.setAnimationData("Hand Pose Priority", rankMode == 1 ? &legacyPriority : nullptr);
+            first.clearHandPoseAnimationData();
+            first.clearHandPoseAnimationData();
+            require(!first.getAnimationData("Hand Pose") && !first.getHandPoseAnimationPriority(),
+                    "Typed cleanup retained a generic or partial hand entry");
+            require(first.getAnimationData("other") == &unrelated && unrelated == 7,
+                    "Typed cleanup changed unrelated animation data");
+            expect(second,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
+        }
     ma.publish();
     expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
 
