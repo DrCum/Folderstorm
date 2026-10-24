@@ -50,3 +50,22 @@ The user has not tested PR 114 yet and is working. Keep Q7 and visible hand/
 outfit/priority/lifecycle checks in the existing question queue; no new answer
 is required for this independent work. Do not operate a logged-in viewer or the
 separate builder's source, monitor, cache or archives.
+
+## Baseline results
+
+Recorded before implementation from PR115 head
+`2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`. Actual relaxed hand callbacks make
+32 allocation calls / 1,024 requested bytes over 32 updates in each of five
+cases: absent, owned, generic override, pose-only and priority-only entries.
+These scopes exclude producer costs and end with zero counted live bytes.
+Cleanup followed by owned publication makes 128 calls / 6,656 bytes over 32
+cycles; its final 176 counted bytes are map-owned and return to zero on cleanup.
+Thus 96 legitimate following-publication allocations must remain separately
+accounted for rather than being mistaken for consumer cleanup waste.
+
+The scratch-only allocation executable compiles pose, character, controller,
+motion, keyframe, shadow and hand sources fresh and links immutable internal
+libraries. Raw rows, probe and exact identities are in
+`results/hand-consumer-*14n*`. This first fixture uses relaxed poses/no mesh; it
+does not cover changing morphs or provide timings. No production cleanup change
+has been made yet. Extend the actual visual-param fixture before the helper.

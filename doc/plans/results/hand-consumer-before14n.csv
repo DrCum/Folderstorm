@@ -1,0 +1,7 @@
+case,callbacks,new_calls,requested_bytes,peak_live_delta,live_after_callbacks,live_after_cleanup
+absent,32,32,1024,32,0,0
+owned,32,32,1024,32,0,0
+generic_override,32,32,1024,32,0,0
+pose_only,32,32,1024,32,0,0
+priority_only,32,32,1024,32,0,0
+cleanup_and_republish,32,128,6656,176,176,0

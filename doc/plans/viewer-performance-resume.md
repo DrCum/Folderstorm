@@ -6,14 +6,17 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-shadow-mask-admission`, from the committed/backed-up 14l
-  decision `ef49e4614faa730d5803edc6dcd4a37f599cca52` on its own branch.
+- Branch: `codex/perf-hand-consumer-cleanup`, from published PR115 head
+  `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`. PR115 targets the committed 14l
+  restore `ef49e4614faa730d5803edc6dcd4a37f599cca52` and is attached to this chat.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
   The 14l inline hint prototype is now declined and withdrawn. Runtime pose
   source/header exactly match PR 114; stop pool-container work. Plan 14m's
   advisory admission is implemented at `b7417ea795`, with final provenance in
-  `results/shadow-mask-provenance14m.json`. Publish its evidence head separately,
-  then begin plan 14n on a new branch. No live worker dispatch is enabled.
+  `results/shadow-mask-provenance14m.json`. PR115 is open/mergeable; automated
+  review completed with no findings at exact `2df5f5bdaf` as last read. Its full
+  viewer build/runtime acceptance is pending. Plan 14n's actual hand-consumer
+  baseline is now recorded; cleanup implementation is not started. No workers.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -264,6 +267,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
   that consumer, then prefer typed cleanup reusing stable key names while
   preserving generic map authority. PR112 review still reports running at
   exact b8c82e6; PR114 completed without findings at exact 514dc0a as last read.
+- Plan 14n's first real relaxed hand-consumer allocation baseline is recorded:
+  32 callbacks make 32 calls / 1,024 bytes in each absent/owned/generic/partial
+  case. Cleanup plus the following publication makes 128 calls / 6,656 bytes;
+  176 final map-owned bytes return to zero at cleanup. The publication's 96
+  allocations are legitimate and must stay separately accounted for. Probe
+  source/report/executable identities are in `results/hand-consumer-*14n*`.
+  Session 51368 is terminal. No changing-morph equivalence or cleanup helper
+  implementation yet. Existing 14f1 real hand lifetime fixture is reusable;
+  every new native wrapper must also include fresh `llpose.cpp` and shadow core.
 
 ## Next sequence
 
@@ -274,10 +286,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Finish publishing plan 14m's exact evidence head and attach its separate PR.
-   Start plan 14n on `codex/perf-hand-consumer-cleanup` from that head after
-   confirming a clean checkout. Freeze actual consumer allocation/morph outputs
-   before changing cleanup. Preserve 14l's rejected data and final 14m source
+3. PR115 is published/attached at exact `2df5f5bdaf`; keep that head stable for
+   its separate build. Continue plan 14n on `codex/perf-hand-consumer-cleanup`.
+   Its allocation baseline is recorded. Freeze actual changing-morph outputs
+   before implementing typed cleanup. Preserve 14l's rejected data and 14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
