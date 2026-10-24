@@ -6,7 +6,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-general-event-wait`, from reviewed PR119 exact
+- Branch: `codex/perf-event-sampling-cost`, from published PR120 exact
+  `55f66ec851701fdc6b9bfd2c81794abc5ee80ccf`. PR120 is attached/mergeable,
+  automated review completed with no findings at that exact head, and the
+  independent builder is building it with Tracy OFF. Keep that published head
+  immutable. Its base is reviewed PR119 exact
   `8952ad421837beb61737a15d999ff14fa1c069b4`, including completed PR118 after audit
   `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
   `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
@@ -38,6 +42,27 @@ Updated October 24, 2026. The user resumed the performance program; the October
   at those exact heads. Their separate full builds are retained and verified.
   Keep those
   heads stable. No GitHub PR was merged and no scheduler default changed.
+- Plan14s is implemented/native checked at8b2b248affde3454226e657c37742f377f6791ed
+  (initial implementation b3bec6cd1411cdafe093abf576dea8d07465ed3d).
+  It is TEST ONLY: a generator adds two explicit private seams to an otherwise
+  byte-preserved current controller translation unit; the viewer still compiles
+  the unmodified original.4,192 complete-controller pose/order/hand and stale/
+  bounded fallback checks pass. Five generator checks cover LF/CRLF byte recovery
+  and ambiguous-boundary rejection. Fresh normal/Tracy syntax passes for both
+  test translation units.32 immutable native dependencies were reverified.
+  See14s-controller-boundary-audit and results/event-sampling14s/progress.json.
+  Native source, executable, response, logs and dependency identities are saved;
+  final executables are event-sampling14s-final and event-sampling14s-alloc-final
+  in performance-validation. All own native/compile sessions are terminal.
+  No timing case has run: the first precheck at21:42:27Z refused launch when
+  PR120 preparation entered NORMAL_PERFORMANCE_QUEUE. Retain that unrun record.
+  The committed matrix-plan has72 timing cases and12 separate allocation cases,
+  paired/reversed,64 frames each, written before accepted measurement. Resume
+  performance-validation/run-event-matrix14s.ps1 only after full-host/private
+  builder idle; it preserves/skips completed cases and refuses failed/live ones.
+  It retries the unrun first case with a new attempt label. Do not publish a new
+  build checkpoint merely to keep the builder busy while timing is pending.
+  Whole cost/economics, CMake integration and real viewer acceptance remain open.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -450,14 +475,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
    integrated with stats14r in published PR119 exact8952ad4218; source identities
    and48-case data were reverified after resolving only docs. Both exact heads
    are now independently retained with verified installer/focused receipts.
-   This branch is based on119 and14q is implemented/native checked. Publish
-   its separate PR, verify/attach exact head, preserve it for its own build and
-   then begin already-written14s on a new branch from that head. Audit current
-   actual-controller/context/batch fixture interfaces before the private complete-
-   cost experiment. Use actual production policy, latest admission/controller
-   code and General-sized capacity; keep frozen controls untouched. Timing
-   requires full-host/private-builder idle, ownership remains strict and no
-   animation workers or scene/controller reordering are enabled here.
+   PR120 is published/attached at exact55f66ec851, based on119. This separate
+   branch implements14s's private complete-controller experiment at8b2b248aff.
+   Resume the prewritten matrix once PR120 is retained and full-host/build state
+   is idle. Preserve the blocked precheck and every exclusion; read actual logs/
+   exit state and source identities before claiming an accepted case. Analyze
+   complete owner plus worker costs and first-consumption fallback rates. Then
+   write the resulting next plan and publish a separately reviewable test-only
+   checkpoint. Do not treat synthetic gaps as real scene deadlines. No animation
+   worker dispatch or scene/controller reordering is enabled here.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
