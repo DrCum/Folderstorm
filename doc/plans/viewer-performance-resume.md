@@ -6,7 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-main-frame-audit`, from published PR116 head
+- Branch: `codex/perf-scheduled-queue-deadlines`, from completed audit
+  `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
   `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
   `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`; both are attached to this chat.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
@@ -333,6 +334,19 @@ Updated October 24, 2026. The user resumed the performance program; the October
   coroutine/fairness, notification/admission/close races and drain/shutdown in
   private pools. Reuse bundled stock first; no new Win32 backend or production
   scheduler change yet. Keep timing behind full-host build-idle checks.
+- The initial private 14p harness is preserved/pushed at `ccad4c341c` on
+  `codex/perf-worker-wait-probe`, with no PR. It stalled at its scheduled case;
+  session93670 is terminal through watchdog exit2. Its smaller reproduction
+  shows both current and stock WorkSchedule pools miss a 20ms due item during
+  500ms observation and deliver only after a later post. This is not a stock
+  acceptance/rejection. No scheduler timings were run; the benchmark compiles.
+  Before-data and identities are in that commit's `scheduler-initial-failure14p`
+  and `scheduled-wait-repro14p*` records. Scratch frozen probe sources are in
+  `performance-validation/frozen-worker-probe-ccad`.
+- Plan14p1 is written before implementing the queue fix on this independent
+  branch. Test scheduled deadline recomputation, caller timeouts, future-head
+  changes, close/drain and lifetimes. Compile fresh `workqueue.cpp` in native
+  wrappers; cached WorkSchedule template instantiations would run the old code.
 
 ## Next sequence
 
@@ -344,10 +358,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
-   Finish backing up completed 14o on `codex/perf-main-frame-audit`, then begin
-   plan14p on a new `codex/perf-worker-wait-probe` branch. Audit-only work needs
-   no extra installer PR. Build a private correctness/sustained-measurement
-   harness with unchanged production pools. Preserve 14l/14m source
+   Implement/test/publish plan14p1 on `codex/perf-scheduled-queue-deadlines` from
+   audit db9be862ab, independently of the preserved unfinished probe ccad4c341c.
+   Then integrate the prerequisite into the probe branch and resume14p without
+   deleting the failed scheduled case. Production pool policy remains unchanged.
+   Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
