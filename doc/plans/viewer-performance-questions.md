@@ -103,6 +103,11 @@ Never present a missing hardware result as a successful test.
   outfit/skeleton replacement and crowded travel/churn in its retained build.
   Ordinary controller updates allocate less; real scene FPS and memory remain
   acceptance work. No production worker dispatch is enabled.
+- Checkpoint 14j preserves normal pool behavior and repairs failed publication
+  and canonical entry reuse. Native failure/retry and frozen frame comparisons
+  pass. Check ordinary cache/animation churn and frame times in its retained
+  viewer build; controlled allocation failures are exercised in the dedicated
+  native probe, not through an in-world memory-exhaustion test.
 
 ## Results
 

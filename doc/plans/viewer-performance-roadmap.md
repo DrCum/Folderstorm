@@ -244,3 +244,11 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   rows; the generated 128-joint direct controller falls from 31.50 to 16.09 us.
   Real viewer frame-time/quality acceptance remains pending.
   Plan 14j targets redundant pool lookup and cold insertion ownership next.
+- Stage 4p: warm pool lookup reuses its first iterator, and cold publication
+  retains temporary ownership until accepted. Both curve modes pass 79 fault,
+  retry and canonical-publication checks plus the frozen outer/controller
+  comparisons. Normal memory behavior is unchanged. Paired costs retain 504
+  rows; the generated 128-joint direct controller falls from 16.25 to 14.88 us,
+  with a documented ~5 ns regression in the smallest isolated collection case.
+  Viewer acceptance remains pending. Plan 14k investigates index locality and
+  cold/retention tradeoffs before any further container change.
