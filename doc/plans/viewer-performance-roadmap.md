@@ -192,3 +192,7 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   export/pose suite. Plan 14c proceeds to the protected base-motion phase contract.
 - Runtime crowd captures and Windows acceptance remain pending. No measured
   improvement has been claimed.
+- Stage 4h: protected base-motion preparation/application is implemented with
+  direct fallback and frozen actual-update/controller comparisons. Normal
+  playback stays serial; live eligibility/version wiring/overlap are pending.
+  Plan 14d separately addresses the initial controller joint mask found by tests.

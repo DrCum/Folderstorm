@@ -55,4 +55,61 @@ full viewer/visual/lifecycle and matched crowd acceptance.
 
 ## Results
 
-Not implemented yet.
+Implemented a protected owner-thread phase API. The ordinary virtual `onUpdate`
+resolves the same update/sample times, applies direct keyframes, then runs the
+same constraints, last-time assignment and continuation test. It constructs no
+sampling request, queue or result and does not poll for background work.
+
+`prepareKeyframeSampling` requires a loaded canonical owner and current state
+shape, copies actual state usage (null states remain no-ops), and retains the
+asset lease without changing motion times, curves, poses or hand-pose data.
+It rejects borrowed/uninitialized assets, malformed shape and nonfinite resolved
+sample/duration values, clearing any old output request on failure.
+
+`updateWithSample` is explicitly invoked base behavior. It resolves time once,
+rebuilds actual current inputs using separately supplied current identity, and
+validates the complete result before any pose write. A mismatch calls the
+existing direct sampler. Accepted rows apply only their sampled channels, then
+publish current main-thread hand pose/priority. Both paths share the original
+constraint/last-time/continuation order. This does not establish subclass
+eligibility or wire live version counters, prediction, queues or workers.
+
+### Validation and limits
+
+The oracle freezes actual pre-refactor `onUpdate` and `applyKeyframes` from
+`dcbc51a058d931722a6db5b4109d859e6b0d6200`; only class/method names differ. Native
+tests compare exact float/pose/state bytes and continuation behavior for direct
+and prepared updates. Cases include negative/signed-zero times, zero duration,
+loop boundaries/reversed/zero ranges, stopped loops, backwards trajectories,
+metadata edits, missing/partial/unknown usage, body/ground constraints and masks
+that suppress constraints. Preparation snapshots check unchanged live state.
+
+Stale application covers all five independent identity fields, current time,
+duration, usage, owner replacement, consumed result, borrowed/unloaded data,
+null state, edited keys and changed loop/last-time inputs. Current hand-pose
+priority ties/winners and weight metadata remain accepted and read at application.
+Owned samples also run on a joined background thread in those tests.
+
+Test-only factories exercise the actual controller's activation, normal update,
+pause, forced update, hidden update, stop/ease, deactivation and reactivation,
+including real blending and positional constraints. These fixtures run an empty
+controller update before activation: the old constructor's uninitialized first
+mask was exposed during testing and is tracked as separate checkpoint 14d.
+
+Final optimized native runs pass **5,956 checks and 1,474 frozen-update
+comparisons in each storage mode**, including 725 accepted sampling cases and
+16 stale/current-input fallback cases (controller/empty cases are additional).
+Complete keyframe source, walk/stand/fall callers and the standalone test pass
+Tracy/contiguous syntax checks. Native tests use fresh character/controller/
+keyframe sources and read cached dependencies only. Full viewer linking,
+rendered multi-joint IK/hand morphs, subclass/lifecycle acceptance, sanitizers
+and ARM/macOS execution remain pending. Test-only controller callbacks are
+synchronous; they do not prove a useful production overlap window or FPS gain.
+Rejection does not repair an already-invalid live motion: the explicit bridge
+retains the ordinary `onUpdate` precondition that direct sampling is valid.
+
+Build/test handoff: retain this exact head separately with the accepted private
+x64 AVX2 OpenSim Nightly configuration and contiguous keys explicitly OFF for
+the map control. Focused LL_TESTS target: `avatar_keyframe_phase`. Full viewer
+builds and monitoring remain stopped until separately requested. Continue 14d's
+initial mask fix before further context/worker integration.
