@@ -81,9 +81,11 @@ Never present a missing hardware result as a successful test.
   The binary replacement fixture proves context publication only, not rendered
   active-reload pose-map correctness. No live dispatch is enabled.
 - Checkpoint 14f measured two repeated hand-pose key-name allocations per update.
-  Plan 14f1 removes them while preserving priority ties and generic data overrides.
+  Checkpoint 14f1 removes them while preserving priority ties and generic data overrides.
   Rendered competing hand animations and hand cleanup/republication remain an
   acceptance item; generated exact poses do not cover visible morphs.
+  Both storage modes pass 171 actual publication/lifetime/consumer checks and
+  zero repeated allocations; post-removal node/key allocations remain counted.
 
 ## Results
 

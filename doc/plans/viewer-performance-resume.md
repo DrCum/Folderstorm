@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-current-motion-context`, based on PR 108 at
-  `eea3c55cd0a93ab93dd0b84a90d1fba1ed85fcc1`.
+- Branch: `codex/perf-hand-pose-name-allocations`, based on PR 109 at
+  `e08cf82050215fd0ab335ba7611c52ff3f03b528`.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -15,6 +15,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 - Its private authority resets on base copy/assignment. Owner-only binding
   snapshots retain bounded joint-state references; jobs never retain live scene
   pointers. Identity never authorizes dereferencing a dead motion/character.
+- Plan 14f is published as PR 109 and its automated review completed with no
+  findings at exact `e08cf82050`. Plan 14f1 is now implemented: stable key names,
+  map-authoritative typed priority lookup and unchanged priority/publication order.
+  This branch needs its own PR and retained build, independent of PR 109.
 - Finish final review, commit/push this branch and resolve its checkpoint PR by
   branch, not by an assumed PR number. Attach every created PR to this chat.
 - The frozen feature baseline through PR 88 is still
@@ -33,6 +37,12 @@ Updated October 24, 2026. The user resumed the performance program; the October
   current application adds no allocations over direct playback. Both playback
   paths still make two hand-pose name allocations per update. Raw allocation
   reports and 81 owner timing rows are in `doc/plans/results/current-motion-*`.
+- The 14f1 fix passes 171 actual hand publication/lifetime/consumer checks in
+  both modes; prior phase and current-context suites remain green. Warm direct
+  and owned updates now make zero replacement-new calls, while post-removal
+  map insertion remains explicit (96 calls / 5,632 bytes for 32 republications).
+  Four paired before/after timing runs total 324 rows / 324,000 calls, with raw
+  reports and verified parent-source/executable hashes in `hand-pose-name-*`.
 - Native fresh-source MSVC x64 AVX2 runs and independent Tracy/contiguous source
   checks passed. Cached dependencies were read only, scratch outputs are in the
   sibling `performance-validation` folder. Full viewer builds are the other
@@ -46,12 +56,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. Publish the
-   14f checkpoint if it has not been published; read its final results and limits.
-2. Begin `viewer-performance-14f1-hand-pose-name-cost.md` on a new `codex/perf-*`
-   branch from 14f. Remove repeated name construction while preserving the
-   animation-data map, priority ties, external overrides/removals and character
-   value lifetime. Test actual publication and repeated allocation behavior in
-   both modes, publish separately and write the following plan before proceeding.
+   14f1 checkpoint if it has not been published; read its final results and limits.
+2. Review PR 109/newer checkpoint comments and independent build evidence.
+   Preserve published heads; keep any corrective fix scoped and propagate its
+   dependency explicitly. Do not treat older full builds as new-head validation.
 3. Continue `viewer-performance-14g-shadow-query-prediction.md`: audit controller
    arithmetic/order, add nonmutating prediction and shadow comparisons, establish
    real overlap before any off-by-default bounded worker trial. Bound owner

@@ -215,3 +215,10 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   direct playback. Two existing hand-pose name allocations per update are the
   next separate optimization (14f1), before 14g's shadow prediction experiment.
   No production worker caller or real overlap/FPS proof exists yet.
+- Stage 4l prerequisite: repeated hand-pose key-name construction is removed
+  without changing generic map authority. 171 publication/lifetime/consumer
+  checks pass per storage mode, with frozen/current-context regressions green.
+  Warm direct/owned updates drop from two allocations per update to zero;
+  post-removal map insertion costs remain explicit. Paired component timings
+  are retained in plan 14f1. Proceed to 14g's real controller prediction/overlap
+  audit; whole-viewer crowd gain remains unproven.

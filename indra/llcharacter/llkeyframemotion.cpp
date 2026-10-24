@@ -1107,7 +1107,7 @@ void LLKeyframeMotion::applyKeyframes(F32 time)
 
 void LLKeyframeMotion::publishHandPose()
 {
-    LLJoint::JointPriority* pose_priority = (LLJoint::JointPriority* )mCharacter->getAnimationData("Hand Pose Priority");
+    const auto* pose_priority = mCharacter->getHandPoseAnimationPriority();
     if (pose_priority)
     {
         if (mJointMotionList->mMaxPriority >= *pose_priority)
