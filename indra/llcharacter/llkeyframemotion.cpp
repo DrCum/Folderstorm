@@ -608,14 +608,21 @@ bool LLKeyframeMotion::samplingInputsMatch(const SamplingResult& result, const s
     const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
     const U32* usage, size_t count)
 {
+    return result.isReady() && result.mJoints.size() == count &&
+        samplingQueryMatches(result.mRequest, asset, identity, numeric_context, time, duration, usage, count);
+}
+
+bool LLKeyframeMotion::samplingQueryMatches(const SamplingRequest& input, const std::shared_ptr<const JointMotionList>& asset,
+    const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+    const U32* usage, size_t count)
+{
     if (count && !usage) return false;
-    const auto& input = result.mRequest;
-    if (!(result.isReady() && asset && input.asset.get() == asset.get() &&
+    if (!(asset && input.asset.get() == asset.get() &&
         !input.asset.owner_before(asset) && !asset.owner_before(input.asset) &&
         input.identity == identity && numeric_context.isSupported() && input.numericContext == numeric_context &&
         std::memcmp(&input.time, &time, sizeof(F32)) == 0 &&
         std::memcmp(&input.duration, &duration, sizeof(F32)) == 0 &&
-        input.usage.size() == count && result.mJoints.size() == count && count == asset->mJointMotionArray.size()))
+        input.usage.size() == count && count == asset->mJointMotionArray.size()))
         return false;
     for (size_t i = 0; i < count; ++i) if (input.usage[i] != usage[i]) return false;
     return true;
@@ -696,6 +703,36 @@ bool LLKeyframeMotion::prepareOwnedSampling(F32 time, SamplingRequest& request)
     SamplingIdentity identity;
     if (!captureOwnedSamplingIdentity(identity)) { request = SamplingRequest{}; return false; }
     return prepareKeyframeSampling(time, identity, request);
+}
+
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
+bool LLKeyframeMotion::matchesOwnedSamplingQuery(F32 time, const SamplingRequest& query)
+{
+    FSSampling::ScopedNumericContext preserve(FSSampling::NumericContext::capture());
+    if (!preserve.isActive()) return false;
+    // A changed publication/shape is stale without growing diagnostic binding storage.
+    if (!mJointMotionList || query.asset.get() != mJointMotionList ||
+        query.identity.instance != mSamplingAuthority.instance ||
+        mSamplingAuthority.bindings.size() != mJointMotionList->mJointMotionArray.size()) return false;
+    SamplingIdentity identity;
+    return captureOwnedSamplingIdentity(identity) &&
+        matchesCurrentQuery(query, resolveKeyframeUpdateTime(time).sampleTime, identity);
+}
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
+
+bool LLKeyframeMotion::releaseOwnedSamplingBindings(U64 instance)
+{
+    if (!instance || instance != mSamplingAuthority.instance) return false;
+    invalidateOwnedSampling();
+    std::vector<SamplingAuthority::Binding>().swap(mSamplingAuthority.bindings);
+    mSamplingAuthority.character = nullptr;
+    return true;
 }
 
 bool LLKeyframeMotion::updateWithOwnedSampling(F32 time, U8* joint_mask, const SamplingResult& result, bool& sample_applied)
@@ -1038,6 +1075,12 @@ bool LLKeyframeMotion::prepareKeyframeSampling(F32 time, const SamplingIdentity&
 
 bool LLKeyframeMotion::matchesCurrentSampling(const SamplingResult& result, F32 sample_time, const SamplingIdentity& identity) const
 {
+    return result.isReady() && result.getJoints().size() == result.getRequest().usage.size() &&
+        matchesCurrentQuery(result.getRequest(), sample_time, identity);
+}
+
+bool LLKeyframeMotion::matchesCurrentQuery(const SamplingRequest& query, F32 sample_time, const SamplingIdentity& identity) const
+{
     const auto asset = getKeyframeSamplingLease();
     if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
         !llfinite(sample_time) || !llfinite(asset->mDuration) ||
@@ -1050,7 +1093,7 @@ bool LLKeyframeMotion::matchesCurrentSampling(const SamplingResult& result, F32 
         if (!asset->mJointMotionArray[i]) return false;
         usage[i] = mJointStates[i] ? mJointStates[i]->getUsage() : 0;
     }
-    return samplingInputsMatch(result, asset, identity, FSSampling::NumericContext::capture(),
+    return samplingQueryMatches(query, asset, identity, FSSampling::NumericContext::capture(),
                                sample_time, asset->mDuration, usage.data(), asset->mJointMotionArray.size());
 }
 
