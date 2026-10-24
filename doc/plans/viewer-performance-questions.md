@@ -8,6 +8,8 @@ Never present a missing hardware result as a successful test.
 - Include the current feature stack, frozen through PR 88 at program start.
 - First priority: many avatars and steady FPS.
 - Test system: Ryzen 5 3600, RTX 3060 12 GB.
+- User confirmed PR 114 runtime testing is still pending. Continue independent
+  source work and retain local testing/capture requests for later.
 - Local builds are handled by a separate agent; performance PRs need explicit
   independent/dependent build instructions and retained versions.
 

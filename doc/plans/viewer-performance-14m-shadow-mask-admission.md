@@ -60,4 +60,30 @@ worker dispatch or frame-order change is authorized by this plan.
 
 ## Results
 
-Not implemented yet.
+Baseline collected before implementation on `codex/perf-shadow-mask-admission`,
+from final 14l decision `ef49e4614faa730d5803edc6dcd4a37f599cca52`. Runtime
+pose source/header match PR 114, without the rejected hint macro/storage.
+
+The separate allocation probe records 12 rows: 128 joints, one/eight motions,
+partial/disjoint/saturated inputs, diagnostics OFF/ON. Every row requires exact
+pre/post poses, zero counted retained bytes and zero owned binding capacity at
+exit. All disabled rows allocate zero. Enabled eight-motion baselines:
+
+| Workload | Predicted | Matched | Unused | New calls | Requested/buffer peak | Curve keys retained |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Partial overlap | 8 | 8 | 0 | 17 | 25,392 bytes | 12,288 |
+| Disjoint groups | 8 | 8 | 0 | 17 | 7,472 bytes | 1,536 |
+| Saturated overlap | 8 | 1 | 7 | 17 | 25,392 bytes | 12,288 |
+
+Raw rows, the scratch-only probe source and complete source/executable identity
+are in `results/shadow-mask-preparation-*14m*`. This is allocation/operation
+evidence, not a timing or FPS result. The probe reuses the recorded scene via
+a renamed benchmark entry point, compiles pose/core fresh and links immutable
+internal libraries. It must not be linked into a viewer or used for timing.
+
+Initial source audit confirms signature reset before additive and again before
+normal; the culling branch reads previous pose weight and the two position/
+rotation signatures before LOD/stop handling. A weight below one bypasses that
+signature-union branch. Keyframe blend type is NORMAL. Continue auditing
+uncertain callbacks and advisory observation before implementing admission.
+No prediction, playback or worker behavior has been changed yet.

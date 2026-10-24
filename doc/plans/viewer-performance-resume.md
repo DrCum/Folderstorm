@@ -6,12 +6,12 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-blender-pool-hints`, from committed/rejected 14k evidence
-  `54e250406c88fffa659dbb30fe7a8f71828ec38b`, backed up on its own remote branch.
+- Branch: `codex/perf-shadow-mask-admission`, from the committed/backed-up 14l
+  decision `ef49e4614faa730d5803edc6dcd4a37f599cca52` on its own branch.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
   The 14l inline hint prototype is now declined and withdrawn. Runtime pose
-  source/header exactly match PR 114; stop pool-container work. Its final
-  evidence/decision must be committed before starting the new 14m branch.
+  source/header exactly match PR 114; stop pool-container work. Plan 14m's
+  preparation baseline is recorded; admission implementation is not started.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -223,6 +223,17 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Plan 14m is written before implementation. The real-controller oracle's
   eight predictions / one actual saturated callback identifies preparation
   waste; record baseline counts, then audit mask/reset/advisory semantics.
+- The new 14m baseline is recorded in 12 rows and explicit source/executable
+  provenance. At 128 joints/eight saturated motions: eight predictions, one
+  actual match, seven unused; 17 allocations / 25,392 bytes and 12,288 retained
+  logical keys. Partial overlap also prepares/matches eight; disjoint input
+  prepares/matches eight with 7,472 bytes / 1,536 keys. All disabled rows have
+  zero calls/bytes; every row restores exact pose, binding capacity and counted
+  live bytes. Scratch executable/source: `shadow-mask-preparation-baseline14m`.
+  Probe session 42776 is terminal. This is not timing and has replacement
+  allocators; never use it for timing or link it into a viewer. No mask pruning
+  or dispatch is implemented yet. User confirmed #114 runtime testing is still
+  pending; keep questions/acceptance deferred without blocking independent work.
 
 ## Next sequence
 
@@ -233,11 +244,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Finish/verify 14l's decision commit and remote backup, then create
-   `codex/perf-shadow-mask-admission` from that exact head for plan 14m. Preserve
-   the rejected data and restore; do not resume container tuning or revive the
-   cache macro. Record initial preparation allocation/buffer/key counts before
-   implementing advisory mask admission. Unknown/custom callbacks, reentry,
+3. Continue plan 14m on `codex/perf-shadow-mask-admission`; verify its baseline
+   checkpoint commit/backup if necessary. Preserve 14l's rejected data/restore;
+   do not resume container tuning or revive the cache macro. Initial preparation
+   allocation/buffer/key counts are recorded. Audit and implement bounded
+   advisory mask admission. Unknown/custom callbacks, reentry,
    independent mask resets and actually observed pruned motions need explicit
    handling. Normal playback/diagnostic default remain unchanged.
    New parent workloads need freshly compiled exact PR114 pose/core/header
