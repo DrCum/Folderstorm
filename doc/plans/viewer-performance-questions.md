@@ -127,6 +127,13 @@ Never present a missing hardware result as a successful test.
   parent in 448 frames per mode. Check rendered changing/competing hand poses,
   outfit/appearance changes and lifecycle behavior in its separately retained
   build when convenient. No new answer or live capture is required now.
+- Checkpoint 14p1/PR117 repairs scheduled queue wait deadlines. Its independent
+  build is in progress; later acceptance includes startup/loading, media/audio,
+  region changes, idle and shutdown with work pending. No live operations were
+  run here. Plan14p2's private current/stock experiment is still incomplete and
+  does not change viewer scheduling. Its General consumer/source appendix lists
+  future trial acceptance, including inventory/folder preparation from the
+  feature stack. Packaged General width is 1; actual overrides remain unobserved.
 
 ## Results
 

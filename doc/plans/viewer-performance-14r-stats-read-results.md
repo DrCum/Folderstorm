@@ -46,9 +46,12 @@ log hashes and the 32 reverified immutable library identities are in
 
 ## Next sequence
 
-Preserve this branch and finish the pending14p2 idle-only matrix on its own
-branch first. Publishing another build target immediately would consume that
-idle window. Then publish each completed checkpoint as its own PR with explicit
-base/head and separate native/full-viewer acceptance. Write the next worker
-trial plan only after the complete CPU evidence supports it. Keep the user's
-performance UI/autotuning/crowd findings deferred while they are working.
+The14p2 matrix has now completed48/48 cases and is published separately as
+PR118 exact0ec73f05516ec0b2e4e578fadcf5e959ecf185d7. It is integrated as this
+publication's base to preserve a cumulative stack. Only roadmap/handoff conflicts
+needed resolution; all four native-tested stat/helper identities still match,
+and the retained worker analyzer passes after integration. The independent
+implementation proof remains1330a9d0c9 from PR117. This update does not amend any
+published head or merge a GitHub PR. Publish14r separately against PR118, then
+follow the already-written14q single-General trial plan. Keep performance UI/
+autotuning/crowd findings deferred while the user is working.

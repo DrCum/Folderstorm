@@ -63,3 +63,22 @@ This does not prove the viewer has spare cores, benefit from more workers or a
 useful animation deadline. It does not replace Q4/Q7 or rendered/lifecycle tests.
 The original performance objective remains incomplete. Keep those existing
 questions deferred while this independent, source-supported experiment proceeds.
+
+## Initial implementation and prerequisite finding
+
+The new correctness harness reached its scheduled-queue case and exited through
+its bounded watchdog. A smaller private reproduction then demonstrated the
+problem with both current and stock scheduling: one future item posted after
+the queue had become empty did not run within 500 ms, despite its 20 ms due
+time. A later immediate post woke it and allowed a clean drain/join. Raw rows
+and exact initial source/executable identities are retained in
+`results/scheduler-initial-failure14p.json` and `scheduled-wait-repro14p*`.
+
+This is not a stock-scheduler rejection. The source's scheduled-pop wait fixes
+its adjusted deadline before delegating to a loop that can be notified by new
+head items without recomputing that deadline. Its WAITING retry can also retain
+an expired limit. Investigate and fix that prerequisite as separate plan14p1,
+with explicit deadline/close regression coverage, before resuming this probe.
+Do not remove the failing case or change production scheduler policy to obtain
+a passing experiment. The current private prototype has not been published as
+a PR or used for timing.

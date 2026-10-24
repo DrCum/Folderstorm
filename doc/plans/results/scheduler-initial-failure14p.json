@@ -1,0 +1,22 @@
+{
+  "base": "db9be862ab1168362b9cca6f767614248dd892ea",
+  "status": "Private correctness test exited 2 through watchdog at scheduled deadlines; source diagnosis pending. Session93670 terminal, no automatic restart.",
+  "source_sha256_normalized_lf": {
+    "indra/llcommon/tests/scheduler_probe.h": "55c7929a3ad12f947d6dcdf0ba616301feff279e389ce4dccca9c03b7a1639e9",
+    "indra/llcommon/tests/threadpool_scheduler_test.cpp": "efa083cc33844e9ee35eefd69c7147289548b6f4d57786ef0bc38fecfbba1c40"
+  },
+  "scratch_artifact_sha256": {
+    "worker-scheduler-verify14p.exe": "c33f1e5891e482be3a5eae6f27f5a41c991330f4e3cad28bb98f3f603d031b5d",
+    "worker-scheduler-verify14p.rsp": "5feee7f4d70e122c659cefeaf51f53482704db3ca75fd23c08bb8685fbd9324a",
+    "worker-scheduler-verify14p.log": "21118e5e1acf24c3b251308e3d54d1d7e12c59a769a03370ab7845bcc76bd780"
+  },
+  "diagnostic": "Tool stderr: Scheduler probe failed: scheduled deadlines. Earlier phases had no printed checkpoints. Current-mode scheduled case precedes stock-mode cases; do not attribute this to stock or accept/reject scheduler from it.",
+  "scope": "No production scheduler changed; no timing claim",
+  "followup": "Both current and stock future callbacks missed the 20ms due time and 500ms observation, then ran after a later immediate post. Separate plan14p1 will investigate/fix scheduled queue deadline recomputation; no scheduler performance conclusion yet.",
+  "repro_scratch_sha256": {
+    "scheduled-wait-repro14p.cpp": "1255908340a216ae5a245d0bbf85bc662af49f10bb7da426bf8185b4df9d4de8",
+    "scheduled-wait-repro14p.exe": "07e7ba7d880176ea0690a52a78b38c8d38170b57cf272806393d14cd6d62ad04",
+    "scheduled-wait-repro14p.rsp": "cafd841f509399674aa488a66eb012a7ce3f58214ae7e7c919159d0ff71f3334",
+    "scheduled-wait-repro14p.log": "b55d7523a40948e6802c4e658b6d5fa98b441b4481221dd0fb805eb4d2452d74"
+  }
+}

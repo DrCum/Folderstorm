@@ -324,6 +324,18 @@ target_include_directories(llcommon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(llcommon stage_third_party_libs)
 
 if (LL_TESTS)
+  # <FS:Perf> Private scheduler acceptance probes; production pool policy stays unchanged.
+  find_package(Threads REQUIRED)
+  add_executable(worker_scheduler_acceptance tests/threadpool_scheduler_test.cpp)
+  target_link_libraries(worker_scheduler_acceptance PRIVATE llcommon Threads::Threads)
+  add_custom_command(TARGET worker_scheduler_acceptance POST_BUILD
+    COMMAND $<TARGET_FILE:worker_scheduler_acceptance> VERBATIM)
+  add_executable(worker_scheduler_cost tests/threadpool_scheduler_benchmark.cpp)
+  target_link_libraries(worker_scheduler_cost PRIVATE llcommon Threads::Threads)
+  if(WINDOWS)
+    target_link_libraries(worker_scheduler_cost PRIVATE winmm)
+  endif()
+  # </FS:Perf>
   include(LLAddBuildTest)
   SET(llcommon_TEST_SOURCE_FILES
     # unit-testing llcommon is not possible right now as the test-harness *itself* depends upon llcommon, causing a circular dependency.  Add your 'unit' tests as integration tests for now.
@@ -370,7 +382,6 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(workqueue "" "${test_libs}")
 
   # <FS> Exercise real timed pools without the circular llcommon test harness.
-  find_package(Threads REQUIRED)
   add_executable(scheduled_queue_deadline_test tests/scheduled_queue_deadline_test.cpp)
   target_link_libraries(scheduled_queue_deadline_test PRIVATE llcommon Threads::Threads)
   add_custom_command(TARGET scheduled_queue_deadline_test POST_BUILD

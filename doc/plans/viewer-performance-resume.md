@@ -6,12 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-stats-read-lookups`, from published PR117 exact
-  `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`. Plan14r is written before code
-  in `viewer-performance-14r-stats-read-lookups.md`. This independent checkpoint
-  targets allocating missing statistics reads, with identical returned values.
-  PR117's builder owns primary source/cache; do not change or measure against it.
-  Published PR116 head remains
+- Branch: `codex/perf-stats-read-lookups`, integrating completed PR118 after audit
+  `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
   `836f1eed3850dcb55e57ba8e9138a2a21917e7fe`. PR116 targets PR115 head
   `2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c`; both are attached to this chat.
   Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
@@ -32,18 +28,22 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
   acceptance probe is written before implementation. No production scheduling
   or further viewer behavior changes are enabled.
-- Plan14r is implemented at `1330a9d0c9`.312 native checks pass, including
-  frozen getter values, unchanged maps/summaries and actual write failure/retry.
-  1,538 reads on initially absent data drop522 allocation calls /115,148 bytes
-  and514 fake nodes to zero. Results/provenance are in `*14r*`. Normal/Tracy
-  source checks passed; full LL_TESTS integration and viewer UI/tuning acceptance
-  remain pending. No timing/FPS claim. Publish this branch separately after
-  finishing the worker matrix's idle window; do not amend PR117.
-- PR117 exact22ea4cee92 is now retained as7.2.5.82278. Installer hash verified:
-  72C467B59D3567BF5DCC19B8346B23FB2E7A8F2E90495D376ECBF340795CF169.
-  The independent receipt reports37 passed focused checks, including timed
-  queue and private current/stock scheduler correctness. Worker/activeBuild/
-  monitor are now idle; recheck full-host process inventory before measurements.
+- Current14r implementation1330a9d0c9/evidence7a524503db is now stacked on
+  completed PR118 exact0ec73f05516ec0b2e4e578fadcf5e959ecf185d7. Only roadmap/
+  handoff conflicts were resolved; all four native-tested statistics source/
+  helper identities still match. The48-case analyzer passes after integration.
+  PR118 is open/attached/mergeable; its own full build is pending. Publish14r
+  separately with PR118 as base, then implement already-written14q from that
+  cumulative stack. No GitHub PR was merged and no scheduler default changed.
+- PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
+  base audit db9. Automated review completed without findings at that head.
+  Its exact-head full build is retained as7.2.5.82278; installer hash and37
+  focused checks were verified. Local merge `4bae43e6a595855510609c0ad7306c13c871bf4f`
+  integrates it into the private probe branch, preserving both test targets.
+  Plan14p2 measurements are complete:48/48 accepted, two overlapping attempts
+  excluded/replaced, one unrun build precheck preserved. Accepted windows do not
+  overlap; all3,072 wake admissions and196,608 active-task results are checked.
+  See `results/worker-wait14p2/README.md`, verified summary and raw observations.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -374,6 +374,45 @@ Updated October 24, 2026. The user resumed the performance program; the October
   and `results/*14p1*`. The next 14p2 continuation plan is written before work.
   PR116 exact836 is now independently retained as `7.2.5.82273`; verified hash
   F793FC9A2BC7BEE4E76182884D9E6280041674CB2E3D8CD728AE25DB2AA02B02.
+- Plan14p2: the exact benchmark at local merge4bae compiles fresh workqueue.cpp.
+  First24 cases and fourteen reverse cases are accepted. No idle spin/cap signal;
+  requested1ms polling wake p50~2ms versus stock tens of microseconds, with low
+  CPU in both and lower stock empty/requested-timer cycles. Default finite-wait
+  differences are mixed/small. Partial observations do not authorize adoption.
+  Two initial overlapped runs are retained/excluded after the orchestration
+  error; clean Attempt2 replacements completed and a concurrent-probe guard is
+  now enforced. Every accepted case verifies before/after full-host build idle.
+  At19:35:30 the next stock3/default/empty reverse case did not launch because
+  monitor phase entered NORMAL_PERFORMANCE_QUEUE. Its precheck is preserved.
+  Stop measurement calls while the builder owns preparation/build/retention.
+  All own native sessions through63044 are terminal; the attempted two-case
+  command then exited1 before launching either case. No own probe is left live.
+- While PR117's live owner20872 and compiler/MSBuild processes were verified,
+  isolated normal/Tracy standalone compilation passed for the correctness and
+  benchmark sources. Their eight response/log hashes and fifteen General source
+  hashes are in `results/worker-wait14p2/compiler-and-general-source.json`.
+  The source appendix `viewer-performance-14p2-general-boundaries.md` records
+  actual consumers and packaged General:1 overriding constructor fallback3;
+  current runtime overrides are not read. StatsRecorder::send is synchronous,
+  despite the startup comment mentioning LLPerfStats. Preserve this distinction
+  in any later trial proposal. No production source/policy changed.
+- Plan14p2 is now complete. The remaining ten cases resumed only after PR117's
+  retained37-check receipt and installer hash were verified. Read the final
+  worker-wait results and results/worker-wait14p2/summary:48 unique cells,
+  1,446.56 seconds of accepted idle data, all context labels/indexes/hashes and
+  nonoverlap checked. No rejection/cap/failure. Polling p95~16ms default or2ms
+  requested, stock31-143us or15-25us. Polling p50 is phase-dependent; do not claim
+  a universal2ms median. Stock has higher active cycles in3/8-worker bursts;
+  default finite-wait cycle totals are closer. Plan14q therefore scopes an
+  explicit default-OFF, Windows General trial to resolved width1 only. It is
+  written before implementation; no production scheduler change yet.
+- Independent14r stats-read implementation1330a9d0c9 and evidence7a524503db are
+  pushed on codex/perf-stats-read-lookups.312 native checks pass; missing reads
+  drop522 new calls/115,148 bytes/514 zero entries to zero, preserving returned
+  values and real write failure/retry. No own viewer was initialized. After
+  publishing this worker checkpoint, integrate that completed base into14r for
+  a cumulative stack, preserving its independent implementation proof, and open
+  its separate PR. Full stats UI/tuning and exact-head viewer acceptance pending.
 
 ## Next sequence
 
@@ -384,19 +423,17 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. PR117 is already published/attached, reviewed without findings and building.
-   The worker probe is independently pushed at exact6987af2ac2 on
-   `codex/perf-worker-wait-probe`. Its current handoff/raw data/38 accepted cases
-   and General consumer appendix live on that branch, not this one. Ten idle-
-   only cases remain: reversed3/default/empty (stock needs Attempt2), then all
-   reversed width1 pairs. Return to that branch before running its retainer.
-   New idle measurements wait until full-host/private-builder checks are clear.
-   Build Agent thread01a11eaf-0c01-7511-99f9-dc00a81f3299 on local is readable
-   with wait_threads; do not message or control it. Live owner20872 was verified.
-   Plan14r is now implemented/native-checked. Commit/push its exact evidence,
-   then switch back to the preserved probe branch and finish its ten cases.
-   Both checkpoints need separate PRs; keep frozen evidence and public values.
-   Production pool policy remains unchanged.
+3. Keep published PR116 at exact `836f1eed38` stable for its separate build.
+   PR117 is published/attached/mergeable at exact22ea4cee92. Its queue fix is
+   integrated into the preserved probe branch. Follow14p2 without
+   deleting the failed scheduled case. Production pool policy remains unchanged.
+   All ten remaining cells are now terminal/passed; no own native session remains.
+   PR118 is already published/attached at exact0ec73f0551, based on PR117. It is
+   integrated into this stats14r branch; source identities and48-case data were
+   reverified after resolving docs. Publish this separate cumulative checkpoint.
+   Both need
+   independent full builds. Plan14q is written and is the next implementation,
+   based on that combined stack, with one-worker opt-in only. No default adoption.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
