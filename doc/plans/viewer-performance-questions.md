@@ -75,6 +75,12 @@ Never present a missing hardware result as a successful test.
 
 ## Results
 
+Checkpoint 14c adds a protected phase contract with frozen update comparisons and
+actual controller callbacks. Full viewer and rendered constraint/hand-morph
+acceptance remain pending. Before further live integration, checkpoint 14d will
+reproduce/fix the controller constructor's uninitialized initial joint mask;
+14c's controller fixtures explicitly establish defined masks by updating first.
+
 No in-world captures or runtime acceptance results received yet. A native
 Ryzen 5 3600 palette-packing microbenchmark was collected for checkpoint 4;
 its scope and results are documented in that plan and do not establish FPS gains.

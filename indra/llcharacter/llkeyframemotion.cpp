@@ -835,51 +835,133 @@ bool LLKeyframeMotion::hasEmbeddedEmote() const
 bool LLKeyframeMotion::onUpdate(F32 time, U8* joint_mask)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    const auto resolved = resolveKeyframeUpdateTime(time);
+    mLastLoopedTime = resolved.sampleTime;
+    applyKeyframes(mLastLoopedTime);
+    return finishKeyframeUpdate(resolved.updateTime, joint_mask);
+}
+
+// <FS:Perf> Resolve on the owner thread without changing the live motion.
+LLKeyframeMotion::KeyframeUpdateTime LLKeyframeMotion::resolveKeyframeUpdateTime(F32 time) const
+{
     // llassert(time >= 0.f);       // This will fire
     time = llmax(0.f, time);
+    F32 looped_time;
 
     if (mJointMotionList->mLoop)
     {
         if (mJointMotionList->mDuration == 0.0f)
         {
             time = 0.f;
-            mLastLoopedTime = 0.0f;
+            looped_time = 0.0f;
         }
         else if (mStopped)
         {
-            mLastLoopedTime = llmin(mJointMotionList->mDuration, mLastLoopedTime + time - mLastUpdateTime);
+            looped_time = llmin(mJointMotionList->mDuration, mLastLoopedTime + time - mLastUpdateTime);
         }
         else if (time > mJointMotionList->mLoopOutPoint)
         {
             if ((mJointMotionList->mLoopOutPoint - mJointMotionList->mLoopInPoint) == 0.f)
             {
-                mLastLoopedTime = mJointMotionList->mLoopOutPoint;
+                looped_time = mJointMotionList->mLoopOutPoint;
             }
             else
             {
-                mLastLoopedTime = mJointMotionList->mLoopInPoint +
+                looped_time = mJointMotionList->mLoopInPoint +
                     fmod(time - mJointMotionList->mLoopOutPoint,
                     mJointMotionList->mLoopOutPoint - mJointMotionList->mLoopInPoint);
             }
         }
         else
         {
-            mLastLoopedTime = time;
+            looped_time = time;
         }
     }
     else
     {
-        mLastLoopedTime = time;
+        looped_time = time;
     }
+    return {time, looped_time};
+}
 
-    applyKeyframes(mLastLoopedTime);
+bool LLKeyframeMotion::buildKeyframeSamplingRequest(F32 sample_time, const SamplingIdentity& identity,
+                                                   SamplingRequest& request) const
+{
+    auto asset = getKeyframeSamplingLease();
+    if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
+        !llfinite(sample_time) || !llfinite(asset->mDuration) ||
+        asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        asset->mJointMotionArray.size() > mJointStates.size())
+    {
+        request = SamplingRequest{};
+        return false;
+    }
+    for (const auto* joint : asset->mJointMotionArray)
+    {
+        if (!joint)
+        {
+            request = SamplingRequest{};
+            return false;
+        }
+    }
+    request.asset = std::move(asset);
+    request.identity = identity;
+    request.time = sample_time;
+    request.duration = request.asset->mDuration;
+    request.usage.resize(request.asset->mJointMotionArray.size());
+    for (U32 i = 0; i < request.usage.size(); ++i)
+    {
+        request.usage[i] = mJointStates[i] ? mJointStates[i]->getUsage() : 0;
+    }
+    return true;
+}
 
+bool LLKeyframeMotion::prepareKeyframeSampling(F32 time, const SamplingIdentity& identity,
+                                              SamplingRequest& request) const
+{
+    if (!mJointMotionList)
+    {
+        request = SamplingRequest{};
+        return false;
+    }
+    return buildKeyframeSamplingRequest(resolveKeyframeUpdateTime(time).sampleTime, identity, request);
+}
+
+bool LLKeyframeMotion::updateWithSample(F32 time, U8* joint_mask, const SamplingResult& result,
+                                       const SamplingIdentity& current_identity, bool& sample_applied)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    const auto resolved = resolveKeyframeUpdateTime(time);
+    SamplingRequest current;
+    sample_applied = buildKeyframeSamplingRequest(resolved.sampleTime, current_identity, current) &&
+        samplingResultMatches(result, current);
+    mLastLoopedTime = resolved.sampleTime;
+    if (sample_applied)
+    {
+        for (U32 i = 0; i < result.getJoints().size(); ++i)
+        {
+            if (!mJointStates[i]) continue;
+            const auto& row = result.getJoints()[i];
+            if (row.usage & LLJointState::SCALE) mJointStates[i]->setScale(row.scale);
+            if (row.usage & LLJointState::ROT) mJointStates[i]->setRotation(row.rotation);
+            if (row.usage & LLJointState::POS) mJointStates[i]->setPosition(row.position);
+        }
+        publishHandPose();
+    }
+    else
+    {
+        applyKeyframes(mLastLoopedTime);
+    }
+    return finishKeyframeUpdate(resolved.updateTime, joint_mask);
+}
+
+bool LLKeyframeMotion::finishKeyframeUpdate(F32 update_time, U8* joint_mask)
+{
     applyConstraints(mLastLoopedTime, joint_mask);
-
-    mLastUpdateTime = time;
-
+    mLastUpdateTime = update_time;
     return mLastLoopedTime <= mJointMotionList->mDuration;
 }
+// </FS:Perf>
 
 //-----------------------------------------------------------------------------
 // applyKeyframes()
@@ -895,6 +977,11 @@ void LLKeyframeMotion::applyKeyframes(F32 time)
                                                       mJointMotionList->mDuration );
     }
 
+    publishHandPose();
+}
+
+void LLKeyframeMotion::publishHandPose()
+{
     LLJoint::JointPriority* pose_priority = (LLJoint::JointPriority* )mCharacter->getAnimationData("Hand Pose Priority");
     if (pose_priority)
     {

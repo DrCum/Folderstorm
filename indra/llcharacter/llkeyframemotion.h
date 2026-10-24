@@ -508,6 +508,24 @@ protected:
     static bool sampleKeyframes(SamplingRequest request, SamplingResult& result);
     // Current inputs/versions must be prepared independently on the main thread, not read back from the result.
     static bool samplingResultMatches(const SamplingResult& result, const SamplingRequest& current);
+
+    struct KeyframeUpdateTime
+    {
+        F32 updateTime;
+        F32 sampleTime;
+    };
+
+    // Owner thread only. Preparation does not advance the motion or publish a pose.
+    KeyframeUpdateTime resolveKeyframeUpdateTime(F32 time) const;
+    bool prepareKeyframeSampling(F32 time, const SamplingIdentity& identity, SamplingRequest& request) const;
+    // Explicit base behavior only, not permission to bypass a subclass's virtual onUpdate.
+    // The caller supplies independently obtained current versions and exclusive result access.
+    // The live motion must satisfy the ordinary onUpdate/direct-sampling preconditions.
+    bool updateWithSample(F32 time, U8* joint_mask, const SamplingResult& result,
+                          const SamplingIdentity& current_identity, bool& sample_applied);
+    bool buildKeyframeSamplingRequest(F32 sample_time, const SamplingIdentity& identity, SamplingRequest& request) const;
+    void publishHandPose();
+    bool finishKeyframeUpdate(F32 update_time, U8* joint_mask);
     // </FS:Perf>
 
     // <FS:Perf> Main-thread adoption/lease creation; jobs never access the cache or live motion.

@@ -55,7 +55,8 @@ change without matched real-viewer performance and visual/lifecycle evidence.
 
 ## Results
 
-Initial source audit started; no phase contract or live dispatch is implemented.
+Initial source audit and the protected base-motion phase contract are implemented;
+no live dispatch is enabled.
 
 The mutation audit found that const serialization quantized stored positions,
 including during getFileSize. Checkpoint 14a isolates and fixes that writer before
@@ -63,7 +64,9 @@ any live worker use; its native export/pose/packet checks pass in both curve
 modes. Shared ownership alone had not made those positions immutable.
 Checkpoint 14b separately makes short constraint-name tails deterministic; its
 name/format checks and the prior export suite pass in both storage modes.
-Checkpoint 14c specifies the next protected base-motion phase contract.
+Checkpoint 14c adds and tests that contract against frozen actual update methods
+and real controller callbacks. Checkpoint 14d isolates a newly observed undefined
+first-activation mask in the existing controller constructor.
 
 ### First dependency findings
 
@@ -101,6 +104,6 @@ Checkpoint 14c specifies the next protected base-motion phase contract.
   work around base behavior. Initial eligibility must be explicit and conservative
   about factories/subclasses, rather than inferred from a base-class pointer.
 
-Next: complete the frame/clock and subclass/mutation audit, then choose a serial
-phase contract or reject the candidate boundary from source evidence. The
-synthetic 2 ms overlap window remains unproven in the real update flow.
+Next: fix the initial controller mask separately, then complete current-context,
+eligibility and worker floating-point contracts. The synthetic 2 ms overlap
+window remains unproven in the real update flow.
