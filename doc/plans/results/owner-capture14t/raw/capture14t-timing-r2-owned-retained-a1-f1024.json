@@ -1,0 +1,34 @@
+{
+  "case": "capture14t-timing-r2-owned-retained-a1-f1024",
+  "kind": "timing",
+  "round": 2,
+  "attempt": 1,
+  "mode": "owned-retained",
+  "avatars": 1,
+  "frames": 1024,
+  "gapUs": 0,
+  "load": "normal",
+  "before": {
+    "utc": "2026-10-24T22:45:23.3648484Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "after": {
+    "utc": "2026-10-24T22:45:23.4813933Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "status": "completed",
+  "exit": 0,
+  "exeSha256": "B35A0CDDE6A14820DA941F93166EE515B6E9B5D9384F072890AE09B20F2FF937",
+  "scope": "Private fixed-cohort owner-binding cost; no scheduler/readiness change or viewer deadline/FPS acceptance",
+  "limits": "Before/after build/probe idle only; desktop/power/timer state uncontrolled; requested1ms timer"
+}

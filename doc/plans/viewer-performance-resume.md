@@ -6,7 +6,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-event-sampling-cost`, from published PR120 exact
+- Branch: `codex/perf-owned-capture-retention`, from published/attached/mergeable
+  PR121 exact81c90614cd1351b6825be2a2e5f19ad2049916db. Its automated review
+  completed with no findings at that head. Its base is published PR120 exact
   `55f66ec851701fdc6b9bfd2c81794abc5ee80ccf`. PR120 is attached/mergeable,
   automated review completed with no findings at that exact head. The independent
   builder retained7.2.5.82290,39 focused checks, at that head with Tracy OFF;
@@ -75,6 +77,22 @@ Updated October 24, 2026. The user resumed the performance program; the October
   establish repeatable owner savings. Keep that design out of viewer integration.
   The exact32 later-frame binding allocations motivate the next private14t plan.
   CMake integration and real viewer/crowd/General acceptance remain open.
+- Plan14t is implemented at482809653ddafa1a541396186c12b3997a7f5734.
+  Only the private test fixture changes. It retains one admitted motion's owner
+  bindings per fixed-cohort character inside Scene lifetime, checks the budget,
+  and releases all bindings before Scene destruction. Character/ID/time callback
+  traces now distinguish same asset IDs across characters. Both native builds
+  pass67,824 checks, including64-query-frame controller oracles and retained
+  stale/cleanup controls; normal/Tracy syntax passes. All12 paired/reversed
+  1,024-frame timing cases and6 separate64-frame allocation cases are terminal/
+  validated with exact program, resource/cleanup and nonoverlap checks. Data is
+  in results/owner-capture14t; current scratch programs event-sampling14t-correctness
+  and event-sampling14t-allocations are terminal. The remaining later allocations
+  fall63→0 for one character and2,016→0 for32. Held bindings are512/16,384 bytes
+  and zero after final cleanup. Retained serial cost still exceeds direct;
+  do not treat this as a viewer cache/FPS improvement. Publish the separate
+  test-only checkpoint, then begin the prewritten14u same-frame readiness plan
+  on a new branch. Preserve all published heads and completed matrix data.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -492,11 +510,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
    branch implements14s's private complete-controller experiment ated052e24b5,
    with analyzer0c61dc0d34. Use the exact current programs/identities in progress,
    and the corrected runner, retaining all previous proof and the unrun precheck.
-   All84 planned cases are terminal/validated; raw data, complete costs and
-   source/program identities are retained. Publish this separately reviewable
-   test-only checkpoint, attach/verify its exact head, and preserve it. Then
-   start already-written14t on a new branch from that published head: isolate
-   bounded owner-binding retention and strengthen character/time callback traces.
+   PR121 is already published/attached/mergeable at exact81c90614cd with no
+   automated review findings. All84 planned cases and the14t18-case follow-up
+   are terminal/validated. Publish14t, attach/verify its exact head, then start
+   already-written14u on a new branch: test later same-frame readiness while
+   retaining the one owned pending batch and immediate per-motion fallback.
    Do not treat synthetic gaps as real scene deadlines or adopt the rejected
    first-consumption batch. No animation worker dispatch or scene/controller
    reordering is enabled here.
