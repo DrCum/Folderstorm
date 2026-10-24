@@ -25,6 +25,9 @@ inline std::atomic_flag locked = ATOMIC_FLAG_INIT;
 inline bool enabled = false;
 inline Stats stats;
 inline std::atomic<int> failureCountdown{-1}; // Test-only fault injection; negative disables it.
+// One-shot reentry callback, installed only by single-threaded allocation tests.
+inline std::atomic<void (*)(void*)> beforeAllocation{nullptr};
+inline std::atomic<void*> allocationContext{nullptr};
 struct Lock
 {
     Lock() { while (locked.test_and_set(std::memory_order_acquire)) {} }
@@ -63,6 +66,8 @@ inline void remove(void* pointer)
 }
 inline void* allocate(size_t bytes, size_t alignment = 0)
 {
+    if (auto callback = beforeAllocation.exchange(nullptr))
+        callback(allocationContext.exchange(nullptr));
     int remaining = failureCountdown.load(std::memory_order_relaxed);
     while (remaining >= 0)
     {
@@ -100,7 +105,7 @@ struct Scope
         enabled = true;
     }
     ~Scope() { stop(); }
-    void stop() { Lock lock; enabled = false; }
+    void stop() { Lock lock; enabled = false; beforeAllocation.store(nullptr); allocationContext.store(nullptr); }
 };
 #else
 inline Stats snapshot() { return {}; }

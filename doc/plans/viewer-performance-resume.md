@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-active-blenders`, based on published PR 112 at
-  `b8c82e686def15937fdfad1620845d557e995a89`.
+- Branch: `codex/perf-blender-pool-lookup`, based on published PR 113 at
+  `c7ce8ec6d7769c13a1decba496260feb5dd8bdd7`.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -98,8 +98,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   controller grows 680 to 688 bytes on this MSVC target.
 - 14i implementation is committed as `85255dd817`. Final frozen/current source,
   executable, frame-stream, dependency and canonical report identities are in
-  `results/active-blender-provenance.json`; finish the evidence/docs commit and
-  publish a separate PR. The independent builder
+  `results/active-blender-provenance.json`; final head `c7ce8ec6d7` is published
+  and attached as PR 113. Its remote head/base and mergeability were verified;
+  automated review completed without findings at that exact head. The independent builder
   retained #112 as `7.2.5.82254` at exact `b8c82e686d` and released ownership
   before the final timings. Script `performance-validation/measure-active-blender14i.ps1`
   checks state/worker/process inventory around every run. Use parent
@@ -116,20 +117,48 @@ Updated October 24, 2026. The user resumed the performance program; the October
   682/5,356/31,498 ns to 545/3,894/16,086 ns; real viewer FPS remains unproved. Initial
   baseline provenance describes fixture commit `3c04393c54`; final evidence must
   identify the refined fixture/source/executable hashes. Plan 14j is written.
+- 14j's cold ownership baseline was reproduced in both frozen PR 112 and
+  PR 113: pool-node allocation failure leaves 112 ordinary-new bytes retained
+  after teardown, with no pool entry and restored motion-state references.
+  This defect predates the vector change. It is now fixed with temporary
+  ownership in a no-inline cold helper and iterator reuse on the warm path.
+  Both modes pass 79 constructor/publication/retry/reentry checks. Parent
+  controls still reproduce the 112-byte retention and canonical overwrite;
+  candidate counted retention is zero and the weighted pose is preserved.
+  Custom aligned block bytes remain excluded from ordinary-new accounting.
+  Reentry is exercised only when ordinary construction allocation is available;
+  global failure injection explicitly skips Tracy-enabled execution.
+- Final helper validation passes both 26,748-check outer suites and reproduces
+  all 216 PR 113 frames per curve mode; 4,054 controller checks per mode and
+  phase/shadow/purge/mask/diagnostic-allocation regressions pass. Cold/warm memory
+  behavior and object layout match PR 113. A first inline-RAII series had a small
+  full-controller regression; its raw reports are preserved in
+  `performance-validation/blender-pool-before-cold-helper14j`. The final helper
+  series retains 504 rows / 504,000 invocations with verified native-build idle:
+  direct 3/32/128 medians 554/3,984/16,249 ns become 540/3,773/14,883 ns. Smallest
+  isolated collection remains ~5 ns slower; document it, do not hide it.
+  Final executables start `pool-final-*`, fault binaries
+  `blender-pool-final-fault-*14j.exe`, timing binaries
+  `blender-pool-cold-helper-{collection,controller}14j.exe`. Their source/report
+  identities are recorded in `results/blender-pool-provenance.json`, with
+  implementation commit `670008164f`. Finish the evidence/docs commit and
+  publication, then start 14k from the exact published head. Plan 14k is written.
+- The independent builder retained PR 113 as `7.2.5.82257` at exact `c7ce8ec6d7`
+  and released ownership before the final 14j measurement. This proves the 14i
+  build, not the newer 14j source. Primary source/cache/monitor remain untouched
+  by this chat.
 
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. Finish
-   14i's evidence/docs commit and publication; do not reimplement its validated
-   source or enable workers. Recheck PR 112's review and separate build evidence.
+   14j's provenance/commit/publication; do not redo its validated source or
+   enable workers. Recheck PR review/build evidence at exact published heads.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Execute `viewer-performance-14i-active-blenders.md` on its new branch from
-   the published 14h head. After its separate PR, create another branch from that
-   exact published head for `viewer-performance-14j-blender-pool-lookup.md`.
-   Keep retained capacity, priority/additive and quantum cache behavior stable;
-   improve the remaining duplicate map lookup and test cold insertion ownership.
+3. After publishing 14j separately, create a new branch from that exact head
+   for `viewer-performance-14k-pool-index.md`. Measure locality/cold/retention
+   and publication/cleanup behavior before considering a container change.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
    enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;

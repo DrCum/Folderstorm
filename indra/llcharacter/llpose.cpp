@@ -34,6 +34,7 @@
 #include "llmotion.h"
 #include "llmath.h"
 #include "llstl.h"
+#include <memory>
 
 //-----------------------------------------------------------------------------
 // Static
@@ -465,6 +466,26 @@ LLPoseBlender::~LLPoseBlender()
     mJointStateBlenderPool.clear();
 }
 
+namespace
+{
+// Keep allocation cleanup out of the per-frame admission loop.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+LLJointStateBlender* createPooledBlender(std::map<LLJoint*,LLJointStateBlender*>& pool, LLJoint* joint)
+{
+    auto candidate = std::make_unique<LLJointStateBlender>();
+    const auto [entry, inserted] = pool.emplace(joint, candidate.get());
+    if (inserted)
+    {
+        candidate.release();
+    }
+    return entry->second;
+}
+}
+
 //-----------------------------------------------------------------------------
 // addMotion()
 //-----------------------------------------------------------------------------
@@ -476,16 +497,14 @@ bool LLPoseBlender::addMotion(LLMotion* motion)
     {
         LLJoint *jointp = jsp->getJoint();
         LLJointStateBlender* joint_blender;
-        if (mJointStateBlenderPool.find(jointp) == mJointStateBlenderPool.end())
+        const auto found = mJointStateBlenderPool.find(jointp);
+        if (found == mJointStateBlenderPool.end())
         {
-            // this is the first time we are animating this joint
-            // so create new jointblender and add it to our pool
-            joint_blender = new LLJointStateBlender();
-            mJointStateBlenderPool[jointp] = joint_blender;
+            joint_blender = createPooledBlender(mJointStateBlenderPool, jointp);
         }
         else
         {
-            joint_blender = mJointStateBlenderPool[jointp];
+            joint_blender = found->second;
         }
 
         if (jsp->getPriority() == LLJoint::USE_MOTION_PRIORITY)

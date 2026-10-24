@@ -122,6 +122,12 @@ if(LL_TESTS)
   add_custom_command(TARGET avatar_initial_motion_mask POST_BUILD
     COMMAND $<TARGET_FILE:avatar_initial_motion_mask> VERBATIM)
 
+  add_executable(avatar_blender_pool_failures tests/blender_pool_failure_test.cpp)
+  target_link_libraries(avatar_blender_pool_failures PRIVATE llcharacter)
+  target_compile_definitions(avatar_blender_pool_failures PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  add_custom_command(TARGET avatar_blender_pool_failures POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_blender_pool_failures> --allocations VERBATIM)
+
   add_executable(avatar_active_blender tests/active_blender_test.cpp)
   target_link_libraries(avatar_active_blender PRIVATE llcharacter)
   add_custom_command(TARGET avatar_active_blender POST_BUILD
