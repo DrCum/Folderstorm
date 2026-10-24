@@ -1,0 +1,16 @@
+// Same frozen fixture/core, all 64 benchmark query times including loop wrapping.
+// Explicit ready controls compare every frame; no performance measurement claim.
+#define main FSEventSamplingBenchmarkMain14s
+#include "event-sampling14s.cpp"
+#undef main
+int main()
+{
+    using namespace FSEventSampling;
+    require(FSSampling::NumericContext::capture().isSupported(), "Owned context unsupported");
+    LLVector4a::initClass();
+    for (auto mode : {Mode::Direct, Mode::Owned, Mode::Default, Mode::Event})
+        for (unsigned avatars : {1u, 32u}) run(mode, avatars, 0, 64, "normal", true);
+    for (auto mode : {Mode::Default, Mode::Event})
+        for (const auto* load : {"busy", "closed"}) run(mode, 8, 0, 64, load, true);
+    std::cout << checks.load() << " same-64-frame controller/direct oracle checks across 768 frames passed\n";
+}

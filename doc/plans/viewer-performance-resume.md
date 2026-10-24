@@ -8,8 +8,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
 - Branch: `codex/perf-event-sampling-cost`, from published PR120 exact
   `55f66ec851701fdc6b9bfd2c81794abc5ee80ccf`. PR120 is attached/mergeable,
-  automated review completed with no findings at that exact head, and the
-  independent builder is building it with Tracy OFF. Keep that published head
+  automated review completed with no findings at that exact head. The independent
+  builder retained7.2.5.82290,39 focused checks, at that head with Tracy OFF;
+  installer SHA and packaged default-FALSE/Persist0 policy were verified. It is
+  now idle. Keep that published head
   immutable. Its base is reviewed PR119 exact
   `8952ad421837beb61737a15d999ff14fa1c069b4`, including completed PR118 after audit
   `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
@@ -60,15 +62,19 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Native source, executable, response, logs and dependency identities are saved;
   current executables are event-sampling14s-reuse1 and event-sampling14s-alloc-reuse1
   in performance-validation. All own native/compile sessions are terminal.
-  No timing case has run: the first precheck at21:42:27Z refused launch when
-  PR120 preparation entered NORMAL_PERFORMANCE_QUEUE. Retain that unrun record.
-  The committed matrix-plan has72 timing cases and12 separate allocation cases,
-  paired/reversed,64 frames each, written before accepted measurement. Resume
-  performance-validation/run-event-matrix14s.ps1 only after full-host/private
-  builder idle; it preserves/skips completed cases and refuses failed/live ones.
-  It retries the unrun first case with a new attempt label. Do not publish a new
-  build checkpoint merely to keep the builder busy while timing is pending.
-  Whole cost/economics, CMake integration and real viewer acceptance remain open.
+  The fixed72 timing/12 allocation matrix is now complete,64 frames each,
+  paired/reversed. All84 cases pass exact executable, frame/count, mask/admission
+  and nonoverlap validation with full-host/private-builder idle before/after.
+  The initial unrun21:42:27Z build-busy precheck is preserved; its new attempt
+  passed. All169 raw files and manifests are retained. An additional30,861-check
+  native oracle compares all64 query times across768 controller frames, including
+  loop wrapping. No oracle work enters measured CPU windows. Do not rerun this
+  completed matrix without a changed source/concern. Read14s-event-sampling-results:
+  first-consumption batches apply0% at immediate deadlines; crowded combined
+  cycles rise1.27–1.64x direct. Synthetic gaps improve event readiness but do not
+  establish repeatable owner savings. Keep that design out of viewer integration.
+  The exact32 later-frame binding allocations motivate the next private14t plan.
+  CMake integration and real viewer/crowd/General acceptance remain open.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -82,8 +88,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
 - PR118 exact0ec73f0551 is retained as7.2.5.82283 with37 focused checks;
   PR119 exact8952ad4218 as7.2.5.82287 with38. Both installer hashes, source
   identities and focused receipts were verified in parent-build-receipts14q.
-  This newer14q source still requires its own exact-head full build, full
-  LL_TESTS integration and manual General lifecycle/CPU/frame-time acceptance.
+  PR120's exact-head full build is now retained with39 focused checks, including
+  its4,593 actual-policy checks. Full LL_TESTS target integration and manual
+  General lifecycle/CPU/frame-time acceptance remain distinct pending gates.
 - PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
   base audit db9. Automated review completed without findings at that head.
   Its exact-head full build is retained as7.2.5.82278; installer hash and37
@@ -485,13 +492,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
    branch implements14s's private complete-controller experiment ated052e24b5,
    with analyzer0c61dc0d34. Use the exact current programs/identities in progress,
    and the corrected runner, retaining all previous proof and the unrun precheck.
-   Resume the prewritten matrix once PR120 is retained and full-host/build state
-   is idle. Preserve the blocked precheck and every exclusion; read actual logs/
-   exit state and source identities before claiming an accepted case. Analyze
-   complete owner plus worker costs and first-consumption fallback rates. Then
-   write the resulting next plan and publish a separately reviewable test-only
-   checkpoint. Do not treat synthetic gaps as real scene deadlines. No animation
-   worker dispatch or scene/controller reordering is enabled here.
+   All84 planned cases are terminal/validated; raw data, complete costs and
+   source/program identities are retained. Publish this separately reviewable
+   test-only checkpoint, attach/verify its exact head, and preserve it. Then
+   start already-written14t on a new branch from that published head: isolate
+   bounded owner-binding retention and strengthen character/time callback traces.
+   Do not treat synthetic gaps as real scene deadlines or adopt the rejected
+   first-consumption batch. No animation worker dispatch or scene/controller
+   reordering is enabled here.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header

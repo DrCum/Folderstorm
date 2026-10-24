@@ -2,13 +2,13 @@
   "parent_pr": 120,
   "parent_head": "55f66ec851701fdc6b9bfd2c81794abc5ee80ccf",
   "implementation_head": "ed052e24b57a84e75856f886af80c17501bb146b",
-  "status": "native_checked_timing_pending",
+  "status": "complete_test_only_experiment",
   "native_checks": 4240,
   "generator_checks": 5,
   "production_cpp_modified": false,
   "viewer_build_acceptance": false,
   "fps_acceptance": false,
-  "accepted_timing_cases": 0,
+  "accepted_timing_cases": 72,
   "timing_block": "Before-check refused launch at 2026-10-24T21:42:27Z while independent monitor entered NORMAL_PERFORMANCE_QUEUE for PR120",
   "sources": {
     "indra/llcharacter/tests/event_sampling_cost.cpp": {
@@ -288,5 +288,16 @@
     "run-event-matrix14s.ps1.txt": "f8cd0d1bd81dec0f1b1f5cfbcdb4deb346871d66007fdb2260e4e2a7b6a083d2",
     "run-event-sampling14s.ps1.txt": "19bbe2a326fcb9b3ff4eb8d8a18773e86a9866c045d235c3b422147078538192",
     "validate-event-generator14s.py.txt": "da2ff39ed52b00d335e253ae0140944022eff7fcab2ff2a119a3f7052d9ceea5"
-  }
+  },
+  "accepted_allocation_cases": 12,
+  "accepted_timing_frames": 4608,
+  "excluded_or_unrun": [
+    {
+      "file": "event14s-timing-r1-direct-a1-g0-normal.json",
+      "status": "before_check"
+    }
+  ],
+  "nonoverlap_verified": true,
+  "real_viewer_dispatch": false,
+  "conclusion": "Do not integrate first-consumption whole-batch cancellation; evaluate bounded owner preparation costs next"
 }
