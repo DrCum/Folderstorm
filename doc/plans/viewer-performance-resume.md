@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-hand-pose-name-allocations`, based on PR 109 at
-  `e08cf82050215fd0ab335ba7611c52ff3f03b528`.
+- Branch: `codex/perf-motion-query-shadow`, based on PR 110 at
+  `4adf6a948e32927afbafea78f5e8511ba552297f`.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -18,9 +18,13 @@ Updated October 24, 2026. The user resumed the performance program; the October
 - Plan 14f is published as PR 109 and its automated review completed with no
   findings at exact `e08cf82050`. Plan 14f1 is now implemented: stable key names,
   map-authoritative typed priority lookup and unchanged priority/publication order.
-  This branch needs its own PR and retained build, independent of PR 109.
-- Finish final review, commit/push this branch and resolve its checkpoint PR by
-  branch, not by an assumed PR number. Attach every created PR to this chat.
+  Plan 14f1 is published as PR 110; its automated review completed with no
+  findings at exact `4adf6a948e`. Both checkpoint PRs are attached to this chat.
+- Plan 14g's controller/avatar audit and concrete implementation sequence are
+  written. This branch currently contains planning only, with no predictor,
+  observer, setting or production worker caller yet. Begin the nonmutating
+  clock/query contract next, then complete the bounded shadow observer before
+  publishing its separately testable PR. Do not guess that PR's number.
 - The frozen feature baseline through PR 88 is still
   `d0f05af90f4ed788cb59a5b2d91dd405ed06717f`; preserve it and published history.
 
@@ -55,8 +59,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Publish the
-   14f1 checkpoint if it has not been published; read its final results and limits.
+1. Inspect current status/head/PR state and preserve any newer work. Read 14g's
+   concrete implementation sequence; begin the nonmutating clock/query contract.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
