@@ -32,6 +32,18 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
   acceptance probe is written before implementation. No production scheduling
   or further viewer behavior changes are enabled.
+- Plan14r is implemented at `1330a9d0c9`.312 native checks pass, including
+  frozen getter values, unchanged maps/summaries and actual write failure/retry.
+  1,538 reads on initially absent data drop522 allocation calls /115,148 bytes
+  and514 fake nodes to zero. Results/provenance are in `*14r*`. Normal/Tracy
+  source checks passed; full LL_TESTS integration and viewer UI/tuning acceptance
+  remain pending. No timing/FPS claim. Publish this branch separately after
+  finishing the worker matrix's idle window; do not amend PR117.
+- PR117 exact22ea4cee92 is now retained as7.2.5.82278. Installer hash verified:
+  72C467B59D3567BF5DCC19B8346B23FB2E7A8F2E90495D376ECBF340795CF169.
+  The independent receipt reports37 passed focused checks, including timed
+  queue and private current/stock scheduler correctness. Worker/activeBuild/
+  monitor are now idle; recheck full-host process inventory before measurements.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -381,8 +393,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
    New idle measurements wait until full-host/private-builder checks are clear.
    Build Agent thread01a11eaf-0c01-7511-99f9-dc00a81f3299 on local is readable
    with wait_threads; do not message or control it. Live owner20872 was verified.
-   Implement/native-check plan14r here while that build runs. Preserve frozen
-   before evidence and exact public values; publish separately when complete.
+   Plan14r is now implemented/native-checked. Commit/push its exact evidence,
+   then switch back to the preserved probe branch and finish its ten cases.
+   Both checkpoints need separate PRs; keep frozen evidence and public values.
    Production pool policy remains unchanged.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.

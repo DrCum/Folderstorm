@@ -291,3 +291,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   checks pass. Timed close/drain and payload ownership remain intact. Publish
   separately for full viewer testing, then follow14p2's sustained private CPU
   comparison before proposing any scheduler policy change.
+- Independent Stage 5 read cleanup: performance-stat getters return the same
+  values through const lookup, avoiding zero-entry insertion for missing data.
+  Plan14r's actual native fixture preserves both buffer selections and summaries;
+  1,538 initially absent reads drop 522 replacement-new calls to zero. Full
+  performance UI/autotuning acceptance remains pending. Finish the independent
+  worker matrix before publishing another head that would consume its idle window.
