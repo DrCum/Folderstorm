@@ -1,11 +1,12 @@
 # Performance work: shutdown handoff
 
 Resumed by the user on October 24. Current checkpoint branch:
-`codex/perf-keyframe-phase-contract`, based on PR 105 at
-`dcbc51a058d931722a6db5b4109d859e6b0d6200`. Checkpoint 14c is implemented and
+`codex/perf-initial-motion-mask`, based on PR 106 at
+`244086fea86c6138b9614e9d76f1ec0b2a7e0de9`. Checkpoint 14c is implemented and
 passes 5,956 checks/1,474 frozen-update comparisons in each storage mode.
-Checkpoint 14d plans a separate initial controller-mask fix found during those
-tests. Build monitoring remains stopped. The shutdown details below are history;
+Checkpoint 14d implements the initial controller-mask fix found during those
+tests. The next plan is 14e's per-job numeric context. Build monitoring remains
+stopped. The shutdown details below are history;
 read the current roadmap and latest checkpoint plans before continuing.
 
 Saved October 23, 2026 at the user's request before computer shutdown. Pause the

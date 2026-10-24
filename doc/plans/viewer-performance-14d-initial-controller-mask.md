@@ -42,6 +42,31 @@ crowd frame-time/quality evidence remain required.
 
 ## Results
 
-Not implemented yet. Constructor omission and inconsistent first-activation
-constraint output were observed during 14c; deterministic poison reproduction
-is the first task here.
+The real controller, placement-constructed over storage filled with nonzero
+bytes, passes that prior byte value to the first actual activation callback.
+The original constructor deterministically fails the focused regression with
+`Activation read a nonzero initial mask` (first poisoned byte: 1).
+
+The fix value-initializes the two existing signature arrays in the constructor.
+No activation, per-frame reset, callback, timing, blending or constraint code is
+changed. The regression covers five prior storage patterns with no prior
+update, an empty normal update or an empty hidden update. It checks full initial
+masks, subsequent chronological callbacks, nonzero priority masks from an
+already-updated motion, same-frame reactivation preserving the current mask,
+hidden updates and reactivation after a clear.
+
+The focused test passes **241 checks across 15 poisoned-storage cases in each
+key storage mode**. The preceding phase suite remains green in both modes:
+5,956 checks and 1,474 frozen-update comparisons, including real controller lifecycle
+and positional constraints. Cached dependencies are read only; no full viewer
+build/cache configure, account operation or monitoring restart is performed.
+The complete controller and standalone test pass Tracy/contiguous syntax checks.
+The shared test-character header now explicitly includes its LLVector3d type
+dependency, exposed by compiling this test independently of the native wrapper.
+
+Focused LL_TESTS target: `avatar_initial_motion_mask`. Retain an exact-head
+private x64 AVX2 OpenSim Nightly build separately when builds are requested.
+Viewer acceptance: initial animation/constraint behavior immediately after
+character creation, then priority interactions, posing, sit/stand and lifecycle
+transitions. Full linking/rendered acceptance and ARM/macOS remain pending.
+Next: `viewer-performance-14e-sampling-fp-context.md`.

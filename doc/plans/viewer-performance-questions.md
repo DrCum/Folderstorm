@@ -77,9 +77,12 @@ Never present a missing hardware result as a successful test.
 
 Checkpoint 14c adds a protected phase contract with frozen update comparisons and
 actual controller callbacks. Full viewer and rendered constraint/hand-morph
-acceptance remain pending. Before further live integration, checkpoint 14d will
-reproduce/fix the controller constructor's uninitialized initial joint mask;
-14c's controller fixtures explicitly establish defined masks by updating first.
+acceptance remain pending. Checkpoint 14d reproduces and fixes the controller
+constructor's uninitialized initial joint mask; verify initial constraints just
+after character creation as well as normal priority/sit/pose transitions.
+14c's historical controller fixtures explicitly establish masks by updating
+first; the new regression also covers activation before any update. Plan 14e
+addresses worker floating-point context before further live integration.
 
 No in-world captures or runtime acceptance results received yet. A native
 Ryzen 5 3600 palette-packing microbenchmark was collected for checkpoint 4;

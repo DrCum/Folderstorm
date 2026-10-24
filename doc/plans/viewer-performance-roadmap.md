@@ -196,3 +196,7 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   direct fallback and frozen actual-update/controller comparisons. Normal
   playback stays serial; live eligibility/version wiring/overlap are pending.
   Plan 14d separately addresses the initial controller joint mask found by tests.
+- Stage 4i prerequisite: the initial controller signature is now value-initialized
+  before activation can pass it to a motion. Poisoned-storage tests reproduce
+  the old behavior and verify initial/current masks and callback order. Plan 14e
+  establishes per-job numeric context before any live worker dispatch.
