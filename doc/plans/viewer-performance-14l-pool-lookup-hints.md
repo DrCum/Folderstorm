@@ -133,3 +133,76 @@ Contiguous-mode/full-outer/other regressions are still pending for any candidate
 selected from complete costs. No PR or default enablement until the complete-
 path and quality/stability evidence justifies a change. The conditional
 prototype defaults to zero, remains experimental and may be removed entirely.
+
+### Multi-motion fixture and measurement controls
+
+`blender_pool_multimotion_benchmark.cpp` adds 21 generated cases over 3/32/128
+joints and 1/4/8 motions (skipping more motions than joints). Inputs and motion
+IDs are deterministic. Partial overlap holds a fixed early ease-in phase;
+disjoint assets use separate joint groups at full weight; saturated assets fully
+overlap at full weight. These are controlled workloads, not a distribution of
+real crowd animations. Assets have four keys per curve, no constraints/rendering.
+
+Outside timing, real ordinary factory/controller callbacks are checked with the
+existing bounded shadow observer. All cases pass 38,971 checks / 252 changing-
+time frames for the exact PR114 parent and both cache sizes. Every candidate
+frame matches the frozen parent bit-for-bit, including all motion poses/weights
+and local/world joint transforms. At 128 joints / eight motions, partial and
+disjoint cases make eight actual callbacks, while saturated overlap makes one
+and leaves seven predictions unused. No custom motion wrapper changes the
+timed callback path. All measured updates run with the observer disabled.
+
+The first full sweep retains 2,268 wall-time rows in `pool-multi-{steady,cold}-*`.
+It is exploratory and **excluded from adoption evidence**: the unchanged
+three-joint disjoint parent's per-run medians drifted from 569.4 to 884.5 ns,
+and the partial parent's from 497.8 to 754.9 ns. Blending those separated runs
+into one median would manufacture apparent gains. The original source copy,
+executables and reports remain preserved; do not replace them with a new run.
+
+The revised fixture records Windows `QueryThreadCycleTime` counts alongside
+wall nanoseconds and accepts a single selected case to interleave short matched
+runs. Raw thread cycles include user/kernel work and are never converted into
+elapsed time; the API's timer behavior can depend on CPU implementation/frequency.
+See the [Microsoft API contract](https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-querythreadcycletime).
+Both metrics and per-run parent drift must be examined before a decision; adding
+a counter alone does not establish a stable causal comparison. On other systems
+the cycle columns explicitly report unavailable. Native execution there remains
+unproved.
+
+Correctness/trace use no arguments / `--trace`. Timing uses `--benchmark` or
+`--cold-benchmark`, optionally followed by joints, motions and workload index
+(0 partial, 1 disjoint, 2 saturated). The cold phase creates a character and its
+motions, performs eight initial updates and destroys it, with assets preloaded;
+it is not an isolated measurement of cache zeroing. Optional LL_TESTS target
+`avatar_blender_pool_multimotion` is excluded from the default build. Native
+candidate layouts still require fresh pose/core wrappers.
+
+The revised, case-interleaved series retains 2,268 rows with both raw thread
+cycles and wall time. Steady parent per-run cycle medians differ by up to about
+2.9%; cold parent differences still reach about 27.9%, so cold results remain
+inconclusive. Keep per-run/min/max values; combined medians alone hide drift.
+Selected steady medians, ns/update, with cycle changes independently agreeing:
+
+| Joints / motions / workload | Parent | 64 slots | 256 slots |
+| --- | ---: | ---: | ---: |
+| 3 / 1 / saturated | 541.15 | 546.95 | 540.80 |
+| 32 / 1 / disjoint | 3,683.05 | 3,619.85 | 3,463.60 |
+| 32 / 8 / partial | 23,949.10 | 22,644.45 | 22,601.10 |
+| 128 / 1 / saturated | 14,608.00 | 14,260.65 | 14,084.10 |
+| 128 / 8 / disjoint | 16,950.40 | 16,756.95 | 16,440.25 |
+| 128 / 8 / partial | 120,328.50 | 125,269.35 | 109,331.20 |
+
+The large partial case is a fixed transition phase, not a claim about warmed
+crowd animation mix. The 256-slot trial saves ~9.1% there, while the 64-slot
+trial costs ~4.1% more. Common one-motion/disjoint improvements are smaller;
+the smallest saturated case is effectively unchanged. This evidence warrants
+the next density check, not default enablement or a viewer FPS claim.
+
+Before accepting the 4 KiB cache, extend this fixture to serial round-robin
+updates of 1/16/64 independently owned controllers, sharing parsed assets as the
+real cache does. Include 32/128 joints, one/eight motions, all three workloads,
+and a fixed total number of character updates per sample. Validate each actor's
+pose/weight outside timing. Record actor/controller sizes and per-run parent
+drift alongside both metrics. Test the working-set tradeoff before broader
+candidate regressions and any PR; reject the design if it is not a useful
+complete-path balance. The current prototype remains default-off.

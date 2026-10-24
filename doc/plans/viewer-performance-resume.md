@@ -175,9 +175,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
   retry/reentry checks each. Motion controllers grow 688 to 1,712/4,784 bytes.
   The first paired complete-path series retains 756 rows. One-motion full costs
   are mixed/unconvincing, while eight-motion collection gains are substantial.
-  The next decisive work is a matched actual multi-motion controller fixture,
-  including partial overlap, disjoint joints and saturated playback, plus cold/
-  memory costs. Retain the first raw series and its ranges; do not cherry-pick.
+  The matched multi-motion fixture is now implemented, as detailed below.
+  Retain the first raw series and its ranges; do not cherry-pick.
 - PR 114 is now retained at exact `514dc0acd4` as `7.2.5.82260`. Its focused
   verification reports passed and installer presence was confirmed. Owner PID
   1500 / MSBuild 2072 / vpk 42328 disappeared; state/worker and complete process
@@ -185,6 +184,29 @@ Updated October 24, 2026. The user resumed the performance program; the October
   This chat did not control the build. All probe sessions returned terminal:
   84109, 7430 and 41464. This proves the PR 114 build and the explicitly listed
   prototype checks, not rendered/crowd acceptance or a completed hint decision.
+- The new deterministic multi-motion fixture has 21 partial/disjoint/saturated
+  cases. Parent and both candidates pass 38,971 checks and reproduce 252 frozen
+  frames, with real callback coverage checked outside timing by the existing
+  observer (eight partial/disjoint callbacks vs one saturated at 128/eight).
+  All pose/core sources are fresh; new parent uses exact frozen PR114
+  `performance-validation/frozen-pool-parent114/llpose.cpp` and `.h`, verified
+  against prior provenance. Do not use an old executable for a new workload.
+- The first 2,268-row multi-motion wall sweep has >50% unchanged-parent drift
+  in small cases. It is retained but excluded from adoption evidence. Exact
+  first fixture source is retained as `results/pool-multi-first-fixture14l.cpp.txt`.
+  Revised native executables are `pool-multi-cycles-{parent,64,256}-14l.exe`;
+  each still reproduces all 252 first-parent frames. They record raw Windows
+  thread cycles alongside wall time, never converted into elapsed time.
+  Script `measure-pool-multi-cycles14l.ps1` interleaves single cases, preserves
+  partial files until complete and checks full build idleness around each run.
+  It retains 2,268 rows plus per-run/combined summaries and parent drift.
+  Steady parent cycle drift is about 2.9% or less; cold drift reaches 27.9%, so cold
+  results are inconclusive. All raw/summary/source identities are in the new
+  multi-motion provenance. 256 slots save a few percent in common steady cases
+  and ~9.1% in the 128/eight fixed transition case; 64 slots regress ~4.1% there.
+  No default activation or new PR. Next decisive step is 1/16/64-controller
+  round-robin density testing, before selected-candidate broader regressions.
+  All new probe sessions are terminal: 45933, 32486, 60016, 38912, 7921.
 
 ## Next sequence
 
@@ -196,15 +218,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
 3. Continue `viewer-performance-14l-pool-lookup-hints.md` on its separate branch.
-   Initial lookups and one-motion full costs are measured; map-mode equivalence/
-   failure checks pass for both prototypes. Add the real multi-motion controller
-   workload before a decision, then cold/memory and any selected candidate's
-   broader checks. Verify actual builder idleness first. Integrate only a
+   Lookups, one-motion and revised multi-motion costs are measured; map-mode
+   equivalence/failure checks pass. Add the planned round-robin density test
+   before accepting 4 KiB/controller, then any selected candidate's broader
+   checks. Cold costs remain noisy. Verify actual builder idleness first. Integrate only a
    complete-path winner; otherwise remove the prototype and stop pool-container
    work for another measured cost. Do not present partial native checks as FPS.
-   Keep the frozen one-motion fixture/report series intact. Add a new benchmark
-   using deterministic motion IDs, independently verified partial weights and
-   disjoint/saturated cases. Match actual poses/callback coverage outside timing.
+   Keep frozen one-motion and initial multi-motion series intact. Preserve the
+   current cycle fixture snapshot before extending it for density; the next
+   plan section already specifies workload/counter/control requirements.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.
    Manual shadow coverage/first-gap capture remains a threading gate; do not

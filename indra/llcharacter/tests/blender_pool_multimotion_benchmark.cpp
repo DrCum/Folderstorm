@@ -1,0 +1,187 @@
+#include "linden_common.h"
+#include "current_motion_fixture.h"
+#include "fssamplingshadow.h"
+#include "llsimdmath.h"
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+#if LL_WINDOWS
+#include <windows.h>
+#endif
+
+namespace BlenderPoolMulti
+{
+using namespace FSCurrentMotion;
+unsigned checks = 0;
+void require(bool ok) { ++checks; if (!ok) { std::cerr << "Multi-motion invariant failed at " << checks << '\n'; std::exit(1); } }
+enum Workload { PARTIAL, DISJOINT, SATURATED };
+const char* name(unsigned mode) { return mode == PARTIAL ? "partial_overlap" : mode == DISJOINT ? "disjoint" : "saturated_overlap"; }
+LLUUID id(unsigned joints, unsigned motions, unsigned mode, unsigned motion)
+{
+    LLUUID result("e7141000-0000-4000-8000-000000000000");
+    result.mData[12] = U8(joints >> 8); result.mData[13] = U8(joints);
+    result.mData[14] = U8((mode << 4) | motions); result.mData[15] = U8(motion + 1);
+    return result;
+}
+void prepare(unsigned count, unsigned motions, unsigned mode)
+{
+    for (unsigned motion = 0; motion < motions; ++motion)
+    {
+        const auto key = id(count, motions, mode, motion);
+        if (LLKeyframeDataCache::getKeyframeData(key)) continue;
+        auto data = asset(count);
+        data->mEaseInDuration = mode == PARTIAL ? 1.f : 0.f;
+        if (mode == DISJOINT)
+        {
+            auto& joints = data->mJointMotionArray;
+            for (size_t i = joints.size(); i-- > 0;)
+                if (i % motions != motion) { delete joints[i]; joints.erase(joints.begin() + i); }
+        }
+        // Distinct inputs make publication/order errors visible in the final pose.
+        for (auto* joint : data->mJointMotionArray)
+            for (auto& entry : joint->mPositionCurve.mKeys)
+                entry.second.mPosition.mV[2] += motion * .015625f;
+        LLKeyframeDataCache::addKeyframeData(key, data);
+    }
+}
+struct Scene
+{
+    struct Seed { Seed() { Clock::set(100.0); } } seed;
+    Character character;
+    std::vector<LLKeyframeMotion*> motions;
+    Scene(unsigned count, unsigned overlap, unsigned mode): character(count)
+    {
+        auto& controller = character.getMotionController(); controller.updateMotions();
+        for (unsigned i = 0; i < overlap; ++i)
+        {
+            const auto key = id(count, overlap, mode, i);
+            require(controller.startMotion(key, 0.f));
+            auto* motion = dynamic_cast<LLKeyframeMotion*>(character.findMotion(key));
+            require(motion && motion->permitsOwnedSampling()); motions.push_back(motion);
+            const unsigned expected = mode == DISJOINT ? (count + overlap - 1 - i) / overlap : count;
+            require(motion->getPose()->getNumJointStates() == expected);
+        }
+        Clock::set(100.125);
+        for (unsigned i = 0; i < 8; ++i) update();
+    }
+    void update() { character.getMotionController().updateMotions(); }
+    void weights(unsigned mode)
+    {
+        require(character.getMotionController().getActiveMotions().size() == motions.size());
+        for (auto* motion : motions)
+        {
+            const F32 weight = motion->getPose()->getWeight();
+            require(mode == PARTIAL ? weight > 0.f && weight < 1.f : weight == 1.f);
+        }
+    }
+    std::vector<U32> snapshot()
+    {
+        std::vector<U32> result;
+        auto scalar = [&](F32 value) { U32 bits; std::memcpy(&bits, &value, sizeof(bits)); result.push_back(bits); };
+        scalar(character.getMotionController().getAnimTime());
+        for (auto* motion : motions)
+        {
+            auto state = pose(*motion); result.insert(result.end(), state.begin(), state.end());
+            scalar(motion->getPose()->getWeight()); scalar(motion->getFadeWeight());
+        }
+        for (auto& joint : character.joints)
+        {
+            require(joint->getPosition().isFinite() && joint->getScale().isFinite());
+            for (F32 v : joint->getPosition().mV) scalar(v);
+            for (F32 v : joint->getRotation().mQ) scalar(v);
+            for (F32 v : joint->getScale().mV) scalar(v);
+            for (F32 v : joint->getWorldPosition().mV) scalar(v);
+            for (F32 v : joint->getWorldRotation().mQ) scalar(v);
+        }
+        return result;
+    }
+};
+void correctness(unsigned count, unsigned motions, unsigned mode, bool trace)
+{
+    Scene direct(count, motions, mode), observed(count, motions, mode);
+    for (unsigned frame = 0; frame < 12; ++frame)
+    {
+        Clock::set(100.125 + frame / 64.0); direct.update();
+        require(FSSampling::ShadowScope::resetTotals());
+        { FSSampling::ShadowScope scope(observed.character.getMotionController(), true); observed.update(); }
+        const auto coverage = FSSampling::ShadowScope::totals();
+        const auto callbacks = coverage.matched + coverage.mismatched + coverage.unpredicted;
+        require(!coverage.mismatched && !coverage.destroyed && !coverage.nested);
+        require(callbacks == (mode == SATURATED ? 1 : motions));
+        require(coverage.predicted && coverage.predicted == coverage.matched + coverage.unused);
+        direct.weights(mode); observed.weights(mode);
+        const auto state = direct.snapshot(); require(state == observed.snapshot());
+        if (frame == 0) std::cout << "coverage," << count << ',' << motions << ',' << name(mode) << ','
+            << callbacks << ',' << coverage.predicted << ',' << coverage.matched << ',' << coverage.unused
+            << ',' << coverage.unpredicted << '\n';
+        if (trace)
+        {
+            std::cout << "frame," << count << ',' << motions << ',' << name(mode) << ',' << frame;
+            for (U32 word : state) std::cout << ',' << word;
+            std::cout << '\n';
+        }
+    }
+}
+U64 threadCycles()
+{
+#if LL_WINDOWS
+    ULONG64 value = 0;
+    require(QueryThreadCycleTime(GetCurrentThread(), &value));
+    return value; // Keep cycles as cycles; their rate is not an elapsed-time contract.
+#else
+    return 0;
+#endif
+}
+void timing(unsigned count, unsigned motions, unsigned mode, bool cold)
+{
+    Scene warm(count, motions, mode);
+    warm.weights(mode);
+    for (unsigned sample = 0; sample < 9; ++sample)
+    {
+        const unsigned iterations = cold ? 16 : 1000;
+        const U64 before = threadCycles();
+        const auto start = std::chrono::steady_clock::now();
+        if (cold) { for (unsigned i = 0; i < iterations; ++i) { Scene temporary(count, motions, mode); } }
+        else { for (unsigned i = 0; i < iterations; ++i) warm.update(); }
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
+        const U64 cycles = threadCycles() - before;
+        std::cout << (cold ? "create_warm_destroy" : "steady") << ',' << count << ',' << motions << ',' << name(mode)
+            << ',' << sample << ',' << iterations << ',' << ns << ',' << cycles << ',' << LL_WINDOWS << '\n';
+        warm.weights(mode);
+    }
+}
+int run(int argc, char** argv)
+{
+    LLVector4a::initClass();
+    const std::string option = argc >= 2 ? argv[1] : "";
+    const bool benchmark = option == "--benchmark", cold = option == "--cold-benchmark", trace = option == "--trace";
+    if ((argc != 1 && argc != 2 && argc != 5) || (argc >= 2 && !benchmark && !cold && !trace)) return 1;
+    unsigned selected[3]{};
+    if (argc == 5)
+    {
+        if (!benchmark && !cold) return 1;
+        for (unsigned i = 0; i < 3; ++i)
+        {
+            char* end = nullptr; const auto value = std::strtoul(argv[i + 2], &end, 10);
+            if (end == argv[i + 2] || *end || value > 128) return 1;
+            selected[i] = unsigned(value);
+        }
+        if ((selected[0] != 3 && selected[0] != 32 && selected[0] != 128) ||
+            (selected[1] != 1 && selected[1] != 4 && selected[1] != 8) ||
+            selected[1] > selected[0] || selected[2] > SATURATED) return 1;
+    }
+    require(FSSampling::NumericContext::capture().isSupported());
+    if (benchmark || cold) std::cout << "phase,joints,motions,workload,sample,iterations,elapsed_ns,thread_cycles,cycles_available\n";
+    for (unsigned count : {3u,32u,128u}) for (unsigned motions : {1u,4u,8u})
+        if (motions <= count) for (unsigned mode = 0; mode < 3; ++mode)
+        {
+            if (argc == 5 && (count != selected[0] || motions != selected[1] || mode != selected[2])) continue;
+            prepare(count,motions,mode);
+            if (benchmark || cold) timing(count,motions,mode,cold); else correctness(count,motions,mode,trace);
+            LLKeyframeDataCache::clear();
+        }
+    if (!benchmark && !cold) std::cout << checks << " multi-motion checks across 252 frames\n";
+    return 0;
+}
+}
+int main(int argc, char** argv) { return BlenderPoolMulti::run(argc,argv); }
