@@ -97,6 +97,12 @@ Never present a missing hardware result as a successful test.
   ownership comparisons pass; check cache-heavy travel, animation/outfit changes,
   arrivals/departures and ordinary/hidden avatar transitions in its retained
   viewer build. Compare warmed crowded frame times with diagnostics FALSE.
+- Checkpoint 14i changes active-blender storage. Its frozen/native comparisons
+  cover cache, interpolation, priorities, state lifetimes and controller paths;
+  check visible easing, low-FPS interpolation, pause/visibility transitions,
+  outfit/skeleton replacement and crowded travel/churn in its retained build.
+  Ordinary controller updates allocate less; real scene FPS and memory remain
+  acceptance work. No production worker dispatch is enabled.
 
 ## Results
 

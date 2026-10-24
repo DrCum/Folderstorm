@@ -235,3 +235,12 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   Full warmed three-joint updates lose one allocation / 48 requested bytes each.
   Paired costs and real crowd acceptance remain separate evidence. Plan 14i
   addresses active-blender list allocation and membership searches next.
+- Stage 4o: reused active-blender pointer storage and owner membership remove
+  per-frame list nodes and repeated active-list scans. Both curve modes pass
+  26,748 outer-reference checks and reproduce 216 frozen controller frames.
+  Warm full three-joint controller allocations are zero. Cached membership and
+  reverse consumption order are preserved; object/capacity tradeoffs are
+  recorded in plan 14i. Matched fresh-source component measurements retain 504
+  rows; the generated 128-joint direct controller falls from 31.50 to 16.09 us.
+  Real viewer frame-time/quality acceptance remains pending.
+  Plan 14j targets redundant pool lookup and cold insertion ownership next.
