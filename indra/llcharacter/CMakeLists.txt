@@ -85,6 +85,7 @@ if(LL_TESTS)
   target_link_libraries(avatar_sampling_shadow PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_sampling_shadow POST_BUILD
     COMMAND $<TARGET_FILE:avatar_sampling_shadow> VERBATIM)
+  # <FS:Perf> Advisory shadow-mask admission coverage.
   add_executable(avatar_sampling_mask tests/sampling_mask_test.cpp)
   target_link_libraries(avatar_sampling_mask PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_sampling_mask POST_BUILD
@@ -92,6 +93,7 @@ if(LL_TESTS)
   add_executable(avatar_sampling_mask_allocations tests/sampling_mask_test.cpp)
   target_link_libraries(avatar_sampling_mask_allocations PRIVATE llcharacter Threads::Threads)
   target_compile_definitions(avatar_sampling_mask_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  # </FS:Perf>
   add_executable(avatar_sampling_shadow_allocations tests/sampling_shadow_test.cpp)
   target_link_libraries(avatar_sampling_shadow_allocations PRIVATE llcharacter Threads::Threads)
   target_compile_definitions(avatar_sampling_shadow_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)

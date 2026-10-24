@@ -145,5 +145,11 @@
     "controls": "Private activeBuild empty, worker idle and full host cl/link/msbuild/cmake/ninja/vpk process inventory empty before/after each case. Does not prove an idle desktop or other CPU users.",
     "counter_scope": "QueryThreadCycleTime raw cycles, never converted to elapsed time; wall ns kept separately"
   },
-  "limits": "Ordinary-new counts exclude custom aligned/RSS. Both timing rounds retained, no global speedup claim. Initial unused FS_ENABLE_CONTIGUOUS_ANIMATION_KEYS defines did not enable contiguous storage; those mislabeled scratch runs are excluded. Final word runs use FS_CONTIGUOUS_ANIMATION_KEYS=1. Shared source/cache unchanged; no live viewer/account operated."
+  "limits": "Ordinary-new counts exclude custom aligned/RSS. Both timing rounds retained, no global speedup claim. Initial unused FS_ENABLE_CONTIGUOUS_ANIMATION_KEYS defines did not enable contiguous storage; those mislabeled scratch runs are excluded. Final word runs use FS_CONTIGUOUS_ANIMATION_KEYS=1. Shared source/cache unchanged; no live viewer/account operated.",
+  "final_comment_annotation_sha256_normalized_lf": {
+    "indra/llcharacter/llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+    "indra/llcharacter/llmotioncontroller.h": "d7bedffa086f9a32a9fede9c814ad82584a2af34bbd906746d22ec8d2894ea29",
+    "indra/llcharacter/CMakeLists.txt": "8cc300522f9a12194c882360215e24817929a9b055e536eedd65e9728c6e80a3"
+  },
+  "final_annotation_scope": "Native artifacts compile implementation b7417ea7950de35cc809fd912bee53e016e4dae4 at source_sha256_normalized_lf. Final FS comment tags only are recorded separately; executable code is unchanged."
 }

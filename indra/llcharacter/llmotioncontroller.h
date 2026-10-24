@@ -186,7 +186,7 @@ protected:
     friend class FSSampling::ShadowScope;
     bool invokeMotionUpdate(LLMotion& motion, F32 time, U8* mask);
     bool predictSamplingTime(LLMotion& motion, const SamplingClock& clock, F32& time) const;
-    bool predictSamplingMask(const LLMotion& motion, U8 (&covered)[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]) const;
+    bool predictSamplingMask(const LLMotion& motion, U8 (&covered)[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]) const; // </FS:Perf>
     // as there can be duplicate motions per id during blending overlap
     void deleteAllMotions();
     bool activateMotionInstance(LLMotion *motion, F32 time);

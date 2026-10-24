@@ -208,7 +208,7 @@ bool LLMotionController::predictSamplingTime(LLMotion& motion, const SamplingClo
     return llfinite(time);
 }
 
-// Advisory only for known ordinary normal motions; callbacks can invalidate it.
+// <FS:Perf> Advisory only for known ordinary normal motions; callbacks can invalidate it.
 bool LLMotionController::predictSamplingMask(const LLMotion& motion,
     U8 (&covered)[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]) const
 {
@@ -228,6 +228,7 @@ bool LLMotionController::predictSamplingMask(const LLMotion& motion,
         }
     return update;
 }
+// </FS:Perf>
 
 inline bool LLMotionController::invokeMotionUpdate(LLMotion& motion, F32 time, U8* mask)
 {
