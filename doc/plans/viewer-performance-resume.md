@@ -379,6 +379,15 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Stop measurement calls while the builder owns preparation/build/retention.
   All own native sessions through63044 are terminal; the attempted two-case
   command then exited1 before launching either case. No own probe is left live.
+- While PR117's live owner20872 and compiler/MSBuild processes were verified,
+  isolated normal/Tracy standalone compilation passed for the correctness and
+  benchmark sources. Their eight response/log hashes and fifteen General source
+  hashes are in `results/worker-wait14p2/compiler-and-general-source.json`.
+  The source appendix `viewer-performance-14p2-general-boundaries.md` records
+  actual consumers and packaged General:1 overriding constructor fallback3;
+  current runtime overrides are not read. StatsRecorder::send is synchronous,
+  despite the startup comment mentioning LLPerfStats. Preserve this distinction
+  in any later trial proposal. No production source/policy changed.
 
 ## Next sequence
 
@@ -400,8 +409,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
    mistake a returned running session for completion. After every call inspect
    terminal exit; the sequential two-case script exits on a precheck failure.
    Retain with scratch `retain-worker-wait-data14p2.ps1` and run committed
-   `results/worker-wait14p2/analyze.py`. Finish portable normal/Tracy source
-   checks, summarize full evidence and publish a test-only PR based on PR117.
+   `results/worker-wait14p2/analyze.py`. Normal/Tracy source checks are now done;
+   summarize full evidence and publish a test-only PR based on PR117.
    Do not create a probe PR with incomplete evidence or change production policy.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.

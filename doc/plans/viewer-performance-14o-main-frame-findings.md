@@ -38,6 +38,15 @@ Windows, [ThreadPoolBase::run](https://github.com/DrCum/Folderstorm/blob/836f1ee
 installs `sleepy_robin`: `suspend_until` calls `Sleep(1)` and `notify` does
 nothing. Other platforms do not install that helper in this entry point.
 
+Follow-up source review in 14p2 also reads packaged settings: `ThreadPoolSizes`
+contains `General: 1`. With ordinary initialized settings lookup this overrides
+the constructor's three. The running user's override remains unknown. Packaged
+ImageDecode 9 is replaced by initThreads' computed entry before construction.
+See `viewer-performance-14p2-general-boundaries.md` for actual General consumers;
+the startup comment mentioning LLPerfStats is not a dispatch proof. Current
+StatsRecorder::send aggregates synchronously. The private matrix covers widths
+1/3/8 without changing the viewer's selection.
+
 [Image decode](https://github.com/DrCum/Folderstorm/blob/836f1eed3850dcb55e57ba8e9138a2a21917e7fe/indra/llimage/llimageworker.cpp#L74)
 already owns requests with retained image/responder handles and runs them on
 the ImageDecode pool. The [mesh repository](https://github.com/DrCum/Folderstorm/blob/836f1eed3850dcb55e57ba8e9138a2a21917e7fe/indra/newview/llmeshrepository.cpp#L118)
