@@ -130,3 +130,8 @@ outfit/skeleton/cache churn and other-platform acceptance remain pending.
 
 The next plan is `viewer-performance-14k-pool-index.md`, measuring index locality
 and cold/memory costs before considering another storage change.
+
+Implementation commit: `670008164f94e3d638ab6fc06e4c576a7e24f17c`. Full current/
+parent source, executable, frame-stream, dependency and canonical report identity
+is in `results/blender-pool-provenance.json`. Shared feature/build source and
+caches remained read only; this chat did not configure or build the viewer.

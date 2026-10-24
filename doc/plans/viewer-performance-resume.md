@@ -140,7 +140,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Final executables start `pool-final-*`, fault binaries
   `blender-pool-final-fault-*14j.exe`, timing binaries
   `blender-pool-cold-helper-{collection,controller}14j.exe`. Their source/report
-  identities and evidence commit/publication remain to finish. Plan 14k is written.
+  identities are recorded in `results/blender-pool-provenance.json`, with
+  implementation commit `670008164f`. Finish the evidence/docs commit and
+  publication, then start 14k from the exact published head. Plan 14k is written.
 - The independent builder retained PR 113 as `7.2.5.82257` at exact `c7ce8ec6d7`
   and released ownership before the final 14j measurement. This proves the 14i
   build, not the newer 14j source. Primary source/cache/monitor remain untouched
