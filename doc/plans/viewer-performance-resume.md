@@ -96,7 +96,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
   native controller wrapper includes fresh `llpose.cpp`; do not use cached
   old-layout pose implementations with the new headers. The containing
   controller grows 680 to 688 bytes on this MSVC target.
-- Final provenance and publication of 14i remain. The independent builder
+- 14i implementation is committed as `85255dd817`. Final frozen/current source,
+  executable, frame-stream, dependency and canonical report identities are in
+  `results/active-blender-provenance.json`; finish the evidence/docs commit and
+  publish a separate PR. The independent builder
   retained #112 as `7.2.5.82254` at exact `b8c82e686d` and released ownership
   before the final timings. Script `performance-validation/measure-active-blender14i.ps1`
   checks state/worker/process inventory around every run. Use parent
@@ -117,7 +120,7 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. Finish
-   14i's final provenance/publication; do not reimplement its validated
+   14i's evidence/docs commit and publication; do not reimplement its validated
    source or enable workers. Recheck PR 112's review and separate build evidence.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its

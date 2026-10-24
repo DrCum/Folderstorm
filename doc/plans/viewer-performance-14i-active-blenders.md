@@ -158,7 +158,11 @@ Full-controller reports also preserve enabled-shadow rows; the table uses only
 direct rows. These are generated fixed-time, warmed four-key curves without
 real avatar preparation/rendering, constraints, useful worker overlap or a
 crowded scene. They establish lower component costs in these fixtures, not an
-FPS improvement. Raw samples and complete identity are recorded in the results.
+FPS improvement. Raw samples and complete identity are recorded in
+`results/active-blender-provenance.json`. The implementation commit is
+`85255dd8172bc34462fc2d6d7b744531cab58a06`; its source and canonical report hashes
+are checked against the committed files. No shared source/cache was configured,
+built or written by this chat.
 Whole-viewer frame times, visible quality, outfit/skeleton/cache churn and other-platform
 acceptance remain pending. The next plan is
 `viewer-performance-14j-blender-pool-lookup.md`.
