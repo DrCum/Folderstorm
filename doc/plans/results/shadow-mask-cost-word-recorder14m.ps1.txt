@@ -37,4 +37,3 @@ foreach($variant in 'parent','current'){
  }
 }
 [ordered]@{startedUtc=$started;finishedUtc=[DateTime]::UtcNow.ToString('o');exe_sha256=$hashes;rows=280;updates=280000;order='P,C,C,P within each case';controls='Private activeBuild empty, worker idle and full host cl/link/msbuild/cmake/ninja/vpk process inventory empty before/after each case. Does not prove an idle desktop or other CPU users.';counter_scope='QueryThreadCycleTime raw cycles, never converted to elapsed time; wall ns kept separately'} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'shadow-mask-cost-word-idle14m.json')
-
