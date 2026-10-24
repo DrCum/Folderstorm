@@ -30,11 +30,12 @@ Updated October 24, 2026. The user resumed the performance program; the October
   or further viewer behavior changes are enabled.
 - PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
   base audit db9. Automated review completed without findings at that head.
-  Its independent full build workflow has entered preparation; no full-build
-  completion is claimed. Local merge `4bae43e6a595855510609c0ad7306c13c871bf4f`
+  Its exact-head full build is retained as7.2.5.82278; installer hash and37
+  focused checks were verified. Local merge `4bae43e6a595855510609c0ad7306c13c871bf4f`
   integrates it into the private probe branch, preserving both test targets.
-  Plan14p2 measurements are partial: 38/48 accepted, two overlapping attempts
-  excluded/replaced, one next-case precheck stopped at NORMAL_PERFORMANCE_QUEUE.
+  Plan14p2 measurements are complete:48/48 accepted, two overlapping attempts
+  excluded/replaced, one unrun build precheck preserved. Accepted windows do not
+  overlap; all3,072 wake admissions and196,608 active-task results are checked.
   See `results/worker-wait14p2/README.md`, verified summary and raw observations.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
@@ -388,6 +389,23 @@ Updated October 24, 2026. The user resumed the performance program; the October
   current runtime overrides are not read. StatsRecorder::send is synchronous,
   despite the startup comment mentioning LLPerfStats. Preserve this distinction
   in any later trial proposal. No production source/policy changed.
+- Plan14p2 is now complete. The remaining ten cases resumed only after PR117's
+  retained37-check receipt and installer hash were verified. Read the final
+  worker-wait results and results/worker-wait14p2/summary:48 unique cells,
+  1,446.56 seconds of accepted idle data, all context labels/indexes/hashes and
+  nonoverlap checked. No rejection/cap/failure. Polling p95~16ms default or2ms
+  requested, stock31-143us or15-25us. Polling p50 is phase-dependent; do not claim
+  a universal2ms median. Stock has higher active cycles in3/8-worker bursts;
+  default finite-wait cycle totals are closer. Plan14q therefore scopes an
+  explicit default-OFF, Windows General trial to resolved width1 only. It is
+  written before implementation; no production scheduler change yet.
+- Independent14r stats-read implementation1330a9d0c9 and evidence7a524503db are
+  pushed on codex/perf-stats-read-lookups.312 native checks pass; missing reads
+  drop522 new calls/115,148 bytes/514 zero entries to zero, preserving returned
+  values and real write failure/retry. No own viewer was initialized. After
+  publishing this worker checkpoint, integrate that completed base into14r for
+  a cumulative stack, preserving its independent implementation proof, and open
+  its separate PR. Full stats UI/tuning and exact-head viewer acceptance pending.
 
 ## Next sequence
 
@@ -402,16 +420,13 @@ Updated October 24, 2026. The user resumed the performance program; the October
    PR117 is published/attached/mergeable at exact22ea4cee92. Its queue fix is
    integrated into the preserved probe branch. Follow14p2 without
    deleting the failed scheduled case. Production pool policy remains unchanged.
-   Finish the remaining ten cells only when independent worker/monitor/activeBuild
-   and full-host compiler/package/probe inventory are idle. Remaining reversed
-   pairs: width3 default empty (stock needs -Attempt2, current normal), then all
-   width1 contexts in stock/current order. Do not overwrite existing cases or
-   mistake a returned running session for completion. After every call inspect
-   terminal exit; the sequential two-case script exits on a precheck failure.
-   Retain with scratch `retain-worker-wait-data14p2.ps1` and run committed
-   `results/worker-wait14p2/analyze.py`. Normal/Tracy source checks are now done;
-   summarize full evidence and publish a test-only PR based on PR117.
-   Do not create a probe PR with incomplete evidence or change production policy.
+   All ten remaining cells are now terminal/passed; no own native session remains.
+   Publish the completed test-only worker checkpoint based on PR117, verify and
+   attach its exact head. Then integrate its completed base into the preserved
+   stats14r branch, resolve only docs as needed, verify unchanged stat source/
+   fixture evidence and publish that separate cumulative checkpoint. Both need
+   independent full builds. Plan14q is written and is the next implementation,
+   based on that combined stack, with one-worker opt-in only. No default adoption.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header

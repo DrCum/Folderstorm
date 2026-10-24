@@ -53,9 +53,10 @@ would require a separate ownership/deadline audit and measured benefit.
 
 ## Shape of a later proposal, still conditional
 
-Finish 14p2's ten remaining cells and assess all evidence first. If a trial is
-supported, keep it explicit, default OFF, limited to General, and selected before
-start. Snapshot the policy on the owning thread; never read live saved settings
+The completed 14p2 matrix now supports only the scoped14q proposal: explicit,
+default OFF, limited to Windows General with resolved width1, selected before
+start. Wider burst active-cycle costs argue against a broader initial trial.
+Snapshot the policy on the owning thread; never read live saved settings
 from each worker or switch a running scheduler in place. Leave ImageDecode,
 ImageGL, mainloop, queue semantics and all widths unchanged. Native tests must
 exercise the real production selection path, not just the probe's run override.

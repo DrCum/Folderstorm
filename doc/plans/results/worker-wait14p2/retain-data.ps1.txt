@@ -26,6 +26,9 @@ $summary = [ordered]@{
     scratch_raw_byte_sha256=$sourceBytes; retained_raw_sha256_normalized_lf=$manifest;
     limits=@('Only accepted full-host build-idle before/after cases are comparable','Other desktop load, power state and timer policy uncontrolled','Raw cycles are not elapsed time or power; Windows CPU time is quantized','Generated queue throughput is not viewer FPS','No production scheduler policy changes')
 }
+if ($summary.accepted -eq $summary.requested_total) {
+    $summary.status = 'Complete private matrix; full viewer and production selection acceptance pending'
+}
 foreach ($relative in @('indra/llcommon/tests/scheduler_probe.h','indra/llcommon/tests/threadpool_scheduler_test.cpp','indra/llcommon/tests/threadpool_scheduler_benchmark.cpp','indra/llcommon/workqueue.cpp','indra/llcommon/threadpool.cpp','indra/llcommon/threadsafeschedule.h','indra/llcommon/CMakeLists.txt')) {
     $text = [IO.File]::ReadAllText((Join-Path "$PSScriptRoot\..\viewer-performance" $relative)).Replace("`r`n", "`n")
     $summary.source_sha256_normalized_lf[$relative] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()

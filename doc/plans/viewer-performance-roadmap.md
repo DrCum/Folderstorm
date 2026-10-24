@@ -291,3 +291,8 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   checks pass. Timed close/drain and payload ownership remain intact. Publish
   separately for full viewer testing, then follow14p2's sustained private CPU
   comparison before proposing any scheduler policy change.
+- Stage 5 worker experiment: all48 current/stock controls and native queue/
+  fiber/lifetime checks pass. Stock lowers delivery p95 without an observed
+  idle-spin regression, but3/8-worker bursts consume more active cycles. Plan14q
+  limits a future explicit default-OFF trial to Windows General when its resolved
+  width is1. No production policy or width changes are enabled in this checkpoint.

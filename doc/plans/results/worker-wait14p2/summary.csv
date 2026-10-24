@@ -23,6 +23,11 @@ round,width,mode,timer,wait,wake_p50_us,wake_p95_us,wake_admitted,wake_rejected,
 1,8,stock,default,finite_fiber_wait,20.4,34.4,64,0,16.0651,312500,166654080,30.281957,1406250,0.4643854424600101,303422040,7776,worker-wait14p2-r1-stock-w8-default-timed
 1,8,stock,requested1ms,empty_fifo,13.9,20.9,64,0,15.5117,468750,166446720,30.0087882,0,0.0,0,0,worker-wait14p2-r1-stock-w8-request-empty
 1,8,stock,requested1ms,finite_fiber_wait,13.5,21.8,64,0,15.5511,625000,165302640,30.0141326,1718750,0.5726469003472051,424811160,11778,worker-wait14p2-r1-stock-w8-request-timed
+2,1,current,default,empty_fifo,15283.6,16021.2,64,0,3498.1232,0,28010520,30.2427294,0,0.0,42586200,0,worker-wait14p2-r2-current-w1-default-empty
+2,1,current,default,finite_fiber_wait,15012.3,16011.0,64,0,2945.5613,156250,23587200,30.2532582,156250,0.05164732967505629,57927960,974,worker-wait14p2-r2-current-w1-default-timed
+2,1,current,requested1ms,empty_fifo,7.4,1998.9,64,0,648.4964,0,20086920,30.0143379,156250,0.05205845303687342,171945360,0,worker-wait14p2-r2-current-w1-request-empty
+2,1,current,requested1ms,finite_fiber_wait,1993.7,2035.9,64,0,582.0424,312500,15893280,30.0148466,156250,0.05205757073567719,153244800,1424,worker-wait14p2-r2-current-w1-request-timed
+2,3,current,default,empty_fifo,15147.7,16016.6,64,0,4212.095,0,48900240,30.2795758,0,0.0,107721000,0,worker-wait14p2-r2-current-w3-default-empty
 2,3,current,default,finite_fiber_wait,29.3,16017.7,64,0,4170.2985,312500,47265120,30.296814,156250,0.051573079598402655,127155240,2915,worker-wait14p2-r2-current-w3-default-timed
 2,3,current,requested1ms,empty_fifo,1981.3,2005.4,64,0,638.7042,156250,31781160,30.0144589,468750,0.1561747295067845,392374080,0,worker-wait14p2-r2-current-w3-request-empty
 2,3,current,requested1ms,finite_fiber_wait,1863.3,2007.9,64,0,427.855,0,34653240,30.0187606,1406250,0.46845704882299505,337246200,4260,worker-wait14p2-r2-current-w3-request-timed
@@ -30,6 +35,11 @@ round,width,mode,timer,wait,wake_p50_us,wake_p95_us,wake_admitted,wake_rejected,
 2,8,current,default,finite_fiber_wait,24.8,16013.2,64,0,1992.5985,0,48403800,30.2878534,156250,0.051588337389403764,288981000,7776,worker-wait14p2-r2-current-w8-default-timed
 2,8,current,requested1ms,empty_fifo,1998.3,2010.1,64,0,686.991,781250,73509120,30.0153763,5937500,1.9781527776481682,1477478880,0,worker-wait14p2-r2-current-w8-request-empty
 2,8,current,requested1ms,finite_fiber_wait,1997.9,2005.0,64,0,667.0183,0,73913400,30.0161934,5156250,1.7178227536340434,1335421440,11439,worker-wait14p2-r2-current-w8-request-timed
+2,1,stock,default,empty_fifo,23.5,45.3,64,0,6.6772,156250,23094720,30.2559173,0,0.0,0,0,worker-wait14p2-r2-stock-w1-default-empty
+2,1,stock,default,finite_fiber_wait,25.9,37.0,64,0,5.1926,156250,18281520,30.2585853,156250,0.05163823703284635,55847520,971,worker-wait14p2-r2-stock-w1-default-timed
+2,1,stock,requested1ms,empty_fifo,11.4,20.1,64,0,5.5248,0,19033920,30.0096936,0,0.0,0,0,worker-wait14p2-r2-stock-w1-request-empty
+2,1,stock,requested1ms,finite_fiber_wait,12.1,16.3,64,0,5.7189,0,19986120,30.0113415,0,0.0,65262600,1472,worker-wait14p2-r2-stock-w1-request-timed
+2,3,stock,default,empty_fifo,23.7,39.3,64,0,8.9039,0,89025120,30.209984,0,0.0,0,0,worker-wait14p2-r2-stock-w3-default-empty-a2
 2,3,stock,default,finite_fiber_wait,22.9,50.0,64,0,7.5713,156250,71328960,30.2610126,156250,0.051634095020336494,130102560,2917,worker-wait14p2-r2-stock-w3-default-timed
 2,3,stock,requested1ms,empty_fifo,14.3,21.4,64,0,9.4848,468750,89572320,30.0100782,0,0.0,0,0,worker-wait14p2-r2-stock-w3-request-empty
 2,3,stock,requested1ms,finite_fiber_wait,13.7,25.1,64,0,7.1937,468750,68484960,30.0107116,468750,0.15619423032941346,184339080,4401,worker-wait14p2-r2-stock-w3-request-timed
