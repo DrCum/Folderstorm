@@ -122,6 +122,19 @@ if(LL_TESTS)
   add_custom_command(TARGET avatar_initial_motion_mask POST_BUILD
     COMMAND $<TARGET_FILE:avatar_initial_motion_mask> VERBATIM)
 
+  add_executable(avatar_motion_purge tests/motion_purge_test.cpp)
+  target_link_libraries(avatar_motion_purge PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_motion_purge POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_motion_purge> VERBATIM)
+
+  foreach(probe IN ITEMS benchmark allocations)
+    add_executable(avatar_motion_purge_${probe} tests/motion_purge_cost_benchmark.cpp)
+    target_link_libraries(avatar_motion_purge_${probe} PRIVATE llcharacter)
+    if(probe STREQUAL "allocations")
+      target_compile_definitions(avatar_motion_purge_${probe} PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+    endif()
+  endforeach()
+
   add_executable(avatar_keyframe_phase tests/keyframe_phase_test.cpp)
   target_link_libraries(avatar_keyframe_phase PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_keyframe_phase POST_BUILD

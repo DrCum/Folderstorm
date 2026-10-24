@@ -6,8 +6,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-motion-query-shadow`, based on PR 110 at
-  `4adf6a948e32927afbafea78f5e8511ba552297f`.
+- Branch: `codex/perf-idle-motion-purge`, based on published PR 111 at
+  `1ad2444867c70566619913b092b42cde0f2e25ab`.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -25,8 +25,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
   storage mode, 26 separate allocation/failure checks per mode, 13 unsupported
   direct/accounting checks, and prior phase/current/mask regressions. Read its
   final results and scratch `*14g*` logs. No production worker caller exists.
-  Finish final diff review/commit/push and publish a separate PR. Do not
-  guess its number. Native tests now use immutable internal-library snapshots
+  Published as PR 111; automated review completed with no findings at that
+  exact head. Native tests now use immutable internal-library snapshots
   in `performance-validation/dependencies-shadow-20261024`, avoiding mutable
   archives during the independent builder's work. Source/cache remained untouched.
 - The frozen feature baseline through PR 88 is still
@@ -62,8 +62,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   That build is not evidence for the newer 14f source.
 - The independent builder has now retained 109 (`7.2.5.82248`) and 110
   (`7.2.5.82249`) separately at their exact published heads; read its state/index
-  for current evidence. Its `activeBuild` is null and worker checkpoint idle as
-  last read. This chat did not control or change its source, caches or monitor.
+  for current evidence. PR 111 is now also retained as `7.2.5.82252` at its exact
+  published head. It released build ownership before the 14h timing runs. This
+  chat did not control or change its source, caches or monitor.
 - 14g's final paired controller costs are retained in `sampling-shadow-cost-*`:
   162 rows / 162,000 updates, default direct differences within about 1% of the
   parent controller control in this fixture; enabled shadow adds ~1-3 us. New
@@ -71,21 +72,30 @@ Updated October 24, 2026. The user resumed the performance program; the October
   paths return owned binding capacity and diagnostic allocations to zero.
   Real viewer gaps/CPU/frame-time, rendered acceptance and other platforms remain
   unproved. No setting/account/capture was operated.
+- Plan 14h's purge guard is implemented and passes 5,838 checks / 45 lifecycle
+  cases in each storage mode, with frozen UUID eviction/callback/lifetime
+  comparisons. Purge-only probes drop one allocation / 48 bytes per call; full
+  warmed three-joint updates now make three calls / 72 bytes instead of four /
+  120. Phase/shadow/mask regressions pass. Eight paired uninstrumented runs retain
+  324 rows / 11,016,000 invocations with verified idle conditions and normalized
+  source/report and executable/dependency provenance. Larger full-controller
+  fixture differences are sub-percent; no whole-viewer gain is established.
+  Implementation commit is `ea82a3c3ea`; finish evidence/docs commit and publish
+  a separate PR. Read its plan and scratch `*14h*` logs. Plan 14i is written,
+  and its real-blender allocation baseline is measured before implementation.
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Finish 14g's
-   review/publication if needed, rather than reimplementing its source.
+1. Inspect current status/head/PR state and preserve any newer work. Finish 14h's
+   evidence/docs commit and publication; do not reimplement 14g or enable workers.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Begin `viewer-performance-14h-purge-allocation.md` on a new branch from the
-   published 14g head. The full controller fixture still makes four calls / 120
-   bytes per warmed three-joint update; source points to three active-blender
-   list nodes and an unconditional empty-set sentinel on MSVC. Attribute purge
-   alone, guard collector construction without changing eviction/order, test
-   below/at/over-cap and deprecated ownership against a frozen oracle, then
-   publish separately. Write the active-blender collection plan afterward.
+3. After publishing 14h separately, begin `viewer-performance-14i-active-blenders.md`
+   on a new branch from that published head. The full controller fixture still
+   makes three calls / 72 bytes per warmed three-joint update. Preserve reverse
+   first-admission order, priority/additive behavior and quantum cache lifetimes;
+   compare actual blenders/poses with a frozen reference before a separate PR.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
    enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;

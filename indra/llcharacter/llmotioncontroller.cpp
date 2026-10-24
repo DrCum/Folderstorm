@@ -265,9 +265,9 @@ void LLMotionController::purgeExcessMotions()
         }
     }
 
-    std::set<LLUUID> motions_to_kill;
     if (mLoadedMotions.size() > MAX_MOTION_INSTANCES)
     {
+        std::set<LLUUID> motions_to_kill;
         // too many motions active this frame, kill all blenders
         mPoseBlender.clearBlenders();
         for (LLMotion* cur_motionp : mLoadedMotions)
@@ -278,17 +278,17 @@ void LLMotionController::purgeExcessMotions()
                 motions_to_kill.insert(cur_motionp->getID());
             }
         }
-    }
 
-    // clean up all inactive, loaded motions
-    for (const LLUUID& motion_id : motions_to_kill)
-    {
-        // look up the motion again by ID to get canonical instance
-        // and kill it only if that one is inactive
-        LLMotion* motionp = findMotion(motion_id);
-        if (motionp && !isMotionActive(motionp))
+        // clean up all inactive, loaded motions
+        for (const LLUUID& motion_id : motions_to_kill)
         {
-            removeMotion(motion_id);
+            // look up the motion again by ID to get canonical instance
+            // and kill it only if that one is inactive
+            LLMotion* motionp = findMotion(motion_id);
+            if (motionp && !isMotionActive(motionp))
+            {
+                removeMotion(motion_id);
+            }
         }
     }
 
