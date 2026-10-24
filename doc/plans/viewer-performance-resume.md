@@ -6,14 +6,17 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-owned-capture-retention`, from published/attached/mergeable
-  PR121 exact81c90614cd1351b6825be2a2e5f19ad2049916db. Its automated review
-  completed with no findings at that head. Its base is published PR120 exact
+- Branch: `codex/perf-same-frame-readiness`, from published/attached/mergeable
+  PR122 exactb7c60446cfdf3f67565690a0b1ffaa3c7f8048be. Its automated review
+  completed with no findings at that head. PR121 remains published/attached/
+  mergeable at81c90614cd1351b6825be2a2e5f19ad2049916db with no review findings.
+  Its base is published PR120 exact
   `55f66ec851701fdc6b9bfd2c81794abc5ee80ccf`. PR120 is attached/mergeable,
   automated review completed with no findings at that exact head. The independent
   builder retained7.2.5.82290,39 focused checks, at that head with Tracy OFF;
   installer SHA and packaged default-FALSE/Persist0 policy were verified. It is
-  now idle. Keep that published head
+  returned idle before the14s/14t measurements. A later worker-state read shows
+  PR121 building; revalidate live ownership/idle before future timing. Keep that published head
   immutable. Its base is reviewed PR119 exact
   `8952ad421837beb61737a15d999ff14fa1c069b4`, including completed PR118 after audit
   `db9be862ab1168362b9cca6f767614248dd892ea`. Published PR116 head remains
@@ -90,9 +93,26 @@ Updated October 24, 2026. The user resumed the performance program; the October
   and event-sampling14t-allocations are terminal. The remaining later allocations
   fall63→0 for one character and2,016→0 for32. Held bindings are512/16,384 bytes
   and zero after final cleanup. Retained serial cost still exceeds direct;
-  do not treat this as a viewer cache/FPS improvement. Publish the separate
-  test-only checkpoint, then begin the prewritten14u same-frame readiness plan
-  on a new branch. Preserve all published heads and completed matrix data.
+  do not treat this as a viewer cache/FPS improvement. It is published as the
+  separate test-only PR122;14u has begun on this new branch. Preserve all
+  published heads and completed matrix data.
+- PR122 is published/attached/mergeable at exactb7c60446cf; preserve it. Plan14u
+  prototype is committed at47d53651ba07850a4cd3a3b2922d68c2238bbf9b. New private
+  modes retain pending work across early callbacks and take it once when ready;
+  each early miss remains direct and frame finish cancels unconsumed work. There
+  are no production source changes. Read14u-consumption-audit before continuing.
+  The first native program exited2 at the generic ready/stale-oracle assertion,
+  without case context. A diagnostic-only build passed110,001 checks; corrected
+  correctness admission also passes110,001. Source confirms tryPost can reject
+  failed try_lock even with storage room; correctness now uses blocking post only
+  to establish its admitted-work oracle. Performance keeps nonblocking tryPost.
+  Original failure attribution remains uncertain; preserve all three executables,
+  responses/logs and partial proof in results/same-frame14u/progress.json.
+  Current scratch program event-sampling14u-controlled-admit3 is terminal, as
+  are all own earlier native/compile sessions. No14u timing case has run.
+  Do not publish14u as complete: deterministic early-miss/later-ready, failure/
+  between-callback stale and cancellation/cleanup controls are still required.
+  Only then do allocator/normal/Tracy checks and freeze the small paired matrix.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -510,11 +530,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
    branch implements14s's private complete-controller experiment ated052e24b5,
    with analyzer0c61dc0d34. Use the exact current programs/identities in progress,
    and the corrected runner, retaining all previous proof and the unrun precheck.
-   PR121 is already published/attached/mergeable at exact81c90614cd with no
-   automated review findings. All84 planned cases and the14t18-case follow-up
-   are terminal/validated. Publish14t, attach/verify its exact head, then start
-   already-written14u on a new branch: test later same-frame readiness while
-   retaining the one owned pending batch and immediate per-motion fallback.
+   PR121 and PR122 are published/attached/mergeable at exact81c90614cd and
+   b7c60446cf, both without automated review findings. Their84/18-case matrices
+   are complete; do not amend those heads or repeat their timings unnecessarily.
+   On this new branch continue14u prototype47d53651ba: add deterministic owned
+   delivery gates for early-miss/later-ready and the remaining transition/failure/
+   stale/cleanup controls before measuring. Read its audit and preserve the initial
+   unlabelled failure. Current corrected-admission110,001-check result is partial,
+   not proof of those missing transitions. No live viewer integration is enabled.
    Do not treat synthetic gaps as real scene deadlines or adopt the rejected
    first-consumption batch. No animation worker dispatch or scene/controller
    reordering is enabled here.
