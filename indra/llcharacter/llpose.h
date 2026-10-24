@@ -39,6 +39,14 @@
 #include <string>
 #include <vector>
 
+#ifndef FS_TEST_BLENDER_POOL_HINT_SLOTS
+#define FS_TEST_BLENDER_POOL_HINT_SLOTS 0
+#endif
+#if FS_TEST_BLENDER_POOL_HINT_SLOTS
+#include <array>
+#include <cstdint>
+#endif
+
 
 //-----------------------------------------------------------------------------
 // class LLPose
@@ -112,6 +120,10 @@ class LLPoseBlender
 protected:
     typedef std::map<LLJoint*,LLJointStateBlender*> blender_map_t;
     blender_map_t mJointStateBlenderPool;
+#if FS_TEST_BLENDER_POOL_HINT_SLOTS
+    static_assert((FS_TEST_BLENDER_POOL_HINT_SLOTS & (FS_TEST_BLENDER_POOL_HINT_SLOTS - 1)) == 0);
+    std::array<std::pair<LLJoint*, LLJointStateBlender*>, FS_TEST_BLENDER_POOL_HINT_SLOTS> mPoolHints{};
+#endif
     std::vector<LLJointStateBlender*> mActiveBlenders;
 
     S32         mNextPoseSlot;

@@ -6,9 +6,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-blender-pool-index`, based on published PR 114 at
-  `514dc0acd4f12e5413718dfafa1c046c778e843e`. The sorted-array experiment
-  remains test-only and is rejected; production still matches that PR.
+- Branch: `codex/perf-blender-pool-hints`, from committed/rejected 14k evidence
+  `54e250406c88fffa659dbb30fe7a8f71828ec38b`, backed up on its own remote branch.
+  Published PR 114 remains `514dc0acd4f12e5413718dfafa1c046c778e843e`.
+  The native-only hint prototype defaults to zero slots, is partially validated,
+  and is not ready for a PR. Do not enable it in a viewer build.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -159,20 +161,52 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Keep the tree. Read the full plan/raw data/provenance, not just favorable
   append-only or large sequential cases. No new viewer testing PR is needed for
   a rejected test-only candidate. Plan 14l is written before implementation.
+- Plan 14l's pure lookup comparison passes 442,015 checks and retains 3,360
+  matched timing rows. Counting coverage includes three passes from empty;
+  timing warms a batch first and has no counters/replacement allocator. Small
+  caches lose on larger cyclic pools; 256 slots can save lookup work but add
+  4 KiB/controller and collision overhead. No candidate is accepted yet.
+  Read the plan, raw coverage/timings and initial lookup provenance. The initial
+  lookup executable used frozen 14k/PR114 pose sources before the conditional
+  real-controller prototype was added. Keep those source identities distinct.
+  `FS_TEST_BLENDER_POOL_HINT_SLOTS` defaults to zero; enabled full-controller
+  wrappers must compile pose/core fresh. Both 64- and 256-slot map controllers
+  now reproduce all 216 frozen frames / 4,054 checks each and pass 79 fault/
+  retry/reentry checks each. Motion controllers grow 688 to 1,712/4,784 bytes.
+  The first paired complete-path series retains 756 rows. One-motion full costs
+  are mixed/unconvincing, while eight-motion collection gains are substantial.
+  The next decisive work is a matched actual multi-motion controller fixture,
+  including partial overlap, disjoint joints and saturated playback, plus cold/
+  memory costs. Retain the first raw series and its ranges; do not cherry-pick.
+- PR 114 is now retained at exact `514dc0acd4` as `7.2.5.82260`. Its focused
+  verification reports passed and installer presence was confirmed. Owner PID
+  1500 / MSBuild 2072 / vpk 42328 disappeared; state/worker and complete process
+  inventory were idle before native prototypes and around every timed run.
+  This chat did not control the build. All probe sessions returned terminal:
+  84109, 7430 and 41464. This proves the PR 114 build and the explicitly listed
+  prototype checks, not rendered/crowd acceptance or a completed hint decision.
 
 ## Next sequence
 
 1. Inspect current status/head/PR state and preserve any newer work. PR 114 is
    published at `514dc0acd4`; do not amend it or redo its validated source.
    Recheck review/build evidence at exact published heads, without controlling
-   the independent builder. Complete/verify 14k's evidence commit if necessary.
+   the independent builder. 14k evidence is committed/pushed at `54e250406c`.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. Start `viewer-performance-14l-pool-lookup-hints.md` from the committed 14k
-   experiment on a separate branch. Measure bounded read-through hints while
-   retaining authoritative tree ownership/order. Integrate only a complete-path
-   winner; otherwise stop pool-container work and choose another measured cost.
+3. Continue `viewer-performance-14l-pool-lookup-hints.md` on its separate branch.
+   Initial lookups and one-motion full costs are measured; map-mode equivalence/
+   failure checks pass for both prototypes. Add the real multi-motion controller
+   workload before a decision, then cold/memory and any selected candidate's
+   broader checks. Verify actual builder idleness first. Integrate only a
+   complete-path winner; otherwise remove the prototype and stop pool-container
+   work for another measured cost. Do not present partial native checks as FPS.
+   Keep the frozen one-motion fixture/report series intact. Add a new benchmark
+   using deterministic motion IDs, independently verified partial weights and
+   disjoint/saturated cases. Match actual poses/callback coverage outside timing.
+   New parent workloads need freshly compiled exact PR114 pose/core/header
+   sources; the old parent executables cannot run a workload they do not contain.
    Manual shadow coverage/first-gap capture remains a threading gate; do not
    enable workers, change ordering or add an animation frame while awaiting it.
 4. Record deferred acceptance/questions in `viewer-performance-questions.md`;

@@ -134,6 +134,8 @@ if(LL_TESTS)
   add_executable(avatar_blender_pool_index_allocations EXCLUDE_FROM_ALL tests/blender_pool_index_experiment.cpp)
   target_link_libraries(avatar_blender_pool_index_allocations PRIVATE llcharacter)
   target_compile_definitions(avatar_blender_pool_index_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  add_executable(avatar_blender_pool_hint_experiment EXCLUDE_FROM_ALL tests/blender_pool_hint_experiment.cpp)
+  target_link_libraries(avatar_blender_pool_hint_experiment PRIVATE llcharacter)
 
   add_executable(avatar_active_blender tests/active_blender_test.cpp)
   target_link_libraries(avatar_active_blender PRIVATE llcharacter)

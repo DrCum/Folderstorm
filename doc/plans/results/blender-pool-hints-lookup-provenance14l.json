@@ -1,0 +1,57 @@
+{
+  "status": "Lookup-only experiment evidence; later controller evaluation recorded separately",
+  "base_commit": "54e250406c88fffa659dbb30fe7a8f71828ec38b",
+  "production_checkpoint": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled; Tracy OFF",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/tests/blender_pool_hint_experiment.cpp": "6d34fc0a5e30c069285199671b4ed270db9c42f94e17c1f1d301d3a0ea886ecd"
+  },
+  "frozen_dependency_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86"
+  },
+  "frozen_dependency_scope": "Initial lookup binaries compiled these frozen pose/joint sources before the conditional full-controller prototype edits. Those later edits are not validated by this executable.",
+  "reports_sha256_normalized_lf": {
+    "blender-pool-hints-coverage14l.csv": "700a0b2fae6e8ec0ab47791187e9fe6ca634471677bb43370c47e4a8adcc72c7",
+    "blender-pool-hints-cost14l-r1.csv": "99a70dd293a6ed8f6d73fba0de07cfaf7ad5efc7e4b2b63678e1d58164b1d7b1",
+    "blender-pool-hints-cost14l-r2.csv": "8cd8514d139425a6f4d7fdf31d3b16a6cbc3f26414c29010edd4299e197e2662",
+    "blender-pool-hints-summary14l.csv": "c330819cd6b354d2af04c8246afe412b396c44f9fd8c5e5eba104b9c410c8bf8"
+  },
+  "scratch_artifact_sha256": {
+    "blender-pool-hint-native14l.cpp": "375a7ceb1e556bd016a9c402fe44d39465be91de6f4d093b4dd9ce45111463ad",
+    "blender-pool-hints14l.exe": "e9d8b7eb8f82d87f81f1e3f38905f422c9dea7a8b57c59389a23df453c0c5407",
+    "blender-pool-hints14l.rsp": "a6483c0ad5a36fb8e629a4d9f888cfc2399b40cae41ab1364f11c632717161ab",
+    "blender-pool-hints14l.asm": "87ec5ab2b61e6e88e5941ddaf764d21a938d57abdef3159a9188092b5d07c550",
+    "blender-pool-hints-correctness14l.log": "9e42be314ea9d83ab21d8138c2548ad035771499d708f0db8856035a9c315c76",
+    "measure-blender-pool-hints14l.ps1": "dd3f75792104176261acadfb33843d3a143cb21395ef7a444fd23bf358c06f9d"
+  },
+  "immutable_dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "timing": {
+    "startedUtc": "2026-10-24T13:39:48.6164305Z",
+    "finishedUtc": "2026-10-24T13:39:50.7205817Z",
+    "checks": "State/worker idle, complete native/package process inventory empty before/after each run",
+    "runs": [
+      {
+        "run": 1,
+        "rows": 1680,
+        "report": "blender-pool-hints-cost14l-r1.csv",
+        "sha256": "bde309550bf893bfc87783891ec92fb5b2d68fe3f9cefd2d0238304ca4c11934"
+      },
+      {
+        "run": 2,
+        "rows": 1680,
+        "report": "blender-pool-hints-cost14l-r2.csv",
+        "sha256": "845c3e02323452525a19d9471425087d33f186f9e3629c873345ee43ca741ade"
+      }
+    ],
+    "exe_sha256": "e9d8b7eb8f82d87f81f1e3f38905f422c9dea7a8b57c59389a23df453c0c5407"
+  },
+  "timing_rows": 3360,
+  "coverage_rows": 140,
+  "checks": 442015,
+  "coverage_scope": "Separate counting instantiations: three 1024-query passes including initial fill. Timing instantiations compile out counts, warm one batch, then time 64 rotated no-inline batches. No replacement allocator. Forced-collision template projects every valid pointer into slot zero.",
+  "tradeoff": "256 slots add 4096 cache bytes; smaller hints regress on larger cyclic pools, and collision fallback adds overhead. No complete-path or default-enablement decision yet.",
+  "pending": "This record proves lookup-only behavior. Consult blender-pool-hints-full-provenance14l.json for later actual-controller evaluation. Never mix enabled headers with old-layout archived core implementations."
+}

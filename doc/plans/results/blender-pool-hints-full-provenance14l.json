@@ -1,0 +1,216 @@
+{
+  "status": "Partial native evaluation; no accepted or published hint implementation",
+  "parent_commit": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "experiment_base": "54e250406c88fffa659dbb30fe7a8f71828ec38b",
+  "default_hint_slots": 0,
+  "tested_hint_slots": [
+    64,
+    256
+  ],
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled, Tracy OFF",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "02492d2482eb2677daa15a23af0c9132081b3fef87a764476d072261fd6e295b",
+    "indra/llcharacter/llpose.h": "9f4240325ac5c773a5bd0fb173786a73c4725801aa19489a2aa34476f7961a82",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/tests/active_blender_controller_test.cpp": "97c35e1e441429515d84af8c1ccabd703191b0462d3a86c24f635dd5de09e2f8",
+    "indra/llcharacter/tests/blender_pool_failure_test.cpp": "6ad1c932d9ac4befd0163fe8bfb9c08a71c0cb623800ed7bce8e445b1ae8c5b0",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/active_blender_cost_benchmark.cpp": "86569ad4933b266b827064377034238177b5f1052ecc31bf085498ad7326fbf8",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447"
+  },
+  "reports_sha256_normalized_lf": {
+    "blender-pool-hints-full-collection-256-r1.csv": "64da8008b1f804053bcc4fd48e7765739ef129d6f2a564242f50e42c72256c82",
+    "blender-pool-hints-full-collection-256-r2.csv": "4b3da21efb521f7a2758d73389f5c7cadfa6685df07071803767aa381932fbac",
+    "blender-pool-hints-full-collection-64-r1.csv": "5f3d35486fc794c121c12bb5d950ca5cda222434597f6587b59889825c307ce1",
+    "blender-pool-hints-full-collection-64-r2.csv": "a055ff56e9ce2fd77d5180eab0ea1a25e9e3a42700db6ccae6a7331c37aab628",
+    "blender-pool-hints-full-collection-parent-r1.csv": "caa60097ec53c3e0facb19edb8edde75f0fc57181beaeb215385bbe23173c6cc",
+    "blender-pool-hints-full-collection-parent-r2.csv": "92416f0bcf5912a59b4ac6388a8c8993a2fa42d150f0fb8df6e408d1f976f175",
+    "blender-pool-hints-full-controller-256-r1.csv": "213b80cbc83b51d1cea12815e27c0a34633159cd0ce0d1c2e62b27c8ea902625",
+    "blender-pool-hints-full-controller-256-r2.csv": "68505abdb84df3985116a42d7a00915f31faf384e8c9c80239aeefe9e3bac9ec",
+    "blender-pool-hints-full-controller-64-r1.csv": "16aad7d9b3619a759371df7084d70bd26df0e32aa5f21ea56c3fc48fdbee52aa",
+    "blender-pool-hints-full-controller-64-r2.csv": "a51dd6e7d4ed8702b45562d40070eaa1db089a90b1b0e462f340f74e560dd3d7",
+    "blender-pool-hints-full-controller-parent-r1.csv": "ffb8d223b60b10a5491a5ecfc33477df10ec775f5235c8a37dfd829e9888adab",
+    "blender-pool-hints-full-controller-parent-r2.csv": "2013bf64d16680e0fc56da74c0ef258c14f5a6a1d98db9919718fcdd9e5993f1",
+    "blender-pool-hints-full-summary14l.csv": "4e20250a201034ccbe2e3651572457db956f7b997d13c87be9a72d1756007c11"
+  },
+  "scratch_artifact_sha256": {
+    "pool-hints-controller64-14l.exe": "57ca488704e751598fb448bc994bbb010db7b6fd7a8be15e1c705b970348a841",
+    "pool-hints-controller256-14l.exe": "e91e58739edf179bdea763850fbe2986920131986e88046b70a8e605c10501cb",
+    "pool-hints-controller64-14l.log": "db847a129c66a7dc1d7a98ede363a5acd5220e8bbc2482a94f8ff76f82a15001",
+    "pool-hints-controller256-14l.log": "5a59a76233eba528258c0a0bc37857b123ca39db9d7e975ec841412d24eb7079",
+    "pool-hints-fault64-14l.exe": "c614a3008468aa75372ea5a9b02612a417883033e09b52b989733b8aa873e721",
+    "pool-hints-fault256-14l.exe": "2c316b0c8289f989bfd6a3c13d30ef58a78722ab71dfd5cd6ff00cddec22c64c",
+    "pool-hints-fault64-14l.log": "4ed9728fa2072387b42c54c589d5d2e410a9ee569a778363545ba55a5fc630d4",
+    "pool-hints-fault256-14l.log": "12d89c93ec7124177f66467312e7936f97aa97ac004aaae185c5f224b562b9e7",
+    "pool-hints-controller-cost64-14l.exe": "e383973902dc9692007de5afd28cedce38b4586563ccebee1fce44d7a6c75720",
+    "pool-hints-controller-cost256-14l.exe": "a1bde49ce5f7b13eb216884da0121ae5c7d9c216966ca16005707f8f974905df",
+    "pool-hints-collection-cost64-14l.exe": "6ff573eab295c93063998117bab0595fe5aee2595a9e20edef254678b7312f71",
+    "pool-hints-collection-cost256-14l.exe": "6bc1240ecda6618412139820e93542a64b1221579e1a5ed2cbe25cf6c33c61b2",
+    "active-blender-controller-native14i.cpp": "b788a6087272523935b6522db47ea0150edb6248c6b374ce81cdd32d7d7a8c54",
+    "blender-pool-failure-native14j.cpp": "78f250c53622418d3151141d967e38d3dded90926a91c7e8d3d9cd5798d1e8c0",
+    "controller-blender-cost-native14i.cpp": "e43ae299a0b6eb347dc4ebc35bcd0495a6706afca9e12bb59837584c4b4807c3",
+    "blender-pool-hint-collection-native14l.cpp": "723d6b97fe57192be14f835a09d6d4be772739cabc304fb82ed53d8903ee9d30",
+    "active-blender-controller-current-trace14i.txt": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59",
+    "measure-blender-pool-hints-full14l.ps1": "e81a47125a7564833ae70a3fb5b9e22b86958ad35e301380e13dd4e09fcf6041",
+    "pool-hints-collection-cost256-14l.rsp": "d685e28a228648a305ee4acfebcd4b47ffda111bdc504a13f32c656043aa099a",
+    "pool-hints-collection-cost64-14l.rsp": "155b785b08322ffa71129bb27ad89333261efb00cf38210787e45ce8a2ce6bc5",
+    "pool-hints-controller-cost256-14l.rsp": "aacc0e127c545774382371cd921d7d828f9e4a4057ed4da91b87ee4c8b3fc2c2",
+    "pool-hints-controller-cost64-14l.rsp": "af0fedaa014d8e9e97337004f20d823750be09caf447ef93acb7e2e25ae2f1b8",
+    "pool-hints-controller256-14l.rsp": "92327c72b6cc26dacd7f452abe9e057220e3e91a027d0d9961c3d4d879a77af3",
+    "pool-hints-controller64-14l.rsp": "27b8a7ff328c8a1eea38bf3e3082b298d3ae0eb3c4132114e3057b003c660702",
+    "pool-hints-fault256-14l.rsp": "7839e4ba51641316f9d0ac3cb1d774188f1b1e4985bb7e48db650ab905ce7f83",
+    "pool-hints-fault64-14l.rsp": "aa82f0c3b62c740d7c1d795ef1732e6de431a1f16f3b876b26cb10730e78af95"
+  },
+  "immutable_dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "verified_immutable_libraries": 32,
+  "controller_frames": {
+    "64": {
+      "frames": 216,
+      "checks": 4054,
+      "sha256_normalized_frame_lines": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba"
+    },
+    "256": {
+      "frames": 216,
+      "checks": 4054,
+      "sha256_normalized_frame_lines": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba"
+    }
+  },
+  "fault_retry_reentry_checks_each_variant": 79,
+  "ordinary_counted_retention_each_variant": 0,
+  "sizes": {
+    "joint_blender": 544,
+    "parent_pose": 80,
+    "parent_controller": 688,
+    "pose64": 1104,
+    "controller64": 1712,
+    "pose256": 4176,
+    "controller256": 4784
+  },
+  "timing": {
+    "startedUtc": "2026-10-24T13:53:12.1441488Z",
+    "finishedUtc": "2026-10-24T13:53:24.8627134Z",
+    "checks": "State/worker idle and complete native/package process inventory empty before/after each run",
+    "order": "P,64,256,256,64,P per component",
+    "runs": [
+      {
+        "component": "collection",
+        "variant": "parent",
+        "repeat": "r1",
+        "exe": "blender-pool-cold-helper-collection14j.exe",
+        "exe_sha256": "deea7689f295b5cd845f943de6622d85524dfee1afca2df40b15671773dca576",
+        "report": "blender-pool-hints-full-collection-parent-r1.csv",
+        "rows": 72
+      },
+      {
+        "component": "collection",
+        "variant": "64",
+        "repeat": "r1",
+        "exe": "pool-hints-collection-cost64-14l.exe",
+        "exe_sha256": "6ff573eab295c93063998117bab0595fe5aee2595a9e20edef254678b7312f71",
+        "report": "blender-pool-hints-full-collection-64-r1.csv",
+        "rows": 72
+      },
+      {
+        "component": "collection",
+        "variant": "256",
+        "repeat": "r1",
+        "exe": "pool-hints-collection-cost256-14l.exe",
+        "exe_sha256": "6bc1240ecda6618412139820e93542a64b1221579e1a5ed2cbe25cf6c33c61b2",
+        "report": "blender-pool-hints-full-collection-256-r1.csv",
+        "rows": 72
+      },
+      {
+        "component": "collection",
+        "variant": "256",
+        "repeat": "r2",
+        "exe": "pool-hints-collection-cost256-14l.exe",
+        "exe_sha256": "6bc1240ecda6618412139820e93542a64b1221579e1a5ed2cbe25cf6c33c61b2",
+        "report": "blender-pool-hints-full-collection-256-r2.csv",
+        "rows": 72
+      },
+      {
+        "component": "collection",
+        "variant": "64",
+        "repeat": "r2",
+        "exe": "pool-hints-collection-cost64-14l.exe",
+        "exe_sha256": "6ff573eab295c93063998117bab0595fe5aee2595a9e20edef254678b7312f71",
+        "report": "blender-pool-hints-full-collection-64-r2.csv",
+        "rows": 72
+      },
+      {
+        "component": "collection",
+        "variant": "parent",
+        "repeat": "r2",
+        "exe": "blender-pool-cold-helper-collection14j.exe",
+        "exe_sha256": "deea7689f295b5cd845f943de6622d85524dfee1afca2df40b15671773dca576",
+        "report": "blender-pool-hints-full-collection-parent-r2.csv",
+        "rows": 72
+      },
+      {
+        "component": "controller",
+        "variant": "parent",
+        "repeat": "r1",
+        "exe": "blender-pool-cold-helper-controller14j.exe",
+        "exe_sha256": "e5184514cc4c248469b9021989a8d42f09383375e14c78bb4e7aa48c93f95660",
+        "report": "blender-pool-hints-full-controller-parent-r1.csv",
+        "rows": 54
+      },
+      {
+        "component": "controller",
+        "variant": "64",
+        "repeat": "r1",
+        "exe": "pool-hints-controller-cost64-14l.exe",
+        "exe_sha256": "e383973902dc9692007de5afd28cedce38b4586563ccebee1fce44d7a6c75720",
+        "report": "blender-pool-hints-full-controller-64-r1.csv",
+        "rows": 54
+      },
+      {
+        "component": "controller",
+        "variant": "256",
+        "repeat": "r1",
+        "exe": "pool-hints-controller-cost256-14l.exe",
+        "exe_sha256": "a1bde49ce5f7b13eb216884da0121ae5c7d9c216966ca16005707f8f974905df",
+        "report": "blender-pool-hints-full-controller-256-r1.csv",
+        "rows": 54
+      },
+      {
+        "component": "controller",
+        "variant": "256",
+        "repeat": "r2",
+        "exe": "pool-hints-controller-cost256-14l.exe",
+        "exe_sha256": "a1bde49ce5f7b13eb216884da0121ae5c7d9c216966ca16005707f8f974905df",
+        "report": "blender-pool-hints-full-controller-256-r2.csv",
+        "rows": 54
+      },
+      {
+        "component": "controller",
+        "variant": "64",
+        "repeat": "r2",
+        "exe": "pool-hints-controller-cost64-14l.exe",
+        "exe_sha256": "e383973902dc9692007de5afd28cedce38b4586563ccebee1fce44d7a6c75720",
+        "report": "blender-pool-hints-full-controller-64-r2.csv",
+        "rows": 54
+      },
+      {
+        "component": "controller",
+        "variant": "parent",
+        "repeat": "r2",
+        "exe": "blender-pool-cold-helper-controller14j.exe",
+        "exe_sha256": "e5184514cc4c248469b9021989a8d42f09383375e14c78bb4e7aa48c93f95660",
+        "report": "blender-pool-hints-full-controller-parent-r2.csv",
+        "rows": 54
+      }
+    ]
+  },
+  "timing_rows": 756,
+  "timing_invocations": 756000,
+  "source_scope": "Actual pose/core/controller compiled fresh for each enabled layout, immutable libraries plus read-only external dependencies. Allocation tests are separate executables; custom aligned blocks/RSS are excluded. Prior lookup-only provenance records earlier frozen pose sources separately.",
+  "pending": "Single-motion full costs do not justify adoption; eight-motion collection gains need a matched actual multi-motion controller fixture, then cold/memory and broader selected-candidate checks. Real crowd/visual/window evidence still pending. No default activation or PR."
+}
