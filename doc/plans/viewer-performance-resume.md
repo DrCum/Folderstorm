@@ -28,6 +28,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
   `results/main-frame-source14o.json`. Plan 14p's stronger private stock-scheduler
   acceptance probe is written before implementation. No production scheduling
   or further viewer behavior changes are enabled.
+- PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
+  base audit db9. Automated review completed without findings at that head.
+  Its independent full build workflow has entered preparation; no full-build
+  completion is claimed. Local merge `4bae43e6a595855510609c0ad7306c13c871bf4f`
+  integrates it into the private probe branch, preserving both test targets.
+  Plan14p2 measurements are partial: 38/48 accepted, two overlapping attempts
+  excluded/replaced, one next-case precheck stopped at NORMAL_PERFORMANCE_QUEUE.
+  See `results/worker-wait14p2/README.md`, verified summary and raw observations.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -358,6 +366,19 @@ Updated October 24, 2026. The user resumed the performance program; the October
   and `results/*14p1*`. The next 14p2 continuation plan is written before work.
   PR116 exact836 is now independently retained as `7.2.5.82273`; verified hash
   F793FC9A2BC7BEE4E76182884D9E6280041674CB2E3D8CD728AE25DB2AA02B02.
+- Plan14p2: the exact benchmark at local merge4bae compiles fresh workqueue.cpp.
+  First24 cases and fourteen reverse cases are accepted. No idle spin/cap signal;
+  requested1ms polling wake p50~2ms versus stock tens of microseconds, with low
+  CPU in both and lower stock empty/requested-timer cycles. Default finite-wait
+  differences are mixed/small. Partial observations do not authorize adoption.
+  Two initial overlapped runs are retained/excluded after the orchestration
+  error; clean Attempt2 replacements completed and a concurrent-probe guard is
+  now enforced. Every accepted case verifies before/after full-host build idle.
+  At19:35:30 the next stock3/default/empty reverse case did not launch because
+  monitor phase entered NORMAL_PERFORMANCE_QUEUE. Its precheck is preserved.
+  Stop measurement calls while the builder owns preparation/build/retention.
+  All own native sessions through63044 are terminal; the attempted two-case
+  command then exited1 before launching either case. No own probe is left live.
 
 ## Next sequence
 
@@ -372,6 +393,16 @@ Updated October 24, 2026. The user resumed the performance program; the October
    PR117 is published/attached/mergeable at exact22ea4cee92. Its queue fix is
    integrated into the preserved probe branch. Follow14p2 without
    deleting the failed scheduled case. Production pool policy remains unchanged.
+   Finish the remaining ten cells only when independent worker/monitor/activeBuild
+   and full-host compiler/package/probe inventory are idle. Remaining reversed
+   pairs: width3 default empty (stock needs -Attempt2, current normal), then all
+   width1 contexts in stock/current order. Do not overwrite existing cases or
+   mistake a returned running session for completion. After every call inspect
+   terminal exit; the sequential two-case script exits on a precheck failure.
+   Retain with scratch `retain-worker-wait-data14p2.ps1` and run committed
+   `results/worker-wait14p2/analyze.py`. Finish portable normal/Tracy source
+   checks, summarize full evidence and publish a test-only PR based on PR117.
+   Do not create a probe PR with incomplete evidence or change production policy.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header

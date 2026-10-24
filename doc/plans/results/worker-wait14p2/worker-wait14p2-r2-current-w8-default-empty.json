@@ -1,0 +1,33 @@
+{
+  "case": "worker-wait14p2-r2-current-w8-default-empty",
+  "mode": "current",
+  "width": 8,
+  "timer": "default",
+  "wait": "empty",
+  "round": 2,
+  "requestedIdleSeconds": 30,
+  "before": {
+    "utc": "2026-10-24T19:31:08.0582286Z",
+    "activeBuild": null,
+    "monitorPhase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildProcesses": [],
+    "concurrentProbes": [],
+    "idle": true
+  },
+  "status": "completed",
+  "after": {
+    "utc": "2026-10-24T19:31:43.2324499Z",
+    "activeBuild": null,
+    "monitorPhase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildProcesses": [],
+    "concurrentProbes": [],
+    "idle": true
+  },
+  "exit": 0,
+  "executableSha256": "67F0FC55157CEE123EEEA6E113622DAB1779920AB15B729C1F979561341D9543",
+  "note": "Full host build process visibility required. Idle observation is not a guarantee of an idle desktop or unchanged power/timer policy."
+}
