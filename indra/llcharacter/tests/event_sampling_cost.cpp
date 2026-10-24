@@ -236,7 +236,7 @@ struct Frame
     unsigned gapUs;
     Executor* executor;
     Request& input;
-    Result output;
+    Result& output;
     std::shared_ptr<Measurement> measurement;
     std::optional<Executor::Ticket> ticket;
     std::array<Entry, 32> entries{};
@@ -246,9 +246,9 @@ struct Frame
     Row row;
     std::vector<LLUUID>* callbackTrace = nullptr;
     const std::thread::id owner = std::this_thread::get_id();
-    Frame(Scene& value, Mode variant, unsigned gap, Executor* destination, Request& request,
+    Frame(Scene& value, Mode variant, unsigned gap, Executor* destination, Request& request, Result& reusable,
           std::shared_ptr<Measurement> trace): scene(value), mode(variant), gapUs(gap), executor(destination),
-          input(request), measurement(std::move(trace)) { require(!active, "Nested private frame"); active = this; }
+          input(request), output(reusable), measurement(std::move(trace)) { require(!active, "Nested private frame"); active = this; }
     ~Frame() { require(active == this, "Private frame ownership changed"); active = nullptr; }
     void prepare(bool force, TimePredict predictTime, MaskPredict predictMask)
     {
@@ -359,6 +359,7 @@ struct Summary
     FSSamplingAlloc::Stats allocations;
     FSSamplingAlloc::Stats firstFrame;
     U64 poolCycles = 0;
+    U64 ownerWindowCycles = 0;
 };
 Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const std::string& load,
             bool correctness = false, unsigned mutation = 0)
@@ -381,7 +382,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     }
     Summary summary; summary.rows.reserve(frames); summary.traces.reserve(frames);
     for (unsigned i = 0; i < frames; ++i) summary.traces.push_back(std::make_shared<Measurement>());
-    Request input;
+    Request input; Result reusableOutput;
     // Warm controller and hand publication before instrumentation, with a changing clock.
     for (unsigned i = 0; i < 8; ++i)
     { FSCurrentMotion::Clock::set(100.0 + (i + 1) / 64.0); scene.update(); expected.update(); }
@@ -389,24 +390,26 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     actualCallbacks.reserve(avatars * 4); expectedCallbacks.reserve(avatars * 4);
     FSSamplingAlloc::Scope allocationScope;
     const auto poolBegin = pool ? pool->workerCycles() : 0;
+    const auto ownerBegin = cycles();
     for (unsigned i = 0; i < frames; ++i)
     {
         FSCurrentMotion::Clock::set(100.0 + (i + 9) / 64.0);
         Row row;
+        const auto cpu = cycles(); const auto begin = Clock::now();
         {
-            Frame frame(scene, mode, gap, executor.get(), input, summary.traces[i]);
+            Frame frame(scene, mode, gap, executor.get(), input, reusableOutput, summary.traces[i]);
             frame.forceReady = correctness && load == "normal" && mode != Mode::Direct;
             frame.mutation = mutation; frame.callbackTrace = correctness ? &actualCallbacks : nullptr;
-            const auto cpu = cycles(); const auto begin = Clock::now(); scene.update(); frame.finish();
-            frame.row.totalNs = nanos(Clock::now() - begin); frame.row.ownerCycles = cycles() - cpu; row = frame.row;
+            scene.update(); frame.finish(); row = frame.row;
         }
+        row.totalNs = nanos(Clock::now() - begin); row.ownerCycles = cycles() - cpu;
         summary.rows.push_back(row);
         if (i == 0) summary.firstFrame = FSSamplingAlloc::snapshot();
         // Correctness-only oracle work is outside the measured owner intervals.
         if (correctness)
         {
             if (mutation == 2) for (auto& character : expected.characters) character->setSkeletonSerialNum(17);
-            Request unused; Frame oracle(expected, Mode::Direct, 0, nullptr, unused, nullptr);
+            Request unused; Result unusedResult; Frame oracle(expected, Mode::Direct, 0, nullptr, unused, unusedResult, nullptr);
             oracle.callbackTrace = &expectedCallbacks; expected.update(); oracle.finish();
             require(scene.snapshot() == expected.snapshot(), "Controller/joint/hand state differs from direct");
             require(actualCallbacks == expectedCallbacks, "Controller callback order differs from direct");
@@ -421,12 +424,13 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     if (load == "busy" && pool) release.set_value();
     if (pool) pool->close(); // Acknowledge abandoned work before reading owned trace fields.
     summary.poolCycles = pool ? pool->workerCycles() - poolBegin : 0;
+    summary.ownerWindowCycles = cycles() - ownerBegin;
     summary.allocations = FSSamplingAlloc::snapshot(); allocationScope.stop();
     return summary;
 }
 void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, const std::string& load)
 {
-    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window\n";
+    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window\n";
     for (size_t i = 0; i < summary.rows.size(); ++i)
     {
         const auto& row = summary.rows[i]; const auto& measurement = *summary.traces[i]; const auto& trace = measurement.trace;
@@ -435,7 +439,7 @@ void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, co
         std::cout << ',' << row.predicted << ',' << row.masked << ',' << row.excluded << ',' << row.rejected << ',' << row.accepted
                   << ',' << row.callbacks << ',' << row.applied << ',' << row.fallback << ',' << row.stale << ',' << measurement.workerCycles
                   << ',' << (trace.sampled ? nanos(trace.started - trace.queued) : 0) << ',' << (trace.sampled ? nanos(trace.finished - trace.started) : 0)
-                  << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << '\n';
+                  << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << ',' << summary.ownerWindowCycles << '\n';
     }
 }
 int check()
