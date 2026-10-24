@@ -1,0 +1,19 @@
+#include "../viewer-performance/indra/llcommon/tests/scheduler_probe.h"
+int main()
+{
+    using namespace FSSchedulerProbe;
+    Watchdog guard;
+    std::cout<<"mode,delivered_without_poke,delivered_after_poke,late_us\n"<<std::flush;
+    for(auto mode:{Mode::Current,Mode::Stock})
+    {
+        guard.phase("isolated scheduled wake");Pool<LL::WorkSchedule> pool(mode,1,16);pool.startChecked();warm(pool);
+        auto callback=std::make_shared<std::promise<Clock::time_point>>();auto future=callback->get_future();
+        const auto deadline=Clock::now()+20ms;
+        require(pool.getQueue().post(pool.checked([=]{callback->set_value(Clock::now());}),deadline),"Future post rejected");
+        const bool timely=future.wait_for(500ms)==std::future_status::ready;
+        if(!timely)require(pool.getQueue().post([]{}),"Diagnostic poke rejected");
+        const auto completed=await(future,"A later post did not rescue scheduled work");
+        pool.close();pool.noErrors();
+        std::cout<<name(mode)<<','<<timely<<",1,"<<std::chrono::duration_cast<std::chrono::microseconds>(completed-deadline).count()<<'\n'<<std::flush;
+    }
+}
