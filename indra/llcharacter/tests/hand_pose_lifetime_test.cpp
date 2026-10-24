@@ -37,6 +37,8 @@ void expect(Character& character, LLHandMotion::eHandPose pose, LLJoint::JointPr
     auto* rank = static_cast<LLJoint::JointPriority*>(character.getAnimationData("Hand Pose Priority"));
     require(value && rank, "Missing hand-pose publication");
     require(*value == pose && *rank == priority, "Hand-pose value/priority changed");
+    const Character& view = character;
+    require(view.getHandPoseAnimationPriority() == rank, "Typed lookup bypassed the current map entry");
 }
 void consume(Character& character)
 {
@@ -44,6 +46,7 @@ void consume(Character& character)
     character.removeAnimationData("Hand Pose Priority");
     require(!character.getAnimationData("Hand Pose") && !character.getAnimationData("Hand Pose Priority"),
             "Hand-motion consumption could not clear entries");
+    require(!character.getHandPoseAnimationPriority(), "Typed lookup retained a removed priority");
 }
 int run()
 {
@@ -57,6 +60,7 @@ int run()
     auto b = asset(idB, LLHandMotion::HAND_POSE_RELAXED, LLJoint::LOW_PRIORITY);
     auto c = asset(idC, LLHandMotion::HAND_POSE_POINT, LLJoint::MEDIUM_PRIORITY);
     Motion ma(first,idA,a), mb(first,idB,b), mc(first,idC,c), shared(second,idA,a);
+    require(!first.getHandPoseAnimationPriority(), "Empty character has a cached hand priority");
     ma.publish();
     expect(first,LLHandMotion::HAND_POSE_FIST,LLJoint::MEDIUM_PRIORITY);
     const auto* poseAddress = first.getAnimationData("Hand Pose");
@@ -92,12 +96,43 @@ int run()
     LLJoint::JointPriority legacyPriority = LLJoint::HIGHEST_PRIORITY;
     first.setAnimationData("Hand Pose",&legacyPose);
     first.setAnimationData("Hand Pose Priority",&legacyPriority);
+    require(first.getHandPoseAnimationPriority() == &legacyPriority, "Typed lookup missed generic priority override");
     ma.publish();
     require(first.getAnimationData("Hand Pose") == &legacyPose, "Lower priority overwrote legacy producer");
     legacyPriority = LLJoint::LOW_PRIORITY;
     ma.publish();
     expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
     require(first.getAnimationData("Hand Pose") != &legacyPose, "Winning request did not own its value");
+
+    // Null and independently removed entries follow the same generic map contract.
+    first.setAnimationData("Hand Pose Priority", nullptr);
+    require(!first.getHandPoseAnimationPriority(), "Null priority entry did not behave as absent");
+    mb.publish();
+    expect(first,LLHandMotion::HAND_POSE_RELAXED,LLJoint::HIGH_PRIORITY);
+    first.removeAnimationData("Hand Pose Priority");
+    require(!first.getHandPoseAnimationPriority(), "Removed priority was retained behind the map");
+    ma.publish();
+    expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        consume(first); ma.publish();
+        expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
+        require(first.getAnimationData("Hand Pose") == poseAddress && first.getHandPoseAnimationPriority() == rankAddress,
+                "Removal/republication changed character-owned value addresses");
+    }
+
+    LLHandMotion hand(LLUUID::null);
+    require(hand.onInitialize(&first) == LLMotion::STATUS_SUCCESS && hand.onActivate(), "Actual hand consumer initialization failed");
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        consume(first); mb.publish(); // Relaxed matches the consumer's initial pose; no mesh is needed.
+        expect(first,LLHandMotion::HAND_POSE_RELAXED,LLJoint::HIGH_PRIORITY);
+        require(hand.onUpdate(i * .1f, nullptr), "Actual hand consumer update failed");
+        require(!first.getAnimationData("Hand Pose") && !first.getHandPoseAnimationPriority(),
+                "Actual hand consumer did not remove both publication entries");
+    }
+    ma.publish();
+    expect(first,LLHandMotion::HAND_POSE_POINT,LLJoint::MEDIUM_PRIORITY);
 
     // Already published values remain character-owned when the cache drops its owner.
     LLKeyframeDataCache::removeKeyframeData(idA);

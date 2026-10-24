@@ -41,6 +41,21 @@ LLStringTable LLCharacter::sVisualParamNames(1024);
 std::list< LLCharacter* > LLCharacter::sInstances;
 bool LLCharacter::sAllowInstancesChange = true ;
 
+namespace
+{
+const std::string& handPoseDataName()
+{
+    static const std::string name("Hand Pose");
+    return name;
+}
+
+const std::string& handPosePriorityDataName()
+{
+    static const std::string name("Hand Pose Priority");
+    return name;
+}
+}
+
 //-----------------------------------------------------------------------------
 // LLCharacter()
 // Class Constructor
@@ -247,8 +262,15 @@ void LLCharacter::setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint
 {
     mAnimationHandPose = pose;
     mAnimationHandPosePriority = priority;
-    setAnimationData("Hand Pose", &mAnimationHandPose);
-    setAnimationData("Hand Pose Priority", &mAnimationHandPosePriority);
+    mAnimationData[handPoseDataName()] = &mAnimationHandPose;
+    mAnimationData[handPosePriorityDataName()] = &mAnimationHandPosePriority;
+}
+
+const LLJoint::JointPriority* LLCharacter::getHandPoseAnimationPriority() const
+{
+    // Consult the map each time so generic producers and hand-motion removal stay authoritative.
+    const auto found = mAnimationData.find(handPosePriorityDataName());
+    return found != mAnimationData.end() ? static_cast<const LLJoint::JointPriority*>(found->second) : nullptr;
 }
 // </FS:Perf>
 

@@ -48,4 +48,36 @@ constraint, blending, skeleton or attachment order to create an artificial gap.
 
 ## Results
 
-Not implemented yet. Complete 14f1's measured serial allocation removal first.
+Prediction/observation is not implemented yet. The preceding 14f1 serial
+allocation fix is implemented and measured; current owner preparation/application
+costs are recorded there. Begin with the following source audit, then complete
+the mutation/independence analysis before selecting an observation boundary.
+
+### Initial controller audit
+
+- `LLMotionController::updateMotions` reads the frame timer as F32, subtracts
+  `mPrevTimerElapsed`, records `mLastTime`, purges excess motions, then evaluates
+  `mAnimTime + delta_time * mTimeFactor * mUpdateFactor` in that order. Guessing
+  animation time from wall-clock delta or dropping the update factor is invalid.
+- Paused nonforced updates run idle-motion handling, not normal callbacks. Forced
+  paused updates retain the old animation time. Minimal/hidden updates refresh
+  `mPrevTimerElapsed` without advancing animation time, and can load/deactivate
+  motions. `LLCharacter::updateMotions` also applies its pause-request handling.
+- The quantum branch can return after interpolation/loading without sampling;
+  a new quantum interpolates/clears blenders before loading and callbacks.
+  Although setting a nonzero step is currently disabled elsewhere, tests must
+  cover the existing branch without enabling it for normal avatars.
+- Loading callbacks occur before additive/regular passes and can activate/delete
+  motions. Active iteration is chronological, split by blend type, with joint-
+  signature coverage, pixel-area fading and early skips. Ordinary factory
+  permission alone does not prove that a callback will occur that frame.
+- Stop/ease-out/inactive branches may use the stop-clamped timestamp, the current
+  animation timestamp, or zero before activation. Network stop callbacks and
+  `stopMotionInstance` can change context before a normal callback. The
+  inactive/deactivation and first-stop cases need explicit prediction exclusions
+  or equivalent source proof. Unused predictions are an expected outcome, not
+  permission to force an update.
+- `LLVOAvatar::updateCharacter` selects hidden/forced/normal updates after root,
+  appearance and animation preparation. Audit that preparation and subsequent
+  pose/attachment consumers before choosing an earlier global/owner prepass.
+  A source-correct query is not yet evidence for sufficient same-frame overlap.

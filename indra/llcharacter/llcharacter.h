@@ -188,6 +188,7 @@ public:
 
     // <FS:Perf> Publish main-thread values without borrowing a cached asset's lifetime.
     void setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority);
+    const LLJoint::JointPriority* getHandPoseAnimationPriority() const;
     // </FS:Perf>
 
     void *getAnimationData(std::string name);

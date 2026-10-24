@@ -25,7 +25,8 @@ struct Prepared
 int allocations()
 {
 #if FS_SAMPLING_ALLOCATION_PROBE
-    std::cout << "mode,joints,cold_prepare_new_calls,warm_prepare_new_calls,direct_apply_new_calls,owned_apply_new_calls,direct_bytes,owned_bytes\n";
+    std::cout << "mode,joints,cold_prepare_new_calls,warm_prepare_new_calls,direct_apply_new_calls,owned_apply_new_calls,direct_bytes,owned_bytes,"
+                 "direct_republish_new_calls,owned_republish_new_calls,direct_republish_bytes,owned_republish_bytes\n";
     for (unsigned count : {3u, 32u, 128u})
     {
         Fixture f(count); Prepared prepared;
@@ -50,10 +51,27 @@ int allocations()
           for (unsigned i = 0; i < 32; ++i)
           { bool applied = false; f.candidate->updateWithOwnedSampling(.625f, mask, prepared.output, applied); require(applied); }
           owned = FSSamplingAlloc::snapshot(); }
-        require(warm.calls == 0 && owned.calls == direct.calls && owned.requested == direct.requested);
+        require(warm.calls == 0 && direct.calls == 0 && owned.calls == 0 && direct.requested == 0 && owned.requested == 0);
+        require(pose(*f.reference) == pose(*f.candidate));
+        FSSamplingAlloc::Stats direct_republish, owned_republish;
+        for (unsigned i = 0; i < 32; ++i)
+        {
+            f.expected.removeAnimationData("Hand Pose"); f.expected.removeAnimationData("Hand Pose Priority");
+            f.actual.removeAnimationData("Hand Pose"); f.actual.removeAnimationData("Hand Pose Priority");
+            { FSSamplingAlloc::Scope scope;
+              f.reference->onUpdate(.625f, mask);
+              const auto row = FSSamplingAlloc::snapshot(); direct_republish.calls += row.calls; direct_republish.requested += row.requested; }
+            { FSSamplingAlloc::Scope scope;
+              bool applied = false; f.candidate->updateWithOwnedSampling(.625f, mask, prepared.output, applied); require(applied);
+              const auto row = FSSamplingAlloc::snapshot(); owned_republish.calls += row.calls; owned_republish.requested += row.requested; }
+        }
+        require(direct_republish.calls > 0 && direct_republish.calls == owned_republish.calls &&
+                direct_republish.requested == owned_republish.requested);
         require(pose(*f.reference) == pose(*f.candidate));
         std::cout << "alloc," << count << ',' << cold.calls << ',' << warm.calls << ',' << direct.calls << ','
-                  << owned.calls << ',' << direct.requested << ',' << owned.requested << '\n';
+                  << owned.calls << ',' << direct.requested << ',' << owned.requested << ','
+                  << direct_republish.calls << ',' << owned_republish.calls << ','
+                  << direct_republish.requested << ',' << owned_republish.requested << '\n';
     }
     return 0;
 #else
