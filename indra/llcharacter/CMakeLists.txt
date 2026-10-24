@@ -263,6 +263,29 @@ if(LL_TESTS)
 
   find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
+    # Private complete-controller experiment. Production compiles the original
+    # controller; only these explicit targets contain the generated test seams.
+    set(event_controller_source "${CMAKE_CURRENT_BINARY_DIR}/event_sampling_controller.cpp")
+    add_custom_command(OUTPUT "${event_controller_source}"
+      COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/make_event_sampling_controller.py"
+        --source "${CMAKE_CURRENT_SOURCE_DIR}/llmotioncontroller.cpp"
+        --output "${event_controller_source}"
+      DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/make_event_sampling_controller.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/llmotioncontroller.cpp"
+      VERBATIM)
+    foreach(probe IN ITEMS benchmark allocations)
+      add_executable(avatar_event_sampling_${probe} EXCLUDE_FROM_ALL
+        tests/event_sampling_cost.cpp "${event_controller_source}")
+      target_link_libraries(avatar_event_sampling_${probe} PRIVATE llcharacter Threads::Threads)
+      if(WIN32)
+        target_link_libraries(avatar_event_sampling_${probe} PRIVATE Winmm)
+      endif()
+      if(probe STREQUAL "allocations")
+        target_compile_definitions(avatar_event_sampling_${probe} PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+      endif()
+    endforeach()
+
     set(curve_source "${CMAKE_CURRENT_BINARY_DIR}/curve_sampling.cpp")
     add_custom_command(OUTPUT "${curve_source}"
       COMMAND "${Python3_EXECUTABLE}"
