@@ -15,8 +15,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
   advisory admission is implemented at `b7417ea795`, with final provenance in
   `results/shadow-mask-provenance14m.json`. PR115 is open/mergeable; automated
   review completed with no findings at exact `2df5f5bdaf` as last read. Its full
-  viewer build/runtime acceptance is pending. Plan 14n's actual hand-consumer
-  baseline is now recorded; cleanup implementation is not started. No workers.
+  viewer build is now retained as `7.2.5.82269` at that exact head; its installer
+  hash and passed focused verification were read/checked. Runtime acceptance is
+  pending. Plan 14n is implemented at `7fe77b5aa9` with final provenance in
+  `results/hand-consumer-provenance14n.json`. Publish its separate evidence head,
+  then begin plan 14o's main-frame/worker candidate audit. No workers enabled.
 - Plan 14f is implemented: ordinary-factory permission, explicit ordinary remote
   character permission, independent current lifecycle/frame time/count/skeleton/
   appearance/asset/binding context, exact current-input validation and direct
@@ -273,9 +276,35 @@ Updated October 24, 2026. The user resumed the performance program; the October
   176 final map-owned bytes return to zero at cleanup. The publication's 96
   allocations are legitimate and must stay separately accounted for. Probe
   source/report/executable identities are in `results/hand-consumer-*14n*`.
-  Session 51368 is terminal. No changing-morph equivalence or cleanup helper
-  implementation yet. Existing 14f1 real hand lifetime fixture is reusable;
+  Session 51368 is terminal. That baseline predates the changing-morph fixture
+  and cleanup helper. Existing 14f1 real hand lifetime coverage is retained;
   every new native wrapper must also include fresh `llpose.cpp` and shadow core.
+- Plan 14n is implemented: the hand callback uses a typed map cleanup at the
+  original point with the existing stable key names. Class fields/virtual APIs,
+  generic map authority, morph math and owner lifetimes are unchanged. Both
+  storage modes reproduce the same 448 frozen parent frames with 55 callback
+  republications and pass 17,103 actual visual-param checks. The expanded actual
+  character/keyframe lifetime suite passes 216 checks per mode. Separate probes
+  pass 1,019 warm allocation/pressure and eight cold failure/retry checks per
+  mode. Standalone normal allocation and Tracy/contiguous production/test TUs
+  compile. No additional phase/shadow regression sweep is needed for this narrow
+  cleanup change unless later evidence finds an issue.
+- 32 warm consumer callbacks drop 32 ordinary-new calls / 1,024 bytes to zero.
+  Cleanup plus following owned publication drops 128 / 6,656 to 96 / 5,632;
+  two nodes and an owned key per republication remain legitimate. Its final 176
+  counted map bytes return to zero on cleanup. Changing-morph callbacks also
+  allocate zero in the focused 64-update probe. The existing stable long name
+  may initialize first in the consumer: failure/retry preserves pose-first
+  cleanup; MSVC retry retains 32 bytes once for that existing static name.
+  Warm cleanup succeeds under injected allocation failure. No FPS claim.
+- The parent idle guard reported PR115 active before an already-queued isolated
+  parent check ran. These correctness runs and subsequent checks use immutable
+  internal libraries/read-only packages; no timing/idle-desktop claim is made.
+  Shared source/cache and monitor stayed untouched. Sessions 96164, 95277 and
+  31851 are terminal. Final evidence is `results/hand-consumer-*14n*`.
+  PR115 is now retained at exact 2df5f5bdaf as `7.2.5.82269`; archive identity,
+  installer SHA and passed focused receipt were verified. This does not validate
+  newer 14n source or rendered/lifecycle/crowd behavior.
 
 ## Next sequence
 
@@ -286,10 +315,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.
-3. PR115 is published/attached at exact `2df5f5bdaf`; keep that head stable for
-   its separate build. Continue plan 14n on `codex/perf-hand-consumer-cleanup`.
-   Its allocation baseline is recorded. Freeze actual changing-morph outputs
-   before implementing typed cleanup. Preserve 14l's rejected data and 14m source
+3. Finish publishing/attaching plan 14n's separate exact-head PR from
+   `codex/perf-hand-consumer-cleanup`, based on PR115 at exact `2df5f5bdaf`.
+   Start plan 14o on `codex/perf-main-frame-audit` from that published head after
+   a clean-checkout check. Trace actual main-frame phases and existing worker
+   ownership, then choose the next kernel from evidence. Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
    sources; the old parent executables cannot run a workload they do not contain.

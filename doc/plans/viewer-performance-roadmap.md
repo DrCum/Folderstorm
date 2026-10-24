@@ -271,3 +271,11 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   when pruning cannot help. Diagnostics stay default FALSE/nonpersistent; no
   real crowd/window/FPS acceptance or production worker caller is established.
   Plan 14n measures the remaining normal hand-consumer cleanup allocation.
+- Stage 4t: the actual hand consumer reuses the existing stable cleanup keys at
+  its original boundary. Both storage modes reproduce 448 frozen morph/callback
+  frames, including callback republication, and pass warm/cold allocation failure
+  and lifetime checks. 32 warm cleanups drop 32 allocation calls to zero; the
+  following publication's 96 legitimate node/key calls remain. No class-layout,
+  morph-math or worker change. Full viewer/FPS/visual acceptance remains pending.
+  Plan 14o audits the main-frame phases and existing workers across the viewer
+  before choosing further work; real attribution/window evidence is still open.

@@ -30,8 +30,9 @@ Never present a missing hardware result as a successful test.
 - Baseline and each checkpoint: full native Windows compile/link and runtime
   verification by the building/testing agent; portable helper tests do not cover
   complete viewer integration.
-  The independent agent has retained full native builds through PR 114
-  (`7.2.5.82260` at `514dc0acd4` as last read). Newer heads need their own build, and
+  The independent agent has retained full native builds through PR 115
+  (`7.2.5.82269` at `2df5f5bdaf`, archive/hash/focused receipt verified).
+  Newer heads need their own build, and
   rendered/lifecycle/crowd acceptance remains pending for the stack.
 - Collect matched solo/crowd frame-time samples and profiler captures as described
   in the roadmap. Raw captures may contain user data; share only deliberately.
@@ -121,6 +122,11 @@ Never present a missing hardware result as a successful test.
   read the updated 14g interpretation before a later Q7 capture. The user has
   not yet tested PR114 and is working; keep this request deferred. No live
   worker trial or default enablement follows from generated matches/gaps.
+- Checkpoint 14n removes a warm key-name allocation in the real hand consumer.
+  Native morph values/callback order/cleanup/republication match the frozen
+  parent in 448 frames per mode. Check rendered changing/competing hand poses,
+  outfit/appearance changes and lifecycle behavior in its separately retained
+  build when convenient. No new answer or live capture is required now.
 
 ## Results
 

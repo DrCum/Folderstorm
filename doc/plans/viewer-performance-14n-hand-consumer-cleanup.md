@@ -67,5 +67,78 @@ The scratch-only allocation executable compiles pose, character, controller,
 motion, keyframe, shadow and hand sources fresh and links immutable internal
 libraries. Raw rows, probe and exact identities are in
 `results/hand-consumer-*14n*`. This first fixture uses relaxed poses/no mesh; it
-does not cover changing morphs or provide timings. No production cleanup change
-has been made yet. Extend the actual visual-param fixture before the helper.
+does not cover changing morphs or provide timings. It predates the production
+cleanup change and the visual-param fixture described below.
+
+## Implementation and final evidence
+
+Implemented at `7fe77b5aa945e4ad8a21ba6f7308e20253dba3fe`.
+`LLCharacter::clearHandPoseAnimationData` erases the two map entries in their
+original order with the existing stable key names. The real hand callback calls
+it at exactly the old cleanup boundary. Generic APIs, value ownership, priority
+lookup, morph math, callback ordering, class fields and virtual APIs are
+unchanged. No cache, worker, persistent setting or frame delay is added.
+
+The frozen pre-change callback is retained as a test-only reference. Before
+implementation, both actual parent modes matched that reference across 448
+frames and 55 callback republications. The final implementation reproduces
+those same frame streams in each key-storage mode. Each run passes 17,103
+checks covering real visual-param storage/application, all hand poses,
+interrupted blends, repeated/backward times, invalid/null requests, partial
+entries, unrelated data and callback republishing before/after cleanup. These
+use dummy morph parameters, not rendered meshes.
+
+The actual character/keyframe lifetime suite now passes 216 checks per mode,
+including generic/null/partial cleanup, idempotence, independent character maps,
+priority ties, publication addresses and motion/cache destruction. Separate
+allocation executables pass 1,019 warm allocation/pressure checks and eight cold
+failure/retry checks per mode. Normal allocation TU and standalone Tracy/
+contiguous production/test TU syntax checks pass.
+
+| 32 actual callbacks | Before calls / bytes | After calls / bytes |
+| --- | ---: | ---: |
+| Absent entries | 32 / 1,024 | 0 / 0 |
+| Owned entries, producer excluded | 32 / 1,024 | 0 / 0 |
+| Generic override, producer excluded | 32 / 1,024 | 0 / 0 |
+| Pose-only or priority-only, producer excluded | 32 / 1,024 | 0 / 0 |
+| Cleanup plus following owned publication | 128 / 6,656 | 96 / 5,632 |
+
+The following publication still creates its two map nodes and owned long key.
+Its final 176 counted bytes return to zero on cleanup. Changing-morph callbacks
+also make zero counted allocations after warm-up in the focused 64-update probe.
+Ordinary-new accounting excludes custom aligned blocks and RSS.
+
+The existing stable long key can initialize first in the consumer. Its injected
+allocation failure preserves the original pose-first cleanup boundary, and
+retry succeeds. On this MSVC target, successful retry retains 32 bytes once for
+that existing static name until process exit. Warm cleanup succeeds with the
+allocation failure counter set to zero. This is shared name initialization,
+not retained per-character map entries.
+
+Final source, reference, frame, probe, executable and dependency identities are
+in `results/hand-consumer-provenance14n.json`; raw before/after rows and probes
+are retained alongside it. The isolated correctness runs overlap the private
+PR115 build and link immutable internal libraries with read-only external
+packages. The parent idle guard reported active before an already-queued
+validation command ran; that is recorded in the parent provenance. No timing
+or idle-desktop evidence is claimed. Shared source/cache and monitor were not
+changed. Native sessions 96164, 95277 and 31851 are terminal.
+
+## Separate build and remaining acceptance
+
+Build this exact PR head separately from PR115, including its complete preceding
+stack. Use the accepted private normal x64 AVX2 OpenSim Nightly Velopack setup,
+Tracy OFF and contiguous keys OFF; preserve completed archives. No extra full
+profiling/storage variants are requested. Full viewer integration, rendered
+hand morphs, competing animations, appearance changes, travel/lifecycle and
+crowded FPS acceptance remain pending. Native counts do not establish FPS gain.
+
+With LL_TESTS, `avatar_hand_consumer` and `avatar_hand_pose_lifetime` run their
+correctness checks. Run `avatar_hand_consumer_allocations --allocations` and
+`avatar_hand_consumer_allocations --cold` as separate fresh processes; the latter
+requires uninitialized production key names. Allocation injection skips with
+Tracy enabled. The allocation executable provides no timings.
+
+Plan 14o returns to the whole viewer's main-frame phase/worker ownership audit
+to choose the next kernel from evidence. Real crowd/query-window and visual
+acceptance remain open, and no production worker dispatch is enabled.
