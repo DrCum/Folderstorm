@@ -7,6 +7,7 @@ include(LLCommon)
 
 set(llcharacter_SOURCE_FILES
     fssamplingcontext.cpp
+    fssamplingshadow.cpp
     llanimationstates.cpp
     llbvhloader.cpp
     llcharacter.cpp
@@ -34,6 +35,7 @@ set(llcharacter_HEADER_FILES
     fsanimationkeys.h
     fssamplingcontext.h
     fssamplingidentity.h
+    fssamplingshadow.h
 
     llanimationstates.h
     llbvhloader.h
@@ -79,6 +81,16 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  add_executable(avatar_sampling_shadow tests/sampling_shadow_test.cpp)
+  target_link_libraries(avatar_sampling_shadow PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_sampling_shadow POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_sampling_shadow> VERBATIM)
+  add_executable(avatar_sampling_shadow_allocations tests/sampling_shadow_test.cpp)
+  target_link_libraries(avatar_sampling_shadow_allocations PRIVATE llcharacter Threads::Threads)
+  target_compile_definitions(avatar_sampling_shadow_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  add_executable(avatar_sampling_shadow_cost tests/sampling_shadow_cost_benchmark.cpp)
+  target_link_libraries(avatar_sampling_shadow_cost PRIVATE llcharacter Threads::Threads)
+
   foreach(probe IN ITEMS cost allocations)
     add_executable(avatar_current_motion_${probe} tests/current_motion_cost_benchmark.cpp)
     target_link_libraries(avatar_current_motion_${probe} PRIVATE llcharacter Threads::Threads)

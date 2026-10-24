@@ -30,6 +30,9 @@
 #include "linden_common.h"
 
 #include "llmotioncontroller.h"
+#include "fssamplingcontext.h"
+#include "fssamplingshadow.h"
+#include <limits>
 #include "llfasttimer.h"
 #include "llkeyframemotion.h"
 #include "llmath.h"
@@ -153,7 +156,53 @@ LLMotionController::LLMotionController()
 //-----------------------------------------------------------------------------
 LLMotionController::~LLMotionController()
 {
+    if (FSSampling::activeShadow) FSSampling::ShadowScope::controllerDestroyed(*this);
     deleteAllMotions();
+}
+
+bool LLMotionController::predictSamplingClock(bool force_update, SamplingClock& projected, bool will_unpause) const
+{
+    projected = {};
+    FSSampling::ScopedNumericContext preserve(FSSampling::NumericContext::capture());
+    if (!preserve.isActive()) return false;
+    const F32 cur_time = mTimer.getElapsedTimeF32();
+    const F32 delta_time = cur_time - mPrevTimerElapsed;
+    if (!llfinite(cur_time) || !llfinite(delta_time) || !llfinite(mAnimTime) ||
+        !llfinite(mTimeFactor) || !llfinite(mUpdateFactor) || !llfinite(mTimeStep)) return false;
+    const bool paused = mPaused && !will_unpause;
+    projected.animTime = mAnimTime;
+    projected.callbacks = !paused || force_update;
+    if (paused) return true;
+    const F32 update_time = mAnimTime + delta_time * mTimeFactor * mUpdateFactor;
+    if (!llfinite(update_time)) return false;
+    if (mTimeStep != 0.f)
+    {
+        if (mTimeStep < 0.f) return false;
+        const F32 time_interval = fmodf(update_time, mTimeStep);
+        const F32 quotient = (update_time - time_interval) / mTimeStep;
+        if (!llfinite(quotient) || F64(quotient) >= F64(std::numeric_limits<S32>::max()) ||
+            F64(quotient) < F64(std::numeric_limits<S32>::min())) return false;
+        const S32 quantum_count = llmax(0, llfloor(quotient)) + 1;
+        if (quantum_count == mTimeStepCount) { projected.callbacks = false; return true; }
+        projected.animTime = F32(quantum_count) * mTimeStep;
+    }
+    else projected.animTime = update_time;
+    return llfinite(projected.animTime);
+}
+
+bool LLMotionController::predictSamplingTime(LLMotion& motion, const SamplingClock& clock, F32& time) const
+{
+    if (!clock.callbacks || !motion.isActive() || motion.isStopped() ||
+        !llfinite(motion.mActivationTimestamp) || !llfinite(motion.mSendStopTimestamp) ||
+        clock.animTime > motion.mSendStopTimestamp) return false;
+    time = clock.animTime >= motion.mActivationTimestamp ? clock.animTime - motion.mActivationTimestamp : 0.f;
+    return llfinite(time);
+}
+
+inline bool LLMotionController::invokeMotionUpdate(LLMotion& motion, F32 time, U8* mask)
+{
+    if (FSSampling::activeShadow) FSSampling::activeShadow->observe(*this, motion, time);
+    return motion.onUpdate(time, mask);
 }
 
 void LLMotionController::incMotionCounts(S32& num_motions, S32& num_loading_motions, S32& num_loaded_motions, S32& num_active_motions, S32& num_deprecated_motions)
@@ -662,7 +711,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
                 // if not, let's stop it this time through and deactivate it the next
 
                 posep->setWeight(motionp->getFadeWeight());
-                motionp->onUpdate(motionp->getStopTime() - motionp->mActivationTimestamp, last_joint_signature);
+                invokeMotionUpdate(*motionp, motionp->getStopTime() - motionp->mActivationTimestamp, last_joint_signature);
             }
             else
             {
@@ -694,7 +743,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
             }
 
             // perform motion update
-            update_result = motionp->onUpdate(mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
+            update_result = invokeMotionUpdate(*motionp, mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
         }
 
         //**********************
@@ -718,7 +767,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
 
             // perform motion update
             {
-                update_result = motionp->onUpdate(mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
+                update_result = invokeMotionUpdate(*motionp, mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
             }
         }
 
@@ -741,12 +790,12 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
                 posep->setWeight(motionp->getFadeWeight() * motionp->mResidualWeight + (1.f - motionp->mResidualWeight) * cubic_step((mAnimTime - motionp->mActivationTimestamp) / motionp->getEaseInDuration()));
             }
             // perform motion update
-            update_result = motionp->onUpdate(mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
+            update_result = invokeMotionUpdate(*motionp, mAnimTime - motionp->mActivationTimestamp, last_joint_signature);
         }
         else
         {
             posep->setWeight(0.f);
-            update_result = motionp->onUpdate(0.f, last_joint_signature);
+            update_result = invokeMotionUpdate(*motionp, 0.f, last_joint_signature);
         }
 
         // allow motions to deactivate themselves
@@ -980,7 +1029,7 @@ bool LLMotionController::activateMotionInstance(LLMotion *motion, F32 time)
     mActiveMotions.push_front(motion);
 
     motion->activate(time);
-    motion->onUpdate(0.f, mJointSignature[1]);
+    invokeMotionUpdate(*motion, 0.f, mJointSignature[1]);
 
     if (mAnimTime >= motion->mSendStopTimestamp)
     {

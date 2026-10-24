@@ -2,6 +2,7 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+ <key>FSAvatarSamplingShadow</key><map><key>Comment</key><string>Diagnostic only: compare early remote-avatar animation queries with actual callbacks. Logs aggregate counts and timing buckets when disabled. Adds observation overhead; does not run workers.</string><key>Persist</key><integer>0</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
  <key>FSKlipyEnabled</key><map><key>Comment</key><string>Enable deliberate KLIPY searches in the GIF Board.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>1</integer></map>
  <key>FSKlipyAppKey</key><map><key>Backup</key><integer>0</integer><key>HideFromEditor</key><integer>1</integer><key>Comment</key><string>Optional public KLIPY desktop app key override. Never use a partner/dashboard credential.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string/></map>
 

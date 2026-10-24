@@ -24,6 +24,7 @@ inline Cell cells[CAPACITY];
 inline std::atomic_flag locked = ATOMIC_FLAG_INIT;
 inline bool enabled = false;
 inline Stats stats;
+inline std::atomic<int> failureCountdown{-1}; // Test-only fault injection; negative disables it.
 struct Lock
 {
     Lock() { while (locked.test_and_set(std::memory_order_acquire)) {} }
@@ -62,6 +63,12 @@ inline void remove(void* pointer)
 }
 inline void* allocate(size_t bytes, size_t alignment = 0)
 {
+    int remaining = failureCountdown.load(std::memory_order_relaxed);
+    while (remaining >= 0)
+    {
+        if (!remaining) throw std::bad_alloc();
+        if (failureCountdown.compare_exchange_weak(remaining, remaining - 1, std::memory_order_relaxed)) break;
+    }
     void* pointer = nullptr;
     if (!alignment) pointer = std::malloc(bytes ? bytes : 1);
 #if defined(_WIN32)

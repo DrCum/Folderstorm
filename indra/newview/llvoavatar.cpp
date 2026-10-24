@@ -31,6 +31,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <sstream>
+#include <optional>
+#include "fssamplingshadow.h"
 
 #include "llaudioengine.h"
 #include "noise.h"
@@ -1298,8 +1300,32 @@ void LLVOAvatar::initClass()
 }
 
 
+namespace
+{
+void reportAvatarSamplingShadow(bool report_empty = false)
+{
+    const auto totals = FSSampling::ShadowScope::totals();
+    if (!FSSampling::ShadowScope::resetTotals() || (!totals.batches && !report_empty)) return;
+    std::ostringstream report;
+    report << "batches=" << totals.batches << " predicted=" << totals.predicted
+        << " matched=" << totals.matched << " mismatched=" << totals.mismatched
+        << " unused=" << totals.unused << " unpredicted=" << totals.unpredicted
+        << " excluded=" << totals.excluded << " rejected=" << totals.rejected
+        << " nested=" << totals.nested << " destroyed=" << totals.destroyed
+        << " prepare_ns=" << totals.prepareNs << " validation_ns=" << totals.validationNs
+        << " observation_ns=" << totals.observationNs << " first_matched=" << totals.firstMatched
+        << " cleanup_ns=" << totals.cleanupNs << " buffer_bytes_peak=" << totals.bufferBytesPeak
+        << " retained_keys_peak=" << totals.retainedKeysPeak << " matched_gap_ns_pow2_buckets=";
+    for (auto count : totals.matchedGapNs) report << count << ',';
+    report << " first_matched_gap_ns_pow2_buckets=";
+    for (auto count : totals.firstMatchedGapNs) report << count << ',';
+    LL_INFOS("AvatarSamplingShadow") << report.str() << LL_ENDL;
+}
+}
+
 void LLVOAvatar::cleanupClass()
 {
+    reportAvatarSamplingShadow();
 }
 
 LLPartSysData LLVOAvatar::sCloud;
@@ -5676,12 +5702,20 @@ bool LLVOAvatar::computeNeedsUpdate()
 bool LLVOAvatar::updateCharacter(LLAgent &agent)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
+    static LLCachedControl<bool> sampling_shadow(gSavedSettings, "FSAvatarSamplingShadow", false);
+    static bool shadow_was_enabled = false;
+    if (!sampling_shadow && shadow_was_enabled) reportAvatarSamplingShadow(true);
+    shadow_was_enabled = sampling_shadow;
     updateDebugText();
 
     if (!mIsBuilt)
     {
         return false;
     }
+
+    std::optional<FSSampling::ShadowScope> shadow;
+    if (sampling_shadow)
+        shadow.emplace(mMotionController, true, mSpecialRenderMode == 1, !hasMotionPauseRequests());
 
     bool visible = isVisible();
 

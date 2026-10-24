@@ -522,6 +522,10 @@ public:
     bool permitsOwnedSampling() const;
     bool prepareOwnedSampling(F32 time, SamplingRequest& request);
     bool updateWithOwnedSampling(F32 time, U8* joint_mask, const SamplingResult& result, bool& sample_applied);
+    bool matchesOwnedSamplingQuery(F32 time, const SamplingRequest& query);
+    U64 getOwnedSamplingInstance() const { return mSamplingAuthority.instance; }
+    size_t ownedSamplingBindingBytes() const { return mSamplingAuthority.bindings.capacity() * sizeof(SamplingAuthority::Binding); }
+    bool releaseOwnedSamplingBindings(U64 instance); // Owner lookup must already establish a valid live motion.
 
 protected:
     // Current inputs/versions must be prepared independently on the main thread, not read back from the result.
@@ -529,6 +533,10 @@ protected:
     static bool samplingInputsMatch(const SamplingResult& result, const std::shared_ptr<const JointMotionList>& asset,
         const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
         const U32* usage, size_t count);
+    static bool samplingQueryMatches(const SamplingRequest& query, const std::shared_ptr<const JointMotionList>& asset,
+        const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+        const U32* usage, size_t count);
+    bool matchesCurrentQuery(const SamplingRequest& query, F32 sample_time, const SamplingIdentity& identity) const;
     bool matchesCurrentSampling(const SamplingResult& result, F32 sample_time, const SamplingIdentity& identity) const;
 
     struct KeyframeUpdateTime

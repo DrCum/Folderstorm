@@ -48,10 +48,34 @@ constraint, blending, skeleton or attachment order to create an artificial gap.
 
 ## Results
 
-Prediction/observation is not implemented yet. The preceding 14f1 serial
-allocation fix is implemented and measured; current owner preparation/application
-costs are recorded there. Begin with the following source audit, then complete
-the mutation/independence analysis before selecting an observation boundary.
+Prediction/observation source is implemented; final validation and publication
+are in progress. No workers are dispatched and no extra poses are applied.
+Initial native runs pass 4,954 real-controller checks and 23 separate allocation/
+failure checks. Final map/contiguous, unsupported-mode and caller checks are
+being completed. Full viewer build and manual observation/crowd acceptance
+remain pending for this checkpoint.
+
+The observer is a lexical owner-thread scope at the built-avatar boundary,
+before visibility/appearance/root preparation. Its thread-local stack allows one
+main-scene batch globally, rejects nested opportunities and cancels lookup on
+controller destruction. It retains owned queries/tokens only and resolves
+cleanup through the controller's current owning containers. Default playback
+creates no shadow buffers. `FSAvatarSamplingShadow` is false and nonpersistent.
+No setting/account was operated here.
+
+Admission caps are 32 motions, 64 KiB of accounted request/owner-binding storage,
+and 32,768 retained logical curve keys. Canonical assets are existing data held
+by leases; logical-key counts do not claim an allocator/RSS bound on those
+assets or their metadata. One bounded preparation attempt can transiently exceed
+the admitted buffer budget before immediate rejection/cleanup. Binding capacities
+and all diagnostic leases are released at scope exit. No queue exists.
+
+Preparation, validation, total hook occupancy and cleanup are accounted
+separately. All-match gap buckets subtract previous measured hook occupancy;
+first-ordinary-callback match buckets are also recorded. Later gaps include
+earlier real animation work that a future worker could remove, so they are an
+optimistic upper bound. Neither histogram alone proves a useful dispatch window.
+The source audit and implementation sequence below remain the design record.
 
 ### Initial controller audit
 

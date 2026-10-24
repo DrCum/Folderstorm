@@ -20,11 +20,14 @@ Updated October 24, 2026. The user resumed the performance program; the October
   map-authoritative typed priority lookup and unchanged priority/publication order.
   Plan 14f1 is published as PR 110; its automated review completed with no
   findings at exact `4adf6a948e`. Both checkpoint PRs are attached to this chat.
-- Plan 14g's controller/avatar audit and concrete implementation sequence are
-  written. This branch currently contains planning only, with no predictor,
-  observer, setting or production worker caller yet. Begin the nonmutating
-  clock/query contract next, then complete the bounded shadow observer before
-  publishing its separately testable PR. Do not guess that PR's number.
+- Plan 14g's predictor/query checker/bounded scoped observer and default-off
+  nonpersistent setting are implemented, with final validation in progress.
+  Initial native checks pass; read its updated results and scratch `*14g*` logs.
+  No production worker caller exists. Finish source review, final regressions,
+  cost/allocation provenance and docs before publishing a separate PR. Do not
+  guess its number. Native tests now use immutable internal-library snapshots
+  in `performance-validation/dependencies-shadow-20261024`, avoiding mutable
+  archives during the independent builder's work. Source/cache remained untouched.
 - The frozen feature baseline through PR 88 is still
   `d0f05af90f4ed788cb59a5b2d91dd405ed06717f`; preserve it and published history.
 
@@ -59,8 +62,8 @@ Updated October 24, 2026. The user resumed the performance program; the October
 
 ## Next sequence
 
-1. Inspect current status/head/PR state and preserve any newer work. Read 14g's
-   concrete implementation sequence; begin the nonmutating clock/query contract.
+1. Inspect current status/head/PR state and preserve any newer work. Finish 14g's
+   validation/review/publication, rather than reimplementing its source.
 2. Review PR 109/newer checkpoint comments and independent build evidence.
    Preserve published heads; keep any corrective fix scoped and propagate its
    dependency explicitly. Do not treat older full builds as new-head validation.

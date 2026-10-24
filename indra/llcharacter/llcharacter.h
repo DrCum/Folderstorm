@@ -160,6 +160,7 @@ public:
 
     LLAnimPauseRequest requestPause();
     bool areAnimationsPaused() const { return mMotionController.isPaused(); }
+    bool hasMotionPauseRequests() const { return mPauseRequest->getNumRefs() > 1; }
     void setAnimTimeFactor(F32 factor) { mMotionController.setTimeFactor(factor); }
     void setTimeStep(F32 time_step) { mMotionController.setTimeStep(time_step); }
 
