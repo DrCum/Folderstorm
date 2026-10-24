@@ -1,0 +1,180 @@
+{
+  "status": "written_before_measurement",
+  "parent_pr": 122,
+  "parent_head": "b7c60446cfdf3f67565690a0b1ffaa3c7f8048be",
+  "timing_cases": 16,
+  "allocation_cases": 8,
+  "gap_us": 0,
+  "load": "normal",
+  "cases": [
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-first-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "default-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-first-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "default-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "default-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-first-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "default-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-first-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-first-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "default-later-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-first-retained",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "default-later-retained",
+      "avatars": 32,
+      "frames": 64
+    }
+  ],
+  "limits": "Actual private generated-controller work only; no delivery gates/correctness hooks/artificial gaps in measurements. No real viewer deadline/FPS acceptance."
+}

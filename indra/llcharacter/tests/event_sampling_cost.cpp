@@ -50,17 +50,33 @@ struct Measurement
     FSSamplingCost::Trace trace;
     U64 workerCycles = 0;
 };
+struct DeliveryGate
+{
+    std::promise<void> entered;
+    std::shared_future<void> released;
+    explicit DeliveryGate(std::shared_future<void> value): released(std::move(value)) {}
+};
+struct DeliveryControl
+{
+    std::promise<void> release;
+    std::shared_ptr<DeliveryGate> data = std::make_shared<DeliveryGate>(release.get_future().share());
+    std::future<void> entered = data->entered.get_future();
+    bool opened = false;
+    void open() { if (!opened) { opened = true; release.set_value(); } }
+    ~DeliveryControl() { open(); } // Declare after the pool so unwinding cannot leave its worker held.
+};
 struct Request
 {
     Batch::Request batch;
     std::shared_ptr<Measurement> measurement;
+    std::shared_ptr<DeliveryGate> delivery; // Correctness controls own synchronization data only.
 };
 struct Result
 {
     Batch::Result batch;
     std::shared_ptr<Measurement> measurement;
     void takeRequest() { batch.takeRequest(); measurement.reset(); }
-    Request recycle() { return {batch.recycle(), std::move(measurement)}; }
+    Request recycle() { return {batch.recycle(), std::move(measurement), {}}; }
 };
 struct Sampler
 {
@@ -70,6 +86,11 @@ struct Sampler
     {
         output.measurement = std::move(input.measurement);
         const auto start = cycles();
+        if (input.delivery)
+        {
+            input.delivery->entered.set_value();
+            input.delivery->released.wait(); // Correctness gate; absent from timed requests.
+        }
         const bool success = Batch::sample(std::move(input.batch), output.batch);
         output.measurement->workerCycles = cycles() - start;
         return success;
@@ -264,6 +285,9 @@ struct Frame
     size_t count = 0;
     bool prepared = false, consumed = false, ready = false, forceReady = false;
     unsigned mutation = 0;
+    bool failSampling = false;
+    std::shared_ptr<DeliveryGate> delivery;
+    std::function<void(Frame&)> beforeCallback; // Owner-only correctness hook; never sent to a worker.
     Row row;
     std::vector<Callback>* callbackTrace = nullptr;
     const std::thread::id owner = std::this_thread::get_id();
@@ -298,6 +322,8 @@ struct Frame
             }
             input.batch.queries.resize(count);
             input.measurement = measurement;
+            input.delivery = delivery;
+            if (failSampling && !input.batch.queries.empty()) input.batch.queries.front().numericContext = {};
             // Alias owns the enclosing trace allocation, never a frame or scene.
             input.batch.trace = std::shared_ptr<FSSamplingCost::Trace>(measurement, &measurement->trace);
         }
@@ -333,6 +359,7 @@ struct Frame
     bool invoke(LLMotionController& controller, LLMotion& base, F32 time, U8* mask)
     {
         require(std::this_thread::get_id() == owner, "Scene callback left its owner"); ++row.callbacks;
+        if (beforeCallback) beforeCallback(*this);
         if (callbackTrace)
         {
             unsigned character = 0;
@@ -414,8 +441,8 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
         require(pool->getWidth() == 1, "Configured private pool width differs");
         require(pool->getWaitPolicy() == (usesEventWait(mode) ? Policy::EventWaitSingleWorker : Policy::PlatformDefault), "Production policy differs");
         auto ready = std::make_shared<std::promise<void>>(); auto warm = ready->get_future();
-        require(pool->getQueue().tryPost([ready] { ready->set_value(); }), "Warm task rejected"); await(warm);
-        if (load == "busy") { require(pool->getQueue().tryPost([&entered, gate] { entered.set_value(); gate.wait(); }), "Blocker rejected"); await(started); }
+        require(pool->getQueue().post([ready] { ready->set_value(); }), "Warm task rejected"); await(warm);
+        if (load == "busy") { require(pool->getQueue().post([&entered, gate] { entered.set_value(); gate.wait(); }), "Blocker rejected"); await(started); }
         if (load == "closed") pool->close();
         Executor::Submit submit = FSSamplingTest::queueSubmitter(pool->getQueue().getWeak(), 1);
         if (correctness)
@@ -521,6 +548,115 @@ void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, co
                   << ',' << row.failedBatches << ',' << row.firstReadyCallback << ',' << trace.joints - row.applied * 32 << '\n';
     }
 }
+enum class Transition { Ready, NoReady, Rejected, Failed, FrameChanged, SkeletonChanged, AssetChanged, PermissionChanged };
+void transitionMutation(Scene& scene, Assets& assets, Transition kind)
+{
+    if (kind == Transition::FrameChanged) FSCurrentMotion::Clock::count();
+    if (kind == Transition::SkeletonChanged) for (auto& character : scene.characters) character->setSkeletonSerialNum(17);
+    if (kind == Transition::AssetChanged) assets.values[3]->invalidateSampling();
+    if (kind == Transition::PermissionChanged) for (auto& character : scene.characters) character->allowOwned = false;
+}
+void transitionCase(Mode mode, unsigned avatars, unsigned at, Transition kind)
+{
+    auto expect = [&](bool value, const char* message) {
+        if (!value) std::cerr << "transition,mode=" << name(mode) << ",avatars=" << avatars << ",at=" << at << ",kind=" << unsigned(kind) << '\n';
+        require(value, message);
+    };
+    expect(isQueued(mode) && retainsBindings(mode) && avatars >= 2 && avatars <= 32 && at >= 2 && at <= avatars,
+           "Invalid controlled transition");
+    FSCurrentMotion::Clock::set(100.0); Assets assets; Scene scene(avatars), expected(avatars); Controls controls;
+    Pool pool(mode); pool.startMeasured();
+    expect(pool.getWidth() == 1 && pool.getWaitPolicy() == (usesEventWait(mode) ? Policy::EventWaitSingleWorker : Policy::PlatformDefault),
+           "Transition pool selection differs");
+    const auto queue = pool.getQueue().getWeak();
+    Executor executor(1, [queue, kind](const Executor::Work& work) {
+        if (kind == Transition::Rejected) return false;
+        auto live = queue.lock(); return live && live->post(work);
+    });
+    DeliveryControl delivery; // Must open before executor/pool destruction on every exit.
+    for (unsigned i = 0; i < 8; ++i)
+    { FSCurrentMotion::Clock::set(100.0 + (i + 1) / 64.0); scene.update(); expected.update(); }
+    FSCurrentMotion::Clock::set(100.0 + 9 / 64.0);
+    Request input; Result output; auto measurement = std::make_shared<Measurement>();
+    Row row; std::vector<Callback> actualCallbacks, expectedCallbacks;
+    actualCallbacks.reserve(avatars); expectedCallbacks.reserve(avatars);
+    auto waitTerminal = [&](Frame& frame) {
+        expect(bool(frame.ticket), "Controlled transition lost its admitted ticket");
+        const auto deadline = Clock::now() + std::chrono::seconds(5);
+        while (true)
+        {
+            const auto status = executor.status(*frame.ticket);
+            if (status == Status::Ready || status == Status::Failed || status == Status::Expired) break;
+            if (Clock::now() >= deadline) expect(false, "Controlled transition did not acknowledge");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    };
+    {
+        Frame frame(scene, mode, 0, &executor, input, output, measurement);
+        frame.delivery = delivery.data; frame.failSampling = kind == Transition::Failed;
+        expect(!FSSampling::NumericContext{}.isSupported(), "Failure control must supply unsupported numeric context");
+        frame.callbackTrace = &actualCallbacks;
+        frame.beforeCallback = [&](Frame& current) {
+            if (kind == Transition::Rejected) return;
+            if (current.row.callbacks == 1) await(delivery.entered); // Prove Running, not a timing guess.
+            if (current.row.callbacks == at && kind != Transition::NoReady)
+            {
+                delivery.open(); waitTerminal(current);
+                transitionMutation(scene, assets, kind); // Mutate only after owned sampling has stopped.
+            }
+        };
+        scene.update(); frame.finish(); row = frame.row;
+        if (kind == Transition::NoReady)
+            expect(frame.ticket && executor.status(*frame.ticket) == Status::Discarding, "Frame finish did not abandon held work");
+    }
+    delivery.open(); executor.close(); pool.close(); // No worker can touch observation fields after join.
+    {
+        Request unused; Result unusedResult; Frame oracle(expected, Mode::Direct, 0, nullptr, unused, unusedResult, nullptr);
+        oracle.callbackTrace = &expectedCallbacks;
+        oracle.beforeCallback = [&](Frame& current) {
+            if (current.row.callbacks == at && kind != Transition::NoReady && kind != Transition::Rejected)
+                transitionMutation(expected, assets, kind);
+        };
+        expected.update(); oracle.finish();
+    }
+    expect(scene.snapshot() == expected.snapshot(), "Transition changed controller/joint/hand state");
+    expect(actualCallbacks == expectedCallbacks, "Transition changed character/motion/time callback order");
+    expect(row.callbacks == avatars && row.predicted == avatars && row.masked == avatars * 3 &&
+           row.applied + row.fallback == avatars, "Transition accounting lost callbacks or admission");
+    const bool later = checksLaterCallbacks(mode), rejected = kind == Transition::Rejected, held = kind == Transition::NoReady;
+    const bool stale = kind == Transition::FrameChanged || kind == Transition::SkeletonChanged ||
+                       kind == Transition::AssetChanged || kind == Transition::PermissionChanged;
+    const unsigned expectedChecks = rejected ? 0 : (later ? (held ? avatars : at) : 1);
+    expect(row.readinessChecks == expectedChecks, "Transition made an unexpected number of readiness checks");
+    expect(row.pendingMisses == (rejected ? 0 : (later && !held ? at - 1 : expectedChecks)), "Transition missed expected early fallback");
+    expect(row.firstReadyCallback == (later && !held && !rejected && kind != Transition::Failed ? at : 0), "Transition became ready at the wrong callback");
+    expect(row.applied == (later && kind == Transition::Ready ? avatars - at + 1 : 0), "Transition applied wrong or stale work");
+    expect(row.stale == (later && stale ? avatars - at + 1 : 0), "Between-callback staleness was not rejected");
+    expect(row.failedBatches == (later && kind == Transition::Failed ? 1 : 0), "Failed batch did not stop consumption");
+    expect(row.accepted == (rejected ? 0 : 1) && row.rejected == (rejected ? 1 : 0), "Controlled admission differs");
+    expect(measurement->trace.joints == (rejected || kind == Transition::Failed ? 0 : avatars * 32), "Owned sampling count differs");
+    if (rejected) expect(delivery.entered.wait_for(std::chrono::seconds(0)) != std::future_status::ready, "Rejected work was delivered");
+    size_t heldBytes = 0, after = 0;
+    for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
+    {
+        auto* motion = static_cast<Motion*>(base); heldBytes += motion->ownedSamplingBindingBytes();
+        if (motion->ownedSamplingBindingBytes()) motion->releaseOwnedSamplingBindings(motion->getOwnedSamplingInstance());
+        after += motion->ownedSamplingBindingBytes();
+    }
+    expect(heldBytes == avatars * 512 && after == 0, "Controlled retention bound or final cleanup differs");
+}
+void transitions()
+{
+    for (auto mode : {Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained})
+        for (unsigned avatars : {8u, 32u})
+        {
+            for (unsigned at : {2u, avatars / 2, avatars}) transitionCase(mode, avatars, at, Transition::Ready);
+            for (auto kind : {Transition::NoReady, Transition::Rejected, Transition::Failed}) transitionCase(mode, avatars, avatars / 2, kind);
+            if (checksLaterCallbacks(mode)) for (auto kind : {Transition::FrameChanged, Transition::SkeletonChanged,
+                                                           Transition::AssetChanged, Transition::PermissionChanged})
+                transitionCase(mode, avatars, avatars / 2, kind);
+        }
+}
 int check()
 {
     for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event,
@@ -532,6 +668,7 @@ int check()
         for (unsigned mutation : {1u, 2u, 3u, 4u}) run(mode, 8, 0, 1, "normal", true, mutation);
     }
     for (unsigned mutation : {1u, 2u, 3u, 4u}) run(Mode::OwnedRetained, 8, 0, 1, "normal", true, mutation);
+    transitions();
     std::cout << checks.load() << " complete-controller, exact-pose/order/hand, current/stale and bounded fallback checks passed\n";
     return 0;
 }
