@@ -76,6 +76,11 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  add_executable(avatar_initial_motion_mask tests/initial_motion_mask_test.cpp)
+  target_link_libraries(avatar_initial_motion_mask PRIVATE llcharacter)
+  add_custom_command(TARGET avatar_initial_motion_mask POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_initial_motion_mask> VERBATIM)
+
   add_executable(avatar_keyframe_phase tests/keyframe_phase_test.cpp)
   target_link_libraries(avatar_keyframe_phase PRIVATE llcharacter Threads::Threads)
   add_custom_command(TARGET avatar_keyframe_phase POST_BUILD

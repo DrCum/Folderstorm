@@ -140,6 +140,7 @@ LLMotionController::LLMotionController()
       mTimeStep(0.f),
       mTimeStepCount(0),
       mLastInterp(0.f),
+      mJointSignature{}, // Activation can call onUpdate before the first per-frame reset.
       mIsSelf(false),
       mLastCountAfterPurge(0)
 {

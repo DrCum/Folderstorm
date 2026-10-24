@@ -3,6 +3,7 @@
 
 #include "llcharacter.h"
 #include "lluuid.h"
+#include "v3dmath.h"
 
 namespace FSKeyframeTests
 {
