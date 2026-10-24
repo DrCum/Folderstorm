@@ -1,6 +1,8 @@
 // Explicit opt-in. Owned batching and independent current-state validation only;
 // no viewer playback, settings, General pool or production scheduler changes.
 #include "linden_common.h"
+#include "llmath.h"
+#include "llsimdmath.h"
 #include "sampling_cost_fixture.h"
 #include "threadpool.h"
 #include "sampling_allocation_probe.h"
@@ -386,7 +388,8 @@ void header(unsigned period, unsigned samples, bool reverse, const char* dataset
 {
     std::cout << std::fixed << std::setprecision(3)
               << "meta,dataset," << dataset << ",accepted_timer_ms," << period << ",storage_contiguous," << FS_CONTIGUOUS_ANIMATION_KEYS
-              << ",samples," << samples << ",warmup,8,reverse_order," << reverse << ",current_scheduler,private_pools_only\n"
+              << ",samples," << samples << ",warmup,8,reverse_order," << reverse
+              << ",current_scheduler,private_pools_only,owner_mode,LLVector4a_initClass\n"
               << "stage_header,mode,motions,joints,keys,batch,seek,workers,slots,cold_ms,overlap_iterations,contention_threads,stage,n,p50_us,p95_us,p99_us,max_us\n"
               << "counts_header,mode,motions,joints,keys,batch,seek,workers,slots,cold_ms,overlap_iterations,contention_threads,samples,accepted,rejected,ready_jobs,fallback_motions,cancelled_queued,abandoned_running,discarded_ready,failed,stale,observed_slots_high,observed_queued_high,sampled_joints,wasted_sampled_joints,max_batch_payload_capacity_bytes,main_cpu_ms,worker_cpu_ms,window_ms\n";
 }
@@ -445,7 +448,8 @@ int allocations()
     }
     TimerPeriod timer;
     std::cout << "meta,allocation_probe_only,timing_invalid,accepted_timer_ms," << timer.period
-              << ",fixed_registry_bytes," << sizeof(FSSamplingAlloc::Cell) * FSSamplingAlloc::CAPACITY << '\n'
+              << ",fixed_registry_bytes," << sizeof(FSSamplingAlloc::Cell) * FSSamplingAlloc::CAPACITY
+              << ",owner_mode,LLVector4a_initClass\n"
               << "alloc_header,mode,motions,joints,keys,batch,workers,slots,samples,total_new_calls,total_requested_bytes,"
                  "postwarm_new_calls,postwarm_requested_bytes,tracked_live_baseline_bytes,tracked_live_end_bytes,tracked_peak_bytes\n";
     for (Config config : {Config{8, 20, 1, 1, false}, Config{32, 64, 32, 8, false}, Config{64, 128, 32, 32, true}})
@@ -467,6 +471,9 @@ int main(int argc, char** argv)
 {
     try
     {
+        if (!FSSampling::NumericContext::capture().isSupported())
+            throw std::runtime_error("Owned sampling numeric context unsupported; cost experiment unavailable");
+        LLVector4a::initClass(); // Match viewer startup for every compared mode, including direct.
         if (FS_SAMPLING_ALLOCATION_PROBE)
         {
             if (argc == 2 && std::string(argv[1]) == "--allocations") return SamplingCostBenchmark::allocations();

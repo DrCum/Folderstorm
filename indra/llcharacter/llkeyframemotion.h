@@ -34,6 +34,7 @@
 #include <string>
 #include <memory> // </FS:Perf> Canonical animation asset ownership.
 #include "fsanimationkeys.h" // </FS:Perf> Build-selected key storage.
+#include "fssamplingcontext.h" // </FS:Perf> Owned numeric controls for pure sampling.
 
 #include "llassetstorage.h"
 #include "llbboxlocal.h"
@@ -472,6 +473,7 @@ protected:
 
         std::shared_ptr<const JointMotionList> asset;
         SamplingIdentity identity;
+        FSSampling::NumericContext numericContext;
         F32 time = 0.f;
         F32 duration = 0.f;
         std::vector<U32> usage;

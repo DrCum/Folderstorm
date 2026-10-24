@@ -75,6 +75,17 @@ Never present a missing hardware result as a successful test.
 
 ## Results
 
+Checkpoint 14e passes native per-job numeric-control/restoration and actual
+underflow/rounding-sensitive sampling checks in both storage modes. Current
+numeric-mode changes reject application; unsupported modes retain direct fallback.
+Its synthetic complete-cost results still do not prove a real overlap window or
+FPS improvement. Plan 14f audits actual eligibility/lifecycle/clock authority and
+the real phase bridge's temporary current-usage allocation before integration.
+
+The independent building agent has retained private PR 106 and 107 builds after
+the user's October 24 resume. That compile/retention evidence is distinct from
+rendered/crowd acceptance; no in-world measurements have been received here.
+
 Checkpoint 14c adds a protected phase contract with frozen update comparisons and
 actual controller callbacks. Full viewer and rendered constraint/hand-morph
 acceptance remain pending. Checkpoint 14d reproduces and fixes the controller

@@ -1,6 +1,7 @@
 // Actual keyframe sampling through a bounded, test-only executor.
 #include "linden_common.h"
 #include "llkeyframemotion.h"
+#include "sampling_test_context.h"
 #include "bounded_sampling_executor.h"
 #include "threadpool.h"
 #include <chrono>
@@ -57,6 +58,7 @@ std::shared_ptr<Probe::Asset> asset(unsigned count = 3)
 Probe::Request request(const std::shared_ptr<Probe::Asset>& data, U64 frame = 1)
 {
     Probe::Request input;
+    input.numericContext = FSSampling::NumericContext::capture();
     input.asset = data; input.identity = {19, 23, frame, 31, 41};
     input.time = 0.625f; input.duration = 1.5f;
     input.usage.resize(data->getNumJointMotions(), ALL);
@@ -317,6 +319,7 @@ void realQueue()
 }
 int run()
 {
+    if (!FSSamplingTest::supportedContext("bounded sampling")) return 0;
     queuedAndReady(); cancellationBounds(); rejectionAndFailure(); runningAndDestruction(); realQueue();
     std::cout << checks << " bounded sampling ownership/admission/lifecycle checks passed\n";
     return 0;

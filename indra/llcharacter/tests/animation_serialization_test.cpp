@@ -169,8 +169,13 @@ void simultaneousReaders()
 }
 int run()
 {
-    preserveSource(); simultaneousReaders();
-    std::cout << checks << " read-only export/size/pose checks and 10000 concurrent owned samples passed\n";
+    preserveSource();
+    if (FSSampling::NumericContext::capture().isSupported())
+    {
+        simultaneousReaders();
+        std::cout << checks << " read-only export/size/pose checks and 10000 concurrent owned samples passed\n";
+    }
+    else std::cout << checks << " read-only export/size/pose checks passed; concurrent owned sampling SKIPPED (numeric context unsupported)\n";
     return 0;
 }
 #endif

@@ -2,6 +2,7 @@
 #include "linden_common.h"
 #include "animation_serialization_fixture.h"
 #include "llframetimer.h"
+#include "sampling_test_context.h"
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -152,7 +153,7 @@ void compare(Probe& legacy, Probe& candidate, bool old_result, bool new_result)
     require(before == after, "Motion times/poses/metadata/constraint effects changed");
     ++updates;
 }
-void trajectories()
+void trajectories(bool owned_supported)
 {
     U8 mask[LL_CHARACTER_MAX_ANIMATED_JOINTS]{};
     for (unsigned config = 0; config < 12; ++config)
@@ -177,16 +178,18 @@ void trajectories()
                 const auto before = prepared.snapshot();
                 const auto keys = AnimationSerializationTest::snapshot(*data);
                 Probe::Request input;
-                require(prepared.prepareKeyframeSampling(time, ID, input), "Valid motion preparation rejected");
+                require(prepared.prepareKeyframeSampling(time, ID, input) == owned_supported,
+                        "Preparation did not honor numeric-context support");
                 require(before == prepared.snapshot() && keys == AnimationSerializationTest::snapshot(*data),
                         "Preparation changed live state or curves");
                 Probe::Result result;
-                require(Probe::sampleKeyframes(std::move(input), result), "Prepared sampling failed");
+                if (owned_supported) require(Probe::sampleKeyframes(std::move(input), result), "Prepared sampling failed");
                 bool applied = false;
                 const bool reference = old.legacyUpdate(time, mask);
                 compare(old, direct, reference, direct.onUpdate(time, mask));
                 compare(old, prepared, reference, prepared.updateWithSample(time, mask, result, ID, applied));
-                require(applied, "Valid prepared result fell back"); ++accepted;
+                require(applied == owned_supported, "Application did not honor numeric-context support");
+                if (applied) ++accepted; else ++fallbacks;
             }
         }
 }
@@ -357,7 +360,15 @@ void controllerLifecycle()
 }
 int run()
 {
-    trajectories(); staleAndMetadata(); rejectedPreparation(); controllerLifecycle();
+    const bool supported = FSSamplingTest::supportedContext("owned phase contract");
+    trajectories(supported);
+    if (!supported)
+    {
+        std::cout << checks << " direct/fallback checks and " << updates
+                  << " frozen-update comparisons passed; owned/controller sampling checks SKIPPED\n";
+        return 0;
+    }
+    staleAndMetadata(); rejectedPreparation(); controllerLifecycle();
     std::cout << checks << " phase checks, " << updates << " frozen-update comparisons, "
               << accepted << " accepted samples and " << fallbacks << " stale fallbacks passed\n";
     return 0;

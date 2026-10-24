@@ -6,10 +6,14 @@ Resumed by the user on October 24. Current checkpoint branch:
 passes 5,956 checks/1,474 frozen-update comparisons in each storage mode.
 Checkpoint 14d implements the initial controller-mask fix found during those
 tests. PRs 106 and 107 have completed automated review with no findings at their
-published heads. Plan 14e's numeric-context audit is started; its native probe
-observes different owner/fresh-thread controls and 64 exact fenv round trips.
-No numeric-context implementation exists yet. Build monitoring remains
-stopped. The shutdown details below are history;
+published heads. Plan 14e's numeric context is implemented and tested: 791 guard
+checks, 829 actual-math/application checks per storage mode, prior regressions
+green, 248 complete-cost trials and isolated guard/capture timings retained.
+Plan 14f covers explicit eligibility/current lifecycle/clock identity and owner
+validation storage before live integration; it is not implemented yet.
+The independent build agent resumed its monitoring under the user's October 24
+instruction and retained 106/107. This chat does not control that monitor/cache.
+The shutdown details below are history;
 read the current roadmap and latest checkpoint plans before continuing.
 
 Saved October 23, 2026 at the user's request before computer shutdown. Pause the
