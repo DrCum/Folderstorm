@@ -30,7 +30,7 @@ def normalized_hash(path):
     return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 
 
-def analyze(raw, plan):
+def analyze(raw, plan, provenance):
     expected = {cell(value) for value in plan['cases']}
     assert len(expected) == len(plan['cases']) == 84
     accepted, excluded, identities, windows = {}, [], {}, []
@@ -43,6 +43,7 @@ def analyze(raw, plan):
             excluded.append({'file': metadata_path.name, 'status': metadata['status']})
             continue
         assert key not in accepted, f'Duplicate accepted cell: {key}'
+        assert metadata['exeSha256'].lower() == provenance['programs'][metadata['kind']]['sha256'].lower(), 'Unmatched executable identity'
         assert metadata['exit'] == 0 and metadata['before']['idle'] and metadata['after']['idle']
         assert not metadata['before']['activeBuild'] and not metadata['after']['activeBuild']
         assert not metadata['before']['buildOrProbeProcesses'] and not metadata['after']['buildOrProbeProcesses']
@@ -111,6 +112,7 @@ def analyze(raw, plan):
     for previous, current in zip(windows, windows[1:]):
         assert previous[1] <= current[0], f'Accepted observations overlap: {previous[2]}, {current[2]}'
     return {
+        'implementation_head': provenance['implementation_head'],
         'complete': len(accepted) == len(expected), 'accepted': len(accepted), 'planned': len(expected),
         'missing': sorted(expected - accepted.keys()), 'excluded_or_unrun': excluded,
         'cases': list(accepted.values()), 'normalized_lf_sha256': identities,
@@ -129,7 +131,10 @@ if __name__ == '__main__':
     parser.add_argument('--raw', type=Path, required=True)
     parser.add_argument('--plan', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--provenance', type=Path, required=True)
     args = parser.parse_args()
-    result = analyze(args.raw, json.loads(args.plan.read_text(encoding='utf-8-sig')))
+    proof = json.loads(args.provenance.read_text(encoding='utf-8-sig'))
+    assert normalized_hash(args.plan) == proof['matrix_plan_normalized_sha256']
+    result = analyze(args.raw, json.loads(args.plan.read_text(encoding='utf-8-sig')), proof)
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(f"Validated {result['accepted']}/{result['planned']} planned cases; complete={result['complete']}")
