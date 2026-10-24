@@ -1,0 +1,63 @@
+{
+  "implementation_commit": "9043662887c4675bc7ddfe8c413e1494e8ff3e75",
+  "status": "Four accepted actual-production-path delivery observations",
+  "requested_timer_ms": 1,
+  "case_order": "default,event,event,default",
+  "cases": [
+    {
+      "case": "worker-policy-delivery14q-r1-default",
+      "mode": "default",
+      "round": 1,
+      "admitted": 64,
+      "rejected": 0,
+      "p50_us": 1997.2,
+      "p95_us": 2001.7
+    },
+    {
+      "case": "worker-policy-delivery14q-r1-event",
+      "mode": "event",
+      "round": 1,
+      "admitted": 64,
+      "rejected": 0,
+      "p50_us": 10.4,
+      "p95_us": 18.0
+    },
+    {
+      "case": "worker-policy-delivery14q-r2-default",
+      "mode": "default",
+      "round": 2,
+      "admitted": 64,
+      "rejected": 0,
+      "p50_us": 1973.8,
+      "p95_us": 2033.1
+    },
+    {
+      "case": "worker-policy-delivery14q-r2-event",
+      "mode": "event",
+      "round": 2,
+      "admitted": 64,
+      "rejected": 0,
+      "p50_us": 12.5,
+      "p95_us": 21.3
+    }
+  ],
+  "nonoverlapping_windows": true,
+  "retained_sha256_normalized_lf": {
+    "worker-policy-delivery14q-r1-default.json": "11060115a6087837170dd2fc74d7d40ef6c4195f8a06e381cf0e904b81bcee1a",
+    "worker-policy-delivery14q-r1-default.csv": "b148f76e37184326b1f0238b142c1075b8d6215ddf1c5e80c36c94a84383096a",
+    "worker-policy-delivery14q-r1-event.json": "39ac07dc9bfb98493ad488c4a5c3c34f83af93d56c5d3b61daf71b812c3740ad",
+    "worker-policy-delivery14q-r1-event.csv": "94543f3f7f2a65d892a9fbf833e355368ee2a0fe3cec83d8367e5e594f267931",
+    "worker-policy-delivery14q-r2-default.json": "7888de2a6c365ca45c2ea4eca4ca4fa27c6f7a4bff0b0004449fa5fab9d960cf",
+    "worker-policy-delivery14q-r2-default.csv": "d99ddbd4b7d331d9de7f02698845d533a2ade96fe25da29a58631412a79dc4d4",
+    "worker-policy-delivery14q-r2-event.json": "af373a6367dd21c8bcaf8dd7723804388a9698ba1ea5f988f75ad1b7a2c11252",
+    "worker-policy-delivery14q-r2-event.csv": "b0d9b185fa2c45afd9d44890268de7363dd7f3a78e99a9a57213efd05c44915c",
+    "run-worker-policy-delivery14q.ps1.txt": "6231e5207c2de6ade0ffd1f3c0d53e47fdf42cdb0c92e0ba5f32f0d40f70e4df",
+    "worker-policy14q.cpp.txt": "3cc4bf952afe64611d33815a20051137a30a0b72510e481930b813bc1b4db93d"
+  },
+  "limits": [
+    "No timing pass threshold",
+    "Before/after full-host build-idle checks; other desktop load/power/timers uncontrolled",
+    "Delivery only, no new sustained CPU/FPS/lifecycle claim",
+    "No test scheduler override; fresh production threadpool.cpp and workqueue.cpp"
+  ]
+}

@@ -296,6 +296,12 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   idle-spin regression, but3/8-worker bursts consume more active cycles. Plan14q
   limits a future explicit default-OFF trial to Windows General when its resolved
   width is1. No production policy or width changes are enabled in this checkpoint.
+- Stage 5 scoped trial:14q implements the explicit default-OFF startup request
+  for single-worker Windows General. Actual-constructor native checks and paired
+  delivery observations pass; full viewer lifecycle/CPU/FPS acceptance remains
+  pending. Keep counts/quality unchanged. Plan14s returns to whole owned-animation
+  economics with this backend and current admission/controller code, privately
+  before proposing any viewer dispatch.
 - Independent Stage 5 read cleanup: performance-stat getters return the same
   values through const lookup, avoiding zero-entry insertion for missing data.
   Plan14r's actual native fixture preserves both buffer selections and summaries;

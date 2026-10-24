@@ -134,6 +134,12 @@ Never present a missing hardware result as a successful test.
   does not change viewer scheduling. Its General consumer/source appendix lists
   future trial acceptance, including inventory/folder preparation from the
   feature stack. Packaged General width is 1; actual overrides remain unobserved.
+- Checkpoint14q's later trial is startup-only and default OFF. When convenient,
+  use `--set FSGeneralPoolEventWait true` and classify by the aggregate startup
+  line's effective policy/width. Keep existing sizes and quality; test normal
+  loading/audio/media/materials/inventory/folder preparation, travel, idle and
+  shutdown, plus warmed CPU/frame-time. Relaunch without the argument to restore
+  the default. No action is requested now, and no viewer/account was operated.
 
 ## Results
 

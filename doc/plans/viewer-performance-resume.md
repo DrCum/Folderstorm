@@ -35,12 +35,24 @@ Updated October 24, 2026. The user resumed the performance program; the October
   helper identities still match. The48-case analyzer passes after integration.
   PR118 and PR119 are open/attached/mergeable. PR119 exact8952ad4218 is based
   on PR118 exact0ec73f0551; both automated reviews completed without findings
-  at those exact heads. Their separate full builds are pending. Keep those
+  at those exact heads. Their separate full builds are retained and verified.
+  Keep those
   heads stable. No GitHub PR was merged and no scheduler default changed.
-- The14q branch contains only preparation/handoff updates so far; no production
-  wait-policy or new startup setting has been added. Implementation entry points
-  and native-control protocol are recorded in its plan before code. All own
-  sessions are terminal. No viewer or account operation has been performed.
+- Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
+  the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
+  Only resolved Windows width1 accepts; all old callers default to platform
+  policy and General is the sole production opt-in caller.4,593 actual-path
+  native checks and18 scope checks pass, with fresh threadpool/workqueue.cpp.
+  Normal/Tracy compilation passed. Four paired/reversed actual-path delivery
+  cases have256 admissions,0 rejects, no accepted overlap; default p95
+  2001.7/2033.1us, event18.0/21.3us at requested1ms. No new CPU/FPS/lifecycle
+  acceptance claim. Evidence is results/worker-policy-provenance14q.json and
+  worker-policy14q/. All own sessions are terminal; no viewer/account operated.
+- PR118 exact0ec73f0551 is retained as7.2.5.82283 with37 focused checks;
+  PR119 exact8952ad4218 as7.2.5.82287 with38. Both installer hashes, source
+  identities and focused receipts were verified in parent-build-receipts14q.
+  This newer14q source still requires its own exact-head full build, full
+  LL_TESTS integration and manual General lifecycle/CPU/frame-time acceptance.
 - PR117 is published/attached at exact `22ea4cee92ae72d315ecc4355241abd6bbe78ff3`,
   base audit db9. Automated review completed without findings at that head.
   Its exact-head full build is retained as7.2.5.82278; installer hash and37
@@ -436,14 +448,16 @@ Updated October 24, 2026. The user resumed the performance program; the October
    All ten remaining cells are now terminal/passed; no own native session remains.
    PR118 is already published/attached at exact0ec73f0551, based on PR117. It is
    integrated with stats14r in published PR119 exact8952ad4218; source identities
-   and48-case data were reverified after resolving only docs. Both need their
-   independent full builds. This branch is based on119. Implement14q's explicit
-   constructor policy and immutable resolved-width decision first, then actual
-   production-path native tests with a private CommonControl listener, then the
-   General-only startup flag/log and scope verification. No test-only scheduler
-   override in that fixture. Default/widths/platforms remain unchanged; do not
-   repeat the48-case matrix for unchanged algorithm code. Retain fresh sources
-   and keep timing behind full-host idle checks. No default adoption.
+   and48-case data were reverified after resolving only docs. Both exact heads
+   are now independently retained with verified installer/focused receipts.
+   This branch is based on119 and14q is implemented/native checked. Publish
+   its separate PR, verify/attach exact head, preserve it for its own build and
+   then begin already-written14s on a new branch from that head. Audit current
+   actual-controller/context/batch fixture interfaces before the private complete-
+   cost experiment. Use actual production policy, latest admission/controller
+   code and General-sized capacity; keep frozen controls untouched. Timing
+   requires full-host/private-builder idle, ownership remains strict and no
+   animation workers or scene/controller reordering are enabled here.
    Preserve 14l/14m source
    identities. Do not resume container tuning or revive the cache macro.
    New parent workloads need freshly compiled exact PR114 pose/core/header
