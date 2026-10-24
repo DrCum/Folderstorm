@@ -1,5 +1,6 @@
 #include "linden_common.h"
 #include "sampling_cost_fixture.h"
+#include "sampling_test_context.h"
 #include <cstdlib>
 #include <deque>
 #include <iostream>
@@ -90,6 +91,7 @@ void failureAndBarrier()
 }
 int run()
 {
+    if (!FSSamplingTest::supportedContext("owned batch sampling")) return 0;
     correctnessAndReuse(); failureAndBarrier();
     std::cout << checks << " owned batch, reusable-capacity, failure and same-frame fallback checks passed\n";
     return 0;

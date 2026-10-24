@@ -86,6 +86,7 @@ inline std::shared_ptr<Probe::Asset> asset(unsigned which)
 inline Probe::Request request(const std::shared_ptr<Probe::Asset>& data, F32 time)
 {
     Probe::Request input;
+    input.numericContext = FSSampling::NumericContext::capture();
     input.asset = data; input.time = time; input.duration = data->mDuration;
     input.identity = {1, 2, 3, 4, 5}; input.usage.assign(data->getNumJointMotions(), ALL);
     return input;

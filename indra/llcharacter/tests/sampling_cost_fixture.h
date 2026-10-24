@@ -178,6 +178,7 @@ public:
         {
             auto& input = current[m]; input.asset = assets[m % assets.size()];
             input.identity = {m + 1, 1, frame, 1, 1}; input.time = time(frame, m); input.duration = duration();
+            input.numericContext = FSSampling::NumericContext::capture();
             input.usage.resize(config.joints);
             for (unsigned j = 0; j < config.joints; ++j) input.usage[j] = states[m][j]->getUsage();
         }
@@ -189,6 +190,7 @@ public:
         {
             const auto& source = current[first + i]; auto& copy = batch.queries[i];
             copy.asset = source.asset; copy.identity = source.identity;
+            copy.numericContext = source.numericContext;
             copy.time = source.time; copy.duration = source.duration; copy.usage = source.usage;
         }
     }

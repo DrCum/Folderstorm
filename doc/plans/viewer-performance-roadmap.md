@@ -200,3 +200,9 @@ and comparison. Normal release builds remain valid without Tracy enabled.
   before activation can pass it to a motion. Poisoned-storage tests reproduce
   the old behavior and verify initial/current masks and callback order. Plan 14e
   establishes per-job numeric context before any live worker dispatch.
+- Stage 4j: owner numeric controls now travel with owned sampling requests;
+  each job establishes/restores worker controls/status and validates current
+  controls at application. Native guard and actual-math tests pass, including
+  116 unguarded mismatches reproduced per storage mode. Complete-cost data and
+  isolated guard timings are retained; immediate dispatch remains unsuitable.
+  Plan 14f covers factory eligibility and actual current lifecycle/clock context.

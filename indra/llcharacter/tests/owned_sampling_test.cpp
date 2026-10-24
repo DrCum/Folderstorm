@@ -1,6 +1,7 @@
 // Pure sampling compared with actual JointMotion::update and LLJointState setters.
 #include "linden_common.h"
 #include "llkeyframemotion.h"
+#include "sampling_test_context.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -43,6 +44,7 @@ constexpr U32 ALL = LLJointState::POS | LLJointState::ROT | LLJointState::SCALE;
 Probe::Request currentCopy(const Probe::Request& input)
 {
     Probe::Request current;
+    current.numericContext=FSSampling::NumericContext::capture();
     current.asset=input.asset; current.identity=input.identity; current.time=input.time;
     current.duration=input.duration; current.usage=input.usage;
     return current;
@@ -113,6 +115,7 @@ std::shared_ptr<Probe::Asset> asset(unsigned count,unsigned seed)
 Probe::Request request(const std::shared_ptr<Probe::Asset>& data,U64 frame)
 {
     Probe::Request input;
+    input.numericContext=FSSampling::NumericContext::capture();
     input.asset=data; input.identity={17,23,frame,31,41}; input.time=0.f;input.duration=3.f;
     input.usage.assign(data->mJointMotionArray.size(),ALL);
     return input;
@@ -140,6 +143,7 @@ void oracleCases()
                 {
                     auto input=result.takeRequest();
                     input.asset=data;input.identity={iteration+1,23,++frame,31,41};
+                    input.numericContext=FSSampling::NumericContext::capture();
                     input.time=time;input.duration=duration;input.usage.resize(count);
                     std::vector<LLPointer<LLJointState>> expected(count),actual(count);
                     for(unsigned j=0;j<count;++j)
@@ -264,6 +268,7 @@ void backgroundLifetime()
 }
 int run()
 {
+    if (!FSSamplingTest::supportedContext("owned sampling")) return 0;
     oracleCases(); identitiesAndMoves(); malformedAndEmpty(); backgroundLifetime();
     std::cout<<poses<<" byte-exact actual joint-state comparisons and "<<checks<<" owned sampling checks passed\n";
     return 0;

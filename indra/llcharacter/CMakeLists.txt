@@ -6,6 +6,7 @@ include(00-Common)
 include(LLCommon)
 
 set(llcharacter_SOURCE_FILES
+    fssamplingcontext.cpp
     llanimationstates.cpp
     llbvhloader.cpp
     llcharacter.cpp
@@ -31,6 +32,7 @@ set(llcharacter_HEADER_FILES
     CMakeLists.txt
 
     fsanimationkeys.h
+    fssamplingcontext.h
 
     llanimationstates.h
     llbvhloader.h
@@ -76,6 +78,19 @@ target_link_libraries(
 # <FS:Perf> Exercise actual joint caches, curve sampling and SIMD skinning math when testing.
 if(LL_TESTS)
   find_package(Threads REQUIRED)
+  add_executable(avatar_sampling_context_cost tests/sampling_context_cost_benchmark.cpp)
+  target_link_libraries(avatar_sampling_context_cost PRIVATE llcharacter Threads::Threads)
+
+  add_executable(avatar_sampling_fp_math tests/sampling_fp_math_test.cpp)
+  target_link_libraries(avatar_sampling_fp_math PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_sampling_fp_math POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_sampling_fp_math> VERBATIM)
+
+  add_executable(avatar_sampling_numeric_context tests/sampling_numeric_context_test.cpp)
+  target_link_libraries(avatar_sampling_numeric_context PRIVATE llcharacter Threads::Threads)
+  add_custom_command(TARGET avatar_sampling_numeric_context POST_BUILD
+    COMMAND $<TARGET_FILE:avatar_sampling_numeric_context> VERBATIM)
+
   add_executable(avatar_initial_motion_mask tests/initial_motion_mask_test.cpp)
   target_link_libraries(avatar_initial_motion_mask PRIVATE llcharacter)
   add_custom_command(TARGET avatar_initial_motion_mask POST_BUILD

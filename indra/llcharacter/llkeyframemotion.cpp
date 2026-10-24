@@ -537,13 +537,18 @@ LLKeyframeMotion::SamplingRequest LLKeyframeMotion::SamplingResult::takeRequest(
     return request;
 }
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
 bool LLKeyframeMotion::sampleKeyframes(SamplingRequest request, SamplingResult& result)
 {
+    FSSampling::ScopedNumericContext numeric_scope(request.numericContext);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     result.mReady = false;
     result.mRequest = std::move(request);
     const auto& input = result.mRequest;
-    if (!input.asset || !llfinite(input.time) || !llfinite(input.duration) ||
+    if (!numeric_scope.isActive() || !input.asset || !llfinite(input.time) || !llfinite(input.duration) ||
         input.asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
         input.usage.size() != input.asset->mJointMotionArray.size())
     {
@@ -582,13 +587,18 @@ bool LLKeyframeMotion::sampleKeyframes(SamplingRequest request, SamplingResult& 
     result.mReady = true;
     return true;
 }
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
 
 bool LLKeyframeMotion::samplingResultMatches(const SamplingResult& result, const SamplingRequest& current)
 {
     const auto& input = result.mRequest;
     return result.isReady() && current.asset && input.asset.get() == current.asset.get() &&
         !input.asset.owner_before(current.asset) && !current.asset.owner_before(input.asset) &&
-        input.identity == current.identity &&
+        input.identity == current.identity && current.numericContext.isSupported() &&
+        input.numericContext == current.numericContext &&
         std::memcmp(&input.time, &current.time, sizeof(F32)) == 0 &&
         std::memcmp(&input.duration, &current.duration, sizeof(F32)) == 0 &&
         input.usage == current.usage && result.mJoints.size() == current.usage.size() &&
@@ -888,7 +898,9 @@ bool LLKeyframeMotion::buildKeyframeSamplingRequest(F32 sample_time, const Sampl
                                                    SamplingRequest& request) const
 {
     auto asset = getKeyframeSamplingLease();
+    const auto numeric_context = FSSampling::NumericContext::capture();
     if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
+        !numeric_context.isSupported() ||
         !llfinite(sample_time) || !llfinite(asset->mDuration) ||
         asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
         asset->mJointMotionArray.size() > mJointStates.size())
@@ -906,6 +918,7 @@ bool LLKeyframeMotion::buildKeyframeSamplingRequest(F32 sample_time, const Sampl
     }
     request.asset = std::move(asset);
     request.identity = identity;
+    request.numericContext = numeric_context;
     request.time = sample_time;
     request.duration = request.asset->mDuration;
     request.usage.resize(request.asset->mJointMotionArray.size());
