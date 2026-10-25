@@ -1,0 +1,22 @@
+{
+  "pr": 123,
+  "head": "6daba8aa6619e678f19fbada673c8295922f867b",
+  "version": "7.2.5.82303",
+  "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-123\\7.2.5.82303-head-6daba8aa66-velopack-sentry-tracy-OFF-clean",
+  "installer_sha256": "eaa32a3aa1ef40e41199e0a2ef63b55181200b33010f3d3ad375cdbe37b5d037",
+  "source_identity_verified": true,
+  "native_result_records": 32,
+  "configuration_records": 6,
+  "configuration_statuses": {
+    "samplingShadowDefault": "passed",
+    "generalPoolEventWaitDefault": "passed",
+    "generalWaitSourceBoundary": "passed",
+    "eventSamplingGenerator": "passed",
+    "eventSamplingExperimentCoverage": "coverage-only",
+    "testOnlyProductionPackageConsistency": "passed"
+  },
+  "normal_tracy": false,
+  "animation_keys": "OFF",
+  "runtime_acceptance": false,
+  "limits": "Verified retained source/configuration,32 native results plus6 configuration/coverage records and installer hash. No installation, login, actual viewer/crowd/FPS acceptance."
+}

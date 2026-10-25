@@ -6,7 +6,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-owned-row-publication`, from published/attached/mergeable
+- Branch: `codex/perf-owned-row-publication`. Completed14v implementation
+  783a615808a80362e99d42c34823d10d2121fa6c and its24-case matrix are ready for
+  a separate test-only PR. Read14v-owned-row-results and the prewritten14w plan.
+  Parent is published/attached/mergeable
   PR123 exact6daba8aa6619e678f19fbada673c8295922f867b. Its automated review
   completed with no findings at that head. PR122 remains stable at
   b7c60446cfdf3f67565690a0b1ffaa3c7f8048be with no findings. PR121 remains published/attached/
@@ -137,9 +140,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
   checkpoint, attach/verify its head, then begin14v on a new branch. Q4/Q7 and
   live General/crowd/quality acceptance stay deferred; no viewer worker is enabled.
 - PR123 is published/attached/mergeable at exact6daba8aa66, no automated review
-  findings. Plan14v has begun on this new branch. Primitive implementation is
-  e485501330659196b9308f0a8c796047cdc3b477; it is NOT controller-integrated or
-  timed. Read14v-row-ownership-audit and results/owned-rows14v/progress.json.
+  findings. At the initial14v checkpoint the primitive implementation was
+  e485501330659196b9308f0a8c796047cdc3b477; it was not yet controller-integrated or
+  timed. That initial stage is historical; completion is recorded below. Read14v-row-ownership-audit and results/owned-rows14v/progress.json.
   It owns two fixed groups of32 request/result cells. Ready/Failed publication
   is per-row release/acquire; published results stay immutable. Executor discard
   releases only group references. Owner-active and exact ticket-Expired gates
@@ -152,10 +155,27 @@ Updated October 24, 2026. The user resumed the performance program; the October
   artifacts remain preserved. Current bounded3 program passes73 primitive
   publication/cancel/acknowledged-reuse/failure/bounds checks; it is terminal.
   Header has only one extra lifetime comment after compilation, recorded as such
-  in partial proof. No14v performance case exists. Next integrate leases into
+  in partial proof. No14v performance case existed then. The next step was to integrate leases into
   the actual private controller fixture with direct/whole-batch controls and
   independent current-context/pose/hand/character-ID-time oracles, add lifetime/
   allocator/capacity checks, then freeze/measure complete costs only while idle.
+- Plan14v is now complete at783a615808a80362e99d42c34823d10d2121fa6c.
+  The actual private controller supports individually published event/default rows;
+  normal/allocation builds passed161684/161716 checks, including36 new controlled
+  row transitions plus52 preceding batch transitions and64 query times at1/8/32.
+  Primitive ownership/lifetime passed85 normal and98 current allocation checks,
+  including callbacks outliving the fixture/pool/executor and allocation recovery.
+  Current normal/Tracy syntax passes. All16 timing plus8 allocation cases validate
+  exact identities, full-host/private-builder idle, counts, resource/useful-waste
+  bounds and nonoverlap. No exclusions/retries.32-character event rows apply90.5–
+  91.7% and save31–33% owner cycles in both orders, at18% extra combined cycles.
+  Solo is worse. Keep it private; no viewer FPS/deadline/lifecycle acceptance.
+  Parent123 build7.2.5.82303 exact head/installer hash were verified; its receipt
+  contains32 native results plus five passed configuration records and one unrun
+  experimental-coverage record. Do not call all aggregate records native checks.
+  Retain data under results/owned-rows14v. Next publish this checkpoint independently,
+  then start14w real-phase/crossover audit on a new branch. No own native session
+  remains, and no live account, feature checkout or shared build cache was changed.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -577,9 +597,9 @@ Updated October 24, 2026. The user resumed the performance program; the October
    b7c60446cf, both without automated review findings. Their84/18-case matrices
    are complete; do not amend those heads or repeat their timings unnecessarily.
    PR123's14u transition controls and24-case matrix are published at6daba8aa66.
-   Keep that head stable. On this new branch continue14v primitivee485501330:
-   integrate its active owner leases into the actual private controller fixture,
-   with current-context stale and exact pose/hand/order checks before timing.
+   Keep that head stable.14v is now complete with its24-case comparison. Publish
+   it as a separate test-only checkpoint, attach/verify exact head, then branch
+   for14w's real-phase feasibility audit and intermediate-cohort crossover.
    Reuse existing generation acknowledgement; no buffer may
    reset until owner reads end and its exact ticket is Expired or no callback
    was retained. No live viewer integration is enabled by this research.
