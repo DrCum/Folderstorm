@@ -1,0 +1,15 @@
+{
+  "pr": 124,
+  "head": "f1db2eab06b1db8c46535fb16979c18bfc147882",
+  "base": "6daba8aa6619e678f19fbada673c8295922f867b",
+  "url": "https://github.com/DrCum/Folderstorm/pull/124",
+  "attached": true,
+  "mergeable": true,
+  "automated_code_review": {
+    "status": "completed",
+    "has_any_findings": false,
+    "has_unresolved_findings": false,
+    "commit": "f1db2eab06b1db8c46535fb16979c18bfc147882"
+  },
+  "build_acceptance": "Independent Build Agent preparing124. No completed124 archive claimed here."
+}

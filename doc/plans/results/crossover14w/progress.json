@@ -1,0 +1,6 @@
+{
+  "status": "phase_audited_timing_pending",
+  "accepted_performance_cases": 0,
+  "expected_performance_cases": 45,
+  "next": "Await full-host/private-builder idle, then execute fixed45-case comparison. No case has been attempted."
+}

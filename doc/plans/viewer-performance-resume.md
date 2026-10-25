@@ -6,10 +6,16 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-owned-row-publication`. Completed14v implementation
-  783a615808a80362e99d42c34823d10d2121fa6c and its24-case matrix are ready for
-  a separate test-only PR. Read14v-owned-row-results and the prewritten14w plan.
-  Parent is published/attached/mergeable
+- Branch: `codex/perf-owner-phase-crossover`, from published/attached/mergeable
+  PR124 exactf1db2eab06b1db8c46535fb16979c18bfc147882. Automated review completed
+  with no findings at that head. Completed14v implementation783a615808 remains
+  unchanged in the native sources/programs used for14w. Read14v-owned-row-results,
+  the prewritten14w plan and14w-owner-phase-audit.14w preparation is committed at
+  8bb36ea1cd51ba266813e7e58b59f6be596608e6. Its45-case plan is frozen and zero
+  cases have been attempted. The independent Build Agent is preparing124 and the
+  monitor phase is NORMAL_PERFORMANCE_QUEUE, so do not take timing observations
+  until actual ownership plus full-host/private-builder idle is revalidated.
+  Prior parent is published/attached/mergeable
   PR123 exact6daba8aa6619e678f19fbada673c8295922f867b. Its automated review
   completed with no findings at that head. PR122 remains stable at
   b7c60446cfdf3f67565690a0b1ffaa3c7f8048be with no findings. PR121 remains published/attached/
@@ -173,9 +179,17 @@ Updated October 24, 2026. The user resumed the performance program; the October
   Parent123 build7.2.5.82303 exact head/installer hash were verified; its receipt
   contains32 native results plus five passed configuration records and one unrun
   experimental-coverage record. Do not call all aggregate records native checks.
-  Retain data under results/owned-rows14v. Next publish this checkpoint independently,
-  then start14w real-phase/crossover audit on a new branch. No own native session
-  remains, and no live account, feature checkout or shared build cache was changed.
+  Retain data under results/owned-rows14v. Published124 is now stable atf1db2eab06.
+  On the new14w branch the real source audit found mutable setup before callbacks,
+  hidden/special eligibility differences, and mutable shared asset aliases. Revision
+  checks cannot make concurrent asset mutation safe; an enforced freeze or immutable
+  versioned snapshot with complete costs is required before a pilot. Native generic
+  CLI already supports2/4/8/16/32, so45 crossover cases can reuse exact14v programs.
+  New analyzer parameterization preserves all24 retained parent validations.
+  Source/program/runner/plan hashes and pending progress are in results/crossover14w.
+  Wait for real build idle before cases; do not weaken guards or alter the builder.
+  No own native session remains, and no live account, feature checkout or shared
+  build cache was changed. User has not tested and is working; keep questions deferred.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -597,9 +611,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
    b7c60446cf, both without automated review findings. Their84/18-case matrices
    are complete; do not amend those heads or repeat their timings unnecessarily.
    PR123's14u transition controls and24-case matrix are published at6daba8aa66.
-   Keep that head stable.14v is now complete with its24-case comparison. Publish
-   it as a separate test-only checkpoint, attach/verify exact head, then branch
-   for14w's real-phase feasibility audit and intermediate-cohort crossover.
+   Keep that head stable.14v is published/attached as124 exactf1db2eab06 with no
+   automated review findings. On14w's separate branch continue the frozen45-case
+   crossover only after full-host/private-builder idle. Its phase audit is complete
+   as source research; real mutation/lifetime/deadline acceptance remains open.
    Reuse existing generation acknowledgement; no buffer may
    reset until owner reads end and its exact ticket is Expired or no callback
    was retained. No live viewer integration is enabled by this research.
