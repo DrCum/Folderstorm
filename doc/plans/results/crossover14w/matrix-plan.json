@@ -1,0 +1,330 @@
+{
+  "status": "written_before_measurement",
+  "parent_pr": 124,
+  "parent_head": "f1db2eab06b1db8c46535fb16979c18bfc147882",
+  "native_implementation": "783a615808a80362e99d42c34823d10d2121fa6c",
+  "native_code_changes": false,
+  "timing_cases": 30,
+  "allocation_cases": 15,
+  "gap_us": 0,
+  "load": "normal",
+  "cases": [
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 16,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 8,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 4,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 2,
+      "frames": 1024
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 2,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 2,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 2,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 4,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 4,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 4,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 8,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 8,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 8,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 16,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 16,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 16,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 64
+    }
+  ],
+  "purpose": "Locate private computational crossover using exact14v programs, with32 as same-program control. No new native feature or dispatch threshold.",
+  "limits": "Generic bounded CLI supports1..32; previous exact pose/order/hand oracles covered1/8/32, not a new explicit correctness run for every intermediate count. All timed counts still require admission/callback/useful-work/resource/identity/nonoverlap checks. Read owner-phase audit; real eligibility, mutation-safe assets, resolver lifetime, General contention and viewer FPS remain unproved."
+}

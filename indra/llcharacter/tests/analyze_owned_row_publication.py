@@ -16,11 +16,11 @@ def stats(values):
     return dict(distribution(values), p99=percentile(values, 99))
 
 
-def analyze(raw, plan, proof):
+def analyze(raw, plan, proof, *, pattern='ownedrows14v-*.json', expected_count=24):
     expected = {key(case) for case in plan['cases']}
-    assert len(expected) == 24
+    assert len(expected) == expected_count
     accepted, excluded, hashes, windows = {}, [], {}, []
-    for path in sorted(raw.glob('ownedrows14v-*.json')):
+    for path in sorted(raw.glob(pattern)):
         metadata = json.loads(path.read_text(encoding='utf-8-sig'))
         cell = key(metadata)
         assert cell in expected and metadata['gapUs'] == 0 and metadata['load'] == 'normal'
