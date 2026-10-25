@@ -4,6 +4,7 @@
 #include "sampling_cost_fixture.h"
 #include "sampling_allocation_probe.h"
 #include "sampling_test_context.h"
+#include "owned_sampling_rows.h"
 #include "threadpool.h"
 #include "llevents.h"
 #include "llsimdmath.h"
@@ -49,6 +50,7 @@ struct Measurement
 {
     FSSamplingCost::Trace trace;
     U64 workerCycles = 0;
+    std::shared_ptr<FSOwnedRows::Observation> rows;
 };
 struct DeliveryGate
 {
@@ -98,13 +100,15 @@ struct Sampler
 };
 using Executor = FSSamplingTest::BoundedExecutor<Sampler>;
 using Status = Executor::Status;
-enum class Mode { Direct, Owned, OwnedRetained, Default, Event, EventFirstRetained, EventLaterRetained, DefaultLaterRetained };
+enum class Mode { Direct, Owned, OwnedRetained, Default, Event, EventFirstRetained, EventLaterRetained, DefaultLaterRetained,
+                  EventRowsRetained, DefaultRowsRetained };
+bool usesRows(Mode mode) { return mode == Mode::EventRowsRetained || mode == Mode::DefaultRowsRetained; }
 bool isOwned(Mode mode) { return mode == Mode::Owned || mode == Mode::OwnedRetained; }
 bool isQueued(Mode mode) { return mode != Mode::Direct && !isOwned(mode); }
 bool usesEventWait(Mode mode)
-{ return mode == Mode::Event || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained; }
+{ return mode == Mode::Event || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained || mode == Mode::EventRowsRetained; }
 bool retainsBindings(Mode mode)
-{ return mode == Mode::OwnedRetained || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained || mode == Mode::DefaultLaterRetained; }
+{ return usesRows(mode) || mode == Mode::OwnedRetained || mode == Mode::EventFirstRetained || mode == Mode::EventLaterRetained || mode == Mode::DefaultLaterRetained; }
 bool checksLaterCallbacks(Mode mode) { return mode == Mode::EventLaterRetained || mode == Mode::DefaultLaterRetained; }
 const char* name(Mode mode)
 {
@@ -113,12 +117,15 @@ const char* name(Mode mode)
     case Mode::EventFirstRetained: return "event-first-retained";
     case Mode::EventLaterRetained: return "event-later-retained";
     case Mode::DefaultLaterRetained: return "default-later-retained";
+    case Mode::EventRowsRetained: return "event-rows-retained";
+    case Mode::DefaultRowsRetained: return "default-rows-retained";
     case Mode::Default: return "default"; default: return "event"; }
 }
 Mode parseMode(const std::string& value)
 {
     for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event,
-                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained}) if (value == name(mode)) return mode;
+                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained,
+                     Mode::EventRowsRetained, Mode::DefaultRowsRetained}) if (value == name(mode)) return mode;
     throw std::runtime_error("Unknown mode");
 }
 class Controls
@@ -287,6 +294,10 @@ struct Frame
     unsigned mutation = 0;
     bool failSampling = false;
     std::shared_ptr<DeliveryGate> delivery;
+    FSOwnedRows::BufferPool* rowBuffers = nullptr;
+    std::optional<FSOwnedRows::BufferPool::Lease> rowLease;
+    std::shared_ptr<FSOwnedRows::Gate> rowGate;
+    bool rowSubmitted = false;
     std::function<void(Frame&)> beforeCallback; // Owner-only correctness hook; never sent to a worker.
     Row row;
     std::vector<Callback>* callbackTrace = nullptr;
@@ -302,6 +313,12 @@ struct Frame
         const auto begin = Clock::now();
         if (mode != Mode::Direct)
         {
+            if (usesRows(mode))
+            {
+                require(rowBuffers != nullptr, "Row mode has no owned buffer pool");
+                rowLease = rowBuffers->acquire();
+                if (!rowLease) { ++row.rejected; row.ns[Capture] += nanos(Clock::now() - begin); return; }
+            }
             for (auto& character : scene.characters)
             {
                 auto& controller = character->getMotionController(); LLMotionController::SamplingClock clock;
@@ -314,34 +331,61 @@ struct Frame
                     { std::memset(covered, 0, sizeof(covered)); ++row.excluded; continue; }
                     if (!(controller.*predictMask)(*base, covered)) { ++row.masked; continue; }
                     if (count == entries.size()) { ++row.rejected; continue; }
-                    if (input.batch.queries.size() <= count) input.batch.queries.emplace_back();
-                    if (!motion->prepareOwnedSampling(time, input.batch.queries[count]))
-                    { ++row.rejected; continue; }
+                    if (!usesRows(mode) && input.batch.queries.size() <= count) input.batch.queries.emplace_back();
+                    auto& query = usesRows(mode) ? rowLease->add() : input.batch.queries[count];
+                    if (!motion->prepareOwnedSampling(time, query))
+                    { if (usesRows(mode)) rowLease->removeLast(); ++row.rejected; continue; }
+                    if (failSampling && count == 0) query.numericContext = {};
                     entries[count++] = {&controller, base->getID(), motion->getOwnedSamplingInstance()}; ++row.predicted;
                 }
             }
-            input.batch.queries.resize(count);
-            input.measurement = measurement;
-            input.delivery = delivery;
-            if (failSampling && !input.batch.queries.empty()) input.batch.queries.front().numericContext = {};
-            // Alias owns the enclosing trace allocation, never a frame or scene.
-            input.batch.trace = std::shared_ptr<FSSamplingCost::Trace>(measurement, &measurement->trace);
+            if (usesRows(mode))
+            {
+                rowLease->setObservation(measurement->rows);
+                if (rowGate) rowLease->setGate(rowGate);
+            }
+            else
+            {
+                input.batch.queries.resize(count);
+                input.measurement = measurement;
+                input.delivery = delivery;
+                if (failSampling && !input.batch.queries.empty()) input.batch.queries.front().numericContext = {};
+                // Alias owns the enclosing trace allocation, never a frame or scene.
+                input.batch.trace = std::shared_ptr<FSSamplingCost::Trace>(measurement, &measurement->trace);
+            }
         }
         row.ns[Capture] += nanos(Clock::now() - begin);
         const auto submit = Clock::now();
         if (count)
         {
-            measurement->trace.queued = Clock::now();
-            if (isOwned(mode)) { ready = Sampler::sample(std::move(input), output); require(ready, "Owner sample failed"); }
-            else { ticket = executor->trySubmit(input); if (ticket) ++row.accepted; else ++row.rejected; }
-            if (forceReady && ticket)
+            if (usesRows(mode))
             {
-                // Correctness-only oracle, outside all performance observations.
-                const auto deadline = Clock::now() + std::chrono::seconds(5);
-                while (executor->status(*ticket) == Status::Queued || executor->status(*ticket) == Status::Running)
+                measurement->rows->trace.queued = Clock::now(); rowSubmitted = rowLease->submit();
+                if (rowSubmitted) ++row.accepted; else ++row.rejected;
+                if (forceReady && rowSubmitted)
                 {
-                    if (Clock::now() >= deadline) require(false, "Ready oracle timed out");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    const auto deadline = Clock::now() + std::chrono::seconds(5);
+                    while (rowLease->status() == FSOwnedRows::Executor::Status::Queued || rowLease->status() == FSOwnedRows::Executor::Status::Running)
+                    {
+                        require(Clock::now() < deadline, "Row ready oracle timed out");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    }
+                }
+            }
+            else
+            {
+                measurement->trace.queued = Clock::now();
+                if (isOwned(mode)) { ready = Sampler::sample(std::move(input), output); require(ready, "Owner sample failed"); }
+                else { ticket = executor->trySubmit(input); if (ticket) ++row.accepted; else ++row.rejected; }
+                if (forceReady && ticket)
+                {
+                    // Correctness-only oracle, outside all performance observations.
+                    const auto deadline = Clock::now() + std::chrono::seconds(5);
+                    while (executor->status(*ticket) == Status::Queued || executor->status(*ticket) == Status::Running)
+                    {
+                        if (Clock::now() >= deadline) require(false, "Ready oracle timed out");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    }
                 }
             }
         }
@@ -370,7 +414,7 @@ struct Frame
         }
         auto* motion = dynamic_cast<Motion*>(&base);
         const auto consume = Clock::now();
-        if (!consumed)
+        if (!usesRows(mode) && !consumed)
         {
             if (ticket)
             {
@@ -389,18 +433,33 @@ struct Frame
             if (ready) row.firstReadyCallback = row.callbacks;
         }
         size_t index = count;
-        if (ready && motion) for (size_t i = 0; i < count; ++i)
+        if ((ready || (usesRows(mode) && rowSubmitted)) && motion) for (size_t i = 0; i < count; ++i)
             if (entries[i].owner == &controller && entries[i].instance == motion->getOwnedSamplingInstance()) { index = i; break; }
+        const Motion::SamplingResult* ownedResult = nullptr;
+        if (index < count)
+        {
+            if (usesRows(mode))
+            {
+                ++row.readinessChecks;
+                const auto state = rowLease->state(index);
+                if (state == FSOwnedRows::Published::Empty) ++row.pendingMisses;
+                if (state == FSOwnedRows::Published::Failed) ++row.failedBatches;
+                if (state == FSOwnedRows::Published::Ready) ownedResult = rowLease->ready(index);
+                if (ownedResult && !row.firstReadyCallback) row.firstReadyCallback = row.callbacks;
+            }
+            else ownedResult = &output.batch.rows[index];
+        }
         row.ns[Consume] += nanos(Clock::now() - consume);
         const auto update = Clock::now(); bool applied = false;
-        const bool result = index < count ? motion->updateWithOwnedSampling(time, mask, output.batch.rows[index], applied) : base.onUpdate(time, mask);
+        const bool result = ownedResult ? motion->updateWithOwnedSampling(time, mask, *ownedResult, applied) : base.onUpdate(time, mask);
         if (applied) { ++row.applied; row.ns[Apply] += nanos(Clock::now() - update); }
-        else { ++row.fallback; row.ns[Fallback] += nanos(Clock::now() - update); if (index < count) ++row.stale; }
+        else { ++row.fallback; row.ns[Fallback] += nanos(Clock::now() - update); if (ownedResult) ++row.stale; }
         return result;
     }
     void finish()
     {
         const auto begin = Clock::now();
+        if (rowLease) rowLease->finish(); // Every result borrow ended inside invoke().
         if (ticket && !consumed) executor->cancel(*ticket);
         if (ready) input = output.recycle();
         if (!retainsBindings(mode)) for (size_t i = 0; i < count; ++i)
@@ -426,6 +485,7 @@ struct Summary
     U64 ownerWindowCycles = 0;
     size_t retainedBindingBytes = 0, retainedBindingMotions = 0, bindingBytesAfterCleanup = 0;
     U64 finalBindingCleanupNs = 0;
+    size_t rowResidentBytes = 0;
 };
 Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const std::string& load,
             bool correctness = false, unsigned mutation = 0)
@@ -434,6 +494,8 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
     require(load == "normal" || load == "busy" || load == "closed", "Unknown queue control");
     FSCurrentMotion::Clock::set(100.0); Assets assets; Scene scene(avatars), expected(avatars);
     Controls controls; std::unique_ptr<Pool> pool; std::unique_ptr<Executor> executor;
+    std::unique_ptr<FSOwnedRows::Executor> rowExecutor;
+    std::unique_ptr<FSOwnedRows::BufferPool> rowBuffers;
     std::promise<void> release, entered; auto gate = release.get_future().share(); auto started = entered.get_future();
     if (isQueued(mode))
     {
@@ -452,10 +514,20 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
             const auto queue = pool->getQueue().getWeak();
             submit = [queue](const Executor::Work& work) { auto live = queue.lock(); return live && live->post(work); };
         }
-        executor = std::make_unique<Executor>(1, std::move(submit));
+        if (usesRows(mode))
+        {
+            rowExecutor = std::make_unique<FSOwnedRows::Executor>(1, std::move(submit));
+            rowBuffers = std::make_unique<FSOwnedRows::BufferPool>(*rowExecutor);
+        }
+        else executor = std::make_unique<Executor>(1, std::move(submit));
     }
     Summary summary; summary.rows.reserve(frames); summary.traces.reserve(frames);
-    for (unsigned i = 0; i < frames; ++i) summary.traces.push_back(std::make_shared<Measurement>());
+    for (unsigned i = 0; i < frames; ++i)
+    {
+        auto trace = std::make_shared<Measurement>();
+        if (usesRows(mode)) trace->rows = std::make_shared<FSOwnedRows::Observation>();
+        summary.traces.push_back(std::move(trace));
+    }
     Request input; Result reusableOutput;
     // Warm controller and hand publication before instrumentation, with a changing clock.
     for (unsigned i = 0; i < 8; ++i)
@@ -472,6 +544,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
         const auto cpu = cycles(); const auto begin = Clock::now();
         {
             Frame frame(scene, mode, gap, executor.get(), input, reusableOutput, summary.traces[i]);
+            frame.rowBuffers = rowBuffers.get();
             frame.forceReady = correctness && load == "normal" && mode != Mode::Direct;
             frame.mutation = mutation; frame.callbackTrace = correctness ? &actualCallbacks : nullptr;
             scene.update(); frame.finish(); row = frame.row;
@@ -501,8 +574,22 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
         }
     }
     if (executor) executor->close();
+    if (rowExecutor) rowExecutor->close();
     if (load == "busy" && pool) release.set_value();
     if (pool) pool->close(); // Acknowledge abandoned work before reading owned trace fields.
+    if (rowBuffers)
+    {
+        summary.rowResidentBytes = rowBuffers->residentBytes();
+        require(summary.rowResidentBytes <= sizeof(FSOwnedRows::Group) * FSOwnedRows::MAX_GROUPS +
+                FSOwnedRows::MAX_GROUPS * avatars * 32 * (2 * sizeof(U32) + sizeof(Motion::SampledJoint)),
+                "Controlled row vector capacities exceeded their fixed-cohort bound");
+        rowBuffers.reset(); // Account complete buffer destruction inside the owner window.
+        for (auto& measurement : summary.traces)
+        {
+            require(measurement->rows->cycleReadOk, "Row worker cycle read failed");
+            measurement->trace = measurement->rows->trace; measurement->workerCycles = measurement->rows->workerCycles;
+        }
+    }
     // This fixed-cohort experiment bounds retention inside Scene's lifetime.
     // A general viewer cache/deprecated-motion resolver is deliberately not installed.
     for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
@@ -533,7 +620,7 @@ Summary run(Mode mode, unsigned avatars, unsigned gap, unsigned frames, const st
 }
 void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, const std::string& load)
 {
-    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,final_binding_cleanup_ns,readiness_checks,pending_misses,failed_batches,first_ready_callback,sampled_unused_joints\n";
+    std::cout << "mode,avatars,gap_us,load,frame,total_ns,owner_cycles,capture_ns,submit_ns,gap_ns,consume_ns,apply_ns,fallback_ns,cleanup_ns,predicted,masked,excluded,rejected,accepted,callbacks,applied,fallback,stale,worker_cycles,delivery_ns,kernel_ns,sampled_joints,payload_capacity_bytes,pool_cycles_window,owner_cycles_window,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,final_binding_cleanup_ns,readiness_checks,pending_misses,failed_batches,first_ready_callback,sampled_unused_joints,row_resident_bytes,row_sampled_count,row_failed_count\n";
     for (size_t i = 0; i < summary.rows.size(); ++i)
     {
         const auto& row = summary.rows[i]; const auto& measurement = *summary.traces[i]; const auto& trace = measurement.trace;
@@ -545,7 +632,9 @@ void print(const Summary& summary, Mode mode, unsigned avatars, unsigned gap, co
                   << ',' << trace.joints << ',' << trace.payloadCapacityBytes << ',' << summary.poolCycles << ',' << summary.ownerWindowCycles
                   << ',' << summary.retainedBindingBytes << ',' << summary.retainedBindingMotions << ',' << summary.bindingBytesAfterCleanup
                   << ',' << summary.finalBindingCleanupNs << ',' << row.readinessChecks << ',' << row.pendingMisses
-                  << ',' << row.failedBatches << ',' << row.firstReadyCallback << ',' << trace.joints - row.applied * 32 << '\n';
+                  << ',' << row.failedBatches << ',' << row.firstReadyCallback << ',' << trace.joints - row.applied * 32
+                  << ',' << summary.rowResidentBytes << ',' << (measurement.rows ? measurement.rows->sampledRows : 0)
+                  << ',' << (measurement.rows ? measurement.rows->failedRows : 0) << '\n';
     }
 }
 enum class Transition { Ready, NoReady, Rejected, Failed, FrameChanged, SkeletonChanged, AssetChanged, PermissionChanged };
@@ -657,18 +746,109 @@ void transitions()
                 transitionCase(mode, avatars, avatars / 2, kind);
         }
 }
+void rowTransition(Mode mode, unsigned avatars, unsigned gateRow, unsigned openAt, Transition kind)
+{
+    const bool rejected = kind == Transition::Rejected, held = kind == Transition::NoReady;
+    const bool stale = kind == Transition::FrameChanged || kind == Transition::SkeletonChanged ||
+                       kind == Transition::AssetChanged || kind == Transition::PermissionChanged;
+    auto expect = [&](bool value, const char* message) {
+        if (!value) std::cerr << "rows,mode=" << name(mode) << ",avatars=" << avatars << ",gate=" << gateRow
+                              << ",open=" << openAt << ",kind=" << unsigned(kind) << '\n';
+        require(value, message);
+    };
+    FSCurrentMotion::Clock::set(100.0); Assets assets; Scene scene(avatars), expected(avatars); Controls controls;
+    Pool pool(mode); pool.startMeasured(); const auto queue = pool.getQueue().getWeak();
+    FSOwnedRows::Executor executor(1, [queue, rejected](const FSOwnedRows::Executor::Work& work) {
+        auto live = queue.lock(); return !rejected && live && live->post(work);
+    });
+    FSOwnedRows::BufferPool buffers(executor);
+    DeliveryControl release; // Its owned release promise opens before pool destruction.
+    auto gate = std::make_shared<FSOwnedRows::Gate>(gateRow, release.data->released);
+    auto entered = gate->entered.get_future();
+    for (unsigned i = 0; i < 8; ++i)
+    { FSCurrentMotion::Clock::set(100.0 + (i + 1) / 64.0); scene.update(); expected.update(); }
+    FSCurrentMotion::Clock::set(100.0 + 9 / 64.0);
+    Request input; Result output; auto measurement = std::make_shared<Measurement>();
+    measurement->rows = std::make_shared<FSOwnedRows::Observation>();
+    Row row; std::vector<Callback> actualCallbacks, expectedCallbacks;
+    {
+        Frame frame(scene, mode, 0, nullptr, input, output, measurement);
+        frame.rowBuffers = &buffers; frame.callbackTrace = &actualCallbacks;
+        frame.forceReady = stale || kind == Transition::Failed;
+        frame.failSampling = kind == Transition::Failed;
+        if (!frame.forceReady && !rejected) frame.rowGate = gate;
+        frame.beforeCallback = [&](Frame& current) {
+            if (!current.forceReady && !rejected && current.row.callbacks == 1) await(entered);
+            if (!current.forceReady && !rejected && !held && current.row.callbacks == openAt)
+            {
+                release.open();
+                const auto deadline = Clock::now() + std::chrono::seconds(5);
+                while (current.rowLease->status() == FSOwnedRows::Executor::Status::Running)
+                { expect(Clock::now() < deadline, "Controlled rows did not finish"); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+            }
+            if (stale && current.row.callbacks == openAt) transitionMutation(scene, assets, kind);
+        };
+        scene.update(); frame.finish(); row = frame.row;
+    }
+    release.open(); executor.close(); pool.close();
+    {
+        Request unused; Result unusedResult; Frame oracle(expected, Mode::Direct, 0, nullptr, unused, unusedResult, nullptr);
+        oracle.callbackTrace = &expectedCallbacks;
+        oracle.beforeCallback = [&](Frame& current) {
+            if (stale && current.row.callbacks == openAt) transitionMutation(expected, assets, kind);
+        };
+        expected.update(); oracle.finish();
+    }
+    expect(scene.snapshot() == expected.snapshot(), "Published rows changed exact pose/controller/hand state");
+    expect(actualCallbacks == expectedCallbacks, "Published rows changed character/ID/time callback order");
+    const auto applied = rejected ? 0 : stale ? openAt - 1 : kind == Transition::Failed ? avatars - 1 :
+                         held ? gateRow : avatars - (openAt > gateRow + 1 ? openAt - gateRow - 1 : 0);
+    expect(row.callbacks == avatars && row.applied == applied && row.fallback == avatars - applied, "Controlled row application/fallback differs");
+    expect(row.accepted == (rejected ? 0 : 1) && row.rejected == (rejected ? 1 : 0), "Controlled row admission differs");
+    expect(row.readinessChecks == (rejected ? 0 : avatars), "Rows were checked outside their real callbacks");
+    expect(row.stale == (stale ? avatars - openAt + 1 : 0), "Stale row reached application");
+    expect(row.failedBatches == (kind == Transition::Failed ? 1 : 0), "Failed row hid its valid neighbors");
+    expect(measurement->rows->trace.joints == (rejected ? 0 : (held ? gateRow + 1 : kind == Transition::Failed ? avatars - 1 : avatars) * 32),
+           "Controlled row sampled-work count differs");
+    const auto resident = buffers.residentBytes();
+    expect(resident >= sizeof(FSOwnedRows::Cell) * FSOwnedRows::MAX_ROWS * FSOwnedRows::MAX_GROUPS,
+           "Resident accounting omitted the fixed cells");
+    size_t heldBytes = 0, after = 0;
+    for (auto& character : scene.characters) for (auto* base : character->getMotionController().getActiveMotions())
+    {
+        auto* motion = static_cast<Motion*>(base); heldBytes += motion->ownedSamplingBindingBytes();
+        if (motion->ownedSamplingBindingBytes()) motion->releaseOwnedSamplingBindings(motion->getOwnedSamplingInstance());
+        after += motion->ownedSamplingBindingBytes();
+    }
+    expect(heldBytes == avatars * 512 && after == 0, "Published-row controlled binding retention escaped its Scene");
+}
+void rowTransitions()
+{
+    for (auto mode : {Mode::EventRowsRetained, Mode::DefaultRowsRetained}) for (unsigned avatars : {8u, 32u})
+    {
+        rowTransition(mode, avatars, avatars / 2, avatars / 2 + 1, Transition::Ready); // Early rows apply while worker is held.
+        rowTransition(mode, avatars, 0, avatars / 2, Transition::Ready); // Misses remain direct; later ready rows apply.
+        rowTransition(mode, avatars, avatars / 2, avatars, Transition::NoReady);
+        rowTransition(mode, avatars, 0, avatars / 2, Transition::Rejected);
+        rowTransition(mode, avatars, 0, avatars / 2, Transition::Failed);
+        for (auto kind : {Transition::FrameChanged, Transition::SkeletonChanged, Transition::AssetChanged, Transition::PermissionChanged})
+            rowTransition(mode, avatars, 0, avatars / 2, kind);
+    }
+}
 int check()
 {
     for (auto mode : {Mode::Direct, Mode::Owned, Mode::OwnedRetained, Mode::Default, Mode::Event,
-                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained})
+                     Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained,
+                     Mode::EventRowsRetained, Mode::DefaultRowsRetained})
         for (unsigned avatars : {1u, 8u, 32u}) run(mode, avatars, 0, 64, "normal", true);
-    for (auto mode : {Mode::Default, Mode::Event, Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained})
+    for (auto mode : {Mode::Default, Mode::Event, Mode::EventFirstRetained, Mode::EventLaterRetained, Mode::DefaultLaterRetained,
+                     Mode::EventRowsRetained, Mode::DefaultRowsRetained})
     {
         for (const auto* load : {"busy", "closed"}) run(mode, 8, 0, 3, load, true);
         for (unsigned mutation : {1u, 2u, 3u, 4u}) run(mode, 8, 0, 1, "normal", true, mutation);
     }
     for (unsigned mutation : {1u, 2u, 3u, 4u}) run(Mode::OwnedRetained, 8, 0, 1, "normal", true, mutation);
-    transitions();
+    transitions(); rowTransitions();
     std::cout << checks.load() << " complete-controller, exact-pose/order/hand, current/stale and bounded fallback checks passed\n";
     return 0;
 }
@@ -679,6 +859,13 @@ int main(int argc, char** argv)
     if (!FSSamplingTest::supportedContext("event controller cost")) return 0;
     LLVector4a::initClass();
     if (argc == 2 && std::string(argv[1]) == "--check") return check();
+    if (argc == 2 && std::string(argv[1]) == "--limits")
+    {
+        std::cout << "{\"groups\":" << FSOwnedRows::MAX_GROUPS << ",\"rows_per_group\":" << FSOwnedRows::MAX_ROWS
+                  << ",\"fixed_group_bytes\":" << sizeof(FSOwnedRows::Group) * FSOwnedRows::MAX_GROUPS
+                  << ",\"sampled_joint_bytes\":" << sizeof(Motion::SampledJoint) << "}\n";
+        return 0;
+    }
     if (argc == 7 && ((std::string(argv[1]) == "--benchmark" && !FS_SAMPLING_ALLOCATION_PROBE) ||
                      (std::string(argv[1]) == "--allocations" && FS_SAMPLING_ALLOCATION_PROBE)))
     {
@@ -689,17 +876,18 @@ int main(int argc, char** argv)
         if (FS_SAMPLING_ALLOCATION_PROBE)
         {
             const auto& value = result.allocations;
-            std::cout << "mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup\n"
+            std::cout << "mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup,row_resident_bytes\n"
                       << name(mode) << ',' << avatars << ',' << gap << ',' << load << ',' << frames << ',' << value.calls << ',' << value.requested
                       << ',' << value.baseline << ',' << value.live << ',' << value.peak << ',' << result.firstFrame.calls << ',' << result.firstFrame.requested
                       << ',' << value.calls - result.firstFrame.calls << ',' << value.requested - result.firstFrame.requested
-                      << ',' << result.retainedBindingBytes << ',' << result.retainedBindingMotions << ',' << result.bindingBytesAfterCleanup << '\n';
+                      << ',' << result.retainedBindingBytes << ',' << result.retainedBindingMotions << ',' << result.bindingBytesAfterCleanup
+                      << ',' << result.rowResidentBytes << '\n';
         }
         else print(result, mode, avatars, gap, load);
         return 0;
     }
     std::cout << "Use --check, or --benchmark mode avatars gap_us frames normal|busy|closed.\n"
-                 "Modes: direct, owned, owned-retained, default, event, event-first-retained, event-later-retained, default-later-retained.\n"
+                 "Modes: direct, owned, owned-retained, default, event, event-first-retained, event-later-retained, default-later-retained, event-rows-retained, default-rows-retained.\n"
                  "Separate allocation build uses --allocations. Synthetic gaps/private cohorts do not establish viewer FPS or a live deadline.\n";
     return argc == 1 ? 0 : 1;
 }

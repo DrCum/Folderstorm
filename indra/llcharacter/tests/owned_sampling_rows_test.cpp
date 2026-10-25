@@ -2,6 +2,7 @@
 #include "owned_sampling_rows.h"
 #include "sampling_cost_fixture.h"
 #include "sampling_test_context.h"
+#include "sampling_allocation_probe.h"
 #include "llsimdmath.h"
 #include <deque>
 #include <iostream>
@@ -129,10 +130,61 @@ void boundsAndEmpty()
     require(overflowRejected, "Row group exceeded fixed capacity");
     full->cancel(); require(!full->submit() && callbacks.empty(), "Pre-cancelled group posted work");
 }
+void orphanedOwnership(bool running)
+{
+    std::deque<Executor::Work> callbacks;
+    auto executor = std::make_unique<Executor>(1, [&](const Executor::Work& work) { callbacks.push_back(work); return true; });
+    auto buffers = std::make_unique<BufferPool>(*executor);
+    auto lease = buffers->acquire();
+    std::weak_ptr<const Motion::JointMotionList> asset;
+    {
+        FSSamplingCost::Fixture fixture({8, 32, 32, 8}); fixture.prepareCurrent(5);
+        asset = fixture.assets[0]; fill(*lease, fixture);
+    } // No fixture, joint state, controller or source asset owner survives submission.
+    require(!asset.expired(), "Captured owned query lost its immutable asset lease");
+    auto observation = std::make_shared<Observation>(); lease->setObservation(observation);
+    std::promise<void> release;
+    auto gate = std::make_shared<Gate>(0, release.get_future().share()); auto entered = gate->entered.get_future();
+    if (running) lease->setGate(gate);
+    require(lease->submit(), "Orphaned ownership did not submit");
+    std::thread worker;
+    if (running)
+    {
+        auto work = std::move(callbacks.front()); callbacks.pop_front();
+        worker = std::thread([work = std::move(work)] { work(); });
+        require(entered.wait_for(std::chrono::seconds(5)) == std::future_status::ready, "Orphan worker never owned its query"); entered.get();
+    }
+    lease->finish(); lease.reset(); buffers.reset(); executor.reset();
+    require(!asset.expired(), "Unacknowledged callback lost data when its owner was destroyed");
+    if (running) { release.set_value(); worker.join(); }
+    else deliver(callbacks);
+    require(asset.expired(), "Acknowledged orphan callback retained its asset indefinitely");
+    require(observation->sampledRows == (running ? 1 : 0) && observation->failedRows == 0,
+            "Owner destruction started unneeded rows or lost in-progress owned sampling");
+}
+void allocationFailure()
+{
+#if FS_SAMPLING_ALLOCATION_PROBE
+    FSSamplingCost::Fixture fixture({3, 32, 32, 3}); fixture.prepareCurrent(6);
+    std::deque<Executor::Work> callbacks;
+    Executor executor(1, [&](const Executor::Work& work) { callbacks.push_back(work); return true; });
+    BufferPool buffers(executor); auto lease = buffers.acquire(); fill(*lease, fixture);
+    require(lease->submit(), "Allocation failure case did not submit");
+    auto work = std::move(callbacks.front()); callbacks.pop_front();
+    FSSamplingAlloc::failureCountdown.store(0); work(); FSSamplingAlloc::failureCountdown.store(-1);
+    for (size_t i = 0; i < fixture.current.size(); ++i)
+        require(lease->state(i) == Published::Failed && !lease->ready(i), "Allocation failure published usable data");
+    lease->finish(); auto next = buffers.acquire(); require(bool(next), "Allocation failure prevented acknowledged reuse");
+    fill(*next, fixture); require(next->submit(), "Allocation recovery did not submit"); deliver(callbacks);
+    for (size_t i = 0; i < fixture.current.size(); ++i) matched(*next, fixture, i);
+#endif
+}
 int run()
 {
     if (!FSSamplingTest::supportedContext("owned row publication")) return 0;
     LLVector4a::initClass(); runningAndReuse(); queuedAndFailed(); stoppedRows(); boundsAndEmpty();
+    orphanedOwnership(false); orphanedOwnership(true);
+    allocationFailure();
     std::cout << checks << " owned-row publication, cancellation and acknowledged-reuse checks passed\n";
     return 0;
 }

@@ -262,6 +262,11 @@ if(LL_TESTS)
     COMMAND $<TARGET_FILE:avatar_joint_matrix_cache> VERBATIM)
 
   find_package(Python3 QUIET COMPONENTS Interpreter)
+  add_executable(avatar_owned_sampling_rows EXCLUDE_FROM_ALL tests/owned_sampling_rows_test.cpp)
+  target_link_libraries(avatar_owned_sampling_rows PRIVATE llcharacter Threads::Threads)
+  add_executable(avatar_owned_sampling_rows_allocations EXCLUDE_FROM_ALL tests/owned_sampling_rows_test.cpp)
+  target_compile_definitions(avatar_owned_sampling_rows_allocations PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  target_link_libraries(avatar_owned_sampling_rows_allocations PRIVATE llcharacter Threads::Threads)
   if(Python3_Interpreter_FOUND)
     # Private complete-controller experiment. Production compiles the original
     # controller; only these explicit targets contain the generated test seams.

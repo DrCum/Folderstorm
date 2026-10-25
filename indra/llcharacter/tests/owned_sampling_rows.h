@@ -3,6 +3,7 @@
 #define FS_TEST_OWNED_SAMPLING_ROWS_H
 #include "llkeyframemotion.h"
 #include "bounded_sampling_executor.h"
+#include "sampling_cost_fixture.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -18,6 +19,13 @@ namespace FSOwnedRows
 inline constexpr size_t MAX_ROWS = 32, MAX_GROUPS = 2;
 using Motion = LLKeyframeMotion;
 enum class Published : unsigned char { Empty, Ready, Failed };
+struct Observation
+{
+    FSSamplingCost::Trace trace;
+    std::uint64_t workerCycles = 0;
+    size_t sampledRows = 0, failedRows = 0;
+    bool cycleReadOk = true;
+};
 struct Gate
 {
     size_t beforeRow;
@@ -41,6 +49,7 @@ class Group
     std::uint64_t epoch = 0;
     std::atomic<bool> cancelled{false};
     std::shared_ptr<Gate> gate; // Optional owned correctness control, not a callback.
+    std::shared_ptr<Observation> observation;
     void reset(std::uint64_t next)
     {
         // BufferPool has proved owner completion AND exact ticket acknowledgement.
@@ -53,7 +62,7 @@ class Group
             cell.request.time = cell.request.duration = 0.f; cell.request.usage.clear();
             cell.published.store(Published::Empty, std::memory_order_relaxed);
         }
-        count = 0; epoch = next; gate.reset(); cancelled.store(false, std::memory_order_relaxed);
+        count = 0; epoch = next; gate.reset(); observation.reset(); cancelled.store(false, std::memory_order_relaxed);
     }
 };
 struct Request { std::shared_ptr<Group> group; std::uint64_t epoch = 0; };
@@ -73,10 +82,16 @@ struct Sampler
         if (!input.group || input.epoch != input.group->epoch || !input.group->count || input.group->count > MAX_ROWS) return false;
         output.group = std::move(input.group);
         auto& group = *output.group;
+        const auto observation = group.observation;
+        std::uint64_t start = 0;
+#if LL_WINDOWS
+        if (observation) observation->cycleReadOk = bool(QueryThreadCycleTime(GetCurrentThread(), &start));
+#endif
+        if (observation) observation->trace.started = FSSamplingCost::Clock::now();
         bool complete = true;
         for (size_t index = 0; index < group.count; ++index)
         {
-            if (group.cancelled.load(std::memory_order_acquire)) return false;
+            if (group.cancelled.load(std::memory_order_acquire)) { complete = false; break; }
             if (group.gate && group.gate->beforeRow == index)
             {
                 group.gate->entered.set_value();
@@ -87,8 +102,22 @@ struct Sampler
             try { ok = Motion::sampleKeyframes(std::move(cell.request), cell.result); }
             catch (...) { cell.result.takeRequest(); }
             complete &= ok;
+            if (observation)
+            {
+                observation->sampledRows += ok; observation->failedRows += !ok;
+                if (ok) observation->trace.joints += cell.result.getJoints().size();
+            }
             cell.published.store(ok ? Published::Ready : Published::Failed, std::memory_order_release);
             // Do not access this cell again until its acknowledged epoch ends.
+        }
+        if (observation)
+        {
+            observation->trace.finished = FSSamplingCost::Clock::now(); observation->trace.sampled = true;
+#if LL_WINDOWS
+            std::uint64_t end = 0;
+            observation->cycleReadOk &= bool(QueryThreadCycleTime(GetCurrentThread(), &end));
+            observation->workerCycles = end - start;
+#endif
         }
         return complete;
     }
@@ -147,6 +176,19 @@ public:
                 throw std::logic_error("Cannot add owned row");
             return value.group->cells[value.group->count++].request;
         }
+        void removeLast()
+        {
+            auto& value = record();
+            if (value.attempted || !value.group->count) throw std::logic_error("Cannot remove owned row");
+            auto& input = value.group->cells[--value.group->count].request;
+            input.asset.reset(); input.usage.clear();
+        }
+        void setObservation(std::shared_ptr<Observation> observation)
+        {
+            auto& value = record();
+            if (value.attempted) throw std::logic_error("Cannot change submitted observation");
+            value.group->observation = std::move(observation);
+        }
         void setGate(std::shared_ptr<Gate> gate)
         {
             auto& value = record();
@@ -162,6 +204,11 @@ public:
             Request input{value.group, epoch};
             value.ticket = pool->executor.trySubmit(input);
             return bool(value.ticket);
+        }
+        Executor::Status status() const
+        {
+            const auto& value = record();
+            return value.ticket ? pool->executor.status(*value.ticket) : Executor::Status::Expired;
         }
         Published state(size_t row) const
         {
@@ -189,6 +236,19 @@ public:
     explicit BufferPool(Executor& value): executor(value) {}
     BufferPool(const BufferPool&) = delete;
     BufferPool& operator=(const BufferPool&) = delete;
+    size_t residentBytes() const
+    {
+        size_t bytes = sizeof(Group) * MAX_GROUPS;
+        for (const auto& record : records)
+        {
+            if (record.ownerActive || (record.ticket && executor.status(*record.ticket) != Executor::Status::Expired))
+                throw std::logic_error("Resident inspection requires acknowledged idle groups");
+            for (const auto& cell : record.group->cells)
+                bytes += cell.request.usage.capacity() * sizeof(U32) + cell.result.getRequest().usage.capacity() * sizeof(U32) +
+                         cell.result.getJoints().capacity() * sizeof(Motion::SampledJoint);
+        }
+        return bytes; // Fixed cells and their vector capacities; excludes shared assets/control blocks.
+    }
     // All pool/lease calls belong to the one owner; leases must end before pool/executor.
     std::optional<Lease> acquire()
     {
