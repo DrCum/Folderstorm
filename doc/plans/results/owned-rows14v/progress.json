@@ -1,0 +1,73 @@
+{
+  "parent_pr": 123,
+  "parent_head": "6daba8aa6619e678f19fbada673c8295922f867b",
+  "primitive_head": "e485501330659196b9308f0a8c796047cdc3b477",
+  "status": "primitive_only_controller_integration_pending",
+  "native_primitive_checks": 73,
+  "accepted_performance_cases": 0,
+  "sources": {
+    "indra/llcharacter/tests/owned_sampling_rows.h": {
+      "bytes": 8111,
+      "sha256": "cb58903879543c408cdfaf615923ce5f8cd1df2897caef93bbc70c4a3ec1b2bb"
+    },
+    "indra/llcharacter/tests/owned_sampling_rows_test.cpp": {
+      "bytes": 8633,
+      "sha256": "f30bdab311120522aa15da1a6b9256b27033cef1d753503ca7e7d64fe2039f0f"
+    }
+  },
+  "source_note": "The committed header adds one borrow-lifetime comment after the bounded3 build; executable code is otherwise unchanged. This is partial premeasurement proof, not exact-byte performance provenance.",
+  "artifacts": {
+    "owned-rows14v.cpp": {
+      "bytes": 570,
+      "sha256": "bcf06aa8c5baee64b7923a4ceca2828361000ee4f02b7dca31cff678e66adbeb"
+    },
+    "owned-rows14v-initial.exe": {
+      "bytes": 4222464,
+      "sha256": "b13c85c8b8d2c8d311412cdbcd0fd1437c2ec0b80c33889372f6b8541f8e0721"
+    },
+    "owned-rows14v-initial.rsp": {
+      "bytes": 12053,
+      "sha256": "8b09d0212e0258acafb0757114534c7e7525e2c242747169fc917e294302e0fe"
+    },
+    "owned-rows14v-initial.log": {
+      "bytes": 534,
+      "sha256": "3d229c9bd888edc1732a92149073398e48c2e1a9e2ba0a177aa94e9cb990caf1"
+    },
+    "owned-rows14v-cleared-epoch2.exe": {
+      "bytes": 4226048,
+      "sha256": "2f7dfefef21c224fa5223dd2a6e6a02210cc3fe84e9a2c36eb38e685a0d095f8"
+    },
+    "owned-rows14v-cleared-epoch2.rsp": {
+      "bytes": 12067,
+      "sha256": "e0298b4b607fcf5715d2dbbbf375c10789add0f11d46945880bc9b92414b3c29"
+    },
+    "owned-rows14v-cleared-epoch2.log": {
+      "bytes": 625,
+      "sha256": "0ed6bfa7da6ea7445c4de2ae390ce59dea0d5484fc851a20d74cdefdc0c0a52d"
+    },
+    "owned-rows14v-bounded3.exe": {
+      "bytes": 4229120,
+      "sha256": "f4db98877f3cad94d68a0014ebb984ae37ec9611e9c52aed9396348d09344fb4"
+    },
+    "owned-rows14v-bounded3.rsp": {
+      "bytes": 12055,
+      "sha256": "12af1365aab3d3a7e104dae457cc415e5ee10a30e0330fb2718f16689c40ae35"
+    },
+    "owned-rows14v-bounded3.log": {
+      "bytes": 613,
+      "sha256": "9a1644c6c8dce1741484015d24e40975c884b1cd1bd2b0aaa68b47e8bfb0132c"
+    }
+  },
+  "initial_failure": {
+    "message": "Failed row was exposed as usable",
+    "cause": "A queued-cancelled request kept supported numeric metadata; the fault control omitted resetting it. New epochs now clear identity/context/time/usage size, preserving capacity, and failure injection is explicit."
+  },
+  "pending": [
+    "Actual controller/hand/character-ID-time integration and current-context stale oracles",
+    "Owned asset lifetime, allocator and normal/Tracy coverage",
+    "Bounded resident capacity and complete publication/capture/check/fallback/CPU costs",
+    "Freeze and validate paired/reversed matrix with exact current programs and full-host build idle"
+  ],
+  "viewer_integration": false,
+  "limits": "Manual held callbacks plus real owned numerical sampling; no actual viewer/scene/GL, deadline or FPS acceptance."
+}

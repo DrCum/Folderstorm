@@ -6,9 +6,10 @@ Updated October 24, 2026. The user resumed the performance program; the October
 ## Current checkpoint
 
 - Worktree: `C:\Users\Marty\Documents\ChatGPT\folderstorm 2\viewer-performance`.
-- Branch: `codex/perf-same-frame-readiness`, from published/attached/mergeable
-  PR122 exactb7c60446cfdf3f67565690a0b1ffaa3c7f8048be. Its automated review
-  completed with no findings at that head. PR121 remains published/attached/
+- Branch: `codex/perf-owned-row-publication`, from published/attached/mergeable
+  PR123 exact6daba8aa6619e678f19fbada673c8295922f867b. Its automated review
+  completed with no findings at that head. PR122 remains stable at
+  b7c60446cfdf3f67565690a0b1ffaa3c7f8048be with no findings. PR121 remains published/attached/
   mergeable at81c90614cd1351b6825be2a2e5f19ad2049916db with no review findings.
   Its base is published PR120 exact
   `55f66ec851701fdc6b9bfd2c81794abc5ee80ccf`. PR120 is attached/mergeable,
@@ -135,6 +136,26 @@ Updated October 24, 2026. The user resumed the performance program; the October
   prewritten14v owned-row-publication plan. Publish14u as a separate test-only
   checkpoint, attach/verify its head, then begin14v on a new branch. Q4/Q7 and
   live General/crowd/quality acceptance stay deferred; no viewer worker is enabled.
+- PR123 is published/attached/mergeable at exact6daba8aa66, no automated review
+  findings. Plan14v has begun on this new branch. Primitive implementation is
+  e485501330659196b9308f0a8c796047cdc3b477; it is NOT controller-integrated or
+  timed. Read14v-row-ownership-audit and results/owned-rows14v/progress.json.
+  It owns two fixed groups of32 request/result cells. Ready/Failed publication
+  is per-row release/acquire; published results stay immutable. Executor discard
+  releases only group references. Owner-active and exact ticket-Expired gates
+  both prevent buffer reset; no shared_ptr use_count inference. Empty/pre-cancelled
+  requests post no callback; epochs never wrap. Leases/read borrows are owner-only
+  and must end before pool/executor destruction.
+  Initial failure revealed reused supported numeric metadata in an incompletely
+  initialized failure control. Reset now clears identity/context/time/usage size
+  while preserving capacity; injection is explicit. All initial/current native
+  artifacts remain preserved. Current bounded3 program passes73 primitive
+  publication/cancel/acknowledged-reuse/failure/bounds checks; it is terminal.
+  Header has only one extra lifetime comment after compilation, recorded as such
+  in partial proof. No14v performance case exists. Next integrate leases into
+  the actual private controller fixture with direct/whole-batch controls and
+  independent current-context/pose/hand/character-ID-time oracles, add lifetime/
+  allocator/capacity checks, then freeze/measure complete costs only while idle.
 - Plan14q is implemented at9043662887c4675bc7ddfe8c413e1494e8ff3e75. It adds
   the explicit startup policy and default-FALSE/Persist0 FSGeneralPoolEventWait.
   Only resolved Windows width1 accepts; all old callers default to platform
@@ -555,10 +576,11 @@ Updated October 24, 2026. The user resumed the performance program; the October
    PR121 and PR122 are published/attached/mergeable at exact81c90614cd and
    b7c60446cf, both without automated review findings. Their84/18-case matrices
    are complete; do not amend those heads or repeat their timings unnecessarily.
-   Plan14u transition controls and its24-case matrix are now complete/validated
-   at6c5012aadc. Publish its separate test-only checkpoint, attach/verify the exact
-   head and preserve it. Then begin the already-written14v owned-row publication
-   plan on a new branch. Reuse existing generation acknowledgement; no buffer may
+   PR123's14u transition controls and24-case matrix are published at6daba8aa66.
+   Keep that head stable. On this new branch continue14v primitivee485501330:
+   integrate its active owner leases into the actual private controller fixture,
+   with current-context stale and exact pose/hand/order checks before timing.
+   Reuse existing generation acknowledgement; no buffer may
    reset until owner reads end and its exact ticket is Expired or no callback
    was retained. No live viewer integration is enabled by this research.
    Do not treat synthetic gaps as real scene deadlines or adopt the rejected
