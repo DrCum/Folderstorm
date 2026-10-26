@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 #include "fsgesturelistener.h"
 #include "llviewermessage.h"
 
@@ -593,8 +594,9 @@ void process_layer_data(LLMessageSystem *mesgsys, void **user_data)
     }
 }
 
-void process_derez_ack(LLMessageSystem*, void**)
+void process_derez_ack(LLMessageSystem* msg, void**)
 {
+    if(fs_object_tools_derez_reply(msg)) return;
     if(gViewerWindow) gViewerWindow->getWindow()->decBusyCount();
 }
 

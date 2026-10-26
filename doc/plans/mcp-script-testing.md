@@ -1,6 +1,6 @@
 # Folderstorm MCP script development and testing
 
-Status: diagnostics, Contents reads/writes and installed-script tools implemented; lifecycle and interaction groups follow in separate stacked PRs. Native Windows/simulator acceptance remains pending.
+Status: diagnostics, Contents, installed-script tools and object lifecycle implemented; interactions and test sessions follow in a separate stacked PR. Native Windows/simulator acceptance remains pending.
 
 Enable an assistant to complete the native loop of creating or editing LSL, installing it in an object, compiling and running it, exercising the object, reading output, and packaging the result into another object's Contents. The same tools must work with the regular viewer and an explicitly selected managed character.
 
@@ -225,3 +225,11 @@ Implemented copy-to-Contents, exact task-source preview/save/Mono compile, nativ
 Mutation IDs have bounded session tombstones; an evicted receipt never authorizes replay. Status reads do not allocate preparation tickets. Pending native outcomes are protected from capacity eviction. Native running replies fan out without changing native editor handling.
 
 Windows acceptance: copy a script into a root and a child prim, confirm the task UUID, read and edit it in place, test a compiler failure after saving, preserve a known Experience, query running state, start/stop/reset, rename and remove a disposable item. Close native source editors for writes; verify a native window joining a running-state query still receives its reply after assistant cancellation. Revoke permissions at metadata, upload and Contents-refresh stages and inspect the original receipt. Unsupported metadata grids, late callbacks and live server correlation need native acceptance.
+
+## Lifecycle checkpoint
+
+Implemented exact-root Take and Take Copy into ordinary unlocked inventory folders, without native selection/camera changes. Receipts distinguish native acknowledgment and inventory arrival, correlating actual BulkUpdateInventory transaction IDs. Both must be observed before reporting confirmed acquisition. Assistant derez acknowledgments do not change native selection busy counters; their transaction tombstones consume late acknowledgments after source changes.
+
+Existing rez tools accept optional unique client_request_id UUIDs for tracked receipts. Native rez provides no request-to-object UUID acknowledgment here, so new owned nearby roots remain candidates. object_rez_identify records an explicit chosen association while leaving object_id_confirmed=false. No candidate is automatically edited or retried. Inspect acquired inventory_item_id before copy-to-Contents packaging. Inner contents of un-rezzed inventory objects remain unavailable.
+
+Validation includes acknowledgment/item arrival ordering and ambiguous acquisition models, registered MCP acquisition/rez forwarding and capability checks, native service/build/inventory/derez adapter syntax checks, XML and focused shared authority checks. Windows/SL/OpenSim acceptance remains pending: take/copy a disposable linked object, verify both native messages and resulting UUID, insert it into another prim, confirm source removal separately, exercise tracked rez and explicit candidate choice, concurrent inventory arrivals, cancellations and late acknowledgments. A grid that does not return the matching inventory transaction remains unconfirmed.

@@ -11,7 +11,7 @@ import (
 
 func objectsFixture(t *testing.T) (*mcp.ClientSession, *preferencesTestAPI) {
 	t.Helper()
-	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"task_inventory":1,"script_diagnostics":1,"task_scripts":1}}`)}
+	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask","object_take":"ask","build_rez":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"task_inventory":1,"script_diagnostics":1,"task_scripts":1,"object_lifecycle":1}}`)}
 	s := reviewServer(api)
 	inst := testInstance(11)
 	inst.ViewerSession = "login-a"
@@ -81,6 +81,34 @@ func TestObjectsRegisteredMutations(t *testing.T) {
 		}
 	}
 }
+func TestObjectsLifecycleDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name, op string
+		args     map[string]any
+	}{
+		{"object_take", "take", map[string]any{"object_id": buildID, "snapshot_id": buildRevision, "destination_folder": contentItem, "client_request_id": contentOperation}},
+		{"object_take_copy", "takeCopy", map[string]any{"object_id": buildID, "snapshot_id": buildRevision, "destination_folder": contentItem, "client_request_id": contentOperation}},
+		{"object_rez_identify", "rezIdentify", map[string]any{"object_id": buildID, "operation_id": contentOperation, "client_request_id": buildRevision}},
+	} {
+		client, api := objectsFixture(t)
+		tc.args["viewer_session"] = "login-a"
+		r := call(t, client, tc.name, tc.args)
+		if r.IsError {
+			t.Fatal(textOf(r))
+		}
+		if got := api.opsCopy(); len(got) != 3 || got[2] != "FSObjects."+tc.op {
+			t.Fatal(got)
+		}
+	}
+	client, api := objectsFixture(t)
+	api.health = json.RawMessage(`{"capabilities":{"building_tools":1}}`)
+	// A missing lifecycle capability must fail before any native acquisition.
+	r := call(t, client, "object_take_copy", map[string]any{"viewer_session": "login-a", "object_id": buildID, "snapshot_id": buildRevision, "destination_folder": contentItem, "client_request_id": contentOperation})
+	if !r.IsError {
+		t.Fatal("missing lifecycle capability accepted")
+	}
+}
+
 func TestObjectsMutationShapeAndPermissionGuards(t *testing.T) {
 	for _, p := range []map[string]any{
 		{"object_id": buildID, "item_id": contentItem, "snapshot_id": buildRevision, "client_request_id": contentOperation},

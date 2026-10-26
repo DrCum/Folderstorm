@@ -10,6 +10,18 @@
 #include <vector>
 
 namespace fs_object_tools {
+class Acquisition
+{
+public:
+    void acknowledge(bool accepted){mAck=true;mAccepted=accepted;}
+    void observe(const std::string& item){if(mItems.size()<2)mItems.insert(item);}
+    bool confirmed()const{return mAck && mAccepted && mItems.size()==1;}
+    bool rejected()const{return mAck && !mAccepted;}
+    bool ambiguous()const{return mItems.size()>1;}
+    std::string item()const{return mItems.size()==1?*mItems.begin():std::string();}
+private:
+    bool mAck=false,mAccepted=false;std::set<std::string> mItems;
+};
 struct Candidate {std::string id,asset;int type=0;};
 struct Insertion {std::string id;bool ambiguous=false;};
 inline Insertion correlateInsertion(const std::set<std::string>& before,const std::vector<Candidate>& after,const std::string& asset,int type)

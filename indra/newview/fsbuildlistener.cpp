@@ -1,6 +1,7 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #include "llviewerprecompiledheaders.h"
 #include "fsbuildlistener.h"
+#include "fsobjecttools.h"
 #include "fsassistantworldmodel.h"
 #include "fseventapibridge.h"
 #include "fssessionworker.h"
@@ -57,7 +58,7 @@ bool readOp(const std::string& op) { return op=="objectGet" || op=="permissionsG
 LLSD material(const LLSD& request)
 {
     LLSD result=LLSD::emptyMap();
-    for (const char* key : {"op","id","expected_revision","position","rotation","scale","face","color","glow","fullbright","uv_scale","uv_offset","uv_rotation","texture_item","material_item","shape","copy","modify","transfer"})
+    for (const char* key : {"op","id","expected_revision","position","rotation","scale","face","color","glow","fullbright","uv_scale","uv_offset","uv_rotation","texture_item","material_item","shape","copy","modify","transfer","client_request_id"})
         if (request.has(key)) result[key]=request[key];
     return result;
 }
@@ -344,6 +345,12 @@ void FSBuildListener::dispatch(const LLSD& request)
             else task->guard()->cancel("material_transport_failed_or_unconfirmed");
         });
         result["status"]="queued"; result["confirmation"]="inspect operation receipt and native object; no automatic retry"; response.setResponse(result); return;
+    }
+    if((op=="rezPrimitive" || op=="rezInventory") && request.has("client_request_id"))
+    {
+        LLSD tracked;entry->executed=true;
+        if(!fs_object_tools_submit_rez(request,[&](){rez(request);},tracked,error))return response.error(error);
+        response.setResponse(tracked);return;
     }
     // Inventory updateServer owns its actual AIS/UDP submission count.
     // An AIS queue entry is not yet a transport submission.

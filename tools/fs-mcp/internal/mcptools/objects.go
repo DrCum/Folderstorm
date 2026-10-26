@@ -25,6 +25,44 @@ func registerObjects(server *mcp.Server, state *Server, readOnly, mutating *mcp.
 	remove.DestructiveHint = boolPtr(true)
 	mcp.AddTool(server, &mcp.Tool{Name: "object_contents_remove", Description: "Permanently remove an exact native COPY/MODIFY Contents item at a fresh snapshot. Requires separate task_inventory_remove approval and unique client_request_id. This does not go to Trash; preserve a backup first if needed. Does not delete the world object.", Annotations: remove}, state.objectRemove)
 	mcp.AddTool(server, &mcp.Tool{Name: "object_operation_status", Description: "Read a source-bound script/Contents operation receipt after submission, cancellation or timeout. Requires task_inventory_read, world_read and inventory read. Pending native outcomes remain retained; status never replays work or allocates mutation tickets.", Annotations: withTitle(readOnly, "Read object operation receipt")}, state.objectOperationStatus)
+	mcp.AddTool(server, &mcp.Tool{Name: "object_take_copy", Description: "Take a copy of one exact owned modifiable movable root linkset into an ordinary unlocked inventory folder. Requires native COPY, a fresh root Contents snapshot, object_take approval, and unique client_request_id. Original remains in world. Receipt confirms the acquired inventory_item_id only from the native transaction plus acknowledgment; never retry an unknown outcome.", Annotations: withTitle(mutating, "Take object copy into inventory")}, state.objectTakeCopy)
+	mcp.AddTool(server, &mcp.Tool{Name: "object_take", Description: "Take one exact owned modifiable movable root linkset into an ordinary unlocked inventory folder, removing the original from world. Requires a fresh root Contents snapshot, object_take approval and unique client_request_id. Attachments, occupied linksets, permanent/locked objects and protected folders are refused. Inspect the original receipt; never replay an unknown acquisition.", Annotations: withTitle(mutating, "Take original object into inventory")}, state.objectTake)
+	mcp.AddTool(server, &mcp.Tool{Name: "object_rez_identify", Description: "Explicitly associate one currently observed new nearby owned root with a tracked rez receipt after inspecting candidates. This is a chosen association, not simulator proof of which request created it; object_id_confirmed stays false. Does not rez or modify the object. Requires build_rez approval and the exact receipt/object/request UUIDs. An existing association cannot switch to another object.", Annotations: withTitle(mutating, "Choose exact rez candidate")}, state.objectRezIdentify)
+}
+
+type objectTakeArgs struct {
+	ViewerSession     string `json:"viewer_session"`
+	ViewerPID         int    `json:"viewer_pid,omitempty"`
+	ObjectID          string `json:"object_id"`
+	SnapshotID        string `json:"snapshot_id"`
+	DestinationFolder string `json:"destination_folder"`
+	ClientRequestID   string `json:"client_request_id"`
+}
+type objectRezIdentifyArgs struct {
+	ViewerSession   string `json:"viewer_session"`
+	ViewerPID       int    `json:"viewer_pid,omitempty"`
+	ObjectID        string `json:"object_id"`
+	OperationID     string `json:"operation_id"`
+	ClientRequestID string `json:"client_request_id"`
+}
+
+func (s *Server) objectTakeCall(ctx context.Context, a objectTakeArgs, op string) (*mcp.CallToolResult, any, error) {
+	if !validContentUUID(a.ObjectID) || !validContentUUID(a.SnapshotID) || !validContentUUID(a.DestinationFolder) || !validContentUUID(a.ClientRequestID) {
+		return errorResult("invalid_args", "Exact root, Contents snapshot, destination and unique request UUID required", nil)
+	}
+	return s.objectCall(ctx, a.ViewerSession, a.ViewerPID, op, "object_lifecycle", objectParams(a), []string{"task_inventory_read", "world_read", "read", "object_take"})
+}
+func (s *Server) objectTakeCopy(ctx context.Context, _ *mcp.CallToolRequest, a objectTakeArgs) (*mcp.CallToolResult, any, error) {
+	return s.objectTakeCall(ctx, a, "takeCopy")
+}
+func (s *Server) objectTake(ctx context.Context, _ *mcp.CallToolRequest, a objectTakeArgs) (*mcp.CallToolResult, any, error) {
+	return s.objectTakeCall(ctx, a, "take")
+}
+func (s *Server) objectRezIdentify(ctx context.Context, _ *mcp.CallToolRequest, a objectRezIdentifyArgs) (*mcp.CallToolResult, any, error) {
+	if !validContentUUID(a.ObjectID) || !validContentUUID(a.OperationID) || !validContentUUID(a.ClientRequestID) {
+		return errorResult("invalid_args", "Exact root candidate, rez receipt and unique request UUID required", nil)
+	}
+	return s.objectCall(ctx, a.ViewerSession, a.ViewerPID, "rezIdentify", "object_lifecycle", objectParams(a), []string{"task_inventory_read", "world_read", "read", "build_rez"})
 }
 
 type objectPutArgs struct {

@@ -30,4 +30,10 @@ int main()
     assert(match.id.empty() && match.ambiguous);
     match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"wrong-type","asset",5}},"asset",10);
     assert(match.id.empty() && !match.ambiguous);
+    fs_object_tools::Acquisition ackFirst;ackFirst.acknowledge(true);assert(!ackFirst.confirmed());
+    ackFirst.observe("result");assert(ackFirst.confirmed());ackFirst.observe("result");assert(ackFirst.confirmed());
+    fs_object_tools::Acquisition inventoryFirst;inventoryFirst.observe("result");assert(!inventoryFirst.confirmed());
+    inventoryFirst.acknowledge(true);assert(inventoryFirst.confirmed());
+    inventoryFirst.observe("other");assert(inventoryFirst.ambiguous() && !inventoryFirst.confirmed() && inventoryFirst.item().empty());
+    fs_object_tools::Acquisition rejected;rejected.acknowledge(false);rejected.observe("late");assert(rejected.rejected() && !rejected.confirmed());
 }
