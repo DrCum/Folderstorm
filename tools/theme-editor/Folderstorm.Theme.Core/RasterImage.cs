@@ -44,7 +44,7 @@ public sealed class RasterImage
         for (var index = 0; index < length; ++index)
         {
             var mix = length == 1 ? 0 : (double)index / (length - 1); var alpha = first.A * (1 - mix) + last.A * mix;
-            double Blend(double a, double b) => alpha == 0 ? 0 : (a * first.A * (1 - mix) + b * last.A * mix) / alpha;
+            double Blend(double a, double b) => alpha == 0 ? a * (1 - mix) + b * mix : (a * first.A * (1 - mix) + b * last.A * mix) / alpha;
             var offset = index * 4; ramp[offset] = Unit(Blend(first.R, last.R)); ramp[offset + 1] = Unit(Blend(first.G, last.G));
             ramp[offset + 2] = Unit(Blend(first.B, last.B)); ramp[offset + 3] = Unit(alpha);
         }

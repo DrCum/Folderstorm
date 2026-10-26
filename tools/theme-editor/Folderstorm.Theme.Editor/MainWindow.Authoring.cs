@@ -18,8 +18,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private string? appliedColorValue;
     private string[] readOnlyReasons = [];
     public event PropertyChangedEventHandler? PropertyChanged;
-    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !copyingProject;
-    public bool CanOpenDocument => !copyingProject;
+    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !copyingProject && !imageOperation && EditCanvas?.IsGuideDragging != true;
+    public bool CanOpenDocument => !copyingProject && !imageOperation && EditCanvas?.IsGuideDragging != true;
     public bool CanUndo => CanEditDocument && (project!.Undo.Count > 0 || MetadataPending());
     public bool CanRedo => CanEditDocument && project!.Redo.Count > 0 && !MetadataPending();
 
@@ -43,13 +43,14 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private void UpdateCommandState()
     {
-        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo) })
+        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo), nameof(CanReplaceImage), nameof(CanEditImage) })
             PropertyChanged?.Invoke(this, new(property));
         if (ProjectLabel == null) return;
         ProjectLabel.Text = project == null ? "Classic AnsaStorm" : project.DisplayName + (changed ? "  •  Unsaved" : "") + "  ·  " + catalog?.Schemes.FirstOrDefault(s => s.Id == project.BaseScheme)?.Name;
         ProjectLabel.ToolTip = projectDirectory;
-        Title = "Folderstorm theme lab · Authoring" + (changed ? " *" : "");
+        Title = "Folderstorm theme lab · " + (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "Development") + (changed ? " *" : "");
         XmlEditor.IsReadOnly = !CanEditDocument;
+        if (EditCanvas != null) EditCanvas.AllowGuideEditing = CanEditImage && ShowImageGuides.IsChecked == true;
         CommandManager.InvalidateRequerySuggested();
     }
     private bool MetadataPending() => project != null && ThemeName != null && ThemeAuthor != null && PackageVersion != null && ThemeDescription != null &&

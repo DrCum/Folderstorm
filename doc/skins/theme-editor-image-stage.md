@@ -19,7 +19,7 @@ exercise this distinction.
 
 Validation:
 
-- 22 core/model groups pass, including original-byte preservation, changed-file
+- 23 core/model groups pass, including original-byte preservation, changed-file
   refusal and clipped/stretch geometry through crop/resize.
 - Six Windows model/codec groups pass. The derivative integration case edits
   `Inv_FolderClosed`, preserves its TGA original and leaves the shared-file sibling
@@ -30,7 +30,20 @@ Validation:
   new native visual check.
 - The TGA decoder's 1641 bundled-file pixel checks remain part of the codec probe.
 
-Editing controls, guide dragging, zoom/pixel sampling, state-family workflows,
-external editing, per-image/group reset and additional import formats remain in
-progress. PNG remains the package replacement format. Native viewer source and
-the retained 82310 installer are unchanged. Final feature/DPI acceptance is open.
+The first image workspace now has family/override filtering, current/original
+comparison, zoom and pixel picking, crop/resize, tint and basic adjustments,
+fill/gradient/border generation, three stretch samples and draggable/numeric
+slice/clip guides. A guide drag commits on release; Escape or capture loss cancels
+it. These UI interactions still need runtime visual checking.
+
+From Images, Preview in viewer composes a preview-only complete sample XUI with
+the selected logical image on `test_button` at 100x32. All its image states use
+that ID, its text is empty, and global button defaults remain inherited. Export
+and source project files/history are unchanged. The composed preview revision
+`1e4319bddb82a307fac576ba7bcc591720b1c445e2c506e285167fb174ab0f05`
+passes the production C++ validator. Actual native visual checking is pending.
+
+Tiled samples, bulk/state-family edits, external editing, per-image/group reset
+and additional import formats remain in progress. PNG remains the package
+replacement format. Native source and the retained 82310 installer are unchanged.
+Final feature/DPI acceptance is open.

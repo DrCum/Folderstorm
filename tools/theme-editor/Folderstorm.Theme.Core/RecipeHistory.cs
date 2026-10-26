@@ -10,7 +10,7 @@ public static class RecipeHistory
     private static readonly Dictionary<string, string[]> Parameters = new(StringComparer.Ordinal)
     {
         ["replace"] = [], ["crop"] = ["x", "y", "width", "height"], ["resize"] = ["width", "height", "interpolation"],
-        ["tint"] = ["color"], ["color-adjust"] = ["brightness", "contrast", "saturation", "gamma"], ["alpha"] = ["scale"],
+        ["tint"] = ["color"], ["color-adjust"] = ["brightness", "contrast", "saturation", "gamma", "alpha_scale"], ["alpha"] = ["scale"],
         ["solid-fill"] = ["width", "height", "color"], ["linear-gradient"] = ["width", "height", "first", "last", "vertical"],
         ["border"] = ["thickness", "color"], ["nine-slice"] = ["left", "top", "right", "bottom", "clip_left", "clip_top", "clip_right", "clip_bottom"], ["pipeline"] = ["steps"]
     };

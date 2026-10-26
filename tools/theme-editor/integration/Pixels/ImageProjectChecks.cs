@@ -40,11 +40,16 @@ internal static class ImageProjectChecks
         ProjectStore.Save(directory, project); project = ProjectStore.Open(directory);
         var theme = PackageStore.Compile(directory, project, catalog); var package = Path.Combine(evidence, "image-pipeline.fstheme"); PackageStore.Export(package, theme);
         var revisionDirectory = ThemeLibrary.Publish(theme, Path.Combine(evidence, "library"), catalog);
+        var sourceBeforePreview = Contract.Bytes(project);
+        var imagePreview = PackageStore.CompileImagePreview(directory, project, catalog, texture.Name);
+        var previewDirectory = ThemeLibrary.Publish(imagePreview, Path.Combine(evidence, "preview-library"), catalog);
+        Assert(Contract.Bytes(project).SequenceEqual(sourceBeforePreview), "Native image composition changed project history");
         Assert(!theme.Files.Keys.Any(path => path.EndsWith(".tga", StringComparison.Ordinal)) && theme.Files[imagePayload].SequenceEqual(resizedPng), "Runtime export contains originals or wrong current bytes");
         Assert(Contract.HashFile(Path.Combine(catalog.Root, texture.Source!)) == originalHash, "Editor changed the inherited base image");
         File.WriteAllBytes(Path.Combine(evidence, "result.json"), Contract.Bytes(new
         {
-            ThemeRevision = theme.Revision, RevisionDirectory = revisionDirectory, Package = package, BaseRoot = catalog.Root,
+            ThemeRevision = theme.Revision, RevisionDirectory = revisionDirectory, PreviewRevisionDirectory = previewDirectory,
+            PreviewThemeRevision = imagePreview.Revision, Package = package, BaseRoot = catalog.Root,
             LogicalId = texture.Name, Sibling = sibling?.Name, OriginalSha256 = originalHash, OriginalPath = asset.OriginalPath,
             ImagePayload = imagePayload, CoreAcceptanceOnly = true, NativeVisualAcceptance = "not tested by this probe"
         }));

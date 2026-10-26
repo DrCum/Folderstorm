@@ -261,8 +261,13 @@ public static class PackageStore
         }
     }
     public static ValidatedTheme Compile(string projectDirectory, ThemeProject project, BaseCatalog catalog)
+        => CompileInternal(projectDirectory, project, catalog, null);
+    public static ValidatedTheme CompileImagePreview(string projectDirectory, ThemeProject project, BaseCatalog catalog, string image)
+        => CompileInternal(projectDirectory, project, catalog, image);
+    private static ValidatedTheme CompileInternal(string projectDirectory, ThemeProject project, BaseCatalog catalog, string? previewImage)
     {
         ProjectStore.EnsureEditable(project);
+        Contract.Require(previewImage == null || catalog.Textures.ContainsKey(previewImage), "texture", "Unknown preview image: " + previewImage);
         var dependencies = Contract.Bytes(project.BaseDependencies);
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["base-dependencies.json"] = dependencies };
         var colors = catalog.CompileColors(project.Edits.Colors, project.Edits.ColorLinks);
@@ -271,6 +276,18 @@ public static class PackageStore
         {
             Contract.Require(asset.Kind == Kind(asset.PayloadPath), "kind", asset.PayloadPath);
             Contract.Require(files.TryAdd(asset.PayloadPath, File.ReadAllBytes(Contract.Contained(projectDirectory, asset.AssetPath))), "collision", asset.PayloadPath);
+        }
+        if (previewImage != null)
+        {
+            const string path = "viewer/xui/en/floater_test_widgets.xml";
+            var sample = Contract.Xml(files.TryGetValue(path, out var current) ? current : catalog.ResolveBytes("xui/en/floater_test_widgets.xml"));
+            var button = sample.Descendants("button").SingleOrDefault(node => (string?)node.Attribute("name") == "test_button");
+            Contract.Require(button != null, "xui_structure", "Native image preview requires the named sample button");
+            foreach (var attribute in new[] { "image_unselected", "image_selected", "image_hover_unselected", "image_hover_selected", "image_pressed", "image_pressed_selected", "image_disabled", "image_disabled_selected" })
+                button.SetAttributeValue(attribute, previewImage);
+            button.SetAttributeValue("label", ""); button.SetAttributeValue("width", "100"); button.SetAttributeValue("height", "32");
+            button.SetAttributeValue("tool_tip", "Image preview: " + previewImage);
+            files[path] = Contract.XmlBytes(sample);
         }
         var fonts = files.TryGetValue("viewer/fonts/fonts.xml", out var fontBytes) ? Contract.Xml(fontBytes).Descendants("file").Select(f => f.Value).Distinct(StringComparer.Ordinal).Select(f =>
             new FontDependency(files.ContainsKey("viewer/fonts/" + f) ? "embedded" : "installed", f)).ToArray() : [];

@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     private readonly PreviewSession preview = new();
     public MainWindow()
     {
-        InitializeComponent(); InitializeAuthoring();
+        InitializeComponent(); InitializeAuthoring(); InitializeImages();
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         if (catalog == null) return;
         BaseScheme.ItemsSource = catalog.Schemes; BaseScheme.SelectedValue = catalog.Scheme;
         RefreshPalette();
-        RefreshTextures();
+        RefreshImageFamilies(); RefreshTextures();
         FontList.ItemsSource = catalog.FontConfigurations; FontList.SelectedIndex = 0;
         SyncMetadata();
     }
@@ -107,39 +107,6 @@ public partial class MainWindow : Window
     private async void SaveProject(object sender, RoutedEventArgs args) => await Run(Save);
     private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; CommitMetadata(); if (project!.UndoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Undone."; } });
     private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; if (project!.RedoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Redone."; } });
-    private void SelectTexture(object sender, SelectionChangedEventArgs args)
-    {
-        if (catalog == null || TextureList.SelectedItem is not TextureDefinition texture) return;
-        TextureName.Text = texture.Name; AssetImage.Source = null; TextureSource.Text = "Requires native resolution";
-        try
-        {
-            var registrations = project?.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == "viewer/textures/textures.xml");
-            if (registrations != null)
-            {
-                var node = Contract.Xml(File.ReadAllBytes(Contract.Contained(projectDirectory, registrations.AssetPath))).Root?.Elements("texture").LastOrDefault(element => (string?)element.Attribute("name") == texture.Name);
-                if (node != null) texture = texture with { Attributes = node.Attributes().ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal) };
-            }
-            if (!texture.Attributes.TryGetValue("file_name", out var fileName)) return;
-            texture = texture with { Source = catalog.Resolve("textures/" + fileName) };
-            var edited = project?.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == "viewer/textures/" + fileName);
-            var path = edited == null ? texture.Source == null ? null : Path.Combine(catalog.Root, texture.Source) : Contract.Contained(projectDirectory, edited.AssetPath);
-            TextureSource.Text = edited == null ? texture.Source ?? "Requires native resolution" : "Project: " + edited.AssetPath;
-            if (path == null) return;
-            Contract.Require(new FileInfo(path).Length <= Contract.ArchiveLimit, "image", "Image exceeds the preview input limit");
-            var image = ImageCodec.Decode(File.ReadAllBytes(path), fileName);
-            AssetImage.Source = ImageCodec.ToBitmap(image); TextureSource.Text += $"\n{image.Width} × {image.Height}";
-        }
-        catch (Exception error) when (error is IOException or NotSupportedException or FormatException or ThemeException)
-        { TextureSource.Text += "\n" + error.Message + "\nUse native inspection for this image format."; }
-    }
-    private async void ReplaceImage(object sender, RoutedEventArgs args)
-    {
-        if (!Ready() || TextureList.SelectedItem is not TextureDefinition texture) return;
-        var picker = new OpenFileDialog { Filter = "PNG image|*.png" }; if (picker.ShowDialog(this) != true) return;
-        await Run(() => { var payload = "viewer/textures/" + texture.Attributes["file_name"]; Contract.Require(payload.EndsWith(".png", StringComparison.OrdinalIgnoreCase), "image", "Choose a PNG-backed registration for this initial replacement tool");
-            project!.Checkpoint("Replace " + texture.Name); var asset = ProjectStore.ImportAsset(projectDirectory, picker.FileName, payload, "image");
-            project.Edits.Assets.RemoveAll(a => a.PayloadPath == payload); project.Edits.Assets.Add(asset); changed = true; SelectTexture(sender, null!); });
-    }
     private void PutAsset(string payload, string kind, byte[] bytes, byte[]? original = null)
     {
         var extension = Path.GetExtension(payload); var relative = "assets/" + Contract.Hash(bytes) + extension;
@@ -193,8 +160,9 @@ public partial class MainWindow : Window
     {
         if (!Ready()) return;
         try { StatusText.Text = "Validating and starting native preview…"; Workspace.IsEnabled = false;
-            CommitMetadata(); var theme = PackageStore.Compile(projectDirectory, project!, catalog!);
-            await preview.StartAsync(ViewerPath.Text, theme, catalog!); StatusText.Text = "Native preview " + preview.Status + " · PID " + preview.ProcessId; }
+            CommitMetadata(); var image = Workspace.SelectedIndex == 1 ? SelectedTexture?.Name : null;
+            var theme = image == null ? PackageStore.Compile(projectDirectory, project!, catalog!) : PackageStore.CompileImagePreview(projectDirectory, project!, catalog!, image);
+            await preview.StartAsync(ViewerPath.Text, theme, catalog!); StatusText.Text = (image == null ? "Native preview " : "Native button preview: " + image + " · ") + preview.Status + " · PID " + preview.ProcessId; }
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { Workspace.IsEnabled = true; }
     }
@@ -202,7 +170,7 @@ public partial class MainWindow : Window
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (closing) return; args.Cancel = true;
-        if (copyingProject) { StatusText.Text = "Wait for the project copy to finish before closing."; return; }
+        if (copyingProject || imageOperation || EditCanvas.IsGuideDragging) { StatusText.Text = "Finish or cancel the current edit before closing."; return; }
         try { if (!Discard()) return; await preview.DisposeAsync(); closing = true; Close(); }
         catch (Exception error) { StatusText.Text = error.Message; }
     }

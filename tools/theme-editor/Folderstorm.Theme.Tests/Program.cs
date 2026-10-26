@@ -284,7 +284,8 @@ Test("image edits preserve source pixels and bound crop adjustments and generati
     var border = RasterImage.Fill(4, 4, ThemeColor.Parse("#0000")).Border(1, ThemeColor.Parse("#f00"));
     Assert(border.Pixel(0, 3) == new RgbaPixel(255, 0, 0, 255) && border.Pixel(1, 1).A == 0, "Border damaged the interior");
     var gradient = RasterImage.Gradient(3, 1, ThemeColor.Parse("#f00"), ThemeColor.Parse("#00f0"), false);
-    Assert(gradient.Pixel(1, 0) == new RgbaPixel(255, 0, 0, 128) && gradient.Pixel(2, 0).A == 0, "Gradient introduced transparent-edge color halos");
+    Assert(gradient.Pixel(1, 0) == new RgbaPixel(255, 0, 0, 128) && gradient.Pixel(2, 0) == new RgbaPixel(0, 0, 255, 0), "Gradient introduced color halos or lost endpoint RGB");
+    Assert(RasterImage.Fill(1, 1, ThemeColor.Parse("#f000")).Pixel(0, 0) == new RgbaPixel(255, 0, 0, 0), "Transparent fill lost the requested hidden RGB");
     Reject("image", () => source.Crop(-1, 0, 1, 1));
     Reject("image", () => source.Adjust(gamma: double.NaN));
     Reject("image", () => RasterImage.Fill(16384, 16384, ThemeColor.Parse("#fff")));
@@ -361,6 +362,19 @@ Test("clip rectangles and stretch guides keep native origins through resize and 
     Assert(cropped.Clip == new NativeSlice(0, 16, 32, 0) && cropped.Margins == new SliceMargins(0, 8, 0, 0), "Crop did not remove clipped-away fixed borders");
     Assert(TextureGeometry.FromAttributes(32, 16, cropped.ApplyTo(catalog.Textures["Rounded_Rect_Top"].Attributes)) == cropped, "Edited guide serialization changed geometry");
     Reject("texture", () => top.Crop(0, 20, 64, 12));
+});
+
+Test("image preview binds only the native sample button and leaves the source project intact", () =>
+{
+    var before = Contract.Bytes(project!);
+    var paths = Directory.EnumerateFiles(projectDirectory, "*", SearchOption.AllDirectories).ToDictionary(path => path, Contract.HashFile);
+    var theme = PackageStore.CompileImagePreview(projectDirectory, project!, catalog, "Inv_FolderClosed");
+    var sample = Contract.Xml(theme.Files["viewer/xui/en/floater_test_widgets.xml"]);
+    var button = sample.Descendants("button").Single(node => (string?)node.Attribute("name") == "test_button");
+    Assert((string?)button.Attribute("image_unselected") == "Inv_FolderClosed" && (string?)button.Attribute("image_pressed") == "Inv_FolderClosed" && (string?)button.Attribute("label") == "", "Native preview image bindings");
+    Assert(!theme.Files.ContainsKey("viewer/xui/en/widgets/button.xml") && theme.Manifest.RequiredCapabilities.Contains("viewer.xui.v1"), "Preview changed global button defaults or missed capability");
+    Assert(Contract.Bytes(project!).SequenceEqual(before) && paths.Count == Directory.EnumerateFiles(projectDirectory, "*", SearchOption.AllDirectories).Count() && paths.All(entry => Contract.HashFile(entry.Key) == entry.Value), "Preview changed source project files or history");
+    Reject("texture", () => PackageStore.CompileImagePreview(projectDirectory, project!, catalog, "MissingImageId"));
 });
 
 var failed = 0;

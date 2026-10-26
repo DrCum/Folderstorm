@@ -62,6 +62,12 @@ overwrite them with a new project. Arbitrary root metadata remains round-trippab
 Recipe records describe retained authoring steps; compiled assets are the prepared
 derivatives. Recognizing a recipe operation does not execute it during export.
 
+Image preview composition is runtime-only: it binds the selected logical image
+to the existing native sample button, without adding controls, changing global
+widget defaults, or writing source project files/history. Its extra complete XUI
+payload and capability are validated like an ordinary runtime package. Export
+continues to compile the authored project without this preview-only binding.
+
 Multiple image edits use a `pipeline` recipe with an ordered `steps` array of
 recipe records in `parameters`. Appends retain earlier steps without modifying
 their records. The current editor supports at most 128 steps and 16 nested
