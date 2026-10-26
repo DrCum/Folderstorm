@@ -310,6 +310,27 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("image recipe pipelines retain each step and reject unknown nested semantics read-only", () =>
+{
+    var original = new Recipe("tint", new() { ["color"] = JsonSerializer.SerializeToElement("#64D8B2") });
+    var resize = new Recipe("resize", new() { ["width"] = JsonSerializer.SerializeToElement(64), ["height"] = JsonSerializer.SerializeToElement(32), ["interpolation"] = JsonSerializer.SerializeToElement("bilinear") });
+    var pipeline = RecipeHistory.Append(original, resize);
+    pipeline = RecipeHistory.Append(pipeline, new("border", new() { ["thickness"] = JsonSerializer.SerializeToElement(2), ["color"] = JsonSerializer.SerializeToElement("#0008") }));
+    Assert(pipeline.Operation == "pipeline" && pipeline.Parameters["steps"].GetArrayLength() == 3 && original.Operation == "tint", "Pipeline lost steps or mutated the original");
+    var directory = Path.Combine(root, "pipeline"); var p = ProjectStore.Create(catalog, "Recipe pipeline"); p.Edits.Recipes["PushButton_Off"] = pipeline;
+    ProjectStore.Save(directory, p);
+    Assert(Contract.Bytes(ProjectStore.Open(directory).Edits.Recipes["PushButton_Off"]).SequenceEqual(Contract.Bytes(pipeline)), "Pipeline changed on reopen");
+    var unknown = new Recipe("pipeline", new() { ["steps"] = JsonSerializer.SerializeToElement(new[] { new Recipe("future-blend.v4", new()) }, Contract.JsonOptions) });
+    p.Redo.Add(new("Future recipe", new ProjectEdits { Recipes = new() { ["PushButton_Off"] = unknown } }));
+    var bytes = Contract.Bytes(p); File.WriteAllBytes(Path.Combine(directory, ProjectStore.FileName), bytes);
+    var document = ProjectStore.OpenDocument(directory);
+    Assert(!document.CanEdit && document.ReadOnlyReasons.Any(reason => reason.Contains("future-blend.v4", StringComparison.Ordinal)), "Unknown nested operation was ignored");
+    Assert(document.OriginalBytes.SequenceEqual(bytes), "Future nested operation bytes changed");
+    var futureParameter = new Recipe("tint", new() { ["future_parameter"] = JsonSerializer.SerializeToElement(true) });
+    Assert(RecipeHistory.ReadOnlyReasons(futureParameter).Length > 0, "Future parameter became an editable no-op");
+    Reject("project_readonly", () => RecipeHistory.Append(futureParameter, resize));
+});
+
 var failed = 0;
 foreach (var (name, run) in tests)
 {

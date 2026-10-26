@@ -28,7 +28,8 @@ internal static class Program
             var inherited = ImageCodec.Decode(original); var inheritedPng = ImageCodec.EncodePng(inherited);
             Assert(ImageCodec.Decode(inheritedPng).ToRgba().SequenceEqual(inherited.ToRgba()) && Contract.Hash(original) == originalHash, "Inherited artwork round trip changed pixels or source bytes");
             Console.WriteLine("PASS inherited button decode/encode pixel fidelity");
-            Console.WriteLine("3/3 passed. Windowless codec checks only; no UI visual acceptance."); return 0;
+            TgaChecks.Run(catalog);
+            Console.WriteLine("5/5 passed. Windowless codec checks only; no UI visual acceptance."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }

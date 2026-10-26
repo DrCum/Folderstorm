@@ -7,8 +7,9 @@ namespace Folderstorm.Theme.Editor;
 
 internal static class ImageCodec
 {
-    public static RasterImage Decode(byte[] bytes)
+    public static RasterImage Decode(byte[] bytes, string? fileName = null)
     {
+        if (string.Equals(Path.GetExtension(fileName), ".tga", StringComparison.OrdinalIgnoreCase)) return TgaImage.Decode(bytes);
         using var input = new MemoryStream(bytes, false);
         var decoder = BitmapDecoder.Create(input, BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnDemand);
         var frame = decoder.Frames[0];

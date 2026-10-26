@@ -59,4 +59,8 @@ dotnet run --project integration/Pixels -c Release -- <matching-viewer-or-reposi
 
 It compiles the production ImageCodec source and checks exact RGBA/alpha/hidden-RGB
 PNG round trips, a frozen display bitmap, and inherited button pixel fidelity.
+It also checks TGA origin/depth/palette/RLE/malformed fixtures and decodes every
+nonempty bundled TGA, writing source and decoded-pixel hashes to a fresh evidence
+folder. The empty placeholder is rejected explicitly. The separate development
+cross-check uses Pillow; the shipped editor uses only the managed decoder.
 It never opens a window and does not establish UI or native rendering acceptance.

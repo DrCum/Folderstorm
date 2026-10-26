@@ -10,7 +10,7 @@ public enum ImageInterpolation { Nearest, Bilinear }
 // Immutable straight-alpha pixels. Imported bytes remain separate project assets.
 public sealed class RasterImage
 {
-    public const int PixelLimit = 16 * 1024 * 1024;
+    public const int PixelLimit = 16_000_000;
     private readonly byte[] pixels;
     public int Width { get; }
     public int Height { get; }

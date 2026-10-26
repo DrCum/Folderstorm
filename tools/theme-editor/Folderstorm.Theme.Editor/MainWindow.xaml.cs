@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         if (catalog == null) return;
         BaseScheme.ItemsSource = catalog.Schemes; BaseScheme.SelectedValue = catalog.Scheme;
         RefreshPalette();
-        TextureList.ItemsSource = catalog.Textures.Values.OrderBy(t => t.Name, StringComparer.Ordinal).ToArray();
+        RefreshTextures();
         FontList.ItemsSource = catalog.FontConfigurations; FontList.SelectedIndex = 0;
         SyncMetadata();
     }
@@ -110,12 +110,27 @@ public partial class MainWindow : Window
     private void SelectTexture(object sender, SelectionChangedEventArgs args)
     {
         if (catalog == null || TextureList.SelectedItem is not TextureDefinition texture) return;
-        TextureName.Text = texture.Name; TextureSource.Text = texture.Source ?? "Requires native resolution"; AssetImage.Source = null;
-        var edited = project?.Edits.Assets.LastOrDefault(a => a.PayloadPath == "viewer/textures/" + texture.Attributes.GetValueOrDefault("file_name"));
-        var path = edited == null ? texture.Source == null ? null : Path.Combine(catalog.Root, texture.Source) : Path.Combine(projectDirectory, edited.AssetPath);
-        if (path == null) return;
-        try { var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.UriSource = new Uri(Path.GetFullPath(path)); bitmap.EndInit(); bitmap.Freeze(); AssetImage.Source = bitmap; }
-        catch (Exception error) when (error is IOException or NotSupportedException or FormatException) { TextureSource.Text += "\nUse native inspection for this image format."; }
+        TextureName.Text = texture.Name; AssetImage.Source = null; TextureSource.Text = "Requires native resolution";
+        try
+        {
+            var registrations = project?.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == "viewer/textures/textures.xml");
+            if (registrations != null)
+            {
+                var node = Contract.Xml(File.ReadAllBytes(Contract.Contained(projectDirectory, registrations.AssetPath))).Root?.Elements("texture").LastOrDefault(element => (string?)element.Attribute("name") == texture.Name);
+                if (node != null) texture = texture with { Attributes = node.Attributes().ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal) };
+            }
+            if (!texture.Attributes.TryGetValue("file_name", out var fileName)) return;
+            texture = texture with { Source = catalog.Resolve("textures/" + fileName) };
+            var edited = project?.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == "viewer/textures/" + fileName);
+            var path = edited == null ? texture.Source == null ? null : Path.Combine(catalog.Root, texture.Source) : Contract.Contained(projectDirectory, edited.AssetPath);
+            TextureSource.Text = edited == null ? texture.Source ?? "Requires native resolution" : "Project: " + edited.AssetPath;
+            if (path == null) return;
+            Contract.Require(new FileInfo(path).Length <= Contract.ArchiveLimit, "image", "Image exceeds the preview input limit");
+            var image = ImageCodec.Decode(File.ReadAllBytes(path), fileName);
+            AssetImage.Source = ImageCodec.ToBitmap(image); TextureSource.Text += $"\n{image.Width} × {image.Height}";
+        }
+        catch (Exception error) when (error is IOException or NotSupportedException or FormatException or ThemeException)
+        { TextureSource.Text += "\n" + error.Message + "\nUse native inspection for this image format."; }
     }
     private async void ReplaceImage(object sender, RoutedEventArgs args)
     {

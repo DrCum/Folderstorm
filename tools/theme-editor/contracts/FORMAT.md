@@ -62,6 +62,13 @@ overwrite them with a new project. Arbitrary root metadata remains round-trippab
 Recipe records describe retained authoring steps; compiled assets are the prepared
 derivatives. Recognizing a recipe operation does not execute it during export.
 
+Multiple image edits use a `pipeline` recipe with an ordered `steps` array of
+recipe records in `parameters`. Appends retain earlier steps without modifying
+their records. The current editor supports at most 128 steps and 16 nested
+pipeline levels. Unknown nested operations/fields/parameters are read-only,
+including steps saved in undo/redo history. Earlier editors that do not recognize
+`pipeline` preserve the document through their unknown-operation read-only path.
+
 Save As stages a complete project copy in the new folder's parent and exposes it
 with a single rename. It retains imported originals, derivatives, history,
 checkpoints and extra plain project files, then saves current in-memory edits.

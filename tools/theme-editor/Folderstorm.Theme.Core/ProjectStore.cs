@@ -13,8 +13,6 @@ public static class ProjectStore
 {
     public const int CurrentVersion = 2;
     public const string FileName = "project.fsthemeproj";
-    private static readonly HashSet<string> RecipeOperations = new(StringComparer.Ordinal)
-    { "replace", "crop", "resize", "tint", "color-adjust", "alpha", "solid-fill", "linear-gradient", "border", "nine-slice" };
 
     public static ThemeProject Create(BaseCatalog catalog, string name) => new()
     { DisplayName = name, BaseSkin = catalog.Skin, BaseScheme = catalog.Scheme, BaseDependencies = catalog.Fingerprint() };
@@ -110,8 +108,7 @@ public static class ProjectStore
             foreach (var recipe in edits.Recipes.Values)
             {
                 Contract.Require(recipe != null && recipe.Operation != null && recipe.Parameters != null, "schema", "Invalid recipe");
-                if (!RecipeOperations.Contains(recipe.Operation)) reasons.Add("Unsupported recipe: " + recipe.Operation);
-                if (recipe.UnknownMetadata?.Count > 0) reasons.Add("Unsupported recipe fields are preserved read-only.");
+                reasons.UnionWith(RecipeHistory.ReadOnlyReasons(recipe));
             }
         }
         if (project.Undo.Concat(project.Redo).Any(checkpoint => checkpoint.UnknownMetadata?.Count > 0))

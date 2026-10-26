@@ -2,7 +2,7 @@
 
 This branch follows PR #125 and its recorded Gate A native checks. The matching
 native 82310 build and editor 0.1.1 remain retained separately. Model checks pass
-19/19, with three additional Windows codec checks. The user verified palette
+20/20, with five additional Windows codec groups. The user verified palette
 changes, Undo/Redo, inspector spacing/scrolling and Save As in retained editor
 0.2.1. Other workflows and final multi-DPI acceptance remain open.
 
@@ -51,4 +51,13 @@ previews. Bilinear interpolation uses premultiplied alpha and fixed slice region
 do not bleed into their neighbors. Editing is bounded to 16 megapixels; PNG
 encoding is bounded to 32 MiB. WPF codec tests preserve channel order, alpha,
 hidden RGB and inherited button pixels. These are model/codec checks; the image
-workspace wiring and derivative/recipe persistence still need implementation.
+editing controls and derivative storage wiring still need implementation.
+
+The image browser now searches IDs/filenames and previews TGA directly, including
+uncompressed/RLE truecolor, palettes, grayscale, origins and alpha. The decoder
+retains source bytes and uses the native reader's 32-bit-alpha convention even
+when descriptor bits are zero. All 1641 bundled nonempty TGA files match Pillow's
+decoded RGBA bytes; the repository's empty placeholder is rejected explicitly.
+This validates decoded pixels, not native widget rendering. Interleaved TGA is
+reported as unsupported. PNG remains the package replacement format until the
+shared native/import validation is expanded.
