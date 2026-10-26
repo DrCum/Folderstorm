@@ -98,7 +98,8 @@ bool configure()
             previewDirectory=expected;id=text(request,"theme_id");revision=text(request,"revision");
             gSavedSettings.setBOOL("AutoLogin",false);gSavedSettings.setBOOL("AllowMultipleViewers",true);gSavedSettings.setBOOL("SLURLPassToOtherInstance",false);
             sessionValue("SkinCurrent","ansastorm");sessionValue("SkinCurrentTheme","folderstorm");sessionValue("Language","en");
-            gSavedSettings.setS32("WindowWidth",1280);gSavedSettings.setS32("WindowHeight",900);
+            gSavedSettings.setU32("WindowWidth",1280);gSavedSettings.setU32("WindowHeight",900);
+            sessionValue("WindowMaximized",false);
         }
         else
         {

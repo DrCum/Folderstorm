@@ -3972,7 +3972,7 @@ bool LLAppViewer::initWindow()
     // Determine if the window should start maximized on initial run based
     // on graphics capability
     //
-    if (gSavedSettings.getBOOL("FirstLoginThisInstall") && meetsRequirementsForMaximizedStart())
+    if (!FSThemeViewer::preview() && gSavedSettings.getBOOL("FirstLoginThisInstall") && meetsRequirementsForMaximizedStart())
     {
         LL_INFOS("AppInit") << "This client met the requirements for a maximized initial screen." << LL_ENDL;
         gSavedSettings.setBOOL("WindowMaximized", true);
@@ -5202,7 +5202,8 @@ static LLNotificationFunctorRegistration finish_quit_reg("ConfirmQuit", finish_q
 void LLAppViewer::userQuit()
 {
     LL_INFOS() << "User requested quit" << LL_ENDL;
-    if (gDisconnected
+    if (FSThemeViewer::preview()
+        || gDisconnected
         || !gViewerWindow
         || !gViewerWindow->getProgressView()
         || gViewerWindow->getProgressView()->getVisible())

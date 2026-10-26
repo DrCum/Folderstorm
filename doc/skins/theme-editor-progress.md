@@ -34,11 +34,23 @@ the build skill's human release-test gate; publication still requires approval.
   actual managed-exported color/image revision. Long Windows paths are covered.
 - The v2 inventory generator hashes asset/XML/font bytes and records all six
   classic schemes. The supplied planning snapshot remains untouched.
-- A minimal self-contained x64 WPF editor compiles and publishes. Viewer search
-  path/font hooks and offline preview integration are written but not yet built
-  into a matching viewer. Gate A has not passed.
+- A minimal self-contained x64 WPF editor compiles and publishes. Matching
+  viewer 7.2.5.82308 (source `95fce16ca2`) is retained with NSIS, runnable files,
+  private symbols, editor and provenance under `D:/Folderstorm-theme-builds/gate-a`.
+  It has not been installed or published. Gate A has not passed.
 - Computer Use approval succeeded. The editor opened, and its tab contrast
   defect was fixed and visually rechecked. Native viewer checks remain pending.
+- Actual native screenshots now cover the built-in sample, no-op overlay and
+  combined proof. Custom button artwork, linked accent text and the package-local
+  font are visible. Warm owned previews reported ready in 6–8 seconds; the cold
+  built-in startup took about 18 seconds. These are preliminary runtime results.
+- Sustained preview rendering can omit most textured controls until a resize.
+  Restoring GL state after offline texture uploads is under test. Window-size
+  control types and first-run maximization were corrected, and offline Close
+  bypasses the ordinary quit-confirmation prompt. These fixes need a new viewer.
+- Native panel drawing uses image-overlay colors when a background image exists.
+  The floater-tint proof now sets those attributes as well as fallback flat
+  colors; both validators share the additional typed color attributes.
 - Ten additional shared boundary probes pass, covering JSON depth/shape, finite
   font sizes, typed XUI geometry, color references and ordered slice bounds.
   The native harness now uses C++20 and warnings as errors, matching the viewer.

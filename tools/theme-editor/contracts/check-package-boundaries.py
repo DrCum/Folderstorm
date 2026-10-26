@@ -78,6 +78,8 @@ mutations = [
     ('nonfinite-font-size', 'viewer/fonts/fonts.xml', 'font_size', 'size', 'NaN', 'font'),
     ('nonfinite-xui-width', 'viewer/xui/en/widgets/floater.xml', None, 'width', 'NaN', 'xui_value'),
     ('unknown-xui-color', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_color', 'MissingThemeColor', 'reference'),
+    ('unknown-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'MissingOverlayColor', 'reference'),
+    ('valid-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'ThemeAccent', 'valid'),
     ('reversed-nine-slice', 'viewer/textures/textures.xml', 'texture', 'scale.left', '31', 'texture'),
 ]
 for name, relative, element, attribute, value, expected in mutations:

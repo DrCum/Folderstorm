@@ -6,13 +6,13 @@
     "width", "height", "min_width", "min_height", "left", "right", "top", "bottom", "left_delta", "top_delta", "left_pad", "top_pad",
     "pad_left", "pad_right", "pad_top", "pad_bottom", "label", "title", "tool_tip", "font", "font_style", "text_color", "text_readonly_color",
     "label_color", "label_color_selected", "label_color_disabled", "label_color_selected_disabled", "bg_opaque_color", "bg_alpha_color",
-    "border_color", "highlight_color", "image_unselected", "image_selected", "image_hover_unselected", "image_hover_selected", "image_disabled", "image_disabled_selected"
+    "border_color", "highlight_color", "bg_opaque_image_overlay", "bg_alpha_image_overlay", "image_unselected", "image_selected", "image_hover_unselected", "image_hover_selected", "image_disabled", "image_disabled_selected"
   ],
   "structure": "same ordered element tree and protected attributes as the exact base",
   "value_rules": {
     "nonnegative_integer": ["width", "height", "min_width", "min_height", "pad_left", "pad_right", "pad_top", "pad_bottom"],
     "signed_integer": ["left", "right", "top", "bottom", "left_delta", "top_delta", "left_pad", "top_pad"],
-    "color": ["text_color", "text_readonly_color", "label_color", "label_color_selected", "label_color_disabled", "label_color_selected_disabled", "bg_opaque_color", "bg_alpha_color", "border_color", "highlight_color"],
+    "color": ["text_color", "text_readonly_color", "label_color", "label_color_selected", "label_color_disabled", "label_color_selected_disabled", "bg_opaque_color", "bg_alpha_color", "border_color", "highlight_color", "bg_opaque_image_overlay", "bg_alpha_image_overlay"],
     "image": ["image_unselected", "image_selected", "image_hover_unselected", "image_hover_selected", "image_disabled", "image_disabled_selected"],
     "integer_limit": 16384,
     "text_limit": 4096

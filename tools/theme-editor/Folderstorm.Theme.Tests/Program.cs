@@ -81,6 +81,11 @@ Test("paths, duplicate keys, capabilities and XUI behavior are rejected", () =>
     Reject("capability", () => PackageStore.Manifest(Contract.Bytes(manifest)));
     var widget = Contract.Xml(catalog.ResolveBytes("xui/en/widgets/floater.xml")); widget.Root!.SetAttributeValue("name", "changed-behavior");
     Reject("xui_attribute", () => XuiPolicy.Validate("xui/en/widgets/floater.xml", Contract.XmlBytes(widget), catalog));
+    var tint = Contract.Xml(catalog.ResolveBytes("xui/en/widgets/floater.xml"));
+    tint.Root!.SetAttributeValue("bg_alpha_image_overlay", "ThemeFloaterAlphaTint");
+    XuiPolicy.Validate("xui/en/widgets/floater.xml", Contract.XmlBytes(tint), catalog);
+    tint.Root.SetAttributeValue("bg_alpha_image_overlay", "MissingOverlayColor");
+    Reject("reference", () => XuiPolicy.Validate("xui/en/widgets/floater.xml", Contract.XmlBytes(tint), catalog));
     Reject("xui_path", () => XuiPolicy.Validate("xui/en/panel_login.xml", [], catalog));
     Reject("xml", () => Contract.Xml(Encoding.UTF8.GetBytes("<!DOCTYPE colors [<!ENTITY file SYSTEM 'file:///secret'>]><colors>&file;</colors>")));
 });
