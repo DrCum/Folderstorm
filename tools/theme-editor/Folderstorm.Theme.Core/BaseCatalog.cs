@@ -120,48 +120,11 @@ public sealed class BaseCatalog
         }
         return names;
     }
-    public Dictionary<string, string> CompileColors(IReadOnlyDictionary<string, string> edits)
-    {
-        var output = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (name, value) in edits)
-        { Contract.Require(Colors.ContainsKey(name), "color", "Unknown color: " + name); Contract.Rgba(value); output[name] = value; }
-        bool changed;
-        do
-        {
-            changed = false;
-            foreach (var color in Colors.Values)
-                if (!output.ContainsKey(color.Name) && color.Reference != null && output.TryGetValue(color.Reference, out var value))
-                { output[color.Name] = value; changed = true; }
-            foreach (var (name, role, alpha) in AlphaLinks)
-                if (!output.ContainsKey(name) && Colors.ContainsKey(name) && output.TryGetValue(role, out var value))
-                { var rgba = Contract.Rgba(value); rgba[3] = alpha; output[name] = Contract.ColorText(rgba); changed = true; }
-        } while (changed);
-        return output;
-    }
-    public ColorInspection InspectColor(string name, IReadOnlyDictionary<string, string> edits)
-    {
-        var compiled = CompileColors(edits);
-        var chain = new List<string>(); var visited = new HashSet<string>(StringComparer.Ordinal);
-        ThemeColor? resolved = compiled.TryGetValue(name, out var applied) ? ThemeColor.Parse(applied) : null;
-        ColorInspection Result(ThemeColor value) => new(name, value, Colors[name].Source, chain.ToArray(), edits.ContainsKey(name), compiled.ContainsKey(name));
-        var current = name;
-        while (true)
-        {
-            Contract.Require(visited.Add(current), "color_cycle", "Color reference cycle: " + string.Join(" → ", chain.Append(current)));
-            Contract.Require(Colors.TryGetValue(current, out var definition), "reference", "Unknown color: " + current);
-            chain.Add(current);
-            if (edits.TryGetValue(current, out var edited)) return Result(resolved ?? ThemeColor.Parse(edited));
-            if (definition.Reference != null) { current = definition.Reference; continue; }
-            if (compiled.ContainsKey(current))
-            {
-                var role = AlphaLinks.Where(link => link.Item1 == current).Select(link => link.Item2).FirstOrDefault();
-                if (role != null && compiled.ContainsKey(role)) { current = role; continue; }
-            }
-            Contract.Require(definition.Value != null, "color", "Color has no value: " + current);
-            return Result(resolved ?? ThemeColor.Parse(definition.Value));
-        }
-    }
-    private static readonly (string, string, double)[] AlphaLinks =
+    public Dictionary<string, string> CompileColors(IReadOnlyDictionary<string, string> edits, IReadOnlyDictionary<string, string>? links = null)
+        => new ColorResolver(this, edits, links).Compile();
+    public ColorInspection InspectColor(string name, IReadOnlyDictionary<string, string> edits, IReadOnlyDictionary<string, string>? links = null)
+        => new ColorResolver(this, edits, links).Inspect(name);
+    internal static readonly (string Name, string Role, double Alpha)[] AlphaLinks =
     [
         ("EmphasisColor_13", "ThemeAccent", .13), ("EmphasisColor_35", "ThemeAccent", .35),
         ("SchemeLightest_35", "ThemeAccent", .35), ("DefaultHighlightLight", "ThemeAccent", .25), ("DefaultHighlightDark", "ThemeAccent", .10),

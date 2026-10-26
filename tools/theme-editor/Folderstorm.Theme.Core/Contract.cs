@@ -188,19 +188,32 @@ public sealed record DependencySet(int FormatVersion, string BaseSkin, string Ba
 public sealed record ColorDefinition(string Name, string? Value, string? Reference, string Source);
 public sealed record TextureDefinition(string Name, Dictionary<string, string> Attributes, string? Source);
 public sealed record Scheme(string Id, string Name);
-public sealed record ProjectAsset(string PayloadPath, string AssetPath, string OriginalPath, string Kind);
-public sealed record Recipe(string Operation, Dictionary<string, JsonElement> Parameters);
+public sealed record ProjectAsset(string PayloadPath, string AssetPath, string OriginalPath, string Kind)
+{
+    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; init; }
+}
+public sealed record Recipe(string Operation, Dictionary<string, JsonElement> Parameters)
+{
+    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; init; }
+}
 public sealed record ProjectEdits
 {
     public Dictionary<string, string> Colors { get; init; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> ColorLinks { get; init; } = new(StringComparer.Ordinal);
     public List<ProjectAsset> Assets { get; init; } = [];
     public Dictionary<string, Recipe> Recipes { get; init; } = new(StringComparer.Ordinal);
     public string? FontConfiguration { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; init; }
 }
-public sealed record ProjectCheckpoint(string Label, ProjectEdits Edits);
+public sealed record ProjectMetadata(string DisplayName, string PackageVersion, string Author, string Description,
+    Dictionary<string, JsonElement> Extensions, Dictionary<string, JsonElement>? UnknownMetadata);
+public sealed record ProjectCheckpoint(string Label, ProjectEdits Edits, ProjectMetadata? Metadata = null)
+{
+    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; init; }
+}
 public sealed record ThemeProject
 {
-    public int ProjectVersion { get; init; } = 1;
+    public int ProjectVersion { get; init; } = ProjectStore.CurrentVersion;
     public string ProjectId { get; init; } = Guid.NewGuid().ToString("D");
     public string ThemeId { get; init; } = Guid.NewGuid().ToString("D");
     public string DisplayName { get; set; } = "Untitled theme";
@@ -215,23 +228,31 @@ public sealed record ThemeProject
     public List<ProjectCheckpoint> Redo { get; init; } = [];
     public string Origin { get; init; } = "authored";
     public Dictionary<string, JsonElement> Extensions { get; init; } = new(StringComparer.Ordinal);
-    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; init; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? UnknownMetadata { get; set; }
 
     public void Checkpoint(string label)
     {
-        Undo.Add(new(label, Contract.Read<ProjectEdits>(Contract.Bytes(Edits))));
+        Undo.Add(new(label, Contract.Read<ProjectEdits>(Contract.Bytes(Edits)), CaptureMetadata()));
         Redo.Clear();
     }
     public bool UndoEdit()
     {
         if (Undo.Count == 0) return false;
         var checkpoint = Undo[^1]; Undo.RemoveAt(Undo.Count - 1);
-        Redo.Add(new(checkpoint.Label, Edits)); Edits = checkpoint.Edits; return true;
+        Redo.Add(new(checkpoint.Label, Edits, CaptureMetadata())); Edits = checkpoint.Edits; RestoreMetadata(checkpoint.Metadata); return true;
     }
     public bool RedoEdit()
     {
         if (Redo.Count == 0) return false;
         var checkpoint = Redo[^1]; Redo.RemoveAt(Redo.Count - 1);
-        Undo.Add(new(checkpoint.Label, Edits)); Edits = checkpoint.Edits; return true;
+        Undo.Add(new(checkpoint.Label, Edits, CaptureMetadata())); Edits = checkpoint.Edits; RestoreMetadata(checkpoint.Metadata); return true;
+    }
+    private ProjectMetadata CaptureMetadata() => Contract.Read<ProjectMetadata>(Contract.Bytes(new ProjectMetadata(DisplayName, PackageVersion, Author, Description, Extensions, UnknownMetadata)));
+    private void RestoreMetadata(ProjectMetadata? metadata)
+    {
+        if (metadata == null) return; // Version-1 checkpoints did not capture metadata.
+        DisplayName = metadata.DisplayName; PackageVersion = metadata.PackageVersion; Author = metadata.Author; Description = metadata.Description;
+        Extensions.Clear(); foreach (var entry in metadata.Extensions) Extensions.Add(entry.Key, entry.Value.Clone());
+        UnknownMetadata = metadata.UnknownMetadata?.ToDictionary(entry => entry.Key, entry => entry.Value.Clone(), StringComparer.Ordinal);
     }
 }

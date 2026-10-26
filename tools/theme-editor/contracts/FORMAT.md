@@ -45,6 +45,23 @@ save/reopen; unsupported structural edit operations fail rather than flattening.
 Export does not rewrite a project. Importing a runtime package starts a separate
 compiled-override project with no invented recipes/originals/undo history.
 
+Project schema 2 adds named `color_links` and metadata snapshots to undo/redo.
+Links are case-sensitive color IDs, mutually exclusive with a literal override
+for the same ID. Export resolves the affected alias/role closure to numeric RGBA
+values in runtime format 1; the native viewer does not need project schema 2.
+Reference cycles and chains longer than 128 entries are rejected. Unedited
+inherited definitions are not normalized or copied into an export.
+
+`OpenDocument` reads at most 4 MiB and preserves the exact source bytes. Version 1
+migrates in memory; only Save writes schema 2, retaining the original document in
+the content-addressed checkpoints folder. Old history entries without metadata
+remain usable. Future versions, unknown recipe operations, and unknown structural
+edit/asset/recipe/history fields open read-only. This applies to undo and redo
+snapshots too. Save and Compile refuse those documents, including attempts to
+overwrite them with a new project. Arbitrary root metadata remains round-trippable.
+Recipe records describe retained authoring steps; compiled assets are the prepared
+derivatives. Recognizing a recipe operation does not execute it during export.
+
 `xui-edit-rules.json` is the adapter's single source for the initial file and
 attribute allowlist. Complete replacements retain the base's ordered control
 tree and protected bindings/callbacks. Future catalog expansion must preserve

@@ -28,7 +28,7 @@ try
         case "set-color":
             var edited = Project(values[1]); Contract.Rgba(values[3]);
             Contract.Require(Base(edited.BaseSkin, edited.BaseScheme).Colors.ContainsKey(values[2]), "color", values[2]);
-            edited.Checkpoint("Set " + values[2]); edited.Edits.Colors[values[2]] = values[3]; ProjectStore.Save(values[1], edited);
+            ColorAuthoring.SetLiteral(edited, Base(edited.BaseSkin, edited.BaseScheme), values[2], values[3]); ProjectStore.Save(values[1], edited);
             result = new { Saved = true }; break;
         case "validate":
         case "inspect":

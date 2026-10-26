@@ -262,9 +262,10 @@ public static class PackageStore
     }
     public static ValidatedTheme Compile(string projectDirectory, ThemeProject project, BaseCatalog catalog)
     {
+        ProjectStore.EnsureEditable(project);
         var dependencies = Contract.Bytes(project.BaseDependencies);
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["base-dependencies.json"] = dependencies };
-        var colors = catalog.CompileColors(project.Edits.Colors);
+        var colors = catalog.CompileColors(project.Edits.Colors, project.Edits.ColorLinks);
         if (colors.Count > 0) files.Add("viewer/colors.xml", Contract.XmlBytes(new XDocument(new XElement("colors", colors.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => new XElement("color", new XAttribute("name", c.Key), new XAttribute("value", c.Value)))))));
         foreach (var asset in project.Edits.Assets)
         {

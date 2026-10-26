@@ -2,6 +2,7 @@
 using Folderstorm.Theme;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
 if (args.Length != 1) { Console.Error.WriteLine("Pass the repository or matching viewer root"); return 2; }
@@ -156,6 +157,91 @@ Test("role alpha derivatives propagate to dependent aliases and inspection detec
     finally
     {
         catalog.Colors.Remove("AuthoringAlphaAlias"); catalog.Colors.Remove("AuthoringCycleA"); catalog.Colors.Remove("AuthoringCycleB");
+    }
+});
+
+Test("version-1 migration is in memory until save and retains original checkpoints", () =>
+{
+    var directory = Path.Combine(root, "migration"); Directory.CreateDirectory(directory);
+    var p = ProjectStore.Create(catalog, "Old project"); p.Checkpoint("Old edit");
+    var json = JsonNode.Parse(Contract.Bytes(p))!.AsObject(); json["project_version"] = 1;
+    json["edits"]!.AsObject().Remove("color_links");
+    json["undo"]![0]!.AsObject().Remove("metadata");
+    json["custom_note"] = new JsonObject { ["nested"] = "keep me" };
+    var original = Encoding.UTF8.GetBytes(json.ToJsonString());
+    File.WriteAllBytes(Path.Combine(directory, ProjectStore.FileName), original);
+    var document = ProjectStore.OpenDocument(directory);
+    Assert(document.CanEdit && document.WasMigrated && document.SourceVersion == 1 && document.Project!.ProjectVersion == 2, "Migration state");
+    Assert(document.OriginalBytes.SequenceEqual(original) && File.ReadAllBytes(Path.Combine(directory, ProjectStore.FileName)).SequenceEqual(original), "Open rewrote the source");
+    var migrated = document.Project!;
+    Assert(migrated.UndoEdit() && migrated.RedoEdit(), "Old history cannot be replayed");
+    ProjectStore.Save(directory, migrated);
+    Assert(File.ReadAllBytes(Path.Combine(directory, "checkpoints", Contract.Hash(original) + ".fsthemeproj")).SequenceEqual(original), "Original v1 bytes not retained");
+    Assert(ProjectStore.Open(directory).UnknownMetadata!["custom_note"].GetProperty("nested").GetString() == "keep me", "Unknown metadata lost");
+});
+Test("future versions and unknown operations stay read-only without rewriting bytes", () =>
+{
+    var futureDirectory = Path.Combine(root, "future"); Directory.CreateDirectory(futureDirectory);
+    var future = Encoding.UTF8.GetBytes("{\"project_version\":3,\"future_edits\":[{\"opaque\":true}]}\n");
+    File.WriteAllBytes(Path.Combine(futureDirectory, ProjectStore.FileName), future);
+    var document = ProjectStore.OpenDocument(futureDirectory);
+    Assert(!document.CanEdit && document.Project == null && document.OriginalBytes.SequenceEqual(future), "Future bytes not preserved");
+    Reject("project_readonly", () => ProjectStore.Open(futureDirectory));
+    Reject("project_readonly", () => ProjectStore.Save(futureDirectory, ProjectStore.Create(catalog, "Overwrite")));
+    Assert(File.ReadAllBytes(Path.Combine(futureDirectory, ProjectStore.FileName)).SequenceEqual(future), "Future project overwritten");
+    foreach (var inHistory in new[] { false, true })
+    {
+        var directory = Path.Combine(root, "unknown-operation-" + inHistory); Directory.CreateDirectory(directory);
+        var p = ProjectStore.Create(catalog, "Unknown operation");
+        var edits = inHistory ? new ProjectEdits() : p.Edits;
+        edits.Recipes["button"] = new("future-filter.v9", new() { ["anything"] = JsonSerializer.SerializeToElement(new[] { 1, 2, 3 }) });
+        if (inHistory) p.Redo.Add(new("Future redo", edits));
+        var bytes = Contract.Bytes(p); File.WriteAllBytes(Path.Combine(directory, ProjectStore.FileName), bytes);
+        var opened = ProjectStore.OpenDocument(directory);
+        Assert(!opened.CanEdit && opened.Project != null && opened.ReadOnlyReasons.Any(reason => reason.Contains("future-filter.v9", StringComparison.Ordinal)), "Unknown operation became editable");
+        Reject("project_readonly", () => ProjectStore.Save(directory, opened.Project!));
+        Reject("project_readonly", () => PackageStore.Compile(directory, opened.Project!, catalog));
+        Assert(File.ReadAllBytes(Path.Combine(directory, ProjectStore.FileName)).SequenceEqual(bytes), "Unsupported operation changed on disk");
+    }
+    var oversizedDirectory = Path.Combine(root, "oversized"); Directory.CreateDirectory(oversizedDirectory);
+    File.WriteAllBytes(Path.Combine(oversizedDirectory, ProjectStore.FileName), new byte[Contract.ManifestLimit + 1]);
+    Reject("size", () => ProjectStore.OpenDocument(oversizedDirectory));
+});
+Test("metadata and color links share durable undo and redo history", () =>
+{
+    var directory = Path.Combine(root, "metadata-history"); var p = ProjectStore.Create(catalog, "Original name");
+    p.UnknownMetadata = new() { ["note"] = JsonSerializer.SerializeToElement("before") };
+    p.Checkpoint("Edit identity"); p.DisplayName = "Changed name"; p.Author = "Marty"; p.Description = "Mint"; p.PackageVersion = "2.0.0";
+    p.UnknownMetadata["note"] = JsonSerializer.SerializeToElement("after");
+    p.Extensions["custom"] = JsonSerializer.SerializeToElement(42);
+    ColorAuthoring.SetLink(p, catalog, "AnsaStorm_HtmlLink", "ThemePanel");
+    ProjectStore.Save(directory, p); p = ProjectStore.Open(directory);
+    Assert(p.UndoEdit() && p.Edits.ColorLinks.Count == 0 && p.DisplayName == "Changed name", "Link undo affected the wrong checkpoint");
+    Assert(p.UndoEdit() && p.DisplayName == "Original name" && p.Author == "" && p.PackageVersion == "1.0.0" && p.Extensions.Count == 0, "Metadata undo failed");
+    Assert(p.UnknownMetadata!["note"].GetString() == "before", "Metadata undo lost an extension");
+    ProjectStore.Save(directory, p); p = ProjectStore.Open(directory);
+    Assert(p.RedoEdit() && p.UnknownMetadata!["note"].GetString() == "after" && p.Extensions["custom"].GetInt32() == 42, "Metadata redo failed after reopen");
+    Assert(p.RedoEdit() && p.Edits.ColorLinks["AnsaStorm_HtmlLink"] == "ThemePanel", "Link redo failed after reopen");
+});
+Test("authoring links flatten to runtime v1 and reject cycles transactionally", () =>
+{
+    var p = ProjectStore.Create(catalog, "Linked colors");
+    ColorAuthoring.SetLiteral(p, catalog, "ThemePanel", "#234");
+    ColorAuthoring.SetLink(p, catalog, "AnsaStorm_HtmlLink", "ThemePanel");
+    var inspection = catalog.InspectColor("AnsaStorm_HtmlLink", p.Edits.Colors, p.Edits.ColorLinks);
+    Assert(inspection.DirectOverride && inspection.Value.Hex(false) == "#223344" && inspection.ReferenceChain.SequenceEqual(new[] { "AnsaStorm_HtmlLink", "ThemePanel" }), "Custom link resolution/provenance");
+    var before = Contract.Bytes(p);
+    Reject("color_cycle", () => ColorAuthoring.SetLink(p, catalog, "ThemePanel", "AnsaStorm_HtmlLink"));
+    Assert(Contract.Bytes(p).SequenceEqual(before), "Rejected link changed edits or history");
+    var compiled = PackageStore.Compile(projectDirectory, p, catalog);
+    Assert(compiled.Manifest.FormatVersion == 1 && Contract.Xml(compiled.Files["viewer/colors.xml"]).Root!.Elements("color").All(node => node.Attribute("value") != null && node.Attribute("reference") == null), "Runtime still requires authoring link support");
+    Assert(ColorAuthoring.SetLiteral(p, catalog, "AnsaStorm_HtmlLink", "#abc") && !p.Edits.ColorLinks.ContainsKey("AnsaStorm_HtmlLink"), "Literal did not replace link");
+    Assert(ColorAuthoring.Reset(p, catalog, "AnsaStorm_HtmlLink") && !p.Edits.Colors.ContainsKey("AnsaStorm_HtmlLink"), "Reset did not inherit");
+    foreach (var scheme in catalog.Schemes)
+    {
+        var other = new BaseCatalog(args[0], "ansastorm", scheme.Id);
+        Assert(other.CompileColors(new Dictionary<string, string>()).Count == 0, "No-op changed legacy colors in " + scheme.Id);
+        Reject("color_literal", () => other.InspectColor("ChicletFlashColor", new Dictionary<string, string>()));
     }
 });
 
