@@ -132,10 +132,10 @@ public sealed class BaseCatalog
             foreach (var color in Colors.Values)
                 if (!output.ContainsKey(color.Name) && color.Reference != null && output.TryGetValue(color.Reference, out var value))
                 { output[color.Name] = value; changed = true; }
+            foreach (var (name, role, alpha) in AlphaLinks)
+                if (!output.ContainsKey(name) && Colors.ContainsKey(name) && output.TryGetValue(role, out var value))
+                { var rgba = Contract.Rgba(value); rgba[3] = alpha; output[name] = Contract.ColorText(rgba); changed = true; }
         } while (changed);
-        foreach (var (name, role, alpha) in AlphaLinks)
-            if (!edits.ContainsKey(name) && Colors.ContainsKey(name) && output.TryGetValue(role, out var value))
-            { var rgba = Contract.Rgba(value); rgba[3] = alpha; output[name] = Contract.ColorText(rgba); }
         return output;
     }
     private static readonly (string, string, double)[] AlphaLinks =

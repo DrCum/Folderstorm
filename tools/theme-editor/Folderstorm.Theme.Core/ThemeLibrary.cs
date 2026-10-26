@@ -8,7 +8,7 @@ public static class ThemeLibrary
     public static string Publish(ValidatedTheme theme, string? root = null, BaseCatalog? catalog = null)
     {
         root ??= DefaultRoot; Directory.CreateDirectory(root);
-        using var ownership = new FileStream(Path.Combine(root, ".import.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        using var ownership = RetryFileOperation(() => new FileStream(Path.Combine(root, ".import.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
         var parent = Contract.Contained(root, theme.Manifest.ThemeId); Directory.CreateDirectory(parent);
         var destination = Contract.Contained(root, theme.Manifest.ThemeId + "/" + theme.Revision);
         if (Directory.Exists(destination))
@@ -20,9 +20,23 @@ public static class ThemeLibrary
         try
         {
             foreach (var file in theme.Files) Contract.AtomicWrite(Contract.Contained(temporary, file.Key), file.Value);
-            Directory.Move(temporary, destination); return destination;
+            RetryFileOperation(() => { Directory.Move(temporary, destination); return true; }); return destination;
         }
         finally { if (Directory.Exists(temporary)) Directory.Delete(temporary, true); }
+    }
+    private static T RetryFileOperation<T>(Func<T> action)
+    {
+        for (var attempt = 0; ; ++attempt)
+        {
+            try { return action(); }
+            catch (Exception error) when (OperatingSystem.IsWindows() && attempt < 5 &&
+                error is IOException or UnauthorizedAccessException && (error.HResult & 0xffff) is 5 or 32 or 33)
+            {
+                // Windows readers can briefly block an atomic directory rename.
+                // Keep the import lock and immutable destination while retrying.
+                Thread.Sleep(100 << attempt);
+            }
+        }
     }
     public static void Select(string profileDirectory, ThemeSelection? selection)
     {

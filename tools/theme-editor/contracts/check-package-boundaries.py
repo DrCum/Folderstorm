@@ -83,10 +83,10 @@ mutations = [
     ('unknown-xui-color', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_color', 'MissingThemeColor', 'reference'),
     ('unknown-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'MissingOverlayColor', 'reference'),
     ('valid-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'ThemeAccent', 'valid'),
-    ('valid-pressed-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed', 'PushButton_Press', 'valid'),
-    ('unknown-pressed-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed', 'MissingPressedImage', 'reference'),
-    ('valid-pressed-selected-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed_selected', 'PushButton_Selected', 'valid'),
-    ('unknown-pressed-selected-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed_selected', 'MissingPressedSelectedImage', 'reference'),
+    ('valid-pressed-image', 'viewer/xui/en/floater_test_widgets.xml', "button[@name='test_button']", 'image_pressed', 'PushButton_Press', 'valid'),
+    ('unknown-pressed-image', 'viewer/xui/en/floater_test_widgets.xml', "button[@name='test_button']", 'image_pressed', 'MissingPressedImage', 'reference'),
+    ('valid-pressed-selected-image', 'viewer/xui/en/floater_test_widgets.xml', "button[@name='test_button']", 'image_pressed_selected', 'PushButton_Selected', 'valid'),
+    ('unknown-pressed-selected-image', 'viewer/xui/en/floater_test_widgets.xml', "button[@name='test_button']", 'image_pressed_selected', 'MissingPressedSelectedImage', 'reference'),
     ('reversed-nine-slice', 'viewer/textures/textures.xml', 'texture', 'scale.left', '31', 'texture'),
 ]
 for name, relative, element, attribute, value, expected in mutations:

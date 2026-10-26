@@ -41,6 +41,9 @@ Test("accent aliases and alpha variants compile together", () =>
     var colors = catalog.CompileColors(new Dictionary<string, string> { ["ThemeAccent"] = "0.2 0.8 0.5 1" });
     Assert(colors["AccentColor"] == "0.2 0.8 0.5 1" && colors["AnsaStorm_HtmlLink"] == "0.2 0.8 0.5 1", "Accent fan-out");
     Assert(colors["SchemeLightest_35"] == "0.2 0.8 0.5 0.35", "Alpha variant");
+    Assert(colors["MapPickRadiusColor"] == "0.2 0.8 0.5 0.35", "An alias of an alpha variant did not follow the accent");
+    var layered = catalog.CompileColors(new Dictionary<string, string> { ["ThemeSelected"] = "0.1 0.2 0.3 1", ["ThemePanel"] = "0.11 0.22 0.33 1" });
+    Assert(layered["PieMenuSelectedColor"] == "0.1 0.2 0.3 0.66" && layered["UploadDialogBackground"] == "0.11 0.22 0.33 0.66", "Indirect role alpha fan-out");
     Reject("color", () => catalog.CompileColors(new Dictionary<string, string> { ["ThemeAccent"] = "NaN 0 0 1" }));
 });
 Test("undo and imported originals persist without flattening recipes", () =>
@@ -71,6 +74,14 @@ Test("immutable library publication is idempotent and does not select profiles",
     Assert(ThemeLibrary.Publish(noOp!, library) == path, "Publication not idempotent");
     Assert(PackageStore.ReadRevision(path, catalog).Revision == noOp!.Revision, "Retained revision invalid");
     Assert(!Directory.EnumerateFiles(library, "custom-theme.json", SearchOption.AllDirectories).Any(), "Import selected a profile");
+    if (OperatingSystem.IsWindows())
+    {
+        var concurrentLibrary = Path.Combine(root, "concurrent-library");
+        var writers = Enumerable.Range(0, 3).Select(_ => Task.Run(() => ThemeLibrary.Publish(noOp!, concurrentLibrary))).ToArray();
+        Task.WaitAll(writers);
+        Assert(writers.Select(writer => writer.Result).Distinct(StringComparer.Ordinal).Count() == 1, "Concurrent imports did not converge on one immutable revision");
+        Assert(!Directory.EnumerateDirectories(concurrentLibrary, ".staging-*").Any(), "Completed concurrent imports left staging data");
+    }
     File.AppendAllText(Path.Combine(path, "base-dependencies.json"), " "); Reject("integrity", () => PackageStore.ReadRevision(path, catalog));
 });
 Test("paths, duplicate keys, capabilities and XUI behavior are rejected", () =>

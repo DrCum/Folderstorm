@@ -47,8 +47,8 @@ try
             var imported = PackageStore.ReadArchive(values[1], Base()); PackageStore.ImportProject(values[2], imported);
             result = new { Project = Path.GetFullPath(values[2]), Origin = "compiled-package", imported.Revision }; break;
         case "publish":
-            var published = PackageStore.ReadArchive(values[1], Base());
-            result = new { LibraryRevision = ThemeLibrary.Publish(published, values.Count > 2 ? values[2] : null), published.Revision }; break;
+            var publishBase = Base(); var published = PackageStore.ReadArchive(values[1], publishBase);
+            result = new { LibraryRevision = ThemeLibrary.Publish(published, values.Count > 2 ? values[2] : null, publishBase), published.Revision }; break;
         default: throw new ThemeException("arguments", "Unknown command: " + values[0]);
     }
     Console.Write(Encoding.UTF8.GetString(Contract.Bytes(result))); return 0;

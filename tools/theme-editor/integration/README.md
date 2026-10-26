@@ -16,6 +16,9 @@ Computer Use or human visual checks. Ready status alone is not visual acceptance
 Use a fresh output directory to preserve prior evidence. The button proof binds
 its normal, hover and pressed images explicitly; texture names alone are not
 widget state bindings. Floater tint includes native image-overlay attributes.
+The explicit images are scoped to the sample's named button. Adding them to the
+global button defaults also changes checkbox/radio inner buttons and can draw
+an oversized hover rectangle over their labels.
 
 The offline sample provides **Pin pressed state** and **Disable sample button**
 controls. Pinning uses the real native button's pressed-image draw branch, so

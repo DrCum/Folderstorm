@@ -74,6 +74,18 @@ the build skill's human release-test gate; publication still requires approval.
   inherited default widget. The proof now supplies a complete button template
   with explicit hover/pressed references. Both validators accept and check the
   two native pressed-image attributes; the new viewer check remains pending.
+- Native 82310 (`97c217e00f`) is retained. Computer Use shows distinct normal,
+  hover, pinned pressed and disabled artwork; a disabled click leaves native
+  input counters unchanged. The user confirmed bright green hover, orange while
+  physically held, and green after release. Owned Close took 1.51 seconds.
+- The user caught a proof-scope error: a global button hover default also reaches
+  checkbox/radio inner buttons, drawing a 32x24 image over their labels. The
+  revised proof binds those two state images only on the named sample button,
+  preserving inherited checkbox/radio defaults. Native recheck remains pending.
+- Exporter alpha fan-out now continues through aliases of alpha variants,
+  including MapPickRadiusColor, PieMenuSelectedColor and UploadDialogBackground.
+  This is a managed exporter change; native source is unchanged from 82310.
+  Keep its updated editor/proof provenance distinct from the retained 82310 files.
 - Native panel drawing uses image-overlay colors when a background image exists.
   The floater-tint proof now sets those attributes as well as fallback flat
   colors; both validators share the additional typed color attributes.

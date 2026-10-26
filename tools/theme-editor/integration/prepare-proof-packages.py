@@ -97,12 +97,16 @@ def button_assets(directory, project, asymmetric):
     asset(directory, project, 'viewer/textures/textures.xml', 'textures', write_xml(registrations))
     project['edits']['colors']['ButtonImageColor'] = '1 1 1 1'
     if not asymmetric:
-        # Texture names alone do not change the inherited widget's state bindings.
-        original = inherited_bytes('xui/en/widgets/button.xml')
-        button = ET.fromstring(original)
+        # Scope explicit state images to this button. Global button defaults are
+        # inherited by checkbox/radio inner buttons, including unscaled images.
+        original = inherited_bytes('xui/en/floater_test_widgets.xml')
+        sample = ET.fromstring(original)
+        button = sample.find("button[@name='test_button']")
+        if button is None:
+            raise RuntimeError('Native proof sample is missing its required button')
         button.set('image_hover_unselected', 'PushButton_Over')
         button.set('image_pressed', 'PushButton_Press')
-        asset(directory, project, 'viewer/xui/en/widgets/button.xml', 'xui', write_xml(button), original)
+        asset(directory, project, 'viewer/xui/en/floater_test_widgets.xml', 'xui', write_xml(sample), original)
 
 
 def floater_asset(directory, project):
