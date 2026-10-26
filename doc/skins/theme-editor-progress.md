@@ -38,5 +38,10 @@ the build skill's human release-test gate; publication still requires approval.
 - Computer Use can list the desktop. Its app approval timed out when launching
   the newly built editor; a follow-up window list confirmed it did not open.
   Visual checks remain pending, and no alternate launch bypass was attempted.
+- The first native build attempt exposed a Windows environment casing collision
+  from a lowercase version override. The second correctly stopped before compile
+  when the legacy configure script replaced the requested build ID with Git count.
+  A process-local `FOLDERSTORM_BUILD_REVISION` override now preserves monotonic
+  private package versions without changing later builders' cache defaults.
 - No native visual acceptance, human acceptance, publication or installation
   is claimed. OpenSim login testing is authorized if a live check needs it.
