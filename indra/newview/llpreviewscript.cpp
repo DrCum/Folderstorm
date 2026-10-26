@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include "llpreviewscript.h"
 
@@ -2833,6 +2834,16 @@ void LLLiveLSLEditor::callbackLSLCompileFailed(const LLSD& compile_errors)
     closeIfNeeded();
 }
 
+bool LLLiveLSLEditor::assistantSourceBusy() const
+{
+    return getVisible() || mIsSaving || fs_content::nativeSourceBusy({!mScriptEd, mPendingUploads > 0,
+        mScriptEd && mScriptEd->mEditor && !mScriptEd->mEditor->isPristine(),
+        mScriptEd && mScriptEd->mLiveFile, mScriptEd && mScriptEd->mEnableSave,
+        mScriptEd && mScriptEd->mSaveDialogShown,
+        mScriptEd && mScriptEd->mLSLProc && mScriptEd->mLSLProc->mWaving,
+        mScriptEd && mScriptEd->mLSLProc && !mScriptEd->mLSLProc->caching_files.empty()});
+}
+
 void LLLiveLSLEditor::loadAsset()
 {
     //LL_INFOS() << "LLLiveLSLEditor::loadAsset()" << LL_ENDL;
@@ -3320,6 +3331,7 @@ void LLLiveLSLEditor::onSave(void* userdata, bool close_after_save, bool sync)
 // static
 void LLLiveLSLEditor::processScriptRunningReply(LLMessageSystem* msg, void**)
 {
+    fs_object_tools_running_reply(msg);
     LLUUID item_id;
     LLUUID object_id;
     msg->getUUIDFast(_PREHASH_Script, _PREHASH_ObjectID, object_id);

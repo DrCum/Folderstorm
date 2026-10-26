@@ -16,6 +16,8 @@
  <string name="action_feature">Allow this assistant action?</string>
  <string name="action_saveNotecard">Replace this notecard's source?</string>
  <string name="action_saveScript">Save and compile this inventory script?</string>
+ <string name="object_contents_irreversible">This permanently removes an item from the object. It does not go to Trash.</string>
+ <string name="object_script_execution_reset">Compilation or reset can restart the script and clear its execution state.</string>
  <string name="content_replace_source">This replaces inventory source. The local revision check cannot prevent concurrent changes made elsewhere. A script compilation failure can still save its source. Unknown outcomes are never retried automatically.</string>
  <string name="content_replacement">Complete replacement source:</string>
  <string name="content_compiler">Compiler: </string>

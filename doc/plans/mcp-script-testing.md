@@ -1,6 +1,6 @@
 # Folderstorm MCP script development and testing
 
-Status: diagnostics and Contents reads implemented; later groups follow in separate stacked PRs. Native Windows/simulator acceptance remains pending.
+Status: diagnostics, Contents reads/writes and installed-script tools implemented; lifecycle and interaction groups follow in separate stacked PRs. Native Windows/simulator acceptance remains pending.
 
 Enable an assistant to complete the native loop of creating or editing LSL, installing it in an object, compiling and running it, exercising the object, reading output, and packaging the result into another object's Contents. The same tools must work with the regular viewer and an explicitly selected managed character.
 
@@ -217,3 +217,11 @@ A cloud agent can implement the services and focused tests. A local Windows agen
 Implemented exact-prim simulator-backed Contents snapshots, item-bound task script reads and a dedicated bounded owner/debug feed. Native cache callbacks distinguish simulator responses from optimistic changes. New private read permissions default to Never; no host IPC change.
 
 Windows acceptance: allow Contents, World read and inventory Read; inspect root and child Contents; read an owned modifiable script. Allow script diagnostics, poll from now, generate owner output and a runtime error with Script Debug closed, then repeat with owner output routed to Script Debug. Change receive restrictions and revoke access while a Contents fetch is pending; native editors must still complete. Use matching viewer/MCP binaries. Native Windows and simulator acceptance is pending.
+
+## Installed script checkpoint
+
+Implemented copy-to-Contents, exact task-source preview/save/Mono compile, native running-state queries, set-running/reset, rename, and separately approved irreversible item removal. Task uploads preserve Experience metadata and reject grids without the required metadata capability instead of clearing the association. Scripts insert stopped by default. Compiler success, source saving and requested/observed running flags remain separate.
+
+Mutation IDs have bounded session tombstones; an evicted receipt never authorizes replay. Status reads do not allocate preparation tickets. Pending native outcomes are protected from capacity eviction. Native running replies fan out without changing native editor handling.
+
+Windows acceptance: copy a script into a root and a child prim, confirm the task UUID, read and edit it in place, test a compiler failure after saving, preserve a known Experience, query running state, start/stop/reset, rename and remove a disposable item. Close native source editors for writes; verify a native window joining a running-state query still receives its reply after assistant cancellation. Revoke permissions at metadata, upload and Contents-refresh stages and inspect the original receipt. Unsupported metadata grids, late callbacks and live server correlation need native acceptance.

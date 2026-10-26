@@ -49,6 +49,9 @@ const (
 	ClassNavigationTeleport   = "navigation_teleport"
 	ClassTaskInventoryRead    = "task_inventory_read"
 	ClassScriptDebugRead      = "script_debug_read"
+	ClassTaskInventoryWrite   = "task_inventory_write"
+	ClassTaskInventoryRemove  = "task_inventory_remove"
+	ClassScriptRun            = "script_run"
 )
 
 // StatusPolicy is the viewer's effective permission map.
@@ -112,6 +115,9 @@ var classDefaults = []classDefault{
 	{ClassNavigationTeleport, "ask", true},
 	{ClassTaskInventoryRead, "deny", false},
 	{ClassScriptDebugRead, "deny", false},
+	{ClassTaskInventoryWrite, "ask", true},
+	{ClassTaskInventoryRemove, "ask", true},
+	{ClassScriptRun, "ask", true},
 }
 
 // Level returns the effective level for a preference class.
@@ -149,7 +155,7 @@ func ParseStatusPolicy(raw []byte) (StatusPolicy, bool) {
 	bulkVersion := 0
 	workspaceVersion := 0
 	if capabilities, ok := payload["capabilities"].(map[string]any); ok {
-		for _, key := range []string{"social_chat", "social_contacts", "social_events", "world_observation", "gesture_tools", "pose_tools", "shared_pose_tools", "content_editing", "preferences_tools", "building_tools", "navigation_tools", "task_inventory", "script_diagnostics"} {
+		for _, key := range []string{"social_chat", "social_contacts", "social_events", "world_observation", "gesture_tools", "pose_tools", "shared_pose_tools", "content_editing", "preferences_tools", "building_tools", "navigation_tools", "task_inventory", "script_diagnostics", "task_scripts"} {
 			if version, ok := capabilities[key].(float64); ok && version == 1 {
 				featureVersions[key] = 1
 			}

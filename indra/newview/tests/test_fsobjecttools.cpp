@@ -22,4 +22,12 @@ int main()
     assert(!ledger.admit("late","changed-args","new"));
     late->value="late-confirmed-id";assert(ledger.find("late")->value=="late-confirmed-id");
     late->pending=0;assert(ledger.admit("fourth","args-d","new"));assert(!ledger.find("late"));
+    assert(!ledger.admit("late","args-a","must not replay"));
+    const std::set<std::string> before{"old"};
+    auto match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"new","asset",10},{"other","different",10}},"asset",10);
+    assert(match.id=="new" && !match.ambiguous);
+    match=fs_object_tools::correlateInsertion(before,{{"a","asset",10},{"b","asset",10}},"asset",10);
+    assert(match.id.empty() && match.ambiguous);
+    match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"wrong-type","asset",5}},"asset",10);
+    assert(match.id.empty() && !match.ambiguous);
 }
