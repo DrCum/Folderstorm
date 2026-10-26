@@ -105,6 +105,7 @@ public static class TextureFamilies
         ("_Selected_Disabled", "Selected disabled"), ("_Disabled_Selected", "Selected disabled"),
         ("_Selected_Over", "Selected hover"), ("_Over_Selected", "Selected hover"),
         ("_Selected_Press", "Selected pressed"), ("_Press_Selected", "Selected pressed"),
+        ("_On_Selected", "Selected"),
         ("_Disabled", "Disabled"), ("_Selected", "Selected"), ("_Inactive", "Inactive"), ("_Active", "Active"),
         ("_Pressed", "Pressed"), ("_Press", "Pressed"), ("_Focused", "Focused"), ("_Unread", "Unread"),
         ("_Hover", "Hover"), ("_Over", "Hover"), ("_Off", "Normal"), ("_On", "Selected")

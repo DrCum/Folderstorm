@@ -63,13 +63,17 @@ public partial class MainWindow
         TextureList.ItemsSource = textures;
         TextureList.SelectedItem = textures.FirstOrDefault(texture => texture.Name == selected) ?? textures.FirstOrDefault();
         if (textures.Length == 0)
-        { currentImage = originalImage = null; imageGeometry = appliedImageGeometry = null; TextureName.Text = "No matching images"; EditCanvas.SetImage(null, null); TextureSource.Text = ""; }
+        {
+            currentImage = originalImage = null; imageGeometry = appliedImageGeometry = null;
+            TextureName.Text = "No matching images"; ImageState.Text = ImageDimensions.Text = ImageRecipeSummary.Text = ImagePixel.Text = TextureSource.Text = "";
+            EditCanvas.SetImage(null, null); RefreshStretchPreviews();
+        }
         UpdateCommandState();
     }
     private void SelectTexture(object sender, SelectionChangedEventArgs args)
     {
         currentImage = originalImage = null; imageGeometry = appliedImageGeometry = null;
-        if (catalog == null || SelectedTexture is not { } selected) { UpdateImageDisplay(); UpdateCommandState(); return; }
+        if (catalog == null || SelectedTexture is not { } selected) { UpdateImageDisplay(); RefreshStretchPreviews(); UpdateCommandState(); return; }
         TextureName.Text = selected.Name; TextureSource.Text = "Requires native resolution";
         var family = TextureFamilies.Describe(selected.Name); ImageState.Text = family.Family + " · " + family.State;
         try
@@ -138,14 +142,41 @@ public partial class MainWindow
         foreach (var label in labels) label.Text = "";
         if (currentImage == null || imageGeometry is not { } geometry || ImageComparison.SelectedIndex != 0) return;
         var visible = geometry.VisibleImage(currentImage);
+        var tiled = ImageSampleMode.SelectedIndex == 1;
         for (var index = 0; index < 3; ++index)
         {
             var width = Math.Max(new[] { 64, 100, 160 }[index], geometry.Margins.Left + geometry.Margins.Right + 1);
             var height = Math.Max(new[] { 24, 32, 48 }[index], geometry.Margins.Top + geometry.Margins.Bottom + 1);
             if ((long)width * height > 2_000_000) { labels[index].Text = "Sample too large"; continue; }
-            images[index].Source = ImageCodec.ToBitmap(visible.Stretch(width, height, geometry.Margins)); labels[index].Text = $"{width} × {height}";
+            images[index].Source = ImageCodec.ToBitmap(tiled ? visible.Tile(width, height) : visible.Stretch(width, height, geometry.Margins)); labels[index].Text = $"{width} × {height}";
         }
     }
+    private void ImageSampleModeChanged(object sender, SelectionChangedEventArgs args) => RefreshStretchPreviews();
+    private void ResetImageSelection(IEnumerable<string> names, string label)
+    {
+        if (!Ready()) return;
+        CommitMetadata();
+        var reset = ImageProject.Reset(projectDirectory, project!, catalog!, names, (bytes, file) => ImageCodec.EncodePng(ImageCodec.Decode(bytes, file)));
+        if (reset) { changed = true; RefreshTextures(); SyncMetadata(); }
+        StatusText.Text = reset ? label + " restored. Undo is available." : "Already inherited.";
+    }
+    private async void ResetSelectedImage(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (CanReplaceImage && SelectedTexture is { } texture) ResetImageSelection([texture.Name], "Image");
+    });
+    private async void ResetSelectedFamily(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (!CanReplaceImage || SelectedTexture is not { } texture || catalog == null) return;
+        var family = TextureFamilies.Describe(texture.Name).Family;
+        ResetImageSelection(catalog.Textures.Keys.Where(name => TextureFamilies.Describe(name).Family == family).ToArray(), family);
+    });
+    private async void ResetAllImages(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (!Ready()) return;
+        CommitMetadata(); var reset = ImageProject.ResetAll(project!, catalog!);
+        if (reset) { changed = true; RefreshTextures(); SyncMetadata(); }
+        StatusText.Text = reset ? "All images restored. Undo is available." : "Images already inherited.";
+    });
     private static int ImageNumber(TextBox input)
     {
         Contract.Require(int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value), "image", "Use a whole pixel value"); return value;

@@ -8,6 +8,7 @@ namespace Folderstorm.Theme;
 public static class ImageProject
 {
     private const string RegistrationPath = "viewer/textures/textures.xml";
+    private static string ScopedFile(string name) => "theme/" + Contract.Hash(Encoding.UTF8.GetBytes(name)) + ".png";
     private static XDocument Registrations(string directory, ThemeProject project)
     {
         var asset = project.Edits.Assets.LastOrDefault(item => item.PayloadPath == RegistrationPath);
@@ -42,7 +43,9 @@ public static class ImageProject
     private static ProjectAsset PrepareRegistrations(string directory, ThemeProject project, BaseCatalog catalog, XDocument document)
     {
         var original = project.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == RegistrationPath)?.OriginalPath;
-        return ProjectAssets.Prepare(directory, RegistrationPath, Contract.XmlBytes(document),
+        // Ignore whitespace outside the root so repeated parse/write cycles stay stable.
+        var normalized = new XDocument(new XElement(document.Root!));
+        return ProjectAssets.Prepare(directory, RegistrationPath, Contract.XmlBytes(normalized),
             original == null ? catalog.ResolveBytes("textures/textures.xml") : null, ".xml", original);
     }
     private static void PutRegistration(XDocument document, string name, Dictionary<string, string> attributes)
@@ -65,7 +68,7 @@ public static class ImageProject
         var original = importedOriginal ?? (prior == null ? Read(directory, project, catalog, name) : null);
         var originalPath = importedOriginal == null ? prior?.OriginalPath : null;
         var extension = importedOriginal == null ? Path.GetExtension(oldFile) : importedExtension;
-        var fileName = "theme/" + Contract.Hash(Encoding.UTF8.GetBytes(name)) + ".png";
+        var fileName = ScopedFile(name);
         var nextRecipe = RecipeHistory.Append(importedOriginal == null ? project.Edits.Recipes.GetValueOrDefault(name) : null, operation);
         var image = ProjectAssets.Prepare(directory, "viewer/textures/" + fileName, png, original, string.IsNullOrEmpty(extension) ? ".bin" : extension, originalPath);
         var attributes = geometry.ApplyTo(texture.Attributes); attributes["name"] = name; attributes["file_name"] = fileName;
@@ -90,5 +93,69 @@ public static class ImageProject
         var recipes = new Dictionary<string, Recipe>(project.Edits.Recipes, StringComparer.Ordinal) { [name] = RecipeHistory.Append(project.Edits.Recipes.GetValueOrDefault(name), operation) };
         var assets = project.Edits.Assets.Where(asset => asset.PayloadPath != RegistrationPath).Append(registration).ToList();
         project.Checkpoint("Set guides " + name); project.Edits = project.Edits with { Assets = assets, Recipes = recipes };
+    }
+
+    public static bool Reset(string directory, ThemeProject project, BaseCatalog catalog, IEnumerable<string> names,
+        Func<byte[], string, byte[]>? encodePng = null)
+    {
+        Ready(project, catalog);
+        var selected = names.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Contract.Require(selected.Length <= catalog.Textures.Count && selected.All(catalog.Textures.ContainsKey), "texture", "Choose known image IDs to reset");
+        if (selected.Length == 0) return false;
+        var registrations = Registrations(directory, project);
+        var assets = project.Edits.Assets.Where(asset => asset.PayloadPath != RegistrationPath).ToList();
+        var recipes = new Dictionary<string, Recipe>(project.Edits.Recipes, StringComparer.Ordinal);
+        foreach (var name in selected)
+        {
+            var inherited = catalog.Textures[name];
+            var nodes = registrations.Root!.Elements("texture").Where(node => (string?)node.Attribute("name") == name).ToArray();
+            Contract.Require(nodes.Length <= 1, "texture", "Duplicate registration: " + name);
+            foreach (var node in nodes) node.Remove();
+            recipes.Remove(name);
+
+            if (!inherited.Attributes.TryGetValue("file_name", out var file) || !assets.Any(asset => asset.PayloadPath == "viewer/textures/" + file)) continue;
+            // A shared physical override must stay for other IDs. Give this ID a private copy of the inherited pixels.
+            var original = catalog.ResolveBytes("textures/" + file);
+            var png = original;
+            if (!file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            {
+                Contract.Require(encodePng != null, "image", "Resetting this shared image requires PNG conversion: " + name);
+                png = encodePng!(original, file);
+            }
+            PackageStore.ValidateImage(png, "inherited.png");
+            var image = ProjectAssets.Prepare(directory, "viewer/textures/" + ScopedFile(name), png, original, Path.GetExtension(file));
+            assets.RemoveAll(asset => asset.PayloadPath == image.PayloadPath); assets.Add(image);
+            var attributes = new Dictionary<string, string>(inherited.Attributes, StringComparer.Ordinal) { ["file_name"] = ScopedFile(name) };
+            PutRegistration(registrations, name, attributes);
+        }
+
+        var registered = registrations.Root!.Elements("texture").ToDictionary(node => (string)node.Attribute("name")!, StringComparer.Ordinal);
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var texture in catalog.Textures.Values)
+        {
+            var file = registered.TryGetValue(texture.Name, out var node) ? (string?)node.Attribute("file_name") : texture.Attributes.GetValueOrDefault("file_name");
+            if (file != null) referenced.Add("viewer/textures/" + file);
+        }
+        foreach (var node in registered.Values)
+            if ((string?)node.Attribute("file_name") is { } file) referenced.Add("viewer/textures/" + file);
+        var scoped = selected.Select(name => "viewer/textures/" + ScopedFile(name)).ToHashSet(StringComparer.Ordinal);
+        assets.RemoveAll(asset => scoped.Contains(asset.PayloadPath) && !referenced.Contains(asset.PayloadPath));
+        if (registrations.Root.Elements("texture").Any()) assets.Add(PrepareRegistrations(directory, project, catalog, registrations));
+        var edits = project.Edits with { Assets = assets, Recipes = recipes };
+        if (Contract.Bytes(edits).SequenceEqual(Contract.Bytes(project.Edits))) return false;
+        project.Checkpoint(selected.Length == 1 ? "Reset image " + selected[0] : "Reset image group"); project.Edits = edits; return true;
+    }
+
+    public static bool ResetAll(ThemeProject project, BaseCatalog catalog)
+    {
+        Ready(project, catalog);
+        if (!project.Edits.Assets.Any(asset => asset.PayloadPath.StartsWith("viewer/textures/", StringComparison.Ordinal)) && project.Edits.Recipes.Count == 0) return false;
+        project.Checkpoint("Reset all images");
+        project.Edits = project.Edits with
+        {
+            Assets = project.Edits.Assets.Where(asset => !asset.PayloadPath.StartsWith("viewer/textures/", StringComparison.Ordinal)).ToList(),
+            Recipes = new(StringComparer.Ordinal)
+        };
+        return true;
     }
 }

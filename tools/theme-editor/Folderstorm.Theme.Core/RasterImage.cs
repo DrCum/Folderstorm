@@ -111,6 +111,21 @@ public sealed class RasterImage
                 Sample((x + .5) * Width / width - .5, (y + .5) * Height / height - .5, 0, Width - 1, 0, Height - 1, interpolation, output, (y * width + x) * 4);
         return new(width, height, output);
     }
+    public RasterImage Tile(int width, int height)
+    {
+        var output = new byte[Storage(width, height)];
+        for (var y = 0; y < Math.Min(height, Height); ++y)
+        {
+            var row = output.AsSpan(y * width * 4, width * 4); var copied = Math.Min(width, Width) * 4;
+            pixels.AsSpan(y * Width * 4, copied).CopyTo(row);
+            while (copied < row.Length)
+            {
+                var length = Math.Min(copied, row.Length - copied); row[..length].CopyTo(row.Slice(copied, length)); copied += length;
+            }
+        }
+        for (var y = Height; y < height; ++y) Array.Copy(output, y % Height * width * 4, output, y * width * 4, width * 4);
+        return new(width, height, output);
+    }
     public RasterImage Stretch(int width, int height, SliceMargins margins, ImageInterpolation interpolation = ImageInterpolation.Bilinear)
     {
         margins.Validate(Width, Height); var output = new byte[Storage(width, height)];

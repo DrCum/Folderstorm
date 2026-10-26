@@ -136,6 +136,8 @@ Test("asset families retain every logical ID and distinguish compound states", (
 {
     Assert(TextureFamilies.Describe("PushButton_Selected_Disabled") == ("PushButton", "Selected disabled"), "Compound state split");
     Assert(TextureFamilies.Describe("PushButton_Off") == ("PushButton", "Normal"), "Normal state split");
+    Assert(TextureFamilies.Describe("PushButton_On_Selected") == ("PushButton", "Selected"), "Selected alias escaped its family");
+    Assert(TextureFamilies.Describe("PushButton_Login_Over") == ("PushButton_Login", "Hover"), "Family grouping included a separate button family");
     var families = TextureFamilies.Build(catalog.Textures.Values);
     Assert(families.Sum(family => family.Members.Length) == catalog.Textures.Count, "Catalog assets lost");
     Assert(families.SelectMany(family => family.Members).Select(member => member.Texture.Name).Distinct(StringComparer.Ordinal).Count() == catalog.Textures.Count, "Logical IDs collided");
@@ -311,6 +313,17 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("tiled samples repeat exact RGBA pixels across partial edges", () =>
+{
+    byte[] rgba = [255, 0, 0, 255, 17, 31, 47, 0, 0, 255, 0, 128, 0, 0, 255, 64, 70, 80, 90, 255, 1, 2, 3, 1];
+    var source = RasterImage.FromRgba(2, 3, rgba); var tiled = source.Tile(5, 7);
+    Assert(tiled.Pixel(2, 0) == new RgbaPixel(255, 0, 0, 255) && tiled.Pixel(3, 6) == new RgbaPixel(17, 31, 47, 0), "Tile seams changed transparent pixels");
+    Assert(tiled.Pixel(4, 4) == new RgbaPixel(0, 255, 0, 128) && tiled.Pixel(1, 5) == new RgbaPixel(1, 2, 3, 1), "Partial tile edges changed row order or alpha");
+    Assert(source.Tile(1, 1).Pixel(0, 0) == source.Pixel(0, 0) && source.ToRgba().SequenceEqual(rgba), "Small sample or immutable input failed");
+    Reject("image", () => source.Tile(0, 8));
+    Reject("image", () => source.Tile(16384, 16384));
+});
+
 Test("image recipe pipelines retain each step and reject unknown nested semantics read-only", () =>
 {
     var original = new Recipe("tint", new() { ["color"] = JsonSerializer.SerializeToElement("#64D8B2") });
@@ -362,6 +375,38 @@ Test("clip rectangles and stretch guides keep native origins through resize and 
     Assert(cropped.Clip == new NativeSlice(0, 16, 32, 0) && cropped.Margins == new SliceMargins(0, 8, 0, 0), "Crop did not remove clipped-away fixed borders");
     Assert(TextureGeometry.FromAttributes(32, 16, cropped.ApplyTo(catalog.Textures["Rounded_Rect_Top"].Attributes)) == cropped, "Edited guide serialization changed geometry");
     Reject("texture", () => top.Crop(0, 20, 64, 12));
+});
+
+Test("image reset restores inheritance and history without deleting originals or unrelated edits", () =>
+{
+    var directory = Path.Combine(root, "image-reset"); var p = ProjectStore.Create(catalog, "Image reset");
+    var names = new[] { "Rounded_Rect_Top", "Rounded_Rect_Bottom" };
+    var images = names.Select(name => catalog.Textures[name]).ToArray();
+    Assert(!ImageProject.Reset(directory, p, catalog, names) && p.Undo.Count == 0 && !Directory.Exists(directory), "No-op reset created files or history");
+    p.Edits.Colors["ThemeAccent"] = "0.2 0.8 0.5 1";
+    var license = ProjectAssets.Prepare(directory, "licenses/artwork.txt", System.Text.Encoding.UTF8.GetBytes("Retained artwork license"));
+    p.Edits.Assets.Add(license);
+    foreach (var image in images)
+    {
+        var bytes = catalog.ResolveBytes("textures/" + image.Attributes["file_name"]);
+        var width = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4));
+        var height = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+        ImageProject.SetPng(directory, p, catalog, image.Name, bytes, TextureGeometry.FromAttributes(width, height, image.Attributes),
+            new("tint", new() { ["color"] = JsonSerializer.SerializeToElement("#fff") }));
+    }
+    var before = Contract.Bytes(p.Edits); var history = p.Undo.Count;
+    var files = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).ToDictionary(path => path, Contract.HashFile);
+    Assert(ImageProject.Reset(directory, p, catalog, [names[0]]) && p.Undo.Count == history + 1, "Reset did not make exactly one checkpoint");
+    Assert(ImageProject.Resolve(directory, p, catalog, names[0]).Attributes["file_name"] == images[0].Attributes["file_name"] && !p.Edits.Recipes.ContainsKey(names[0]), "Reset did not restore inherited registration/recipe");
+    Assert(ImageProject.Resolve(directory, p, catalog, names[1]).Attributes["file_name"].StartsWith("theme/", StringComparison.Ordinal) && p.Edits.Recipes.ContainsKey(names[1]), "Reset changed the shared-file sibling");
+    Assert(files.All(entry => File.Exists(entry.Key) && Contract.HashFile(entry.Key) == entry.Value), "Reset deleted or rewrote original/history files");
+    Assert(p.UndoEdit() && Contract.Bytes(p.Edits).SequenceEqual(before), "Undo failed to restore the prior image state");
+    Assert(p.RedoEdit() && ImageProject.Reset(directory, p, catalog, names), "Group reset failed after redo");
+    Assert(!p.Edits.Assets.Any(asset => asset.PayloadPath.StartsWith("viewer/textures/", StringComparison.Ordinal)) && p.Edits.Assets.Contains(license) && p.Edits.Colors.Count == 1, "Group reset flattened inherited textures or removed unrelated edits");
+    history = p.Undo.Count;
+    Assert(!ImageProject.Reset(directory, p, catalog, names) && p.Undo.Count == history, "Repeated reset created an empty undo entry");
+    Reject("texture", () => ImageProject.Reset(directory, p, catalog, ["MissingImageId"]));
+    Assert(!ImageProject.ResetAll(p, catalog), "Reset all reported changes without image edits");
 });
 
 Test("image preview binds only the native sample button and leaves the source project intact", () =>

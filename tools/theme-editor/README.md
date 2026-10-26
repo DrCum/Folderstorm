@@ -9,7 +9,10 @@ The palette workbench includes named links, hex/RGBA and alpha, before/after WPF
 samples, metadata/history and Save As. Images searches IDs/filenames and previews
 PNG/TGA with a checkerboard. WPF samples approximate appearance; Preview in viewer
 uses the isolated native sample. Set color applies an edited field before Save
-or Save As. Future projects and unsupported operations open read-only.
+or Save As. The image workspace includes crop/resize/tint/adjustments, generators,
+slice guides, stretch/tile samples and image/family/all-image reset. Reset keeps
+stored originals and history; Undo restores the edits. Future projects and
+unsupported operations open read-only.
 
 Use .NET 10 on Windows. The editor is x64 WPF, self-contained and non-trimmed;
 core and CLI have no UI or third-party package dependencies.

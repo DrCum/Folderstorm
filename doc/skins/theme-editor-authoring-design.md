@@ -1,8 +1,9 @@
 # Authoring stage
 
 This branch follows PR #125 and its recorded Gate A native checks. The matching
-native 82310 build and editor 0.1.1 remain retained separately. Model checks pass
-20/20, with five additional Windows codec groups. The user verified palette
+native 82310 build and editor 0.1.1 remain retained separately. Current image-stage
+checks and remaining acceptance are recorded in `theme-editor-image-stage.md`.
+The user verified palette
 changes, Undo/Redo, inspector spacing/scrolling and Save As in retained editor
 0.2.1. Other workflows and final multi-DPI acceptance remain open.
 
@@ -50,8 +51,9 @@ saturation/gamma/alpha adjustment, fill, gradient, border and sliced stretch
 previews. Bilinear interpolation uses premultiplied alpha and fixed slice regions
 do not bleed into their neighbors. Editing is bounded to 16 megapixels; PNG
 encoding is bounded to 32 MiB. WPF codec tests preserve channel order, alpha,
-hidden RGB and inherited button pixels. These are model/codec checks; the image
-editing controls and derivative storage wiring still need implementation.
+hidden RGB and inherited button pixels. The image workspace exposes these
+operations with scoped derivative storage, retained originals and undo history.
+Model/codec checks remain distinct from the recorded human UI checks.
 
 The image browser now searches IDs/filenames and previews TGA directly, including
 uncompressed/RLE truecolor, palettes, grayscale, origins and alpha. The decoder

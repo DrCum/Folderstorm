@@ -30,7 +30,8 @@ internal static class Program
             Console.WriteLine("PASS inherited button decode/encode pixel fidelity");
             TgaChecks.Run(catalog);
             ImageProjectChecks.Run(catalog);
-            Console.WriteLine("6/6 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
+            ImageResetChecks.Run(catalog);
+            Console.WriteLine("7/7 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
