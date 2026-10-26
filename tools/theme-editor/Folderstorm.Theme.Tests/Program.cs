@@ -108,6 +108,57 @@ Test("changed inherited bytes fail compatibility without a version change", () =
     Reject("base_changed", () => catalog.Verify(project.BaseDependencies with { Files = [] }));
 });
 
+Test("hex channels, alpha compositing and contrast use displayed colors", () =>
+{
+    Assert(ThemeColor.Parse("#3c8").Hex() == "#33CC88FF", "Short hex");
+    Assert(ThemeColor.Parse("#1234").Hex() == "#11223344", "Short alpha must be last");
+    Assert(ThemeColor.Parse("0.2 0.8 0.5 1").Hex(false) == "#33CC80", "Channel rounding");
+    var white = ThemeColor.Parse("#fff"); var black = ThemeColor.Parse("#000");
+    Assert(Math.Abs(ThemeColor.Contrast(black, white, white) - 21) < .000001, "Opaque contrast");
+    Assert(ThemeColor.Contrast(ThemeColor.Parse("#0000"), white, black) == 1, "Transparent foreground contrast");
+    Assert(ThemeColor.Parse("1 0 0 0.5").Over(black).NativeText == "0.5 0 0 1", "Straight-alpha composition");
+    Reject("color", () => ThemeColor.Parse("#notacolor"));
+    Reject("color", () => ThemeColor.Contrast(black, white, ThemeColor.Parse("#0000")));
+});
+Test("asymmetric slice guides convert native bottom origin without reversal", () =>
+{
+    var native = new NativeSlice(3, 21, 26, 7);
+    var margins = SliceMargins.FromNative(32, 24, native);
+    Assert(margins == new SliceMargins(3, 3, 6, 7) && margins.ToNative(32, 24) == native, "Native guide conversion");
+    Assert(SliceMargins.FromAttributes(32, 24, new Dictionary<string, string>()) == default, "Default full stretch region");
+    Assert(new SliceMargins(1, 1, 1, 1).Resize(2, 2, 1, 1) == new SliceMargins(1, 1, 0, 0), "Rounding must not invert a small stretch region");
+    Reject("texture", () => new SliceMargins(3, 3, 30, 7).Validate(32, 24));
+    Reject("texture", () => SliceMargins.FromNative(32, 24, new NativeSlice(3, 4, 26, 7)));
+    Reject("texture", () => SliceMargins.FromNative(32, 24, new NativeSlice(3, int.MinValue, 26, 7)));
+});
+Test("asset families retain every logical ID and distinguish compound states", () =>
+{
+    Assert(TextureFamilies.Describe("PushButton_Selected_Disabled") == ("PushButton", "Selected disabled"), "Compound state split");
+    Assert(TextureFamilies.Describe("PushButton_Off") == ("PushButton", "Normal"), "Normal state split");
+    var families = TextureFamilies.Build(catalog.Textures.Values);
+    Assert(families.Sum(family => family.Members.Length) == catalog.Textures.Count, "Catalog assets lost");
+    Assert(families.SelectMany(family => family.Members).Select(member => member.Texture.Name).Distinct(StringComparer.Ordinal).Count() == catalog.Textures.Count, "Logical IDs collided");
+});
+Test("role alpha derivatives propagate to dependent aliases and inspection detects cycles", () =>
+{
+    catalog.Colors["AuthoringAlphaAlias"] = new("AuthoringAlphaAlias", null, "EmphasisColor_35", "fixture");
+    catalog.Colors["AuthoringCycleA"] = new("AuthoringCycleA", null, "AuthoringCycleB", "fixture");
+    catalog.Colors["AuthoringCycleB"] = new("AuthoringCycleB", null, "AuthoringCycleA", "fixture");
+    try
+    {
+        var edits = new Dictionary<string, string> { ["ThemeAccent"] = "0.2 0.8 0.5 1" };
+        Assert(catalog.CompileColors(edits)["AuthoringAlphaAlias"] == "0.2 0.8 0.5 0.35", "Alpha fan-out stopped early");
+        var inspection = catalog.InspectColor("AuthoringAlphaAlias", edits);
+        Assert(inspection.AffectedByOverride && !inspection.DirectOverride, "Inherited/derived distinction");
+        Assert(inspection.ReferenceChain.SequenceEqual(new[] { "AuthoringAlphaAlias", "EmphasisColor_35", "ThemeAccent" }), "Role provenance stopped at a compiled alias");
+        Reject("color_cycle", () => catalog.InspectColor("AuthoringCycleA", new Dictionary<string, string>()));
+    }
+    finally
+    {
+        catalog.Colors.Remove("AuthoringAlphaAlias"); catalog.Colors.Remove("AuthoringCycleA"); catalog.Colors.Remove("AuthoringCycleB");
+    }
+});
+
 var failed = 0;
 foreach (var (name, run) in tests)
 {

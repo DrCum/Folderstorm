@@ -138,6 +138,29 @@ public sealed class BaseCatalog
         } while (changed);
         return output;
     }
+    public ColorInspection InspectColor(string name, IReadOnlyDictionary<string, string> edits)
+    {
+        var compiled = CompileColors(edits);
+        var chain = new List<string>(); var visited = new HashSet<string>(StringComparer.Ordinal);
+        ThemeColor? resolved = compiled.TryGetValue(name, out var applied) ? ThemeColor.Parse(applied) : null;
+        ColorInspection Result(ThemeColor value) => new(name, value, Colors[name].Source, chain.ToArray(), edits.ContainsKey(name), compiled.ContainsKey(name));
+        var current = name;
+        while (true)
+        {
+            Contract.Require(visited.Add(current), "color_cycle", "Color reference cycle: " + string.Join(" → ", chain.Append(current)));
+            Contract.Require(Colors.TryGetValue(current, out var definition), "reference", "Unknown color: " + current);
+            chain.Add(current);
+            if (edits.TryGetValue(current, out var edited)) return Result(resolved ?? ThemeColor.Parse(edited));
+            if (definition.Reference != null) { current = definition.Reference; continue; }
+            if (compiled.ContainsKey(current))
+            {
+                var role = AlphaLinks.Where(link => link.Item1 == current).Select(link => link.Item2).FirstOrDefault();
+                if (role != null && compiled.ContainsKey(role)) { current = role; continue; }
+            }
+            Contract.Require(definition.Value != null, "color", "Color has no value: " + current);
+            return Result(resolved ?? ThemeColor.Parse(definition.Value));
+        }
+    }
     private static readonly (string, string, double)[] AlphaLinks =
     [
         ("EmphasisColor_13", "ThemeAccent", .13), ("EmphasisColor_35", "ThemeAccent", .35),
@@ -149,3 +172,5 @@ public sealed class BaseCatalog
         ("SL-Foreground_50", "ThemeHover", .50), ("SL-Foreground_66", "ThemeHover", .66)
     ];
 }
+
+public sealed record ColorInspection(string Name, ThemeColor Value, string Source, string[] ReferenceChain, bool DirectOverride, bool AffectedByOverride);
