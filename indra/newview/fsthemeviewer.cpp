@@ -4,6 +4,8 @@
 #include "fsthemepackage.h"
 #include "fssessionworker.h"
 #include "llappviewer.h"
+#include "llbutton.h"
+#include "llcheckboxctrl.h"
 #include "lldir.h"
 #include "llfile.h"
 #include "llfloater.h"
@@ -12,6 +14,8 @@
 #include "llviewerwindow.h"
 #include "llwindow.h"
 #include "llstartup.h"
+#include "lluictrlfactory.h"
+#include <cstdint>
 #include <fstream>
 #include <optional>
 #include <regex>
@@ -30,6 +34,8 @@ fs::path previewDirectory;
 fs::path startupMarker,lastGoodSelection;
 std::string requestId,diagnostic;
 std::int64_t generation=0;
+std::uint64_t sampleDowns=0,sampleUps=0,sampleCommits=0;
+bool pinnedPress=false,sampleDisabled=false;
 void sessionValue(const char* name,const LLSD& value)
 {if(auto control=gSavedSettings.getControl(name))control->setValue(value,false);}
 void atomicFile(const fs::path& destination,const std::string& bytes)
@@ -65,6 +71,8 @@ void writeStatus(const std::string& state)
 #if LL_WINDOWS
     result["pid"]=static_cast<std::uint64_t>(GetCurrentProcessId());
 #endif
+    result["sample_interaction"]=boost::json::object{{"mouse_down",sampleDowns},{"mouse_up",sampleUps},{"commits",sampleCommits},
+        {"pinned_press",pinnedPress},{"disabled",sampleDisabled}};
     const auto temporary=previewDirectory/"status.tmp",destination=previewDirectory/"status.json";
     {std::ofstream output(temporary,std::ios::binary|std::ios::trunc);output<<boost::json::serialize(result)<<'\n';output.flush();if(!output)return;}
 #if LL_WINDOWS
@@ -185,6 +193,24 @@ bool idlePreview()
         if(auto* sample=LLFloaterReg::showInstance("test_widgets"))
         {
             sample->setTitle(diagnostic.empty()?"Theme preview":"Theme preview (base fallback)");sample->center();
+            if(auto* button=sample->findChild<LLButton>("test_button"))
+            {
+                button->setMouseDownCallback([](LLUICtrl*,const LLSD&){++sampleDowns;writeStatus(diagnostic.empty()?"ready":"fallback_ready");});
+                button->setMouseUpCallback([](LLUICtrl*,const LLSD&){++sampleUps;writeStatus(diagnostic.empty()?"ready":"fallback_ready");});
+                button->setClickedCallback([](LLUICtrl*,const LLSD&){++sampleCommits;writeStatus(diagnostic.empty()?"ready":"fallback_ready");});
+                // Pin the real LLButton draw state so a released mouse can be
+                // used to inspect/capture pressed artwork in this offline tool.
+                LLCheckBoxCtrl::Params pin;
+                pin.name="theme_preview_pin_pressed";pin.label="Pin pressed state";
+                pin.rect=LLRect(10,55,240,35);pin.follows.flags=FOLLOWS_LEFT|FOLLOWS_BOTTOM;
+                auto* pressed=LLUICtrlFactory::create<LLCheckBoxCtrl>(pin);sample->addChild(pressed);
+                pressed->setCommitCallback([button](LLUICtrl* control,const LLSD&)
+                {pinnedPress=control->getValue().asBoolean();button->setForcePressedState(pinnedPress);writeStatus(diagnostic.empty()?"ready":"fallback_ready");});
+                pin.name="theme_preview_disable_button";pin.label="Disable sample button";pin.rect=LLRect(10,30,240,10);
+                auto* disabled=LLUICtrlFactory::create<LLCheckBoxCtrl>(pin);sample->addChild(disabled);
+                disabled->setCommitCallback([button](LLUICtrl* control,const LLSD&)
+                {sampleDisabled=control->getValue().asBoolean();button->setEnabled(!sampleDisabled);writeStatus(diagnostic.empty()?"ready":"fallback_ready");});
+            }
             gViewerWindow->getWindow()->show();writeStatus(diagnostic.empty()?"ready":"fallback_ready");shown=true;
         }
         else {diagnostic="Native widget sample could not be built";writeStatus("failed");LLAppViewer::instance()->forceQuit();}

@@ -44,15 +44,42 @@ the build skill's human release-test gate; publication still requires approval.
   combined proof. Custom button artwork, linked accent text and the package-local
   font are visible. Warm owned previews reported ready in 6–8 seconds; the cold
   built-in startup took about 18 seconds. These are preliminary runtime results.
-- Sustained preview rendering can omit most textured controls until a resize.
-  Restoring GL state after offline texture uploads is under test. Window-size
-  control types and first-run maximization were corrected, and offline Close
-  bypasses the ordinary quit-confirmation prompt. These fixes need a new viewer.
+- Viewer 7.2.5.82309 (source `ba79b7829a`) is also retained, with the corrected
+  window-size control types, first-run maximization suppression, image-overlay
+  tint support and ordinary owned-preview Close. Close completed in 1.16 seconds
+  without a quit-confirmation prompt.
+- Computer Use can capture an incomplete OpenGL window even while the window
+  remains fully drawn on the user's screen. The user confirmed this in the
+  ordinary combined preview, and supplied a fully drawn diagnostic reference.
+  A later Sky capture of that diagnostic window also matched. This is a capture
+  limitation; the earlier evidence does not establish a viewer renderer failure.
+  The speculative GL-state refresh has not demonstrated an independent benefit
+  and is removed from the next candidate.
+- The ordinary combined 82309 preview visibly loads the green image-overlay
+  floater tint, mint link, green button artwork and package-local
+  monospace font with Cyrillic/CJK fallbacks. Native floater resizing was
+  exercised. Capture limitations and remaining state checks are recorded in
+  `theme-editor-native-evidence-ba79b7829a` in the local workspace.
+- Six native normal-startup recovery cases pass: valid selection, startup
+  rollback, explicit reset, missing revision, changed base and corrupt payload.
+  All preserve the original skin/font settings and a personal color override.
+  Normal-close confirmation was left untouched; the test driver's bounded
+  fallback closed only its owned process after eight seconds.
+- A two-preview ownership check passes: refresh replaces only the primary
+  child/profile, leaves its sibling and sibling request/status unchanged, and
+  Close affects only the selected preview. Neither test logs in or installs.
+- The asymmetric fixture visibly preserves red/cyan top and green/amber bottom
+  corners in the stretched native button. The state-family check found that
+  replacing `PushButton_Over`/`PushButton_Press` alone does not bind them in the
+  inherited default widget. The proof now supplies a complete button template
+  with explicit hover/pressed references. Both validators accept and check the
+  two native pressed-image attributes; the new viewer check remains pending.
 - Native panel drawing uses image-overlay colors when a background image exists.
   The floater-tint proof now sets those attributes as well as fallback flat
   colors; both validators share the additional typed color attributes.
-- Ten additional shared boundary probes pass, covering JSON depth/shape, finite
-  font sizes, typed XUI geometry, color references and ordered slice bounds.
+- Sixteen additional shared boundary probes pass, covering JSON depth/shape, finite
+  font sizes, typed XUI geometry, color/image references (including both pressed
+  image attributes) and ordered slice bounds.
   The native harness now uses C++20 and warnings as errors, matching the viewer.
 - The first native build attempt exposed a Windows environment casing collision
   from a lowercase version override. The second correctly stopped before compile

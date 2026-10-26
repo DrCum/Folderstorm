@@ -20,7 +20,7 @@ try
             result = PackageStore.Manifest(File.ReadAllBytes(values[1])); break;
         case "catalog":
             var catalog = Base();
-            result = new { catalog.Skin, catalog.Scheme, catalog.Schemes, Colors = catalog.Colors.Values, Textures = catalog.Textures.Values, catalog.FontConfigurations }; break;
+            result = new { catalog.Skin, catalog.Scheme, catalog.Schemes, catalog.Layers, Colors = catalog.Colors.Values, Textures = catalog.Textures.Values, catalog.FontConfigurations }; break;
         case "create":
             Contract.Require(!Directory.Exists(values[1]), "project_exists", "Choose a new project directory");
             var created = ProjectStore.Create(Base(), values.Count > 2 ? values[2] : "Untitled theme"); ProjectStore.Save(values[1], created);

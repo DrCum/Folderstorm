@@ -14,11 +14,14 @@ import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--source', type=Path, required=True)
+parser.add_argument('--base', type=Path, help='Installed/retained base used to export the proof packages; defaults to source')
 parser.add_argument('--dotnet', required=True)
 parser.add_argument('--proof-cases', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 source = args.source.resolve()
+base = (args.base or args.source).resolve()
+native_base = base / 'indra/newview' if (base / 'indra/newview/skins').is_dir() else base
 output = args.output.resolve()
 if output.exists():
     parser.error('Use a new evidence directory')
@@ -34,7 +37,7 @@ def run(path, mode, expected):
     for name, command in [('managed', [args.dotnet, str(cli), 'manifest' if mode == 'manifest' else 'validate', str(path)]),
                           ('native', [str(native), mode, str(path)])]:
         if mode == 'revision':
-            command += ['--base', str(source)] if name == 'managed' else [str(source / 'indra/newview')]
+            command += ['--base', str(base)] if name == 'managed' else [str(native_base)]
         process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', timeout=180)
         if not process.returncode:
             result = 'valid'
@@ -80,6 +83,10 @@ mutations = [
     ('unknown-xui-color', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_color', 'MissingThemeColor', 'reference'),
     ('unknown-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'MissingOverlayColor', 'reference'),
     ('valid-xui-image-overlay', 'viewer/xui/en/widgets/floater.xml', None, 'bg_alpha_image_overlay', 'ThemeAccent', 'valid'),
+    ('valid-pressed-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed', 'PushButton_Press', 'valid'),
+    ('unknown-pressed-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed', 'MissingPressedImage', 'reference'),
+    ('valid-pressed-selected-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed_selected', 'PushButton_Selected', 'valid'),
+    ('unknown-pressed-selected-image', 'viewer/xui/en/widgets/button.xml', None, 'image_pressed_selected', 'MissingPressedSelectedImage', 'reference'),
     ('reversed-nine-slice', 'viewer/textures/textures.xml', 'texture', 'scale.left', '31', 'texture'),
 ]
 for name, relative, element, attribute, value, expected in mutations:

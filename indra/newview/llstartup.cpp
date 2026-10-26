@@ -700,8 +700,6 @@ bool idle_startup()
     if (FSThemeViewer::idlePreview())
     {
         update_texture_fetch();
-        // Texture uploads can change GL bindings outside the startup UI draw.
-        gGL.refreshState();
         return false;
     }
 
