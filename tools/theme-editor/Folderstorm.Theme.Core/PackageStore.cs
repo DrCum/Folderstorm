@@ -39,6 +39,12 @@ public static class PackageStore
             Contract.Require(root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String, "schema", name);
         foreach (var name in new[] { "files", "required_capabilities", "font_dependencies" })
             Contract.Require(root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array, "schema", name);
+        foreach (var entry in root.GetProperty("files").EnumerateArray())
+            Shape(entry, ["path", "sha256", "kind"], ["size"], ["path", "size", "sha256", "kind"]);
+        foreach (var entry in root.GetProperty("font_dependencies").EnumerateArray())
+            Shape(entry, ["kind", "file"], [], ["kind", "file", "face"]);
+        foreach (var entry in root.GetProperty("font_dependencies").EnumerateArray())
+            if (entry.TryGetProperty("face", out var face)) Contract.Require(face.ValueKind == JsonValueKind.Number && face.TryGetInt32(out _), "schema", "face");
         var manifest = Contract.Read<ThemeManifest>(bytes);
         Contract.Require(manifest.FormatVersion == 1, "format_version", "Unsupported format");
         Contract.Require(Guid.TryParseExact(manifest.ThemeId, "D", out var id) && id.ToString("D") == manifest.ThemeId, "identity", "Canonical UUID required");
@@ -73,6 +79,13 @@ public static class PackageStore
         }
         Contract.Require(manifest.Author != null && manifest.Description != null && manifest.Author.EnumerateRunes().Count() <= 1024 && manifest.Description.EnumerateRunes().Count() <= 32768 && manifest.Extensions != null, "schema", "Invalid metadata");
         return manifest;
+    }
+    private static void Shape(JsonElement value, string[] strings, string[] integers, string[] allowed)
+    {
+        Contract.Require(value.ValueKind == JsonValueKind.Object, "schema", "Expected an object");
+        foreach (var field in value.EnumerateObject()) Contract.Require(allowed.Contains(field.Name), "schema", field.Name);
+        foreach (var name in strings) Contract.Require(value.TryGetProperty(name, out var item) && item.ValueKind == JsonValueKind.String, "schema", name);
+        foreach (var name in integers) Contract.Require(value.TryGetProperty(name, out var item) && item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out _), "schema", name);
     }
     private static long Limit(string kind) => kind switch
     { "font" => 64L * 1024 * 1024, "image" => 32L * 1024 * 1024, _ => Contract.ManifestLimit };
@@ -161,6 +174,10 @@ public static class PackageStore
                 if (key.StartsWith("scale.", StringComparison.Ordinal) || key.StartsWith("clip.", StringComparison.Ordinal))
                     Contract.Require(double.TryParse(attribute.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) && value is >= 0 and <= 16384, "texture", key);
             }
+            foreach (var prefix in new[] { "scale.", "clip." })
+                foreach (var (low, high) in new[] { ("left", "right"), ("bottom", "top") })
+                    if (node.Attribute(prefix + low) is { } first && node.Attribute(prefix + high) is { } last)
+                        Contract.Require(double.Parse(first.Value, System.Globalization.CultureInfo.InvariantCulture) <= double.Parse(last.Value, System.Globalization.CultureInfo.InvariantCulture), "texture", "Reversed " + prefix + low);
         }
     }
     private static void ValidateFonts(byte[] bytes, ThemeManifest manifest, BaseCatalog? catalog)
@@ -173,6 +190,14 @@ public static class PackageStore
                 manifest.FontDependencies.Any(f => f.File == file.Value)), "font", "Undeclared font: " + file.Value);
         }
         Contract.Require(root.Elements().All(n => n.Name.LocalName is "font" or "font_size") && root.Descendants().All(n => n.Name.LocalName is "font" or "file" or "os" or "font_size"), "font", "Unsupported font structure");
+        foreach (var node in root.Descendants())
+            foreach (var attribute in node.Attributes())
+                if (node.Name == "font_size" && attribute.Name == "size" || node.Name == "file" && attribute.Name.LocalName is "size_delta" or "font_weight")
+                {
+                    var name = attribute.Name.LocalName;
+                    var (min, max) = name == "size" ? (1d, 256d) : name == "size_delta" ? (-64d, 64d) : (1d, 1000d);
+                    Contract.Require(double.TryParse(attribute.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number) && double.IsFinite(number) && number >= min && number <= max && (name != "font_weight" || number == Math.Truncate(number)), "font", "Invalid " + name);
+                }
     }
     private static void ValidateImage(byte[] bytes, string path)
     {
@@ -299,23 +324,44 @@ public static class XuiPolicy
     private static readonly JsonDocument Rules = JsonDocument.Parse(typeof(XuiPolicy).Assembly.GetManifestResourceStream("Folderstorm.Theme.XuiRules")!);
     public static readonly HashSet<string> Files = ReadNames("paths");
     private static readonly HashSet<string> Attributes = ReadNames("editable_attributes");
+    private static readonly JsonElement Values = Rules.RootElement.GetProperty("value_rules");
     private static HashSet<string> ReadNames(string name) => Rules.RootElement.GetProperty(name).EnumerateArray().Select(v => v.GetString()!).ToHashSet(StringComparer.Ordinal);
     public static void Validate(string path, byte[] bytes, BaseCatalog catalog)
     {
         Contract.Require(Files.Contains(path), "xui_path", path);
         var baseline = Contract.Xml(catalog.ResolveBytes(path)); var candidate = Contract.Xml(bytes);
-        Compare(baseline.Root!, candidate.Root!, "/" + baseline.Root!.Name);
+        Compare(baseline.Root!, candidate.Root!, "/" + baseline.Root!.Name, catalog);
     }
-    private static void Compare(XElement baseline, XElement candidate, string selector)
+    private static void Compare(XElement baseline, XElement candidate, string selector, BaseCatalog catalog)
     {
         Contract.Require(baseline.Name == candidate.Name && baseline.Elements().Count() == candidate.Elements().Count(), "xui_structure", selector);
         var attributes = baseline.Attributes().Select(a => a.Name).Union(candidate.Attributes().Select(a => a.Name));
         foreach (var name in attributes)
             if ((string?)baseline.Attribute(name) != (string?)candidate.Attribute(name))
+            {
                 Contract.Require(name.NamespaceName.Length == 0 && Attributes.Contains(name.LocalName), "xui_attribute", selector + "/@" + name);
+                if (candidate.Attribute(name) is { } attribute) ValidateValue(name.LocalName, attribute.Value, catalog);
+            }
         var baseText = string.Concat(baseline.Nodes().OfType<XText>().Select(n => n.Value)).Trim();
         var newText = string.Concat(candidate.Nodes().OfType<XText>().Select(n => n.Value)).Trim();
         Contract.Require(baseText == newText || baseline.Name.LocalName == "text", "xui_structure", selector + "/text()");
-        foreach (var (left, right) in baseline.Elements().Zip(candidate.Elements())) Compare(left, right, selector + "/" + left.Name + "[" + (string?)left.Attribute("name") + "]");
+        Contract.Require(newText.Length <= Values.GetProperty("text_limit").GetInt32(), "xui_value", "Text is too long");
+        foreach (var (left, right) in baseline.Elements().Zip(candidate.Elements())) Compare(left, right, selector + "/" + left.Name + "[" + (string?)left.Attribute("name") + "]", catalog);
+    }
+    private static void ValidateValue(string name, string value, BaseCatalog catalog)
+    {
+        bool In(string group) => Values.GetProperty(group).EnumerateArray().Any(v => v.GetString() == name);
+        Contract.Require(value.Length <= Values.GetProperty("text_limit").GetInt32(), "xui_value", name);
+        if (In("nonnegative_integer") || In("signed_integer"))
+        {
+            var limit = Values.GetProperty("integer_limit").GetInt32();
+            Contract.Require(int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var number) && number <= limit && number >= (In("signed_integer") ? -limit : 0), "xui_value", name);
+        }
+        else if (In("color") && !catalog.Colors.ContainsKey(value))
+        {
+            try { Contract.Rgba(value); }
+            catch (ThemeException) { throw new ThemeException("reference", "Unknown color: " + value); }
+        }
+        else if (In("image")) Contract.Require(catalog.Textures.ContainsKey(value), "reference", "Unknown image: " + value);
     }
 }

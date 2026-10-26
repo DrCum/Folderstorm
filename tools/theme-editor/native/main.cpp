@@ -6,9 +6,9 @@ int main(int count,char** args)
     try
     {
         if(count==3 && std::string(args[1])=="manifest")
-        {const auto manifest=fs_theme::manifest(fs_theme::readFile(std::filesystem::u8path(args[2])));std::cout<<"valid "<<manifest.id<<'\n';}
+        {const auto manifest=fs_theme::manifest(fs_theme::readFile(fs_theme::fromUtf8(args[2])));std::cout<<"valid "<<manifest.id<<'\n';}
         else if(count==4 && std::string(args[1])=="revision")
-        {const auto revision=fs_theme::load(std::filesystem::u8path(args[2]),std::filesystem::u8path(args[3]));std::cout<<"valid "<<revision.revision<<'\n';}
+        {const auto revision=fs_theme::load(fs_theme::fromUtf8(args[2]),fs_theme::fromUtf8(args[3]));std::cout<<"valid "<<revision.revision<<'\n';}
         else {std::cerr<<"theme_validate manifest file | revision directory base\n";return 2;}
         return 0;
     }

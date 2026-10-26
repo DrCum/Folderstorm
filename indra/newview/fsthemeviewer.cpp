@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsthemeviewer.h"
 #include "fsthemepackage.h"
+#include "fssessionworker.h"
 #include "llappviewer.h"
 #include "lldir.h"
 #include "llfile.h"
@@ -10,7 +11,6 @@
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
 #include "llwindow.h"
-#include "llsplashscreen.h"
 #include "llstartup.h"
 #include <fstream>
 #include <optional>
@@ -50,7 +50,7 @@ fs::path knownFolder(bool roaming)
     fs_theme::require(SUCCEEDED(status) && result,"profile","Known Windows user folder unavailable");
     const fs::path path(result);CoTaskMemFree(result);return path;
 #else
-    return fs::u8path(gDirUtilp->getOSUserDir());
+    return fs_theme::fromUtf8(gDirUtilp->getOSUserDir());
 #endif
 }
 std::string text(const boost::json::object& object,const char* field)
@@ -78,13 +78,14 @@ bool preview(){return offline;}
 bool configure()
 {
     const auto requestPath=gSavedSettings.getString("FSThemePreviewRequest");offline=!requestPath.empty();
-    const auto settings=fs::u8path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,""));
+    const auto settings=fs_theme::fromUtf8(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,""));
     try
     {
         std::string id,revision;
         if(offline)
         {
-            const auto path=fs::u8path(requestPath);const auto session=path.parent_path().filename().u8string();
+            fs_theme::require(!FSSessionWorker::managed(),"profile","Theme preview cannot attach to a managed viewer session");
+            const auto path=fs_theme::fromUtf8(requestPath);const auto session=fs_theme::toUtf8(path.parent_path().filename());
             fs_theme::require(std::regex_match(session,std::regex("[0-9a-f]{32}")),"preview_request","Invalid preview session");
             const auto expected=knownFolder(false)/"Folderstorm"/"theme-preview"/session;
             fs_theme::require(fs::weakly_canonical(path)==fs::weakly_canonical(expected/"request.json"),"preview_request","Request is outside its preview session");
@@ -92,7 +93,8 @@ bool configure()
             fs_theme::require(request.at("preview_version").is_int64() && request.at("preview_version").as_int64()==1,"preview_request","Unsupported preview protocol");
             requestId=text(request,"request_id");fs_theme::require(fs_theme::validHash(requestId),"preview_request","Invalid request ID");
             fs_theme::require(request.at("generation").is_int64() && request.at("generation").as_int64()>0,"preview_request","Invalid generation");generation=request.at("generation").as_int64();
-            fs_theme::require(fs::weakly_canonical(fs::u8path(gDirUtilp->getOSUserDir()))==fs::weakly_canonical(expected/"roaming"),"profile","Preview roaming profile is not isolated");
+            fs_theme::require(fs::weakly_canonical(fs_theme::fromUtf8(gDirUtilp->getOSUserDir()))==fs::weakly_canonical(expected/"roaming"),"profile","Preview roaming profile is not isolated");
+            fs_theme::require(fs::weakly_canonical(fs_theme::fromUtf8(gDirUtilp->getOSCacheDir()))==fs::weakly_canonical(expected/"local"),"profile","Preview cache profile is not isolated");
             previewDirectory=expected;id=text(request,"theme_id");revision=text(request,"revision");
             gSavedSettings.setBOOL("AutoLogin",false);gSavedSettings.setBOOL("AllowMultipleViewers",true);gSavedSettings.setBOOL("SLURLPassToOtherInstance",false);
             sessionValue("SkinCurrent","ansastorm");sessionValue("SkinCurrentTheme","folderstorm");sessionValue("Language","en");
@@ -104,6 +106,7 @@ bool configure()
             if(gSavedSettings.getBOOL("FSResetCustomTheme"))
             {
                 if(fs::is_regular_file(selection))atomicFile(selection,"null\n");
+                std::error_code error;fs::remove(settings/"custom-theme.starting.json",error);
                 return true;
             }
             if(!fs::is_regular_file(selection))return true;
@@ -121,6 +124,7 @@ bool configure()
                     const auto oldId=text(previous.as_object(),"theme_id"),oldRevision=text(previous.as_object(),"revision");
                     fs_theme::require(oldId!=id || oldRevision!=revision,"startup_recovery","Failed revision requires an explicit reset or replacement");
                     id=oldId;revision=oldRevision;
+                    atomicFile(selection,boost::json::serialize(previous)+"\n");
                 }
             }
         }
@@ -128,10 +132,10 @@ bool configure()
         {
             fs_theme::require(std::regex_match(id,std::regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) && fs_theme::validHash(revision),"selection","Invalid theme ID/revision");
             const auto library=knownFolder(true)/"Folderstorm"/"theme-library";
-            selected=fs_theme::load(library/fs::u8path(id)/fs::u8path(revision),fs::u8path(gDirUtilp->getAppRODataDir()));
+            selected=fs_theme::load(library/fs_theme::fromUtf8(id)/fs_theme::fromUtf8(revision),fs_theme::fromUtf8(gDirUtilp->getAppRODataDir()));
             fs_theme::require(selected->revision==revision && selected->manifest.id==id,"selection","Selected revision differs");
             sessionValue("SkinCurrent",selected->manifest.skin);sessionValue("SkinCurrentTheme",selected->manifest.scheme);
-            gDirUtilp->setCustomThemeDir(selected->viewer().u8string());
+            gDirUtilp->setCustomThemeDir(fs_theme::toUtf8(selected->viewer()));
             if(!offline)
             {
                 startupMarker=settings/"custom-theme.starting.json";lastGoodSelection=settings/"custom-theme.last-good.json";
@@ -146,6 +150,16 @@ bool configure()
         selected.reset();gDirUtilp->setCustomThemeDir("");diagnostic=error.what();
         LL_WARNS("Theme")<<"Using built-in theme: "<<diagnostic<<LL_ENDL;
         if(offline && previewDirectory.empty())return false;
+        if(!offline)
+        {
+            try
+            {
+                atomicFile(settings/"custom-theme.error.json",boost::json::serialize(boost::json::object{{"diagnostic",diagnostic},{"fallback","built-in"}})+"\n");
+                atomicFile(settings/"custom-theme.json","null\n");
+                std::error_code ignored;fs::remove(settings/"custom-theme.starting.json",ignored);
+            }
+            catch(const std::exception& stateError){LL_WARNS("Theme")<<"Could not save theme recovery: "<<stateError.what()<<LL_ENDL;}
+        }
         writeStatus("fallback");return true;
     }
 }

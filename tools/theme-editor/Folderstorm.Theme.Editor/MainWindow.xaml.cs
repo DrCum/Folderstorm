@@ -23,6 +23,12 @@ public partial class MainWindow : Window
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
+        ThemeName.TextChanged += (_, _) => { if (project != null && ThemeName.Text != project.DisplayName) changed = true; };
+        BasePath.LostKeyboardFocus += async (_, _) =>
+        {
+            if (project == null && BasePath.Text.Length > 0)
+                await Run(() => { catalog = new BaseCatalog(BasePath.Text); RefreshCatalog(); });
+        };
         XmlFile.ItemsSource = XuiPolicy.Files.Order(StringComparer.Ordinal).Concat(["textures/textures.xml"]).ToArray(); XmlFile.SelectedIndex = 0;
         Loaded += async (_, _) =>
         {
@@ -157,14 +163,24 @@ public partial class MainWindow : Window
             PutAsset("viewer/fonts/fonts.xml", "font_config", Contract.XmlBytes(config)); FontStatus.Text = name + " embedded. Include its redistribution license before sharing."; });
     }
     private async void ResetFont(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; project!.Checkpoint("Reset font"); project.Edits.Assets.RemoveAll(a => a.PayloadPath.StartsWith("viewer/fonts/", StringComparison.Ordinal)); changed = true; FontStatus.Text = "Inherited font configuration restored."; });
-    private async void LoadXml(object sender, RoutedEventArgs args) => await Run(() => { if (catalog != null && XmlFile.SelectedItem is string file) XmlEditor.Text = System.Text.Encoding.UTF8.GetString(catalog.ResolveBytes(file)); });
+    private async void LoadXml(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (catalog == null || XmlFile.SelectedItem is not string file) return;
+        var asset = project?.Edits.Assets.LastOrDefault(a => a.PayloadPath == "viewer/" + file);
+        XmlEditor.Text = System.Text.Encoding.UTF8.GetString(asset == null ? catalog.ResolveBytes(file) : File.ReadAllBytes(Contract.Contained(projectDirectory, asset.AssetPath)));
+    });
     private async void SetXml(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready() || XmlFile.SelectedItem is not string file) return;
         var bytes = System.Text.Encoding.UTF8.GetBytes(XmlEditor.Text); Contract.Xml(bytes);
         if (file.StartsWith("xui/", StringComparison.Ordinal)) XuiPolicy.Validate(file, bytes, catalog!);
-        project!.Checkpoint("Edit " + file); PutAsset("viewer/" + file, PackageStore.Kind("viewer/" + file), bytes, catalog!.ResolveBytes(file));
-        PackageStore.Compile(projectDirectory, project, catalog); StatusText.Text = "Override validated.";
+        var before = Contract.Bytes(project!); var wasChanged = changed;
+        try
+        {
+            project!.Checkpoint("Edit " + file); PutAsset("viewer/" + file, PackageStore.Kind("viewer/" + file), bytes, catalog!.ResolveBytes(file));
+            PackageStore.Compile(projectDirectory, project, catalog); StatusText.Text = "Override validated.";
+        }
+        catch { project = Contract.Read<ThemeProject>(before); changed = wasChanged; throw; }
     });
     private async void Export(object sender, RoutedEventArgs args)
     {

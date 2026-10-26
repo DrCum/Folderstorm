@@ -163,5 +163,40 @@
     "name": "case-collision",
     "file": "case-collision.json",
     "expected": "collision"
+  },
+  {
+    "name": "metadata-depth-20",
+    "file": "metadata-depth-20.json",
+    "expected": "valid"
+  },
+  {
+    "name": "metadata-depth-40",
+    "file": "metadata-depth-40.json",
+    "expected": "valid"
+  },
+  {
+    "name": "metadata-depth-60",
+    "file": "metadata-depth-60.json",
+    "expected": "valid"
+  },
+  {
+    "name": "metadata-depth-65",
+    "file": "metadata-depth-65.json",
+    "expected": "json"
+  },
+  {
+    "name": "null-font-entry",
+    "file": "null-font-entry.json",
+    "expected": "schema"
+  },
+  {
+    "name": "missing-payload-size",
+    "file": "missing-payload-size.json",
+    "expected": "schema"
+  },
+  {
+    "name": "shape-before-version",
+    "file": "shape-before-version.json",
+    "expected": "schema"
   }
 ]

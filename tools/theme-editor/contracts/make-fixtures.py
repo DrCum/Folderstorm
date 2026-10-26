@@ -72,5 +72,13 @@ def collision(document):
 
 
 case("case-collision", "collision", collision)
+for depth in [20, 40, 60, 65]:
+    nested = 1
+    for unused in range(depth):
+        nested = {"x": nested}
+    case(f"metadata-depth-{depth}", "valid" if depth <= 60 else "json", field("extensions", {"org.folderstorm.fixture": nested}))
+case("null-font-entry", "schema", field("font_dependencies", [None]))
+case("missing-payload-size", "schema", lambda document: document["files"][0].pop("size"))
+case("shape-before-version", "schema", lambda document: (document.update(format_version=2), document["files"][0].update(unknown=True)))
 (root / "cases.json").write_text(json.dumps(cases, indent=2) + "\n", encoding="utf-8", newline="\n")
 print(f"Wrote {len(cases)} shared manifest fixtures")

@@ -31,6 +31,8 @@ struct Revision
 };
 void require(bool condition,const std::string& code,const std::string& detail);
 void pathName(const std::string& path);
+std::filesystem::path fromUtf8(const std::string& value);
+std::string toUtf8(const std::filesystem::path& path,bool generic=false);
 bool validHash(const std::string& value);
 std::string hash(const std::string& bytes);
 std::string readFile(const std::filesystem::path& path,std::uint64_t limit=ManifestLimit);

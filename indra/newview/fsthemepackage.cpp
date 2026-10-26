@@ -28,6 +28,21 @@ namespace fs_theme
 namespace fs=std::filesystem;
 using Object=boost::json::object;
 using Tree=boost::property_tree::ptree;
+fs::path fromUtf8(const std::string& value)
+{
+#if defined(__cpp_char8_t)
+    std::u8string encoded;encoded.reserve(value.size());
+    for(unsigned char byte:value)encoded.push_back(static_cast<char8_t>(byte));
+    return fs::path(encoded);
+#else
+    return fs::u8path(value);
+#endif
+}
+std::string toUtf8(const fs::path& path,bool generic)
+{
+    const auto encoded=generic?path.generic_u8string():path.u8string();
+    return std::string(reinterpret_cast<const char*>(encoded.data()),encoded.size());
+}
 void require(bool condition,const std::string& code,const std::string& detail)
 {if(!condition)throw Error(code,detail);}
 namespace
@@ -61,7 +76,7 @@ void fields(const Object& object,const std::set<std::string>& names)
 bool equalPath(const std::string& a,const std::string& b)
 {
 #if defined(_WIN32)
-    const auto left=fs::u8path(a).wstring(),right=fs::u8path(b).wstring();
+    const auto left=fromUtf8(a).wstring(),right=fromUtf8(b).wstring();
     return CompareStringOrdinal(left.data(),static_cast<int>(left.size()),right.data(),static_cast<int>(right.size()),TRUE)==CSTR_EQUAL;
 #else
     if(a.size()!=b.size())return false;
@@ -71,7 +86,7 @@ bool equalPath(const std::string& a,const std::string& b)
 bool linked(const fs::path& path)
 {
 #if defined(_WIN32)
-    const auto attributes=GetFileAttributesW(path.c_str());
+    const auto attributes=GetFileAttributesW(nativePath(path).c_str());
     return attributes!=INVALID_FILE_ATTRIBUTES && (attributes&FILE_ATTRIBUTE_REPARSE_POINT);
 #else
     return fs::is_symlink(fs::symlink_status(path));
@@ -79,8 +94,8 @@ bool linked(const fs::path& path)
 }
 fs::path contained(const fs::path& root,const std::string& relative)
 {
-    pathName(relative);require(!linked(root),"link",root.u8string());auto path=root;
-    for(const auto& part:fs::u8path(relative)){path/=part;require(!linked(path),"link",relative);}
+    pathName(relative);require(!linked(root),"link",toUtf8(root));auto path=root;
+    for(const auto& part:fromUtf8(relative)){path/=part;require(!linked(path),"link",relative);}
     return nativePath(path);
 }
 std::set<std::string> ruleNames(const char* field)
@@ -90,7 +105,7 @@ std::set<std::string> ruleNames(const char* field)
 }
 const auto xuiPaths=ruleNames("paths"),xuiAttributes=ruleNames("editable_attributes");
 std::string extension(std::string path)
-{path=fs::u8path(path).extension().u8string();for(auto& c:path)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return path;}
+{path=toUtf8(fromUtf8(path).extension());for(auto& c:path)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return path;}
 std::string kind(const std::string& path)
 {
     pathName(path);
@@ -116,7 +131,21 @@ Tree xml(const std::string& bytes)
 }
 std::vector<const Tree::value_type*> children(const Tree& tree)
 {std::vector<const Tree::value_type*> result;for(const auto& child:tree)if(child.first!="<xmlattr>")result.push_back(&child);return result;}
-void compareXui(const Tree::value_type& baseline,const Tree::value_type& candidate,const std::string& selector)
+void color(const std::string& value);
+void xuiValue(const std::string& name,const std::string& value,const std::map<std::string,std::string>& colors,const std::map<std::string,std::string>& textures)
+{
+    static const auto rules=boost::json::parse(ThemeRulesJson).as_object().at("value_rules").as_object();
+    const auto in=[&](const char* group){const auto& names=rules.at(group).as_array();return std::any_of(names.begin(),names.end(),[&](const auto& item){return item.as_string()==name;});};
+    require(value.size()<=static_cast<std::size_t>(rules.at("text_limit").as_int64()),"xui_value",name);
+    if(in("nonnegative_integer") || in("signed_integer"))
+    {
+        std::istringstream input(value);input.imbue(std::locale::classic());long long number;std::string extra;const auto maximum=rules.at("integer_limit").as_int64();
+        require(static_cast<bool>(input>>number) && !(input>>extra) && number<=maximum && number>=(in("signed_integer")?-maximum:0),"xui_value",name);
+    }
+    else if(in("color") && !colors.count(value)){try{color(value);}catch(const Error&){throw Error("reference","Unknown color: "+value);}}
+    else if(in("image"))require(textures.count(value),"reference","Unknown image: "+value);
+}
+void compareXui(const Tree::value_type& baseline,const Tree::value_type& candidate,const std::string& selector,const std::map<std::string,std::string>& colors,const std::map<std::string,std::string>& textures)
 {
     const auto left=children(baseline.second),right=children(candidate.second);
     require(baseline.first==candidate.first && left.size()==right.size(),"xui_structure",selector);
@@ -124,12 +153,12 @@ void compareXui(const Tree::value_type& baseline,const Tree::value_type& candida
     if(const auto attributes=baseline.second.get_child_optional("<xmlattr>"))for(const auto& a:*attributes)first[a.first]=a.second.data();
     if(const auto attributes=candidate.second.get_child_optional("<xmlattr>"))for(const auto& a:*attributes)second[a.first]=a.second.data();
     std::set<std::string> names;for(const auto& a:first)names.insert(a.first);for(const auto& a:second)names.insert(a.first);
-    for(const auto& name:names)if(first[name]!=second[name])require(xuiAttributes.count(name),"xui_attribute",selector+"/@"+name);
+    for(const auto& name:names)if(first[name]!=second[name]){require(xuiAttributes.count(name),"xui_attribute",selector+"/@"+name);if(second.count(name))xuiValue(name,second.at(name),colors,textures);}
     require(baseline.second.data()==candidate.second.data() || baseline.first=="text","xui_structure",selector+"/text()");
-    for(std::size_t i=0;i<left.size();++i)compareXui(*left[i],*right[i],selector+"/"+left[i]->first);
+    for(std::size_t i=0;i<left.size();++i)compareXui(*left[i],*right[i],selector+"/"+left[i]->first,colors,textures);
 }
 std::string resolve(const fs::path& base,const std::vector<std::string>& roots,const std::string& name)
-{std::string found;for(const auto& root:roots){const auto path=contained(base,root+"/"+name);if(fs::is_regular_file(path))found=path.u8string();}return found;}
+{std::string found;for(const auto& root:roots){const auto path=contained(base,root+"/"+name);if(fs::is_regular_file(path))found=toUtf8(path);}return found;}
 void color(const std::string& value)
 {
     std::istringstream input(value);input.imbue(std::locale::classic());double number;
@@ -141,7 +170,7 @@ bool validHash(const std::string& value)
 {return value.size()==64 && value.find_first_not_of("0123456789abcdef")==std::string::npos;}
 void pathName(const std::string& path)
 {
-    require(!path.empty() && fs::u8path(path).wstring().size()<=240 && path.front()!='/' && path.find('\\')==std::string::npos,"path",path);
+    require(!path.empty() && fromUtf8(path).wstring().size()<=240 && path.front()!='/' && path.find('\\')==std::string::npos,"path",path);
     std::size_t begin=0;
     do
     {
@@ -182,17 +211,18 @@ std::string hash(const std::string& bytes)
 std::string readFile(const fs::path& inputPath,std::uint64_t maximum)
 {
     const auto path=nativePath(inputPath);
-    std::error_code error;const auto size=fs::file_size(path,error);require(!error && size<=maximum,"size",path.u8string());
-    std::ifstream input(path,std::ios::binary);require(static_cast<bool>(input),"integrity",path.u8string());
+    std::error_code error;const auto size=fs::file_size(path,error);require(!error && size<=maximum,"size",toUtf8(path));
+    std::ifstream input(path,std::ios::binary);require(static_cast<bool>(input),"integrity",toUtf8(path));
     std::string result(static_cast<std::size_t>(size),'\0');input.read(result.data(),static_cast<std::streamsize>(size));
-    require(static_cast<std::uint64_t>(input.gcount())==size && input.peek()==std::char_traits<char>::eof(),"integrity",path.u8string());return result;
+    require(static_cast<std::uint64_t>(input.gcount())==size && input.peek()==std::char_traits<char>::eof(),"integrity",toUtf8(path));return result;
 }
 std::string hashFile(const fs::path& path)
 {return hash(readFile(path,ExpandedLimit));}
 boost::json::value parse(const std::string& bytes)
 {
     require(bytes.size()<=ManifestLimit,"size","JSON exceeds 4 MiB");boost::system::error_code error;
-    auto value=boost::json::parse(bytes,error);require(!error,"json",error.message());
+    boost::json::parse_options options;options.max_depth=64;
+    auto value=boost::json::parse(bytes,error,{},options);require(!error,"json",error.message());
     std::vector<std::set<std::string>> stack;
     for(std::size_t i=0;i<bytes.size();++i)
     {
@@ -216,6 +246,19 @@ Manifest manifest(const std::string& bytes)
     require(result.version.size()<=128,"identity","Version is too long");
     result.skin=text(object,"base_skin");result.scheme=text(object,"base_scheme");const auto adapter=text(object,"adapter_id");result.fingerprint=text(object,"base_fingerprint");
     const auto& files=array(object,"files");const auto& capabilities=array(object,"required_capabilities");const auto& fonts=array(object,"font_dependencies");
+    for(const auto& value:files)
+    {
+        require(value.is_object(),"schema","Invalid payload entry");const auto& item=value.as_object();fields(item,{"path","size","sha256","kind"});
+        text(item,"path");text(item,"sha256");text(item,"kind");integer(item,"size");
+    }
+    for(const auto& value:fonts)
+    {
+        require(value.is_object(),"schema","Invalid font entry");const auto& item=value.as_object();fields(item,{"kind","file","face"});
+        text(item,"kind");text(item,"file");if(item.contains("face")){const auto face=integer(item,"face");require(face>=INT32_MIN && face<=INT32_MAX,"schema","face");}
+    }
+    for(const auto* field:{"author","description"})if(object.contains(field))text(object,field);
+    if(object.contains("extensions"))require(object.at("extensions").is_object(),"schema","Invalid metadata");
+    integer(object,"adapter_version");
     require(integer(object,"format_version")==1,"format_version","Unsupported format");
     require(std::regex_match(result.id,std::regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")),"identity","Canonical UUID required");
     require(std::regex_match(result.version,std::regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?")),"identity","Invalid package version");
@@ -267,7 +310,7 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
     }
     std::size_t count=0;
     for(const auto& entry:fs::recursive_directory_iterator(directory))
-    {require(!linked(entry.path()),"link",entry.path().u8string());if(entry.is_regular_file()){++count;require(expected.count(fs::relative(entry.path(),directory).generic_u8string()),"coverage","Unlisted revision payload");}}
+    {require(!linked(entry.path()),"link",toUtf8(entry.path()));if(entry.is_regular_file()){++count;require(expected.count(toUtf8(fs::relative(entry.path(),directory),true)),"coverage","Unlisted revision payload");}}
     require(count==expected.size(),"coverage","Missing revision payload");
     const auto dependencyBytes=readFile(contained(directory,"base-dependencies.json"));require(hash(dependencyBytes)==data.fingerprint,"integrity","Base fingerprint");
     const auto dependencyValue=parse(dependencyBytes);require(dependencyValue.is_object(),"base","Invalid dependency set");const auto& dependencies=dependencyValue.as_object();
@@ -288,15 +331,15 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
     }
     std::set<std::string> logical,closure;
     for(const auto& root:roots)
-        for(const auto& entry:fs::recursive_directory_iterator(base/fs::u8path(root)))
+        for(const auto& entry:fs::recursive_directory_iterator(base/fromUtf8(root)))
         {
-            require(!linked(entry.path()),"link",entry.path().u8string());if(!entry.is_regular_file())continue;
-            const auto relative=fs::relative(entry.path(),base/fs::u8path(root)).generic_u8string();
+            require(!linked(entry.path()),"link",toUtf8(entry.path()));if(!entry.is_regular_file())continue;
+            const auto relative=toUtf8(fs::relative(entry.path(),base/fromUtf8(root)),true);
             if(relative=="colors.xml" || relative.rfind("textures/",0)==0 || relative.rfind("xui/en/",0)==0)logical.insert(relative);
         }
     for(const auto& name:logical)for(const auto& root:roots)closure.insert(root+"/"+name);
     if(fs::is_directory(base/"fonts"))for(const auto& entry:fs::recursive_directory_iterator(base/"fonts"))
-        if(entry.is_regular_file())closure.insert(fs::relative(entry.path(),base).generic_u8string());
+        if(entry.is_regular_file())closure.insert(toUtf8(fs::relative(entry.path(),base),true));
     require(closure==std::set<std::string>(dependencyPaths.begin(),dependencyPaths.end()),"base_changed","Dependency closure differs");
     std::map<std::string,std::string> baseColors,baseTextures;
     for(const auto& root:roots)
@@ -330,7 +373,7 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
         else if(file.kind=="xui")
         {
             const auto relative=file.path.substr(7);const auto resolved=resolve(base,roots,relative);require(!resolved.empty(),"reference",relative);
-            const auto left=xml(readFile(fs::u8path(resolved))),right=xml(readFile(path));require(left.size()==1 && right.size()==1,"xui_structure",relative);compareXui(*left.begin(),*right.begin(),relative);
+            const auto left=xml(readFile(fromUtf8(resolved))),right=xml(readFile(path));require(left.size()==1 && right.size()==1,"xui_structure",relative);compareXui(*left.begin(),*right.begin(),relative,baseColors,baseTextures);
         }
         else if(file.kind=="image")
         {
@@ -357,6 +400,13 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
                     if(key.rfind("scale.",0)==0 || key.rfind("clip.",0)==0)
                     {std::istringstream input(attribute.second.data());input.imbue(std::locale::classic());double number;std::string extra;require(static_cast<bool>(input>>number) && !(input>>extra) && std::isfinite(number) && number>=0 && number<=16384,"texture",key);}
                 }
+                for(const auto* prefix:{"scale.","clip."})for(const auto& edges:{std::pair{"left","right"},std::pair{"bottom","top"}})
+                {
+                    // Attribute names contain dots, so read them directly rather than as property-tree paths.
+                    const auto& attributes=node.second.get_child("<xmlattr>");
+                    const auto low=attributes.find(std::string(prefix)+edges.first),high=attributes.find(std::string(prefix)+edges.second);
+                    if(low!=attributes.not_found() && high!=attributes.not_found())require(std::stod(low->second.data())<=std::stod(high->second.data()),"texture","Reversed slice bounds");
+                }
             }
         }
         else if(file.kind=="font_config")
@@ -370,6 +420,16 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
                     if(node.first=="<xmlattr>")continue;
                     require(node.first=="font" || node.first=="font_size" || node.first=="file" || node.first=="os","font","Unsupported font structure");
                     if(tag=="fonts")require(node.first=="font" || node.first=="font_size","font","Unsupported font structure");
+                    if(const auto attributes=node.second.get_child_optional("<xmlattr>"))for(const auto& attribute:*attributes)
+                    {
+                        const auto& name=attribute.first;
+                        if(node.first=="font_size" && name=="size" || node.first=="file" && (name=="size_delta" || name=="font_weight"))
+                        {
+                            std::istringstream input(attribute.second.data());input.imbue(std::locale::classic());double number;std::string extra;
+                            const auto minimum=name=="size"?1.0:name=="size_delta"?-64.0:1.0,maximum=name=="size"?256.0:name=="size_delta"?64.0:1000.0;
+                            require(static_cast<bool>(input>>number) && !(input>>extra) && std::isfinite(number) && number>=minimum && number<=maximum && (name!="font_weight" || number==std::trunc(number)),"font","Invalid "+name);
+                        }
+                    }
                     if(node.first=="file")
                     {
                         const auto& filename=node.second.data();pathName(filename);

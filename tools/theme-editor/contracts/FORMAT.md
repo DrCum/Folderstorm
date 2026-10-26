@@ -49,3 +49,7 @@ compiled-override project with no invented recipes/originals/undo history.
 attribute allowlist. Complete replacements retain the base's ordered control
 tree and protected bindings/callbacks. Future catalog expansion must preserve
 these invariants. Login, consent, update and security UI are excluded.
+Changed geometry is bounded integer input; changed color/image references must
+resolve in the selected base. Font sizes and offsets must be finite and bounded.
+Scale and clip edges cannot be reversed. These rules are checked independently
+by both implementations before the viewer loads an override.
