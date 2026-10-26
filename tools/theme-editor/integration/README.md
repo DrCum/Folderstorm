@@ -64,3 +64,9 @@ nonempty bundled TGA, writing source and decoded-pixel hashes to a fresh evidenc
 folder. The empty placeholder is rejected explicitly. The separate development
 cross-check uses Pillow; the shipped editor uses only the managed decoder.
 It never opens a window and does not establish UI or native rendering acceptance.
+
+The image-project case also exports scoped PNG derivatives with retained TGA
+originals and recipes, tests a shared-file sibling and undo/redo, then publishes
+only into its fresh evidence-local library. Its `result.json` gives the revision
+directory and matching base root for the production validator's `revision`
+command. It does not select any user profile or launch a viewer.

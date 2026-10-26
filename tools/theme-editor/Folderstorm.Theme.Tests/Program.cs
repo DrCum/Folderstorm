@@ -331,6 +331,38 @@ Test("image recipe pipelines retain each step and reject unknown nested semantic
     Reject("project_readonly", () => RecipeHistory.Append(futureParameter, resize));
 });
 
+Test("image asset preparation preserves originals and refuses changed stored bytes", () =>
+{
+    var directory = Path.Combine(root, "prepared-assets");
+    var png = File.ReadAllBytes(Path.Combine(catalog.Root, catalog.Textures.Values.First(texture => texture.Source?.EndsWith(".png", StringComparison.Ordinal) == true).Source!));
+    var original = File.ReadAllBytes(Path.Combine(catalog.Root, catalog.Textures.Values.First(texture => texture.Source?.EndsWith(".tga", StringComparison.Ordinal) == true).Source!));
+    var asset = ProjectAssets.Prepare(directory, "viewer/textures/theme/test.png", png, original, ".tga");
+    Assert(asset.OriginalPath.EndsWith(".tga", StringComparison.Ordinal) && File.ReadAllBytes(Path.Combine(directory, asset.OriginalPath)).SequenceEqual(original), "Imported TGA original changed");
+    var next = ProjectAssets.Prepare(directory, asset.PayloadPath, png, preservedOriginal: asset.OriginalPath);
+    Assert(next == asset, "Original reference or immutable current data changed");
+    var both = Path.Combine(root, "rejected-original-options");
+    Reject("project_asset", () => ProjectAssets.Prepare(both, asset.PayloadPath, png, original, ".tga", asset.OriginalPath));
+    Assert(!Directory.Exists(both), "Rejected preparation created a directory");
+    File.WriteAllBytes(Path.Combine(directory, asset.OriginalPath), [1, 2, 3]);
+    Reject("project_asset", () => ProjectAssets.Store(directory, original, ".tga"));
+    Assert(File.ReadAllBytes(Path.Combine(directory, asset.OriginalPath)).SequenceEqual(new byte[] { 1, 2, 3 }), "Changed external bytes were overwritten");
+});
+Test("clip rectangles and stretch guides keep native origins through resize and crop", () =>
+{
+    var top = TextureGeometry.FromAttributes(64, 32, catalog.Textures["Rounded_Rect_Top"].Attributes);
+    var bottom = TextureGeometry.FromAttributes(64, 32, catalog.Textures["Rounded_Rect_Bottom"].Attributes);
+    Assert(top.Clip == new NativeSlice(0, 32, 64, 16) && top.Margins == new SliceMargins(6, 8, 6, 0), "Top clip or relative stretch guide origin");
+    Assert(bottom.Clip == new NativeSlice(0, 16, 64, 0) && bottom.Margins == new SliceMargins(6, 0, 6, 8), "Bottom clip or relative stretch guide origin");
+    var source = RasterImage.Gradient(64, 32, ThemeColor.Parse("#f00"), ThemeColor.Parse("#00f"), true);
+    Assert(top.VisibleImage(source).Pixel(0, 0) == source.Pixel(0, 0) && bottom.VisibleImage(source).Pixel(0, 0) == source.Pixel(0, 16), "Clip selected wrong physical rows");
+    var resized = top.Resize(128, 64);
+    Assert(resized.Clip == new NativeSlice(0, 64, 128, 32) && resized.Margins == new SliceMargins(12, 16, 12, 0), "Resize did not preserve clipped border geometry");
+    var cropped = top.Crop(16, 0, 32, 16);
+    Assert(cropped.Clip == new NativeSlice(0, 16, 32, 0) && cropped.Margins == new SliceMargins(0, 8, 0, 0), "Crop did not remove clipped-away fixed borders");
+    Assert(TextureGeometry.FromAttributes(32, 16, cropped.ApplyTo(catalog.Textures["Rounded_Rect_Top"].Attributes)) == cropped, "Edited guide serialization changed geometry");
+    Reject("texture", () => top.Crop(0, 20, 64, 12));
+});
+
 var failed = 0;
 foreach (var (name, run) in tests)
 {

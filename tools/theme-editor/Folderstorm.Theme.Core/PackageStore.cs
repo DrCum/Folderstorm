@@ -199,7 +199,7 @@ public static class PackageStore
                     Contract.Require(double.TryParse(attribute.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number) && double.IsFinite(number) && number >= min && number <= max && (name != "font_weight" || number == Math.Truncate(number)), "font", "Invalid " + name);
                 }
     }
-    private static void ValidateImage(byte[] bytes, string path)
+    internal static void ValidateImage(byte[] bytes, string path)
     {
         if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
         {

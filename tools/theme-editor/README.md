@@ -1,9 +1,15 @@
 # Folderstorm theme editor
 
-Gate A work in progress, based on PR #88. The native preview integration needs
-its first matching viewer build and visual validation; this is not a completed
-feature or a release candidate. See `doc/skins/theme-editor-progress.md` for the
-full authorized sequence and current evidence.
+Based on the exact PR #88 head. The native architectural slice is retained and
+validated at the observed desktop scale; full authoring and final acceptance are
+still in progress. See `doc/skins/theme-editor-gate-a-validation.md` and
+`doc/skins/theme-editor-authoring-design.md` for evidence and remaining scope.
+
+The palette workbench includes named links, hex/RGBA and alpha, before/after WPF
+samples, metadata/history and Save As. Images searches IDs/filenames and previews
+PNG/TGA with a checkerboard. WPF samples approximate appearance; Preview in viewer
+uses the isolated native sample. Set color applies an edited field before Save
+or Save As. Future projects and unsupported operations open read-only.
 
 Use .NET 10 on Windows. The editor is x64 WPF, self-contained and non-trimmed;
 core and CLI have no UI or third-party package dependencies.
