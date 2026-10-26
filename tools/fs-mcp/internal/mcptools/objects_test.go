@@ -11,7 +11,7 @@ import (
 
 func objectsFixture(t *testing.T) (*mcp.ClientSession, *preferencesTestAPI) {
 	t.Helper()
-	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask","object_take":"ask","build_rez":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"task_inventory":1,"script_diagnostics":1,"task_scripts":1,"object_lifecycle":1}}`)}
+	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask","object_take":"ask","build_rez":"ask","object_interact":"ask","script_test":"ask","notifications_read":"allow","chat_send_nearby":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"task_inventory":1,"script_diagnostics":1,"task_scripts":1,"object_lifecycle":1,"object_interaction":1,"test_sessions":1}}`)}
 	s := reviewServer(api)
 	inst := testInstance(11)
 	inst.ViewerSession = "login-a"

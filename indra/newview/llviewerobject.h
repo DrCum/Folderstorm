@@ -934,8 +934,8 @@ protected:
     //
 
     static void processTaskInvFile(void** user_data, S32 error_code, LLExtStat ext_status);
-    bool loadTaskInvFile(const std::string& filename);
-    void loadTaskInvLLSD(const LLSD &inv_result);
+    bool loadTaskInvFile(const std::string& filename, bool assistant_complete = true);
+    void loadTaskInvLLSD(const LLSD &inv_result, bool assistant_complete = true);
     void doInventoryCallback(bool from_simulator = false, bool complete = true);
     U64 mInventoryServerGeneration = 0;
     U64 mInventoryChangeGeneration = 0;

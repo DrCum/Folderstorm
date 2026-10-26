@@ -2,6 +2,16 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsobjecttools.h"
 #include "fsobjecttoolsmodel.h"
+#include "fsscripttestmodel.h"
+#include "fsassistantsocialmodel.h"
+#include "fsassistantnearbychatpolicy.h"
+#include "llframetimer.h"
+#include "llnotifications.h"
+#include "lllslconstants.h"
+#include "lltoolgrab.h"
+#include "llviewerwindow.h"
+#include "llmutelist.h"
+#include "fsnearbychathub.h"
 #include "fsassistantfeature.h"
 #include "fscontentpermissions.h"
 #include "fscontentpolicy.h"
@@ -93,28 +103,51 @@ struct SourceSnapshot {std::string source,epoch,text,hash;LLSD object,item;doubl
 struct ContentsRead;
 struct Mutation;
 struct RunningRead;
+struct TestSession;
 struct Running {std::string source,epoch;LLUUID token,asset;bool running=false,mono=false;double at=0.;};
 struct Service
 {
-    std::string source;std::map<LLUUID,Snapshot> snapshots;std::map<LLUUID,SourceSnapshot> scripts;
+    std::string source,restrictions;U64 privacyEpoch=0;fs_assistant_social::PrivacyIngressFence diagnosticIngress;
+    std::map<LLUUID,Snapshot> snapshots;std::map<LLUUID,SourceSnapshot> scripts;
     std::vector<std::shared_ptr<ContentsRead>> reads;
     fs_object_tools::Journal<LLSD> diagnostics;
     std::map<std::string,std::uint64_t> cursors;
     fs_object_tools::Receipts<std::shared_ptr<Mutation>> operations;
     std::map<std::pair<LLUUID,LLUUID>,Running> running;
+    fs_object_tools::ExecutionVersions<std::pair<LLUUID,LLUUID>> executionEpoch;
+    fs_object_tools::RunningQueries<std::pair<LLUUID,LLUUID>> runningQueries;
     std::vector<std::shared_ptr<RunningRead>> runningReads;
     std::map<LLUUID,LLHost> derezTransactions;
+    std::deque<double> channelSends,touches;
+    std::shared_ptr<TestSession> test;std::set<std::string> testIDs;
 };
 Service& service(){static Service value;return value;}
 void syncService()
 {
     auto& self=service();const auto current=source();
+    std::string restrictions=std::to_string(rlv_handler_t::isEnabled());
+    for(const auto behaviour:{RLV_BHVR_SHOWNAMES,RLV_BHVR_SHOWLOC,RLV_BHVR_VIEWSCRIPT,RLV_BHVR_RECVCHAT,
+        RLV_BHVR_RECVCHATFROM,RLV_BHVR_RECVEMOTE,RLV_BHVR_RECVEMOTEFROM,RLV_BHVR_PERMISSIVE})
+        restrictions+=":"+std::to_string(gRlvHandler.hasBehaviour(behaviour));
+    if(self.restrictions!=restrictions)
+    {self.restrictions=restrictions;fs_object_tools_privacy_changed();}
     if(self.source==current)return;
-    self.source=current;self.snapshots.clear();self.scripts.clear();self.cursors.clear();self.diagnostics.clear();
-    self.operations.clear();self.running.clear();
+    self.source=current;self.diagnosticIngress.advance(0,LLFrameTimer::getElapsedSeconds());self.snapshots.clear();self.scripts.clear();self.cursors.clear();self.diagnostics.clear();
+    self.operations.clear();self.running.clear();self.executionEpoch.clear();self.runningQueries.clear();self.test.reset();self.testIDs.clear();
     // Destroy listeners only from maintenance, never from an inventory callback.
 }
 LLSD resultBase(){return llsd::map("viewer_session",FSEventAPIBridge::instance().sessionReference(),"account",gAgent.getID(),"grid",LLGridManager::instance().getGrid());}
+bool diagnosticReceiveAllowed(const LLUUID& sender,S32 type,bool emote)
+{
+    using namespace fs_assistant_social;
+    NearbyOrigin origin;origin.source=NearbySource::Object;origin.type=type==CHAT_TYPE_OWNER?NearbyType::Owner:NearbyType::Text;origin.emote=emote;
+    NearbyReceivePolicy policy;policy.enabled=rlv_handler_t::isEnabled();
+    policy.recvChat=gRlvHandler.hasBehaviour(RLV_BHVR_RECVCHAT);policy.recvChatException=gRlvHandler.isException(RLV_BHVR_RECVCHAT,sender);
+    policy.recvChatFrom=gRlvHandler.hasBehaviour(RLV_BHVR_RECVCHATFROM);policy.recvChatFromMatch=gRlvHandler.isException(RLV_BHVR_RECVCHATFROM,sender);
+    policy.recvEmote=gRlvHandler.hasBehaviour(RLV_BHVR_RECVEMOTE);policy.recvEmoteException=gRlvHandler.isException(RLV_BHVR_RECVEMOTE,sender);
+    policy.recvEmoteFrom=gRlvHandler.hasBehaviour(RLV_BHVR_RECVEMOTEFROM);policy.recvEmoteFromMatch=gRlvHandler.isException(RLV_BHVR_RECVEMOTEFROM,sender);
+    return nearbyReceiveAllowed(origin,policy);
+}
 void reply(const LLSD& request,const LLSD& result)
 {if(fs_assistant_request_allowed(request))sendReply(result,request);}
 Snapshot* contentsSnapshot(const LLSD& request,std::string& error)
@@ -141,18 +174,21 @@ LLSD contentsPage(const LLSD& request,const LLUUID& token,const Snapshot& value,
 struct ContentsRead:LLVOInventoryListener
 {
     LLSD request;std::string source;LLUUID object;fs_assistant::AsyncTaskPtr task;
-    U64 generation=0;double deadline=0.;bool done=false;
-    ContentsRead(const LLSD& value,LLViewerObject* prim):request(value),source(::source()),object(prim->getID()),task(fs_assistant::asyncTask()),
+    U64 generation=0,privacyEpoch=0;double deadline=0.,refreshAt=0.;bool done=false,needsFresh=false,publish=true,succeeded=false;
+    std::set<LLUUID> observedItems;
+    ContentsRead(const LLSD& value,LLViewerObject* prim,bool publicSnapshot=true):request(value),source(::source()),object(prim->getID()),task(fs_assistant::asyncTask()),
         generation(prim->getInventoryServerGeneration()),deadline(now()+25.)
-    {registerVOInventoryListener(prim,nullptr);}
-    void start(LLViewerObject* prim){prim->dirtyInventory();requestVOInventory();}
+    {publish=publicSnapshot;privacyEpoch=service().privacyEpoch;registerVOInventoryListener(prim,nullptr);}
+    void start(LLViewerObject* prim){needsFresh=false;prim->dirtyInventory();requestVOInventory();}
     void inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_list_t* inventory,S32,void*)override
     {
         if(done || prim->getInventoryServerGeneration()<=generation)return;
         fs_assistant::AsyncScope scope(task->guard());std::string error;
+        if(privacyEpoch!=service().privacyEpoch){done=true;reply(request,llsd::map("error","privacy_epoch_changed: request a new Contents read"));return;}
         if(source!=::source() || !fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(request) || !target(object,error))
         {done=true;return;}
-        if(!inventory || !prim->isInventoryServerComplete())
+        if(!prim->isInventoryServerComplete()){needsFresh=true;refreshAt=now()+1.;return;}
+        if(!inventory)
         {done=true;reply(request,llsd::map("error","incomplete: simulator Contents could not be fully decoded"));return;}
         Snapshot value;value.source=source;value.epoch=request["__assistant_epoch"].asString();value.object=objectEvidence(prim);value.expires=now()+120.;
         std::size_t bytes=0;
@@ -164,6 +200,7 @@ struct ContentsRead:LLVOInventoryListener
             {done=true;reply(request,llsd::map("error","incomplete: invalid or oversized task inventory"));return;}
             value.items.emplace(item->getUUID(),new LLViewerInventoryItem(item));
         }
+        if(!publish){for(const auto& entry:value.items)observedItems.insert(entry.first);succeeded=true;done=true;return;}
         auto& entries=service().snapshots;
         for(auto it=entries.begin();it!=entries.end();)if(now()>it->second.expires)it=entries.erase(it);else ++it;
         if(entries.size()>=16){done=true;reply(request,llsd::map("error","capacity: finish existing Contents snapshots or wait for expiry"));return;}
@@ -173,11 +210,12 @@ struct ContentsRead:LLVOInventoryListener
     }
 };
 struct AssetRead
-{LLSD request,object,item;std::string source;fs_assistant::AsyncTaskPtr task;};
+{LLSD request,object,item;std::string source;fs_assistant::AsyncTaskPtr task;U64 privacyEpoch=0;};
 void scriptLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 status,LLExtStat)
 {
     std::unique_ptr<AssetRead> read(static_cast<AssetRead*>(userdata));
     fs_assistant::AsyncScope scope(read->task->guard());if(!read->task->claim("asset"))return;
+    if(read->privacyEpoch!=service().privacyEpoch){reply(read->request,llsd::map("error","privacy_epoch_changed: request fresh script source"));return;}
     std::string error;auto* prim=target(read->object["object_id"].asUUID(),error);
     auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(read->item["item_id"].asUUID())):nullptr;
     if(read->source!=source() || !fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(read->request) ||
@@ -202,10 +240,23 @@ void scriptLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 stat
     }
     reply(read->request,result);
 }
+bool interactionOp(const std::string&);
+bool testOp(const std::string&);
+bool interactionArguments(const LLSD&,std::string&);
+bool testArguments(const LLSD&,std::string&);
+bool prepareInteraction(FSAssistantPreparedOperation&,std::string&);
+bool validateInteraction(const FSAssistantPreparedOperation&,std::string&);
+void dispatchInteraction(const LLSD&);
+bool prepareTest(FSAssistantPreparedOperation&,std::string&);
+bool validateTest(const FSAssistantPreparedOperation&,std::string&);
+void dispatchTest(const LLSD&);
+void tickTests();
+void clearTestPrivate();
 bool mutationArguments(const LLSD&,std::string&);
 bool prepareMutation(FSAssistantPreparedOperation&,std::string&);
 bool validateMutation(const FSAssistantPreparedOperation&,std::string&);
 void dispatchMutation(const LLSD&);
+LLSD publicReceipt(const std::shared_ptr<Mutation>&);
 void tickMutations();
 bool arguments(const LLSD& request,std::string& error)
 {
@@ -235,19 +286,21 @@ class ObjectListener:public LLEventAPI,public FSAssistantFeature
 {
 public:
     ObjectListener():LLEventAPI("FSObjects","Exact-prim script development and diagnostics")
-    {for(const char* op:{"contents","scriptGet","debugPoll","scriptPreview","scriptSave","scriptStatus","scriptRunning","scriptReset","put","rename","remove","operationStatus","take","takeCopy","rezIdentify"})add(op,"Source-bound object tool",&ObjectListener::dispatch);}
+    {for(const char* op:{"contents","scriptGet","debugPoll","scriptPreview","scriptSave","scriptStatus","scriptRunning","scriptReset","put","rename","remove","operationStatus","take","takeCopy","rezIdentify","touch","dialogList","dialogReply","channelSend","testBegin","testStatus","testStop"})add(op,"Source-bound object tool",&ObjectListener::dispatch);}
     const char* assistantCapability()const override{return "task_inventory";}
-    LLSD assistantCapabilities()const override{return llsd::map("task_inventory",1,"script_diagnostics",1,"task_scripts",1,"object_lifecycle",1);}
+    LLSD assistantCapabilities()const override{return llsd::map("task_inventory",1,"script_diagnostics",1,"task_scripts",1,"object_lifecycle",1,"object_interaction",1,"test_sessions",1);}
     LLSD assistantLimits()const override{return llsd::map("contents_items",4096,"source_bytes",65536,"diagnostic_events",2048,"diagnostic_bytes",2097152,"atomic_revision_check",false);}
     bool prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error)const override
     {
         syncService();const auto& request=operation.request;if(!ready() || !arguments(request,error))return false;
         const auto op=request["op"].asString();
+        if(interactionOp(op))return prepareInteraction(operation,error);
+        if(testOp(op))return prepareTest(operation,error);
         if(op!="contents" && op!="scriptGet" && op!="debugPoll")return prepareMutation(operation,error);
         operation.validation=llsd::map("source",source());
         if(op=="debugPoll")
         {
-            if(gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT)){error="restricted: script diagnostics unavailable";return false;}
+            if(gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT) || gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES)){error="restricted: script diagnostics unavailable";return false;}
             return !request.has("object_id") || target(request["object_id"].asUUID(),error);
         }
         auto* prim=target(request["object_id"].asUUID(),error);if(!prim)return false;
@@ -266,14 +319,17 @@ public:
     bool validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error)const override
     {
         const auto op=operation.request["op"].asString();
+        if(interactionOp(op))return validateInteraction(operation,error);
+        if(testOp(op))return validateTest(operation,error);
         if(op!="contents" && op!="scriptGet" && op!="debugPoll")return validateMutation(operation,error);
         if(operation.validation["source"].asString()!=source()){error="session_changed";return false;}
-        if(operation.request["op"].asString()=="debugPoll")return !gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT);
+        if(operation.request["op"].asString()=="debugPoll")return !gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT) && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES);
         auto* prim=target(operation.request["object_id"].asUUID(),error);if(!prim)return false;
         // Contents may legitimately refresh while a read is pending. Source reads
         // keep their exact task/item evidence and recheck it at delivery.
+        auto* item=operation.request["op"].asString()=="scriptGet"?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(operation.request["item_id"].asUUID())):nullptr;
         if(operation.request["op"].asString()=="scriptGet" &&
-            !llsd_equals(objectEvidence(prim),operation.validation["object"]))
+            (!scriptReadable(item) || !llsd_equals(itemEvidence(item),operation.validation["item"]) || !llsd_equals(objectEvidence(prim),operation.validation["object"])))
         {error="conflict: task inventory changed";return false;}
         return true;
     }
@@ -284,6 +340,8 @@ public:
         if(!fs_assistant::AsyncScope::current()){Response response(LLSD(),request);return response.error("Durable assistant context required");}
         syncService();std::string error;if(!arguments(request,error)){Response response(LLSD(),request);return response.error(error);}
         const auto op=request["op"].asString();
+        if(interactionOp(op)){dispatchInteraction(request);return;}
+        if(testOp(op)){dispatchTest(request);return;}
         if(op=="debugPoll")
         {
             Response response(LLSD(),request);auto& self=service();std::uint64_t position=0;
@@ -296,7 +354,8 @@ public:
             {
                 if(entry.sequence<=position)continue;
                 std::string why;
-                if(!target(entry.value["object_id"].asUUID(),why) || (request.has("object_id") && request["object_id"].asUUID()!=entry.value["object_id"].asUUID())){position=entry.sequence;continue;}
+                if(!target(entry.value["object_id"].asUUID(),why) || !diagnosticReceiveAllowed(entry.value["object_id"].asUUID(),entry.value["native_type"].asInteger(),entry.value["native_emote"].asBoolean()) ||
+                   (request.has("object_id") && request["object_id"].asUUID()!=entry.value["object_id"].asUUID())){position=entry.sequence;continue;}
                 if(result["events"].size()>=limit || bytes+entry.bytes>60*1024){more=true;break;}
                 result["events"].append(entry.value);bytes+=entry.bytes;position=entry.sequence;
             }
@@ -318,7 +377,7 @@ public:
             auto* value=contentsSnapshot(request,error);if(!value){Response response(LLSD(),request);return response.error(error);}
             auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));
             if(!scriptReadable(item) || !gAssetStorage){Response response(LLSD(),request);return response.error("Native script source unavailable");}
-            auto* pending=new AssetRead{request,objectEvidence(prim),itemEvidence(item),source(),fs_assistant::asyncTask()};
+            auto* pending=new AssetRead{request,objectEvidence(prim),itemEvidence(item),source(),fs_assistant::asyncTask(),service().privacyEpoch};
             gAssetStorage->getInvItemAsset(prim->getRegion()->getHost(),gAgent.getID(),gAgent.getSessionID(),item->getPermissions().getOwner(),
                 prim->getID(),item->getUUID(),item->getAssetUUID(),LLAssetType::AT_LSL_TEXT,scriptLoaded,pending,true);return;
         }
@@ -329,33 +388,35 @@ struct Mutation:LLVOInventoryListener
     LLSD request,before,item,receipt;std::string source,epoch,signature,key;
     fs_assistant::AsyncTaskPtr task;std::weak_ptr<LLResourceUploadInfo> upload;
     fs_content::UploadProgress progress;
+    LLUUID confirmedAsset;bool privateRetired=false;
     fs_object_tools::Acquisition acquisition;
+    LLNotificationPtr dialog;
     U64 generation=0;double deadline=0.,refreshAt=0.;bool submitted=false,finished=false,refresh=false;
     std::set<std::string> previousItems;
     void observe(LLViewerObject* prim){generation=prim->getInventoryServerGeneration();registerVOInventoryListener(prim,nullptr);}
     void inventoryChanged(LLViewerObject*,LLInventoryObject::object_list_t*,S32,void*)override;
 };
-struct RunningRead {LLSD request,item;std::string source;fs_assistant::AsyncTaskPtr task;double deadline=0.;bool done=false;};
+struct RunningRead {LLSD request,item;std::string source;fs_assistant::AsyncTaskPtr task;double deadline=0.;U64 execution=0,privacyEpoch=0;bool done=false;};
 bool mutationRead(const std::string& op){return op=="scriptStatus" || op=="scriptPreview" || op=="operationStatus";}
 LLSD mutationMaterial(const LLSD& request)
 {
     LLSD result=LLSD::emptyMap();
-    for(const char* key:{"id","position","rotation","scale","shape","destination_folder","operation_id","op","object_id","item_id","snapshot_id","source_snapshot","content_hash","expected_asset_id","text","compiler","running_mode","running_snapshot","running","source_item","name"})
+    for(const char* key:{"id","position","rotation","scale","shape","destination_folder","operation_id","notification_id","expected_dialog","button_index","channel","face","uv","local_point","op","object_id","item_id","snapshot_id","source_snapshot","content_hash","expected_asset_id","text","compiler","running_mode","running_snapshot","running","source_item","name"})
         if(request.has(key))result[key]=request[key];
     return result;
 }
 std::string mutationSignature(const LLSD& request){return fs_content::hash(ll_stream_notation_sd(mutationMaterial(request)));}
 std::shared_ptr<Mutation> ownMutation(const LLSD& request)
 {
-    auto* entry=service().operations.find(request["client_request_id"].asString());
+    auto* entry=service().operations.find(request["client_request_id"].asUUID().asString());
     return entry && entry->value && entry->value->source==source() && entry->value->epoch==request["__assistant_epoch"].asString()?entry->value:nullptr;
 }
 void settle(const std::shared_ptr<Mutation>& value,const std::string& state,const std::string& reason,bool pending=false)
 {
-    value->receipt["state"]=state;value->receipt["reason"]=reason;value->finished=true;
+    value->receipt["state"]=state;value->receipt["reason"]=value->privateRetired && value->request["op"].asString()=="scriptSave"?std::string("private_results_removed"):fs_content::excerpt(reason,1024);value->finished=true;
     auto* entry=service().operations.find(value->key);
     if(entry && entry->value==value){entry->terminal=true;entry->pending=pending?1:0;}
-    if(!pending){value->task.reset();value->refresh=false;}
+    if(!pending){value->task.reset();value->refresh=false;value->dialog.reset();value->request.erase("text");}
 }
 bool taskEditorBusy(const LLUUID& object,const LLUUID& item,const LLResourceUploadInfo* own=nullptr)
 {
@@ -383,6 +444,8 @@ void dispatchLifecycle(const LLSD&);
 bool mutationArguments(const LLSD& request,std::string& error)
 {
     const auto op=request["op"].asString();
+    if(interactionOp(op))return interactionArguments(request,error);
+    if(testOp(op))return testArguments(request,error);
     if(op=="operationStatus")
     {if(id(request["operation_id"]))return true;error="invalid_args: exact operation_id required";return false;}
     if(op=="take" || op=="takeCopy" || op=="rezIdentify")
@@ -439,6 +502,39 @@ std::shared_ptr<Mutation> receiptOperation(const LLSD& request,std::string& erro
         }
     error="operation_expired: receipt is unavailable for this exact source";return {};
 }
+LLSD publicReceipt(const std::shared_ptr<Mutation>& value)
+{
+    auto result=value->receipt;const auto op=value->request["op"].asString();std::string error;
+    if(op=="scriptSave")
+    {
+        auto* prim=target(value->request["object_id"].asUUID(),error);
+        auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(value->request["item_id"].asUUID())):nullptr;
+        if(value->privateRetired || !scriptReadable(item))
+        {for(const char* key:{"diagnostics","asset_id","previous_asset_id","item_id","reason"})result.erase(key);result["results_restricted"]=true;}
+    }
+    else if(op=="put" || op=="rename" || op=="remove")
+    {if(!target(value->request["object_id"].asUUID(),error)){result.erase("task_item_id");result.erase("item_id");result["results_restricted"]=true;}}
+    else if(op=="take" || op=="takeCopy")
+    {
+        auto* prim=gObjectList.findObject(value->request["object_id"].asUUID());
+        const bool loaded=prim && !prim->isDead() && prim->getRegion()==gAgent.getRegion();
+        result["source_present_observed"]=loaded?LLSD(true):LLSD();
+        result["source_observation"]=loaded?"loaded_in_source_region":"not_loaded_or_removed";
+        result["source_removal_known"]=op=="take" && value->acquisition.sourceRemovalObserved();
+        result["source_removal_scope"]="Native Take acknowledgment, inventory arrival and source-region kill; not inferred from culling";
+        const auto itemID=result["inventory_item_id"].asUUID();auto* item=gInventory.getItem(itemID);
+        if(itemID.notNull() && (!item || !fs_content::agentInventory(itemID) || item->getPermissions().getOwner()!=gAgent.getID()))
+        {result.erase("inventory_item_id");result["results_restricted"]=true;}
+    }
+    return result;
+}
+void acquisitionProgress(const std::shared_ptr<Mutation>& value)
+{
+    if(!value->acquisition.confirmed())return;
+    const bool sourcePending=value->request["op"].asString()=="take" && !value->acquisition.sourceRemovalObserved();
+    value->receipt["source_removal_known"]=!sourcePending && value->request["op"].asString()=="take";
+    settle(value,sourcePending?"inventory_confirmed_source_pending":"server_confirmed",sourcePending?"Acquired item confirmed; waiting for source-region removal evidence":"Native acquisition evidence observed",sourcePending);
+}
 bool requestedRunning(const LLSD& request,bool& running,std::string& error)
 {
     running=false;if(request["running_mode"].asString()!="preserve")return true;
@@ -451,6 +547,7 @@ bool requestedRunning(const LLSD& request,bool& running,std::string& error)
 bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
 {
     const auto& request=operation.request;const auto op=request["op"].asString();
+    if(!mutationArguments(request,error))return false;
     operation.validation=llsd::map("source",source(),"material",mutationMaterial(request));
     operation.requiredClasses.push_back("world_read");operation.requiredClasses.push_back("task_inventory_read");
     if(op=="scriptSave" || op=="scriptPreview" || op=="put" || op=="operationStatus")operation.requiredClasses.push_back("read");
@@ -471,10 +568,19 @@ bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
     if(op!="put")
     {item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));if(!item){error="task_item_missing";return false;}operation.validation["item"]=itemEvidence(item);}
     if(op=="scriptStatus")
-    {if(!scriptReadable(item)){error="not_permitted: native-readable task script required";return false;}return true;}
+    {
+        if(!scriptReadable(item)){error="not_permitted: native-readable task script required";return false;}
+        for(const auto& entry:service().operations.entries())
+        {const auto value=entry.second.value;if(entry.second.pending && value && value->request["object_id"].asUUID()==prim->getID() && value->request["item_id"].asUUID()==item->getUUID() &&
+            (value->request["op"].asString()=="scriptSave" || value->request["op"].asString()=="scriptRunning" || value->request["op"].asString()=="scriptReset"))
+            {error="busy: reconcile the script execution operation before querying running state";return false;}}
+        return true;
+    }
+    if((op=="scriptSave" || op=="scriptRunning" || op=="scriptReset") && service().runningQueries.pending({prim->getID(),item->getUUID()}))
+    {error="busy: an earlier native running-state reply must drain before execution can change";return false;}
     if(!mutationRead(op))
     {
-        for(const auto& entry:service().operations.entries())if(entry.second.pending && entry.second.value && entry.second.value->request["object_id"]==request["object_id"])
+        for(const auto& entry:service().operations.entries())if(entry.second.pending && entry.second.value && entry.second.value->request["object_id"].asUUID()==request["object_id"].asUUID())
         {error="busy: reconcile the previous operation on this prim first";return false;}
     }
     if(op=="scriptSave" || op=="scriptPreview")
@@ -543,7 +649,7 @@ bool liveMutation(const std::shared_ptr<Mutation>& value)
     {
         const auto upload=value->upload.lock();if(!scriptReadable(item) || taskEditorBusy(prim->getID(),item->getUUID(),upload.get()))return false;
         auto expected=value->item;
-        if(value->receipt["source_saved"].asBoolean())expected["asset_id"]=value->receipt["asset_id"];
+        if(value->confirmedAsset.notNull())expected["asset_id"]=value->confirmedAsset;
         return llsd_equals(itemEvidence(item),expected) || llsd_equals(itemEvidence(item),value->item);
     }
     return true;
@@ -565,10 +671,22 @@ bool validateMutation(const FSAssistantPreparedOperation& operation,std::string&
     if(!prepareMutation(latest,error))return false;
     if(!llsd_equals(latest.validation,operation.validation)){error="conflict: task or source changed after approval";return false;}return true;
 }
-void requestRunning(LLViewerObject* prim,const LLUUID& item)
+U64 executionFor(const LLUUID& prim,const LLUUID& item)
+{return service().executionEpoch.current({prim,item});}
+bool invalidateRunning(const LLUUID& prim,const LLUUID& item)
 {
+    if(service().runningQueries.pending({prim,item}))return false;
+    if(!service().executionEpoch.advance({prim,item}))return false;service().running.erase({prim,item});return true;
+}
+bool requestRunning(LLViewerObject* prim,const LLUUID& item)
+{
+    using Queries=fs_object_tools::RunningQueries<std::pair<LLUUID,LLUUID>>;
+    const auto admission=service().runningQueries.begin({prim->getID(),item},executionFor(prim->getID(),item));
+    if(admission==Queries::Admission::Blocked)return false;
+    if(admission==Queries::Admission::Join)return true;
     LLMessageSystem* msg=gMessageSystem;msg->newMessageFast(_PREHASH_GetScriptRunning);msg->nextBlockFast(_PREHASH_Script);
     msg->addUUIDFast(_PREHASH_ObjectID,prim->getID());msg->addUUIDFast(_PREHASH_ItemID,item);msg->sendReliable(prim->getRegion()->getHost());
+    return true;
 }
 void Mutation::inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_list_t* contents,S32,void*)
 {
@@ -605,9 +723,9 @@ void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,
     const auto outcome=value->progress.outcome(confirmed,success);
     value->receipt["source_saved"]=outcome.sourceSaved;value->receipt["source_saved_known"]=outcome.sourceSavedKnown;
     value->receipt["uncertain"]=outcome.uncertain;value->receipt["compiled_known"]=confirmed && result["compiled"].isBoolean();value->receipt["compiled"]=confirmed && result["compiled"].asBoolean();
-    if(asset.notNull())value->receipt["asset_id"]=asset;
+    if(asset.notNull()){value->confirmedAsset=asset;if(!value->privateRetired)value->receipt["asset_id"]=asset;}
     value->receipt["diagnostics"]=LLSD::emptyArray();std::size_t bytes=0;
-    for(const auto& raw:llsd::inArray(result["errors"]))
+    for(const auto& raw:llsd::inArray(value->privateRetired?LLSD():result["errors"]))
     {const auto rawText=raw.isMap()?raw["message"].asString():raw.asString();const auto text=fs_content::excerpt(fs_content::utf8(rawText)?rawText:"Compiler returned an invalid UTF-8 diagnostic",1024);if(bytes+text.size()>8192 || value->receipt["diagnostics"].size()>=64){value->receipt["diagnostics_truncated"]=true;break;}value->receipt["diagnostics"].append(llsd::map("message",text));bytes+=text.size();}
     // Remove cached source bytes; the next complete read must fetch the actual
     // saved revision. Never invoke an editor callback with assistant source.
@@ -646,6 +764,7 @@ void enqueueTaskScript(const std::shared_ptr<Mutation>& value)
         auto failed=[value](LLUUID,LLUUID,LLSD result,std::string reason){finishTaskUpload(value,result,false,reason);return true;};
         auto upload=std::make_shared<LLScriptAssetUpload>(value->request["object_id"].asUUID(),value->request["item_id"].asUUID(),LLScriptAssetUpload::MONO,
             running,result["experience"].asUUID(),value->request["text"].asString(),finished,failed);
+        if(!invalidateRunning(value->request["object_id"].asUUID(),value->request["item_id"].asUUID())){settle(value,"cancelled_before_submission","execution_version_capacity");return;}
         value->upload=upload;value->receipt["requested_running"]=running;value->receipt["experience_preserved"]=true;
         upload->setAssistantHooks({[value](const std::string& stage,bool submit)
         {
@@ -660,32 +779,35 @@ LLSD rezCandidates(const std::shared_ptr<Mutation>&);
 void dispatchMutation(const LLSD& request)
 {
     std::string error;const auto op=request["op"].asString();
+    if(!mutationArguments(request,error)){LLEventAPI::Response invalid(LLSD(),request);return invalid.error(error);}
     if(op=="scriptStatus")
     {
         auto* prim=target(request["object_id"].asUUID(),error);if(!prim){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error(error);}
         if(service().runningReads.size()>=16){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error("capacity: too many script status readers");}
         auto read=std::make_shared<RunningRead>();read->request=request;read->source=source();read->task=fs_assistant::asyncTask();read->deadline=now()+10.;
         auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));if(!scriptReadable(item)){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error("script_not_readable");}
-        read->item=itemEvidence(item);service().runningReads.push_back(read);requestRunning(prim,item->getUUID());return;
+        read->item=itemEvidence(item);read->privacyEpoch=service().privacyEpoch;read->execution=executionFor(prim->getID(),item->getUUID());
+        service().runningReads.push_back(read);
+        if(!requestRunning(prim,item->getUUID())){read->done=true;reply(request,llsd::map("error","busy: outstanding running reply or native query capacity"));}return;
     }
     if(op=="take" || op=="takeCopy" || op=="rezIdentify"){dispatchLifecycle(request);return;}
     LLEventAPI::Response response(LLSD(),request);
     if(op=="operationStatus")
     {auto value=receiptOperation(request,error);if(!value)return response.error(error);
       if(value->request["op"].asString()=="rezInventory" || value->request["op"].asString()=="rezPrimitive")value->receipt["candidates"]=rezCandidates(value);
-      response.setResponse(value->receipt);return;}
-    if(auto own=ownMutation(request)){response.setResponse(own->receipt);return;}
+      response.setResponse(publicReceipt(value));return;}
+    if(auto own=ownMutation(request)){response.setResponse(publicReceipt(own));return;}
     auto* prim=target(request["object_id"].asUUID(),error);if(!prim)return response.error(error);
     if(op=="scriptPreview")
     {auto* value=scriptSnapshot(request,error);if(!value)return response.error(error);const auto diff=fs_content::diff(value->text,request["text"].asString());response.setResponse(llsd::map("before",diff.before,"after",diff.after,"truncated",diff.truncated,"atomic_revision_check",false));return;}
     FSAssistantPreparedOperation prepared;prepared.request=request;if(!prepareMutation(prepared,error))return response.error(error);
     auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->signature=mutationSignature(request);
-    value->key=request["client_request_id"].asString();value->before=objectEvidence(prim);value->item=prepared.validation[op=="put"?"agent_source":"item"];value->task=fs_assistant::asyncTask();value->deadline=now()+25.;
+    value->key=request["client_request_id"].asUUID().asString();value->before=objectEvidence(prim);value->item=prepared.validation[op=="put"?"agent_source":"item"];value->task=fs_assistant::asyncTask();value->deadline=now()+25.;
     value->receipt=resultBase();value->receipt["operation_id"]=request["reqid"];value->receipt["client_request_id"]=request["client_request_id"];value->receipt["object_id"]=prim->getID();value->receipt["item_id"]=request["item_id"];value->receipt["state"]="queued";
     auto* entry=service().operations.admit(value->key,value->signature,value);if(!entry)return response.error("capacity_or_request_id_reused: no new operation was submitted");entry->pending=1;
-    if(op=="scriptSave"){enqueueTaskScript(value);response.setResponse(value->receipt);return;}
+    if(op=="scriptSave"){enqueueTaskScript(value);response.setResponse(publicReceipt(value));return;}
     auto* item=op=="put"?agentSource(request,error):dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));
-    if(!item || !fs_assistant::asyncTaskSubmit(value->task) || !liveMutation(value)){settle(value,"cancelled_before_submission","authority_or_target_changed");response.setResponse(value->receipt);return;}
+    if(!item || !fs_assistant::asyncTaskSubmit(value->task) || !liveMutation(value)){settle(value,"cancelled_before_submission","authority_or_target_changed");response.setResponse(publicReceipt(value));return;}
     if(op=="put" || op=="rename" || op=="remove")
     {
         LLInventoryObject::object_list_t contents;prim->getInventoryContents(contents);for(const auto& old:contents)value->previousItems.insert(old->getUUID().asString());
@@ -704,6 +826,7 @@ void dispatchMutation(const LLSD& request)
     else if(op=="remove")prim->removeInventory(item->getUUID());
     else
     {
+        if(!invalidateRunning(prim->getID(),item->getUUID())){settle(value,"cancelled_before_submission","execution_version_capacity");response.setResponse(publicReceipt(value));return;}
         LLMessageSystem* msg=gMessageSystem;msg->newMessageFast(op=="scriptReset"?_PREHASH_ScriptReset:_PREHASH_SetScriptRunning);
         msg->nextBlockFast(_PREHASH_AgentData);msg->addUUIDFast(_PREHASH_AgentID,gAgent.getID());msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
         msg->nextBlockFast(_PREHASH_Script);msg->addUUIDFast(_PREHASH_ObjectID,prim->getID());msg->addUUIDFast(_PREHASH_ItemID,item->getUUID());
@@ -711,7 +834,7 @@ void dispatchMutation(const LLSD& request)
         if(op=="scriptReset")settle(value,"submitted","Native reset has no completion acknowledgment; inspect subsequent output");
         else requestRunning(prim,item->getUUID());
     }
-    response.setResponse(value->receipt);
+    response.setResponse(publicReceipt(value));
 }
 void tickMutations()
 {
@@ -799,23 +922,29 @@ bool prepareLifecycle(FSAssistantPreparedOperation& operation,std::string& error
 void dispatchLifecycle(const LLSD& request)
 {
     LLEventAPI::Response response(LLSD(),request);std::string error;const auto op=request["op"].asString();
-    if(auto own=ownMutation(request)){if(own->signature!=mutationSignature(request))return response.error("request_id_reused");response.setResponse(own->receipt);return;}
+    if(auto own=ownMutation(request)){if(own->signature!=mutationSignature(request))return response.error("request_id_reused");response.setResponse(publicReceipt(own));return;}
     FSAssistantPreparedOperation prepared;prepared.request=request;if(!prepareLifecycle(prepared,error))return response.error(error);
     if(op=="rezIdentify")
     {
         auto value=receiptOperation(request,error);if(!value)return response.error(error);
+        auto association=std::make_shared<Mutation>();association->request=request;association->source=source();association->epoch=request["__assistant_epoch"].asString();
+        association->key=request["client_request_id"].asUUID().asString();association->signature=mutationSignature(request);association->receipt=value->receipt;
+        auto* entry=service().operations.admit(association->key,association->signature,association);
+        if(!entry)return response.error("capacity_or_retired_request_id: association unchanged");
         value->receipt["object_id"]=request["object_id"];value->receipt["object_id_confirmed"]=false;value->receipt["correlation"]="explicit_selection";
-        settle(value,"selected_candidate","Explicit association is not simulator proof of which rez created the object");response.setResponse(value->receipt);return;
+        settle(value,"selected_candidate","Explicit association is not simulator proof of which rez created the object");
+        association->receipt=value->receipt;association->receipt["associated_rez_operation_id"]=value->receipt["operation_id"];association->receipt["operation_id"]=request["reqid"];association->receipt["client_request_id"]=request["client_request_id"];
+        settle(association,"selected_candidate","Local association only; no simulator creation proof");response.setResponse(publicReceipt(association));return;
     }
     auto* prim=target(request["object_id"].asUUID(),error);if(!prim)return response.error(error);
-    auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->key=request["client_request_id"].asString();
+    auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->key=request["client_request_id"].asUUID().asString();
     value->signature=mutationSignature(request);value->before=objectEvidence(prim);value->task=fs_assistant::asyncTask();value->deadline=now()+30.;
     value->receipt=resultBase();value->receipt["operation_id"]=request["reqid"];value->receipt["client_request_id"]=request["client_request_id"];
     value->receipt["object_id"]=prim->getID();value->receipt["transaction_id"]=LLUUID::generateNewID();value->receipt["destination_folder"]=request["destination_folder"];
-    value->receipt["state"]="queued";value->receipt["source_retained"]=op=="takeCopy";value->receipt["inventory_item_confirmed"]=false;
+    value->receipt["state"]="queued";value->receipt["requested_source_retained"]=op=="takeCopy";value->receipt["source_present_observed"]=true;value->receipt["source_removal_known"]=false;value->receipt["inventory_item_confirmed"]=false;
     auto* entry=service().operations.admit(value->key,value->signature,value);if(!entry)return response.error("capacity_or_request_id_reused: nothing submitted");entry->pending=1;
     if(!fs_assistant::asyncTaskSubmit(value->task) || !takeEligible(prim,request,error))
-    {settle(value,"cancelled_before_submission",error);response.setResponse(value->receipt);return;}
+    {settle(value,"cancelled_before_submission",error);response.setResponse(publicReceipt(value));return;}
     service().derezTransactions[value->receipt["transaction_id"].asUUID()]=prim->getRegion()->getHost();
     LLMessageSystem* msg=gMessageSystem;msg->newMessageFast(_PREHASH_DeRezObject);
     msg->nextBlockFast(_PREHASH_AgentData);msg->addUUIDFast(_PREHASH_AgentID,gAgent.getID());msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
@@ -824,32 +953,556 @@ void dispatchLifecycle(const LLSD& request)
     msg->addUUIDFast(_PREHASH_DestinationID,request["destination_folder"].asUUID());msg->addUUIDFast(_PREHASH_TransactionID,value->receipt["transaction_id"].asUUID());
     msg->addU8Fast(_PREHASH_PacketCount,1);msg->addU8Fast(_PREHASH_PacketNumber,0);
     msg->nextBlockFast(_PREHASH_ObjectData);msg->addU32Fast(_PREHASH_ObjectLocalID,prim->getLocalID());
-    value->submitted=true;value->receipt["state"]="submitted_unknown";msg->sendReliable(prim->getRegion()->getHost());response.setResponse(value->receipt);
+    value->submitted=true;value->receipt["state"]="submitted_unknown";msg->sendReliable(prim->getRegion()->getHost());response.setResponse(publicReceipt(value));
+}
+bool interactionOp(const std::string& op){return op=="touch" || op=="dialogList" || op=="dialogReply" || op=="channelSend";}
+bool interactionArguments(const LLSD& request,std::string& error)
+{
+    const auto op=request["op"].asString();
+    if(!id(request["object_id"]) || (op!="dialogList" && !id(request["client_request_id"])))
+    {error="invalid_args: exact prim and unique request UUID required";return false;}
+    if(op=="touch")
+    {
+        if(request.has("face") && (!request["face"].isInteger() || request["face"].asInteger()<0 || request["face"].asInteger()>63))
+        {error="invalid_args: explicit face must be 0..63";return false;}
+        if(request.has("face")!=request.has("uv") || request.has("face")!=request.has("local_point"))
+        {error="invalid_args: a synthetic face touch requires face, UV and local_point together";return false;}
+        for(const auto& key:{std::string("uv"),std::string("local_point")})if(request.has(key))
+        {
+            const auto& vector=request[key];if(!vector.isArray() || vector.size()!=(key=="uv"?2:3)){error="invalid_args: invalid touch vector";return false;}
+            for(const auto& n:llsd::inArray(vector))if((!n.isReal() && !n.isInteger()) || !std::isfinite(n.asReal()) || (key=="uv" && (n.asReal()<0. || n.asReal()>1.)))
+            {error="invalid_args: finite touch point and UV in 0..1 required";return false;}
+        }
+    }
+    if(op=="channelSend")
+    {
+        if(!request["channel"].isInteger() || request["channel"].asInteger()==0 || request["channel"].asInteger()==std::numeric_limits<S32>::max() ||
+            !request["text"].isString() || request["text"].asString().empty() || request["text"].asString().size()>1023 || !fs_content::utf8(request["text"].asString()))
+        {error="invalid_args: explicit nonzero non-debug signed channel and 1..1023 UTF-8 text bytes required";return false;}
+    }
+    if(op=="dialogReply")
+    {
+        if(!id(request["notification_id"]) || request["expected_dialog"].asString().size()!=64 ||
+            (request.has("text")==request.has("button_index")) ||
+            (request.has("text") && (!request["text"].isString() || request["text"].asString().size()>250 || !fs_content::utf8(request["text"].asString()))) ||
+            (request.has("button_index") && (!request["button_index"].isInteger() || request["button_index"].asInteger()<0 || request["button_index"].asInteger()>11)))
+        {error="invalid_args: exact live dialog revision and either native button_index or bounded text required";return false;}
+    }
+    return true;
+}
+LLNotificationPtr gameDialog(const LLUUID& uuid,const LLUUID& object,std::string& error,bool responding=false,LLNotificationPtr retained={})
+{
+    auto native=retained?retained:LLNotifications::instance().find(uuid);
+    if(!native || (!responding && !native->isActive()) || (native->getName()!="ScriptDialog" && native->getName()!="ScriptDialogGroup"))
+    {error="dialog_expired: exact live script dialog required";return {};}
+    const auto& payload=native->getPayload();const auto owner=payload["owner_id"].asUUID();
+    if(payload["object_id"].asUUID()!=object || (owner.notNull() && owner!=gAgent.getID()) ||
+        payload["sender"].asString()!=gAgent.getRegion()->getHost().getIPandPort() || !target(object,error) ||
+        LLMuteList::getInstance()->isMuted(object) || (owner.notNull() && LLMuteList::getInstance()->isMuted(owner)))
+    {error="not_permitted: current-region dialog from this owned prim required";return {};}
+    return native;
+}
+std::string dialogRevision(const LLNotificationPtr& native)
+{return fs_content::hash(native->getID().asString()+ll_stream_notation_sd(native->getPayload())+ll_stream_notation_sd(native->getForm()->asLLSD())+native->getMessage());}
+LLSD dialogRow(const LLNotificationPtr& native)
+{
+    auto result=llsd::map("notification_id",native->getID(),"dialog_revision",dialogRevision(native),"object_id",native->getPayload()["object_id"],
+        "message",fs_content::excerpt(native->getMessage(),1024),"textbox",native->getForm()->hasElement(TEXTBOX_MAGIC_TOKEN),"buttons",LLSD::emptyArray());
+    for(const auto& element:llsd::inArray(native->getForm()->asLLSD()))
+        if(element["type"].asString()=="button" && element["index"].asInteger()>=0 && element["index"].asInteger()<12 && element["name"].asString()!=TEXTBOX_MAGIC_TOKEN)
+            result["buttons"].append(llsd::map("index",element["index"],"name",fs_content::excerpt(element["name"].asString(),128),"enabled",!element.has("enabled") || element["enabled"].asBoolean()));
+    return result;
+}
+bool interactionRate(const std::string& op,std::string& error)
+{
+    auto& times=op=="channelSend"?service().channelSends:service().touches;
+    while(!times.empty() && now()-times.front()>=60.)times.pop_front();
+    if((!times.empty() && now()-times.back()<1.) || times.size()>=(op=="channelSend"?6U:60U))
+    {error="rate_limited: wait before another interaction; channel sends are limited to six per minute";return false;}
+    return true;
+}
+bool prepareInteraction(FSAssistantPreparedOperation& operation,std::string& error)
+{
+    const auto& request=operation.request;const auto op=request["op"].asString();
+    if(!interactionArguments(request,error))return false;
+    operation.validation=llsd::map("source",source(),"material",mutationMaterial(request));
+    operation.requiredClasses.push_back("world_read");
+    if(op=="dialogReply" || op=="dialogList")
+    {if(gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES)){error="restricted: game dialog text unavailable";return false;}operation.requiredClasses.push_back("notifications_read");}
+    else operation.requiredClasses.push_back("task_inventory_read");
+    if(op=="channelSend")operation.requiredClasses.push_back("chat_send_nearby");
+    if(auto own=ownMutation(request))
+    {if(own->signature!=mutationSignature(request)){error="request_id_reused";return false;}operation.validation["replay"]=true;return true;}
+    auto* prim=target(request["object_id"].asUUID(),error);if(!prim)return false;
+    if(dist_vec_squared(gAgent.getPositionAgent(),prim->getPositionAgent())>4096.f)
+    {error="out_of_range: interaction must be within 64m";return false;}
+    operation.validation["object"]=objectEvidence(prim);operation.validation["position"]=ll_sd_from_vector3(prim->getPositionRegion());
+    if(op=="dialogList")return true;
+    if(!interactionRate(op,error))return false;
+    if(op=="touch")
+    {
+        LLVector3 point=LLVector3::zero;if(request.has("local_point"))point=ll_vector3_from_sd(request["local_point"]);
+        for(S32 axis=0;axis<3;++axis)if(std::abs(point.mV[axis])>prim->getScale().mV[axis]*.5f)
+        {error="invalid_args: local touch point exceeds the prim bounds";return false;}
+        if((request.has("face") && request["face"].asInteger()>=prim->getNumTEs()) || !RlvActions::canTouch(prim,point*prim->getRenderRotation()))
+        {error="restricted_or_invalid_face";return false;}
+    }
+    if(op=="channelSend" && !RlvActions::canSendChannel(request["channel"].asInteger())){error="restricted: script channel unavailable";return false;}
+    if(op=="dialogReply")
+    {
+        auto native=gameDialog(request["notification_id"].asUUID(),prim->getID(),error);if(!native)return false;
+        if(dialogRevision(native)!=request["expected_dialog"].asString()){error="dialog_changed: list the live dialog again";return false;}
+        const S32 channel=native->getPayload()["chat_channel"].asInteger();
+        if((channel==0 && gRlvHandler.hasBehaviour(RLV_BHVR_SENDCHAT)) || (channel!=0 && !RlvActions::canSendChannel(channel)))
+        {error="restricted: native dialog reply channel unavailable";return false;}
+        if(channel==0)operation.requiredClasses.push_back("chat_send_nearby");
+        if(request.has("text"))
+        {if(!native->getForm()->hasElement(TEXTBOX_MAGIC_TOKEN)){error="not_a_textbox";return false;}}
+        else
+        {
+            if(native->getForm()->hasElement(TEXTBOX_MAGIC_TOKEN)){error="textbox_needs_text";return false;}
+            bool found=false;for(const auto& element:llsd::inArray(native->getForm()->asLLSD()))
+                if(element["type"].asString()=="button" && element["index"]==request["button_index"] && (!element.has("enabled") || element["enabled"].asBoolean()))found=true;
+            if(!found){error="dialog_button_unavailable";return false;}
+        }
+        operation.validation["dialog_revision"]=dialogRevision(native);
+    }
+    operation.summary=llsd::map("op",op,"subject_count",1,"subjects",LLSD::emptyArray());
+    operation.summary["subjects"].append(llsd::map("id",prim->getID(),"name",prim->getID().asString(),"after_name",op,
+        "destination",op=="channelSend"?"Avatar channel broadcast "+request["channel"].asString():request["notification_id"].asString()));
+    if(request.has("text")){operation.summary["replacement_text"]=request["text"];operation.summary["compiler"]="literal text; no chat-bar commands";}
+    return true;
+}
+bool validateInteraction(const FSAssistantPreparedOperation& operation,std::string& error)
+{
+    if(operation.validation["source"].asString()!=source()){error="session_changed";return false;}
+    if(auto own=ownMutation(operation.request))
+    {
+        if(own->signature!=mutationSignature(operation.request)){error="request_id_reused";return false;}
+        if(own->finished || operation.validation["replay"].asBoolean())return true;
+        if(own->receipt["responding"].asBoolean() && own->dialog)
+        {
+            auto native=gameDialog(own->request["notification_id"].asUUID(),own->request["object_id"].asUUID(),error,true,own->dialog);
+            if(!native || dialogRevision(native)!=own->request["expected_dialog"].asString())return false;
+            const S32 channel=native->getPayload()["chat_channel"].asInteger();
+            return channel==0?!gRlvHandler.hasBehaviour(RLV_BHVR_SENDCHAT):RlvActions::canSendChannel(channel);
+        }
+    }
+    FSAssistantPreparedOperation current;current.request=operation.request;
+    // Validate directly without treating this in-flight record as a replay.
+    auto* prim=target(operation.request["object_id"].asUUID(),error);if(!prim)return false;
+    if(!llsd_equals(objectEvidence(prim),operation.validation["object"]) || dist_vec_squared(gAgent.getPositionAgent(),prim->getPositionAgent())>4096.f)
+    {error="interaction_target_changed";return false;}
+    if(operation.request["op"].asString()=="channelSend")return RlvActions::canSendChannel(operation.request["channel"].asInteger());
+    if(operation.request["op"].asString()=="touch")return RlvActions::canTouch(prim,operation.request.has("local_point")?ll_vector3_from_sd(operation.request["local_point"])*prim->getRenderRotation():LLVector3::zero);
+    if(operation.request["op"].asString()=="dialogReply")
+    {auto native=gameDialog(operation.request["notification_id"].asUUID(),prim->getID(),error);return native && dialogRevision(native)==operation.validation["dialog_revision"].asString();}
+    return true;
+}
+void dispatchInteraction(const LLSD& request)
+{
+    LLEventAPI::Response response(LLSD(),request);const auto op=request["op"].asString();std::string error;
+    if(!interactionArguments(request,error))return response.error(error);
+    if(op=="dialogList")
+    {
+        auto result=resultBase();result["dialogs"]=LLSD::emptyArray();result["complete"]=true;std::size_t bytes=0;
+        if(auto channel=LLNotifications::instance().getChannel("Visible"))channel->forEachNotification([&](LLNotificationPtr native)
+        {
+            if(!gameDialog(native->getID(),request["object_id"].asUUID(),error))return;
+            const auto row=dialogRow(native);const auto size=ll_stream_notation_sd(row).size()+128;
+            if(result["dialogs"].size()>=32 || bytes+size>60*1024){result["complete"]=false;return;}
+            bytes+=size;result["dialogs"].append(row);
+        });
+        response.setResponse(result);return;
+    }
+    if(auto own=ownMutation(request)){response.setResponse(publicReceipt(own));return;}
+    FSAssistantPreparedOperation prepared;prepared.request=request;if(!prepareInteraction(prepared,error))return response.error(error);
+    auto* prim=target(request["object_id"].asUUID(),error);if(!prim)return response.error(error);
+    auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->key=request["client_request_id"].asUUID().asString();
+    value->signature=mutationSignature(request);value->before=objectEvidence(prim);value->task=fs_assistant::asyncTask();value->deadline=now()+10.;
+    value->receipt=resultBase();value->receipt["operation_id"]=request["reqid"];value->receipt["client_request_id"]=request["client_request_id"];
+    value->receipt["object_id"]=prim->getID();value->receipt["state"]="queued";value->receipt["execution_confirmed"]=false;
+    auto* entry=service().operations.admit(value->key,value->signature,value);if(!entry)return response.error("capacity_or_retired_request_id: no interaction submitted");entry->pending=1;
+    if(op=="dialogReply")
+    {
+        value->dialog=gameDialog(request["notification_id"].asUUID(),prim->getID(),error);
+        if(!value->dialog || !fs_assistant::asyncTaskAllowed(value->task)){settle(value,"cancelled_before_submission",error);response.setResponse(publicReceipt(value));return;}
+        auto native=value->dialog;auto reply=native->getResponseTemplate();
+        if(request.has("text"))reply[TEXTBOX_MAGIC_TOKEN]=request["text"].asString().empty()?LLSD(true):request["text"];
+        else for(const auto& element:llsd::inArray(native->getForm()->asLLSD()))
+            if(element["type"].asString()=="button" && element["index"]==request["button_index"])reply[element["name"].asString()]=true;
+        value->receipt["responding"]=true;const auto before=value->task->guard()->submitted();native->respond(reply);
+        value->submitted=value->task && value->task->guard()->submitted()>before;value->dialog.reset();value->receipt.erase("responding");
+    }
+    else
+    {
+        if(!fs_assistant::asyncTaskSubmit(value->task)){settle(value,"cancelled_before_submission","authority_revoked");response.setResponse(publicReceipt(value));return;}
+        value->submitted=true;
+        if(op=="touch")
+        {
+            LLPickInfo pick;pick.mObjectID=prim->getID();pick.mObjectFace=-1;pick.mUVCoords=LLVector2(-1,-1);pick.mSTCoords=LLVector2(-1,-1);
+            pick.mObjectOffset=LLVector3::zero;pick.mIntersection=prim->getPositionAgent();pick.mNormal=LLVector3::zero;pick.mBinormal=LLVector3::zero;
+            if(request.has("face"))
+            {pick.mObjectFace=request["face"].asInteger();pick.mUVCoords=LLVector2(static_cast<F32>(request["uv"][0].asReal()),static_cast<F32>(request["uv"][1].asReal()));pick.mSTCoords=pick.mUVCoords;
+             pick.mObjectOffset=ll_vector3_from_sd(request["local_point"])*prim->getRenderRotation();pick.mIntersection+=pick.mObjectOffset;}
+            // One non-yielding logical tap. Always release an accepted grab;
+            // no physical drag or delayed release action is scheduled.
+            send_ObjectGrab_message(prim,pick,LLVector3::zero);send_ObjectDeGrab_message(prim,pick);value->receipt["surface_is_synthetic"]=true;
+        }
+        else
+        {const auto text=utf8str_to_wstring(request["text"].asString());FSNearbyChat::sendChatFromViewer(text,text,CHAT_TYPE_NORMAL,false,request["channel"].asInteger());}
+    }
+    if(value->submitted)(op=="channelSend"?service().channelSends:service().touches).push_back(now());
+    settle(value,value->submitted?"submitted":"cancelled_before_submission",value->submitted?"Inspect native output; delivery/execution is not acknowledged":"Native reply authority changed");
+    response.setResponse(publicReceipt(value));
+}
+bool testOp(const std::string& op){return op=="testBegin" || op=="testStatus" || op=="testStop";}
+struct TestSession
+{
+    std::string source,epoch,key,signature;LLUUID id;LLSD request,scope,results=LLSD::emptyArray(),sources=LLSD::emptyArray();
+    fs_assistant::AsyncTaskPtr task;fs_script_test::Sequence sequence;fs_script_test::ObservationWindow observation;std::uint64_t errorCursor=0;
+    double tickAt=0.;S32 total=0;
+    S32 initialized=-1;double queryAt=0.;U64 inventoryGeneration=0;bool initiated=false,privateCleared=false;
+    std::shared_ptr<Mutation> action;std::shared_ptr<ContentsRead> observer;S32 assertions=0;
+};
+LLSD testMaterial(const LLSD& request)
+{return llsd::map("object_ids",request["object_ids"],"steps",request["steps"],"timeout_seconds",request["timeout_seconds"],"fail_on_runtime_errors",request["fail_on_runtime_errors"]);}
+LLSD testChild(const LLSD& request,S32 index)
+{
+    const auto& step=request["steps"][index];LLSD child;
+    for(const char* key:{"object_id","item_id","snapshot_id","face","uv","local_point","text","channel","running"})if(step.has(key))child[key]=step[key];
+    const auto action=step["action"].asString();
+    child["api"]="FSObjects";child["op"]=action=="reset"?"scriptReset":action=="running"?"scriptRunning":action=="send_channel"?"channelSend":action;
+    child["__assistant_epoch"]=request["__assistant_epoch"];child["client_request_id"]=request["__test_step_ids"][index];child["reqid"]=request["__test_step_ids"][index];
+    return child;
+}
+bool testArguments(const LLSD& request,std::string& error)
+{
+    if(request["op"].asString()!="testBegin")
+    {if(id(request["run_id"]))return true;error="invalid_args: exact run_id required";return false;}
+    if(!id(request["client_request_id"]) || !request["object_ids"].isArray() || request["object_ids"].size()<1 || request["object_ids"].size()>32 ||
+        !request["steps"].isArray() || request["steps"].size()<1 || request["steps"].size()>64 ||
+        !request["timeout_seconds"].isInteger() || request["timeout_seconds"].asInteger()<1 || request["timeout_seconds"].asInteger()>600 || ll_stream_notation_sd(request["steps"]).size()>65536)
+    {error="invalid_args: request UUID, 1..32 objects, 1..64 bounded steps and timeout 1..600 seconds required";return false;}
+    if(request.has("fail_on_runtime_errors") && !request["fail_on_runtime_errors"].isBoolean()){error="invalid_args: fail_on_runtime_errors must be boolean";return false;}
+    if(request.has("__test_step_ids"))
+    {
+        if(!request["__test_step_ids"].isArray() || request["__test_step_ids"].size()!=request["steps"].size())
+        {error="invalid_internal_step_ids";return false;}
+        std::set<LLUUID> stepIDs;for(const auto& token:llsd::inArray(request["__test_step_ids"]))if(!id(token) || !stepIDs.insert(token.asUUID()).second)
+        {error="invalid_internal_step_ids";return false;}
+    }
+    std::set<LLUUID> objects;for(const auto& object:llsd::inArray(request["object_ids"]))if(!id(object) || !objects.insert(object.asUUID()).second)
+    {error="invalid_args: object scope must contain unique exact prim UUIDs";return false;}
+    for(const auto& step:llsd::inArray(request["steps"]))
+    {
+        if(!step.isMap()){error="invalid_args: test steps must be maps";return false;}
+        const auto action=step["action"].asString();
+        std::set<std::string> keys{"action","object_id"};
+        const auto allow=[&](std::initializer_list<const char*> names){for(const auto* name:names)keys.insert(name);};
+        if(action=="touch")allow({"face","uv","local_point"});
+        else if(action=="reset")allow({"item_id","snapshot_id"});
+        else if(action=="running")allow({"item_id","snapshot_id","running"});
+        else if(action=="send_channel")allow({"channel","text"});
+        else if(action=="wait_output")allow({"text","expected","timeout_seconds","match"});
+        else if(action=="assert_running" || action=="assert_contents")allow({"item_id","expected","timeout_seconds"});
+        else if(action=="delay")allow({"seconds"});
+        for(auto it=step.beginMap();it!=step.endMap();++it)if(!keys.count(it->first)){error="invalid_args: unrelated field in test step";return false;}
+        if(action!="delay" && !objects.count(step["object_id"].asUUID())){error="invalid_args: every step must target a scoped prim";return false;}
+        if(action=="delay")
+        {if(!step["seconds"].isInteger() || step["seconds"].asInteger()<1 || step["seconds"].asInteger()>60){error="invalid_args: delay seconds must be 1..60";return false;}}
+        else if(action=="wait_output" || action=="assert_running" || action=="assert_contents")
+        {
+            if(!step["expected"].isBoolean() || !step["timeout_seconds"].isInteger() || step["timeout_seconds"].asInteger()<1 || step["timeout_seconds"].asInteger()>120)
+            {error="invalid_args: assertions need explicit expected and timeout 1..120 seconds";return false;}
+            if(action=="wait_output")
+            {if(!step["text"].isString() || step["text"].asString().empty() || step["text"].asString().size()>1024 || !fs_content::utf8(step["text"].asString()) ||
+                (step.has("match") && step["match"].asString()!="contains" && step["match"].asString()!="equals"))
+             {error="invalid_args: bounded literal contains/equals output expectation required";return false;}}
+            else if(!id(step["item_id"])){error="invalid_args: exact assertion task item required";return false;}
+        }
+        else if(action!="touch" && action!="reset" && action!="running" && action!="send_channel")
+        {error="invalid_args: test actions are touch/reset/running/send_channel/wait_output/assert_running/assert_contents/delay";return false;}
+    }
+    return true;
+}
+LLSD scopeIdentity(LLViewerObject* prim)
+{return llsd::map("object_id",prim->getID(),"root_id",prim->getRootEdit()->getID(),"region_id",prim->getRegion()->getRegionID(),"local_id",static_cast<S32>(prim->getLocalID()));}
+bool testScopeCurrent(const LLSD& scope,std::string& error,bool* pending=nullptr)
+{
+    for(const auto& row:llsd::inArray(scope["objects"]))
+    {auto* prim=target(row["object_id"].asUUID(),error);if(!prim || !llsd_equals(scopeIdentity(prim),row)){error="test_scope_changed";return false;}}
+    for(const auto& row:llsd::inArray(scope["scripts"]))
+    {
+        auto* prim=target(row["object_id"].asUUID(),error);auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(row["item_id"].asUUID())):nullptr;
+        if(prim && (prim->isInventoryPending() || prim->isInventoryDirty() || !prim->getInventoryRoot())){if(pending)*pending=true;continue;}
+        if(!scriptReadable(item) || item->getAssetUUID()!=row["asset_id"].asUUID()){error="test_script_revision_changed";return false;}
+    }
+    return true;
+}
+bool prepareTest(FSAssistantPreparedOperation& operation,std::string& error)
+{
+    auto& request=operation.request;const auto op=request["op"].asString();auto current=service().test;
+    if(!testArguments(request,error))return false;
+    operation.validation=llsd::map("source",source());
+    if(op!="testBegin")
+    {
+        if(!current || current->source!=source() || current->epoch!=request["__assistant_epoch"].asString() || current->id!=request["run_id"].asUUID())
+        {error="test_expired: run belongs to another source";return false;}
+        if(op=="testStatus")
+        {operation.requiredClasses.push_back("script_debug_read");operation.requiredClasses.push_back("read");operation.requiredClasses.push_back("task_inventory_read");
+         if(gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT) || !RlvActions::canShowLocation()){error="restricted: test diagnostics unavailable";return false;}}
+        return true;
+    }
+    operation.requiredClasses.push_back("world_read");operation.requiredClasses.push_back("task_inventory_read");operation.requiredClasses.push_back("script_debug_read");operation.requiredClasses.push_back("read");
+    const auto signature=fs_content::hash(ll_stream_notation_sd(testMaterial(request)));
+    if(current && current->key==request["client_request_id"].asUUID().asString())
+    {if(current->signature!=signature){error="request_id_reused";return false;}operation.validation["replay"]=true;return true;}
+    if((current && current->sequence.running()) || service().testIDs.count(request["client_request_id"].asUUID().asString()) || service().testIDs.size()>=4096)
+    {error="busy_or_retired_run_id: stop the current run or choose a new request UUID";return false;}
+    operation.requiredClasses.push_back("world_read");operation.requiredClasses.push_back("task_inventory_read");operation.requiredClasses.push_back("script_debug_read");operation.requiredClasses.push_back("read");
+    LLSD scope=llsd::map("objects",LLSD::emptyArray(),"scripts",LLSD::emptyArray());
+    for(const auto& object:llsd::inArray(request["object_ids"]))
+    {auto* prim=target(object.asUUID(),error);if(!prim)return false;scope["objects"].append(scopeIdentity(prim));}
+    if(!request["__test_step_ids"].isArray())
+    {request["__test_step_ids"]=LLSD::emptyArray();for(S32 index=0;index<request["steps"].size();++index)request["__test_step_ids"].append(LLUUID::generateNewID());}
+    for(S32 index=0;index<request["steps"].size();++index)
+    {
+        const auto& step=request["steps"][index];const auto action=step["action"].asString();
+        if(action=="delay" || action=="wait_output" || action=="assert_contents")continue;
+        auto child=testChild(request,index);if(action=="assert_running")child["op"]="scriptStatus";
+        if(!mutationArguments(child,error))return false;
+        FSAssistantPreparedOperation prepared;prepared.request=child;
+        const auto* feature=fs_assistant::featureOperation("FSObjects",child["op"].asString());if(!feature){error="unsupported_test_action";return false;}
+        prepared.requiredClasses.emplace_back(feature->permission);
+        if(!(interactionOp(child["op"].asString())?prepareInteraction(prepared,error):prepareMutation(prepared,error)))return false;
+        operation.requiredClasses.insert(operation.requiredClasses.end(),prepared.requiredClasses.begin(),prepared.requiredClasses.end());
+        if(action=="reset" || action=="running" || action=="assert_running")
+        {
+            auto* prim=target(step["object_id"].asUUID(),error);auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(step["item_id"].asUUID())):nullptr;
+            if(!scriptReadable(item)){error="test_script_not_readable";return false;}
+            scope["scripts"].append(llsd::map("object_id",prim->getID(),"item_id",item->getUUID(),"asset_id",item->getAssetUUID()));
+        }
+    }
+    operation.validation["scope"]=scope;operation.validation["signature"]=signature;
+    operation.summary=llsd::map("op",op,"subject_count",static_cast<S32>(request["object_ids"].size()),"subjects",LLSD::emptyArray(),"test_steps",ll_stream_notation_sd(request["steps"]));
+    for(const auto& object:llsd::inArray(request["object_ids"]))operation.summary["subjects"].append(llsd::map("id",object,"name",object.asString(),"after_name","Run only these frozen test steps"));
+    return true;
+}
+bool validateTest(const FSAssistantPreparedOperation& operation,std::string& error)
+{
+    if(operation.validation["source"].asString()!=source()){error="session_changed";return false;}
+    const auto op=operation.request["op"].asString();auto current=service().test;
+    if(op!="testBegin")return current && current->id==operation.request["run_id"].asUUID() && current->source==source();
+    if(current && current->key==operation.request["client_request_id"].asUUID().asString())
+    {if(operation.validation["replay"].asBoolean() || !current->sequence.running())return true;return testScopeCurrent(current->scope,error);}
+    return testScopeCurrent(operation.validation["scope"],error);
+}
+LLSD testReport(const std::shared_ptr<TestSession>& run)
+{
+    auto result=resultBase();result["run_id"]=run->id;result["client_request_id"]=run->key;result["state"]=run->sequence.state();
+    if(run->sequence.state()=="passed" && !run->assertions)result["state"]="completed_unverified";
+    result["reason"]=run->sequence.reason();result["step"]=static_cast<S32>(run->sequence.index());result["total"]=run->total;
+    result["results"]=run->results;result["script_sources"]=run->sources;
+    for(S32 index=0;index<result["results"].size();++index)
+    {auto& row=result["results"][index];std::string error;if(id(row["object_id"]) && !target(row["object_id"].asUUID(),error)){row.erase("evidence");row["evidence_restricted"]=true;}}
+    for(S32 index=0;index<result["script_sources"].size();++index)
+    {
+        auto& row=result["script_sources"][index];std::string error;auto* prim=target(row["object_id"].asUUID(),error);
+        auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(row["item_id"].asUUID())):nullptr;
+        if(!scriptReadable(item)){row.erase("content_hash");row.erase("asset_id");row["content_hash_known"]=false;row["source_restricted"]=true;}
+    }
+    result["assertions"]=run->assertions;result["private_payloads_removed"]=run->privateCleared;
+    result["scope"]="Declared assertions only; submitted UDP actions do not prove script execution";return result;
+}
+void dispatchTest(const LLSD& request)
+{
+    LLEventAPI::Response response(LLSD(),request);std::string error;const auto op=request["op"].asString();auto current=service().test;
+    if(op!="testBegin")
+    {
+        if(!current || current->id!=request["run_id"].asUUID() || current->source!=source() || current->epoch!=request["__assistant_epoch"].asString())return response.error("test_expired");
+        if(op=="testStop" && current->sequence.running())
+        {current->sequence.stop();if(current->task && current->task->guard())current->task->guard()->cancel("test_stopped");current->task.reset();}
+        if(op=="testStop")response.setResponse(llsd::map("run_id",current->id,"state",current->sequence.state(),"reason",current->sequence.reason()));
+        else response.setResponse(testReport(current));return;
+    }
+    if(current && current->key==request["client_request_id"].asUUID().asString()){response.setResponse(testReport(current));return;}
+    FSAssistantPreparedOperation prepared;prepared.request=request;if(!prepareTest(prepared,error))return response.error(error);
+    auto run=std::make_shared<TestSession>();run->source=source();run->epoch=request["__assistant_epoch"].asString();run->key=request["client_request_id"].asUUID().asString();
+    run->signature=fs_content::hash(ll_stream_notation_sd(testMaterial(request)));run->id=request["reqid"].asUUID();run->request=prepared.request;run->scope=prepared.validation["scope"];
+    run->observation.action(service().diagnostics.latest());run->errorCursor=run->observation.cursor();run->total=request["steps"].size();run->task=fs_assistant::asyncTask();run->sequence.start(request["steps"].size(),now(),request["timeout_seconds"].asInteger());
+    for(const auto& script:llsd::inArray(run->scope["scripts"]))
+    {
+        LLSD row=script;row["content_hash_known"]=false;
+        for(const auto& snapshot:service().scripts)if(snapshot.second.source==source() && snapshot.second.item["item_id"]==script["item_id"] && snapshot.second.object["object_id"]==script["object_id"] && snapshot.second.item["asset_id"]==script["asset_id"])
+        {row["content_hash"]=snapshot.second.hash;row["content_hash_known"]=true;break;}
+        run->sources.append(row);
+    }
+    for(const auto& step:llsd::inArray(request["steps"]))if(step["action"].asString()=="wait_output" || step["action"].asString()=="assert_running" || step["action"].asString()=="assert_contents")++run->assertions;
+    service().testIDs.insert(run->key);service().test=run;response.setResponse(testReport(run));
+}
+void completeTestStep(const std::shared_ptr<TestSession>& run,const std::string& state,const std::string& evidence={})
+{
+    const auto index=static_cast<S32>(run->sequence.index());const auto& step=run->request["steps"][index];
+    auto result=llsd::map("step",index,"action",step["action"],"object_id",step["object_id"],"state",state,"evidence",fs_content::excerpt(evidence,256));
+    if(run->action)result["operation_id"]=run->action->receipt["operation_id"];
+    run->results.append(result);run->action.reset();run->observer.reset();run->sequence.next(now());
+}
+void tickTests()
+{
+    auto run=service().test;if(!run)return;
+    if(!run->sequence.running())
+    {if(run->task){if(run->sequence.state()!="passed" && run->task->guard())run->task->guard()->cancel(run->sequence.reason());run->task.reset();}return;}
+    if(now()<run->tickAt)return;run->tickAt=now()+.1;
+    const bool allowed=run->task && fs_assistant::asyncTaskAllowed(run->task);
+    run->sequence.check(allowed,run->source==source(),(service().diagnostics.gap(run->observation.baseline()) || ((!run->request.has("fail_on_runtime_errors") || run->request["fail_on_runtime_errors"].asBoolean()) && service().diagnostics.gap(run->errorCursor))),now());
+    if(!run->sequence.running()){if(run->task && run->task->guard())run->task->guard()->cancel(run->sequence.reason());run->task.reset();return;}
+    std::string scopeError;bool scopePending=false;
+    if(!testScopeCurrent(run->scope,scopeError,&scopePending)){run->sequence.finish("inconclusive",scopeError);return;}
+    // A source fetch can temporarily empty native Contents. Keep authority
+    // alive, but never accept an assertion/final pass on an unknown revision.
+    if(scopePending)return;
+    if(!run->request.has("fail_on_runtime_errors") || run->request["fail_on_runtime_errors"].asBoolean())
+    {
+        for(const auto& event:service().diagnostics.entries())
+        {
+            if(event.sequence<=run->errorCursor)continue;run->errorCursor=event.sequence;
+            if(event.value["kind"].asString()!="runtime_error")continue;
+            bool scoped=false;for(const auto& object:llsd::inArray(run->request["object_ids"]))if(object.asUUID()==event.value["object_id"].asUUID())scoped=true;
+            if(scoped){run->results.append(llsd::map("state","runtime_error","object_id",event.value["object_id"],"evidence",fs_content::excerpt(event.value["text"].asString(),256)));run->sequence.finish("failed","native_runtime_error");return;}
+        }
+    }
+    fs_assistant::AsyncScope scope(run->task->guard());const auto index=static_cast<S32>(run->sequence.index());const auto& step=run->request["steps"][index];const auto action=step["action"].asString();
+    if(run->initialized!=index){run->initialized=index;run->initiated=false;run->queryAt=0.;run->inventoryGeneration=0;run->action.reset();run->observer.reset();}
+    const double seconds=step.has("timeout_seconds")?step["timeout_seconds"].asInteger():25.;
+    if(action=="delay"){if(run->sequence.stepExpired(now(),step["seconds"].asInteger()))completeTestStep(run,"elapsed");return;}
+    if(action=="wait_output")
+    {
+        for(const auto& event:service().diagnostics.entries())
+        {
+            if(event.sequence<=(step["expected"].asBoolean()?run->observation.cursor():run->observation.baseline()))continue;
+            if(step["expected"].asBoolean())run->observation.consume(event.sequence);
+            if(event.value["object_id"].asUUID()!=step["object_id"].asUUID())continue;const auto text=event.value["text"].asString();
+            const bool matched=step["match"].asString()=="equals"?text==step["text"].asString():text.find(step["text"].asString())!=std::string::npos;
+            if(!matched)continue;
+            if(!step["expected"].asBoolean()){run->sequence.finish("failed","unexpected_output");return;}
+            completeTestStep(run,"matched",text);return;
+        }
+        if(run->sequence.stepExpired(now(),seconds))
+        {if(step["expected"].asBoolean())run->sequence.finish("failed","expected_output_timeout");else completeTestStep(run,"absence_observed");}
+        return;
+    }
+    std::string error;auto* prim=target(step["object_id"].asUUID(),error);
+    if(!prim){run->sequence.finish("inconclusive",error);return;}
+    if(action=="assert_running" || action=="assert_contents")
+    {
+        if(action=="assert_running")
+        {
+            const auto it=service().running.find({prim->getID(),step["item_id"].asUUID()});
+            if(it!=service().running.end() && it->second.source==source() && it->second.at>=run->sequence.stepAt() && it->second.running==step["expected"].asBoolean())
+            {completeTestStep(run,"native_state_observed");return;}
+        }
+        else if(run->observer && run->observer->done && run->observer->succeeded)
+        {const bool present=run->observer->observedItems.count(step["item_id"].asUUID())!=0;if(present==step["expected"].asBoolean()){completeTestStep(run,"fresh_contents_observed");return;}}
+        if(run->sequence.stepExpired(now(),seconds)){run->sequence.finish("inconclusive","native_assertion_not_confirmed");return;}
+        if(now()>=run->queryAt)
+        {
+            run->queryAt=now()+1.;auto child=testChild(run->request,index);
+            if(action=="assert_running")
+            {bool pending=false;for(const auto& read:service().runningReads)if(!read->done && read->source==source() && read->request["object_id"].asUUID()==step["object_id"].asUUID() && read->request["item_id"].asUUID()==step["item_id"].asUUID())pending=true;
+             if(!pending){child["op"]="scriptStatus";dispatchMutation(child);}}
+            else
+            {
+                if(run->observer && !run->observer->done)return;
+                if(service().reads.size()>=16){run->sequence.finish("inconclusive","Contents reader capacity");return;}
+                if(!run->initiated)run->inventoryGeneration=prim->getInventoryServerGeneration();
+                child["op"]="contents";auto read=std::make_shared<ContentsRead>(child,prim,false);run->observer=read;service().reads.push_back(read);read->start(prim);
+            }
+            run->initiated=true;
+        }
+        return;
+    }
+    if(!run->initiated)
+    {
+        bool pending=false;if(!testScopeCurrent(run->scope,error,&pending)){run->sequence.finish("inconclusive",error);return;}
+        if(pending){if(run->sequence.stepExpired(now(),seconds))run->sequence.finish("inconclusive","pending_contents_timeout");return;}
+        auto child=testChild(run->request,index);FSAssistantPreparedOperation prepared;prepared.request=child;
+        if(!(interactionOp(child["op"].asString())?prepareInteraction(prepared,error):prepareMutation(prepared,error)))
+        {run->sequence.finish("inconclusive",error);return;}
+        if(!mutationArguments(child,error)){run->sequence.finish("inconclusive",error);return;}
+        if(!fs_assistant::asyncAllowed()){run->sequence.finish("stopped","authority_changed");return;}
+        run->observation.action(service().diagnostics.latest());
+        if(interactionOp(child["op"].asString()))dispatchInteraction(child);else dispatchMutation(child);
+        run->action=ownMutation(child);run->initiated=true;
+        if(!run->action){run->sequence.finish("inconclusive","native_action_not_admitted");return;}
+    }
+    const auto state=run->action->receipt["state"].asString();
+    if(state=="submitted" || state=="simulator_observed")completeTestStep(run,state);
+    else if(state=="cancelled_before_submission" || state=="server_rejected" || state=="simulator_observed_different")run->sequence.finish("failed",state);
+    else if(run->sequence.stepExpired(now(),seconds))run->sequence.finish("inconclusive","action_outcome_unknown");
+}
+void clearTestPrivate()
+{
+    auto run=service().test;if(!run)return;
+    if(run->task && run->task->guard())run->task->guard()->cancel("privacy_changed");run->sequence.stop();run->task.reset();
+    run->results=LLSD::emptyArray();run->sources=LLSD::emptyArray();run->request["steps"]=LLSD::emptyArray();run->privateCleared=true;
 }
 }
-void fs_initialize_object_tools(){static ObjectListener listener;}
+void fs_initialize_object_tools()
+{
+    static ObjectListener listener;
+    static boost::signals2::scoped_connection privacy=gRlvHandler.setBehaviourCallback([](ERlvBehaviour behaviour,ERlvParamType)
+    {
+        if(behaviour==RLV_BHVR_SHOWNAMES || behaviour==RLV_BHVR_SHOWLOC || behaviour==RLV_BHVR_VIEWSCRIPT)fs_object_tools_privacy_changed();
+        if(behaviour==RLV_BHVR_VIEWSCRIPT)for(const auto& entry:service().operations.entries())
+        {auto value=entry.second.value;if(value && value->task){value->task->guard()->cancel("script_read_policy_changed");value->request.erase("text");}}
+    });
+    static boost::signals2::scoped_connection receivePrivacy=gRlvHandler.setCommandCallback([](const RlvCommand& command,ERlvCmdRet,bool)
+    {
+        if(command.getParamType()==RLV_TYPE_CLEAR){fs_object_tools_privacy_changed();return;}
+        if(command.getParamType()!=RLV_TYPE_ADD && command.getParamType()!=RLV_TYPE_REMOVE)return;
+        const auto behaviour=command.getBehaviourType();
+        // Command callbacks also cover exception changes, which do not always
+        // toggle a behaviour's reference count. Conservatively fence attempts.
+        if(behaviour==RLV_BHVR_RECVCHAT || behaviour==RLV_BHVR_RECVCHATFROM || behaviour==RLV_BHVR_RECVEMOTE ||
+            behaviour==RLV_BHVR_RECVEMOTEFROM || behaviour==RLV_BHVR_PERMISSIVE)fs_object_tools_privacy_changed();
+    });
+}
 void fs_object_tools_tick()
 {
-    syncService();tickMutations();auto& reads=service().reads;
+    syncService();tickMutations();tickTests();auto& reads=service().reads;
     for(auto it=reads.begin();it!=reads.end();)
     {
         auto& read=**it;
         if(!read.done && now()>read.deadline){read.done=true;reply(read.request,llsd::map("error","timeout: simulator Contents unavailable"));}
-        if(read.done || read.source!=source() || !fs_assistant::asyncTaskAllowed(read.task) || !fs_assistant_request_allowed(read.request))it=reads.erase(it);else ++it;
+        if(read.done || read.source!=source() || !fs_assistant::asyncTaskAllowed(read.task) || !fs_assistant_request_allowed(read.request))it=reads.erase(it);else
+        {
+            if(read.needsFresh && now()>=read.refreshAt)
+            {std::string error;if(auto* prim=target(read.object,error))read.start(prim);}
+            ++it;
+        }
     }
 }
 void fs_object_tools_privacy_changed()
-{auto& self=service();self.snapshots.clear();self.scripts.clear();self.diagnostics.clear();self.cursors.clear();self.running.clear();}
+{clearTestPrivate();auto& self=service();++self.privacyEpoch;self.diagnosticIngress.advance(0,LLFrameTimer::getElapsedSeconds());
+    for(const auto& entry:self.operations.entries())
+    {auto value=entry.second.value;if(!value)continue;value->privateRetired=true;value->receipt.erase("diagnostics");value->receipt.erase("asset_id");if(value->request["op"].asString()=="scriptSave")value->receipt["reason"]="private_results_removed";value->receipt["results_restricted"]=true;
+     if(value->finished)value->request.erase("text");
+     if(value->task && (FSEventAPIBridge::getPermissionLevel("read")!="allow" || FSEventAPIBridge::getPermissionLevel("task_inventory_read")!="allow" || gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT)))
+     {value->task->guard()->cancel("private_read_changed");value->request.erase("text");}}self.snapshots.clear();self.scripts.clear();self.diagnostics.clear();self.cursors.clear();self.running.clear();}
 void fs_object_tools_debug(const LLChat& chat)
 {
     syncService();if(!ready() || FSEventAPIBridge::getPermissionLevel("script_debug_read")!="allow" ||
+        !service().diagnosticIngress.allowsNearby(chat.mTime) || gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES) ||
         gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT) || chat.mMuted || chat.mSourceType!=CHAT_SOURCE_OBJECT ||
-        (chat.mChatType!=CHAT_TYPE_DEBUG_MSG && chat.mChatType!=CHAT_TYPE_OWNER) || chat.mOwnerID!=gAgent.getID())return;
+        (chat.mChatType!=CHAT_TYPE_DEBUG_MSG && chat.mChatType!=CHAT_TYPE_OWNER) || chat.mOwnerID!=gAgent.getID() ||
+        !diagnosticReceiveAllowed(chat.mFromID,chat.mChatType,chat.mChatStyle==CHAT_STYLE_IRC || RlvUtil::isEmote(chat.mText)))return;
     std::string error;auto* prim=target(chat.mFromID,error);if(!prim)return;
     auto event=llsd::map("object_id",prim->getID(),"root_id",prim->getRootEdit()->getID(),"owner_id",chat.mOwnerID,
         "object_name",fs_content::excerpt(chat.mFromName,255),"text",fs_content::excerpt(chat.mText,8192),
         "native_type",static_cast<S32>(chat.mChatType),"kind",chat.mChatType==CHAT_TYPE_DEBUG_MSG?"runtime_error":"owner_say",
         "timestamp",chat.mTime,"script_identity_known",false,"truncated",chat.mText.size()>8192);
+    event["native_emote"]=chat.mChatStyle==CHAT_STYLE_IRC || RlvUtil::isEmote(chat.mText);
     auto& journal=service().diagnostics;event["sequence"]=std::to_string(journal.latest()+1);
     const auto bytes=chat.mFromName.size()+std::min<std::size_t>(8192,chat.mText.size())+512;journal.append(std::move(event),bytes);
 }
@@ -859,12 +1512,19 @@ void fs_object_tools_running_reply(LLMessageSystem* msg)
     LLUUID object,itemID;bool running=false,mono=false;
     msg->getUUIDFast(_PREHASH_Script,_PREHASH_ObjectID,object);msg->getUUIDFast(_PREHASH_Script,_PREHASH_ItemID,itemID);
     msg->getBOOLFast(_PREHASH_Script,_PREHASH_Running,running);msg->getBOOLFast(_PREHASH_Script,"Mono",mono);
+    std::uint64_t queryExecution=0;const bool expectedReply=service().runningQueries.drain({object,itemID},queryExecution);
     std::string error;auto* prim=target(object,error);if(!prim)return;
     auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(itemID));if(!scriptReadable(item))return;
+    const auto cached=service().running.find({object,itemID});
+    if(cached!=service().running.end() && (cached->second.running!=running || cached->second.mono!=mono || cached->second.asset!=item->getAssetUUID()))
+        service().running.erase(cached);
     for(auto& read:service().runningReads)
     {
         if(read->done || read->source!=source() || read->request["object_id"].asUUID()!=object || read->request["item_id"].asUUID()!=itemID)continue;
         read->done=true;fs_assistant::AsyncScope scope(read->task->guard());
+        if(read->privacyEpoch!=service().privacyEpoch){reply(read->request,llsd::map("error","privacy_epoch_changed: query fresh running state"));continue;}
+        if(!expectedReply || read->execution!=queryExecution || read->execution!=executionFor(object,itemID))
+        {reply(read->request,llsd::map("error","execution_changed: query fresh running state"));continue;}
         if(!fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(read->request) || !llsd_equals(read->item,itemEvidence(item)))continue;
         Running state{source(),read->request["__assistant_epoch"].asString(),LLUUID::generateNewID(),item->getAssetUUID(),running,mono,now()};
         if(service().running.size()>=128)service().running.erase(service().running.begin());
@@ -875,7 +1535,7 @@ void fs_object_tools_running_reply(LLMessageSystem* msg)
     for(const auto& entry:service().operations.entries())
     {
         auto value=entry.second.value;
-        if(!value || !entry.second.pending || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
+        if(!expectedReply || queryExecution!=executionFor(object,itemID) || !value || !entry.second.pending || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
             value->request["object_id"].asUUID()!=object || value->request["item_id"].asUUID()!=itemID)continue;
         value->receipt["observed_running"]=running;
         settle(value,running==value->request["running"].asBoolean()?"simulator_observed":"simulator_observed_different","Native running reply is an observation, not an execution acknowledgment");
@@ -902,8 +1562,8 @@ void fs_object_tools_inventory_transaction(LLMessageSystem* msg)
         {value->receipt["correlation"]="ambiguous_transaction";value->receipt["inventory_item_confirmed"]=false;value->receipt.erase("inventory_item_id");continue;}
         if(matching.empty())continue;
         value->receipt["inventory_item_id"]=*matching.begin();value->receipt["inventory_item_confirmed"]=true;value->receipt["correlation"]="native_transaction";
-        if(value->task && value->task->guard())value->task->guard()->acknowledge(matching.begin()->asString());
-        if(value->acquisition.confirmed())settle(value,"server_confirmed","Native acquisition transaction and inventory arrival observed");
+        // Created IDs are delivered only through the typed native-read-checked receipt.
+        if(value->acquisition.confirmed())acquisitionProgress(value);
         else value->receipt["state"]=value->acquisition.rejected()?"server_result_conflict":"inventory_confirmed_ack_pending";
     }
 }
@@ -919,10 +1579,21 @@ bool fs_object_tools_derez_reply(LLMessageSystem* msg)
         auto value=entry.second.value;if(!value || value->source!=source() || value->receipt["transaction_id"].asUUID()!=transaction)continue;
         value->receipt["native_accepted"]=success;value->acquisition.acknowledge(success);
         if(!success)settle(value,"server_rejected","Simulator rejected the acquisition");
-        else if(value->acquisition.confirmed())settle(value,"server_confirmed","Native acquisition transaction and inventory arrival observed");
+        else if(value->acquisition.confirmed())acquisitionProgress(value);
         else value->receipt["state"]="simulator_accepted_inventory_pending";
     }
     return true;
+}
+void fs_object_tools_object_killed(const LLUUID& object,const LLHost& sender)
+{
+    if(!ready() || sender!=gAgent.getRegion()->getHost())return;
+    for(const auto& entry:service().operations.entries())
+    {
+        auto value=entry.second.value;
+        if(!value || value->source!=source() || !value->submitted || value->request["op"].asString()!="take" || value->request["object_id"].asUUID()!=object)continue;
+        value->acquisition.observeSourceKill();value->receipt["source_region_kill_observed"]=true;
+        acquisitionProgress(value);
+    }
 }
 bool fs_object_tools_submit_rez(const LLSD& request,const std::function<void()>& submit,LLSD& result,std::string& error)
 {
@@ -930,8 +1601,8 @@ bool fs_object_tools_submit_rez(const LLSD& request,const std::function<void()>&
     if(!id(request["client_request_id"]) || !fs_assistant::AsyncScope::current() || !ready())
     {error="invalid_args: tracked rez needs an exact source, request UUID and native authority";return false;}
     if(auto own=ownMutation(request))
-    {if(own->signature!=mutationSignature(request)){error="request_id_reused";return false;}result=own->receipt;return true;}
-    auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->key=request["client_request_id"].asString();
+    {if(own->signature!=mutationSignature(request)){error="request_id_reused";return false;}result=publicReceipt(own);return true;}
+    auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->key=request["client_request_id"].asUUID().asString();
     value->signature=mutationSignature(request);value->task=fs_assistant::asyncTask();value->deadline=now()+30.;
     const auto position=ll_vector3_from_sd(request["position"]);
     for(S32 index=0;index<gObjectList.getNumObjects();++index)
@@ -944,6 +1615,6 @@ bool fs_object_tools_submit_rez(const LLSD& request,const std::function<void()>&
     value->receipt=resultBase();value->receipt["operation_id"]=request["reqid"];value->receipt["client_request_id"]=request["client_request_id"];
     value->receipt["state"]="queued";value->receipt["object_id_confirmed"]=false;value->receipt["correlation"]="unconfirmed";value->receipt["candidates"]=LLSD::emptyArray();
     auto* entry=service().operations.admit(value->key,value->signature,value);if(!entry){error="capacity_or_retired_request_id: no rez submitted";return false;}entry->pending=1;
-    if(!fs_assistant::asyncTaskSubmit(value->task)){settle(value,"cancelled_before_submission","authority_revoked");result=value->receipt;return true;}
-    value->submitted=true;value->receipt["state"]="submitted_unknown";submit();result=value->receipt;return true;
+    if(!fs_assistant::asyncTaskSubmit(value->task)){settle(value,"cancelled_before_submission","authority_revoked");result=publicReceipt(value);return true;}
+    value->submitted=true;value->receipt["state"]="submitted_unknown";submit();result=publicReceipt(value);return true;
 }

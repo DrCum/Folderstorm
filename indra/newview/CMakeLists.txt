@@ -1042,6 +1042,7 @@ set(viewer_HEADER_FILES
     fsassistantassetfetch.h
     fsobjecttools.h
     fsobjecttoolsmodel.h
+    fsscripttestmodel.h
     fscontentlistener.h
     fscontentupload.h
     fscontentreadpolicy.h

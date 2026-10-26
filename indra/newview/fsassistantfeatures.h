@@ -5,8 +5,19 @@
 #include <string>
 #include <vector>
 namespace fs_assistant {
+// Only an already source-validated test run may be cancelled without a private
+// read or mutation permission. This does not authorize script execution.
+inline bool sourceBoundCancellation(const std::string& api,const std::string& op)
+{return api=="FSObjects" && op=="testStop";}
+// The HTTP/approval deadline stays separate. Only an approved bounded recipe
+// may retain native authority for its declared execution window.
+inline double durableOperationSeconds(const std::string& api,const std::string& op,int approvedSeconds,double fallback=70.)
+{
+    if(api!="FSObjects" || op!="testBegin" || approvedSeconds<1 || approvedSeconds>600)return fallback;
+    const double seconds=static_cast<double>(approvedSeconds)+5.;return seconds>fallback?seconds:fallback;
+}
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 82> featureOperations {{
+inline constexpr std::array<FeatureOperation, 89> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -89,6 +100,13 @@ inline constexpr std::array<FeatureOperation, 82> featureOperations {{
     {"FSObjects","take","object_lifecycle","object_take",false,true,"task_inventory_read"},
     {"FSObjects","takeCopy","object_lifecycle","object_take",false,true,"task_inventory_read"},
     {"FSObjects","rezIdentify","object_lifecycle","build_rez",false,true,"task_inventory_read"},
+    {"FSObjects","touch","object_interaction","object_interact",false,true,"world_read"},
+    {"FSObjects","dialogList","object_interaction","notifications_read",true,false,"notifications_read"},
+    {"FSObjects","dialogReply","object_interaction","object_interact",false,true,"notifications_read"},
+    {"FSObjects","channelSend","object_interaction","object_interact",false,true,"world_read"},
+    {"FSObjects","testBegin","test_sessions","script_test",false,true,"script_debug_read"},
+    {"FSObjects","testStatus","test_sessions","world_read",true,false,"script_debug_read"},
+    {"FSObjects","testStop","test_sessions","",false,false,""},
 }};
 inline const FeatureOperation* featureOperation(const std::string& api,const std::string& op)
 {for(const auto& entry:featureOperations)if(api==entry.api && op==entry.op)return &entry;return nullptr;}

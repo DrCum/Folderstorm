@@ -1,5 +1,6 @@
 /** SPDX-License-Identifier: LGPL-2.1-or-later */
 #include "fsobjecttoolsmodel.h"
+#include "fsassistantsocialmodel.h"
 #include <cassert>
 #include <string>
 int main()
@@ -32,8 +33,28 @@ int main()
     assert(match.id.empty() && !match.ambiguous);
     fs_object_tools::Acquisition ackFirst;ackFirst.acknowledge(true);assert(!ackFirst.confirmed());
     ackFirst.observe("result");assert(ackFirst.confirmed());ackFirst.observe("result");assert(ackFirst.confirmed());
+    assert(!ackFirst.sourceRemovalObserved());ackFirst.observeSourceKill();assert(ackFirst.sourceRemovalObserved());
     fs_object_tools::Acquisition inventoryFirst;inventoryFirst.observe("result");assert(!inventoryFirst.confirmed());
     inventoryFirst.acknowledge(true);assert(inventoryFirst.confirmed());
     inventoryFirst.observe("other");assert(inventoryFirst.ambiguous() && !inventoryFirst.confirmed() && inventoryFirst.item().empty());
     fs_object_tools::Acquisition rejected;rejected.acknowledge(false);rejected.observe("late");assert(rejected.rejected() && !rejected.confirmed());
+    fs_assistant_social::PrivacyIngressFence privacy;privacy.advance(0,10.);
+    assert(!privacy.allowsNearby(9.) && !privacy.allowsNearby(10.) && privacy.allowsNearby(10.1));
+    privacy.advance(0,20.);assert(!privacy.allowsNearby(10.1) && privacy.allowsNearby(20.1));
+    fs_object_tools::ExecutionVersions<std::string> versions;
+    const auto oldRead=versions.current("script");assert(versions.advance("script"));
+    assert(oldRead!=versions.current("script"));
+    for(int i=0;i<10000;++i)assert(versions.current("read-only-"+std::to_string(i))==0);
+    // Queries do not consume the version store's mutation capacity.
+    for(int i=0;i<4095;++i)assert(versions.advance("write-"+std::to_string(i)));
+    assert(!versions.advance("capacity") && versions.advance("script"));
+    fs_object_tools::RunningQueries<std::string> queries;
+    using Admission=fs_object_tools::RunningQueries<std::string>::Admission;
+    assert(queries.begin("script",0)==Admission::Send);
+    assert(queries.begin("script",0)==Admission::Join);
+    // A caller timeout/revocation does not drain a native no-nonce reply.
+    assert(queries.pending("script") && queries.begin("script",1)==Admission::Blocked);
+    std::uint64_t version=99;assert(queries.drain("script",version) && version==0);
+    assert(!queries.pending("script") && queries.begin("script",1)==Admission::Send);
+    assert(queries.drain("script",version) && version==1 && !queries.drain("script",version));
 }

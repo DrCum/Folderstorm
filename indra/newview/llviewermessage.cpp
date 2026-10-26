@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "fsobjecttools.h"
+#include "fsassistantasync.h"
 #include "fsgesturelistener.h"
 #include "llviewermessage.h"
 
@@ -4745,6 +4746,8 @@ void process_kill_object(LLMessageSystem *mesgsys, void **user_data)
                 LL_DEBUGS("MessageBlip") << "Kill blip for local " << local_id << " at " << objectp->getPositionAgent() << LL_ENDL;
             }
 
+            // Observe this exact source-region event before the object disappears.
+            fs_object_tools_object_killed(id, mesgsys->getSender());
             // Do the kill
             gObjectList.killObject(objectp);
         }
@@ -8355,6 +8358,7 @@ bool callback_script_dialog(const LLSD& notification, const LLSD& response)
 
     if (0 <= button_idx)
     {
+        if (!fs_assistant::asyncSubmit()) return false;
         LLMessageSystem* msg = gMessageSystem;
         msg->newMessage("ScriptDialogReply");
         msg->nextBlock("AgentData");

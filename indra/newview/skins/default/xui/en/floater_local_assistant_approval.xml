@@ -86,4 +86,5 @@
  </text>
  <button name="deny" label="Deny" right="-125" bottom="-10" width="100" height="23" follows="right|bottom"/>
  <button name="allow" label="Allow" right="-15" bottom="-10" width="100" height="23" follows="right|bottom"/>
+ <string name="object_test_steps">Frozen test steps</string>
 </floater>

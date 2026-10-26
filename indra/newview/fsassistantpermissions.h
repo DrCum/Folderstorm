@@ -22,7 +22,7 @@
 
 namespace fs_assistant
 {
-enum class ActionClass { Unknown, Read, Camera, Create, Edit, Move, Trash, NoCopy, Wear, Links, Workspace, Permanent, ChatRead, ChatState, ChatSendIM, ChatSendGroup, ChatSendConference, ChatSendNearby, FriendsRead, ResidentSearch, ProfileRead, NotificationsRead, NotificationReview, WorldRead, GestureRead, GesturePlay, PoseRead, PoseEdit, PoseSave, PoseShare, ContentEdit, PreferencesRead, PreferencesWrite, BuildEdit, BuildRez, InventoryPermissions, NavigationMove, NavigationTeleport, TaskInventoryRead, ScriptDebugRead, TaskInventoryWrite, TaskInventoryRemove, ScriptRun, ObjectTake };
+enum class ActionClass { Unknown, Read, Camera, Create, Edit, Move, Trash, NoCopy, Wear, Links, Workspace, Permanent, ChatRead, ChatState, ChatSendIM, ChatSendGroup, ChatSendConference, ChatSendNearby, FriendsRead, ResidentSearch, ProfileRead, NotificationsRead, NotificationReview, WorldRead, GestureRead, GesturePlay, PoseRead, PoseEdit, PoseSave, PoseShare, ContentEdit, PreferencesRead, PreferencesWrite, BuildEdit, BuildRez, InventoryPermissions, NavigationMove, NavigationTeleport, TaskInventoryRead, ScriptDebugRead, TaskInventoryWrite, TaskInventoryRemove, ScriptRun, ObjectTake, ObjectInteract, ScriptTest };
 struct PermissionClass
 {
     ActionClass kind;
@@ -33,7 +33,7 @@ struct PermissionClass
     const char* widget;
     bool privateRead = false;
 };
-inline constexpr std::array<PermissionClass, 42> permissionClasses {{
+inline constexpr std::array<PermissionClass, 44> permissionClasses {{
     {ActionClass::Read, "read", "Read inventory and outfits", "allow", false, "local_assistant_perm_read"},
     {ActionClass::Camera, "camera", "Move camera and take pictures", "allow", true, "local_assistant_perm_camera"},
     {ActionClass::Create, "create", "Create folders and items", "allow", true, "local_assistant_perm_create"},
@@ -76,6 +76,8 @@ inline constexpr std::array<PermissionClass, 42> permissionClasses {{
     {ActionClass::TaskInventoryRemove,"task_inventory_remove","Permanently remove object Contents","ask",true,"local_assistant_perm_task_inventory_remove"},
     {ActionClass::ScriptRun,"script_run","Start stop and reset object scripts","ask",true,"local_assistant_perm_script_run"},
     {ActionClass::ObjectTake,"object_take","Take owned objects into inventory","ask",true,"local_assistant_perm_object_take"},
+    {ActionClass::ObjectInteract,"object_interact","Touch objects and answer game dialogs","ask",true,"local_assistant_perm_object_interact"},
+    {ActionClass::ScriptTest,"script_test","Run scoped object test recipes","ask",true,"local_assistant_perm_script_test"},
 }};
 inline bool permissionLevelAllowed(const PermissionClass& def, const std::string& level)
 {

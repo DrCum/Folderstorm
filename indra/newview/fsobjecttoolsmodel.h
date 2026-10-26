@@ -10,17 +10,49 @@
 #include <vector>
 
 namespace fs_object_tools {
+// ScriptRunningReply has no request nonce. A caller timing out or cancelling
+// cannot discard this wire fence: a late reply must drain before execution can
+// change, or it could be mistaken for an observation of the next execution.
+template<class Key> class RunningQueries
+{
+public:
+    enum class Admission { Send, Join, Blocked };
+    Admission begin(const Key& key,std::uint64_t version)
+    {
+        const auto it=mPending.find(key);
+        if(it!=mPending.end())return it->second==version?Admission::Join:Admission::Blocked;
+        if(mPending.size()>=128)return Admission::Blocked;
+        mPending.emplace(key,version);return Admission::Send;
+    }
+    bool pending(const Key& key)const{return mPending.count(key)!=0;}
+    bool drain(const Key& key,std::uint64_t& version)
+    {const auto it=mPending.find(key);if(it==mPending.end())return false;version=it->second;mPending.erase(it);return true;}
+    void clear(){mPending.clear();}
+private:std::map<Key,std::uint64_t> mPending;
+};
+template<class Key> class ExecutionVersions
+{
+public:
+    std::uint64_t current(const Key& key)const
+    {const auto it=mVersions.find(key);return it==mVersions.end()?0:it->second;}
+    bool advance(const Key& key)
+    {if(!mVersions.count(key) && mVersions.size()>=4096)return false;++mVersions[key];return true;}
+    void clear(){mVersions.clear();}
+private:std::map<Key,std::uint64_t> mVersions;
+};
 class Acquisition
 {
 public:
     void acknowledge(bool accepted){mAck=true;mAccepted=accepted;}
     void observe(const std::string& item){if(mItems.size()<2)mItems.insert(item);}
+    void observeSourceKill(){mSourceKill=true;}
     bool confirmed()const{return mAck && mAccepted && mItems.size()==1;}
     bool rejected()const{return mAck && !mAccepted;}
     bool ambiguous()const{return mItems.size()>1;}
+    bool sourceRemovalObserved()const{return confirmed() && mSourceKill;}
     std::string item()const{return mItems.size()==1?*mItems.begin():std::string();}
 private:
-    bool mAck=false,mAccepted=false;std::set<std::string> mItems;
+    bool mAck=false,mAccepted=false,mSourceKill=false;std::set<std::string> mItems;
 };
 struct Candidate {std::string id,asset;int type=0;};
 struct Insertion {std::string id;bool ambiguous=false;};
