@@ -3,6 +3,17 @@
     <DrawingBrush x:Key="Checkerboard" TileMode="Tile" Viewport="0,0,16,16" ViewportUnits="Absolute">
       <DrawingBrush.Drawing><DrawingGroup><GeometryDrawing Brush="#25222D" Geometry="M0,0 H16 V16 H0 Z"/><GeometryDrawing Brush="#393442" Geometry="M0,0 H8 V8 H0 Z M8,8 H16 V16 H8 Z"/></DrawingGroup></DrawingBrush.Drawing>
     </DrawingBrush>
+    <Style TargetType="ScrollBar">
+      <Setter Property="Width" Value="12"/><Setter Property="Background" Value="#17141F"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar"><Border Background="{TemplateBinding Background}">
+        <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+          <Track.DecreaseRepeatButton><RepeatButton x:Name="DecreasePage" Focusable="False" Command="{x:Static ScrollBar.PageUpCommand}"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+          <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border x:Name="ScrollThumb" Background="#665078" CornerRadius="4" Margin="2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="#BFA4FC"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="#BFA4FC"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+          <Track.IncreaseRepeatButton><RepeatButton x:Name="IncreasePage" Focusable="False" Command="{x:Static ScrollBar.PageDownCommand}"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+        </Track>
+      </Border><ControlTemplate.Triggers><Trigger Property="Orientation" Value="Horizontal"><Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/><Setter TargetName="DecreasePage" Property="Command" Value="{x:Static ScrollBar.PageLeftCommand}"/><Setter TargetName="IncreasePage" Property="Command" Value="{x:Static ScrollBar.PageRightCommand}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+      <Style.Triggers><Trigger Property="Orientation" Value="Horizontal"><Setter Property="Width" Value="Auto"/><Setter Property="Height" Value="12"/></Trigger></Style.Triggers>
+    </Style>
     <SolidColorBrush x:Key="Surface" Color="#201D2A"/>
     <SolidColorBrush x:Key="Accent" Color="#C6ADFF"/>
     <Style TargetType="Control"><Setter Property="FontFamily" Value="Segoe UI"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="#EDE7F6"/></Style>

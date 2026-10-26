@@ -245,6 +245,31 @@ Test("authoring links flatten to runtime v1 and reject cycles transactionally", 
     }
 });
 
+Test("save-as stages all originals and history without altering source or overwriting folders", () =>
+{
+    var source = Path.Combine(root, "copy-source"); var destination = Path.Combine(root, "copy-destination");
+    var p = ProjectStore.Create(catalog, "Original"); ProjectStore.Save(source, p);
+    var original = File.ReadAllBytes(Path.Combine(source, ProjectStore.FileName));
+    var image = catalog.Textures.Values.First(texture => texture.Source?.EndsWith(".png", StringComparison.Ordinal) == true);
+    p.Checkpoint("Import image");
+    p.Edits.Assets.Add(ProjectStore.ImportAsset(source, Path.Combine(catalog.Root, image.Source!), "viewer/textures/" + image.Attributes["file_name"], "image"));
+    ProjectStore.Save(source, p);
+    File.WriteAllText(Path.Combine(source, "external-editor-notes.txt"), "Do not lose this project file");
+    var before = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).ToDictionary(path => Path.GetRelativePath(source, path), Contract.HashFile);
+    p.Checkpoint("Rename unsaved copy"); p.DisplayName = "Copy with unsaved edits";
+    Assert(ProjectCopy.SaveAs(source, destination, p) == destination, "Copy destination differs");
+    var copy = ProjectStore.Open(destination);
+    Assert(copy.DisplayName == "Copy with unsaved edits" && copy.ThemeId == p.ThemeId && copy.Undo.Count == p.Undo.Count, "Copy lost current identity/history");
+    Assert(File.ReadAllText(Path.Combine(destination, "external-editor-notes.txt")) == "Do not lose this project file", "External project data was lost");
+    foreach (var asset in copy.Edits.Assets)
+        Assert(Contract.HashFile(Path.Combine(source, asset.OriginalPath)) == Contract.HashFile(Path.Combine(destination, asset.OriginalPath)), "Imported original changed");
+    Assert(File.ReadAllBytes(Path.Combine(destination, "checkpoints", Contract.Hash(original) + ".fsthemeproj")).SequenceEqual(original), "Earlier source checkpoint lost");
+    Assert(before.All(entry => Contract.HashFile(Path.Combine(source, entry.Key)) == entry.Value), "Save As changed source bytes");
+    Reject("project_exists", () => ProjectCopy.SaveAs(source, destination, p));
+    Reject("project_overlap", () => ProjectCopy.SaveAs(source, Path.Combine(source, "inside"), p));
+    Assert(!Directory.Exists(Path.Combine(source, "inside")), "Rejected copy created a folder");
+});
+
 var failed = 0;
 foreach (var (name, run) in tests)
 {

@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     }
     private async void OpenProject(object sender, RoutedEventArgs args)
     {
+        if (!CanOpenDocument) return;
         if (!Discard()) return;
         var picker = new OpenFolderDialog { Title = "Create or open a theme project" };
         if (picker.ShowDialog(this) != true) return;
@@ -186,6 +187,7 @@ public partial class MainWindow : Window
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (closing) return; args.Cancel = true;
+        if (copyingProject) { StatusText.Text = "Wait for the project copy to finish before closing."; return; }
         try { if (!Discard()) return; await preview.DisposeAsync(); closing = true; Close(); }
         catch (Exception error) { StatusText.Text = error.Message; }
     }

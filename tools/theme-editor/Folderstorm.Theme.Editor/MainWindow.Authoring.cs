@@ -14,9 +14,11 @@ public sealed record ColorRow(string Name, Brush Swatch, string State);
 public partial class MainWindow : INotifyPropertyChanged
 {
     private bool updatingEditors;
+    private bool copyingProject;
     private string[] readOnlyReasons = [];
     public event PropertyChangedEventHandler? PropertyChanged;
-    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0;
+    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !copyingProject;
+    public bool CanOpenDocument => !copyingProject;
     public bool CanUndo => CanEditDocument && (project!.Undo.Count > 0 || MetadataPending());
     public bool CanRedo => CanEditDocument && project!.Redo.Count > 0 && !MetadataPending();
 
@@ -28,17 +30,19 @@ public partial class MainWindow : INotifyPropertyChanged
         void Command(RoutedCommand command, Action execute, Func<bool> allowed)
             => CommandBindings.Add(new(command, (_, args) => { execute(); args.Handled = true; }, (_, args) => { args.CanExecute = allowed(); args.Handled = true; }));
         Command(ApplicationCommands.Save, () => SaveProject(this, new RoutedEventArgs()), () => CanEditDocument);
+        Command(ApplicationCommands.SaveAs, () => SaveAsProject(this, new RoutedEventArgs()), () => CanEditDocument);
         Command(ApplicationCommands.Undo, () => Undo(this, new RoutedEventArgs()), () => CanUndo);
         Command(ApplicationCommands.Redo, () => Redo(this, new RoutedEventArgs()), () => CanRedo);
-        Command(ApplicationCommands.Open, () => OpenProject(this, new RoutedEventArgs()), () => true);
+        Command(ApplicationCommands.Open, () => OpenProject(this, new RoutedEventArgs()), () => CanOpenDocument);
         InputBindings.Add(new KeyBinding(ApplicationCommands.Save, Key.S, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(ApplicationCommands.SaveAs, Key.S, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(ApplicationCommands.Undo, Key.Z, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ApplicationCommands.Redo, Key.Y, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ApplicationCommands.Open, Key.O, ModifierKeys.Control));
     }
     private void UpdateCommandState()
     {
-        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanUndo), nameof(CanRedo) })
+        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo) })
             PropertyChanged?.Invoke(this, new(property));
         if (ProjectLabel == null) return;
         ProjectLabel.Text = project == null ? "Classic AnsaStorm" : project.DisplayName + (changed ? "  •  Unsaved" : "") + "  ·  " + catalog?.Schemes.FirstOrDefault(s => s.Id == project.BaseScheme)?.Name;
@@ -75,6 +79,20 @@ public partial class MainWindow : INotifyPropertyChanged
     private void RefreshDocumentEditors()
     {
         SyncMetadata(); RefreshPalette(); SelectTexture(this, null!);
+    }
+    private async void SaveAsProject(object sender, RoutedEventArgs args)
+    {
+        if (!Ready()) return;
+        var dialog = new ProjectCopyDialog(this, projectDirectory); if (dialog.ShowDialog() != true) return;
+        CommitMetadata(); var snapshot = Contract.Read<ThemeProject>(Contract.Bytes(project!)); var source = projectDirectory;
+        copyingProject = true; UpdateCommandState(); StatusText.Text = "Saving project copy…";
+        try
+        {
+            projectDirectory = await Task.Run(() => ProjectCopy.SaveAs(source, dialog.Destination, snapshot));
+            project = snapshot; changed = false; RefreshDocumentEditors(); StatusText.Text = "Project copy saved.";
+        }
+        catch (Exception error) { StatusText.Text = error.Message; }
+        finally { copyingProject = false; UpdateCommandState(); }
     }
     private void FilterColors(object sender, SelectionChangedEventArgs args) => RefreshPalette();
     private void SearchColors(object sender, TextChangedEventArgs args) => RefreshPalette();

@@ -3,7 +3,7 @@
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Margin="0,0,0,16">
       <StackPanel DockPanel.Dock="Left"><TextBlock Text="Theme lab" FontSize="26" FontWeight="SemiBold"/><TextBlock x:Name="ProjectLabel" Text="Classic AnsaStorm" Foreground="#ADA9BA" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="420"/></StackPanel>
-      <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="New / open" Click="OpenProject"/><Button Content="Save" Click="SaveProject" IsEnabled="{Binding CanEditDocument}"/><Button Content="Undo" Click="Undo" IsEnabled="{Binding CanUndo}"/><Button Content="Redo" Click="Redo" IsEnabled="{Binding CanRedo}"/><Button Content="Export" Click="Export" IsEnabled="{Binding CanEditDocument}"/></WrapPanel>
+      <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="New / open" Click="OpenProject" IsEnabled="{Binding CanOpenDocument}"/><Button Content="Save" Click="SaveProject" IsEnabled="{Binding CanEditDocument}"/><Button Content="Save as" Click="SaveAsProject" IsEnabled="{Binding CanEditDocument}"/><Button Content="Undo" Click="Undo" IsEnabled="{Binding CanUndo}"/><Button Content="Redo" Click="Redo" IsEnabled="{Binding CanRedo}"/><Button Content="Export" Click="Export" IsEnabled="{Binding CanEditDocument}"/></WrapPanel>
     </DockPanel>
     <Expander x:Name="SetupExpander" Grid.Row="1" Header="Setup" Margin="0,0,0,12" Foreground="#ADA9BA" IsExpanded="True">
       <Grid Margin="0,10,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -29,7 +29,7 @@
           <local:PaletteSample Grid.Row="4" x:Name="AfterSample" MinHeight="165"/>
         </Grid>
         <GridSplitter Grid.Column="3" Width="2" HorizontalAlignment="Center" Background="#302D3B"/>
-        <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="10,0,0,0">
+        <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch"><StackPanel Margin="10,0,14,0">
           <TextBlock x:Name="ColorName" Text="Choose a color" FontSize="20" TextWrapping="Wrap"/><TextBlock x:Name="ColorState" Foreground="#BFA4FC" Margin="0,5,0,0"/>
           <Border Height="70" Margin="0,16,0,14" Background="{StaticResource Checkerboard}"><Border x:Name="ColorSwatch"/></Border>
           <StackPanel IsEnabled="{Binding CanEditDocument}"><TextBlock Text="Hex / RGBA" Foreground="#ADA9BA" Margin="0,0,0,5"/><TextBox x:Name="ColorValue" Text="#FFFFFFFF" FontFamily="Consolas" AutomationProperties.Name="Hex or RGBA value"/><TextBlock x:Name="ColorFormats" Foreground="#ADA9BA" FontFamily="Consolas" FontSize="11" Margin="0,6,0,8" TextWrapping="Wrap"/>

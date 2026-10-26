@@ -62,6 +62,13 @@ overwrite them with a new project. Arbitrary root metadata remains round-trippab
 Recipe records describe retained authoring steps; compiled assets are the prepared
 derivatives. Recognizing a recipe operation does not execute it during export.
 
+Save As stages a complete project copy in the new folder's parent and exposes it
+with a single rename. It retains imported originals, derivatives, history,
+checkpoints and extra plain project files, then saves current in-memory edits.
+It refuses existing destinations, overlapping source/destination trees, links,
+more than 10000 entries or more than 512 MiB of source files. The source is never
+written. A failed stage is retained with its path in the error for recovery.
+
 `xui-edit-rules.json` is the adapter's single source for the initial file and
 attribute allowlist. Complete replacements retain the base's ordered control
 tree and protected bindings/callbacks. Future catalog expansion must preserve
