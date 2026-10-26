@@ -262,7 +262,6 @@ public static class PackageStore
     }
     public static ValidatedTheme Compile(string projectDirectory, ThemeProject project, BaseCatalog catalog)
     {
-        catalog.Verify(project.BaseDependencies);
         var dependencies = Contract.Bytes(project.BaseDependencies);
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["base-dependencies.json"] = dependencies };
         var colors = catalog.CompileColors(project.Edits.Colors);

@@ -107,11 +107,17 @@ public sealed class BaseCatalog
     {
         var names = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var layer in Layers)
-            foreach (var path in Directory.EnumerateFiles(Path.Combine(Root, layer), "*", SearchOption.AllDirectories))
+        {
+            Contract.Require(Directory.Exists(Path.Combine(Root, layer)), "base", "Missing base layer: " + layer);
+            if (File.Exists(Path.Combine(Root, layer, "colors.xml"))) names.Add("colors.xml");
+            foreach (var prefix in new[] { "textures", "xui/en" })
             {
-                var relative = Path.GetRelativePath(Path.Combine(Root, layer), path).Replace('\\', '/');
-                if (relative == "colors.xml" || relative.StartsWith("textures/", StringComparison.Ordinal) || relative.StartsWith("xui/en/", StringComparison.Ordinal)) names.Add(relative);
+                var folder = Path.Combine(Root, layer, prefix);
+                if (!Directory.Exists(folder)) continue;
+                foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                    names.Add(prefix + "/" + Path.GetRelativePath(folder, path).Replace('\\', '/'));
             }
+        }
         return names;
     }
     public Dictionary<string, string> CompileColors(IReadOnlyDictionary<string, string> edits)

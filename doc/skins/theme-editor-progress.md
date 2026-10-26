@@ -50,5 +50,12 @@ the build skill's human release-test gate; publication still requires approval.
 - The first full viewer compile found a nonexistent splash header and C++20
   filesystem UTF-8 conversion errors. The fixes preserve Unicode paths, and
   the standalone native validator compiles with the viewer's language settings.
+- A subsequent viewer compile found that the settings API returns a smart
+  pointer; the session-setting helper now keeps that ownership type.
+- The native verifier uses an indexed case-insensitive path set and lexical
+  relative paths for already-contained files. Dependency enumeration visits the
+  captured resource directories. No-op native verification took 10.54 seconds
+  with the build idle; the earlier loaded measurement was 221.36 seconds.
+  Package compilation performs the full base verification once.
 - No native visual acceptance, human acceptance, publication or installation
   is claimed. OpenSim login testing is authorized if a live check needs it.

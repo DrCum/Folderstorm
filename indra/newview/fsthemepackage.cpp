@@ -73,16 +73,18 @@ const boost::json::array& array(const Object& object,const char* name)
 {const auto* value=object.if_contains(name);require(value && value->is_array(),"schema",name);return value->as_array();}
 void fields(const Object& object,const std::set<std::string>& names)
 {for(const auto& field:object)require(names.count(std::string(field.key())),"schema",std::string(field.key()));}
-bool equalPath(const std::string& a,const std::string& b)
+struct CasePathLess
+{
+bool operator()(const std::string& a,const std::string& b) const
 {
 #if defined(_WIN32)
     const auto left=fromUtf8(a).wstring(),right=fromUtf8(b).wstring();
-    return CompareStringOrdinal(left.data(),static_cast<int>(left.size()),right.data(),static_cast<int>(right.size()),TRUE)==CSTR_EQUAL;
+    return CompareStringOrdinal(left.data(),static_cast<int>(left.size()),right.data(),static_cast<int>(right.size()),TRUE)==CSTR_LESS_THAN;
 #else
-    if(a.size()!=b.size())return false;
-    return std::equal(a.begin(),a.end(),b.begin(),[](unsigned char l,unsigned char r){return std::toupper(l)==std::toupper(r);});
+    return std::lexicographical_compare(a.begin(),a.end(),b.begin(),b.end(),[](unsigned char l,unsigned char r){return std::toupper(l)<std::toupper(r);});
 #endif
 }
+};
 bool linked(const fs::path& path)
 {
 #if defined(_WIN32)
@@ -274,12 +276,12 @@ Manifest manifest(const std::string& bytes)
     for(const auto& capability:capabilities)
     {require(capability.is_string(),"capability","Invalid capability");const std::string name(capability.as_string());require((name=="viewer.overlay.v1" || name=="viewer.preview.v1" || name=="viewer.fonts.v1" || name=="viewer.xui.v1" || name=="host.palette.v1") && seenCapabilities.insert(name).second,"capability",name);}
     require(validHash(result.fingerprint),"schema","Invalid base fingerprint");
-    require(!files.empty() && files.size()<10000,"size","Invalid payload count");std::uint64_t expanded=0;std::string previous;
+    require(!files.empty() && files.size()<10000,"size","Invalid payload count");std::uint64_t expanded=0;std::string previous;std::set<std::string,CasePathLess> filePaths;
     for(const auto& value:files)
     {
         require(value.is_object(),"schema","Invalid payload entry");const auto& item=value.as_object();fields(item,{"path","size","sha256","kind"});
         File file;file.path=text(item,"path");file.sha256=text(item,"sha256");file.kind=text(item,"kind");pathName(file.path);
-        require(std::none_of(result.files.begin(),result.files.end(),[&](const File& old){return equalPath(old.path,file.path);}),"collision",file.path);
+        require(filePaths.insert(file.path).second,"collision",file.path);
         require(previous.empty() || previous<file.path,"schema","Payload list must be path-sorted");previous=file.path;
         const auto size=integer(item,"size");require(size>=0 && static_cast<std::uint64_t>(size)<=limit(file.kind) && validHash(file.sha256),"size",file.path);file.size=static_cast<std::uint64_t>(size);
         require(file.kind==kind(file.path),"kind",file.path);expanded+=file.size;result.files.push_back(std::move(file));
@@ -310,7 +312,7 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
     }
     std::size_t count=0;
     for(const auto& entry:fs::recursive_directory_iterator(directory))
-    {require(!linked(entry.path()),"link",toUtf8(entry.path()));if(entry.is_regular_file()){++count;require(expected.count(toUtf8(fs::relative(entry.path(),directory),true)),"coverage","Unlisted revision payload");}}
+    {require(!linked(entry.path()),"link",toUtf8(entry.path()));if(entry.is_regular_file()){++count;require(expected.count(toUtf8(entry.path().lexically_relative(directory),true)),"coverage","Unlisted revision payload");}}
     require(count==expected.size(),"coverage","Missing revision payload");
     const auto dependencyBytes=readFile(contained(directory,"base-dependencies.json"));require(hash(dependencyBytes)==data.fingerprint,"integrity","Base fingerprint");
     const auto dependencyValue=parse(dependencyBytes);require(dependencyValue.is_object(),"base","Invalid dependency set");const auto& dependencies=dependencyValue.as_object();
@@ -318,11 +320,11 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
     std::vector<std::string> roots{"skins/default","skins/ansastorm"};if(!data.scheme.empty())roots.push_back("skins/ansastorm/themes/"+data.scheme);
     const auto& recordedRoots=array(dependencies,"roots");require(recordedRoots.size()==roots.size(),"base","Invalid roots");
     for(std::size_t i=0;i<roots.size();++i)require(recordedRoots[i].is_string() && recordedRoots[i].as_string()==roots[i],"base","Invalid roots");
-    std::vector<std::string> dependencyPaths;
+    std::vector<std::string> dependencyPaths;std::set<std::string,CasePathLess> dependencyNames;
     for(const auto& value:array(dependencies,"files"))
     {
         require(value.is_object(),"base","Invalid dependency record");const auto& item=value.as_object();const auto path=text(item,"path");pathName(path);
-        require(std::none_of(dependencyPaths.begin(),dependencyPaths.end(),[&](const std::string& old){return equalPath(old,path);}),"base",path);dependencyPaths.push_back(path);
+        require(dependencyNames.insert(path).second,"base",path);dependencyPaths.push_back(path);
         require(path.rfind("fonts/",0)==0 || std::any_of(roots.begin(),roots.end(),[&](const std::string& root){return path.rfind(root+"/",0)==0;}),"base",path);
         const auto* present=item.if_contains("present");require(present && present->is_bool(),"base",path);const auto size=integer(item,"size"),layer=integer(item,"layer");const auto digest=text(item,"sha256");
         require(size>=0 && layer>=0 && (present->as_bool()?validHash(digest):size==0 && digest.empty()),"base",path);
@@ -331,15 +333,22 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
     }
     std::set<std::string> logical,closure;
     for(const auto& root:roots)
-        for(const auto& entry:fs::recursive_directory_iterator(base/fromUtf8(root)))
+    {
+        const auto rootPath=contained(base,root);
+        if(fs::is_regular_file(rootPath/"colors.xml"))logical.insert("colors.xml");
+        for(const auto* prefix:{"textures","xui/en"})
         {
-            require(!linked(entry.path()),"link",toUtf8(entry.path()));if(!entry.is_regular_file())continue;
-            const auto relative=toUtf8(fs::relative(entry.path(),base/fromUtf8(root)),true);
-            if(relative=="colors.xml" || relative.rfind("textures/",0)==0 || relative.rfind("xui/en/",0)==0)logical.insert(relative);
+            const auto folder=contained(base,root+"/"+prefix);if(!fs::is_directory(folder))continue;
+            for(const auto& entry:fs::recursive_directory_iterator(folder))
+            {
+                require(!linked(entry.path()),"link",toUtf8(entry.path()));if(!entry.is_regular_file())continue;
+                logical.insert(toUtf8(entry.path().lexically_relative(rootPath),true));
+            }
         }
+    }
     for(const auto& name:logical)for(const auto& root:roots)closure.insert(root+"/"+name);
     if(fs::is_directory(base/"fonts"))for(const auto& entry:fs::recursive_directory_iterator(base/"fonts"))
-        if(entry.is_regular_file())closure.insert(toUtf8(fs::relative(entry.path(),base),true));
+        if(entry.is_regular_file())closure.insert(toUtf8(entry.path().lexically_relative(base),true));
     require(closure==std::set<std::string>(dependencyPaths.begin(),dependencyPaths.end()),"base_changed","Dependency closure differs");
     std::map<std::string,std::string> baseColors,baseTextures;
     for(const auto& root:roots)

@@ -31,7 +31,7 @@ fs::path startupMarker,lastGoodSelection;
 std::string requestId,diagnostic;
 std::int64_t generation=0;
 void sessionValue(const char* name,const LLSD& value)
-{if(auto* control=gSavedSettings.getControl(name))control->setValue(value,false);}
+{if(auto control=gSavedSettings.getControl(name))control->setValue(value,false);}
 void atomicFile(const fs::path& destination,const std::string& bytes)
 {
     const auto temporary=destination.wstring()+L".tmp";
