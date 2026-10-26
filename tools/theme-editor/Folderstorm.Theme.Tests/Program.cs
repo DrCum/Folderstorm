@@ -270,6 +270,46 @@ Test("save-as stages all originals and history without altering source or overwr
     Assert(!Directory.Exists(Path.Combine(source, "inside")), "Rejected copy created a folder");
 });
 
+Test("image edits preserve source pixels and bound crop adjustments and generation", () =>
+{
+    byte[] bytes = [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 0, 255, 0];
+    var source = RasterImage.FromRgba(2, 2, bytes); bytes[0] = 0;
+    Assert(source.Pixel(0, 0) == new RgbaPixel(255, 0, 0, 255), "Source aliases caller bytes");
+    var crop = source.Crop(1, 0, 1, 2);
+    Assert(crop.Pixel(0, 0) == new RgbaPixel(0, 255, 0, 255) && crop.Pixel(0, 1) == new RgbaPixel(255, 0, 255, 0), "Crop rows or hidden RGB changed");
+    var tinted = RasterImage.FromRgba(1, 1, new byte[] { 128, 64, 32, 128 }).Tint(ThemeColor.Create(.5, 1, .25, .5));
+    Assert(tinted.Pixel(0, 0) == new RgbaPixel(64, 64, 8, 64), "Tint channels or alpha differ");
+    Assert(source.Adjust().ToRgba().SequenceEqual(source.ToRgba()), "Neutral adjustment changed bytes");
+    Assert(source.Adjust(brightness: 1).Pixel(0, 0) == new RgbaPixel(255, 255, 255, 255), "Brightness clamping");
+    var border = RasterImage.Fill(4, 4, ThemeColor.Parse("#0000")).Border(1, ThemeColor.Parse("#f00"));
+    Assert(border.Pixel(0, 3) == new RgbaPixel(255, 0, 0, 255) && border.Pixel(1, 1).A == 0, "Border damaged the interior");
+    var gradient = RasterImage.Gradient(3, 1, ThemeColor.Parse("#f00"), ThemeColor.Parse("#00f0"), false);
+    Assert(gradient.Pixel(1, 0) == new RgbaPixel(255, 0, 0, 128) && gradient.Pixel(2, 0).A == 0, "Gradient introduced transparent-edge color halos");
+    Reject("image", () => source.Crop(-1, 0, 1, 1));
+    Reject("image", () => source.Adjust(gamma: double.NaN));
+    Reject("image", () => RasterImage.Fill(16384, 16384, ThemeColor.Parse("#fff")));
+    Assert(source.Pixel(0, 0) == new RgbaPixel(255, 0, 0, 255) && source.Pixel(1, 1) == new RgbaPixel(255, 0, 255, 0), "An edit mutated the original");
+});
+Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borders", () =>
+{
+    var edge = RasterImage.FromRgba(2, 1, new byte[] { 255, 0, 0, 255, 0, 0, 255, 0 });
+    Assert(edge.Resize(1, 1).Pixel(0, 0) == new RgbaPixel(255, 0, 0, 128), "Bilinear resize has transparent blue fringes");
+    Assert(edge.Resize(2, 1).ToRgba().SequenceEqual(edge.ToRgba()), "Identity resize discarded hidden RGB");
+    var pixels = new byte[5 * 4 * 4];
+    for (var y = 0; y < 4; ++y)
+        for (var x = 0; x < 5; ++x)
+        { var index = (y * 5 + x) * 4; pixels[index] = (byte)(x * 30); pixels[index + 1] = (byte)(y * 50); pixels[index + 2] = (byte)(x + y); pixels[index + 3] = 255; }
+    var source = RasterImage.FromRgba(5, 4, pixels); var margins = new SliceMargins(1, 1, 2, 2);
+    Assert(source.Stretch(5, 4, margins).ToRgba().SequenceEqual(pixels), "Identity stretch moved guide pixels");
+    foreach (var (width, height) in new[] { (9, 7), (14, 10), (3, 3) })
+    {
+        var stretched = source.Stretch(width, height, margins);
+        Assert(stretched.Pixel(0, 0) == source.Pixel(0, 0), "Top-left corner changed");
+        Assert(stretched.Pixel(width - 2, height - 2) == source.Pixel(3, 2) && stretched.Pixel(width - 1, height - 1) == source.Pixel(4, 3), "Asymmetric right/bottom margins were reversed or resampled");
+    }
+    Reject("image", () => source.Stretch(2, 2, margins));
+});
+
 var failed = 0;
 foreach (var (name, run) in tests)
 {

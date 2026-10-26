@@ -15,6 +15,7 @@ public partial class MainWindow : INotifyPropertyChanged
 {
     private bool updatingEditors;
     private bool copyingProject;
+    private string? appliedColorValue;
     private string[] readOnlyReasons = [];
     public event PropertyChangedEventHandler? PropertyChanged;
     public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !copyingProject;
@@ -89,7 +90,7 @@ public partial class MainWindow : INotifyPropertyChanged
         try
         {
             projectDirectory = await Task.Run(() => ProjectCopy.SaveAs(source, dialog.Destination, snapshot));
-            project = snapshot; changed = false; RefreshDocumentEditors(); StatusText.Text = "Project copy saved.";
+            project = snapshot; changed = false; RefreshDocumentEditors(); StatusText.Text = "Editing copy: " + System.IO.Path.GetFileName(projectDirectory);
         }
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { copyingProject = false; UpdateCommandState(); }
@@ -156,7 +157,10 @@ public partial class MainWindow : INotifyPropertyChanged
         try
         {
             var inspected = catalog.InspectColor(row.Name, literals, links);
-            ColorValue.Text = inspected.Value.Hex(inspected.Value.A < 1);
+            appliedColorValue = inspected.Value.NativeText;
+            updatingEditors = true;
+            try { ColorValue.Text = appliedColorValue; }
+            finally { updatingEditors = false; }
             ColorSource.Text = inspected.Source + "\n" + string.Join(" → ", inspected.ReferenceChain);
             ColorLinkTarget.Text = links.GetValueOrDefault(row.Name) ?? catalog.Colors[row.Name].Reference ?? "";
             var followers = catalog.Colors.Keys.Where(name => name != row.Name).Where(name =>
@@ -169,6 +173,7 @@ public partial class MainWindow : INotifyPropertyChanged
         }
         catch (ThemeException error)
         {
+            appliedColorValue = null; ColorDraftState.Visibility = Visibility.Collapsed;
             ColorValue.Text = catalog.Colors[row.Name].Value ?? ""; ColorSource.Text = error.Message;
             ColorSwatch.Background = Brushes.Transparent; ColorFormats.Text = "Native inherited value"; ColorContrast.Text = ""; ColorAffected.Text = "";
         }
@@ -182,11 +187,12 @@ public partial class MainWindow : INotifyPropertyChanged
             try { RedChannel.Value = value.R * 255; GreenChannel.Value = value.G * 255; BlueChannel.Value = value.B * 255; AlphaChannel.Value = value.A * 255; }
             finally { updatingEditors = false; }
             ColorSwatch.Background = ToBrush(value); ColorFormats.Text = value.Hex() + "\n" + value.NativeText;
+            ColorDraftState.Visibility = appliedColorValue != null && value.NativeText != appliedColorValue ? Visibility.Visible : Visibility.Collapsed;
             var sample = SampleColors(true); var panel = sample.GetValueOrDefault("ThemePanel", ThemeColor.Parse("#1A1921"));
             var canvas = sample.GetValueOrDefault("ThemeBg", ThemeColor.Parse("#111016")).Over(ThemeColor.Parse("#000"));
             ColorContrast.Text = "Against panel: " + ThemeColor.Contrast(value, panel, canvas).ToString("0.00", CultureInfo.InvariantCulture) + ":1";
         }
-        catch (ThemeException error) { ColorFormats.Text = error.Message; ColorContrast.Text = ""; }
+        catch (ThemeException error) { ColorFormats.Text = error.Message; ColorContrast.Text = ""; ColorDraftState.Visibility = appliedColorValue == null ? Visibility.Collapsed : Visibility.Visible; }
     }
     private void ChannelChanged(object sender, RoutedPropertyChangedEventArgs<double> args)
     {

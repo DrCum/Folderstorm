@@ -50,3 +50,13 @@ that limitation in evidence; do not infer a native renderer failure from an
 incomplete capture. Record executable/source/revision, window size and DPI/scale
 coverage for each accepted image. Never substitute WPF rendering for native
 font, slicing, image-state or tint acceptance.
+
+`Pixels` is a windowless Windows/WPF codec probe, independent of GUI automation:
+
+```text
+dotnet run --project integration/Pixels -c Release -- <matching-viewer-or-repository-root>
+```
+
+It compiles the production ImageCodec source and checks exact RGBA/alpha/hidden-RGB
+PNG round trips, a frozen display bitmap, and inherited button pixel fidelity.
+It never opens a window and does not establish UI or native rendering acceptance.
