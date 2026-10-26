@@ -159,12 +159,15 @@ public partial class MainWindow : Window
     private async void Preview(object sender, RoutedEventArgs args)
     {
         if (!Ready()) return;
-        try { StatusText.Text = "Validating and starting native preview…"; Workspace.IsEnabled = false;
-            CommitMetadata(); var image = Workspace.SelectedIndex == 1 ? SelectedTexture?.Name : null;
+        var selectedTab = Workspace.SelectedIndex;
+        var image = selectedTab == 1 ? SelectedTexture?.Name : null;
+        if (selectedTab == 1 && image == null) { StatusText.Text = "Select an image to preview."; return; }
+        try { StatusText.Text = image == null ? "Validating and starting native preview…" : "Starting native button preview: " + image; Workspace.IsEnabled = false;
+            CommitMetadata();
             var theme = image == null ? PackageStore.Compile(projectDirectory, project!, catalog!) : PackageStore.CompileImagePreview(projectDirectory, project!, catalog!, image);
             await preview.StartAsync(ViewerPath.Text, theme, catalog!); StatusText.Text = (image == null ? "Native preview " : "Native button preview: " + image + " · ") + preview.Status + " · PID " + preview.ProcessId; }
         catch (Exception error) { StatusText.Text = error.Message; }
-        finally { Workspace.IsEnabled = true; }
+        finally { Workspace.IsEnabled = true; Workspace.SelectedIndex = selectedTab; }
     }
     private async void ClosePreview(object sender, RoutedEventArgs args) { await preview.CloseAsync(); StatusText.Text = "Preview closed."; }
     private async void OnClosing(object? sender, CancelEventArgs args)

@@ -16,6 +16,7 @@ public partial class MainWindow
     private RasterImage? currentImage, originalImage;
     private TextureGeometry? imageGeometry, appliedImageGeometry;
     private bool imageOperation, changingImageDimensions;
+    private string? lastImageGuideError;
     private TextureDefinition? SelectedTexture => TextureList?.SelectedItem as TextureDefinition;
     public bool CanReplaceImage => CanEditDocument && SelectedTexture != null && (ImageComparison?.SelectedIndex ?? 0) == 0;
     public bool CanEditImage => CanReplaceImage && currentImage != null && imageGeometry != null;
@@ -78,8 +79,13 @@ public partial class MainWindow
             var edited = project?.Edits.Assets.LastOrDefault(asset => asset.PayloadPath == "viewer/textures/" + fileName);
             var bytes = project == null ? catalog.ResolveBytes("textures/" + fileName) : ImageProject.Read(projectDirectory, project, catalog, selected.Name);
             currentImage = ImageCodec.Decode(bytes, fileName);
-            try { imageGeometry = appliedImageGeometry = TextureGeometry.FromAttributes(currentImage.Width, currentImage.Height, texture.Attributes); }
-            catch (ThemeException error) { StatusText.Text = error.Message; }
+            try
+            {
+                imageGeometry = appliedImageGeometry = TextureGeometry.FromAttributes(currentImage.Width, currentImage.Height, texture.Attributes);
+                if (StatusText.Text == lastImageGuideError) StatusText.Text = "Image loaded.";
+                lastImageGuideError = null;
+            }
+            catch (ThemeException error) { lastImageGuideError = texture.Name + ": " + error.Message; StatusText.Text = lastImageGuideError; }
             originalImage = edited == null ? currentImage : ImageCodec.Decode(File.ReadAllBytes(Contract.Contained(projectDirectory, edited.OriginalPath)), edited.OriginalPath);
             TextureSource.Text = edited == null ? texture.Source ?? fileName : "Project image\nOriginal: " + Path.GetExtension(edited.OriginalPath).TrimStart('.').ToUpperInvariant();
             ImageRecipeSummary.Text = project?.Edits.Recipes.TryGetValue(selected.Name, out var recipe) == true

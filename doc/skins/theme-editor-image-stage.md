@@ -34,7 +34,8 @@ The first image workspace now has family/override filtering, current/original
 comparison, zoom and pixel picking, crop/resize, tint and basic adjustments,
 fill/gradient/border generation, three stretch samples and draggable/numeric
 slice/clip guides. A guide drag commits on release; Escape or capture loss cancels
-it. These UI interactions still need runtime visual checking.
+it. The user verified readability, tint, Undo/Redo and guide dragging/Escape in
+retained editor 0.3.0. Multi-DPI checks remain open.
 
 From Images, Preview in viewer composes a preview-only complete sample XUI with
 the selected logical image on `test_button` at 100x32. All its image states use
@@ -42,6 +43,14 @@ that ID, its text is empty, and global button defaults remain inherited. Export
 and source project files/history are unchanged. The composed preview revision
 `1e4319bddb82a307fac576ba7bcc591720b1c445e2c506e285167fb174ab0f05`
 passes the production C++ validator. Actual native visual checking is pending.
+
+The first human native-image check still displayed the ordinary Button label.
+Its owned preview request used the original combined revision rather than the
+selected-image composition. The 0.3.1 correction captures the active tab/image
+before disabling the workspace and restores the active tab afterward. It also
+forwards the ComboBox selection template selector so family labels render, and
+clears an earlier image's guide error when a valid image is selected. The WPF
+build passes; native visual confirmation of this correction is pending.
 
 Tiled samples, bulk/state-family edits, external editing, per-image/group reset
 and additional import formats remain in progress. PNG remains the package
