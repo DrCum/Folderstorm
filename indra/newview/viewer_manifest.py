@@ -926,6 +926,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
         self.path(self.stage_session_host(), "folderstorm-session-host.exe")
         self.path(os.path.join(self.get_build_prefix(), "folderstorm-bundle.json"), "folderstorm-bundle.json")
+        self.path(os.path.join(self.get_build_prefix(), "folderstorm-theme-capabilities.json"), "folderstorm-theme-capabilities.json")
         if self.args.get('velopack', 'OFF') == 'ON':
             config = self.args.get("configuration") or ""
             candidates = [os.path.join(self.get_build_prefix(), part, "folderstorm-update.exe") for part in ([config, ""] if config else [""])]

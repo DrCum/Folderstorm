@@ -1,0 +1,5 @@
+{
+  "preview_version": 1,
+  "source_commit": "@FS_SOURCE_COMMIT@",
+  "capabilities": ["viewer.overlay.v1", "viewer.preview.v1", "viewer.fonts.v1", "viewer.xui.v1"]
+}

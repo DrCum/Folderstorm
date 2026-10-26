@@ -617,6 +617,8 @@ LLFontGL *LLFontRegistry::createFont(const LLFontDescriptor& desc)
     bool is_first_found = true;
 
     string_vec_t font_search_paths;
+    if (!gDirUtilp->getCustomThemeDir().empty())
+        font_search_paths.push_back(gDirUtilp->add(gDirUtilp->getCustomThemeDir(), "fonts") + gDirUtilp->getDirDelimiter());
     font_search_paths.push_back(LLFontGL::getFontPathLocal());
     font_search_paths.push_back(LLFontGL::getFontPathSystem());
     // <FS:Kadah> User fonts: Also load from user_settings/fonts

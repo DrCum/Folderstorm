@@ -1964,6 +1964,11 @@ include(FolderstormUpdates)
 list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp fsinstallviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsinstallviewer.h)
 list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
+file(READ "${CMAKE_SOURCE_DIR}/../tools/theme-editor/contracts/xui-edit-rules.json" THEME_RULES_JSON)
+configure_file("${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/fsthemerules.h.in" "${CMAKE_CURRENT_BINARY_DIR}/fsthemerules.h" @ONLY)
+configure_file(fsthemecapabilities.json.in "${CMAKE_CURRENT_BINARY_DIR}/folderstorm-theme-capabilities.json" @ONLY)
+list(APPEND viewer_SOURCE_FILES fsthemepackage.cpp fsthemeviewer.cpp)
+list(APPEND viewer_HEADER_FILES fsthemepackage.h fsthemeviewer.h)
 add_subdirectory(third_party/chat_media)
 list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp fschatupload.cpp fschatuploadhttp.cpp fschatuploadreply.cpp)
 list(APPEND viewer_SOURCE_FILES fsfloatergifboard.cpp fsgiflibrary.cpp)
@@ -2906,6 +2911,10 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         fs::glod # <FS:Beq/> restore GLOD dependencies
         fs::discord # <FS:Ansariel> Discord  support
         )
+
+if (WINDOWS)
+   target_link_libraries(${VIEWER_BINARY_NAME} bcrypt)
+endif ()
 
 if (USE_DISCORD)
    target_link_libraries(${VIEWER_BINARY_NAME} ll::discord_sdk )

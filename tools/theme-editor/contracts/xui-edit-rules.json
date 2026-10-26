@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "adapter_id": "ansastorm-classic",
+  "paths": ["xui/en/widgets/floater.xml", "xui/en/widgets/button.xml", "xui/en/floater_test_widgets.xml"],
+  "editable_attributes": [
+    "width", "height", "min_width", "min_height", "left", "right", "top", "bottom", "left_delta", "top_delta", "left_pad", "top_pad",
+    "pad_left", "pad_right", "pad_top", "pad_bottom", "label", "title", "tool_tip", "font", "font_style", "text_color", "text_readonly_color",
+    "label_color", "label_color_selected", "label_color_disabled", "label_color_selected_disabled", "bg_opaque_color", "bg_alpha_color",
+    "border_color", "highlight_color", "image_unselected", "image_selected", "image_hover_unselected", "image_hover_selected", "image_disabled", "image_disabled_selected"
+  ],
+  "structure": "same ordered element tree and protected attributes as the exact base",
+  "editable_text_elements": ["text"],
+  "locale": "en",
+  "load_semantics": "complete replacement; do not treat a partial widget document as inherited defaults"
+}

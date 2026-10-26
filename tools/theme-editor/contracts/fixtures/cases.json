@@ -1,0 +1,167 @@
+[
+  {
+    "name": "valid",
+    "file": "valid.json",
+    "expected": "valid"
+  },
+  {
+    "name": "unicode-name",
+    "file": "unicode-name.json",
+    "expected": "valid"
+  },
+  {
+    "name": "metadata-version-hyphen",
+    "file": "metadata-version-hyphen.json",
+    "expected": "valid"
+  },
+  {
+    "name": "version-prerelease",
+    "file": "version-prerelease.json",
+    "expected": "valid"
+  },
+  {
+    "name": "empty-base-scheme",
+    "file": "empty-base-scheme.json",
+    "expected": "valid"
+  },
+  {
+    "name": "unknown-format",
+    "file": "unknown-format.json",
+    "expected": "format_version"
+  },
+  {
+    "name": "format-string",
+    "file": "format-string.json",
+    "expected": "schema"
+  },
+  {
+    "name": "uppercase-identity",
+    "file": "uppercase-identity.json",
+    "expected": "identity"
+  },
+  {
+    "name": "numeric-prerelease-zero",
+    "file": "numeric-prerelease-zero.json",
+    "expected": "identity"
+  },
+  {
+    "name": "new-capability",
+    "file": "new-capability.json",
+    "expected": "capability"
+  },
+  {
+    "name": "duplicate-capability",
+    "file": "duplicate-capability.json",
+    "expected": "capability"
+  },
+  {
+    "name": "unsupported-adapter",
+    "file": "unsupported-adapter.json",
+    "expected": "base"
+  },
+  {
+    "name": "absolute-scheme",
+    "file": "absolute-scheme.json",
+    "expected": "path"
+  },
+  {
+    "name": "null-display",
+    "file": "null-display.json",
+    "expected": "schema"
+  },
+  {
+    "name": "oversized-display",
+    "file": "oversized-display.json",
+    "expected": "identity"
+  },
+  {
+    "name": "control-display",
+    "file": "control-display.json",
+    "expected": "identity"
+  },
+  {
+    "name": "c1-control-display",
+    "file": "c1-control-display.json",
+    "expected": "identity"
+  },
+  {
+    "name": "unicode-author",
+    "file": "unicode-author.json",
+    "expected": "valid"
+  },
+  {
+    "name": "unknown-structural-field",
+    "file": "unknown-structural-field.json",
+    "expected": "schema"
+  },
+  {
+    "name": "invalid-hash",
+    "file": "invalid-hash.json",
+    "expected": "schema"
+  },
+  {
+    "name": "duplicate-key",
+    "file": "duplicate-key.json",
+    "expected": "duplicate_key"
+  },
+  {
+    "name": "escaped-duplicate-key",
+    "file": "escaped-duplicate-key.json",
+    "expected": "duplicate_key"
+  },
+  {
+    "name": "malformed-json",
+    "file": "malformed-json.json",
+    "expected": "json"
+  },
+  {
+    "name": "traversal",
+    "file": "traversal.json",
+    "expected": "path"
+  },
+  {
+    "name": "drive",
+    "file": "drive.json",
+    "expected": "path"
+  },
+  {
+    "name": "stream",
+    "file": "stream.json",
+    "expected": "path"
+  },
+  {
+    "name": "device",
+    "file": "device.json",
+    "expected": "path"
+  },
+  {
+    "name": "superscript-device",
+    "file": "superscript-device.json",
+    "expected": "path"
+  },
+  {
+    "name": "trailing-space",
+    "file": "trailing-space.json",
+    "expected": "path"
+  },
+  {
+    "name": "backslash",
+    "file": "backslash.json",
+    "expected": "path"
+  },
+  {
+    "name": "unlisted-kind",
+    "file": "unlisted-kind.json",
+    "expected": "kind"
+  },
+  {
+    "name": "negative-size",
+    "file": "negative-size.json",
+    "expected": "size"
+  },
+  {
+    "name": "case-collision",
+    "file": "case-collision.json",
+    "expected": "collision"
+  }
+]

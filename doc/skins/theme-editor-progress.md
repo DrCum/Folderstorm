@@ -1,0 +1,42 @@
+# Theme editor implementation
+
+Base: PR #88, `85f620154fe0da09d2a64d7fcc0f9f352f358c49`.
+Development branch: `codex/ansastorm-theme-editor-a`.
+
+The user authorized implementation on October 26, 2026 and expects work to
+continue while they are unavailable. Preserve any candidate awaiting human
+validation, then continue on a new PR. This overrides stopping development at
+the build skill's human release-test gate; publication still requires approval.
+
+## Required sequence
+
+1. Gate A: shared contracts, catalogs, projects/packages, native overlay/fonts,
+   isolated offline preview, focused automated and actual native visual checks.
+2. Complete AnsaStorm palette, image, font, widget/layout and host tools,
+   undo/redo/library, launchers, distribution, documentation and acceptance.
+3. Add and validate the Folderstorm/Firestorm base adapter.
+4. If the user has not intervened, plan and begin customization that no longer
+   requires an installed base theme. Retain compatibility/recovery guarantees.
+
+## Current evidence
+
+- Isolated worktree created from the exact pinned PR #88 commit.
+- Shared performance source/cache left unchanged; last retained cache verified.
+- Official portable .NET SDK 10.0.403 downloaded and SHA-512 verified outside
+  the repository. The global SDK and PATH are unchanged.
+- Core and CLI implement project checkpoints/undo, deterministic package
+  export/import, strict validation, immutable library publication, base catalogs
+  and linked/alpha color compilation. Eight focused regression groups pass.
+- C# and C++ agree on all 33 shared manifest fixtures, including Unicode metadata
+  and control characters. Native C++ accepted an
+  actual managed-exported color/image revision. Long Windows paths are covered.
+- The v2 inventory generator hashes asset/XML/font bytes and records all six
+  classic schemes. The supplied planning snapshot remains untouched.
+- A minimal self-contained x64 WPF editor compiles and publishes. Viewer search
+  path/font hooks and offline preview integration are written but not yet built
+  into a matching viewer. Gate A has not passed.
+- Computer Use can list the desktop. Its app approval timed out when launching
+  the newly built editor; a follow-up window list confirmed it did not open.
+  Visual checks remain pending, and no alternate launch bypass was attempted.
+- No native visual acceptance, human acceptance, publication or installation
+  is claimed. OpenSim login testing is authorized if a live check needs it.

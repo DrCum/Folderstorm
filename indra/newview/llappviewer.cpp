@@ -35,6 +35,7 @@
 #include "fscrash.h"
 #include "fsupdate.h"
 #include "fsinstallviewer.h"
+#include "fsthemeviewer.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -3464,6 +3465,8 @@ bool LLAppViewer::initConfiguration()
         // so it's limited to a single session
         gSavedSettings.setBOOL("RenderDebugGLSession", false);
     }
+
+    if (!FSThemeViewer::configure()) return false;
 
     // <FS:TT> Hacking to save the skin and theme for future use.
     mCurrentSkin = gSavedSettings.getString("SkinCurrent");

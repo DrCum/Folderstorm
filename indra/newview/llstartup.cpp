@@ -28,6 +28,7 @@
 #include "fssquirtynotes.h"
 #include "fssessionworker.h"
 #include "fsworkspacecontroller.h"
+#include "fsthemeviewer.h"
 
 #include "llappviewer.h"
 #include "llstartup.h"
@@ -695,6 +696,12 @@ bool idle_startup()
     // to work.
     gIdleCallbacks.callFunctions();
     gViewerWindow->updateUI();
+
+    if (FSThemeViewer::idlePreview())
+    {
+        update_texture_fetch();
+        return false;
+    }
 
     LLMortician::updateClass();
 

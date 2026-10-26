@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:folderstorm:theme:1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "theme_id", "package_version", "display_name", "base_skin", "base_scheme", "adapter_id", "adapter_version", "required_capabilities", "base_fingerprint", "files", "font_dependencies"],
+  "properties": {
+    "format_version": { "const": 1 },
+    "theme_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "package_version": { "type": "string", "description": "SemVer 2.0.0, including numeric prerelease zero restrictions" },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "base_skin": { "const": "ansastorm" },
+    "base_scheme": { "type": "string", "description": "Exact installed classic scheme ID; empty is valid" },
+    "adapter_id": { "const": "ansastorm-classic" },
+    "adapter_version": { "const": 1 },
+    "required_capabilities": { "type": "array", "uniqueItems": true, "items": { "enum": ["viewer.overlay.v1", "viewer.preview.v1", "viewer.fonts.v1", "viewer.xui.v1", "host.palette.v1"] } },
+    "base_fingerprint": { "$ref": "#/$defs/hash" },
+    "files": { "type": "array", "minItems": 1, "maxItems": 9999, "items": { "$ref": "#/$defs/file" } },
+    "font_dependencies": { "type": "array", "items": { "$ref": "#/$defs/font" } },
+    "author": { "type": "string", "maxLength": 1024 },
+    "description": { "type": "string", "maxLength": 32768 },
+    "extensions": { "type": "object", "description": "Inert namespaced metadata; no executable/activation semantics" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "path": { "type": "string", "minLength": 1, "maxLength": 240, "description": "Forward-slash relative path; native path/collision rules also apply" },
+    "file": {
+      "type": "object", "additionalProperties": false, "required": ["path", "size", "sha256", "kind"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" }, "size": { "type": "integer", "minimum": 0, "maximum": 67108864 },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "kind": { "enum": ["dependencies", "colors", "textures", "image", "xui", "font_config", "font", "host_palette", "license"] }
+      }
+    },
+    "font": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "file"],
+      "properties": { "kind": { "enum": ["embedded", "installed"] }, "file": { "$ref": "#/$defs/path" }, "face": { "type": "integer", "minimum": 0, "maximum": 128 } }
+    }
+  }
+}
