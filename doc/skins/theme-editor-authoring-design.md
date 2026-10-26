@@ -1,8 +1,9 @@
 # Authoring stage
 
-This branch starts at the frozen Gate A candidate `97c217e00f`. The matching
-native 82310 build remains separate. Full WPF expansion waits for its native
-state checks; independent authoring models can be prepared without altering it.
+This branch follows PR #125 and its recorded Gate A native checks. The matching
+native 82310 build and editor 0.1.1 remain retained separately. Model checks pass
+16/16. The first expanded palette interface is ready for runtime visual checking;
+that does not establish final editor or multi-DPI acceptance.
 
 Use the native viewer's visual vocabulary: a quiet violet workbench surrounding
 one large, useful preview. Spend the visual emphasis on the selected artwork and
@@ -41,4 +42,4 @@ authoring-only schema changes require migration and preserve earlier projects.
 Full palette, image, font, widget, library and package features remain in scope,
 followed by host/Preferences/launcher/distribution integration, Folderstorm base
 support and the separately planned base-independent phase. This design note does
-not declare any of those features implemented or waive Gate A.
+not declare those remaining features implemented or waive final acceptance.

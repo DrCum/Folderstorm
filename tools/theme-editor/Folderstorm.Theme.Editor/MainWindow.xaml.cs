@@ -19,11 +19,11 @@ public partial class MainWindow : Window
     private readonly PreviewSession preview = new();
     public MainWindow()
     {
-        InitializeComponent();
+        InitializeComponent(); InitializeAuthoring();
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
-        ThemeName.TextChanged += (_, _) => { if (project != null && ThemeName.Text != project.DisplayName) changed = true; };
+
         BasePath.LostKeyboardFocus += async (_, _) =>
         {
             if (project == null && BasePath.Text.Length > 0)
@@ -41,11 +41,13 @@ public partial class MainWindow : Window
     {
         try { action(); }
         catch (Exception error) { StatusText.Text = error.Message; }
+        finally { UpdateCommandState(); }
         await Task.CompletedTask;
     }
     private bool Ready()
     {
-        if (project != null && catalog != null) return true;
+        if (CanEditDocument && catalog != null) return true;
+        if (readOnlyReasons.Length > 0) { StatusText.Text = string.Join(" ", readOnlyReasons); return false; }
         StatusText.Text = "Create or open a project first."; return false;
     }
     private bool Discard()
@@ -68,59 +70,42 @@ public partial class MainWindow : Window
             {
                 catalog = new BaseCatalog(BasePath.Text, scheme: BaseScheme.SelectedValue as string ?? "folderstorm");
                 project = ProjectStore.Create(catalog, "My theme"); projectDirectory = picker.FolderName;
-                ThemeName.Text = project.DisplayName; Save(); RefreshCatalog();
+                readOnlyReasons = []; ReadOnlyBanner.Visibility = Visibility.Collapsed; RawProject.Visibility = Visibility.Collapsed; SyncMetadata(); Save(); RefreshCatalog(); SetupExpander.IsExpanded = false;
             }
         });
     }
     private void Open(string directory)
     {
-        project = ProjectStore.Open(directory); projectDirectory = Path.GetFullPath(directory);
-        catalog = new BaseCatalog(BasePath.Text, project.BaseSkin, project.BaseScheme); ThemeName.Text = project.DisplayName;
-        changed = false; RefreshCatalog(); StatusText.Text = project.Origin == "compiled-package" ? "Imported compiled overrides. This project starts its own editing history." : "Project opened.";
+        var document = ProjectStore.OpenDocument(directory);
+        var next = document.Project;
+        var nextCatalog = next == null ? catalog : new BaseCatalog(BasePath.Text, next.BaseSkin, next.BaseScheme);
+        project = next; catalog = nextCatalog; projectDirectory = Path.GetFullPath(directory); readOnlyReasons = document.ReadOnlyReasons;
+        changed = false; SyncMetadata(); RefreshCatalog();
+        ReadOnlyBanner.Visibility = document.CanEdit ? Visibility.Collapsed : Visibility.Visible;
+        ReadOnlyMessage.Text = string.Join(" ", readOnlyReasons);
+        RawProject.Text = document.CanEdit ? "" : System.Text.Encoding.UTF8.GetString(document.OriginalBytes);
+        RawProject.Visibility = document.CanEdit ? Visibility.Collapsed : Visibility.Visible;
+        if (!document.CanEdit) { Workspace.SelectedItem = ProjectTab; StatusText.Text = "Read-only project. Original bytes are preserved."; }
+        else StatusText.Text = document.WasMigrated ? "Version 1 opened. Save retains the original and writes version 2." : project!.Origin == "compiled-package" ? "Compiled overrides opened with independent history." : "Project opened.";
+        SetupExpander.IsExpanded = false;
     }
     private void RefreshCatalog()
     {
         if (catalog == null) return;
         BaseScheme.ItemsSource = catalog.Schemes; BaseScheme.SelectedValue = catalog.Scheme;
-        ColorList.ItemsSource = catalog.Colors.Values.OrderBy(c => c.Name, StringComparer.Ordinal).ToArray();
+        RefreshPalette();
         TextureList.ItemsSource = catalog.Textures.Values.OrderBy(t => t.Name, StringComparer.Ordinal).ToArray();
         FontList.ItemsSource = catalog.FontConfigurations; FontList.SelectedIndex = 0;
-        ProjectLabel.Text = project == null ? "Classic AnsaStorm" : projectDirectory;
+        SyncMetadata();
     }
     private void Save()
     {
         if (!Ready()) return;
-        project!.DisplayName = ThemeName.Text; ProjectStore.Save(projectDirectory, project); changed = false; StatusText.Text = "Project saved.";
+        CommitMetadata(); ProjectStore.Save(projectDirectory, project!); changed = false; SyncMetadata(); StatusText.Text = "Project saved.";
     }
     private async void SaveProject(object sender, RoutedEventArgs args) => await Run(Save);
-    private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (Ready() && project!.UndoEdit()) { changed = true; SelectColor(sender, null!); StatusText.Text = "Undone."; } });
-    private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (Ready() && project!.RedoEdit()) { changed = true; SelectColor(sender, null!); StatusText.Text = "Redone."; } });
-    private void SearchColors(object sender, TextChangedEventArgs args)
-    {
-        if (catalog != null) ColorList.ItemsSource = catalog.Colors.Values.Where(c => c.Name.Contains(ColorSearch.Text, StringComparison.OrdinalIgnoreCase)).OrderBy(c => c.Name, StringComparer.Ordinal).ToArray();
-    }
-    private void SelectColor(object sender, SelectionChangedEventArgs args)
-    {
-        if (catalog == null || ColorList.SelectedItem is not ColorDefinition definition) return;
-        ColorName.Text = definition.Name; ColorSource.Text = definition.Source + (definition.Reference == null ? "" : "\nLinked to " + definition.Reference);
-        var colors = project == null ? new Dictionary<string, string>() : catalog.CompileColors(project.Edits.Colors);
-        var current = definition; var visited = new HashSet<string>(StringComparer.Ordinal);
-        while (current.Reference != null && visited.Add(current.Name) && catalog.Colors.TryGetValue(current.Reference, out var next)) current = next;
-        ColorValue.Text = colors.GetValueOrDefault(definition.Name) ?? current.Value ?? "1 1 1 1";
-        try { var rgba = Contract.Rgba(ColorValue.Text); ColorSwatch.Background = new SolidColorBrush(Color.FromArgb((byte)(rgba[3] * 255), (byte)(rgba[0] * 255), (byte)(rgba[1] * 255), (byte)(rgba[2] * 255))); }
-        catch (ThemeException) { ColorSwatch.Background = Brushes.Transparent; }
-    }
-    private async void SetColor(object sender, RoutedEventArgs args) => await Run(() =>
-    {
-        if (!Ready() || ColorList.SelectedItem is not ColorDefinition color) return;
-        Contract.Rgba(ColorValue.Text); project!.Checkpoint("Set " + color.Name); project.Edits.Colors[color.Name] = ColorValue.Text; changed = true;
-        SelectColor(sender, null!); StatusText.Text = "Color set. Refresh the viewer preview to inspect it.";
-    });
-    private async void ResetColor(object sender, RoutedEventArgs args) => await Run(() =>
-    {
-        if (!Ready() || ColorList.SelectedItem is not ColorDefinition color) return;
-        project!.Checkpoint("Reset " + color.Name); project.Edits.Colors.Remove(color.Name); changed = true; SelectColor(sender, null!);
-    });
+    private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; CommitMetadata(); if (project!.UndoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Undone."; } });
+    private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; if (project!.RedoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Redone."; } });
     private void SelectTexture(object sender, SelectionChangedEventArgs args)
     {
         if (catalog == null || TextureList.SelectedItem is not TextureDefinition texture) return;
@@ -186,13 +171,13 @@ public partial class MainWindow : Window
     {
         if (!Ready()) return;
         var picker = new SaveFileDialog { Filter = "Folderstorm theme|*.fstheme", FileName = "My theme.fstheme" }; if (picker.ShowDialog(this) != true) return;
-        await Run(() => { project!.DisplayName = ThemeName.Text; PackageStore.Export(picker.FileName, PackageStore.Compile(projectDirectory, project, catalog!)); StatusText.Text = "Theme exported. Save the project to retain its editing history."; });
+        await Run(() => { CommitMetadata(); PackageStore.Export(picker.FileName, PackageStore.Compile(projectDirectory, project!, catalog!)); StatusText.Text = "Theme exported. Save the project to retain its editing history."; });
     }
     private async void Preview(object sender, RoutedEventArgs args)
     {
         if (!Ready()) return;
         try { StatusText.Text = "Validating and starting native preview…"; Workspace.IsEnabled = false;
-            project!.DisplayName = ThemeName.Text; var theme = PackageStore.Compile(projectDirectory, project, catalog!);
+            CommitMetadata(); var theme = PackageStore.Compile(projectDirectory, project!, catalog!);
             await preview.StartAsync(ViewerPath.Text, theme, catalog!); StatusText.Text = "Native preview " + preview.Status + " · PID " + preview.ProcessId; }
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { Workspace.IsEnabled = true; }
