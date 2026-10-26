@@ -3426,7 +3426,7 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
                 LLAssetType::AT_CATEGORY,
                 "Contents");
             object->mInventory->push_front(obj);
-            object->doInventoryCallback();
+            object->doInventoryCallback(true);
             delete ft;
             return;
         }
@@ -3526,9 +3526,9 @@ bool LLViewerObject::loadTaskInvFile(const std::string& filename)
 {
     std::string filename_and_local_path = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, filename);
     llifstream ifs(filename_and_local_path.c_str());
+    U32 fail_count = 0;
     if(ifs.good())
     {
-        U32 fail_count = 0;
         char buffer[MAX_STRING];    /* Flawfinder: ignore */
         // *NOTE: This buffer size is hard coded into scanf() below.
         char keyword[MAX_STRING];   /* Flawfinder: ignore */
@@ -3553,13 +3553,13 @@ bool LLViewerObject::loadTaskInvFile(const std::string& filename)
             else if(0 == strcmp("inv_item", keyword))
             {
                 LLPointer<LLInventoryObject> inv = new LLViewerInventoryItem;
-                inv->importLegacyStream(ifs);
+                if (!inv->importLegacyStream(ifs)) ++fail_count;
                 mInventory->push_front(inv);
             }
             else if(0 == strcmp("inv_object", keyword))
             {
                 LLPointer<LLInventoryObject> inv = new LLInventoryObject;
-                inv->importLegacyStream(ifs);
+                if (!inv->importLegacyStream(ifs)) ++fail_count;
                 inv->rename("Contents");
                 mInventory->push_front(inv);
             }
@@ -3586,14 +3586,15 @@ bool LLViewerObject::loadTaskInvFile(const std::string& filename)
                 << LL_ENDL;
         return false;
     }
-    doInventoryCallback();
+    doInventoryCallback(true, fail_count == 0);
 
     return true;
 }
 
 void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
 {
-    if (inv_result.has("contents"))
+    bool complete = true;
+    if (inv_result["contents"].isArray())
     {
         if(mInventory)
         {
@@ -3619,6 +3620,7 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
             }
             else
             {
+                complete = false;
                 LL_WARNS_ONCE() << "Unknown inventory entry while reading from inventory file. Entry: '"
                                 << inv_entry << "'" << LL_ENDL;
             }
@@ -3629,11 +3631,17 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
         return;
     }
-    doInventoryCallback();
+    doInventoryCallback(true, complete);
 }
 
-void LLViewerObject::doInventoryCallback()
+void LLViewerObject::doInventoryCallback(bool from_simulator, bool complete)
 {
+    ++mInventoryChangeGeneration;
+    if (from_simulator)
+    {
+        ++mInventoryServerGeneration;
+        mInventoryServerComplete = complete;
+    }
     for (callback_list_t::iterator iter = mInventoryCallbacks.begin();
          iter != mInventoryCallbacks.end(); )
     {

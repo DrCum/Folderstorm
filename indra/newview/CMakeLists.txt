@@ -123,6 +123,7 @@ set(viewer_SOURCE_FILES
     fsnavigationlistener.cpp
     fsbuildlistener.cpp
     fsworldlistener.cpp
+    fsobjecttools.cpp
     fscontentlistener.cpp
     fsgesturelistener.cpp
     fspreferenceslistener.cpp
@@ -1039,6 +1040,8 @@ set(viewer_HEADER_FILES
     fsgesturelistener.h
     fsassistantgesturemodel.h
     fsassistantassetfetch.h
+    fsobjecttools.h
+    fsobjecttoolsmodel.h
     fscontentlistener.h
     fscontentupload.h
     fscontentreadpolicy.h

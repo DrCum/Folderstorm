@@ -40,6 +40,7 @@
 #include "fsbuildlistener.h"
 #include "fsnavigationlistener.h"
 #include "fscontentlistener.h"
+#include "fsobjecttools.h"
 #include "fsgesturelistener.h"
 #include "fspreferenceslistener.h"
 #include "fsposelistener.h"
@@ -382,6 +383,7 @@ public:
         fs_initialize_build_api();
         fs_initialize_navigation_api();
         fs_initialize_content_api();
+        fs_initialize_object_tools();
         fs_initialize_gesture_api();
         fs_initialize_preferences_api();
         fs_initialize_pose_api();
@@ -621,6 +623,7 @@ public:
     void disable()
     {
         mEnabled = false;
+        fs_object_tools_privacy_changed();
         if(mSocial)mSocial->privacyChanged();
         FSInventoryBulk::retireAssistant();
         ++mSessionGeneration;
@@ -695,6 +698,7 @@ public:
 
     void permissionsChanged()
     {
+        fs_object_tools_privacy_changed();
         refreshSocialPrivacy();
         mExecutions.erase(std::remove_if(mExecutions.begin(), mExecutions.end(), [](const auto& weak)
         {
@@ -1611,6 +1615,7 @@ void FSEventAPIBridge::refreshSession()
 {
     // Preview cleanup must run even while the authenticated bridge is paused.
     fs_preferences_tick();
+    fs_object_tools_tick();
     if(!mState || !mState->enabled())return;
     mState->maintenance();
     const bool ready=LLStartUp::getStartupState()==STATE_STARTED && !gDisconnected;

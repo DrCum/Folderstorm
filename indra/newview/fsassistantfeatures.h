@@ -6,7 +6,7 @@
 #include <vector>
 namespace fs_assistant {
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 67> featureOperations {{
+inline constexpr std::array<FeatureOperation, 70> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -74,6 +74,9 @@ inline constexpr std::array<FeatureOperation, 67> featureOperations {{
     {"FSNavigation","flyingSet","navigation_tools","navigation_move",false,true,"world_read"},
     {"FSNavigation","teleport","navigation_tools","navigation_teleport",false,true,"world_read"},
     {"FSNavigation","stop","navigation_tools","world_read",false,false,"world_read"},
+    {"FSObjects","contents","task_inventory","task_inventory_read",true,false,"task_inventory_read"},
+    {"FSObjects","scriptGet","task_inventory","task_inventory_read",true,false,"task_inventory_read"},
+    {"FSObjects","debugPoll","script_diagnostics","script_debug_read",true,false,"script_debug_read"},
 }};
 inline const FeatureOperation* featureOperation(const std::string& api,const std::string& op)
 {for(const auto& entry:featureOperations)if(api==entry.api && op==entry.op)return &entry;return nullptr;}
