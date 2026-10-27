@@ -49,3 +49,8 @@ python contracts/check-fixtures.py --dotnet dotnet --cli Folderstorm.Theme.Cli/b
 The independent validator's `revision <directory> <viewer-resource-root>` command
 checks actual payload and inherited bytes, references and protected XUI structure.
 Neither a green contract test nor a WPF screenshot establishes native appearance.
+
+`integration/Workbench/WorkbenchProbe.csproj` exercises the production WPF reset
+handlers, selected-image canvas and override-filtered Undo/Redo without showing
+windows. Pass the matching viewer resource root as its only argument. This is a
+focused UI-state regression check, separate from human visual acceptance.

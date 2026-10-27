@@ -80,7 +80,7 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private void RefreshDocumentEditors()
     {
-        SyncMetadata(); RefreshPalette(); SelectTexture(this, null!);
+        SyncMetadata(); RefreshPalette(); RefreshImageEditors();
     }
     private async void SaveAsProject(object sender, RoutedEventArgs args)
     {

@@ -73,6 +73,15 @@ sibling's changed pixels, save/reopen, Undo/Redo and repeated-reset no-op behavi
 Registration output ignores whitespace outside its root so parse/write cycles do
 not add meaningless changes. These new controls still need runtime visual checking.
 
+The user confirmed Undo and Tile in retained 0.4.0, but Reset image appeared to do
+nothing. A windowless check of the production WPF handler reproduced it: the
+model reset succeeded while the selected image/canvas retained the edited pixels.
+The 0.4.1 correction explicitly reloads the selected image after refreshing the
+catalog. Image/family/all-image reset and Undo/Redo share that refresh path;
+Undo also refreshes an empty Overrides filter. Four focused WPF handler checks
+pass after reproducing the stale-pixel failure before the fix. These checks do
+not show a window or launch a viewer. Human confirmation of 0.4.1 remains open.
+
 Bulk/state-family edits, external editing and additional import formats remain
 in progress. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.

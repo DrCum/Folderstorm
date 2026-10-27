@@ -152,12 +152,18 @@ public partial class MainWindow
         }
     }
     private void ImageSampleModeChanged(object sender, SelectionChangedEventArgs args) => RefreshStretchPreviews();
+    private void RefreshImageEditors()
+    {
+        RefreshTextures();
+        // Reusing the selected catalog item does not raise SelectionChanged after an edit.
+        SelectTexture(this, null!);
+    }
     private void ResetImageSelection(IEnumerable<string> names, string label)
     {
         if (!Ready()) return;
         CommitMetadata();
         var reset = ImageProject.Reset(projectDirectory, project!, catalog!, names, (bytes, file) => ImageCodec.EncodePng(ImageCodec.Decode(bytes, file)));
-        if (reset) { changed = true; RefreshTextures(); SyncMetadata(); }
+        if (reset) { changed = true; RefreshImageEditors(); SyncMetadata(); }
         StatusText.Text = reset ? label + " restored. Undo is available." : "Already inherited.";
     }
     private async void ResetSelectedImage(object sender, RoutedEventArgs args) => await Run(() =>
@@ -174,7 +180,7 @@ public partial class MainWindow
     {
         if (!Ready()) return;
         CommitMetadata(); var reset = ImageProject.ResetAll(project!, catalog!);
-        if (reset) { changed = true; RefreshTextures(); SyncMetadata(); }
+        if (reset) { changed = true; RefreshImageEditors(); SyncMetadata(); }
         StatusText.Text = reset ? "All images restored. Undo is available." : "Images already inherited.";
     });
     private static int ImageNumber(TextBox input)
