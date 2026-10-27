@@ -34,6 +34,13 @@ cancels. Pick buttons open the shared color/opacity picker beside palette, tint,
 generator and drawing-color fields. Picking a tint does not apply it until Apply
 tint is clicked.
 
+The picker also keeps up to 32 local saved swatches, including opacity. Save
+swatch stores a color independently of project edits; selecting a saved swatch
+restores it. Screen pick chooses a screen RGB value while keeping the current
+opacity. Escape or right-click cancels. This candidate still needs a manual
+physical-mouse RGB check: automated sampling did not match the captured swatch.
+The picker scrolls on short displays and keeps Cancel/Use color visible.
+
 In Images, expand External editor, choose an installed editor application, and
 Open copy. Save the separate PNG in that editor, then Reload in the lab. Reload
 creates one undoable edit and preserves original artwork. A file watcher only

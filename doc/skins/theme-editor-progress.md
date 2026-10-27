@@ -54,8 +54,31 @@ checks pass 34/34, including all three presets across six AnsaStorm schemes and
 text/panel contrast. Thirteen windowless WPF groups cover preview, validation,
 Cancel, link-target invalidation and Apply/Undo/Redo. Three preset packages pass
 the C++ validator. Dialog renders are reviewed at normal/minimum widths; actual
-desktop and full native acceptance remain open. Screen eyedropper, saved swatches
-and the remaining font/layout/package/host/base work are still required.
+desktop and full native acceptance remain open.
+
+The 0.10.0 candidate adds local saved swatches, a screen picker and a bounded,
+scrollable shared color dialog. Eighteen windowless WPF groups pass, including
+concurrent swatch saves, malformed/future-data preservation, RGBA restoration,
+injected screen sample/cancel/error paths and queued close completion. Desktop
+testing verified saved swatches through reopen/select, alpha retention and
+Escape keeping the parent dialog open. It caught a late-deactivation crash;
+completion now queues one Close and ignores later callbacks instead of writing
+DialogResult after the modal loop has ended.
+
+Desktop RGB verification is **not accepted**: automation sampled `#1F321080`
+where the captured lab swatch was `#BFA4FCFF` and expected output `#BFA4FC80`.
+The final input path prefers the queued mouse message's clicked pixel, with a
+visual-point fallback. Its arithmetic/handler checks pass; a physical-mouse RGB
+check remains pending. Actual mixed-monitor and system-DPI acceptance also stays
+open. Per-monitor V2 is declared in the editor's manifest; it changes no Windows
+settings. Core/export/native code is unchanged from the checked 0.9.0 source.
+
+Implementation references: [mouse-message coordinates](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-lbuttondown),
+[GetPixel](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getpixel),
+[DwmFlush](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmflush)
+and [DPI manifests](https://learn.microsoft.com/en-us/windows/win32/hidpi/setting-the-default-dpi-awareness-for-a-process).
+The remaining font/layout/package/host/distribution/base phases continue while
+this candidate stays available for later testing.
 
 Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future

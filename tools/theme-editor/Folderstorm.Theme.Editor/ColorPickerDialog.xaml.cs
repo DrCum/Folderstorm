@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.IO;
 
 namespace Folderstorm.Theme.Editor;
 
@@ -9,9 +10,15 @@ public partial class ColorPickerDialog : Window
 {
     private bool updating;
     private HsvColor hsv;
+    private readonly ColorSwatchStore swatchStore;
+    private readonly Func<Window, ThemeColor, ThemeColor?> screenPicker;
+    private string? selectedSaved;
+    private bool savingSwatch, closed;
+    private SwatchState saved = new([], true);
     public ThemeColor SelectedColor { get; private set; }
-    public ColorPickerDialog(ThemeColor initial)
+    public ColorPickerDialog(ThemeColor initial, string? swatchPath = null, Func<Window, ThemeColor, ThemeColor?>? sampler = null)
     {
+        swatchStore = new(swatchPath ?? ColorSwatchStore.DefaultPath); screenPicker = sampler ?? ScreenColorPicker.Pick;
         InitializeComponent(); SelectedColor = initial; hsv = HsvColor.FromColor(initial);
         Spectrum.Changed += (saturation, value) => { hsv = hsv with { Saturation = saturation, Value = value }; SelectedColor = hsv.ToColor(); UpdateFields(); };
         foreach (var hex in new[] { "#FFFFFFFF", "#000000FF", "#BFA4FCFF", "#64D8B2FF", "#FFCC66FF", "#FF6699FF", "#00000000" })
@@ -24,6 +31,9 @@ public partial class ColorPickerDialog : Window
             Swatches.Children.Add(swatch);
         }
         UpdateFields();
+        SetSavedState(swatchStore.Load());
+        SourceInitialized += (_, _) => ScreenPixel.FitDialog(this);
+        Closed += (_, _) => closed = true;
     }
     private static SolidColorBrush Brush(ThemeColor color) => new(Color.FromArgb((byte)Math.Round(color.A * 255), (byte)Math.Round(color.R * 255), (byte)Math.Round(color.G * 255), (byte)Math.Round(color.B * 255)));
     private void UpdateFields()
@@ -34,6 +44,7 @@ public partial class ColorPickerDialog : Window
             Hex.Text = SelectedColor.Hex(); Hue.Value = hsv.Hue; Alpha.Value = Math.Round(SelectedColor.A * 255);
             AlphaLabel.Text = Math.Round(SelectedColor.A * 100) + "%"; ChosenSwatch.Background = Brush(SelectedColor); Spectrum.SetColor(hsv);
             UseColor.IsEnabled = true; ErrorText.Visibility = Visibility.Collapsed;
+            UpdateSwatchCommands();
         }
         finally { updating = false; }
     }
@@ -57,8 +68,61 @@ public partial class ColorPickerDialog : Window
             try { Hue.Value = hsv.Hue; Alpha.Value = Math.Round(hsv.Alpha * 255); AlphaLabel.Text = Math.Round(hsv.Alpha * 100) + "%"; ChosenSwatch.Background = Brush(SelectedColor); Spectrum.SetColor(hsv); }
             finally { updating = false; }
             UseColor.IsEnabled = true; ErrorText.Visibility = Visibility.Collapsed;
+            UpdateSwatchCommands();
         }
-        catch (ThemeException error) { UseColor.IsEnabled = false; ErrorText.Text = error.Message; ErrorText.Visibility = Visibility.Visible; }
+        catch (ThemeException error) { selectedSaved = null; UseColor.IsEnabled = false; ErrorText.Text = error.Message; ErrorText.Visibility = Visibility.Visible; UpdateSwatchCommands(); }
+    }
+    private void UpdateSwatchCommands()
+    {
+        if (SaveSwatch == null) return;
+        if (selectedSaved != SelectedColor.Hex()) selectedSaved = null;
+        SaveSwatch.IsEnabled = UseColor.IsEnabled && saved.CanWrite && !savingSwatch;
+        RemoveSwatch.IsEnabled = saved.CanWrite && selectedSaved != null && !savingSwatch;
+        ScreenPick.IsEnabled = !savingSwatch;
+        foreach (Button button in SavedColors.Children)
+            if ((string?)button.ToolTip == selectedSaved) button.BorderBrush = new SolidColorBrush(Color.FromRgb(191, 164, 252));
+            else button.ClearValue(BorderBrushProperty);
+    }
+    private void SetSavedState(SwatchState state)
+    {
+        saved = state; SavedColors.Children.Clear();
+        foreach (var hex in state.Colors)
+        {
+            var color = ThemeColor.Parse(hex);
+            var button = new Button { Width = 32, Height = 28, Padding = new Thickness(0), Margin = new Thickness(0, 0, 6, 6), ToolTip = hex,
+                Content = new Border { Width = 22, Height = 16, Background = (Brush)FindResource("Checkerboard"), Child = new Border { Background = Brush(color) } } };
+            System.Windows.Automation.AutomationProperties.SetName(button, "Saved " + hex);
+            button.Click += (_, _) => { selectedSaved = hex; SelectedColor = color; hsv = HsvColor.FromColor(color); UpdateFields(); };
+            SavedColors.Children.Add(button);
+        }
+        SavedStatus.Text = state.Message ?? state.Colors.Length + "/32 saved colors"; UpdateSwatchCommands();
+    }
+    private async Task ChangeSwatch(bool remove)
+    {
+        if (savingSwatch) return;
+        try
+        {
+            var color = remove ? ThemeColor.Parse(selectedSaved ?? throw new ThemeException("swatches", "Select a saved color first")) : ThemeColor.Parse(Hex.Text);
+            savingSwatch = true; UpdateSwatchCommands(); SavedStatus.Text = "Saving swatches…";
+            var state = await Task.Run(() => remove ? swatchStore.Remove(color) : swatchStore.Save(color));
+            if (closed) return;
+            selectedSaved = remove ? null : color.Hex(); SetSavedState(state);
+        }
+        catch (Exception error) when (error is ThemeException or IOException or UnauthorizedAccessException or ArgumentException)
+        { if (!closed) SavedStatus.Text = error.Message; }
+        finally { savingSwatch = false; if (!closed) UpdateSwatchCommands(); }
+    }
+    private async void SaveChosenSwatch(object sender, RoutedEventArgs args) => await ChangeSwatch(false);
+    private async void RemoveChosenSwatch(object sender, RoutedEventArgs args) => await ChangeSwatch(true);
+    private void PickScreen(object sender, RoutedEventArgs args)
+    {
+        if (savingSwatch) return;
+        try
+        {
+            var result = screenPicker(this, SelectedColor); if (result == null) return;
+            selectedSaved = null; SelectedColor = result.Value; hsv = HsvColor.FromColor(SelectedColor); UpdateFields();
+        }
+        catch (Exception error) { ErrorText.Text = error.Message; ErrorText.Visibility = Visibility.Visible; }
     }
     private void Accept(object sender, RoutedEventArgs args)
     {

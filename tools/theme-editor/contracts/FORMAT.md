@@ -97,6 +97,15 @@ no-ops. Reset removes only selected literals/links, retaining opaque inherited
 values for native resolution. Presets are starting overrides, not a new project
 or runtime schema. Other palette edits and non-color assets remain preserved.
 
+Saved picker swatches are local preferences, not project or runtime payloads.
+`swatches.json` uses version 1 and at most 32 unique RGBA hex strings, bounded to
+16 KiB. Concurrent writers use an exclusive local lease and atomically replace
+the JSON after rereading it. Duplicates are no-ops and full lists are not evicted
+automatically. Unknown/malformed files stay untouched and disable swatch writes
+without disabling ordinary color selection. Saving a swatch does not checkpoint
+the theme. Screen-pick output is an ordinary selected RGBA value; it is not
+applied to the theme until the existing field's Apply/Set action.
+
 Family edits retain the existing per-image recipe operations. All checked
 states are prepared before the document changes, then committed in one
 checkpoint. Each logical ID keeps a separate scoped PNG and original reference.

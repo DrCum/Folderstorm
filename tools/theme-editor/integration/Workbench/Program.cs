@@ -241,8 +241,10 @@ internal static class Program
             Call(window, "Redo", window, new RoutedEventArgs()); Assert(catalog.InspectColor("ButtonLabelColor", project.Edits.Colors, project.Edits.ColorLinks).Value.Hex() == "#64D8B280", "Bulk palette Redo lost selected value");
             Assert(!paletteDialog.IsVisible, "Palette probe unexpectedly showed a window");
             Console.WriteLine("PASS palette preset/bulk preview, invalid/settings/cancel gating, one-checkpoint Apply and Undo/Redo");
+            var beforeExtras = Contract.Bytes(project); PaletteExtrasChecks.Run(directory);
+            Assert(Contract.Bytes(project).SequenceEqual(beforeExtras), "Picker extras changed the project");
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("13/13 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("18/18 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
