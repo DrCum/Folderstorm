@@ -65,8 +65,28 @@ internal static class Program
             Call(window, "Undo", window, new RoutedEventArgs());
             Assert(Field<ListBox>(window, "TextureList").Items.Count == 1 && Field<RasterImage>(window, "currentImage").ToRgba().SequenceEqual(edited.ToRgba()), "Undo did not refill the override list and image");
             Console.WriteLine("PASS reset/Undo refreshes override-filtered results and canvas");
+            Field<CheckBox>(window, "ImageOverridesOnly").IsChecked = false;
+            var drawingSource = Field<RasterImage>(window, "currentImage"); var drawingHistory = project.Undo.Count;
+            var stroke = new PixelStroke(drawingSource, PixelTool.Line, new(1, 1), ThemeColor.Parse("#EF1234FF")); stroke.Move(new(7, 7));
+            Call(window, "CommitDrawing", stroke.Preview, stroke.Recipe);
+            Assert(project.Undo.Count == drawingHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(stroke.Preview), "Drawing handler did not store/redraw exactly one gesture");
+            Call(window, "Undo", window, new RoutedEventArgs());
+            Assert(Field<RasterImage>(window, "currentImage").PixelEquals(drawingSource), "Drawing Undo did not restore the prior pixels");
+            Call(window, "Redo", window, new RoutedEventArgs());
+            Assert(Field<RasterImage>(window, "currentImage").PixelEquals(stroke.Preview), "Drawing Redo did not restore the new pixels");
+            Console.WriteLine("PASS drawing commit redraws exact pixels with one checkpoint and Undo/Redo");
+            var picker = new ColorPickerDialog(ThemeColor.Parse("#11223344"));
+            T PickerField<T>(string name) => (T)typeof(ColorPickerDialog).GetField(name, Private)!.GetValue(picker)!;
+            var hex = PickerField<TextBox>("Hex"); var alpha = PickerField<Slider>("Alpha");
+            Assert(hex.Text == "#11223344" && alpha.Value == 68, "Picker lost its initial color/alpha");
+            hex.Text = "#FF000080"; PickerField<Slider>("Hue").Value = 180;
+            Assert(picker.SelectedColor.Hex() == "#00FFFF80" && alpha.Value == 128, "Picker hue selection changed alpha or displayed channels");
+            hex.Text = "#Oops"; Assert(!PickerField<Button>("UseColor").IsEnabled, "Invalid hex enabled Use color");
+            hex.Text = "#64D8B200"; Assert(picker.SelectedColor.Hex() == "#64D8B200" && PickerField<Button>("UseColor").IsEnabled, "Picker lost transparent RGB or did not recover valid hex");
+            Assert(!picker.IsVisible, "Probe unexpectedly showed the picker");
+            Console.WriteLine("PASS picker initial/edited RGBA, hue, transparency and invalid input gating");
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("4/4 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("6/6 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

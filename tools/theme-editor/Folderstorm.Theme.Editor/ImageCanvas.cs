@@ -12,21 +12,32 @@ public sealed class ImageCanvas : FrameworkElement
     private BitmapSource? bitmap;
     private TextureGeometry? geometry;
     private TextureGeometry? dragStart;
+    private PixelStroke? stroke;
     private int guide = -1;
     public double Zoom { get; private set; } = 1;
     public bool AllowGuideEditing { get; set; } = true;
     public bool IsGuideDragging => guide >= 0;
+    public bool IsInteracting => IsGuideDragging || stroke != null;
+    public bool AllowDrawing { get; set; }
+    public PixelTool Tool { get; set; }
+    public ThemeColor DrawingColor { get; set; } = ThemeColor.Parse("#FFFFFFFF");
+    public int BrushSize { get; set; } = 1;
+    public bool ShowPixelGrid { get; set; } = true;
     public event Action<int, int, RgbaPixel>? PixelHovered;
     public event Action<RgbaPixel>? PixelChosen;
     public event Action<TextureGeometry>? GuidesMoved;
     public event Action<TextureGeometry>? GuidesCommitted;
     public event Action? GuideDragStateChanged;
+    public event Action? DrawingStateChanged;
+    public event Action<RasterImage, Recipe>? DrawingCommitted;
+    public event Action<string>? DrawingFailed;
     public ImageCanvas() { Focusable = true; Cursor = Cursors.Cross; RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor); }
     public void SetImage(RasterImage? value, TextureGeometry? guides)
     {
-        var wasDragging = guide >= 0; guide = -1; dragStart = null; if (IsMouseCaptured) ReleaseMouseCapture();
+        var wasDragging = guide >= 0; var wasDrawing = stroke != null; stroke = null; guide = -1; dragStart = null; if (IsMouseCaptured) ReleaseMouseCapture();
         image = value; bitmap = value == null ? null : ImageCodec.ToBitmap(value); geometry = guides;
         if (wasDragging) GuideDragStateChanged?.Invoke();
+        if (wasDrawing) DrawingStateChanged?.Invoke();
         InvalidateMeasure(); InvalidateVisual();
     }
     public void SetZoom(double value)
@@ -39,6 +50,12 @@ public sealed class ImageCanvas : FrameworkElement
         base.OnRender(drawing); if (image == null || bitmap == null) return;
         drawing.PushTransform(new ScaleTransform(Zoom, Zoom));
         drawing.DrawImage(bitmap, new(0, 0, image.Width, image.Height));
+        if (ShowPixelGrid && Zoom >= 6 && image.Width + image.Height <= 8192)
+        {
+            var grid = new Pen(new SolidColorBrush(Color.FromArgb(75, 0, 0, 0)), 1 / Zoom);
+            for (var x = 1; x < image.Width; ++x) drawing.DrawLine(grid, new(x, 0), new(x, image.Height));
+            for (var y = 1; y < image.Height; ++y) drawing.DrawLine(grid, new(0, y), new(image.Width, y));
+        }
         if (geometry is { } bounds)
         {
             var clip = new Rect(bounds.Clip.Left, image.Height - bounds.Clip.Top, bounds.ClipWidth, bounds.ClipHeight);
@@ -66,6 +83,17 @@ public sealed class ImageCanvas : FrameworkElement
     {
         base.OnMouseLeftButtonDown(args); if (image == null || PixelAt(args) is not { } pixel) return;
         Focus();
+        if (Tool != PixelTool.Inspect)
+        {
+            if (!AllowDrawing || !CaptureMouse()) return;
+            try
+            {
+                stroke = new(image, Tool, new(pixel.X, pixel.Y), DrawingColor, BrushSize);
+                ShowStroke(); DrawingStateChanged?.Invoke(); args.Handled = true;
+            }
+            catch (ThemeException error) { CancelStroke(); if (IsMouseCaptured) ReleaseMouseCapture(); DrawingFailed?.Invoke(error.Message); }
+            return;
+        }
         if (AllowGuideEditing && geometry is { } bounds)
         {
             var point = args.GetPosition(this); var top = image.Height - bounds.Clip.Top; var bottom = image.Height - bounds.Clip.Bottom;
@@ -85,7 +113,12 @@ public sealed class ImageCanvas : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs args)
     {
         base.OnMouseMove(args); if (image == null) return;
-        if (guide >= 0 && geometry is { } bounds)
+        if (stroke != null)
+        {
+            try { stroke.Move(ClampedPixel(args)); ShowStroke(); args.Handled = true; }
+            catch (ThemeException error) { CancelStroke(); DrawingFailed?.Invoke(error.Message); }
+        }
+        else if (guide >= 0 && geometry is { } bounds)
         {
             var point = args.GetPosition(this); var x = (int)Math.Round(point.X / Zoom); var y = (int)Math.Round(point.Y / Zoom);
             var margins = bounds.Margins;
@@ -102,13 +135,27 @@ public sealed class ImageCanvas : FrameworkElement
     }
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs args)
     {
-        base.OnMouseLeftButtonUp(args); if (guide < 0) return;
+        base.OnMouseLeftButtonUp(args);
+        if (stroke != null)
+        {
+            try
+            {
+                stroke.Move(ClampedPixel(args)); var finished = stroke; stroke = null;
+                image = finished.Preview; bitmap = ImageCodec.ToBitmap(image); ReleaseMouseCapture();
+                DrawingStateChanged?.Invoke(); InvalidateVisual();
+                if (finished.HasChanges) DrawingCommitted?.Invoke(finished.Preview, finished.Recipe);
+            }
+            catch (ThemeException error) { CancelStroke(); DrawingFailed?.Invoke(error.Message); }
+            args.Handled = true; return;
+        }
+        if (guide < 0) return;
         guide = -1; dragStart = null; ReleaseMouseCapture();
         GuideDragStateChanged?.Invoke();
         if (geometry is { } bounds) GuidesCommitted?.Invoke(bounds); args.Handled = true;
     }
     protected override void OnKeyDown(KeyEventArgs args)
     {
+        if (args.Key == Key.Escape && stroke != null) { CancelStroke(); args.Handled = true; }
         if (args.Key == Key.Escape && guide >= 0)
         {
             geometry = dragStart; dragStart = null; guide = -1; ReleaseMouseCapture();
@@ -119,7 +166,24 @@ public sealed class ImageCanvas : FrameworkElement
     }
     protected override void OnLostMouseCapture(MouseEventArgs args)
     {
+        if (stroke != null) CancelStroke();
         if (guide >= 0) { geometry = dragStart; guide = -1; dragStart = null; GuideDragStateChanged?.Invoke(); if (geometry is { } bounds) GuidesMoved?.Invoke(bounds); InvalidateVisual(); }
         base.OnLostMouseCapture(args);
+    }
+    private PixelPoint ClampedPixel(MouseEventArgs args)
+    {
+        var point = args.GetPosition(this);
+        return new(Math.Clamp((int)Math.Floor(point.X / Zoom), 0, image!.Width - 1), Math.Clamp((int)Math.Floor(point.Y / Zoom), 0, image.Height - 1));
+    }
+    private void ShowStroke()
+    {
+        if (stroke == null) return;
+        image = stroke.Preview; bitmap = ImageCodec.ToBitmap(image); InvalidateVisual();
+    }
+    private void CancelStroke()
+    {
+        if (stroke == null) return;
+        image = stroke.Original; stroke = null; bitmap = ImageCodec.ToBitmap(image);
+        if (IsMouseCaptured) ReleaseMouseCapture(); DrawingStateChanged?.Invoke(); InvalidateVisual();
     }
 }

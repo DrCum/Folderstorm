@@ -15,7 +15,7 @@ public partial class MainWindow : Window
     private BaseCatalog? catalog;
     private ThemeProject? project;
     private string projectDirectory = "";
-    private bool changed, closing;
+    private bool changed, closing, closePending;
     private readonly PreviewSession preview = new();
     public MainWindow()
     {
@@ -173,8 +173,14 @@ public partial class MainWindow : Window
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (closing) return; args.Cancel = true;
-        if (copyingProject || imageOperation || EditCanvas.IsGuideDragging) { StatusText.Text = "Finish or cancel the current edit before closing."; return; }
-        try { if (!Discard()) return; await preview.DisposeAsync(); closing = true; Close(); }
-        catch (Exception error) { StatusText.Text = error.Message; }
+        if (closePending) return;
+        if (copyingProject || imageOperation || EditCanvas.IsInteracting) { StatusText.Text = "Finish or cancel the current edit before closing."; return; }
+        try
+        {
+            if (!Discard()) return;
+            closePending = true; UpdateCommandState(); await preview.DisposeAsync(); closing = true;
+            await Dispatcher.InvokeAsync(Close);
+        }
+        catch (Exception error) { closePending = closing = false; UpdateCommandState(); StatusText.Text = error.Message; }
     }
 }

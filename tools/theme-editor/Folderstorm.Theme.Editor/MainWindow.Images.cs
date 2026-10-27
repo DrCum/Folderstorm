@@ -24,10 +24,14 @@ public partial class MainWindow
     private void InitializeImages()
     {
         EditCanvas.PixelHovered += (x, y, pixel) => ImagePixel.Text = $"{x}, {y}  {pixel.Color.Hex()}  {pixel.R} {pixel.G} {pixel.B} {pixel.A}";
-        EditCanvas.PixelChosen += pixel => { if (CanEditImage) { ImageTint.Text = pixel.Color.Hex(); StatusText.Text = "Pixel color picked. Apply tint to use it."; } };
+        EditCanvas.PixelChosen += pixel => { if (CanEditImage) { ImageTint.Text = DrawingColor.Text = pixel.Color.Hex(); StatusText.Text = "Pixel color picked."; } };
         EditCanvas.GuidesMoved += geometry => { imageGeometry = geometry; SetGuideFields(geometry); RefreshStretchPreviews(); };
         EditCanvas.GuidesCommitted += geometry => _ = Run(() => ApplyGuides(geometry));
         EditCanvas.GuideDragStateChanged += UpdateCommandState;
+        EditCanvas.DrawingStateChanged += UpdateCommandState;
+        EditCanvas.DrawingCommitted += CommitDrawing;
+        EditCanvas.DrawingFailed += message => StatusText.Text = message;
+        DrawingSettingsChanged(this, new RoutedEventArgs());
     }
     private void SearchTextures(object sender, TextChangedEventArgs args) => RefreshTextures();
     private void FilterImageFamily(object sender, SelectionChangedEventArgs args) => RefreshTextures();

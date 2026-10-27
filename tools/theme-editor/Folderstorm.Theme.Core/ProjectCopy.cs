@@ -48,7 +48,16 @@ public static class ProjectCopy
                 Contract.Require(output.Length == length, "project_changed", "Project file changed during copy: " + relative);
             }
             ProjectStore.Save(staging, project);
-            Directory.Move(staging, destination);
+            for (var attempt = 0; ; ++attempt)
+            {
+                try { Directory.Move(staging, destination); break; }
+                catch (Exception error) when (OperatingSystem.IsWindows() && attempt < 5 &&
+                    error is IOException or UnauthorizedAccessException && (error.HResult & 0xffff) is 5 or 32 or 33)
+                {
+                    // Windows readers can briefly hold a newly written stage without delete sharing.
+                    Thread.Sleep(100 << attempt);
+                }
+            }
             return destination;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ThemeException)

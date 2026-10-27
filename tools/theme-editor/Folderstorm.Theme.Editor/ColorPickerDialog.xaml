@@ -1,0 +1,15 @@
+<Window x:Class="Folderstorm.Theme.Editor.ColorPickerDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Folderstorm.Theme.Editor" Title="Choose color" Width="450" SizeToContent="Height" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="#111016" Foreground="#F5F3FA">
+  <StackPanel Margin="20">
+    <local:ColorSpectrum x:Name="Spectrum" Height="235" Margin="7,7,7,14" AutomationProperties.Name="Saturation and brightness" ToolTip="Click or drag to choose saturation and brightness. Arrow keys adjust; Shift makes larger steps."/>
+    <TextBlock Text="Hue"/><Slider x:Name="Hue" Minimum="0" Maximum="360" ValueChanged="HueChanged" AutomationProperties.Name="Color hue" Margin="0,3,0,10"/>
+    <DockPanel><TextBlock Text="Opacity"/><TextBlock x:Name="AlphaLabel" HorizontalAlignment="Right"/></DockPanel>
+    <Slider x:Name="Alpha" Minimum="0" Maximum="255" Value="255" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="AlphaChanged" AutomationProperties.Name="Color opacity" Margin="0,3,0,12"/>
+    <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <Border Height="46" Background="{StaticResource Checkerboard}" Margin="0,0,12,0"><Border x:Name="ChosenSwatch"/></Border>
+      <TextBox Grid.Column="1" x:Name="Hex" TextChanged="HexChanged" FontFamily="Consolas" VerticalContentAlignment="Center" AutomationProperties.Name="Picked hex or RGBA value" ToolTip="#RRGGBB or #RRGGBBAA. Alpha comes last."/>
+    </Grid>
+    <TextBlock x:Name="ErrorText" Foreground="#F2CD94" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
+    <WrapPanel x:Name="Swatches" Margin="0,0,0,12"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="Cancel" IsCancel="True"/><Button x:Name="UseColor" Content="Use color" IsDefault="True" Click="Accept"/></StackPanel>
+  </StackPanel>
+</Window>

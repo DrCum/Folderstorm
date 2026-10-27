@@ -313,6 +313,48 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("pixel drawing connects strokes, preserves alpha and clips circle/brush edges", () =>
+{
+    var source = RasterImage.Fill(9, 9, ThemeColor.Parse("#00000000")); var ink = ThemeColor.Parse("#D85BFF80"); var pixel = new RgbaPixel(216, 91, 255, 128);
+    var pen = source.Draw(PixelTool.Pen, [new(1, 1), new(7, 1), new(7, 7)], ink);
+    Assert(pen.Pixel(4, 1) == pixel && pen.Pixel(7, 4) == pixel && pen.Pixel(4, 4).A == 0, "Pen skipped pixels or filled the path's interior");
+    var line = source.Draw(PixelTool.Line, [new(0, 8), new(8, 0)], ink);
+    Assert(Enumerable.Range(0, 9).All(index => line.Pixel(index, 8 - index) == pixel) && line.Pixel(0, 0).A == 0, "Line endpoints/diagonal or exact alpha changed");
+    var circle = source.Draw(PixelTool.Circle, [new(4, 4), new(6, 4)], ink);
+    Assert(circle.Pixel(2, 4) == pixel && circle.Pixel(6, 4) == pixel && circle.Pixel(4, 2) == pixel && circle.Pixel(4, 6) == pixel && circle.Pixel(4, 4).A == 0, "Circle cardinal points or hollow center changed");
+    var edge = source.Draw(PixelTool.Circle, [new(0, 0), new(2, 0)], ink, 2);
+    Assert(edge.Pixel(2, 0) == pixel && edge.Pixel(0, 2) == pixel, "Circle brush did not clip at image edges");
+    var erased = pen.Draw(PixelTool.Pen, [new(1, 1)], ThemeColor.Parse("#11663300"));
+    Assert(erased.Pixel(1, 1) == new RgbaPixel(17, 102, 51, 0) && source.Pixel(1, 1).A == 0, "Transparent brush blended pixels or changed the original");
+    Reject("drawing", () => source.Draw(PixelTool.Inspect, [new(0, 0)], ink));
+    Reject("drawing", () => source.Draw(PixelTool.Line, [new(0, 0)], ink));
+    Reject("drawing", () => source.Draw(PixelTool.Pen, [new(-1, 0)], ink));
+    Reject("drawing", () => source.Draw(PixelTool.Pen, [new(0, 0)], ink, 17));
+});
+
+Test("drawing gesture previews replace shapes and retain a bounded recipe without modifying source pixels", () =>
+{
+    var original = RasterImage.Fill(8, 8, ThemeColor.Parse("#0000")); var stroke = new PixelStroke(original, PixelTool.Line, new(1, 1), ThemeColor.Parse("#fff"));
+    stroke.Move(new(6, 1)); stroke.Move(new(1, 6));
+    Assert(stroke.Preview.Pixel(1, 4).A == 255 && stroke.Preview.Pixel(4, 1).A == 0 && original.Pixel(1, 4).A == 0, "Line preview accumulated earlier positions or mutated original");
+    Assert(stroke.HasChanges && stroke.Recipe.Parameters["points"].GetArrayLength() == 2 && RecipeHistory.ReadOnlyReasons(stroke.Recipe).Length == 0, "Shape recipe lost its endpoints");
+    Assert(!new PixelStroke(original, PixelTool.Pen, new(0, 0), ThemeColor.Parse("#0000")).HasChanges, "Identical pixels counted as an edit");
+    var pen = new PixelStroke(original, PixelTool.Pen, new(0, 0), ThemeColor.Parse("#fff"));
+    for (var index = 1; index < PixelStroke.PointLimit; ++index) pen.Move(new(index % 8, index / 8 % 8));
+    var before = pen.Preview.ToRgba();
+    Reject("drawing", () => pen.Move(new(0, 0)));
+    Assert(pen.Preview.ToRgba().SequenceEqual(before) && pen.Recipe.Parameters["points"].GetArrayLength() == PixelStroke.PointLimit, "Rejected gesture changed pixels/recipe");
+});
+
+Test("HSV color selection preserves RGBA, grayscale and the hue seam", () =>
+{
+    foreach (var hex in new[] { "#FF0000FF", "#00FF0080", "#0000FF01", "#F6219C7F", "#33333344", "#11663300", "#00000000", "#FFFFFFFF" })
+        Assert(HsvColor.FromColor(ThemeColor.Parse(hex)).ToColor().Hex() == hex, "HSV round trip changed " + hex);
+    Assert(new HsvColor(360, 1, 1, .5).ToColor().Hex() == "#FF000080", "Hue seam or alpha rounding changed");
+    Reject("color", () => new HsvColor(double.NaN, 1, 1, 1).ToColor());
+    Reject("color", () => new HsvColor(0, 2, 1, 1).ToColor());
+});
+
 Test("tiled samples repeat exact RGBA pixels across partial edges", () =>
 {
     byte[] rgba = [255, 0, 0, 255, 17, 31, 47, 0, 0, 255, 0, 128, 0, 0, 255, 64, 70, 80, 90, 255, 1, 2, 3, 1];

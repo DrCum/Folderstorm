@@ -12,7 +12,8 @@ public static class RecipeHistory
         ["replace"] = [], ["crop"] = ["x", "y", "width", "height"], ["resize"] = ["width", "height", "interpolation"],
         ["tint"] = ["color"], ["color-adjust"] = ["brightness", "contrast", "saturation", "gamma", "alpha_scale"], ["alpha"] = ["scale"],
         ["solid-fill"] = ["width", "height", "color"], ["linear-gradient"] = ["width", "height", "first", "last", "vertical"],
-        ["border"] = ["thickness", "color"], ["nine-slice"] = ["left", "top", "right", "bottom", "clip_left", "clip_top", "clip_right", "clip_bottom"], ["pipeline"] = ["steps"]
+        ["border"] = ["thickness", "color"], ["nine-slice"] = ["left", "top", "right", "bottom", "clip_left", "clip_top", "clip_right", "clip_bottom"],
+        ["pixel-draw"] = ["tool", "color", "size", "points"], ["pipeline"] = ["steps"]
     };
     public static string[] ReadOnlyReasons(Recipe recipe) => Inspect(recipe, 0).Distinct(StringComparer.Ordinal).ToArray();
     private static IEnumerable<string> Inspect(Recipe recipe, int depth)

@@ -18,8 +18,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private string? appliedColorValue;
     private string[] readOnlyReasons = [];
     public event PropertyChangedEventHandler? PropertyChanged;
-    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !copyingProject && !imageOperation && EditCanvas?.IsGuideDragging != true;
-    public bool CanOpenDocument => !copyingProject && !imageOperation && EditCanvas?.IsGuideDragging != true;
+    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !closePending && !copyingProject && !imageOperation && EditCanvas?.IsInteracting != true;
+    public bool CanOpenDocument => !closePending && !copyingProject && !imageOperation && EditCanvas?.IsInteracting != true;
     public bool CanUndo => CanEditDocument && (project!.Undo.Count > 0 || MetadataPending());
     public bool CanRedo => CanEditDocument && project!.Redo.Count > 0 && !MetadataPending();
 
@@ -50,7 +50,7 @@ public partial class MainWindow : INotifyPropertyChanged
         ProjectLabel.ToolTip = projectDirectory;
         Title = "Folderstorm theme lab · " + (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "Development") + (changed ? " *" : "");
         XmlEditor.IsReadOnly = !CanEditDocument;
-        if (EditCanvas != null) EditCanvas.AllowGuideEditing = CanEditImage && ShowImageGuides.IsChecked == true;
+        if (EditCanvas != null) DrawingSettingsChanged(this, new RoutedEventArgs());
         CommandManager.InvalidateRequerySuggested();
     }
     private bool MetadataPending() => project != null && ThemeName != null && ThemeAuthor != null && PackageVersion != null && ThemeDescription != null &&

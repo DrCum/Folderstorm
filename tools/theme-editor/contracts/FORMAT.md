@@ -75,6 +75,14 @@ pipeline levels. Unknown nested operations/fields/parameters are read-only,
 including steps saved in undo/redo history. Earlier editors that do not recognize
 `pipeline` preserve the document through their unknown-operation read-only path.
 
+`pixel-draw` records a `tool` (`pen`, `line`, `circle`), `color` in RGBA hex,
+integer brush `size`, and top-origin integer `points` (`x`, `y`). A pen retains
+its connected path; a line retains two endpoints; a circle retains center/edge.
+Drawing writes exact RGBA pixels. Each gesture has at most 4096 points and a
+1–16 pixel brush. The prepared PNG is the runtime asset; export does not replay
+the recipe. Earlier editors preserve this operation read-only. Cancelled or
+pixel-identical gestures do not create project edits.
+
 Save As stages a complete project copy in the new folder's parent and exposes it
 with a single rename. It retains imported originals, derivatives, history,
 checkpoints and extra plain project files, then saves current in-memory edits.

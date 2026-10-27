@@ -8,7 +8,7 @@ public readonly record struct RgbaPixel(byte R, byte G, byte B, byte A)
 public enum ImageInterpolation { Nearest, Bilinear }
 
 // Immutable straight-alpha pixels. Imported bytes remain separate project assets.
-public sealed class RasterImage
+public sealed partial class RasterImage
 {
     public const int PixelLimit = 16_000_000;
     private readonly byte[] pixels;

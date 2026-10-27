@@ -82,6 +82,34 @@ Undo also refreshes an empty Overrides filter. Four focused WPF handler checks
 pass after reproducing the stale-pixel failure before the fix. These checks do
 not show a window or launch a viewer. Human confirmation of 0.4.1 remains open.
 
+The user resumed implementation and requested pixel-art Pen, Line and Circle
+tools plus a picker beside each hex-color field. These use the existing dark
+workbench and image canvas. The toolbar defaults to Inspect; drawing is explicit.
+Pen connects input points; Line replaces its live endpoint preview; Circle is
+dragged from center to edge. Brushes write exact RGBA pixels, including alpha
+zero, with no smoothing or blending. The optional grid appears at 6x zoom or
+larger. A completed gesture creates one scoped PNG/recipe/checkpoint; Escape or
+capture loss cancels before the project is touched. Original comparison and
+read-only documents cannot be drawn on.
+
+The shared picker offers saturation/brightness, hue, opacity, hex/RGBA input and
+small preset swatches. It is available for palette values, image tint, both
+generated colors and drawing color. Choosing a color updates its field; Set
+color, Apply tint and generation commands retain their existing apply behavior.
+The pixel inspector can also copy an artwork pixel into tint and drawing color.
+
+Core checks now pass 28/28, image/codec groups pass 8/8, and focused WPF handler
+checks pass 6/6. The production C++ validator accepts the drawing revision
+`b5b25e0e9655774e381f3a0a63902775fa84e3c03ff067f89c65705c01ee077b`
+and its sample preview
+`7b9e01a9966965cbe1449c5951f7edd1908a866411770411de5ffa78e9d50ec0`.
+Actual desktop checks for the pixel tools remain in progress. A Windows staging rename
+failure in Save As exposed a short file-sharing race; its final rename now uses
+the same bounded Windows retry pattern as library publishing. The source project
+and failed stages remain preserved. Closing the editor now queues the final
+Close call after its first Closing event returns, avoiding reentrant close while
+still disposing only its owned preview.
+
 Bulk/state-family edits, external editing and additional import formats remain
 in progress. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.

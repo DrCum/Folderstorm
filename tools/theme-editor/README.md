@@ -14,6 +14,12 @@ slice guides, stretch/tile samples and image/family/all-image reset. Reset keeps
 stored originals and history; Undo restores the edits. Future projects and
 unsupported operations open read-only.
 
+Images also has Pen, Line and Circle pixel tools. Zoom in for the optional grid;
+drag a circle from center to edge. Release commits one undoable gesture; Escape
+cancels. Pick buttons open the shared color/opacity picker beside palette, tint,
+generator and drawing-color fields. Picking a tint does not apply it until Apply
+tint is clicked.
+
 Use .NET 10 on Windows. The editor is x64 WPF, self-contained and non-trimmed;
 core and CLI have no UI or third-party package dependencies.
 

@@ -31,7 +31,8 @@ internal static class Program
             TgaChecks.Run(catalog);
             ImageProjectChecks.Run(catalog);
             ImageResetChecks.Run(catalog);
-            Console.WriteLine("7/7 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
+            DrawingProjectChecks.Run(catalog);
+            Console.WriteLine("8/8 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
