@@ -358,6 +358,10 @@ groups after correcting the summary fixture's expected count to the30 compiled
 accent/alias overrides actually present. The final narrow render keeps the color
 study/artwork explanation readable. This is a foundation checkpoint, without an
 enabled host authoring candidate or new native build.
+The managed and native host-format validators now agree on33 shared cases,
+including exact error codes and packed RGB values. Four focused managed groups
+pass. The standalone production-code helper compiled with warnings as errors;
+the shared viewer cache, retained native files and host activation are unchanged.
 
 The exact previously rejected source push was retried after connected GitHub
 confirmed repository ownership and push access. Automatic approval review again

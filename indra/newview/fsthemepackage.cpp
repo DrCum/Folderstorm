@@ -279,6 +279,33 @@ boost::json::value parse(const std::string& bytes)
     }
     return value;
 }
+HostPalette hostPalette(const std::string& bytes)
+{
+    require(bytes.size()<=4096,"size","Host palette exceeds4 KiB");
+    require(bytes.rfind("\xef\xbb\xbf",0)!=0,"json","Host palette must not contain a UTF-8 BOM");
+    const auto value=parse(bytes);require(!value.is_null(),"json","Null host palette");require(value.is_object(),"schema","Expected host palette object");
+    const auto& object=value.as_object();fields(object,{"format_version","colors"});
+    const auto version=integer(object,"format_version");require(version>=INT32_MIN && version<=INT32_MAX,"schema","format_version");
+    const auto* colors=object.if_contains("colors");require(colors && (colors->is_object() || colors->is_null()),"schema","colors");
+    if(colors->is_object())for(const auto& field:colors->as_object())require(field.value().is_string() || field.value().is_null(),"schema",std::string(field.key()));
+    require(version==1,"host_palette_version","Unsupported host palette format");
+    static const std::set<std::string> roles{"background","panel","input","text","muted","accent","border"};
+    require(colors->is_object() && colors->as_object().size()==roles.size(),"host_palette","Define the seven host color roles");
+    HostPalette result;
+    for(const auto& field:colors->as_object())
+    {
+        require(roles.count(std::string(field.key())) && field.value().is_string(),"host_palette","Invalid host color role/value");
+        const auto hex=field.value().as_string();require(hex.size()==7 && hex[0]=='#',"host_palette","Host colors use #RRGGBB");
+        std::uint32_t rgb=0;
+        for(std::size_t index=1;index<hex.size();++index)
+        {
+            const auto digit=hex[index];const int part=digit>='0' && digit<='9'?digit-'0':digit>='a' && digit<='f'?digit-'a'+10:digit>='A' && digit<='F'?digit-'A'+10:-1;
+            require(part>=0,"host_palette","Host colors use #RRGGBB");rgb=(rgb<<4)|static_cast<std::uint32_t>(part);
+        }
+        result.colors.emplace(std::string(field.key()),rgb);
+    }
+    return result;
+}
 CaptureRequest captureRequest(const std::string& bytes,const std::string& requestId,std::int64_t generation,const std::string& revision)
 {
     require(bytes.size()<=4096,"size","Capture request exceeds 4096 bytes");

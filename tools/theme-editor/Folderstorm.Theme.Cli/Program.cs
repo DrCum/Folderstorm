@@ -16,6 +16,9 @@ try
     object result;
     switch (values[0])
     {
+        case "host-palette":
+            var hostPalette = HostPalette.Read(LibraryCatalog.ReadBounded(values[1], HostPalette.Limit));
+            result = hostPalette.Colors.ToDictionary(item => item.Key, item => ThemeColor.Parse(item.Value).Hex(false), StringComparer.Ordinal); break;
         case "capture-contract":
             using (var fixture = Contract.Parse(File.ReadAllBytes(values[1])))
             {

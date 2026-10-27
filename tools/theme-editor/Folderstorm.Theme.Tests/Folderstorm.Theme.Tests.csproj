@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
   <ItemGroup><ProjectReference Include="../Folderstorm.Theme.Core/Folderstorm.Theme.Core.csproj" /></ItemGroup>
+  <ItemGroup><None Include="../contracts/host-palette-cases.json" Link="host-palette-cases.json" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
 </Project>

@@ -3,6 +3,8 @@
 #define FS_THEME_PACKAGE_H
 #include <boost/json.hpp>
 #include <filesystem>
+#include <cstdint>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -38,6 +40,8 @@ std::string hash(const std::string& bytes);
 std::string readFile(const std::filesystem::path& path,std::uint64_t limit=ManifestLimit);
 std::string hashFile(const std::filesystem::path& path);
 boost::json::value parse(const std::string& bytes);
+struct HostPalette {std::map<std::string,std::uint32_t> colors;}; // packed0xRRGGBB
+HostPalette hostPalette(const std::string& bytes);
 Manifest manifest(const std::string& bytes);
 Revision load(const std::filesystem::path& directory,const std::filesystem::path& base);
 struct CaptureRequest {std::string id;int width=0,height=0;};

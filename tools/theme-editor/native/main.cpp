@@ -5,7 +5,13 @@ int main(int count,char** args)
 {
     try
     {
-        if(count==3 && std::string(args[1])=="capture-contract")
+        if(count==3 && std::string(args[1])=="host-palette")
+        {
+            const auto palette=fs_theme::hostPalette(fs_theme::readFile(fs_theme::fromUtf8(args[2]),4096));boost::json::object colors;
+            for(const auto& entry:palette.colors)colors[entry.first]=entry.second;
+            std::cout<<"valid "<<boost::json::serialize(colors)<<'\n';
+        }
+        else if(count==3 && std::string(args[1])=="capture-contract")
         {
             const auto fixture=fs_theme::parse(fs_theme::readFile(fs_theme::fromUtf8(args[2]))).as_object();
             const auto request=fs_theme::captureRequest(boost::json::serialize(fixture.at("request")),std::string(fixture.at("request_id").as_string()),fixture.at("generation").as_int64(),std::string(fixture.at("revision").as_string()));

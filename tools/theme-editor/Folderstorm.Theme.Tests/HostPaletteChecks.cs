@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 using Folderstorm.Theme;
 using System.Text;
+using System.Globalization;
 
 internal static class HostPaletteChecks
 {
@@ -41,5 +42,19 @@ internal static class HostPaletteChecks
             Reject("host_palette", () => HostPalette.WithColor(palette, "unknown", "#123456"));
             Assert(HostPalette.Bytes(palette).SequenceEqual(before), "Rejected edit changed source");
         });
+        test("host palette shared cases freeze managed/native rejection and exact RGB values", () =>
+        {
+            var fixtures = Contract.Read<HostPaletteFixtures>(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "host-palette-cases.json")));
+            Assert(fixtures.FormatVersion == 1 && fixtures.Cases.Length == 33, "Host fixture corpus changed");
+            foreach (var item in fixtures.Cases)
+            {
+                var bytes = Encoding.UTF8.GetBytes(item.Input);
+                if (item.Error != null) { Reject(item.Error, () => HostPalette.Read(bytes)); continue; }
+                var palette = HostPalette.Read(bytes);
+                Assert(item.Colors != null && palette.Colors.Count == item.Colors.Count && palette.Colors.All(color => uint.Parse(color.Value[1..], NumberStyles.HexNumber, CultureInfo.InvariantCulture) == item.Colors[color.Key]), "Host RGB values differ: " + item.Name);
+            }
+        });
     }
+    private sealed record HostPaletteFixtures(int FormatVersion, HostPaletteCase[] Cases);
+    private sealed record HostPaletteCase(string Name, string Input, string? Error, Dictionary<string, uint>? Colors = null);
 }

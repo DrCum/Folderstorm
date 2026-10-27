@@ -21,8 +21,9 @@ and preserve the normal built-in choice for fallback. Viewer-profile selection
 is independent. Copying viewer roles to host roles will be an explicit snapshot,
 with no inferred links in a compiled import.
 
-This checkpoint defines the managed data contract only. Both package validators
-still reject host-palette activation. Shared managed/native cases, native format
+Both format validators agree on33 shared cases, exact rejection codes and RGB
+values. The standalone native helper uses the production package implementation.
+Both package loaders still reject host-palette activation. Native format
 capability negotiation, host project/history compatibility, authoring UI,
 selection/rollback and the host consumer must land before enabling that payload.
 An older editor must open projects containing unsupported host edits/history
