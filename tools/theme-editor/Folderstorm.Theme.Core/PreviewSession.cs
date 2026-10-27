@@ -18,13 +18,14 @@ public sealed class PreviewSession : IAsyncDisposable
     public int? ProcessId => process is { HasExited: false } ? process.Id : null;
     public string Status { get; private set; } = "Closed";
 
-    public static void ValidateCapabilities(byte[] bytes, bool requiresXui, bool requiresCapture = false)
+    public static void ValidateCapabilities(byte[] bytes, bool requiresXui, bool requiresCapture = false, bool requiresHostPalette = false)
     {
         using var capabilities = Contract.Parse(bytes); var root = capabilities.RootElement;
         Contract.Require(root.ValueKind == JsonValueKind.Object && root.TryGetProperty("preview_version", out var version) && version.ValueKind == JsonValueKind.Number && version.TryGetInt32(out var number) && number == 1, "preview_unsupported", "Unsupported viewer preview protocol");
         Contract.Require(root.TryGetProperty("source_commit", out var source) && source.ValueKind == JsonValueKind.String && source.GetString() is { Length: 40 }, "preview_unsupported", "Viewer capability provenance is missing");
         if (requiresXui) Contract.Require(root.TryGetProperty("xui_rules_sha256", out var policy) && policy.ValueKind == JsonValueKind.String && policy.GetString() == XuiPolicy.Fingerprint, "preview_unsupported", "This viewer uses different widget rules. Choose the matching viewer build in Setup.");
         if (requiresCapture) Contract.Require(root.TryGetProperty("preview_capture_version", out var capture) && capture.ValueKind == JsonValueKind.Number && capture.TryGetInt32(out var captureVersion) && captureVersion == 1, "preview_unsupported", "Choose a matching viewer with preview image capture in Setup.");
+        if (requiresHostPalette) Contract.Require(root.TryGetProperty("host_palette_version", out var host) && host.ValueKind == JsonValueKind.Number && host.TryGetInt32(out var hostVersion) && hostVersion == 1, "preview_unsupported", "Choose a matching viewer with host palette support in Setup.");
     }
 
     public async Task StartAsync(string executable, ValidatedTheme? theme, BaseCatalog catalog, CancellationToken cancellation = default, bool requiresCapture = false)
@@ -38,7 +39,7 @@ public sealed class PreviewSession : IAsyncDisposable
         var capabilitiesPath = Path.Combine(Path.GetDirectoryName(executable)!, "folderstorm-theme-capabilities.json");
         Contract.Require(File.Exists(capabilitiesPath), "preview_unsupported", "This viewer does not provide offline theme previews");
         var capabilities = File.ReadAllBytes(capabilitiesPath);
-        ValidateCapabilities(capabilities, theme?.Manifest.Files.Any(file => file.Kind == "xui") == true, requiresCapture);
+        ValidateCapabilities(capabilities, theme?.Manifest.Files.Any(file => file.Kind == "xui") == true, requiresCapture, theme?.Files.ContainsKey(HostProject.PayloadPath) == true);
         using (var document = Contract.Parse(capabilities)) canCapture = document.RootElement.TryGetProperty("preview_capture_version", out var capture) && capture.ValueKind == JsonValueKind.Number && capture.TryGetInt32(out var captureVersion) && captureVersion == 1;
         revision = theme?.Revision ?? "";
         if (theme != null) ThemeLibrary.Publish(theme, catalog: catalog);

@@ -624,6 +624,7 @@ CaptureChecks.Register(Test, root, catalog);
 CompiledPaletteChecks.Register(Test, root, catalog);
 ProjectChangesChecks.Register(Test, root, catalog);
 HostPaletteChecks.Register(Test);
+HostProjectChecks.Register(Test, root, catalog);
 if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith(args[1] switch { "--fonts-only" => "font", "--xui-only" => "xui", "--compiled-only" => "compiled", "--changes-only" => "changes", "--host-only" => "host", _ => "library" }, StringComparison.Ordinal)).ToList();
 var failed = 0;
 foreach (var (name, run) in tests)

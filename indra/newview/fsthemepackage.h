@@ -39,6 +39,7 @@ bool validHash(const std::string& value);
 std::string hash(const std::string& bytes);
 std::string readFile(const std::filesystem::path& path,std::uint64_t limit=ManifestLimit);
 std::string hashFile(const std::filesystem::path& path);
+std::filesystem::path containedPath(const std::filesystem::path& root,const std::string& relative);
 boost::json::value parse(const std::string& bytes);
 struct HostPalette {std::map<std::string,std::uint32_t> colors;}; // packed0xRRGGBB
 HostPalette hostPalette(const std::string& bytes);

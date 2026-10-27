@@ -103,6 +103,7 @@ public static class ProjectChanges
             else if (selected.Id.StartsWith("image:", StringComparison.Ordinal)) ImageProject.Reset(directory, candidate, catalog, [selected.Name], encodePng);
             else if (selected.Id == "fonts:all") RemoveGroup(candidate, ChangeGroup.Fonts);
             else if (selected.Id == "file:viewer/textures/textures.xml") RemoveGroup(candidate, ChangeGroup.Images);
+            else if (selected.Id == "file:host/palette.json") RemoveGroup(candidate, ChangeGroup.Host);
             else if (selected.Id.StartsWith("recipe:", StringComparison.Ordinal)) candidate.Edits.Recipes.Remove(selected.Id[7..]);
             else candidate.Edits.Assets.RemoveAll(asset => asset.PayloadPath == selected.Id[5..]);
         }
@@ -118,6 +119,7 @@ public static class ProjectChanges
         if (group == ChangeGroup.Palette) { project.Edits.Colors.Clear(); project.Edits.ColorLinks.Clear(); }
         if (group == ChangeGroup.Images) project.Edits.Recipes.Clear();
         if (group == ChangeGroup.Fonts) project.Edits.FontConfiguration = null;
+        if (group == ChangeGroup.Host) project.Edits = project.Edits with { HostPaletteVersion = null };
         project.Edits.Assets.RemoveAll(asset => GroupOf(asset.PayloadPath) == group);
     }
     private static ChangeGroup GroupOf(string path) => path switch

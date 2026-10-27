@@ -23,9 +23,13 @@ with no inferred links in a compiled import.
 
 Both format validators agree on33 shared cases, exact rejection codes and RGB
 values. The standalone native helper uses the production package implementation.
-Both package loaders still reject host-palette activation. Native format
-capability negotiation, host project/history compatibility, authoring UI,
-selection/rollback and the host consumer must land before enabling that payload.
+Both package loaders validate host payloads and require `host.palette.v1`.
+Projects mark host edits with `host_palette_version: 1`, including history.
+The editor requires native `host_palette_version: 1` before publishing a preview
+package. The Host workspace uses the shared picker with opaque colors, stages
+complete packages before editing history, and supports independent preset and
+viewer-color snapshots. Native selection/rollback and owned offline host preview
+remain required before retaining an enabled host candidate.
 An older editor must open projects containing unsupported host edits/history
 read-only, preserving their original bytes. A matching native build is required
 before retaining an enabled host candidate.

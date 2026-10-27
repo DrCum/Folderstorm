@@ -134,7 +134,7 @@ std::string kind(const std::string& path)
     throw Error("kind","Unsupported payload: "+path);
 }
 std::uint64_t limit(const std::string& type)
-{return type=="font"?64ULL*1024*1024:type=="image"?32ULL*1024*1024:ManifestLimit;}
+{return type=="font"?64ULL*1024*1024:type=="image"?32ULL*1024*1024:type=="host_palette"?4096:ManifestLimit;}
 Tree xml(const std::string& bytes)
 {
     require(bytes.find("<!DOCTYPE")==std::string::npos && bytes.find("<!ENTITY")==std::string::npos,"xml","DTD/entity declarations are prohibited");
@@ -258,6 +258,7 @@ std::string readFile(const fs::path& inputPath,std::uint64_t maximum)
     std::string result(static_cast<std::size_t>(size),'\0');input.read(result.data(),static_cast<std::streamsize>(size));
     require(static_cast<std::uint64_t>(input.gcount())==size && input.peek()==std::char_traits<char>::eof(),"integrity",toUtf8(path));return result;
 }
+fs::path containedPath(const fs::path& root,const std::string& relative){return contained(root,relative);}
 std::string hashFile(const fs::path& path)
 {return hash(readFile(path,ExpandedLimit));}
 boost::json::value parse(const std::string& bytes)
@@ -476,7 +477,12 @@ Revision load(const fs::path& directoryInput,const fs::path& baseInput)
             auto dimension=[&](int offset){std::uint32_t result=0;for(int i=0;i<4;++i)result=(result<<8)|static_cast<unsigned char>(bytes[static_cast<std::size_t>(offset+i)]);return result;};
             const auto width=dimension(16),height=dimension(20);require(width && height && static_cast<std::uint64_t>(width)*height<=16000000,"image","Image exceeds 16 megapixels");
         }
-        else if(file.kind=="host_palette")throw Error("capability","Host palette activation is not implemented yet");
+        else if(file.kind=="host_palette")
+        {
+            const auto& capabilities=data.document.at("required_capabilities").as_array();
+            require(std::any_of(capabilities.begin(),capabilities.end(),[](const auto& entry){return entry.as_string()=="host.palette.v1";}),"capability","Host palette capability is required");
+            hostPalette(readFile(path,4096));
+        }
         else if(file.kind=="textures")
         {
             const auto tree=xml(readFile(path));require(tree.size()==1 && tree.begin()->first=="textures","xml","Expected textures");std::set<std::string> names;

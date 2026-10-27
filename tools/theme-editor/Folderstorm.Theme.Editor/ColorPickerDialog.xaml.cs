@@ -12,18 +12,23 @@ public partial class ColorPickerDialog : Window
     private HsvColor hsv;
     private readonly ColorSwatchStore swatchStore;
     private readonly Func<Window, ThemeColor, ThemeColor?> screenPicker;
+    private readonly bool allowOpacity;
     private string? selectedSaved;
     private bool savingSwatch, closed;
     private SwatchState saved = new([], true);
     public ThemeColor SelectedColor { get; private set; }
-    public ColorPickerDialog(ThemeColor initial, string? swatchPath = null, Func<Window, ThemeColor, ThemeColor?>? sampler = null)
+    public ColorPickerDialog(ThemeColor initial, string? swatchPath = null, Func<Window, ThemeColor, ThemeColor?>? sampler = null, bool allowOpacity = true)
     {
+        this.allowOpacity = allowOpacity; ValidateColor(initial);
         swatchStore = new(swatchPath ?? ColorSwatchStore.DefaultPath); screenPicker = sampler ?? ScreenColorPicker.Pick;
         InitializeComponent(); SelectedColor = initial; hsv = HsvColor.FromColor(initial);
+        Alpha.IsEnabled = allowOpacity;
+        if (!allowOpacity) { Alpha.ToolTip = AlphaLabel.ToolTip = "Host colors use opaque RGB."; Hex.ToolTip = "Opaque #RRGGBB. Host controls do not use transparency."; }
         Spectrum.Changed += (saturation, value) => { hsv = hsv with { Saturation = saturation, Value = value }; SelectedColor = hsv.ToColor(); UpdateFields(); };
         foreach (var hex in new[] { "#FFFFFFFF", "#000000FF", "#BFA4FCFF", "#64D8B2FF", "#FFCC66FF", "#FF6699FF", "#00000000" })
         {
             var color = ThemeColor.Parse(hex);
+            if (!allowOpacity && color.A != 1) continue;
             var swatch = new Button { Width = 36, Height = 30, Padding = new Thickness(0), Margin = new Thickness(0, 0, 7, 0), ToolTip = hex,
                 Content = new Border { Width = 22, Height = 16, Background = Brush(color), BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1) } };
             System.Windows.Automation.AutomationProperties.SetName(swatch, "Choose " + hex);
@@ -35,6 +40,7 @@ public partial class ColorPickerDialog : Window
         SourceInitialized += (_, _) => ScreenPixel.FitDialog(this);
         Closed += (_, _) => closed = true;
     }
+    private void ValidateColor(ThemeColor color) => Contract.Require(allowOpacity || color.A == 1, "host_palette", "Host colors must be opaque");
     private static SolidColorBrush Brush(ThemeColor color) => new(Color.FromArgb((byte)Math.Round(color.A * 255), (byte)Math.Round(color.R * 255), (byte)Math.Round(color.G * 255), (byte)Math.Round(color.B * 255)));
     private void UpdateFields()
     {
@@ -56,6 +62,7 @@ public partial class ColorPickerDialog : Window
     private void AlphaChanged(object sender, RoutedPropertyChangedEventArgs<double> args)
     {
         if (updating || Spectrum == null || Hex == null) return;
+        if (!allowOpacity) { UpdateFields(); return; }
         hsv = hsv with { Alpha = args.NewValue / 255 }; SelectedColor = hsv.ToColor(); UpdateFields();
     }
     private void HexChanged(object sender, TextChangedEventArgs args)
@@ -63,7 +70,7 @@ public partial class ColorPickerDialog : Window
         if (updating || UseColor == null || Alpha == null) return;
         try
         {
-            SelectedColor = ThemeColor.Parse(Hex.Text); hsv = HsvColor.FromColor(SelectedColor);
+            var color = ThemeColor.Parse(Hex.Text); ValidateColor(color); SelectedColor = color; hsv = HsvColor.FromColor(SelectedColor);
             updating = true;
             try { Hue.Value = hsv.Hue; Alpha.Value = Math.Round(hsv.Alpha * 255); AlphaLabel.Text = Math.Round(hsv.Alpha * 100) + "%"; ChosenSwatch.Background = Brush(SelectedColor); Spectrum.SetColor(hsv); }
             finally { updating = false; }
@@ -92,6 +99,7 @@ public partial class ColorPickerDialog : Window
             var button = new Button { Width = 32, Height = 28, Padding = new Thickness(0), Margin = new Thickness(0, 0, 6, 6), ToolTip = hex,
                 Content = new Border { Width = 22, Height = 16, Background = (Brush)FindResource("Checkerboard"), Child = new Border { Background = Brush(color) } } };
             System.Windows.Automation.AutomationProperties.SetName(button, "Saved " + hex);
+            button.IsEnabled = allowOpacity || color.A == 1;
             button.Click += (_, _) => { selectedSaved = hex; SelectedColor = color; hsv = HsvColor.FromColor(color); UpdateFields(); };
             SavedColors.Children.Add(button);
         }
@@ -120,13 +128,13 @@ public partial class ColorPickerDialog : Window
         try
         {
             var result = screenPicker(this, SelectedColor); if (result == null) return;
-            selectedSaved = null; SelectedColor = result.Value; hsv = HsvColor.FromColor(SelectedColor); UpdateFields();
+            ValidateColor(result.Value); selectedSaved = null; SelectedColor = result.Value; hsv = HsvColor.FromColor(SelectedColor); UpdateFields();
         }
         catch (Exception error) { ErrorText.Text = error.Message; ErrorText.Visibility = Visibility.Visible; }
     }
     private void Accept(object sender, RoutedEventArgs args)
     {
-        try { SelectedColor = ThemeColor.Parse(Hex.Text); DialogResult = true; }
+        try { var color = ThemeColor.Parse(Hex.Text); ValidateColor(color); SelectedColor = color; DialogResult = true; }
         catch (ThemeException error) { UseColor.IsEnabled = false; ErrorText.Text = error.Message; ErrorText.Visibility = Visibility.Visible; }
     }
 }

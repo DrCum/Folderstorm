@@ -97,6 +97,7 @@
           <WrapPanel IsEnabled="{Binding CanEditDocument}"><Button Content="Import PNG…" Click="ImportThumbnail" Margin="0,0,8,8"/><Button Content="Capture native preview" Click="CaptureThumbnail" Margin="0,0,0,8"/><Button Content="Reset image" Click="ResetThumbnail" ToolTip="Remove the package preview image. Undo restores it."/></WrapPanel>
         </StackPanel>
       </Grid></ScrollViewer></TabItem>
+      <TabItem Header="Host"><local:HostWorkbench x:Name="HostWorkspace"/></TabItem>
     </TabControl>
     <DockPanel Grid.Row="4" Margin="0,14,0,0"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="Close preview" Click="ClosePreview"/><Button Content="Preview in viewer" Click="Preview" Background="#68468A" IsEnabled="{Binding CanEditDocument}" Margin="0"/></StackPanel><TextBlock x:Name="StatusText" Text="Choose a base folder, then create or open a project." Foreground="#ADA9BA" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0"/></DockPanel>
   </Grid>

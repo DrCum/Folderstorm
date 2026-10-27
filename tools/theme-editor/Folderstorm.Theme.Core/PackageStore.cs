@@ -88,7 +88,7 @@ public static class PackageStore
         foreach (var name in integers) Contract.Require(value.TryGetProperty(name, out var item) && item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out _), "schema", name);
     }
     private static long Limit(string kind) => kind switch
-    { "font" => 64L * 1024 * 1024, "image" => 32L * 1024 * 1024, _ => Contract.ManifestLimit };
+    { "font" => 64L * 1024 * 1024, "image" => 32L * 1024 * 1024, "host_palette" => HostPalette.Limit, _ => Contract.ManifestLimit };
 
     public static ValidatedTheme Validate(Dictionary<string, byte[]> files, BaseCatalog? catalog = null)
     {
@@ -126,7 +126,9 @@ public static class PackageStore
                     XuiPolicy.Validate(payload.Path[7..], bytes, catalog!); break;
                 case "font_config": ValidateFonts(bytes, manifest, catalog); break;
                 case "image": ValidateImage(bytes, payload.Path); break;
-                case "host_palette": throw new ThemeException("capability", "Host palette activation is not implemented yet");
+                case "host_palette":
+                    Contract.Require(manifest.RequiredCapabilities.Contains("host.palette.v1", StringComparer.Ordinal), "capability", "Host palette capability is required");
+                    HostPalette.Read(bytes); break;
             }
         }
         return new(manifest, Contract.Hash(manifestBytes!), files);
@@ -304,6 +306,7 @@ public static class PackageStore
         var capabilities = new List<string> { "viewer.overlay.v1" };
         if (files.ContainsKey("viewer/fonts/fonts.xml")) capabilities.Add("viewer.fonts.v1");
         if (files.Keys.Any(p => p.StartsWith("viewer/xui/", StringComparison.Ordinal))) capabilities.Add("viewer.xui.v1");
+        if (files.ContainsKey(HostProject.PayloadPath)) capabilities.Add("host.palette.v1");
         var manifest = new ThemeManifest
         {
             FormatVersion = 1, ThemeId = project.ThemeId, PackageVersion = project.PackageVersion,
@@ -325,7 +328,8 @@ public static class PackageStore
                 return previous == null ? !files.ContainsKey(path) : files.TryGetValue(path, out var current) && Contract.Hash(current) == previous.Sha256;
             }
             var stableFonts = Unchanged("viewer/fonts/fonts.xml") && header.FontDependencies.Where(font => font.Kind == "embedded").All(font => Unchanged("viewer/fonts/" + font.File));
-            var derived = new[] { "viewer.overlay.v1", "viewer.fonts.v1", "viewer.xui.v1" };
+            var derived = new List<string> { "viewer.overlay.v1", "viewer.fonts.v1", "viewer.xui.v1" };
+            if (header.Files.Any(file => file.Path == HostProject.PayloadPath)) derived.Add("host.palette.v1");
             manifest = manifest with { RequiredCapabilities = manifest.RequiredCapabilities.Concat(header.RequiredCapabilities.Except(derived, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray(), FontDependencies = stableFonts ? header.FontDependencies : manifest.FontDependencies };
             manifestBytes = Contract.Bytes(manifest);
             var samePayloads = header.ThemeId == manifest.ThemeId && header.BaseSkin == manifest.BaseSkin && header.BaseScheme == manifest.BaseScheme && header.BaseFingerprint == manifest.BaseFingerprint &&

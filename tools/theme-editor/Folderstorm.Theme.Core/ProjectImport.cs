@@ -31,7 +31,7 @@ public static class ProjectImport
                 ThemeId = header.ThemeId, DisplayName = header.DisplayName, PackageVersion = header.PackageVersion,
                 Author = header.Author, Description = header.Description, BaseSkin = header.BaseSkin, BaseScheme = header.BaseScheme,
                 BaseDependencies = Contract.Read<DependencySet>(files["base-dependencies.json"]), Origin = "compiled-package", Extensions = header.Extensions,
-                Edits = new() { CompiledManifestPath = ProjectAssets.Store(staging, files["theme.json"], ".json") }
+                Edits = new() { CompiledManifestPath = ProjectAssets.Store(staging, files["theme.json"], ".json"), HostPaletteVersion = files.ContainsKey(HostProject.PayloadPath) ? 1 : null }
             };
             foreach (var payload in header.Files.Where(file => file.Path != "base-dependencies.json"))
             {

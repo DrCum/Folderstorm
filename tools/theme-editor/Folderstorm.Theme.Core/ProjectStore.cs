@@ -100,6 +100,8 @@ public static class ProjectStore
         {
             Contract.Require(edits.Colors != null && edits.ColorLinks != null && edits.Assets != null && edits.Recipes != null, "schema", "Invalid edit collections");
             if (edits.UnknownMetadata?.Count > 0) reasons.Add("Unsupported edit fields are preserved read-only.");
+            if (edits.HostPaletteVersion is { } hostVersion && hostVersion != 1) reasons.Add("This host palette needs a newer editor.");
+            if (edits.Assets.Any(asset => asset?.PayloadPath == HostProject.PayloadPath) && edits.HostPaletteVersion == null) reasons.Add("Host palette edits require their project feature marker.");
             foreach (var asset in edits.Assets)
             {
                 Contract.Require(asset != null, "schema", "Null project asset");
@@ -133,6 +135,7 @@ public static class ProjectStore
                 Contract.Require(asset.PayloadPath != null && asset.AssetPath != null && asset.OriginalPath != null && asset.Kind != null, "schema", "Invalid project asset");
                 Contract.PathName(asset.PayloadPath);
                 Contract.Require(File.Exists(Contract.Contained(directory, asset.AssetPath)) && File.Exists(Contract.Contained(directory, asset.OriginalPath)), "project_asset", asset.AssetPath);
+                if (asset.PayloadPath == HostProject.PayloadPath) HostPalette.Read(LibraryCatalog.ReadBounded(Contract.Contained(directory, asset.AssetPath), HostPalette.Limit));
             }
             foreach (var (name, value) in edits.Colors)
             {
