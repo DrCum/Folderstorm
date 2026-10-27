@@ -16,7 +16,8 @@ The optional component requires SDK 10 or newer on the build machine. End users
 receive a self-contained Windows Desktop runtime and do not need an SDK or .NET
 installation. The source commit and editor version are explicit build inputs.
 
-CMake publishes to a source/version/configuration directory, then seals a file
+CMake keeps managed intermediate files in the native binary cache, publishes
+to a source/version/configuration directory, then seals a file
 manifest. Packaging checks the x64 apphost, bundled runtime, exact source and all
 file hashes. NSIS receives explicit file records under `theme-editor/`; Velopack
 validates the same component before packing its staged directory. Private PDBs

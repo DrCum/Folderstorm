@@ -33,6 +33,7 @@ list(FILTER editor_inputs EXCLUDE REGEX "/(bin|obj)/")
 add_custom_command(OUTPUT "${FOLDERSTORM_THEME_EDITOR_STAMP}"
   COMMAND "${CMAKE_COMMAND}" -E env --unset=LIB "${FOLDERSTORM_THEME_EDITOR_DOTNET}" publish "${editor_root}/Folderstorm.Theme.Editor/Folderstorm.Theme.Editor.csproj"
     --configuration Release --runtime win-x64 --self-contained true --nologo --output "${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}"
+    --artifacts-path "${CMAKE_CURRENT_BINARY_DIR}/theme-editor-artifacts/${FS_SOURCE_COMMIT}"
     -m:1 -nr:false -p:UseSharedCompilation=false -p:NuGetAudit=false "-p:Version=${FOLDERSTORM_THEME_EDITOR_VERSION}"
     "-p:InformationalVersion=${FOLDERSTORM_THEME_EDITOR_VERSION}+${FS_SOURCE_COMMIT}"
   COMMAND "${PYTHON_EXECUTABLE}" "${editor_sealer}" "${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}" --source "${FS_SOURCE_COMMIT}" --version "${FOLDERSTORM_THEME_EDITOR_VERSION}"
