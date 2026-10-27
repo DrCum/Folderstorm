@@ -156,9 +156,23 @@ rejected atomically by the editor. Managed attribute validation now counts UTF-8
 bytes, matching the native limit. New desktop/native-appearance and system-DPI
 acceptance remain open until separately recorded.
 
-The next native rules audit must include editable-attribute removal and text-node
-limits alongside wider exact file/type-specific property coverage. The current
-positive Unicode boundary export does not establish those remaining cases.
+The exact retained0.13.0 desktop check passed label Set, visible before/after,
+Undo, Redo and Save in a disposable project. Disk XML retains the label and one
+Undo checkpoint. Its owned native preview reported ready, but two screenshot
+attempts timed out. Native appearance is not accepted. Both test windows closed
+after the editor Close; computer control is disconnected. The receipt remains
+outside the immutable archive at `theme-editor-widget-evidence-20261027/desktop-runtime-check.json`.
+
+The next local branch, `codex/ansastorm-xui-rules`, fixes native attribute presence
+comparison and text byte limits. The old native validator disagreed on4 of15
+shared cases: removing width, adding an empty protected callback and two oversized
+text cases. The corrected standalone validator and current managed CLI agree on
+all15. Five focused XUI model groups pass, including atomic rejected edits.
+Attribute lookup no longer inserts absent map entries; both validators enforce
+the4096-byte UTF-8 budget on text content and use the policy's text-element list.
+These checks do not rebuild or validate a new viewer installer. Native82310 and
+the retained0.13.0 editor are unchanged. Broader exact file/type/property rules
+and a matching native build remain in progress.
 
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay

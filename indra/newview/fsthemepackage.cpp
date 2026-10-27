@@ -105,7 +105,7 @@ std::set<std::string> ruleNames(const char* field)
     const auto rules=boost::json::parse(ThemeRulesJson).as_object();std::set<std::string> names;
     for(const auto& name:rules.at(field).as_array())names.emplace(name.as_string());return names;
 }
-const auto xuiPaths=ruleNames("paths"),xuiAttributes=ruleNames("editable_attributes");
+const auto xuiPaths=ruleNames("paths"),xuiAttributes=ruleNames("editable_attributes"),xuiTextElements=ruleNames("editable_text_elements");
 std::string extension(std::string path)
 {path=toUtf8(fromUtf8(path).extension());for(auto& c:path)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return path;}
 std::string kind(const std::string& path)
@@ -155,8 +155,18 @@ void compareXui(const Tree::value_type& baseline,const Tree::value_type& candida
     if(const auto attributes=baseline.second.get_child_optional("<xmlattr>"))for(const auto& a:*attributes)first[a.first]=a.second.data();
     if(const auto attributes=candidate.second.get_child_optional("<xmlattr>"))for(const auto& a:*attributes)second[a.first]=a.second.data();
     std::set<std::string> names;for(const auto& a:first)names.insert(a.first);for(const auto& a:second)names.insert(a.first);
-    for(const auto& name:names)if(first[name]!=second[name]){require(xuiAttributes.count(name),"xui_attribute",selector+"/@"+name);if(second.count(name))xuiValue(name,second.at(name),colors,textures);}
-    require(baseline.second.data()==candidate.second.data() || baseline.first=="text","xui_structure",selector+"/text()");
+    for(const auto& name:names)
+    {
+        const auto before=first.find(name),after=second.find(name);
+        if(before==first.end() || after==second.end() || before->second!=after->second)
+        {
+            require(xuiAttributes.count(name),"xui_attribute",selector+"/@"+name);
+            if(after!=second.end())xuiValue(name,after->second,colors,textures);
+        }
+    }
+    require(baseline.second.data()==candidate.second.data() || xuiTextElements.count(baseline.first),"xui_structure",selector+"/text()");
+    static const auto textLimit=boost::json::parse(ThemeRulesJson).as_object().at("value_rules").as_object().at("text_limit").as_int64();
+    require(candidate.second.data().size()<=static_cast<std::size_t>(textLimit),"xui_value",selector+"/text()");
     for(std::size_t i=0;i<left.size();++i)compareXui(*left[i],*right[i],selector+"/"+left[i]->first,colors,textures);
 }
 std::string resolve(const fs::path& base,const std::vector<std::string>& roots,const std::string& name)

@@ -145,9 +145,12 @@ approved property name. A null change restores the recorded base property;
 properties and compile a staged project before one history checkpoint. Equal XML
 ignores document-edge whitespace only; meaningful text, comments and protected
 structure stay significant. Attribute values use the native4096-byte UTF-8 limit,
-not a UTF-16 character count. Broader attribute-removal and text-node boundary
-parity remain part of the next native rules audit. This stage retains the three
-existing approved paths and does not expand the native allowlist.
+not a UTF-16 character count. Text-node edits use that same UTF-8 budget.
+Attribute comparison distinguishes absence from an empty value: removing an
+editable width is allowed, while adding an empty protected callback is rejected.
+`check-xui-boundaries.py` replays these cases through both production validators.
+This stage retains the three existing approved paths. Wider file/type-specific
+coverage requires the explicit native allowlist audit.
 
 Font authoring writes the existing runtime font configuration and dependencies;
 it introduces no new package or project version. Role/style/platform structure,

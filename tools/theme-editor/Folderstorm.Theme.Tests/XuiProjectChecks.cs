@@ -63,5 +63,22 @@ internal static class XuiProjectChecks
             var theme = PackageStore.Compile(directory, project, catalog); var revision = ThemeLibrary.Publish(theme, Path.Combine(root, "xui-byte-library"));
             Contract.AtomicWrite(Path.Combine(directory, "result.json"), Contract.Bytes(new { revision = theme.Revision, path = revision }));
         });
+        test("xui removed geometry, protected empty attributes and text byte limits stay atomic", () =>
+        {
+            var directory = Path.Combine(root, "xui-presence"); var project = ProjectStore.Create(catalog, "XUI presence");
+            var original = XuiProject.Read(directory, project, catalog, path); var document = Contract.Xml(original);
+            var button = document.Root!.Elements("button").Single(element => (string?)element.Attribute("name") == "test_button");
+            button.Attribute("width")!.Remove(); Assert(XuiProject.SetXml(directory, project, catalog, path, Contract.XmlBytes(document), "Inherit geometry"), "Removed width rejected");
+            var before = Contract.Bytes(project); button.SetAttributeValue("commit_callback", "");
+            Reject("xui_attribute", () => XuiProject.SetXml(directory, project, catalog, path, Contract.XmlBytes(document), "Protected empty value"));
+            Assert(Contract.Bytes(project).SequenceEqual(before), "Empty protected attribute changed project/history");
+            var text = XuiProject.Inspect(directory, project, catalog, path).Elements.First(element => element.Type == "text");
+            Assert(XuiProject.Apply(directory, project, catalog, path, [new(text.Index, "#text", new string('中', 1365))], "Text boundary"), "4095-byte text rejected");
+            before = Contract.Bytes(project);
+            Reject("xui_value", () => XuiProject.Apply(directory, project, catalog, path, [new(text.Index, "#text", new string('中', 1366))], "Text overflow"));
+            var raw = Contract.Xml(XuiProject.Read(directory, project, catalog, path)); raw.Root!.Elements("text").First().Value = new string('A', 4097);
+            Reject("xui_value", () => XuiProject.SetXml(directory, project, catalog, path, Contract.XmlBytes(raw), "Raw text overflow"));
+            Assert(Contract.Bytes(project).SequenceEqual(before), "Oversized structured/raw text changed project/history");
+        });
     }
 }

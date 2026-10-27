@@ -341,6 +341,7 @@ public static class XuiPolicy
     private static readonly JsonDocument Rules = JsonDocument.Parse(typeof(XuiPolicy).Assembly.GetManifestResourceStream("Folderstorm.Theme.XuiRules")!);
     public static readonly HashSet<string> Files = ReadNames("paths");
     private static readonly HashSet<string> Attributes = ReadNames("editable_attributes");
+    private static readonly HashSet<string> TextElements = ReadNames("editable_text_elements");
     public static string[] EditableAttributes => Attributes.Order(StringComparer.Ordinal).ToArray();
     public static bool CanEditAttribute(string name) => Attributes.Contains(name);
     public static string AttributeKind(string name)
@@ -370,8 +371,8 @@ public static class XuiPolicy
             }
         var baseText = string.Concat(baseline.Nodes().OfType<XText>().Select(n => n.Value)).Trim();
         var newText = string.Concat(candidate.Nodes().OfType<XText>().Select(n => n.Value)).Trim();
-        Contract.Require(baseText == newText || baseline.Name.LocalName == "text", "xui_structure", selector + "/text()");
-        Contract.Require(newText.Length <= Values.GetProperty("text_limit").GetInt32(), "xui_value", "Text is too long");
+        Contract.Require(baseText == newText || TextElements.Contains(baseline.Name.LocalName), "xui_structure", selector + "/text()");
+        Contract.Require(Encoding.UTF8.GetByteCount(newText) <= Values.GetProperty("text_limit").GetInt32(), "xui_value", "Text exceeds the native UTF-8 byte limit");
         foreach (var (left, right) in baseline.Elements().Zip(candidate.Elements())) Compare(left, right, selector + "/" + left.Name + "[" + (string?)left.Attribute("name") + "]", catalog);
     }
     private static void ValidateValue(string name, string value, BaseCatalog catalog)

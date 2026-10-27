@@ -43,7 +43,7 @@ public static class XuiProject
         Contract.Require(selected.Length <= 1024 && selected.Select(change => (change.Element, change.Attribute)).Distinct().Count() == selected.Length, "xui_change", "Choose up to1024 distinct properties");
         foreach (var change in selected)
         {
-            Contract.Require(change.Value == null || change.Value.Length <= 4096, "xui_value", "Property value exceeds4096 characters");
+            Contract.Require(change.Value == null || System.Text.Encoding.UTF8.GetByteCount(change.Value) <= 4096, "xui_value", "Property value exceeds4096 UTF-8 bytes");
             var element = Element(document, change.Element); var inherited = Element(original, change.Element);
             if (change.Attribute == "#text")
             {
