@@ -27,7 +27,9 @@ The GDI adapter converts packed RGB explicitly to `COLORREF`. `Theme::set` keeps
 system and host-preference high contrast above custom colors, and restores the
 existing built-in choice when no custom palette is supplied.
 
-This checkpoint contains pure selection transitions and the package/GDI consumer.
-The normal host startup, atomic selection-file persistence, Preferences choice,
-owned offline preview and editor launch points are still to be connected. No
-normal host selection or viewer profile is written by these helpers or tests.
+The normal host embeds this selection in its existing preferences transaction;
+see `host-preferences-v2.md` for its bounded binary representation and migration.
+Startup, Preferences preview/Apply/Cancel/rollback and editor launch points are
+connected in source. The owned offline preview remains independent of normal
+settings. Full native packaging and desktop acceptance are still required. The
+pure helpers and fixture tests do not write real host or viewer profiles.

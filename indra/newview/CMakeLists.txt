@@ -1968,8 +1968,8 @@ include("${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/ThemeRules.cmake")
 folderstorm_theme_rules("${CMAKE_SOURCE_DIR}/../tools/theme-editor/contracts/xui-edit-rules.json")
 configure_file("${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/fsthemerules.h.in" "${CMAKE_CURRENT_BINARY_DIR}/fsthemerules.h" @ONLY)
 configure_file(fsthemecapabilities.json.in "${CMAKE_CURRENT_BINARY_DIR}/folderstorm-theme-capabilities.json" @ONLY)
-list(APPEND viewer_SOURCE_FILES fsthemepackage.cpp fsthemeviewer.cpp)
-list(APPEND viewer_HEADER_FILES fsthemepackage.h fsthemeviewer.h)
+list(APPEND viewer_SOURCE_FILES fsthemepackage.cpp fsthemeviewer.cpp fsthemeeditor.cpp)
+list(APPEND viewer_HEADER_FILES fsthemepackage.h fsthemeviewer.h fsthemeeditor.h)
 add_subdirectory(third_party/chat_media)
 list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp fschatupload.cpp fschatuploadhttp.cpp fschatuploadreply.cpp)
 list(APPEND viewer_SOURCE_FILES fsfloatergifboard.cpp fsgiflibrary.cpp)
@@ -2447,9 +2447,12 @@ folderstorm_update_target(${VIEWER_BINARY_NAME})
 # a controller or background workers. Keep the binary beside the matching viewer.
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
+      fsthemeeditor.cpp
       fsthemepackage.cpp
       fsreleasefeed.cpp
       "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme_state.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme_windows.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/host_preview.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/release_json.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"

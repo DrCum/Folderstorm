@@ -8,10 +8,7 @@ namespace
 {
 void validate(const Choice& choice)
 {
-    const auto hex=[](char ch){return ch>='0' && ch<='9' || ch>='a' && ch<='f';};
-    bool id=choice.id.size()==36;
-    for(std::size_t i=0;id && i<choice.id.size();++i)id=(i==8 || i==13 || i==18 || i==23)?choice.id[i]=='-':hex(choice.id[i]);
-    fs_theme::require(id && fs_theme::validHash(choice.revision),"host_selection","Invalid host theme identity");
+    fs_theme::require(choice.valid(),"host_selection","Invalid host theme identity");
 }
 bool equal(const std::optional<Choice>& first,const std::optional<Choice>& second)
 {return first && second?first->id==second->id && first->revision==second->revision:!first && !second;}

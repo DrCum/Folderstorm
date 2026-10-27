@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsthemeviewer.h"
 #include "fsthemepackage.h"
+#include "fsthemeeditor.h"
+#include "llnotificationsutil.h"
 #include "fssessionworker.h"
 #include "llappviewer.h"
 #include "llbutton.h"
@@ -93,6 +95,12 @@ void writeStatus(const std::string& state)
 }
 }
 bool preview(){return offline;}
+void openEditor(bool library)
+{
+    const auto base=fs_theme::fromUtf8(gDirUtilp->getAppRODataDir());std::string message;
+    if(!fs_theme::launchEditor(base,fs_theme::fromUtf8(gDirUtilp->getExecutablePathAndName()),base/"folderstorm-session-host.exe",library,message))
+    {LLSD arguments;arguments["MESSAGE"]=message;LLNotificationsUtil::add("GenericAlert",arguments);}
+}
 bool configure()
 {
     const auto requestPath=gSavedSettings.getString("FSThemePreviewRequest");offline=!requestPath.empty();

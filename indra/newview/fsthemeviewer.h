@@ -7,5 +7,6 @@ bool configure();
 bool preview();
 bool idlePreview();
 void captureFrame();
+void openEditor(bool library=false);
 }
 #endif

@@ -32,6 +32,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsthemeviewer.h"
 #include "fschatupload.h"
 #include "fschatmedia.h"
 #include "fsklipyclient.h"
@@ -5644,6 +5645,7 @@ LLPanelPreferenceSkins::LLPanelPreferenceSkins()
 
 bool LLPanelPreferenceSkins::postBuild()
 {
+    if(auto* lab=findChild<LLButton>("theme_lab"))lab->setClickedCallback([]{FSThemeViewer::openEditor();});
     m_pSkinCombo = getChild<LLComboBox>("skin_combobox");
     if (m_pSkinCombo)
         m_pSkinCombo->setCommitCallback(boost::bind(&LLPanelPreferenceSkins::onSkinChanged, this));

@@ -47,5 +47,5 @@ editor shutdown close both owned preview types. PID/start-time guards prevent
 closing unrelated processes. Child environment profile folders are isolated.
 
 This module's development checks do not establish the full host build, normal
-host selection persistence/Preferences, physical input or numeric system-DPI
+host Preferences interaction, physical input or numeric system-DPI
 acceptance. Those remain separate integration and validation work.

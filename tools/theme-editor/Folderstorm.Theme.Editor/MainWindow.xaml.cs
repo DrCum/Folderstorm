@@ -40,6 +40,7 @@ public partial class MainWindow : Window
             if (BasePath.Text.Length > 0) await Run(() => { catalog = new BaseCatalog(BasePath.Text); RefreshCatalog(); });
             var path = Argument("--project");
             if (path.Length > 0) await Run(() => Open(path));
+            else if (args.Contains("--library", StringComparer.Ordinal)) OpenLibrary(this, new RoutedEventArgs());
         };
     }
     private async Task Run(Action action)
