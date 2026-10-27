@@ -32,7 +32,7 @@ public static class XuiProject
     {
         var current = Element(Contract.Xml(Read(directory, project, catalog, path)), index); var baseline = Element(Contract.Xml(catalog.ResolveBytes(path)), index);
         var names = current.Attributes().Select(attribute => attribute.Name.ToString()).Concat(baseline.Attributes().Select(attribute => attribute.Name.ToString())).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
-        var properties = names.Select(name => new XuiPropertyInfo(name, XuiPolicy.AttributeKind(name), (string?)current.Attribute(name), (string?)baseline.Attribute(name), XuiPolicy.CanEditAttribute(name))).ToList();
+        var properties = names.Select(name => new XuiPropertyInfo(name, XuiPolicy.AttributeKind(name), (string?)current.Attribute(name), (string?)baseline.Attribute(name), XuiPolicy.CanEditAttribute(baseline.Name.LocalName, name))).ToList();
         if (baseline.Name.LocalName == "text") properties.Add(new("#text", "text", Text(current), Text(baseline), true));
         return properties.ToArray();
     }
@@ -51,7 +51,7 @@ public static class XuiProject
                 foreach (var node in element.Nodes().OfType<XText>().ToArray()) node.Remove();
                 element.AddFirst(new XText(change.Value ?? Text(inherited))); continue;
             }
-            Contract.Require(XuiPolicy.CanEditAttribute(change.Attribute), "xui_attribute", "Protected property: " + change.Attribute);
+            Contract.Require(XuiPolicy.CanEditAttribute(inherited.Name.LocalName, change.Attribute), "xui_attribute", "Protected property: " + change.Attribute);
             var value = change.Value ?? (string?)inherited.Attribute(change.Attribute);
             if (value != null && XuiPolicy.AttributeKind(change.Attribute) == "color" && value.TrimStart().StartsWith('#')) value = ThemeColor.Parse(value).NativeText;
             element.SetAttributeValue(change.Attribute, value);

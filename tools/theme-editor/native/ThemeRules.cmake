@@ -1,0 +1,7 @@
+function(folderstorm_theme_rules path)
+  file(READ "${path}" rules)
+  string(REPLACE "\r\n" "\n" rules "${rules}")
+  string(SHA256 fingerprint "${rules}")
+  set(THEME_RULES_JSON "${rules}" PARENT_SCOPE)
+  set(THEME_RULES_SHA256 "${fingerprint}" PARENT_SCOPE)
+endfunction()

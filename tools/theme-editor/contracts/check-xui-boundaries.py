@@ -19,6 +19,7 @@ parser.add_argument('--dotnet', required=True)
 parser.add_argument('--cli', type=Path, required=True)
 parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--expanded', action='store_true', help='Include control-specific property rules')
 args = parser.parse_args()
 if args.output.exists():
     parser.error('Use a new evidence directory')
@@ -59,6 +60,24 @@ cases = [
     ('empty-text', text(''), 'valid'),
     ('protected-content', lambda root: setattr(root, 'text', 'Changed protected content'), 'xui_structure'),
 ]
+if args.expanded:
+    cases += [
+        ('native-disabled-selected-color', attribute('label_color_disabled_selected', 'ThemeAccent'), 'valid'),
+        ('ignored-disabled-selected-spelling', attribute('label_color_selected_disabled', 'ThemeAccent'), 'xui_attribute'),
+        ('native-font-style', attribute('font.style', 'BOLD|ITALIC'), 'valid'),
+        ('ignored-font-style', attribute('font_style', 'BOLD'), 'xui_attribute'),
+        ('valid-anchors', attribute('follows', 'left|right|top'), 'valid'),
+        ('unknown-anchor', attribute('follows', 'left|diagonal'), 'xui_value'),
+        ('trailing-anchor', attribute('follows', 'left|'), 'xui_value'),
+        ('invalid-layout', attribute('layout', 'sideways'), 'xui_value'),
+        ('valid-visual-boolean', attribute('scale_image', 'false'), 'valid'),
+        ('invalid-visual-boolean', attribute('scale_image', 'yes'), 'xui_value'),
+        ('valid-glow', attribute('hover_glow_amount', '0.5'), 'valid'),
+        ('nonfinite-glow', attribute('hover_glow_amount', 'NaN'), 'xui_value'),
+        ('excessive-glow', attribute('hover_glow_amount', '1.01'), 'xui_value'),
+        ('wrong-control-image', lambda root: root.find('check_box').set('image_hover_unselected', 'Inv_FolderClosed'), 'xui_attribute'),
+        ('protected-parameter-geometry', lambda root: root.find('floater.string').set('width', '1'), 'xui_attribute'),
+    ]
 results = []
 for name, mutate, expected in cases:
     directory = args.output / name

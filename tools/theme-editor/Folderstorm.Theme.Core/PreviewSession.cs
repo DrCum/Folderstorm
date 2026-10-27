@@ -16,6 +16,14 @@ public sealed class PreviewSession : IAsyncDisposable
     public int? ProcessId => process is { HasExited: false } ? process.Id : null;
     public string Status { get; private set; } = "Closed";
 
+    public static void ValidateCapabilities(byte[] bytes, bool requiresXui)
+    {
+        using var capabilities = Contract.Parse(bytes); var root = capabilities.RootElement;
+        Contract.Require(root.ValueKind == JsonValueKind.Object && root.TryGetProperty("preview_version", out var version) && version.ValueKind == JsonValueKind.Number && version.TryGetInt32(out var number) && number == 1, "preview_unsupported", "Unsupported viewer preview protocol");
+        Contract.Require(root.TryGetProperty("source_commit", out var source) && source.ValueKind == JsonValueKind.String && source.GetString() is { Length: 40 }, "preview_unsupported", "Viewer capability provenance is missing");
+        if (requiresXui) Contract.Require(root.TryGetProperty("xui_rules_sha256", out var policy) && policy.ValueKind == JsonValueKind.String && policy.GetString() == XuiPolicy.Fingerprint, "preview_unsupported", "This viewer uses different widget rules. Choose the matching viewer build in Setup.");
+    }
+
     public async Task StartAsync(string executable, ValidatedTheme? theme, BaseCatalog catalog, CancellationToken cancellation = default)
     {
         await lifecycle.WaitAsync(cancellation);
@@ -26,11 +34,7 @@ public sealed class PreviewSession : IAsyncDisposable
         Contract.Require(File.Exists(executable), "viewer", "Choose the matching viewer executable");
         var capabilitiesPath = Path.Combine(Path.GetDirectoryName(executable)!, "folderstorm-theme-capabilities.json");
         Contract.Require(File.Exists(capabilitiesPath), "preview_unsupported", "This viewer does not provide offline theme previews");
-        using (var capabilities = Contract.Parse(File.ReadAllBytes(capabilitiesPath)))
-        {
-            Contract.Require(capabilities.RootElement.GetProperty("preview_version").GetInt32() == 1, "preview_unsupported", "Unsupported viewer preview protocol");
-            Contract.Require(capabilities.RootElement.GetProperty("source_commit").GetString() is { Length: 40 }, "preview_unsupported", "Viewer capability provenance is missing");
-        }
+        ValidateCapabilities(File.ReadAllBytes(capabilitiesPath), theme?.Manifest.Files.Any(file => file.Kind == "xui") == true);
         if (theme != null) ThemeLibrary.Publish(theme, catalog: catalog);
         DirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Folderstorm", "theme-preview", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(DirectoryPath);

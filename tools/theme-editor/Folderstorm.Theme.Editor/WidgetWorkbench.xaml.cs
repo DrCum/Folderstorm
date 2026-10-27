@@ -78,15 +78,7 @@ public partial class WidgetWorkbench : UserControl
         catch (Exception error) { ClearSelection(); Status.Text = error.Message; }
     }
     private static string[] AdditionalProperties(string type, XuiPropertyInfo[] current)
-    {
-        bool Geometry(string name) => XuiPolicy.AttributeKind(name) is "signed_integer" or "nonnegative_integer";
-        var supportedControl = new[] { "button", "floater", "panel", "text", "text_editor", "line_editor", "search_editor", "check_box", "radio_group", "radio_item", "slider", "spinner", "combo_box", "scroll_list", "tab_container", "color_swatch", "progress_bar", "icon" }.Contains(type);
-        return XuiPolicy.EditableAttributes.Where(name => current.Any(item => item.Name == name) || supportedControl && (Geometry(name) || name is "tool_tip" or "font" or "font_style" ||
-            type == "button" && (name.StartsWith("label", StringComparison.Ordinal) || name.StartsWith("image_", StringComparison.Ordinal)) ||
-            type is "floater" or "panel" && (name is "title" || name.StartsWith("bg_", StringComparison.Ordinal)) ||
-            type is "text" or "text_editor" or "line_editor" or "search_editor" or "check_box" or "radio_item" && name is "text_color" or "text_readonly_color" or "label"))
-            .Where(name => !current.Any(item => item.Name == name)).ToArray();
-    }
+        => XuiPolicy.EditableAttributesFor(type).Where(name => !current.Any(item => item.Name == name)).ToArray();
     private void FilterProperties(object sender, SelectionChangedEventArgs args) { if (Properties != null && !refreshing) ShowControl(); }
     private void SelectProperty(object sender, SelectionChangedEventArgs args) { if (!refreshing) ShowProperty((Properties.SelectedItem as WidgetPropertyRow)?.Property); }
     private void SelectExtraProperty(object sender, SelectionChangedEventArgs args)
@@ -104,9 +96,9 @@ public partial class WidgetWorkbench : UserControl
             PropertyValue.Text = selected?.Value ?? ""; PropertyValue.IsReadOnly = selected?.Editable != true;
             InheritedValue.Text = selected == null ? "" : "Base value: " + (selected.BaseValue ?? "(not set)");
             PickRow.Visibility = selected?.Kind == "color" ? Visibility.Visible : Visibility.Collapsed;
-            IEnumerable<string> choices = selected?.Kind switch { "color" => catalog?.Colors.Keys.Order(StringComparer.Ordinal).ToArray() ?? [], "image" => catalog?.Textures.Keys.Order(StringComparer.Ordinal).ToArray() ?? [], _ => [] };
+            IEnumerable<string> choices = selected?.Kind switch { "color" => catalog?.Colors.Keys.Order(StringComparer.Ordinal).ToArray() ?? [], "image" => catalog?.Textures.Keys.Order(StringComparer.Ordinal).ToArray() ?? [], _ => selected == null ? [] : XuiPolicy.ValueChoices(selected.Name) };
             ValueChoice.ItemsSource = choices.ToArray(); ValueChoice.SelectedIndex = -1; ValueChoice.Visibility = ValueChoice.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            ValueChoiceLabel.Visibility = ValueChoice.Visibility; ValueChoiceLabel.Text = selected?.Kind == "color" ? "Named color" : "Image ID";
+            ValueChoiceLabel.Visibility = ValueChoice.Visibility; ValueChoiceLabel.Text = selected?.Kind == "color" ? "Named color" : selected?.Kind == "image" ? "Image ID" : "Value";
             ApplyPropertyButton.IsEnabled = ResetPropertyButton.IsEnabled = PickColorButton.IsEnabled = selected?.Editable == true;
         }
         finally { editingValue = false; }

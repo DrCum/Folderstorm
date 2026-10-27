@@ -130,8 +130,9 @@ It refuses existing destinations, overlapping source/destination trees, links,
 more than 10000 entries or more than 512 MiB of source files. The source is never
 written. A failed stage is retained with its path in the error for recovery.
 
-`xui-edit-rules.json` is the adapter's single source for the initial file and
-attribute allowlist. Complete replacements retain the base's ordered control
+`xui-edit-rules.json` is the adapter's single source for exact paths, property
+groups, control/parameter types and value rules. Its internal policy format2
+does not change runtime package version1. Complete replacements retain the base's ordered control
 tree and protected bindings/callbacks. Future catalog expansion must preserve
 these invariants. Login, consent, update and security UI are excluded.
 Changed geometry is bounded integer input; changed color/image references must
@@ -149,8 +150,20 @@ not a UTF-16 character count. Text-node edits use that same UTF-8 budget.
 Attribute comparison distinguishes absence from an empty value: removing an
 editable width is allowed, while adding an empty protected callback is rejected.
 `check-xui-boundaries.py` replays these cases through both production validators.
-This stage retains the three existing approved paths. Wider file/type-specific
-coverage requires the explicit native allowlist audit.
+The expanded policy covers the sample document and26 explicit widget templates.
+Groups apply only to registered element types, with explicit exclusions such as
+the floater's ignored `follows` parameter. Changed boolean, enum, flag and finite
+numeric values are validated as well as geometry and resource references.
+Unknown controls/parameters keep their attributes protected. No arbitrary file
+glob or behavioral property is made editable. Earlier ignored widget spellings
+are preserved in project assets and reported as protected; they are never
+silently translated or removed.
+
+Viewer capability receipts now include `xui_rules_sha256`. SHA-256 uses the rule
+file's UTF-8 bytes with CRLF normalized to LF. The managed editor and shared
+`native/ThemeRules.cmake` use that same definition. XUI previews reject a missing
+or different fingerprint before writing a library revision or starting a child.
+Non-XUI previews retain the existing version1 capability behavior.
 
 Font authoring writes the existing runtime font configuration and dependencies;
 it introduces no new package or project version. Role/style/platform structure,

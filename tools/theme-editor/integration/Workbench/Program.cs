@@ -37,7 +37,8 @@ internal static class Program
             {
                 WidgetWorkbenchChecks.Run(window, directory, catalog, project);
                 WidgetPropertyChecks.Run(window, directory, catalog, project);
-                Console.WriteLine("5/5 passed. Focused windowless XUI handler checks. Workspace: " + directory); return 0;
+                WidgetRuleChecks.Run(window, directory, catalog, project);
+                Console.WriteLine("7/7 passed. Focused windowless XUI handler checks. Workspace: " + directory); return 0;
             }
             if (args.Length == 2)
             {
@@ -260,8 +261,9 @@ internal static class Program
             FontCollectionChecks.Run(window, directory, catalog, project);
             WidgetWorkbenchChecks.Run(window, directory, catalog, project);
             WidgetPropertyChecks.Run(window, directory, catalog, project);
+            WidgetRuleChecks.Run(window, directory, catalog, project);
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("28/28 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("30/30 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

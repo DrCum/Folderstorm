@@ -80,5 +80,44 @@ internal static class XuiProjectChecks
             Reject("xui_value", () => XuiProject.SetXml(directory, project, catalog, path, Contract.XmlBytes(raw), "Raw text overflow"));
             Assert(Contract.Bytes(project).SequenceEqual(before), "Oversized structured/raw text changed project/history");
         });
+        test("xui widget matrix uses native property names, types and exact template paths", () =>
+        {
+            Assert(XuiPolicy.Files.Count == 27 && XuiPolicy.CanEditAttribute("button", "label_color_disabled_selected") && XuiPolicy.CanEditAttribute("button", "font.style") &&
+                !XuiPolicy.CanEditAttribute("button", "font_style") && !XuiPolicy.CanEditAttribute("button", "label_color_selected_disabled") &&
+                !XuiPolicy.CanEditAttribute("check_box", "image_hover_unselected") && !XuiPolicy.CanEditAttribute("floater.string", "width") && !XuiPolicy.CanEditAttribute("floater", "follows"), "Ignored or wrong-control native property became editable");
+            const string template = "xui/en/widgets/button.xml"; var source = catalog.ResolveBytes(template);
+            void Check(string name, string value) => XuiPolicy.Validate(template, XuiProject.Change(source, source, catalog, [new(0, name, value)]), catalog);
+            Check("follows", "left|right|top"); Check("layout", "topleft"); Check("font.style", "BOLD|ITALIC"); Check("scale_image", "false"); Check("hover_glow_amount", "0.5");
+            Reject("xui_value", () => Check("follows", "left|diagonal")); Reject("xui_value", () => Check("follows", "left|")); Reject("xui_value", () => Check("layout", "invalid"));
+            Reject("xui_value", () => Check("scale_image", "yes")); Reject("xui_value", () => Check("hover_glow_amount", "NaN")); Reject("xui_value", () => Check("hover_glow_amount", "1.01"));
+            Reject("reference", () => Check("image_color", "MissingColor")); Reject("xui_attribute", () => Check("font_style", "BOLD"));
+            var directory = Path.Combine(root, "xui-matrix"); var project = ProjectStore.Create(catalog, "Widget matrix");
+            foreach (var file in XuiPolicy.Files.Order(StringComparer.Ordinal))
+            {
+                var original = catalog.ResolveBytes(file); var changes = new List<XuiChange> { new(0, "tool_tip", "Widget matrix check") };
+                if (file == template) changes.AddRange([new(0, "label_color_disabled_selected", "#64D8B280"), new(0, "image_color", "ThemeAccent"), new(0, "font.style", "BOLD|ITALIC"), new(0, "follows", "left|right|top"), new(0, "scale_image", "false"), new(0, "hover_glow_amount", "0.5")]);
+                if (file == "xui/en/widgets/line_editor.xml") changes.Add(new(0, "background_image_focused", "Inv_FolderClosed"));
+                if (file == "xui/en/widgets/tab_container.xml")
+                {
+                    var first = Contract.Xml(original).Root!.DescendantsAndSelf().Select((element, index) => (element, index)).First(item => item.element.Name.LocalName == "first_tab");
+                    changes.Add(new(first.index, "tab_top_image_flash", "Inv_FolderClosed"));
+                }
+                var bytes = XuiProject.Change(original, original, catalog, changes); XuiPolicy.Validate(file, bytes, catalog);
+                project.Edits.Assets.Add(ProjectAssets.Prepare(directory, "viewer/" + file, bytes, original));
+            }
+            ProjectStore.Save(directory, project); var theme = PackageStore.Compile(directory, project, catalog); var revision = ThemeLibrary.Publish(theme, Path.Combine(root, "xui-matrix-library"));
+            Assert(theme.Manifest.Files.Count(file => file.Kind == "xui") == 27, "Template package dropped a supported file");
+            Contract.AtomicWrite(Path.Combine(directory, "result.json"), Contract.Bytes(new { revision = theme.Revision, path = revision, policy = XuiPolicy.Fingerprint }));
+        });
+        test("xui preview rejects a mismatched native policy before publishing or launching", () =>
+        {
+            byte[] Capabilities(object version, string? hash) => Contract.Bytes(new { preview_version = version, source_commit = new string('a', 40), xui_rules_sha256 = hash });
+            PreviewSession.ValidateCapabilities(Capabilities(1, XuiPolicy.Fingerprint), true);
+            PreviewSession.ValidateCapabilities(Capabilities(1, null), false);
+            Reject("preview_unsupported", () => PreviewSession.ValidateCapabilities(Capabilities(1, null), true));
+            Reject("preview_unsupported", () => PreviewSession.ValidateCapabilities(Capabilities(1, new string('0', 64)), true));
+            Reject("preview_unsupported", () => PreviewSession.ValidateCapabilities(Capabilities("1", XuiPolicy.Fingerprint), true));
+            Reject("preview_unsupported", () => PreviewSession.ValidateCapabilities(Contract.Bytes(new { preview_version = 1 }), false));
+        });
     }
 }

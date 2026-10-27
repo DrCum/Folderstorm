@@ -174,6 +174,29 @@ These checks do not rebuild or validate a new viewer installer. Native82310 and
 the retained0.13.0 editor are unchanged. Broader exact file/type/property rules
 and a matching native build remain in progress.
 
+Expanded widget rules now cover27 exact English paths and47 control/nested
+parameter types, using168 visual attributes. The inspector consumes those type
+rules directly. Geometry, supported anchoring, bounded glow/spacing, exact state
+images, color references, booleans and enum/flag values validate in both languages.
+Names, callbacks, bindings and unknown parameters remain protected. Button
+disabled-selected colors and widget font subparameters use their actual native
+spellings. The sample routes focused input artwork and the corrected state/font
+properties; WPF rendering remains approximate.
+
+Fresh full runs pass48 core groups,30 WPF groups and12 codec groups. All30 shared
+expanded revision fixtures agree in managed/native validation, and a single
+package containing all27 approved XUI payloads passes C++ validation. Focused
+checks cover template navigation, per-control inspector filtering and state/font
+sample updates. The normal/narrow/asymmetric WPF renders are pixel-identical to
+the reviewed0.13 renders. These are separate from native/system-DPI acceptance.
+
+The preview protocol now checks an exact rule fingerprint when XUI is present,
+before library publication or child launch. Shared CMake and managed definitions
+normalize CRLF to LF; an independent SHA-256 check verifies both line endings.
+Final managed checks cover that normalization. Native82310 and retained editors
+remain unchanged. The expanded policy requires a new matching viewer build;
+its private build/retention is the next step, with appearance acceptance pending.
+
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.

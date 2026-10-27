@@ -110,17 +110,26 @@ License text for next embedded font applies only when using Embed font. Installe
 dependencies do not expose a packaged-license editor. Non-UTF8 existing license
 bytes are preserved and reported, rather than silently replaced.
 
-Widgets offers a searchable control hierarchy for the three currently approved
-XUI files. Choose a property, edit its draft, then Set property. Geometry, labels,
+Widgets offers a searchable control hierarchy for27 approved English files:
+the native sample and26 widget templates. Choose a property, edit its draft,
+then Set property. Geometry, labels,
 font references, colors and state images retain their native values. Color fields
 use the shared picker; named colors and image IDs have reference lists. Protected
-names, callbacks and bindings are read-only. Reset property restores its base
+names, callbacks and bindings are read-only. Only properties supported by the
+selected control or nested parameter are offered. Geometry includes bounded
+relative deltas and supported layout/follows values. Booleans and enum values
+have choices. Use native `font.style`/`font.size` for widget font subparameters;
+disabled selected button text uses `label_color_disabled_selected`.
+Reset property restores its base
 value; Reset file restores only the selected document. Both are undoable.
 
 Before/after samples share a scale and selected state. Native artwork and slice
 borders are used for supported samples; WPF text, compositing and behavior remain
 approximate. Preview in viewer checks the exported resources with the matching
-native viewer. Other layout files require explicit adapter/native rules before
+native viewer. XUI preview checks the viewer's exact rule fingerprint before
+publishing or launching; select the matching viewer build in Setup if it differs.
+Older retained editors and viewers keep their original rule set.
+Other layout files require explicit adapter/native rules before
 they become editable. The Layout XML tab remains available for validated edits.
 
 `contracts/FORMAT.md` documents the runtime package and project contracts. Build

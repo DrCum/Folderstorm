@@ -338,20 +338,38 @@ public static class PackageStore
 
 public static class XuiPolicy
 {
-    private static readonly JsonDocument Rules = JsonDocument.Parse(typeof(XuiPolicy).Assembly.GetManifestResourceStream("Folderstorm.Theme.XuiRules")!);
+    private static readonly byte[] RuleBytes = ReadRules();
+    private static readonly JsonDocument Rules = JsonDocument.Parse(RuleBytes);
     public static readonly HashSet<string> Files = ReadNames("paths");
-    private static readonly HashSet<string> Attributes = ReadNames("editable_attributes");
+    private static readonly Dictionary<string, HashSet<string>> Elements = ReadElements();
+    private static readonly HashSet<string> Attributes = Elements.Values.SelectMany(values => values).ToHashSet(StringComparer.Ordinal);
     private static readonly HashSet<string> TextElements = ReadNames("editable_text_elements");
+    public static string Fingerprint => Contract.Hash(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(RuleBytes).Replace("\r\n", "\n", StringComparison.Ordinal)));
     public static string[] EditableAttributes => Attributes.Order(StringComparer.Ordinal).ToArray();
     public static bool CanEditAttribute(string name) => Attributes.Contains(name);
+    public static bool CanEditAttribute(string element, string name) => Elements.TryGetValue(element, out var names) && names.Contains(name);
+    public static string[] EditableAttributesFor(string element) => Elements.TryGetValue(element, out var names) ? names.Order(StringComparer.Ordinal).ToArray() : [];
+    public static string[] ValueChoices(string name) => AttributeKind(name) == "boolean" ? ["true", "false"] : Values.GetProperty("enum").TryGetProperty(name, out var choices) || Values.GetProperty("flags").TryGetProperty(name, out choices) ? choices.EnumerateArray().Select(value => value.GetString()!).ToArray() : [];
     public static string AttributeKind(string name)
     {
         if (!Attributes.Contains(name)) return "protected";
-        foreach (var group in new[] { "nonnegative_integer", "signed_integer", "color", "image" })
+        foreach (var group in new[] { "nonnegative_integer", "signed_integer", "color", "image", "boolean" })
             if (Values.GetProperty(group).EnumerateArray().Any(value => value.GetString() == name)) return group;
+        foreach (var group in new[] { "enum", "flags", "number" }) if (Values.GetProperty(group).TryGetProperty(name, out _)) return group;
         return "string";
     }
     private static readonly JsonElement Values = Rules.RootElement.GetProperty("value_rules");
+    private static byte[] ReadRules() { using var stream = typeof(XuiPolicy).Assembly.GetManifestResourceStream("Folderstorm.Theme.XuiRules")!; using var output = new MemoryStream(); stream.CopyTo(output); return output.ToArray(); }
+    private static Dictionary<string, HashSet<string>> ReadElements()
+    {
+        var groups = Rules.RootElement.GetProperty("attribute_groups"); var exclusions = Rules.RootElement.GetProperty("element_exclusions");
+        return Rules.RootElement.GetProperty("elements").EnumerateObject().ToDictionary(element => element.Name, element =>
+        {
+            var names = element.Value.EnumerateArray().SelectMany(group => groups.GetProperty(group.GetString()!).EnumerateArray().Select(value => value.GetString()!)).ToHashSet(StringComparer.Ordinal);
+            if (exclusions.TryGetProperty(element.Name, out var excluded)) names.ExceptWith(excluded.EnumerateArray().Select(value => value.GetString()!));
+            return names;
+        }, StringComparer.Ordinal);
+    }
     private static HashSet<string> ReadNames(string name) => Rules.RootElement.GetProperty(name).EnumerateArray().Select(v => v.GetString()!).ToHashSet(StringComparer.Ordinal);
     public static void Validate(string path, byte[] bytes, BaseCatalog catalog)
     {
@@ -366,7 +384,7 @@ public static class XuiPolicy
         foreach (var name in attributes)
             if ((string?)baseline.Attribute(name) != (string?)candidate.Attribute(name))
             {
-                Contract.Require(name.NamespaceName.Length == 0 && Attributes.Contains(name.LocalName), "xui_attribute", selector + "/@" + name);
+                Contract.Require(name.NamespaceName.Length == 0 && CanEditAttribute(baseline.Name.LocalName, name.LocalName), "xui_attribute", selector + "/@" + name);
                 if (candidate.Attribute(name) is { } attribute) ValidateValue(name.LocalName, attribute.Value, catalog);
             }
         var baseText = string.Concat(baseline.Nodes().OfType<XText>().Select(n => n.Value)).Trim();
@@ -390,5 +408,9 @@ public static class XuiPolicy
             catch (ThemeException) { throw new ThemeException("reference", "Unknown color: " + value); }
         }
         else if (In("image")) Contract.Require(catalog.Textures.ContainsKey(value), "reference", "Unknown image: " + value);
+        else if (In("boolean")) Contract.Require(value is "true" or "false", "xui_value", name);
+        else if (Values.GetProperty("enum").TryGetProperty(name, out var choices)) Contract.Require(choices.EnumerateArray().Any(choice => choice.GetString() == value), "xui_value", name);
+        else if (Values.GetProperty("flags").TryGetProperty(name, out var flags)) Contract.Require(value.Length == 0 || value.Split('|').All(token => flags.EnumerateArray().Any(flag => flag.GetString() == token)), "xui_value", name);
+        else if (Values.GetProperty("number").TryGetProperty(name, out var range)) Contract.Require(double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number) && double.IsFinite(number) && number >= range[0].GetDouble() && number <= range[1].GetDouble(), "xui_value", name);
     }
 }

@@ -12,7 +12,7 @@ public sealed record WidgetSampleData(string Type, string Label, double Width, d
 
 public static class WidgetSampleSource
 {
-    public static readonly string[] States = ["Normal", "Hover", "Pressed", "Disabled", "Selected", "Selected hover", "Selected pressed", "Selected disabled", "Inactive"];
+    public static readonly string[] States = ["Normal", "Hover", "Pressed", "Disabled", "Selected", "Selected hover", "Selected pressed", "Selected disabled", "Focused", "Unread", "Inactive"];
     public static WidgetSampleData Read(string directory, ThemeProject? project, BaseCatalog catalog, string path, int index, string state)
     {
         var xml = Contract.Xml(XuiProject.Read(directory, project, catalog, path)); var element = xml.Root!.DescendantsAndSelf().ElementAt(index); var type = element.Name.LocalName;
@@ -31,20 +31,23 @@ public static class WidgetSampleSource
             catch (ThemeException) { return ThemeColor.Parse(fallback); }
         }
         var selected = state.StartsWith("Selected", StringComparison.Ordinal); var disabled = state.Contains("disabled", StringComparison.OrdinalIgnoreCase);
-        var textName = type == "button" ? selected ? disabled ? "label_color_selected_disabled" : "label_color_selected" : disabled ? "label_color_disabled" : "label_color" : "text_color";
+        var textName = type == "button" ? selected ? disabled ? "label_color_disabled_selected" : "label_color_selected" : disabled ? "label_color_disabled" : "label_color" : "text_color";
         var text = ColorValue(Value(textName, disabled ? "LabelDisabledColor" : "TextFgColor"), "#F5F3FA");
-        var background = ColorValue(Value(type == "floater" ? state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_color" : "bg_opaque_color" : "bg_color", "ThemePanel"), "#1A1921");
+        var background = ColorValue(Value(type is "floater" or "panel" ? state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_color" : "bg_opaque_color" : "bg_color", "ThemePanel"), "#1A1921");
         var width = Number("width", type == "floater" || type == "panel" ? 300 : type is "text" or "text_editor" ? 220 : 140);
         var height = Number("height", type is "floater" or "panel" ? 180 : type is "text_editor" or "scroll_list" ? 90 : 28);
         var label = Value(type == "floater" ? "title" : "label", element.HasElements ? "" : element.Value.Trim());
+        if (type == "button" && selected) label = Value("label_selected", label);
         if (label.Length == 0 && !attributes.ContainsKey("label") && type == "button") label = "Button";
         var imageName = "";
         if (type == "button")
         {
-            var property = state switch { "Hover" => "image_hover_unselected", "Pressed" => "image_pressed", "Disabled" => "image_disabled", "Selected" => "image_selected", "Selected hover" => "image_hover_selected", "Selected pressed" => "image_pressed_selected", "Selected disabled" => "image_disabled_selected", _ => "image_unselected" };
+            var property = state switch { "Hover" => "image_hover_unselected", "Pressed" => "image_pressed", "Disabled" => "image_disabled", "Selected" => "image_selected", "Selected hover" => "image_hover_selected", "Selected pressed" => "image_pressed_selected", "Selected disabled" => "image_disabled_selected", "Unread" => "image_flash", _ => "image_unselected" };
             imageName = Value(property, Value(selected ? "image_selected" : "image_unselected", Value("image_unselected")));
         }
-        else if (type == "floater") imageName = Value(state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_image" : "bg_opaque_image");
+        else if (type is "floater" or "panel") imageName = Value(state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_image" : "bg_opaque_image");
+        else if (type is "line_editor" or "search_editor") imageName = Value(disabled ? "background_image_disabled" : state == "Focused" ? "background_image_focused" : "background_image", Value("background_image"));
+        else if (type is "first_tab" or "middle_tab" or "last_tab") imageName = Value(state == "Unread" ? "tab_top_image_flash" : selected ? "tab_top_image_selected" : "tab_top_image_unselected", Value("tab_top_image_unselected"));
         else if (type is "icon" or "image") imageName = Value("image_name", Value("image"));
         RasterImage? image = null; SliceMargins margins = default; var detail = type + " · " + width + " × " + height;
         if (imageName.Length > 0)
@@ -56,17 +59,17 @@ public static class WidgetSampleSource
                 var pixels = ImageCodec.Decode(source, file); var geometry = TextureGeometry.FromAttributes(pixels.Width, pixels.Height, texture.Attributes);
                 image = pixels.Crop(geometry.Clip.Left, pixels.Height - geometry.Clip.Top, geometry.ClipWidth, geometry.ClipHeight);
                 margins = geometry.Margins;
-                var tint = type == "button" ? Value(disabled ? "image_color_disabled" : "image_color", "ButtonImageColor") : Value(state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_image_overlay" : "bg_opaque_image_overlay", "#FFFFFFFF");
+                var tint = type == "button" ? Value(disabled ? "image_color_disabled" : "image_color", "ButtonImageColor") : type is "floater" or "panel" ? Value(state == "Inactive" || Value("background_opaque") != "true" ? "bg_alpha_image_overlay" : "bg_opaque_image_overlay", "#FFFFFFFF") : type == "icon" ? Value("color", "#FFFFFFFF") : "#FFFFFFFF";
                 image = image.Tint(ColorValue(tint, "#FFFFFFFF")); detail += "\n" + imageName;
             }
             catch (Exception error) when (error is ThemeException or System.IO.IOException or NotSupportedException or KeyNotFoundException or FormatException)
             { image = null; detail += "\nImage sample unavailable: " + error.Message; }
         }
-        var font = Value("font", "SansSerifSmall"); var points = 9d;
-        try { var sizes = FontProject.Sizes(FontProject.Read(directory, project, catalog)); var size = sizes.Keys.OrderByDescending(name => name.Length).FirstOrDefault(name => font.EndsWith(name, StringComparison.Ordinal)); if (size != null) points = sizes[size]; }
+        var fontKey = type == "floater" ? "header_font" : "font"; var font = Value(fontKey, "SansSerifSmall"); var points = 9d;
+        try { var sizes = FontProject.Sizes(FontProject.Read(directory, project, catalog)); var size = Value(fontKey + ".size"); if (size.Length == 0) size = sizes.Keys.OrderByDescending(name => name.Length).FirstOrDefault(name => font.EndsWith(name, StringComparison.Ordinal)) ?? ""; if (sizes.TryGetValue(size, out var namedPoints)) points = namedPoints; }
         catch (Exception error) when (error is ThemeException or System.IO.IOException or FormatException or ArgumentException) { }
         detail += "\n" + font + " · " + points.ToString(CultureInfo.InvariantCulture) + " pt";
-        return new(type, label, width, height, text, background, image, margins, detail, selected, disabled, font, points * 96 / 72, Value("font_style"));
+        return new(type, label, width, height, text, background, image, margins, detail, selected, disabled, font, points * 96 / 72, Value(fontKey + ".style"));
     }
 }
 

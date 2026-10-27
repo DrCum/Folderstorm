@@ -105,7 +105,17 @@ std::set<std::string> ruleNames(const char* field)
     const auto rules=boost::json::parse(ThemeRulesJson).as_object();std::set<std::string> names;
     for(const auto& name:rules.at(field).as_array())names.emplace(name.as_string());return names;
 }
-const auto xuiPaths=ruleNames("paths"),xuiAttributes=ruleNames("editable_attributes"),xuiTextElements=ruleNames("editable_text_elements");
+const auto xuiPaths=ruleNames("paths"),xuiTextElements=ruleNames("editable_text_elements");
+bool xuiAttribute(const std::string& element,const std::string& name)
+{
+    static const auto rules=boost::json::parse(ThemeRulesJson).as_object();
+    const auto* groups=rules.at("elements").as_object().if_contains(element);
+    if(!groups)return false;
+    const auto* exclusions=rules.at("element_exclusions").as_object().if_contains(element);
+    if(exclusions)for(const auto& excluded:exclusions->as_array())if(excluded.as_string()==name)return false;
+    for(const auto& group:groups->as_array())for(const auto& attribute:rules.at("attribute_groups").as_object().at(group.as_string()).as_array())if(attribute.as_string()==name)return true;
+    return false;
+}
 std::string extension(std::string path)
 {path=toUtf8(fromUtf8(path).extension());for(auto& c:path)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return path;}
 std::string kind(const std::string& path)
@@ -146,6 +156,26 @@ void xuiValue(const std::string& name,const std::string& value,const std::map<st
     }
     else if(in("color") && !colors.count(value)){try{color(value);}catch(const Error&){throw Error("reference","Unknown color: "+value);}}
     else if(in("image"))require(textures.count(value),"reference","Unknown image: "+value);
+    else if(in("boolean"))require(value=="true" || value=="false","xui_value",name);
+    else if(const auto* choices=rules.at("enum").as_object().if_contains(name))
+        require(std::any_of(choices->as_array().begin(),choices->as_array().end(),[&](const auto& choice){return choice.as_string()==value;}),"xui_value",name);
+    else if(const auto* flags=rules.at("flags").as_object().if_contains(name))
+    {
+        std::size_t begin=0;
+        while(begin<value.size())
+        {
+            const auto end=value.find('|',begin);const auto token=value.substr(begin,end==std::string::npos?end:end-begin);
+            require(std::any_of(flags->as_array().begin(),flags->as_array().end(),[&](const auto& flag){return flag.as_string()==token;}),"xui_value",name);
+            if(end==std::string::npos)break;
+            require(end+1<value.size(),"xui_value",name);begin=end+1;
+        }
+    }
+    else if(const auto* range=rules.at("number").as_object().if_contains(name))
+    {
+        std::istringstream input(value);input.imbue(std::locale::classic());double number;std::string extra;
+        const auto bound=[](const boost::json::value& v){return v.is_double()?v.as_double():static_cast<double>(v.as_int64());};
+        require(static_cast<bool>(input>>number) && !(input>>extra) && std::isfinite(number) && number>=bound(range->as_array()[0]) && number<=bound(range->as_array()[1]),"xui_value",name);
+    }
 }
 void compareXui(const Tree::value_type& baseline,const Tree::value_type& candidate,const std::string& selector,const std::map<std::string,std::string>& colors,const std::map<std::string,std::string>& textures)
 {
@@ -160,7 +190,7 @@ void compareXui(const Tree::value_type& baseline,const Tree::value_type& candida
         const auto before=first.find(name),after=second.find(name);
         if(before==first.end() || after==second.end() || before->second!=after->second)
         {
-            require(xuiAttributes.count(name),"xui_attribute",selector+"/@"+name);
+            require(xuiAttribute(baseline.first,name),"xui_attribute",selector+"/@"+name);
             if(after!=second.end())xuiValue(name,after->second,colors,textures);
         }
     }
