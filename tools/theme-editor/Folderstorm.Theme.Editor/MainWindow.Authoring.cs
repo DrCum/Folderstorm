@@ -105,22 +105,26 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         if (catalog == null || ColorList == null || ColorScope == null || ColorSearch == null) return;
         var selection = (ColorList.SelectedItem as ColorRow)?.Name;
-        var literals = project?.Edits.Colors ?? new Dictionary<string, string>();
-        var links = project?.Edits.ColorLinks ?? new Dictionary<string, string>();
+        PaletteState palette;
+        try { palette = PaletteProject.Read(projectDirectory, project, catalog); }
+        catch (Exception error) { ColorList.ItemsSource = null; StatusText.Text = error.Message; return; }
+        var literals = palette.Literals; var links = palette.Links;
         Dictionary<string, string> compiled;
-        try { compiled = catalog.CompileColors(literals, links); }
+        try { compiled = palette.CompileChanges(); }
         catch (ThemeException error) { compiled = new(StringComparer.Ordinal); StatusText.Text = error.Message; }
         var roleNames = catalog.Colors.Keys.Where(name => name.StartsWith("Theme", StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
         if (roleNames.Count == 0) roleNames.UnionWith(new[] { "SL-Background", "SL-Background_Light", "TextBgWriteableColor", "TextFgColor", "LabelDisabledColor", "AccentColor", "SchemeLightest", "EmphasisColor", "ScrollSelectedBGColor", "ScrollHoveredColor", "FloaterFocusBorderColor", "HTMLLinkColor" });
         var rows = catalog.Colors.Keys.Order(StringComparer.Ordinal)
             .Where(name => name.Contains(ColorSearch.Text, StringComparison.OrdinalIgnoreCase))
-            .Where(name => ColorScope.SelectedIndex switch { 0 => roleNames.Contains(name), 2 => literals.ContainsKey(name) || links.ContainsKey(name), 3 => compiled.ContainsKey(name), _ => true })
+            .Where(name => ColorScope.SelectedIndex switch { 0 => roleNames.Contains(name), 2 => literals.ContainsKey(name) || links.ContainsKey(name), 3 => palette.Imported.ContainsKey(name) || compiled.ContainsKey(name), _ => true })
             .Select(name =>
             {
                 Brush swatch = Brushes.Transparent;
-                try { swatch = ToBrush(catalog.InspectColor(name, literals, links).Value); }
+                try { swatch = ToBrush(palette.Inspect(name).Value); }
                 catch (ThemeException) { }
-                var state = links.TryGetValue(name, out var target) ? "Linked → " + target : literals.ContainsKey(name) ? "Override" : compiled.ContainsKey(name) ? "Follows an override" : "Inherited";
+                var authored = project?.Edits.Colors.ContainsKey(name) == true || project?.Edits.ColorLinks.ContainsKey(name) == true;
+                var state = !authored && palette.Imported.ContainsKey(name) ? links.TryGetValue(name, out var rawTarget) ? "Imported link → " + rawTarget : "Imported override"
+                    : links.TryGetValue(name, out var target) ? "Linked → " + target : literals.ContainsKey(name) ? "Override" : compiled.ContainsKey(name) ? "Follows an override" : "Inherited";
                 return new ColorRow(name, swatch, state);
             }).ToArray();
         ColorLinkTarget.ItemsSource = catalog.Colors.Keys.Order(StringComparer.Ordinal).ToArray();
@@ -133,6 +137,9 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         var values = new Dictionary<string, ThemeColor>(StringComparer.Ordinal);
         if (catalog == null) return values;
+        PaletteState palette;
+        try { palette = PaletteProject.Read(projectDirectory, edited ? project : null, catalog); }
+        catch (Exception) { return values; }
         var aliases = new (string Role, string Fallback)[]
         {
             ("ThemeBg", "MenuBarBgColor"), ("ThemePanel", "SL-Background"), ("ThemeLine", "FloaterUnfocusBorderColor"),
@@ -143,7 +150,7 @@ public partial class MainWindow : INotifyPropertyChanged
         foreach (var (role, fallback) in aliases)
         {
             var name = catalog.Colors.ContainsKey(role) ? role : fallback;
-            try { values[role] = catalog.InspectColor(name, edited && project != null ? project.Edits.Colors : new Dictionary<string, string>(), edited ? project?.Edits.ColorLinks : null).Value; }
+            try { values[role] = palette.Inspect(name).Value; }
             catch (ThemeException) { }
         }
         var button = values.GetValueOrDefault("ThemeLine", ThemeColor.Parse("#302D3B"));
@@ -157,25 +164,25 @@ public partial class MainWindow : INotifyPropertyChanged
     {
         if (catalog == null || ColorList.SelectedItem is not ColorRow row) return;
         ColorName.Text = row.Name; ColorState.Text = row.State;
-        var literals = project?.Edits.Colors ?? new Dictionary<string, string>(); var links = project?.Edits.ColorLinks ?? new Dictionary<string, string>();
+        ColorState.ToolTip = project?.Origin == "compiled-package" ? "Imported colors are explicit overrides. Reset palette restores the base; original editing links are not inferred." : null;
         try
         {
-            var inspected = catalog.InspectColor(row.Name, literals, links);
+            var palette = PaletteProject.Read(projectDirectory, project, catalog); var inspected = palette.Inspect(row.Name);
             appliedColorValue = inspected.Value.NativeText;
             updatingEditors = true;
             try { ColorValue.Text = appliedColorValue; }
             finally { updatingEditors = false; }
             ColorSource.Text = inspected.Source + "\n" + string.Join(" → ", inspected.ReferenceChain);
-            ColorLinkTarget.Text = links.GetValueOrDefault(row.Name) ?? catalog.Colors[row.Name].Reference ?? "";
+            ColorLinkTarget.Text = palette.Links.GetValueOrDefault(row.Name) ?? catalog.Colors[row.Name].Reference ?? "";
             var followers = catalog.Colors.Keys.Where(name => name != row.Name).Where(name =>
             {
-                try { return catalog.InspectColor(name, literals, links).ReferenceChain.Contains(row.Name); }
+                try { return palette.Inspect(name).ReferenceChain.Contains(row.Name); }
                 catch (ThemeException) { return false; }
             }).ToArray();
             ColorAffected.Text = followers.Length == 0 ? "" : $"{followers.Length} linked colors\n" + string.Join(", ", followers.Take(7)) + (followers.Length > 7 ? "…" : "");
             ShowDraftColor();
         }
-        catch (ThemeException error)
+        catch (Exception error)
         {
             appliedColorValue = null; ColorDraftState.Visibility = Visibility.Collapsed;
             ColorValue.Text = catalog.Colors[row.Name].Value ?? ""; ColorSource.Text = error.Message;
@@ -206,38 +213,38 @@ public partial class MainWindow : INotifyPropertyChanged
     private async void SetColor(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready() || ColorList.SelectedItem is not ColorRow row) return;
-        CommitMetadata(); if (ColorAuthoring.SetLiteral(project!, catalog!, row.Name, ColorValue.Text)) changed = true;
+        CommitMetadata(); if (ColorAuthoring.SetLiteral(project!, catalog!, row.Name, ColorValue.Text, projectDirectory)) changed = true;
         RefreshPalette(); StatusText.Text = "Color set.";
     });
     private async void SetColorLink(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready() || ColorList.SelectedItem is not ColorRow row) return;
-        CommitMetadata(); if (ColorAuthoring.SetLink(project!, catalog!, row.Name, ColorLinkTarget.Text.Trim())) changed = true;
+        CommitMetadata(); if (ColorAuthoring.SetLink(project!, catalog!, row.Name, ColorLinkTarget.Text.Trim(), projectDirectory)) changed = true;
         RefreshPalette(); StatusText.Text = "Color linked.";
     });
     private async void ResetColor(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready() || ColorList.SelectedItem is not ColorRow row) return;
-        CommitMetadata(); if (ColorAuthoring.Reset(project!, catalog!, row.Name)) changed = true;
+        CommitMetadata(); if (ColorAuthoring.Reset(project!, catalog!, row.Name, projectDirectory)) changed = true;
         RefreshPalette(); StatusText.Text = "Inherited color restored.";
     });
     private async void ResetPalette(object sender, RoutedEventArgs args) => await Run(() =>
     {
-        if (!Ready() || project!.Edits.Colors.Count + project.Edits.ColorLinks.Count == 0) return;
-        CommitMetadata(); project.Checkpoint("Reset palette"); project.Edits = project.Edits with { Colors = new(StringComparer.Ordinal), ColorLinks = new(StringComparer.Ordinal) };
-        changed = true; RefreshPalette(); StatusText.Text = "Inherited palette restored. Undo keeps your edits.";
+        if (!Ready()) return;
+        CommitMetadata(); if (PaletteProject.ResetAll(projectDirectory, project!, catalog!)) changed = true;
+        RefreshPalette(); StatusText.Text = "Inherited palette restored. Undo keeps your edits.";
     });
     private async void OpenPaletteTools(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready()) return;
         var selection = ColorList.SelectedItems.Cast<ColorRow>().Select(item => item.Name).ToArray();
-        var dialog = new PaletteToolsDialog(this, project!, catalog!, selection);
+        var dialog = new PaletteToolsDialog(this, project!, catalog!, selection, projectDirectory);
         if (dialog.ShowDialog() == true) ApplyPaletteChanges(dialog.Changes, dialog.EditLabel);
     });
     private void ApplyPaletteChanges(PaletteChange[] changes, string label)
     {
         if (!Ready()) return;
-        CommitMetadata(); var count = PaletteProject.Apply(project!, catalog!, changes, label);
+        CommitMetadata(); var count = PaletteProject.Apply(project!, catalog!, changes, label, projectDirectory);
         if (count > 0) { changed = true; RefreshPalette(); SyncMetadata(); }
         StatusText.Text = count == 0 ? "Palette already matches." : count + " palette edits applied. Undo restores the palette.";
     }

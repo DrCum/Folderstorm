@@ -35,7 +35,7 @@ try
         case "set-color":
             var edited = Project(values[1]); Contract.Rgba(values[3]);
             Contract.Require(Base(edited.BaseSkin, edited.BaseScheme).Colors.ContainsKey(values[2]), "color", values[2]);
-            ColorAuthoring.SetLiteral(edited, Base(edited.BaseSkin, edited.BaseScheme), values[2], values[3]); ProjectStore.Save(values[1], edited);
+            ColorAuthoring.SetLiteral(edited, Base(edited.BaseSkin, edited.BaseScheme), values[2], values[3], values[1]); ProjectStore.Save(values[1], edited);
             result = new { Saved = true }; break;
         case "validate":
         case "inspect":
@@ -51,7 +51,7 @@ try
             var project = Project(values[1]); var theme = PackageStore.Compile(values[1], project, Base(project.BaseSkin, project.BaseScheme));
             PackageStore.Export(values[2], theme); result = new { Package = Path.GetFullPath(values[2]), theme.Revision }; break;
         case "import":
-            var imported = PackageStore.ReadArchive(values[1], Base()); PackageStore.ImportProject(values[2], imported);
+            var importBase = Base(); var imported = PackageStore.ReadArchive(values[1], importBase); PackageStore.ImportProject(values[2], imported, importBase);
             result = new { Project = Path.GetFullPath(values[2]), Origin = "compiled-package", imported.Revision }; break;
         case "publish":
             var publishBase = Base(); var published = PackageStore.ReadArchive(values[1], publishBase);

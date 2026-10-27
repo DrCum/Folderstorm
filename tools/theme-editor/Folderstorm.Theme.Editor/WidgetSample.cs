@@ -23,11 +23,12 @@ public static class WidgetSampleSource
             foreach (var attribute in Contract.Xml(defaults).Root!.Attributes()) attributes[attribute.Name.LocalName] = attribute.Value;
         }
         foreach (var attribute in element.Attributes()) attributes[attribute.Name.LocalName] = attribute.Value;
+        var palette = PaletteProject.Read(directory, project, catalog);
         string Value(string name, string fallback = "") => attributes.GetValueOrDefault(name, fallback);
         double Number(string name, double fallback) => double.TryParse(Value(name), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? Math.Clamp(value, 0, 16384) : fallback;
         ThemeColor ColorValue(string value, string fallback)
         {
-            try { return catalog.Colors.ContainsKey(value) ? catalog.InspectColor(value, project?.Edits.Colors ?? new Dictionary<string, string>(), project?.Edits.ColorLinks).Value : ThemeColor.Parse(value); }
+            try { return catalog.Colors.ContainsKey(value) ? palette.Inspect(value).Value : ThemeColor.Parse(value); }
             catch (ThemeException) { return ThemeColor.Parse(fallback); }
         }
         var selected = state.StartsWith("Selected", StringComparison.Ordinal); var disabled = state.Contains("disabled", StringComparison.OrdinalIgnoreCase);

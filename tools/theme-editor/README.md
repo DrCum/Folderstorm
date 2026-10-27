@@ -134,6 +134,13 @@ Select a package to validate its base, payload hashes and preview image before
 previewing it or opening a new project. Open as project preserves compiled bytes
 and starts independent history in a new folder. Inspection does not select a
 theme for your normal viewer profile.
+Imported palette entries are explicit overrides. The inspector identifies them,
+and samples and bulk tools read their values. Set/link/reset and Reset palette
+retain one-step Undo and stored originals. Editing a role does not relink explicit
+compiled aliases. Unchanged package payload and manifest bytes remain exact;
+required capability and font metadata survive unrelated edits. Project creation
+stages and validates a full import before renaming its new folder, outside the
+protected library. Failed stages remain available for recovery.
 
 Project includes an optional package preview image. Import PNG, Reset image,
 Undo/Redo and Save retain exact bytes and stored originals. Capture native preview

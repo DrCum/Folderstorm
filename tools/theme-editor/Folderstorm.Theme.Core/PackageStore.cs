@@ -131,7 +131,7 @@ public static class PackageStore
         }
         return new(manifest, Contract.Hash(manifestBytes!), files);
     }
-    private static void ValidateColors(byte[] bytes, BaseCatalog? catalog)
+    internal static void ValidateColors(byte[] bytes, BaseCatalog? catalog)
     {
         var root = Contract.Xml(bytes).Root!; Contract.Require(root.Name == "colors", "xml", "Expected colors");
         var names = new Dictionary<string, string?>(StringComparer.Ordinal);
@@ -279,11 +279,12 @@ public static class PackageStore
         Contract.Require(previewImage == null || catalog.Textures.ContainsKey(previewImage), "texture", "Unknown preview image: " + previewImage);
         var dependencies = Contract.Bytes(project.BaseDependencies);
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["base-dependencies.json"] = dependencies };
-        var colors = catalog.CompileColors(project.Edits.Colors, project.Edits.ColorLinks);
-        if (colors.Count > 0) files.Add("viewer/colors.xml", Contract.XmlBytes(new XDocument(new XElement("colors", colors.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => new XElement("color", new XAttribute("name", c.Key), new XAttribute("value", c.Value)))))));
+        var colors = PaletteProject.CompilePayload(projectDirectory, project, catalog);
+        if (colors != null) files.Add(PaletteProject.PayloadPath, colors);
         foreach (var asset in project.Edits.Assets)
         {
             Contract.Require(asset.Kind == Kind(asset.PayloadPath), "kind", asset.PayloadPath);
+            if (asset.PayloadPath == PaletteProject.PayloadPath) continue;
             Contract.Require(files.TryAdd(asset.PayloadPath, File.ReadAllBytes(Contract.Contained(projectDirectory, asset.AssetPath))), "collision", asset.PayloadPath);
         }
         if (previewImage != null)
@@ -312,7 +313,30 @@ public static class PackageStore
             Files = files.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => new Payload(f.Key, f.Value.LongLength, Contract.Hash(f.Value), Kind(f.Key))).ToArray(),
             FontDependencies = fonts, Extensions = project.Extensions
         };
-        files.Add("theme.json", Contract.Bytes(manifest)); return Validate(files, catalog);
+        var manifestBytes = Contract.Bytes(manifest);
+        if (project.Edits.CompiledManifestPath is { } origin)
+        {
+            var original = LibraryCatalog.ReadBounded(Contract.Contained(projectDirectory, origin), Contract.ManifestLimit);
+            Contract.Require(Contract.Hash(original) == Path.GetFileNameWithoutExtension(origin), "project_asset", "Stored compiled manifest has changed");
+            var header = Manifest(original);
+            bool Unchanged(string path)
+            {
+                var previous = header.Files.SingleOrDefault(file => file.Path == path);
+                return previous == null ? !files.ContainsKey(path) : files.TryGetValue(path, out var current) && Contract.Hash(current) == previous.Sha256;
+            }
+            var stableFonts = Unchanged("viewer/fonts/fonts.xml") && header.FontDependencies.Where(font => font.Kind == "embedded").All(font => Unchanged("viewer/fonts/" + font.File));
+            var derived = new[] { "viewer.overlay.v1", "viewer.fonts.v1", "viewer.xui.v1" };
+            manifest = manifest with { RequiredCapabilities = manifest.RequiredCapabilities.Concat(header.RequiredCapabilities.Except(derived, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray(), FontDependencies = stableFonts ? header.FontDependencies : manifest.FontDependencies };
+            manifestBytes = Contract.Bytes(manifest);
+            var samePayloads = header.ThemeId == manifest.ThemeId && header.BaseSkin == manifest.BaseSkin && header.BaseScheme == manifest.BaseScheme && header.BaseFingerprint == manifest.BaseFingerprint &&
+                header.Files.Length == files.Count && header.Files.All(file => files.TryGetValue(file.Path, out var bytes) && bytes.LongLength == file.Size && Contract.Hash(bytes) == file.Sha256);
+            if (samePayloads)
+            {
+                var metadata = header with { DisplayName = manifest.DisplayName, PackageVersion = manifest.PackageVersion, Author = manifest.Author, Description = manifest.Description, Extensions = manifest.Extensions };
+                manifestBytes = Contract.Bytes(metadata).SequenceEqual(Contract.Bytes(header)) ? original : Contract.Bytes(metadata);
+            }
+        }
+        files.Add("theme.json", manifestBytes); return Validate(files, catalog);
     }
     public static void Export(string path, ValidatedTheme theme)
     {
@@ -326,23 +350,8 @@ public static class PackageStore
         Contract.Require(buffer.Length <= Contract.ArchiveLimit, "size", "Export exceeds 128 MiB");
         Contract.AtomicWrite(path, buffer.ToArray());
     }
-    public static ThemeProject ImportProject(string directory, ValidatedTheme theme)
-    {
-        Contract.Require(!Directory.Exists(directory), "project_exists", "Choose a new project directory"); Directory.CreateDirectory(directory);
-        var project = new ThemeProject
-        {
-            ThemeId = theme.Manifest.ThemeId, DisplayName = theme.Manifest.DisplayName, PackageVersion = theme.Manifest.PackageVersion,
-            Author = theme.Manifest.Author, Description = theme.Manifest.Description, BaseSkin = theme.Manifest.BaseSkin, BaseScheme = theme.Manifest.BaseScheme,
-            BaseDependencies = Contract.Read<DependencySet>(theme.Files["base-dependencies.json"]), Origin = "compiled-package", Extensions = theme.Manifest.Extensions
-        };
-        foreach (var payload in theme.Manifest.Files.Where(f => f.Path != "base-dependencies.json"))
-        {
-            var relative = "assets/" + payload.Sha256 + Path.GetExtension(payload.Path);
-            Contract.AtomicWrite(Contract.Contained(directory, relative), theme.Files[payload.Path]);
-            project.Edits.Assets.Add(new(payload.Path, relative, relative, payload.Kind));
-        }
-        ProjectStore.Save(directory, project); return project;
-    }
+    public static ThemeProject ImportProject(string directory, ValidatedTheme theme, BaseCatalog? catalog = null, string? protectedLibrary = null)
+        => ProjectImport.Create(directory, theme, catalog, protectedLibrary);
 }
 
 public static class XuiPolicy

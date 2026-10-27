@@ -274,6 +274,33 @@ Six focused library/capture model groups and the editor build pass. No0.16
 candidate is retained yet. Imported raw palettes still need effective inspection,
 collision-free staged edits/reset, and atomic destination-safe project import.
 
+The0.16 branch now resolves imported colors as a separate native-style layer.
+The inspector, quick sample, widget samples and bulk tools read that layer.
+Explicit compiled literals stop authored role fan-out; missing original links
+are not inferred. Imported XML and manifest bytes survive a no-op exactly.
+Set/link/reset and reset-all stage validation before a checkpoint, keep originals
+and unrelated edits, and support durable Undo/Redo. Bulk preview performs no
+writes. Unrelated native-only references remain in the source XML.
+
+Import now validates a byte snapshot, stages a full project in a new sibling and
+renames without replacement after validation. Existing destinations and folders
+inside the protected library are refused. Failed stages stay recoverable without
+exposing the final project. The optional `compiled_manifest_path` edit field
+retains exact original header formatting, capabilities and font metadata. The
+actual retained0.15 reader opens this field read-only and rejects Save with source
+bytes unchanged; normal older projects omit the field and stay compatible.
+
+Full runs pass59 core groups,36 windowless WPF groups and12 codec groups. New
+checks cover exact imported values/bytes, explicit override precedence, failed
+cycles and compilation, scoped reset, save/reopen, raw native-only references,
+manifest formatting/metadata, destination bounds and an8000-license import whose
+project exceeds the authoring limit after staging. The final destination stays
+absent and its stage is retained. A package with edited imported colors and
+preserved declared font/capability metadata passes the matching C++ validator.
+Full suites precede only a final empty-XML rejection/depth-diagnostic guard,
+covered by the final focused imported-project run. Retention and new desktop
+acceptance are next; source remains local and the whole goal is incomplete.
+
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.

@@ -22,7 +22,7 @@ public sealed class PaletteToolsDialog : Window
     public PaletteChange[] Changes { get; private set; } = [];
     public string EditLabel { get; private set; } = "Edit palette";
 
-    public PaletteToolsDialog(Window? owner, ThemeProject document, BaseCatalog source, IEnumerable<string> selection)
+    public PaletteToolsDialog(Window? owner, ThemeProject document, BaseCatalog source, IEnumerable<string> selection, string? directory = null)
     {
         if (owner != null) Owner = owner;
         project = document; catalog = source; selected = selection.Where(catalog.Colors.ContainsKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -79,8 +79,8 @@ public sealed class PaletteToolsDialog : Window
                 var predefined = ((PalettePreset)preset.SelectedItem).Changes(catalog).ToDictionary(item => item.Name, StringComparer.Ordinal);
                 prepared = names.Select(name => mode.SelectedIndex switch
                 { 0 => predefined[name], 1 => new PaletteChange(name, value.Text), 2 => new PaletteChange(name, Link: link.Text.Trim()), _ => new PaletteChange(name) }).ToArray();
-                var result = PaletteProject.Preview(project, catalog, prepared);
-                string Before(string name) { try { return catalog.InspectColor(name, project.Edits.Colors, project.Edits.ColorLinks).Value.Hex(); } catch (ThemeException) { return "Native value"; } }
+                var result = PaletteProject.Preview(project, catalog, prepared, directory); var palette = PaletteProject.Read(directory, project, catalog);
+                string Before(string name) { try { return palette.Inspect(name).Value.Hex(); } catch (ThemeException) { return "Native value"; } }
                 changesText.Text = string.Join("\n", result.EffectiveChanges.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item.Key + "\n" + Before(item.Key) + " → " + ThemeColor.Parse(item.Value).Hex() + "\n")
                     .Concat(result.NativeOnly.Select(name => name + "\nInherited native value\n")));
                 status.Text = result.DirectChanges + " direct edits · " + result.EffectiveChanges.Count + " color changes. Apply makes one Undo step.";

@@ -59,7 +59,7 @@ public partial class MainWindow
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { previewOperation = false; Workspace.IsEnabled = true; UpdateCommandState(); }
     }
-    private void OpenLibrary(object sender, RoutedEventArgs args)
+    private async void OpenLibrary(object sender, RoutedEventArgs args)
     {
         if (!CanOpenDocument) return;
         try
@@ -70,9 +70,16 @@ public partial class MainWindow
                 Contract.Require(preview.Status == "ready", "preview", "Viewer used its built-in fallback; this package could not be previewed.");
             }, parent: projectDirectory.Length > 0 ? Path.GetDirectoryName(projectDirectory) : null);
             if (dialog.ShowDialog() != true || dialog.SelectedTheme == null || !Discard()) return;
-            PackageStore.ImportProject(dialog.Destination, dialog.SelectedTheme); Open(dialog.Destination);
+            copyingProject = true; UpdateCommandState(); StatusText.Text = "Importing compiled package…";
+            var baseRoot = BasePath.Text;
+            await Task.Run(() =>
+            {
+                var source = new BaseCatalog(baseRoot, dialog.SelectedTheme.Manifest.BaseSkin, dialog.SelectedTheme.Manifest.BaseScheme);
+                PackageStore.ImportProject(dialog.Destination, dialog.SelectedTheme, source, dialog.ProtectedLibrary);
+            });
+            Open(dialog.Destination);
         }
         catch (Exception error) { StatusText.Text = error.Message; }
-        finally { UpdateCommandState(); }
+        finally { copyingProject = false; UpdateCommandState(); }
     }
 }

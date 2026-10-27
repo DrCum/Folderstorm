@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
+using System.Xml.Linq;
 namespace Folderstorm.Theme;
 
 public sealed record PaletteChange(string Name, string? Value = null, string? Link = null);
-public sealed record PalettePreview(ProjectEdits Edits, int DirectChanges, Dictionary<string, string> EffectiveChanges, string[] NativeOnly);
-public static class PaletteProject
+public sealed record PalettePreview(ProjectEdits Edits, int DirectChanges, Dictionary<string, string> EffectiveChanges, string[] NativeOnly, byte[]? ImportedPayload = null, bool ImportedChanged = false);
+public static partial class PaletteProject
 {
-    public static PalettePreview Preview(ThemeProject project, BaseCatalog catalog, IEnumerable<PaletteChange> changes)
+    public static PalettePreview Preview(ThemeProject project, BaseCatalog catalog, IEnumerable<PaletteChange> changes, string? directory = null)
     {
         ProjectStore.EnsureEditable(project);
         Contract.Require(project.BaseSkin == catalog.Skin && project.BaseScheme == catalog.Scheme, "base", "Palette base differs from the project");
@@ -14,38 +15,62 @@ public static class PaletteProject
             "palette_batch", "Choose distinct known colors");
         var colors = new Dictionary<string, string>(project.Edits.Colors, StringComparer.Ordinal);
         var links = new Dictionary<string, string>(project.Edits.ColorLinks, StringComparer.Ordinal);
+        var before = Read(directory, project, catalog);
+        var raw = before.RawBytes is { Length: > 0 } ? Contract.Xml(before.RawBytes) : null; var rawChanged = false; var direct = 0;
         foreach (var item in selected)
         {
             Contract.Require(catalog.Colors.ContainsKey(item.Name), "color", "Unknown color: " + item.Name);
             Contract.Require(item.Value == null || item.Link == null, "palette_batch", "Choose a value or a link for each color");
-            colors.Remove(item.Name); links.Remove(item.Name);
-            if (item.Value != null) colors[item.Name] = ThemeColor.Parse(item.Value).NativeText;
-            if (item.Link != null) links[item.Name] = item.Link;
+            var literal = item.Value == null ? null : ThemeColor.Parse(item.Value).NativeText;
+            if (literal != null && before.Literals.TryGetValue(item.Name, out var old) && ThemeColor.Parse(old).NativeText == literal && !before.Links.ContainsKey(item.Name) ||
+                item.Link != null && before.Links.GetValueOrDefault(item.Name) == item.Link) continue;
+            var changed = colors.Remove(item.Name) | links.Remove(item.Name);
+            if (literal != null) { colors[item.Name] = literal; changed = true; }
+            if (item.Link != null) { links[item.Name] = item.Link; changed = true; }
+            if (literal == null && item.Link == null && raw?.Root!.Elements("color").SingleOrDefault(node => (string?)node.Attribute("name") == item.Name) is { } node)
+            { node.Remove(); rawChanged = changed = true; }
+            if (changed) ++direct;
         }
-        var resolver = new ColorResolver(catalog, colors, links); var compiled = resolver.Compile();
-        var direct = selected.Count(item => project.Edits.Colors.GetValueOrDefault(item.Name) != colors.GetValueOrDefault(item.Name) ||
-            project.Edits.ColorLinks.GetValueOrDefault(item.Name) != links.GetValueOrDefault(item.Name));
+        var edits = project.Edits with { Colors = colors, ColorLinks = links };
+        var rawBytes = rawChanged ? raw!.Root!.HasElements ? Contract.XmlBytes(raw) : [] : before.RawBytes;
+        var after = new PaletteState(catalog, edits, before.RawAsset, rawBytes); var compiled = after.CompileChanges();
         var affected = new Dictionary<string, string>(StringComparer.Ordinal); var nativeOnly = new List<string>();
-        IEnumerable<string> previous; ColorResolver? beforeResolver;
-        try { beforeResolver = new(catalog, project.Edits.Colors, project.Edits.ColorLinks); previous = beforeResolver.Compile().Keys; }
-        catch (ThemeException) { beforeResolver = null; previous = project.Edits.Colors.Keys.Concat(project.Edits.ColorLinks.Keys); }
-        var candidates = compiled.Keys.Concat(previous).Distinct(StringComparer.Ordinal);
+        IEnumerable<string> previous;
+        try { previous = before.CompileChanges().Keys; }
+        catch (ThemeException) { previous = project.Edits.Colors.Keys.Concat(project.Edits.ColorLinks.Keys); }
+        var candidates = compiled.Keys.Concat(previous).Concat(selected.Select(item => item.Name)).Concat(before.Imported.Keys).Concat(after.Imported.Keys).Distinct(StringComparer.Ordinal);
         foreach (var name in candidates)
         {
-            string after;
-            try { after = resolver.Inspect(name).Value.NativeText; }
+            string next;
+            try { next = after.Inspect(name).Value.NativeText; }
             catch (ThemeException) { nativeOnly.Add(name); continue; }
-            string? before = null;
-            try { before = beforeResolver?.Inspect(name).Value.NativeText; }
+            string? old = null;
+            try { old = before.Inspect(name).Value.NativeText; }
             catch (ThemeException) { }
-            if (after != before) affected[name] = after;
+            if (next != old) affected[name] = next;
         }
-        return new(project.Edits with { Colors = colors, ColorLinks = links }, direct, affected, nativeOnly.ToArray());
+        return new(edits, direct, affected, nativeOnly.ToArray(), rawBytes, rawChanged);
     }
-    public static int Apply(ThemeProject project, BaseCatalog catalog, IEnumerable<PaletteChange> changes, string label)
+    public static int Apply(ThemeProject project, BaseCatalog catalog, IEnumerable<PaletteChange> changes, string label, string? directory = null)
     {
-        var prepared = Preview(project, catalog, changes); if (prepared.DirectChanges == 0) return 0;
-        project.Checkpoint(label); project.Edits = prepared.Edits; return prepared.DirectChanges;
+        var prepared = Preview(project, catalog, changes, directory); if (prepared.DirectChanges == 0) return 0;
+        var edits = prepared.Edits;
+        if (prepared.ImportedChanged)
+        {
+            Contract.Require(directory != null, "palette_context", "Imported colors require the project directory");
+            var previous = project.Edits.Assets.Single(asset => asset.PayloadPath == PayloadPath);
+            var assets = new List<ProjectAsset>(edits.Assets); assets.RemoveAll(asset => asset.PayloadPath == PayloadPath);
+            if (prepared.ImportedPayload is { Length: > 0 } bytes) assets.Add(ProjectAssets.Prepare(directory, PayloadPath, bytes, preservedOriginal: previous.OriginalPath));
+            edits = edits with { Assets = assets };
+        }
+        if (directory != null) PackageStore.Compile(directory, project with { Edits = edits }, catalog);
+        project.Checkpoint(label); project.Edits = edits; return prepared.DirectChanges;
+    }
+    public static bool ResetAll(string directory, ThemeProject project, BaseCatalog catalog)
+    {
+        var state = Read(directory, project, catalog);
+        var names = state.Literals.Keys.Concat(state.Links.Keys).Distinct(StringComparer.Ordinal).Select(name => new PaletteChange(name));
+        return Apply(project, catalog, names, "Reset palette", directory) > 0;
     }
 }
 

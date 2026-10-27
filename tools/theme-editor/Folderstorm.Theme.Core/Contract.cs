@@ -205,6 +205,7 @@ public sealed record Recipe(string Operation, Dictionary<string, JsonElement> Pa
 }
 public sealed record ProjectEdits
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CompiledManifestPath { get; init; }
     public Dictionary<string, string> Colors { get; init; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> ColorLinks { get; init; } = new(StringComparer.Ordinal);
     public List<ProjectAsset> Assets { get; init; } = [];

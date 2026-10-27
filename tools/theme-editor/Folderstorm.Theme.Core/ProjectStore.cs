@@ -120,6 +120,14 @@ public static class ProjectStore
     {
         foreach (var edits in Snapshots(project))
         {
+            if (edits.CompiledManifestPath is { } origin)
+            {
+                Contract.PathName(origin);
+                Contract.Require(origin.StartsWith("assets/", StringComparison.Ordinal) && origin.EndsWith(".json", StringComparison.Ordinal) && Contract.IsHash(origin[7..^5]), "project_asset", "Invalid compiled manifest path");
+                var bytes = LibraryCatalog.ReadBounded(Contract.Contained(directory, origin), Contract.ManifestLimit);
+                Contract.Require(Contract.Hash(bytes) == origin[7..^5], "project_asset", "Stored compiled manifest has changed");
+                PackageStore.Manifest(bytes);
+            }
             foreach (var asset in edits.Assets)
             {
                 Contract.Require(asset.PayloadPath != null && asset.AssetPath != null && asset.OriginalPath != null && asset.Kind != null, "schema", "Invalid project asset");

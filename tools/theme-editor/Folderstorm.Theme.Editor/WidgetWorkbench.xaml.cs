@@ -110,7 +110,7 @@ public partial class WidgetWorkbench : UserControl
         if (property?.Kind != "color" || catalog == null) return;
         try
         {
-            var value = PropertyValue.Text; var initial = catalog.Colors.ContainsKey(value) ? catalog.InspectColor(value, project?.Edits.Colors ?? new Dictionary<string, string>(), project?.Edits.ColorLinks).Value : value.Length == 0 ? ThemeColor.Parse("#FFFFFFFF") : ThemeColor.Parse(value);
+            var value = PropertyValue.Text; var initial = catalog.Colors.ContainsKey(value) ? PaletteProject.Read(directory, project, catalog).Inspect(value).Value : value.Length == 0 ? ThemeColor.Parse("#FFFFFFFF") : ThemeColor.Parse(value);
             var picker = new ColorPickerDialog(initial) { Owner = Window.GetWindow(this) }; if (picker.ShowDialog() == true) PropertyValue.Text = picker.SelectedColor.Hex();
         }
         catch (Exception error) { Status.Text = error.Message; }

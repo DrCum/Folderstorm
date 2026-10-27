@@ -24,6 +24,7 @@
       "properties": {
         "colors": { "type": "object", "additionalProperties": { "type": "string" } },
         "color_links": { "type": "object", "additionalProperties": { "type": "string" } },
+        "compiled_manifest_path": { "type": "string", "pattern": "^assets/[0-9a-f]{64}\\.json$" },
         "assets": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["payload_path", "asset_path", "original_path", "kind"], "properties": { "payload_path": { "type": "string" }, "asset_path": { "type": "string" }, "original_path": { "type": "string" }, "kind": { "type": "string" } } } },
         "recipes": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["operation", "parameters"], "properties": { "operation": { "type": "string" }, "parameters": { "type": "object" } } } },
         "font_configuration": { "type": ["string", "null"] }

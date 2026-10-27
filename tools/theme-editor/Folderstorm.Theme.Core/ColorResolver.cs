@@ -6,14 +6,18 @@ internal sealed class ColorResolver
     private sealed record Resolved(string Text, string[] Chain);
     private readonly BaseCatalog catalog;
     private readonly IReadOnlyDictionary<string, string> literals, links;
+    private readonly IReadOnlyDictionary<string, ColorDefinition>? imported;
+    private readonly Func<string, ColorInspection>? baseline;
     private readonly Dictionary<string, (string Role, double Alpha)> alphaLinks;
     private readonly HashSet<string> affected = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Resolved> memo = new(StringComparer.Ordinal);
     private readonly HashSet<string> visiting = new(StringComparer.Ordinal);
 
-    public ColorResolver(BaseCatalog catalog, IReadOnlyDictionary<string, string> literals, IReadOnlyDictionary<string, string>? links)
+    public ColorResolver(BaseCatalog catalog, IReadOnlyDictionary<string, string> literals, IReadOnlyDictionary<string, string>? links,
+        IReadOnlyDictionary<string, ColorDefinition>? imported = null, Func<string, ColorInspection>? baseline = null)
     {
         this.catalog = catalog; this.literals = literals; this.links = links ?? new Dictionary<string, string>();
+        this.imported = imported; this.baseline = baseline;
         alphaLinks = BaseCatalog.AlphaLinks.Where(link => catalog.Colors.ContainsKey(link.Name))
             .ToDictionary(link => link.Name, link => (link.Role, link.Alpha), StringComparer.Ordinal);
         foreach (var (name, value) in literals)
@@ -33,10 +37,14 @@ internal sealed class ColorResolver
         {
             changed = false;
             foreach (var color in catalog.Colors.Values)
+            {
+                var raw = imported?.GetValueOrDefault(color.Name);
+                var reference = raw?.Reference ?? (raw == null ? color.Reference : null);
                 if (!affected.Contains(color.Name) &&
-                    (color.Reference != null && affected.Contains(color.Reference) ||
-                     alphaLinks.TryGetValue(color.Name, out var alpha) && affected.Contains(alpha.Role)))
+                    (reference != null && affected.Contains(reference) ||
+                     raw == null && alphaLinks.TryGetValue(color.Name, out var alpha) && affected.Contains(alpha.Role)))
                     changed |= affected.Add(color.Name);
+            }
         } while (changed);
     }
 
@@ -45,8 +53,8 @@ internal sealed class ColorResolver
     public ColorInspection Inspect(string name)
     {
         var resolved = Resolve(name, 0);
-        return new(name, ThemeColor.Parse(resolved.Text), catalog.Colors[name].Source, resolved.Chain,
-            literals.ContainsKey(name) || links.ContainsKey(name), affected.Contains(name));
+        return new(name, ThemeColor.Parse(resolved.Text), imported?.GetValueOrDefault(name)?.Source ?? catalog.Colors[name].Source, resolved.Chain,
+            literals.ContainsKey(name) || links.ContainsKey(name) || imported?.ContainsKey(name) == true, affected.Contains(name));
     }
 
     private Resolved Resolve(string name, int depth)
@@ -58,13 +66,18 @@ internal sealed class ColorResolver
             return cached;
         }
         Contract.Require(catalog.Colors.TryGetValue(name, out var color), "reference", "Unknown color: " + name);
+        var raw = imported?.GetValueOrDefault(name); color = raw ?? color;
         Contract.Require(visiting.Add(name), "color_cycle", "Color reference cycle at " + name);
         try
         {
             Resolved result;
             if (literals.TryGetValue(name, out var literal)) result = new(literal, [name]);
             else if (links.TryGetValue(name, out var target)) result = Follow(target);
-            else if (alphaLinks.TryGetValue(name, out var alpha) && affected.Contains(alpha.Role))
+            else if (baseline != null && !affected.Contains(name))
+            {
+                var inherited = baseline(name); result = new(inherited.Value.NativeText, inherited.ReferenceChain);
+            }
+            else if (raw == null && alphaLinks.TryGetValue(name, out var alpha) && affected.Contains(alpha.Role))
             {
                 var role = Follow(alpha.Role); var rgba = Contract.Rgba(role.Text); rgba[3] = alpha.Alpha;
                 result = role with { Text = Contract.ColorText(rgba) };
@@ -92,34 +105,16 @@ internal sealed class ColorResolver
 
 public static class ColorAuthoring
 {
-    public static bool SetLiteral(ThemeProject project, BaseCatalog catalog, string name, string value)
+    public static bool SetLiteral(ThemeProject project, BaseCatalog catalog, string name, string value, string? directory = null)
     {
-        var text = ThemeColor.Parse(value).NativeText;
-        if (project.Edits.Colors.TryGetValue(name, out var previous) && previous == text && !project.Edits.ColorLinks.ContainsKey(name)) return false;
-        return Change(project, catalog, "Set " + name, name, text, null);
+        return PaletteProject.Apply(project, catalog, [new(name, Value: value)], "Set " + name, directory) > 0;
     }
-    public static bool SetLink(ThemeProject project, BaseCatalog catalog, string name, string target)
+    public static bool SetLink(ThemeProject project, BaseCatalog catalog, string name, string target, string? directory = null)
     {
-        if (project.Edits.ColorLinks.TryGetValue(name, out var previous) && previous == target && !project.Edits.Colors.ContainsKey(name)) return false;
-        return Change(project, catalog, "Link " + name, name, null, target);
+        return PaletteProject.Apply(project, catalog, [new(name, Link: target)], "Link " + name, directory) > 0;
     }
-    public static bool Reset(ThemeProject project, BaseCatalog catalog, string name)
+    public static bool Reset(ThemeProject project, BaseCatalog catalog, string name, string? directory = null)
     {
-        if (!project.Edits.Colors.ContainsKey(name) && !project.Edits.ColorLinks.ContainsKey(name)) return false;
-        return Change(project, catalog, "Reset " + name, name, null, null);
-    }
-    private static bool Change(ThemeProject project, BaseCatalog catalog, string label, string name, string? literal, string? target)
-    {
-        ProjectStore.EnsureEditable(project);
-        Contract.Require(catalog.Colors.ContainsKey(name), "color", "Unknown color: " + name);
-        var colors = new Dictionary<string, string>(project.Edits.Colors, StringComparer.Ordinal);
-        var links = new Dictionary<string, string>(project.Edits.ColorLinks, StringComparer.Ordinal);
-        colors.Remove(name); links.Remove(name);
-        if (literal != null) colors[name] = literal;
-        if (target != null) links[name] = target;
-        catalog.CompileColors(colors, links); // Reject cycles before changing the document or history.
-        project.Checkpoint(label);
-        project.Edits = project.Edits with { Colors = colors, ColorLinks = links };
-        return true;
+        return PaletteProject.Apply(project, catalog, [new(name)], "Reset " + name, directory) > 0;
     }
 }

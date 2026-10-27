@@ -200,6 +200,28 @@ explicit refresh. Preview bytes match their manifest SHA-256 and size; image
 decoding/render acceptance is separate. Scanning never creates or modifies a
 library. Unsupported headers remain on disk and are reported.
 
+Imported palettes keep their original `viewer/colors.xml` asset as a distinct
+resolved layer. Unaffected base references keep their loaded base values;
+explicit imported literals stop authored role fan-out. New values/links use the
+authored layer, with cycles and full compilation checked before one checkpoint.
+Reset removes selected authored and imported nodes, retaining stored originals
+and unrelated overrides. Bulk preview performs no writes. No-op compilation
+retains exact imported XML; edits update only the affected closure in a copy.
+
+An optional project-v2 edit field, `compiled_manifest_path`, references the
+content-addressed original manifest in `assets/<sha256>.json`. It is authoring
+data and never becomes a runtime payload. Save/open/history validate its path,
+size, hash and schema. Exact unmodified payloads/metadata reuse the source header
+bytes; metadata edits keep declared capabilities and font data. Unrelated payload
+edits keep optional capabilities and stable font metadata. Older editors that
+do not recognize this edit field preserve the project read-only.
+
+Project import validates a frozen byte snapshot, stages assets and metadata in
+a new sibling folder, then renames without replacement after successful checks.
+Existing files/directories and destinations inside the protected library are
+refused. An incomplete stage stays recoverable; the final project is not exposed.
+Archive inspection selects the manifest's declared base before XUI validation.
+
 `preview.png` already belongs to runtime version1. Thumbnail authoring uses the
 existing content-addressed asset and history format, with staged compilation
 before one checkpoint. Replacing a thumbnail keeps its original; reset removes

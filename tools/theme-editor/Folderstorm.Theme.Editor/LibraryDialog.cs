@@ -36,6 +36,7 @@ public sealed class LibraryDialog : Window
     private readonly string projectParent;
     public ValidatedTheme? SelectedTheme { get; private set; }
     public string Destination { get; private set; } = "";
+    public string ProtectedLibrary => libraryRoot;
 
     public LibraryDialog(Window? owner, string viewerRoot, Func<ValidatedTheme, BaseCatalog, Task> nativePreview, string? library = null, string? parent = null)
     {
@@ -68,13 +69,17 @@ public sealed class LibraryDialog : Window
         package.Click += (_, _) =>
         {
             var picker = new OpenFileDialog { Filter = "Folderstorm theme|*.fstheme" }; if (picker.ShowDialog(this) != true) return;
-            var row = new Row(Path.GetFileNameWithoutExtension(picker.FileName), "Package archive", null, picker.FileName);
-            rows = rows.Append(row).ToArray(); search.Text = ""; Filter(); entries.SelectedItem = row;
+            AddArchive(picker.FileName);
         };
         previewButton.Click += async (_, _) => await UseSelectionAsync(false);
         openButton.Click += async (_, _) => await UseSelectionAsync(true);
         Closing += (_, args) => { if (busy) { args.Cancel = true; status.Text = "Wait for the preview to finish starting."; } else ++selection; };
         RefreshLibrary();
+    }
+    private void AddArchive(string path)
+    {
+        var row = new Row(Path.GetFileNameWithoutExtension(path), "Package archive", null, path);
+        rows = rows.Append(row).ToArray(); search.Text = ""; Filter(); entries.SelectedItem = row;
     }
     private void RefreshLibrary()
     {
@@ -143,7 +148,7 @@ public sealed class LibraryDialog : Window
             if (open)
             {
                 var picker = new ProjectCopyDialog(this, Path.Combine(projectParent, "Imported theme"), "Open package as project", "Create project", "Imported theme");
-                if (picker.ShowDialog() == true) { SelectedTheme = theme; Destination = picker.Destination; busy = false; DialogResult = true; }
+                if (picker.ShowDialog() == true) { Destination = ProjectImport.Destination(picker.Destination, libraryRoot); SelectedTheme = theme; busy = false; DialogResult = true; }
             }
             else { status.Text = "Starting isolated preview…"; await preview(theme, catalog); status.Text = "Native preview opened."; }
         }

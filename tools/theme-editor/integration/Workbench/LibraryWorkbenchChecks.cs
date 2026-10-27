@@ -67,7 +67,7 @@ internal static class LibraryWorkbenchChecks
         Field<TabControl>(window, "Workspace").SelectedItem = Field<TabItem>(window, "ProjectTab");
         foreach (var (width, height) in new[] { (1240, 760), (1000, 620) }) Render(window, directory, "project-layout-" + width, width, height);
         Call(window, "Save"); var reopened = ProjectStore.Open(directory); Assert(ThumbnailProject.Read(directory, reopened)!.SequenceEqual(png), "Handler Save lost thumbnail");
-        var destination = Path.Combine(directory, "compiled-copy"); PackageStore.ImportProject(destination, theme); Assert(ThumbnailProject.Read(destination, ProjectStore.Open(destination))!.SequenceEqual(png), "Compiled project import changed thumbnail bytes");
+        var destination = Path.Combine(directory, "compiled-copy"); PackageStore.ImportProject(destination, theme, catalog); Assert(ThumbnailProject.Read(destination, ProjectStore.Open(destination))!.SequenceEqual(png), "Compiled project import changed thumbnail bytes");
         Console.WriteLine("PASS package workspace narrow/wide render, saved thumbnail and compiled import preserve exact PNG bytes");
     }
 }
