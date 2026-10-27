@@ -20,6 +20,14 @@ cancels. Pick buttons open the shared color/opacity picker beside palette, tint,
 generator and drawing-color fields. Picking a tint does not apply it until Apply
 tint is clicked.
 
+In Images, expand External editor, choose an installed editor application, and
+Open copy. Save the separate PNG in that editor, then Reload in the lab. Reload
+creates one undoable edit and preserves original artwork. A file watcher only
+reports changes; it never imports automatically. Reopening the same project and
+image with Open copy resumes a compatible saved working copy. Conflicting image
+edits require a new copy; old working files remain in Working files. Application
+preferences and working sessions stay local and are excluded from exports.
+
 Use .NET 10 on Windows. The editor is x64 WPF, self-contained and non-trimmed;
 core and CLI have no UI or third-party package dependencies.
 

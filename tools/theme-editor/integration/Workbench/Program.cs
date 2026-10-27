@@ -111,8 +111,25 @@ internal static class Program
             using (var keySource = new HwndSource(new HwndSourceParameters("Hidden cancellation probe") { Width = 1, Height = 1, WindowStyle = 0 }))
                 CancelGesture("OnKeyDown", new KeyEventArgs(Keyboard.PrimaryDevice, keySource, 0, Key.Escape) { RoutedEvent = Keyboard.KeyDownEvent });
             CancelGesture("OnLostMouseCapture", new MouseEventArgs(Mouse.PrimaryDevice, 0));
+            // Keep working files outside the project, as in the real app.
+            Set(window, "externalWorkRoot", directory + "-working");
+            var external = (ExternalImageSession)Call(window, "PrepareExternalCopy")!;
+            var beforeExternal = Field<RasterImage>(window, "currentImage"); var externalHistory = project.Undo.Count;
+            var externalImage = RasterImage.Fill(beforeExternal.Width, beforeExternal.Height, ThemeColor.Parse("#3366CC80"));
+            var externalPng = (byte[])codec.GetMethod("EncodePng", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, [externalImage])!;
+            Contract.AtomicWrite(external.WorkingPath, externalPng);
+            Call(window, "ReloadExternalCopy", window, new RoutedEventArgs());
+            Assert(project.Undo.Count == externalHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(externalImage), "External reload handler did not redraw exactly one imported edit");
+            Call(window, "Undo", window, new RoutedEventArgs());
+            Assert(Field<RasterImage>(window, "currentImage").PixelEquals(beforeExternal), "External Undo did not restore previous pixels");
+            var beforeConflict = Contract.Bytes(project);
+            Call(window, "ReloadExternalCopy", window, new RoutedEventArgs());
+            Assert(Contract.Bytes(project).SequenceEqual(beforeConflict) && Field<TextBlock>(window, "StatusText").Text.Contains("Image changed", StringComparison.Ordinal), "Stale external reload overwrote an undone image");
+            Call(window, "StopExternalSessions");
+            Assert(File.Exists(external.WorkingPath) && !window.CanReloadExternal, "Ending external tracking deleted the working file or left Reload active");
+            Console.WriteLine("PASS external reload redraw/history, stale-edit refusal and retained working files");
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("8/8 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("9/9 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

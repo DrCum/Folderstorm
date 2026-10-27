@@ -313,6 +313,64 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("external working copies preserve project bytes, resume locally and reload one undoable image edit", () =>
+{
+    var directory = Path.Combine(root, "external-project"); var working = Path.Combine(root, "external-working");
+    var p = ProjectStore.Create(catalog, "External copy"); ProjectStore.Save(directory, p);
+    var original = catalog.ResolveBytes("textures/" + catalog.Textures["PushButton_Off"].Attributes["file_name"]);
+    var replacement = catalog.ResolveBytes("textures/" + catalog.Textures["PushButton_On"].Attributes["file_name"]);
+    Assert(!original.SequenceEqual(replacement), "External fixture has identical images");
+    var before = Contract.Bytes(p); var files = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).ToDictionary(path => path, Contract.HashFile);
+    var session = ExternalImageSession.Create(directory, p, catalog, "PushButton_Off", working, (_, _) => throw new Exception("PNG should not be transcoded"));
+    Assert(File.ReadAllBytes(session.WorkingPath).SequenceEqual(original) && Contract.Bytes(p).SequenceEqual(before) && files.All(entry => Contract.HashFile(entry.Key) == entry.Value), "Opening an external copy changed source bytes or the project");
+    var restored = ExternalImageSession.FindPrevious(directory, p, "PushButton_Off", working);
+    Assert(restored != null && restored.WorkingPath == session.WorkingPath && restored.IsCurrent(directory, p, catalog), "Working copy was not resumable");
+    using var signal = new ManualResetEventSlim();
+    using var watcher = session.Watch(() => { try { signal.Set(); } catch (ObjectDisposedException) { } });
+    Assert(watcher.Filter == "image.png" && !watcher.IncludeSubdirectories, "Watcher includes unrelated files");
+    Contract.AtomicWrite(session.WorkingPath, replacement);
+    Assert(signal.Wait(TimeSpan.FromSeconds(3)) && session.HasChanges, "Explicit working file change was not detected");
+    p.Edits.Colors["ThemeAccent"] = "0.2 0.8 0.5 1";
+    Assert(session.Reload(directory, p, catalog, _ => { }) && p.Undo.Count == 1, "External reload did not make exactly one checkpoint");
+    Assert(ImageProject.Read(directory, p, catalog, "PushButton_Off").SequenceEqual(replacement) && p.Edits.Recipes["PushButton_Off"].Operation == "external-edit", "External bytes/recipe were not retained");
+    var asset = p.Edits.Assets.Single(item => item.Kind == "image");
+    Assert(File.ReadAllBytes(Path.Combine(directory, asset.OriginalPath)).SequenceEqual(original), "External reload lost its original");
+    Assert(!session.HasChanges && !session.Reload(directory, p, catalog, _ => { }) && p.Undo.Count == 1, "Unchanged Reload created an undo entry");
+    ProjectStore.Save(directory, p); p = ProjectStore.Open(directory);
+    Assert(ExternalImageSession.FindPrevious(directory, p, "PushButton_Off", working)?.IsCurrent(directory, p, catalog) == true, "Saved external state did not resume");
+    Assert(p.UndoEdit() && ImageProject.Read(directory, p, catalog, "PushButton_Off").SequenceEqual(original) && !session.IsCurrent(directory, p, catalog), "External Undo did not restore inheritance or invalidate stale reload");
+    Assert(p.RedoEdit() && session.IsCurrent(directory, p, catalog), "External Redo did not restore the accepted snapshot");
+});
+
+Test("external reload refuses wrong scopes, stale guides and incomplete files without changing history", () =>
+{
+    var directory = Path.Combine(root, "external-conflicts"); var working = Path.Combine(root, "external-conflict-working");
+    var p = ProjectStore.Create(catalog, "External conflicts"); ProjectStore.Save(directory, p);
+    var session = ExternalImageSession.Create(directory, p, catalog, "PushButton_Off", working, (_, _) => throw new Exception("Expected PNG"));
+    var before = Contract.Bytes(p);
+    Reject("external_scope", () => session.Reload(directory + "-other", p, catalog, _ => { }));
+    Reject("external_scope", () => session.Reload(directory, ProjectStore.Create(catalog, "Other"), catalog, _ => { }));
+    Reject("external_scope", () => ExternalImageSession.Create(directory, p, catalog, "PushButton_Off", Path.Combine(directory, "working"), (_, _) => []));
+    Reject("external_scope", () => ExternalImageSession.Create(Path.GetPathRoot(directory)!, p, catalog, "PushButton_Off", working, (_, _) => []));
+    var malformed = Path.Combine(working, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(malformed);
+    File.WriteAllText(Path.Combine(malformed, "session.json"), "{\"version\":1,\"source_fingerprint\":null,\"imported_hash\":null}");
+    Assert(ExternalImageSession.FindPrevious(directory, p, "PushButton_Off", working)?.WorkingPath == session.WorkingPath, "Malformed recovery record hid a usable working copy");
+    File.WriteAllBytes(session.WorkingPath, [1, 2, 3]);
+    Reject("image", () => session.Reload(directory, p, catalog, _ => { }));
+    Assert(Contract.Bytes(p).SequenceEqual(before), "Rejected external data changed the document");
+    var bytes = catalog.ResolveBytes("textures/" + catalog.Textures["PushButton_Off"].Attributes["file_name"]);
+    var width = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4)); var height = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+    var geometry = TextureGeometry.FromAttributes(width, height, catalog.Textures["PushButton_Off"].Attributes);
+    ImageProject.SetGeometry(directory, p, catalog, "PushButton_Off", geometry with { Margins = geometry.Margins with { Left = geometry.Margins.Left + 1 } });
+    before = Contract.Bytes(p);
+    Reject("external_conflict", () => session.Reload(directory, p, catalog, _ => { }));
+    Assert(Contract.Bytes(p).SequenceEqual(before) && File.ReadAllBytes(session.WorkingPath).SequenceEqual(new byte[] { 1, 2, 3 }), "Stale reload changed model or external file");
+    var fresh = ExternalImageSession.Create(directory, p, catalog, "PushButton_Off", working, (_, _) => []);
+    File.Delete(fresh.WorkingPath);
+    Reject("external_missing", () => fresh.Reload(directory, p, catalog, _ => { }));
+    Assert(Contract.Bytes(p).SequenceEqual(before), "Missing file changed history");
+});
+
 Test("pixel drawing connects strokes, preserves alpha and clips circle/brush edges", () =>
 {
     var source = RasterImage.Fill(9, 9, ThemeColor.Parse("#00000000")); var ink = ThemeColor.Parse("#D85BFF80"); var pixel = new RgbaPixel(216, 91, 255, 128);

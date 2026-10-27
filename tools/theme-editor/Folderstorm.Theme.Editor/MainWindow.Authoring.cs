@@ -43,7 +43,7 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private void UpdateCommandState()
     {
-        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo), nameof(CanReplaceImage), nameof(CanEditImage) })
+        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo), nameof(CanReplaceImage), nameof(CanEditImage), nameof(CanReloadExternal), nameof(CanBrowseWorkingFiles) })
             PropertyChanged?.Invoke(this, new(property));
         if (ProjectLabel == null) return;
         ProjectLabel.Text = project == null ? "Classic AnsaStorm" : project.DisplayName + (changed ? "  •  Unsaved" : "") + "  ·  " + catalog?.Schemes.FirstOrDefault(s => s.Id == project.BaseScheme)?.Name;
@@ -51,6 +51,7 @@ public partial class MainWindow : INotifyPropertyChanged
         Title = "Folderstorm theme lab · " + (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "Development") + (changed ? " *" : "");
         XmlEditor.IsReadOnly = !CanEditDocument;
         if (EditCanvas != null) DrawingSettingsChanged(this, new RoutedEventArgs());
+        RefreshExternalDisplay();
         CommandManager.InvalidateRequerySuggested();
     }
     private bool MetadataPending() => project != null && ThemeName != null && ThemeAuthor != null && PackageVersion != null && ThemeDescription != null &&
@@ -84,13 +85,14 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private async void SaveAsProject(object sender, RoutedEventArgs args)
     {
-        if (!Ready()) return;
+        if (!Ready() || !ConfirmExternalChanges()) return;
         var dialog = new ProjectCopyDialog(this, projectDirectory); if (dialog.ShowDialog() != true) return;
         CommitMetadata(); var snapshot = Contract.Read<ThemeProject>(Contract.Bytes(project!)); var source = projectDirectory;
         copyingProject = true; UpdateCommandState(); StatusText.Text = "Saving project copy…";
         try
         {
-            projectDirectory = await Task.Run(() => ProjectCopy.SaveAs(source, dialog.Destination, snapshot));
+            var destination = await Task.Run(() => ProjectCopy.SaveAs(source, dialog.Destination, snapshot));
+            StopExternalSessions(); projectDirectory = destination;
             project = snapshot; changed = false; RefreshDocumentEditors(); StatusText.Text = "Editing copy: " + System.IO.Path.GetFileName(projectDirectory);
         }
         catch (Exception error) { StatusText.Text = error.Message; }

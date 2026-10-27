@@ -126,7 +126,22 @@ availability and unchanged project/history. Their gesture state is primed in
 the probe; this is not a claim that Computer Use held the mouse while pressing
 Escape. Core/codec/native-package code remains unchanged from the tested 0.5.0.
 
-Bulk/state-family edits, external editing and additional import formats remain
-in progress. PNG remains the package
+The 0.6.0 candidate adds an explicit external-editor round trip. Choose an
+installed executable, open a separate PNG copy, save it externally, then Reload.
+TGA sources are converted to working PNG without touching the base. Reload
+validates and fully decodes changed bytes, updates resized geometry and makes
+one scoped checkpoint. A watcher reports exact-file changes, including atomic
+replacement, without applying them. Opening the same project/image can recover
+the last compatible local session. Stale project-side edits refuse Reload;
+working copies remain available. Pending external edits are identified before
+closing, opening another project or Save As. No external application is killed.
+Local executable paths and session data never enter project/runtime exports.
+
+Thirty core groups, nine image/codec groups and nine non-visible WPF handler
+groups pass. These cover original/sibling isolation, resized guide geometry,
+exact imported PNG bytes, recovery, no-op reload, malformed/missing files,
+conflict refusal and Undo/Redo. Desktop round-trip validation is in progress.
+
+Bulk/state-family edits and additional import formats remain in progress. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.
 Final feature/DPI acceptance is open.

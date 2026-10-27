@@ -83,6 +83,15 @@ Drawing writes exact RGBA pixels. Each gesture has at most 4096 points and a
 the recipe. Earlier editors preserve this operation read-only. Cancelled or
 pixel-identical gestures do not create project edits.
 
+`external-edit` records the `sha256` of the PNG explicitly reloaded from a local
+working copy. It retains prior recipe steps and imported originals. Reload is
+one image checkpoint; unchanged data creates no checkpoint. Runtime packages
+contain the prepared PNG, never the external executable path or session files.
+Working-copy records live outside the project and match its canonical directory,
+project ID, logical image ID and source fingerprint. Stale reload is refused;
+old copies remain available for recovery. Earlier editors preserve this operation
+through their unknown-recipe read-only path.
+
 Save As stages a complete project copy in the new folder's parent and exposes it
 with a single rename. It retains imported originals, derivatives, history,
 checkpoints and extra plain project files, then saves current in-memory edits.

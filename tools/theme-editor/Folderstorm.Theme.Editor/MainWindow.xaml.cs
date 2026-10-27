@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     private readonly PreviewSession preview = new();
     public MainWindow()
     {
-        InitializeComponent(); InitializeAuthoring(); InitializeImages();
+        InitializeComponent(); InitializeAuthoring(); InitializeImages(); InitializeExternalEditing();
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     }
     private bool Discard()
     {
+        if (!ConfirmExternalChanges()) return false;
         if (!changed) return true;
         var answer = MessageBox.Show(this, "Save this project before continuing?", "Unsaved changes", MessageBoxButton.YesNoCancel);
         if (answer == MessageBoxResult.Cancel) return false;
@@ -70,7 +71,7 @@ public partial class MainWindow : Window
             else
             {
                 catalog = new BaseCatalog(BasePath.Text, scheme: BaseScheme.SelectedValue as string ?? "folderstorm");
-                project = ProjectStore.Create(catalog, "My theme"); projectDirectory = picker.FolderName;
+                StopExternalSessions(); project = ProjectStore.Create(catalog, "My theme"); projectDirectory = picker.FolderName;
                 readOnlyReasons = []; ReadOnlyBanner.Visibility = Visibility.Collapsed; RawProject.Visibility = Visibility.Collapsed; SyncMetadata(); Save(); RefreshCatalog(); SetupExpander.IsExpanded = false;
             }
         });
@@ -80,7 +81,7 @@ public partial class MainWindow : Window
         var document = ProjectStore.OpenDocument(directory);
         var next = document.Project;
         var nextCatalog = next == null ? catalog : new BaseCatalog(BasePath.Text, next.BaseSkin, next.BaseScheme);
-        project = next; catalog = nextCatalog; projectDirectory = Path.GetFullPath(directory); readOnlyReasons = document.ReadOnlyReasons;
+        StopExternalSessions(); project = next; catalog = nextCatalog; projectDirectory = Path.GetFullPath(directory); readOnlyReasons = document.ReadOnlyReasons;
         changed = false; SyncMetadata(); RefreshCatalog();
         ReadOnlyBanner.Visibility = document.CanEdit ? Visibility.Collapsed : Visibility.Visible;
         ReadOnlyMessage.Text = string.Join(" ", readOnlyReasons);
@@ -178,7 +179,7 @@ public partial class MainWindow : Window
         try
         {
             if (!Discard()) return;
-            closePending = true; UpdateCommandState(); await preview.DisposeAsync(); closing = true;
+            closePending = true; UpdateCommandState(); await preview.DisposeAsync(); StopExternalSessions(); closing = true;
             await Dispatcher.InvokeAsync(Close);
         }
         catch (Exception error) { closePending = closing = false; UpdateCommandState(); StatusText.Text = error.Message; }
