@@ -36,8 +36,9 @@ internal static class Program
             if (args.Length == 2)
             {
                 FontWorkbenchChecks.Run(window, directory, catalog, project);
+                FontCollectionChecks.Run(window, directory, catalog, project);
                 Assert(!window.IsVisible, "Font probe unexpectedly showed a window");
-                Console.WriteLine("3/3 passed. Focused windowless font-workbench checks. Workspace: " + directory); return 0;
+                Console.WriteLine("5/5 passed. Focused windowless font-workbench checks. Workspace: " + directory); return 0;
             }
             var texture = catalog.Textures["PushButton_Off"];
             Field<ListBox>(window, "TextureList").SelectedItem = texture;
@@ -250,8 +251,9 @@ internal static class Program
             var beforeExtras = Contract.Bytes(project); PaletteExtrasChecks.Run(directory);
             Assert(Contract.Bytes(project).SequenceEqual(beforeExtras), "Picker extras changed the project");
             FontWorkbenchChecks.Run(window, directory, catalog, project);
+            FontCollectionChecks.Run(window, directory, catalog, project);
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("21/21 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("23/23 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

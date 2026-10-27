@@ -154,6 +154,13 @@ flags, fvar axes and cmap4/12/13 mappings with bounded offsets. Unsupported maps
 are reported without claiming coverage. Inspection neither installs fonts nor
 changes the runtime loader. The native loader controls only `wght`, and collection
 loading enumerates its faces rather than selecting an exported face index.
+The editor's selected inspection face is not serialized into the project or
+runtime package. License edits use the embedded font's actual SHA-256 to locate
+`licenses/font-<sha256>.txt`, including legacy embedded filenames. UTF-8 text and
+line endings are preserved exactly. License changes stage and validate the whole
+project before one checkpoint; identical text creates none. Removing a license
+keeps its asset bytes and history available for Undo. Other license payloads are
+retained. Unsupported text encoding remains unchanged until an explicit new edit.
 See Microsoft's [OpenType file structure](https://learn.microsoft.com/en-us/typography/opentype/spec/otff),
 [character maps](https://learn.microsoft.com/en-us/typography/opentype/spec/cmap),
 [variable axes](https://learn.microsoft.com/en-us/typography/opentype/spec/fvar)

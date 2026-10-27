@@ -98,6 +98,18 @@ referenced as dependencies without copying them. Check the actual redistribution
 license before sharing embedded fonts. Reset fonts restores inheritance; Undo
 restores the changes, embedded fonts and their license files.
 
+For a collection, Inspect collection face changes the WPF sample, metadata and
+single-face glyph report. This selection is for inspection; native collection
+loading still uses all faces in file order. The selection survives sample-text
+edits and never changes the exported configuration.
+
+An embedded font also has a Packaged license panel. Save license writes its text
+to the package, with one Undo step; Remove license restores the same text through
+Undo. Unchanged saves do nothing. Font bytes and configuration stay intact.
+License text for next embedded font applies only when using Embed font. Installed
+dependencies do not expose a packaged-license editor. Non-UTF8 existing license
+bytes are preserved and reported, rather than silently replaced.
+
 `contracts/FORMAT.md` documents the runtime package and project contracts. Build
 the separate `native/` CMake project with the existing Boost include directory;
 it does not configure/download the viewer or require .NET. Replay shared cases:

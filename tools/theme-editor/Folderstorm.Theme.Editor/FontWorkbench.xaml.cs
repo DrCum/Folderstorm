@@ -21,6 +21,9 @@ public partial class FontWorkbench : UserControl
     private int inspectionGeneration;
     private readonly SemaphoreSlim inspectionGate = new(1, 1);
     private readonly ConcurrentDictionary<string, FontFaceInfo[]> inspected = new(StringComparer.OrdinalIgnoreCase);
+    private FontChoice? inspectedChoice;
+    private FontReference? inspectedReference;
+    private FontRole? inspectedRole;
     public event Action? Edited;
     public FontWorkbench() { InitializeComponent(); refreshing = false; }
     private FontRole? SelectedRole => Roles?.SelectedItem as FontRole;
@@ -69,15 +72,22 @@ public partial class FontWorkbench : UserControl
     {
         try
         {
-            if (SelectedRole == null) { RoleName.Text = "No matching font roles"; References.ItemsSource = null; Details.Text = Coverage.Text = Specimen.Text = SpecimenSmall.Text = ""; return; }
+            if (SelectedRole == null) { RoleName.Text = "No matching font roles"; References.ItemsSource = null; ClearFace(); EmbeddedLicensePanel.Visibility = Visibility.Collapsed; Details.Text = Coverage.Text = Specimen.Text = SpecimenSmall.Text = ""; return; }
             var previous = SelectedReference?.Index ?? 0; RoleName.Text = SelectedRole.Label;
-            var files = FontProject.References(config, SelectedRole.Index); References.ItemsSource = files; References.SelectedItem = files.ElementAtOrDefault(Math.Min(previous, files.Length - 1));
+            var files = FontProject.References(config, SelectedRole.Index); var wasRefreshing = refreshing; refreshing = true;
+            try { References.ItemsSource = files; References.SelectedItem = files.ElementAtOrDefault(Math.Min(previous, files.Length - 1)); }
+            finally { refreshing = wasRefreshing; }
+            // Equal reference records need an explicit refresh when only their license/history changed.
+            _ = RefreshReference();
         }
-        catch (Exception error) { References.ItemsSource = null; Status.Text = error.Message; Details.Text = Coverage.Text = Specimen.Text = SpecimenSmall.Text = ""; }
+        catch (Exception error) { References.ItemsSource = null; ClearFace(); EmbeddedLicensePanel.Visibility = Visibility.Collapsed; Status.Text = error.Message; Details.Text = Coverage.Text = Specimen.Text = SpecimenSmall.Text = ""; }
     }
     private async void SelectReference(object sender, SelectionChangedEventArgs args)
+    { if (!refreshing) await RefreshReference(); }
+    private async Task RefreshReference()
     {
         var reference = SelectedReference; ++inspectionGeneration;
+        ClearFace(); RefreshLicense();
         if (reference == null) return;
         var choice = ((IEnumerable<FontChoice>?)Available.ItemsSource)?.FirstOrDefault(choice => choice.File.Equals(reference.File, StringComparison.OrdinalIgnoreCase));
         if (choice == null)
@@ -132,19 +142,7 @@ public partial class FontWorkbench : UserControl
             foreach (var item in result) if (item.Choice != null && item.Faces != null) inspected[item.Choice.Path] = item.Faces;
             var faces = result.FirstOrDefault(item => item.Choice?.Path == choice.Path).Faces;
             if (faces == null) { Details.Text = "This font could not be inspected within the supported metadata limits. Try another file or verify it in the viewer."; return; }
-            var first = faces[0];
-            Details.Text = choice.Source + " · " + faces.Length + " face(s)\n" + string.Join("\n", faces.Select(face => face.Index + ": " + face.Family + " · " + face.Style + "\n" +
-                (face.Axes.Length == 0 ? "Static font" : string.Join(", ", face.Axes.Select(axis => axis.Tag + " " + axis.Minimum + ".." + axis.Maximum + " (default " + axis.Default + ")"))) + "\n" + face.EmbeddingNotice)) +
-                "\n\n" + first.Copyright + "\n" + (first.License.Length == 0 ? "No license text in the font. Add its redistribution license when embedding." : first.License) + "\n" + first.LicenseUrl +
-                (reference.Functor.Length == 0 ? "" : "\nNative character filter: " + reference.Functor) + "\nNative weight controls wght only. Other axes remain at the font default. Collection loading uses all faces in file order.";
-            try
-            {
-                Specimen.FontFamily = SpecimenSmall.FontFamily = new FontFamily(new Uri(Path.GetDirectoryName(choice.Path)! + Path.DirectorySeparatorChar), "./" + Path.GetFileName(choice.Path) + "#" + first.Family);
-                Specimen.FontWeight = SpecimenSmall.FontWeight = FontWeight.FromOpenTypeWeight(reference.Weight ?? (reference.Bold || role.Style.Contains("BOLD", StringComparison.Ordinal) ? 700 : 400));
-                Specimen.FontStyle = SpecimenSmall.FontStyle = role.Style.Contains("ITALIC", StringComparison.Ordinal) ? FontStyles.Italic : FontStyles.Normal;
-            }
-            catch (ArgumentException) { Specimen.FontFamily = SpecimenSmall.FontFamily = new FontFamily("Segoe UI"); }
-            ShowSample();
+            SetInspectedFaces(choice, reference, role, faces);
             var missing = new List<string>(); var unknown = false; var used = new Dictionary<string, int>();
             foreach (var rune in SampleText.Text.EnumerateRunes().Where(rune => !Rune.IsWhiteSpace(rune)).Distinct())
             {
@@ -166,6 +164,53 @@ public partial class FontWorkbench : UserControl
         }
         catch (Exception error) { if (generation == inspectionGeneration) Details.Text = error.Message; }
     }
+    private void ClearFace()
+    {
+        inspectedChoice = null; inspectedReference = null; inspectedRole = null;
+        FaceChoice.ItemsSource = null; FacePanel.Visibility = Visibility.Collapsed; FaceCoverage.Text = "";
+    }
+    private void SetInspectedFaces(FontChoice choice, FontReference reference, FontRole role, FontFaceInfo[] faces)
+    {
+        var previous = inspectedChoice?.Path == choice.Path ? (FaceChoice.SelectedItem as FontFaceInfo)?.Index ?? 0 : 0;
+        inspectedChoice = choice; inspectedReference = reference; inspectedRole = role;
+        FaceChoice.ItemsSource = faces; FaceChoice.SelectedIndex = Math.Clamp(previous, 0, faces.Length - 1);
+        FacePanel.Visibility = faces.Length > 1 ? Visibility.Visible : Visibility.Collapsed; ShowSelectedFace();
+    }
+    private void SelectFace(object sender, SelectionChangedEventArgs args) => ShowSelectedFace();
+    private void ShowSelectedFace()
+    {
+        if (FaceChoice.SelectedItem is not FontFaceInfo face || inspectedChoice is not { } choice || inspectedReference is not { } reference || inspectedRole is not { } role) return;
+        Details.Text = choice.Source + " · " + FaceChoice.Items.Count + " face(s)\n" + face.Label + "\n" +
+            (face.Axes.Length == 0 ? "Static font" : string.Join(", ", face.Axes.Select(axis => axis.Tag + " " + axis.Minimum + ".." + axis.Maximum + " (default " + axis.Default + ")"))) +
+            "\n" + face.EmbeddingNotice + "\n\n" + face.Copyright + "\n" + (face.License.Length == 0 ? "No license text in the font. Add its redistribution license when embedding." : face.License) + "\n" + face.LicenseUrl +
+            (reference.Functor.Length == 0 ? "" : "\nNative character filter: " + reference.Functor) + "\nNative weight controls wght only. Other axes remain at the font default. Collection loading uses all faces in file order.";
+        try
+        {
+            Specimen.FontFamily = SpecimenSmall.FontFamily = new FontFamily(new Uri(Path.GetDirectoryName(choice.Path)! + Path.DirectorySeparatorChar), "./" + Path.GetFileName(choice.Path) + "#" + face.Family);
+            Specimen.FontWeight = SpecimenSmall.FontWeight = FontWeight.FromOpenTypeWeight(reference.Weight ?? (reference.Bold || role.Style.Contains("BOLD", StringComparison.Ordinal) || face.Style.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? 700 : 400));
+            Specimen.FontStyle = SpecimenSmall.FontStyle = role.Style.Contains("ITALIC", StringComparison.Ordinal) || face.Style.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyles.Italic : FontStyles.Normal;
+        }
+        catch (ArgumentException) { Specimen.FontFamily = SpecimenSmall.FontFamily = new FontFamily("Segoe UI"); }
+        ShowSample();
+        var scalars = SampleText.Text.EnumerateRunes().Where(rune => !Rune.IsWhiteSpace(rune)).Distinct().ToArray();
+        var missing = scalars.Where(rune => !face.Characters.HasGlyph(rune.Value)).Select(rune => "U+" + rune.Value.ToString("X4")).ToArray();
+        FaceCoverage.Text = FaceChoice.Items.Count <= 1 ? "" : !face.Characters.Supported ? "Selected face has an unsupported Unicode map; coverage is unknown." :
+            "Face " + face.Index + " only: " + (scalars.Length - missing.Length) + "/" + scalars.Length + " sample code points mapped." + (missing.Length == 0 ? "" : " Unmapped: " + string.Join(", ", missing)) + " Native collection loading remains unchanged.";
+    }
+    private void RefreshLicense()
+    {
+        EmbeddedLicensePanel.Visibility = Visibility.Collapsed;
+        if (project == null || SelectedReference == null || !project.Edits.Assets.Any(asset => asset.Kind == "font" && asset.PayloadPath == "viewer/fonts/" + SelectedReference.File)) return;
+        try
+        {
+            var license = FontProject.ReadLicense(directory, project, SelectedReference.File);
+            LicensePath.Text = license.PayloadPath; PackagedLicense.Text = license.Text; RemoveLicenseButton.IsEnabled = license.Exists;
+            EmbeddedLicensePanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception error) { Status.Text = error.Message; }
+    }
+    private void SaveLicense(object sender, RoutedEventArgs args) => Action(() => SelectedReference != null && FontProject.SetLicense(directory, project!, catalog!, SelectedReference.File, PackagedLicense.Text), "License saved in the package.");
+    private void RemoveLicense(object sender, RoutedEventArgs args) => Action(() => SelectedReference != null && FontProject.RemoveLicense(directory, project!, catalog!, SelectedReference.File), "Packaged license removed.");
     private FontFaceInfo[]? ReadSafely(FontChoice choice) { try { return Inspect(choice); } catch (Exception error) when (error is ThemeException or IOException or UnauthorizedAccessException) { return null; } }
     private void SampleChanged(object sender, TextChangedEventArgs args) { if (Specimen == null) return; ShowSample(); if (!refreshing && SelectedReference != null) _ = InspectSelection(); }
     private void ShowSample() { if (SampleText == null || SpecimenSmall == null) return; Specimen.Text = SampleText.Text; SpecimenSmall.Text = "Aa Bb 0123456789 · Русский · 中文 · 🙂"; }

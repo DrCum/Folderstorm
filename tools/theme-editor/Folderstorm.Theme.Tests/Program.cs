@@ -617,6 +617,7 @@ Test("image preview binds only the native sample button and leaves the source pr
 });
 
 FontChecks.Register(Test, root, catalog);
+FontLicenseChecks.Register(Test, root, catalog);
 if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith("font", StringComparison.Ordinal)).ToList();
 var failed = 0;
 foreach (var (name, run) in tests)

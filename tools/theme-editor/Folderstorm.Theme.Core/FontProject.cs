@@ -8,6 +8,7 @@ public sealed record FontRole(int Index, string Name, string Style) { public str
 public sealed record FontReference(int Index, string File, string Scope, double SizeDelta, int? Weight, bool Collection, string Hinting, bool Bold, string Functor)
 { public string Label => File + " · " + Scope; }
 public sealed record FontReferenceEdit(string File, double SizeDelta = 0, int? Weight = null, bool Collection = false, string Hinting = "force_auto", bool Bold = false);
+public sealed record FontLicense(string PayloadPath, string Text, bool Exists);
 
 public static class FontProject
 {
@@ -101,4 +102,37 @@ public static class FontProject
         if (!project.Edits.Assets.Any(IsFont) && project.Edits.FontConfiguration == null) return false;
         project.Checkpoint("Reset fonts"); project.Edits.Assets.RemoveAll(IsFont); project.Edits.FontConfiguration = null; return true;
     }
+    private static string LicensePath(string directory, ThemeProject project, string file)
+    {
+        Contract.PathName(file); Contract.Require(!file.Contains('/'), "font_license", "Choose an embedded font filename");
+        var font = project.Edits.Assets.SingleOrDefault(asset => asset.Kind == "font" && asset.PayloadPath == "viewer/fonts/" + file);
+        Contract.Require(font != null, "font_license", "Only embedded fonts have packaged licenses");
+        var path = Contract.Contained(directory, font.AssetPath); Contract.Require(new FileInfo(path).Length <= 64L * 1024 * 1024, "size", "Font exceeds64 MiB");
+        return "licenses/font-" + Contract.HashFile(path) + ".txt";
+    }
+    public static FontLicense ReadLicense(string directory, ThemeProject project, string file)
+    {
+        var path = LicensePath(directory, project, file); var asset = project.Edits.Assets.SingleOrDefault(asset => asset.PayloadPath == path);
+        if (asset == null) return new(path, "", false);
+        var stored = Contract.Contained(directory, asset.AssetPath); Contract.Require(new FileInfo(stored).Length <= Contract.ManifestLimit, "size", "License exceeds4 MiB");
+        try { return new(path, new System.Text.UTF8Encoding(false, true).GetString(File.ReadAllBytes(stored)), true); }
+        catch (System.Text.DecoderFallbackException) { throw new ThemeException("font_license", "This license is not UTF-8 and was kept unchanged"); }
+    }
+    public static bool SetLicense(string directory, ThemeProject project, BaseCatalog catalog, string file, string text)
+    {
+        ProjectStore.EnsureEditable(project); Contract.Require(!string.IsNullOrWhiteSpace(text), "font_license", "Enter license text, or use Remove license");
+        Contract.Require(text.Length <= Contract.ManifestLimit, "size", "License exceeds4 MiB");
+        var path = LicensePath(directory, project, file); var bytes = System.Text.Encoding.UTF8.GetBytes(text); var previous = project.Edits.Assets.SingleOrDefault(asset => asset.PayloadPath == path);
+        if (previous != null && File.ReadAllBytes(Contract.Contained(directory, previous.AssetPath)).SequenceEqual(bytes)) return false;
+        var asset = ProjectAssets.Prepare(directory, path, bytes); var edits = Contract.Read<ProjectEdits>(Contract.Bytes(project.Edits));
+        edits.Assets.RemoveAll(asset => asset.PayloadPath == path); edits.Assets.Add(asset); return CommitLicense(directory, project, catalog, edits, "Save font license");
+    }
+    public static bool RemoveLicense(string directory, ThemeProject project, BaseCatalog catalog, string file)
+    {
+        ProjectStore.EnsureEditable(project); var path = LicensePath(directory, project, file); var edits = Contract.Read<ProjectEdits>(Contract.Bytes(project.Edits));
+        if (edits.Assets.RemoveAll(asset => asset.PayloadPath == path) == 0) return false;
+        return CommitLicense(directory, project, catalog, edits, "Remove font license");
+    }
+    private static bool CommitLicense(string directory, ThemeProject project, BaseCatalog catalog, ProjectEdits edits, string label)
+    { PackageStore.Compile(directory, project with { Edits = edits }, catalog); project.Checkpoint(label); project.Edits = edits; return true; }
 }

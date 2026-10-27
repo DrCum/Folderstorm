@@ -8,6 +8,7 @@ public sealed record FontAxis(string Tag, double Minimum, double Default, double
 public sealed record FontFaceInfo(int Index, string Family, string Style, string Copyright, string License, string LicenseUrl,
     int EmbeddingFlags, FontAxis[] Axes, FontCharacterMap Characters)
 {
+    public string Label => Index + ": " + Family + " · " + Style;
     public string EmbeddingNotice => EmbeddingFlags < 0 ? "Embedding flags unavailable. Check the font license."
         : (EmbeddingFlags & 2) != 0 ? "Restricted embedding flag. Check the font license before sharing."
         : (EmbeddingFlags & 0x200) != 0 ? "Bitmap-only embedding flag. Check the font license before sharing."

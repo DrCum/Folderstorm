@@ -102,8 +102,24 @@ computer control is off. Final font-only checks also cover later malformed-value
 empty-search, metadata-budget and stale-inspection guards. Native font visual,
 real system-DPI and mixed-monitor acceptance remain open.
 
-Remaining work includes richer collection/face preview and font-license tools,
-widget/layout editing, project/library/package tools, host/distribution/base
+The0.12.0 collection/license stage adds an inspection-only face selector with
+per-face metadata and glyph mapping. A real Windows MSGOTHIC.TTC fixture verifies
+that selection/sample changes preserve native configuration and do not copy the
+installed font. Embedded-font licenses can be saved or removed in their own
+panel, with no-op detection and one-checkpoint Undo/Redo. License text/line endings
+survive save, reopen and export; malformed/oversized/installed targets and failed
+validation leave the project/history intact. Non-UTF8 existing bytes remain
+unchanged. Reset retains unrelated license files.
+
+Seven focused core font groups and five windowless WPF font groups pass. The UI
+checks caught stale license text after Undo when equal font-reference records did
+not fire SelectionChanged; reference/inspection/license refresh is now explicit.
+Three collection/license layouts are reviewed at normal/narrow widths. The new
+font/license export passes C++ validation. Actual new collection/license UI and
+native/system-DPI acceptance remain open; the earlier0.11 desktop checks retain
+their original scope. Computer control remains off.
+
+Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.
 
