@@ -313,6 +313,60 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("palette batches preview without mutation and commit links, values and resets as one durable step", () =>
+{
+    var p = ProjectStore.Create(catalog, "Palette batches"); p.Edits.Colors["ButtonImageColor"] = "0.2 0.3 0.4 1";
+    var changes = new[] { new PaletteChange("ThemeAccent", "#64D8B280"), new PaletteChange("ButtonLabelColor", Link: "ThemeAccent") };
+    var before = Contract.Bytes(p); var preview = PaletteProject.Preview(p, catalog, changes);
+    Assert(preview.DirectChanges == 2 && preview.EffectiveChanges.ContainsKey("ThemeAccent") && Contract.Bytes(p).SequenceEqual(before), "Palette preview changed project or omitted selected values");
+    Assert(PaletteProject.Apply(p, catalog, changes, "Batch palette") == 2 && p.Undo.Count == 1 && p.Edits.Colors["ButtonImageColor"] == "0.2 0.3 0.4 1", "Palette batch lost unrelated values or made extra checkpoints");
+    Assert(PaletteProject.Apply(p, catalog, changes, "Repeat") == 0 && p.Undo.Count == 1, "Repeated palette batch created history");
+    var changed = Contract.Bytes(p);
+    Reject("color_cycle", () => PaletteProject.Apply(p, catalog, [new("ThemeAccent", Link: "ButtonLabelColor")], "Cycle"));
+    Reject("palette_batch", () => PaletteProject.Apply(p, catalog, [new("ThemeText", "#FFF"), new("ThemeText", "#000")], "Duplicate"));
+    Assert(Contract.Bytes(p).SequenceEqual(changed), "Rejected palette batch changed history");
+    var directory = Path.Combine(root, "palette-batch"); ProjectStore.Save(directory, p); p = ProjectStore.Open(directory);
+    Assert(p.UndoEdit() && Contract.Bytes(p.Edits).SequenceEqual(Contract.Bytes(Contract.Read<ThemeProject>(before).Edits)), "Palette batch Undo lost original edits");
+    Assert(p.RedoEdit() && Contract.Bytes(p).SequenceEqual(changed), "Palette batch Redo failed after reopen");
+    var reset = new[] { new PaletteChange("ThemeAccent"), new PaletteChange("ButtonLabelColor") };
+    var resetPreview = PaletteProject.Preview(p, catalog, reset);
+    Assert(resetPreview.EffectiveChanges.ContainsKey("ButtonLabelColor"), "Reset preview omitted restored dependent colors");
+    Assert(PaletteProject.Apply(p, catalog, reset, "Reset selected") == 2 && !p.Edits.Colors.ContainsKey("ThemeAccent") && !p.Edits.ColorLinks.ContainsKey("ButtonLabelColor") && p.Undo.Count == 2, "Selected reset failed");
+    PaletteProject.Apply(p, catalog, [new("ChicletFlashColor", "#FFF")], "Override legacy color");
+    var legacy = PaletteProject.Preview(p, catalog, [new("ChicletFlashColor")]);
+    Assert(legacy.NativeOnly.Contains("ChicletFlashColor") && PaletteProject.Apply(p, catalog, [new("ChicletFlashColor")], "Restore legacy color") == 1, "Native-only inherited color could not be restored");
+});
+
+Test("Violet Mint and Paper presets compile across every AnsaStorm scheme and retain unrelated overrides", () =>
+{
+    foreach (var scheme in catalog.Schemes)
+    {
+        var selected = new BaseCatalog(catalog.Root, scheme: scheme.Id);
+        foreach (var preset in PalettePreset.Choices)
+        {
+            var p = ProjectStore.Create(selected, preset.Name); p.Edits.Colors["ButtonImageColor"] = "0.2 0.3 0.4 1";
+            var changes = preset.Changes(selected); var before = Contract.Bytes(p);
+            var preview = PaletteProject.Preview(p, selected, changes);
+            Assert(changes.Length >= 10 && preview.DirectChanges > 0 && Contract.Bytes(p).SequenceEqual(before), "Preset did not stage a coordinated palette");
+            PaletteProject.Apply(p, selected, changes, "Preset " + preset.Name);
+            Assert(p.Undo.Count == 1 && p.Edits.Colors["ButtonImageColor"] == "0.2 0.3 0.4 1", "Preset lost unrelated artwork tint/history");
+            ThemeColor Value(string role, string fallback) => selected.InspectColor(selected.Colors.ContainsKey(role) ? role : fallback, p.Edits.Colors, p.Edits.ColorLinks).Value;
+            Assert(ThemeColor.Contrast(Value("ThemeText", "TextFgColor"), Value("ThemePanel", "SL-Background"), ThemeColor.Parse("#000")) >= 4.5, "Preset text/panel contrast is too low");
+            Assert(p.UndoEdit() && Contract.Bytes(p.Edits).SequenceEqual(Contract.Bytes(Contract.Read<ThemeProject>(before).Edits)), "Preset Undo lost original palette");
+        }
+    }
+    var exportRoot = Path.Combine(root, "palette-exports"); var exports = new List<object>();
+    foreach (var preset in PalettePreset.Choices)
+    {
+        var p = ProjectStore.Create(catalog, preset.Name); var directory = Path.Combine(exportRoot, preset.Name);
+        PaletteProject.Apply(p, catalog, preset.Changes(catalog), "Preset " + preset.Name); ProjectStore.Save(directory, p);
+        var package = PackageStore.Compile(directory, p, catalog); var revision = ThemeLibrary.Publish(package, Path.Combine(exportRoot, "library"), catalog);
+        exports.Add(new { preset.Name, package.Revision, RevisionDirectory = revision });
+    }
+    File.WriteAllBytes(Path.Combine(exportRoot, "result.json"), Contract.Bytes(new { BaseRoot = catalog.Root, Exports = exports, NativeVisualAcceptance = "not tested by this probe" }));
+    Console.WriteLine("Palette export receipt: " + Path.Combine(exportRoot, "result.json"));
+});
+
 Test("image batches preserve individual originals and recipes with one durable checkpoint", () =>
 {
     var directory = Path.Combine(root, "image-batch"); var p = ProjectStore.Create(catalog, "Image batch"); ProjectStore.Save(directory, p);

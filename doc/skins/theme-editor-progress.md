@@ -46,6 +46,17 @@ validations. Windowless layouts are reviewed; external-app desktop access and
 full native/DPI acceptance remain open. Each candidate stays retained separately
 while remaining authoring work continues. Native 82310 remains unchanged.
 
+Palette tools in 0.9.0 adds Violet/Mint/Paper starting presets and checked bulk
+literal, link and reset edits. Previews list before/after values and dependent
+colors; settings changes invalidate Apply. One Apply makes one checkpoint.
+Unknown inherited color literals can be restored as native-only values. Core
+checks pass 34/34, including all three presets across six AnsaStorm schemes and
+text/panel contrast. Thirteen windowless WPF groups cover preview, validation,
+Cancel, link-target invalidation and Apply/Undo/Redo. Three preset packages pass
+the C++ validator. Dialog renders are reviewed at normal/minimum widths; actual
+desktop and full native acceptance remain open. Screen eyedropper, saved swatches
+and the remaining font/layout/package/host/base work are still required.
+
 Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future
 computer-control batch must be announced, delayed at least five seconds, kept

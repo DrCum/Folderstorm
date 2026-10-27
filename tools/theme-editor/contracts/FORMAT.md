@@ -90,6 +90,13 @@ the decoded pixels. Format mismatches are refused. Explicitly resetting invalid
 legacy guides uses the existing `nine-slice` operation, full-image clipping and
 zero margins. It changes registration attributes without touching artwork.
 
+Palette batches use the existing literal/link dictionaries. Preview validates
+the complete edited color closure without changing the project. Apply prepares
+all changes and checks cycles before one checkpoint; repeated direct values are
+no-ops. Reset removes only selected literals/links, retaining opaque inherited
+values for native resolution. Presets are starting overrides, not a new project
+or runtime schema. Other palette edits and non-color assets remain preserved.
+
 Family edits retain the existing per-image recipe operations. All checked
 states are prepared before the document changes, then committed in one
 checkpoint. Each logical ID keeps a separate scoped PNG and original reference.

@@ -205,8 +205,44 @@ internal static class Program
             Call(window, "Redo", window, new RoutedEventArgs()); Assert(window.CanEditImage && !window.CanRepairImageGuides, "Guide Redo did not restore editing");
             Field<ComboBox>(window, "ImageComparison").SelectedIndex = 1; Assert(!window.CanRepairImageGuides && !window.CanEditImage, "Original comparison allowed guide repair/editing");
             Console.WriteLine("PASS explicit legacy guide repair availability, pixel preservation and Undo/Redo; fixture=" + legacyName);
+            var paletteDialog = new PaletteToolsDialog(null, project, catalog, ["ThemeAccent", "ButtonLabelColor"]);
+            T PaletteField<T>(string name) => (T)typeof(PaletteToolsDialog).GetField(name, Private)!.GetValue(paletteDialog)!;
+            var paletteBefore = Contract.Bytes(project);
+            PaletteField<ComboBox>("preset").SelectedIndex = 2;
+            PaletteField<Button>("preview").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert(PaletteField<Button>("apply").IsEnabled && Contract.Bytes(project).SequenceEqual(paletteBefore), "Preset preview failed or changed the document");
+            PaletteField<ComboBox>("mode").SelectedIndex = 2; PaletteField<ComboBox>("link").SelectedItem = "ThemeText";
+            PaletteField<Button>("preview").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert(PaletteField<Button>("apply").IsEnabled, "Bulk link preview failed");
+            PaletteField<ComboBox>("link").SelectedItem = "ThemeMuted";
+            Assert(!PaletteField<Button>("apply").IsEnabled, "Changing the link target left stale Apply active");
+            PaletteField<ComboBox>("mode").SelectedIndex = 1;
+            Assert(!PaletteField<Button>("apply").IsEnabled, "Changing palette mode left stale Apply active");
+            PaletteField<TextBox>("value").Text = "#oops";
+            PaletteField<Button>("preview").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert(!PaletteField<Button>("apply").IsEnabled && Contract.Bytes(project).SequenceEqual(paletteBefore), "Invalid bulk color enabled Apply or changed document");
+            PaletteField<TextBox>("value").Text = "#64D8B280";
+            PaletteField<Button>("preview").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var paletteChanges = PaletteField<PaletteChange[]>("prepared");
+            Assert(paletteChanges.Length == 2 && PaletteField<Button>("apply").IsEnabled, "Bulk color preview omitted selected colors");
+            var paletteVisual = (FrameworkElement)paletteDialog.Content; paletteDialog.Content = null; ((Panel)paletteVisual).Background = paletteDialog.Background;
+            foreach (var (logicalWidth, logicalHeight) in new[] { (900, 620), (760, 460) })
+            {
+                paletteVisual.Measure(new Size(logicalWidth, logicalHeight)); paletteVisual.Arrange(new Rect(0, 0, logicalWidth, logicalHeight)); paletteVisual.UpdateLayout();
+                var render = new RenderTargetBitmap(logicalWidth, logicalHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32); render.Render(paletteVisual);
+                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(render));
+                using var output = File.Create(Path.Combine(directory, $"palette-layout-{logicalWidth}.png")); encoder.Save(output);
+            }
+            paletteDialog.Close(); Assert(Contract.Bytes(project).SequenceEqual(paletteBefore), "Palette dialog Cancel changed project");
+            var paletteHistory = project.Undo.Count;
+            Call(window, "ApplyPaletteChanges", paletteChanges, "Bulk palette probe");
+            Assert(project.Undo.Count == paletteHistory + 1 && catalog.InspectColor("ThemeAccent", project.Edits.Colors, project.Edits.ColorLinks).Value.Hex() == "#64D8B280", "Bulk palette handler failed or added extra checkpoints");
+            Call(window, "Undo", window, new RoutedEventArgs()); Assert(Contract.Bytes(project.Edits).SequenceEqual(Contract.Bytes(Contract.Read<ThemeProject>(paletteBefore).Edits)), "Bulk palette Undo lost prior edits");
+            Call(window, "Redo", window, new RoutedEventArgs()); Assert(catalog.InspectColor("ButtonLabelColor", project.Edits.Colors, project.Edits.ColorLinks).Value.Hex() == "#64D8B280", "Bulk palette Redo lost selected value");
+            Assert(!paletteDialog.IsVisible, "Palette probe unexpectedly showed a window");
+            Console.WriteLine("PASS palette preset/bulk preview, invalid/settings/cancel gating, one-checkpoint Apply and Undo/Redo");
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("12/12 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("13/13 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

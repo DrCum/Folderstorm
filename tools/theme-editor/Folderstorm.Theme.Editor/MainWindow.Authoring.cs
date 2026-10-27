@@ -226,4 +226,18 @@ public partial class MainWindow : INotifyPropertyChanged
         CommitMetadata(); project.Checkpoint("Reset palette"); project.Edits = project.Edits with { Colors = new(StringComparer.Ordinal), ColorLinks = new(StringComparer.Ordinal) };
         changed = true; RefreshPalette(); StatusText.Text = "Inherited palette restored. Undo keeps your edits.";
     });
+    private async void OpenPaletteTools(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (!Ready()) return;
+        var selection = ColorList.SelectedItems.Cast<ColorRow>().Select(item => item.Name).ToArray();
+        var dialog = new PaletteToolsDialog(this, project!, catalog!, selection);
+        if (dialog.ShowDialog() == true) ApplyPaletteChanges(dialog.Changes, dialog.EditLabel);
+    });
+    private void ApplyPaletteChanges(PaletteChange[] changes, string label)
+    {
+        if (!Ready()) return;
+        CommitMetadata(); var count = PaletteProject.Apply(project!, catalog!, changes, label);
+        if (count > 0) { changed = true; RefreshPalette(); SyncMetadata(); }
+        StatusText.Text = count == 0 ? "Palette already matches." : count + " palette edits applied. Undo restores the palette.";
+    }
 }

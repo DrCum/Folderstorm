@@ -14,6 +14,13 @@ slice guides, stretch/tile samples and image/family/all-image reset. Reset keeps
 stored originals and history; Undo restores the edits. Future projects and
 unsupported operations open read-only.
 
+Palette tools offers Violet, Mint and Paper starting presets. Ctrl/Shift selects
+colors for bulk Set color, Link to color or Reset checked. Preview lists direct
+edits and effective before/after values, including linked followers. Apply uses
+one Undo step and leaves other project edits intact. Changing options invalidates
+Apply until another preview. Native-only inherited values are preserved when
+resetting. The normal palette sample remains an approximation of viewer artwork.
+
 Import image accepts PNG, TGA, BMP and JPEG. PNG bytes are kept directly; other
 formats become a PNG while the exact imported bytes and extension remain in
 the project. The import applies to the selected logical ID and is undoable.
