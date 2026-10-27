@@ -6,6 +6,11 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import importlib.util
+
+_editor_spec = importlib.util.spec_from_file_location("folderstorm_theme_editor", Path(__file__).with_name("folderstorm_theme_editor.py"))
+_editor = importlib.util.module_from_spec(_editor_spec)
+_editor_spec.loader.exec_module(_editor)
 
 
 def command(bundle_dir, output):
@@ -27,6 +32,7 @@ def command(bundle_dir, output):
         path = bundle_dir / name
         if not path.is_file() or not path.stat().st_size:
             raise ValueError(f"Missing bundle component: {name}")
+    _editor.validate_bundle(bundle_dir, bundle)
     parts = version.rsplit(".", 1)
     return ["vpk", "pack", "--packId", bundle["app_id"], "--packVersion", "-".join(parts),
             "--packDir", str(bundle_dir), "--mainExe", guide, "--packTitle", "Folderstorm",

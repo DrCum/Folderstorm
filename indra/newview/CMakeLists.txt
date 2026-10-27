@@ -1960,6 +1960,7 @@ configure_file(
 list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/fsversionvalues.h)
 include(FolderstormReleases)
 include(FolderstormSentry)
+include(FolderstormThemeEditor)
 include(FolderstormUpdates)
 list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp fsinstallviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsinstallviewer.h)
@@ -2684,6 +2685,8 @@ if (WINDOWS)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--tracy=${USE_TRACY}"
+        "--theme-editor=$<IF:$<BOOL:${FOLDERSTORM_BUILD_THEME_EDITOR}>,ON,OFF>"
+        "--theme-editor-source=${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
         --build=${CMAKE_CURRENT_BINARY_DIR}
         --buildtype=$<CONFIG>
@@ -2700,6 +2703,9 @@ if (WINDOWS)
         stage_third_party_libs
         llwebrtc
         ${COPY_INPUT_DEPENDENCIES}
+        ${FOLDERSTORM_THEME_EDITOR_STAMP}
+        ${FOLDERSTORM_THEME_EDITOR_HELPER}
+        ${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json
       COMMENT "Performing viewer_manifest copy"
       )
 
@@ -2795,6 +2801,8 @@ if (WINDOWS)
               "--openal=${USE_OPENAL}"
               "--tracy=${USE_TRACY}"
               "--velopack=${USE_VELOPACK}"
+              "--theme-editor=$<IF:$<BOOL:${FOLDERSTORM_BUILD_THEME_EDITOR}>,ON,OFF>"
+              "--theme-editor-source=${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}"
               "--avx2=${USE_AVX2_OPTIMIZATION}"
               --build=${CMAKE_CURRENT_BINARY_DIR}
               --buildtype=$<CONFIG>
@@ -2811,6 +2819,9 @@ if (WINDOWS)
             ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
             ${CMAKE_CURRENT_BINARY_DIR}/viewer_version.txt
             ${COPY_INPUT_DEPENDENCIES}
+            ${FOLDERSTORM_THEME_EDITOR_STAMP}
+            ${FOLDERSTORM_THEME_EDITOR_HELPER}
+            ${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json
         )
 
       add_custom_target(llpackage ALL DEPENDS
@@ -3470,6 +3481,9 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
+  if(TARGET folderstorm-theme-editor)
+    add_dependencies(copy_w_viewer_manifest folderstorm-theme-editor)
+  endif()
   add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance folderstorm-session-host)
   if(TARGET folderstorm-update)
     add_dependencies(copy_w_viewer_manifest folderstorm-update)

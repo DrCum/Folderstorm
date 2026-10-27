@@ -36,6 +36,7 @@ import plistlib
 import random
 import re
 import secrets
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,8 @@ sys.dont_write_bytecode = True # <FS:Ansariel> Prevents creating __pycache__ dir
 from fs_viewer_manifest import FSViewerManifest #<FS:ND/> Manifest extensions for Firestorm
 
 viewer_dir = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(viewer_dir, os.pardir, os.pardir, "scripts"))
+import folderstorm_theme_editor as theme_editor_package
 # Add indra/lib/python to our path so we don't have to muck with PYTHONPATH.
 # Put it FIRST because some of our build hosts have an ancient install of
 # indra.util.llmanifest under their system Python!
@@ -126,6 +129,26 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             if os.path.isfile(candidate):
                 return candidate
         raise ManifestError("folderstorm-session-host.exe was not built. Rebuild the matching Windows viewer target.")
+
+    def stage_theme_editor(self):
+        """Include only the matching sealed publish; OFF never discovers an SDK."""
+        try:
+            bundle = json.loads(Path(self.get_build_prefix(), "folderstorm-bundle.json").read_text(encoding="utf-8"))
+            enabled = self.args.get("theme-editor", "OFF") == "ON"
+            if bundle.get("theme_editor", False) is not enabled:
+                raise ValueError("Optional editor bundle/configuration mismatch")
+            document = None
+            source = self.args.get("theme-editor-source", "")
+            if enabled:
+                if not source:
+                    raise ValueError("Matching theme editor publish directory is missing")
+                document = theme_editor_package.validate(Path(source), bundle["commit"])
+            theme_editor_package.remove_staged(Path(self.get_dst_prefix()))
+            if document:
+                for name in [*document["files"], theme_editor_package.MARKER]:
+                    self.path(os.path.join(source, *name.split("/")), "theme-editor/" + name)
+        except (OSError, ValueError, KeyError) as error:
+            raise ManifestError(str(error))
 
     def construct(self):
         super(ViewerManifest, self).construct()
@@ -925,6 +948,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Run only during uninstall, before its installation's sidecar disappears.
         self.path(self.stage_fs_mcp_launcher_maintenance(), "fs-mcp-launcher-maintenance.exe")
         self.path(self.stage_session_host(), "folderstorm-session-host.exe")
+        self.stage_theme_editor()
         self.path(os.path.join(self.get_build_prefix(), "folderstorm-bundle.json"), "folderstorm-bundle.json")
         self.path(os.path.join(self.get_build_prefix(), "folderstorm-theme-capabilities.json"), "folderstorm-theme-capabilities.json")
         if self.args.get('velopack', 'OFF') == 'ON':
@@ -2620,6 +2644,8 @@ if __name__ == "__main__":
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),
+        dict(name='theme-editor', description="""Include the matching optional theme editor""", default='OFF'),
+        dict(name='theme-editor-source', description="""Sealed self-contained editor publish directory""", default=''),
         dict(name='avx2', description="""Indication avx2 instruction set is enabled""", default='OFF'),
         ]
     try:
