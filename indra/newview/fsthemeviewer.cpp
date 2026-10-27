@@ -10,15 +10,19 @@
 #include "llfile.h"
 #include "llfloater.h"
 #include "llfloaterreg.h"
+#include "llgl.h"
+#include "llimagepng.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
 #include "llwindow.h"
 #include "llstartup.h"
 #include "lluictrlfactory.h"
 #include <cstdint>
+#include <algorithm>
 #include <fstream>
 #include <optional>
 #include <regex>
+#include <cmath>
 #if LL_WINDOWS
 #include <shlobj.h>
 #endif
@@ -36,6 +40,12 @@ std::string requestId,diagnostic;
 std::int64_t generation=0;
 std::uint64_t sampleDowns=0,sampleUps=0,sampleCommits=0;
 bool pinnedPress=false,sampleDisabled=false;
+std::string lastCaptureRequest;
+fs::file_time_type lastCaptureWrite;
+std::uintmax_t lastCaptureSize=0;
+bool captureRequestSeen=false;
+std::optional<fs_theme::CaptureRequest> pendingCapture;
+unsigned captureFrames=0;
 void sessionValue(const char* name,const LLSD& value)
 {if(auto control=gSavedSettings.getControl(name))control->setValue(value,false);}
 void atomicFile(const fs::path& destination,const std::string& bytes)
@@ -216,5 +226,80 @@ bool idlePreview()
         else {diagnostic="Native widget sample could not be built";writeStatus("failed");LLAppViewer::instance()->forceQuit();}
     }
     return true;
+}
+void captureFrame()
+{
+    // The offline startup frame has finished drawing its UI and has not swapped yet.
+    if(!offline || !shown || !diagnostic.empty() || !gViewerWindow || !gViewerWindow->getWindow())return;
+    std::string captureId;
+    auto receipt=[&](const std::string& state,const std::string& message,boost::json::object details={})
+    {
+        details["capture_version"]=1;details["request_id"]=requestId;details["generation"]=generation;
+        details["revision"]=selected?selected->revision:"";details["capture_id"]=captureId;
+        details["state"]=state;details["diagnostic"]=message;
+#if LL_WINDOWS
+        details["pid"]=static_cast<std::uint64_t>(GetCurrentProcessId());
+#endif
+        fs_theme::capturePath(previewDirectory,"capture-status.json.tmp");
+        atomicFile(fs_theme::capturePath(previewDirectory,"capture-status.json"),boost::json::serialize(details)+"\n");
+    };
+    try
+    {
+        const auto requestFile=fs_theme::capturePath(previewDirectory,"capture-request.json");
+        if(fs::is_regular_file(requestFile))
+        {
+            const auto write=fs::last_write_time(requestFile);const auto size=fs::file_size(requestFile);
+            if(!captureRequestSeen || write!=lastCaptureWrite || size!=lastCaptureSize)
+            {
+                captureRequestSeen=true;lastCaptureWrite=write;lastCaptureSize=size;
+                const auto bytes=fs_theme::readFile(requestFile,4096),digest=fs_theme::hash(bytes);
+                if(digest!=lastCaptureRequest)
+                {
+                    lastCaptureRequest=digest;pendingCapture.reset();
+                    pendingCapture=fs_theme::captureRequest(bytes,requestId,generation,selected?selected->revision:"");captureFrames=0;
+                }
+            }
+        }
+        if(!pendingCapture || ++captureFrames<3)return;
+        const auto request=*pendingCapture;pendingCapture.reset();captureId=request.id;
+        const int width=gViewerWindow->getWindowWidthRaw(),height=gViewerWindow->getWindowHeightRaw();
+        fs_theme::require(width>0 && height>0 && width<=16384 && height<=16384 && static_cast<std::int64_t>(width)*height<=16000000,"image","Preview window is too large to capture");
+        LLPointer<LLImageRaw> pixels=new LLImageRaw(static_cast<U16>(width),static_cast<U16>(height),3);
+        fs_theme::require(pixels->getData()!=nullptr,"image","Could not allocate preview pixels");
+        {
+            // Preserve readback state, including a possible asynchronous pixel-pack buffer.
+            struct ReadState
+            {
+                GLint framebuffer,buffer,defaultBuffer,pbo,alignment,rowLength,skipRows,skipPixels;
+                ReadState()
+                {
+                    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&framebuffer);glGetIntegerv(GL_READ_BUFFER,&buffer);
+                    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&pbo);glGetIntegerv(GL_PACK_ALIGNMENT,&alignment);
+                    glGetIntegerv(GL_PACK_ROW_LENGTH,&rowLength);glGetIntegerv(GL_PACK_SKIP_ROWS,&skipRows);glGetIntegerv(GL_PACK_SKIP_PIXELS,&skipPixels);
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER,0);glGetIntegerv(GL_READ_BUFFER,&defaultBuffer);glReadBuffer(GL_BACK);glBindBuffer(GL_PIXEL_PACK_BUFFER,0);
+                    glPixelStorei(GL_PACK_ALIGNMENT,1);glPixelStorei(GL_PACK_ROW_LENGTH,0);glPixelStorei(GL_PACK_SKIP_ROWS,0);glPixelStorei(GL_PACK_SKIP_PIXELS,0);
+                }
+                ~ReadState()
+                {
+                    glReadBuffer(defaultBuffer);glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glReadBuffer(buffer);glBindBuffer(GL_PIXEL_PACK_BUFFER,pbo);
+                    glPixelStorei(GL_PACK_ALIGNMENT,alignment);glPixelStorei(GL_PACK_ROW_LENGTH,rowLength);glPixelStorei(GL_PACK_SKIP_ROWS,skipRows);glPixelStorei(GL_PACK_SKIP_PIXELS,skipPixels);
+                }
+            } restore;
+            glReadPixels(0,0,width,height,GL_RGB,GL_UNSIGNED_BYTE,pixels->getData());
+        }
+        const double factor=std::min({1.0,static_cast<double>(request.width)/width,static_cast<double>(request.height)/height});
+        const int outputWidth=std::max(1,static_cast<int>(std::floor(width*factor))),outputHeight=std::max(1,static_cast<int>(std::floor(height*factor)));
+        if(outputWidth!=width || outputHeight!=height)fs_theme::require(pixels->scale(outputWidth,outputHeight),"image","Could not resize preview image");
+        LLPointer<LLImagePNG> png=new LLImagePNG();fs_theme::require(png->encode(pixels,0.f),"image","Could not encode preview image");
+        fs_theme::require(png->getDataSize()>0 && png->getDataSize()<=32*1024*1024,"size","Preview PNG exceeds its byte limit");
+        const std::string bytes(reinterpret_cast<const char*>(png->getData()),png->getDataSize()),leaf="capture-"+captureId+".png";
+        fs_theme::capturePath(previewDirectory,leaf+".tmp");atomicFile(fs_theme::capturePath(previewDirectory,leaf),bytes);
+        receipt("captured","",{{"image",leaf},{"sha256",fs_theme::hash(bytes)},{"width",outputWidth},{"height",outputHeight},{"source_width",width},{"source_height",height}});
+    }
+    catch(const std::exception& error)
+    {
+        pendingCapture.reset();LL_WARNS("Theme")<<"Preview capture failed: "<<error.what()<<LL_ENDL;
+        try {receipt("failed",error.what());}catch(const std::exception&){ }
+    }
 }
 }

@@ -11,9 +11,9 @@ namespace Folderstorm.Theme.Editor;
 public sealed class ProjectCopyDialog : Window
 {
     public string Destination { get; private set; } = "";
-    public ProjectCopyDialog(Window owner, string source)
+    public ProjectCopyDialog(Window owner, string source, string title = "Save project as", string action = "Save copy", string? folderName = null)
     {
-        Owner = owner; Title = "Save project as"; Width = 580; SizeToContent = SizeToContent.Height;
+        Owner = owner; Title = title; Width = 580; SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(17, 16, 22)); Foreground = Brushes.White;
         var panel = new StackPanel { Margin = new Thickness(20) }; Content = panel;
@@ -24,13 +24,13 @@ public sealed class ProjectCopyDialog : Window
         AutomationProperties.SetName(parent, "Copy parent folder");
         pathRow.Children.Add(parent);
         panel.Children.Add(new TextBlock { Text = "New folder name", Margin = new Thickness(0, 18, 0, 6) });
-        var initial = Path.GetFileName(Path.TrimEndingDirectorySeparator(source)) + " copy";
+        var initial = folderName ?? Path.GetFileName(Path.TrimEndingDirectorySeparator(source)) + " copy";
         for (var index = 2; Directory.Exists(Path.Combine(parent.Text, initial)) && index < 1000; ++index)
-            initial = Path.GetFileName(Path.TrimEndingDirectorySeparator(source)) + " copy " + index;
+            initial = (folderName ?? Path.GetFileName(Path.TrimEndingDirectorySeparator(source)) + " copy") + " " + index;
         var name = new TextBox { Text = initial }; AutomationProperties.SetName(name, "New project folder name"); panel.Children.Add(name);
         var error = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(242, 173, 173)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) }; panel.Children.Add(error);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) }; panel.Children.Add(actions);
-        var cancel = new Button { Content = "Cancel", IsCancel = true }; var save = new Button { Content = "Save copy", IsDefault = true, Margin = new Thickness(0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true }; var save = new Button { Content = action, IsDefault = true, Margin = new Thickness(0) };
         actions.Children.Add(cancel); actions.Children.Add(save);
         browse.Click += (_, _) => { var picker = new OpenFolderDialog { Title = "Choose the parent folder", InitialDirectory = parent.Text }; if (picker.ShowDialog(this) == true) parent.Text = picker.FolderName; };
         save.Click += (_, _) =>

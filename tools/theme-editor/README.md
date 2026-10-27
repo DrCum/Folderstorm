@@ -129,6 +129,20 @@ approximate. Preview in viewer checks the exported resources with the matching
 native viewer. XUI preview checks the viewer's exact rule fingerprint before
 publishing or launching; select the matching viewer build in Setup if it differs.
 Older retained editors and viewers keep their original rule set.
+The Library button inspects bounded library revisions or `.fstheme` archives.
+Select a package to validate its base, payload hashes and preview image before
+previewing it or opening a new project. Open as project preserves compiled bytes
+and starts independent history in a new folder. Inspection does not select a
+theme for your normal viewer profile.
+
+Project includes an optional package preview image. Import PNG, Reset image,
+Undo/Redo and Save retain exact bytes and stored originals. Capture native preview
+starts a fresh isolated viewer for the current project and captures its rendered
+UI before buffer swap. It requires `preview_capture_version: 1` in the matching
+viewer capabilities. The request and PNG receipt bind the owned process, request,
+generation, revision and fresh capture ID. The editor decodes the PNG before
+creating a checkpoint. It never captures another viewer or a logged-in world.
+
 Other layout files require explicit adapter/native rules before
 they become editable. The Layout XML tab remains available for validated edits.
 
@@ -150,3 +164,4 @@ windows. Pass the matching viewer resource root as its only argument. This is a
 focused UI-state regression check, separate from human visual acceptance.
 Both the core test executable and Workbench accept `--fonts-only` after the base
 path for focused font checks, or `--xui-only` for focused widget checks.
+Use `--library-only` for package/library, thumbnail and capture-contract checks.

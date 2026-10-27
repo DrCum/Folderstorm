@@ -279,6 +279,24 @@ boost::json::value parse(const std::string& bytes)
     }
     return value;
 }
+CaptureRequest captureRequest(const std::string& bytes,const std::string& requestId,std::int64_t generation,const std::string& revision)
+{
+    require(bytes.size()<=4096,"size","Capture request exceeds 4096 bytes");
+    const auto value=parse(bytes);require(value.is_object(),"capture_request","Expected capture object");const auto& object=value.as_object();
+    fields(object,{"capture_version","request_id","generation","revision","capture_id","max_width","max_height"});
+    const auto owner=text(object,"request_id"),selected=text(object,"revision"),id=text(object,"capture_id");
+    const auto version=integer(object,"capture_version"),counter=integer(object,"generation"),width=integer(object,"max_width"),height=integer(object,"max_height");
+    require(version==1 && validHash(owner) && validHash(id) && (selected.empty() || validHash(selected)) && counter>0 && width>0 && width<=2048 && height>0 && height<=2048,"capture_request","Invalid capture request");
+    require(owner==requestId && counter==generation && selected==revision,"capture_ownership","Capture belongs to a different preview");
+    return {id,static_cast<int>(width),static_cast<int>(height)};
+}
+fs::path capturePath(const fs::path& directory,const std::string& leaf)
+{
+    const auto name=leaf.size()>4 && leaf.substr(leaf.size()-4)==".tmp"?leaf.substr(0,leaf.size()-4):leaf;
+    const bool image=name.size()==76 && name.substr(0,8)=="capture-" && name.substr(72)==".png" && validHash(name.substr(8,64));
+    require(name=="capture-request.json" || name=="capture-status.json" || image,"capture_request","Unsupported capture filename");
+    return contained(directory,leaf);
+}
 Manifest manifest(const std::string& bytes)
 {
     auto parsed=parse(bytes);require(parsed.is_object(),"schema","Manifest must be an object");const auto& object=parsed.as_object();

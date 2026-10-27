@@ -219,9 +219,33 @@ the full chosen revision before use. Thumbnail edits preserve exact PNG bytes,
 stored originals, unrelated edits and one-step history. Three focused model groups
 pass, including save/reopen, no-op/reset/Undo, corrupt preview and future-header
 cases. These are model foundations; the browser UI, native capture protocol and
-image-codec/desktop acceptance are still in progress. Native capture should use
+image-codec/desktop acceptance were pending at that checkpoint. Native capture should use
 the isolated viewer's own renderer to generate package thumbnails, with explicit
 session/revision binding, rather than depending on desktop frame capture.
+
+The branch now implements the library browser, package-file inspection, isolated
+preview and explicit open-as-new-project flow. It validates the chosen revision
+and decodes its PNG before enabling actions. Rapid selections share one validation
+slot and skip stale queued work. Rows identify their revision and explain absent
+preview images. A development desktop check opened the real library and validated
+existing revisions; the final label/empty-state polish still needs desktop review.
+
+Project now supports PNG import/reset with visible Undo/Redo, saved exact bytes
+and independent compiled-package import. Its capture action starts a fresh owned
+offline preview, locks project changes during capture and decodes before committing.
+Native capture protocol1 binds the request ID, generation, revision, process and
+fresh capture ID. The renderer reads its completed startup UI frame before swap,
+preserves readback state and atomically writes only a nonce-derived PNG in its
+session. This is a package-thumbnail feature, not desktop automation.
+
+Focused capture/library model checks pass5 groups; the full WPF suite passes33,
+the codec suite passes12 (including1641 TGA assets), and managed/native capture
+acceptance agrees on17 cases. The first full core run found a test-directory
+collision (51/53); those fixtures now have separate roots and the fresh full run
+passes53/53. Final browser polish also passes3 focused WPF groups; the33-group
+full WPF run preceded only that row-label/empty-preview presentation change.
+A matching native build, real capture/PNG appearance, desktop open-as-project and
+system-DPI checks remain pending. No installation, source push or publication.
 
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay

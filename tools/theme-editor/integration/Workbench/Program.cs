@@ -21,7 +21,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] is not ("--fonts-only" or "--xui-only")) { Console.Error.WriteLine("Pass the matching viewer root, optionally --fonts-only or --xui-only"); return 2; }
+        if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] is not ("--fonts-only" or "--xui-only" or "--library-only")) { Console.Error.WriteLine("Pass the matching viewer root, optionally --fonts-only or --xui-only"); return 2; }
         try
         {
             // Exercise production handlers and controls without showing windows or running the desktop/viewer.
@@ -33,6 +33,11 @@ internal static class Program
             Directory.CreateDirectory(directory);
             Set(window, "catalog", catalog); Set(window, "project", project); Set(window, "projectDirectory", directory);
             Call(window, "RefreshCatalog");
+            if (args.Length == 2 && args[1] == "--library-only")
+            {
+                LibraryWorkbenchChecks.Run(window, directory, catalog, project);
+                Console.WriteLine("3/3 passed. Windowless library and thumbnail handler checks. Workspace: " + directory); return 0;
+            }
             if (args.Length == 2 && args[1] == "--xui-only")
             {
                 WidgetWorkbenchChecks.Run(window, directory, catalog, project);
@@ -262,8 +267,9 @@ internal static class Program
             WidgetWorkbenchChecks.Run(window, directory, catalog, project);
             WidgetPropertyChecks.Run(window, directory, catalog, project);
             WidgetRuleChecks.Run(window, directory, catalog, project);
+            LibraryWorkbenchChecks.Run(window, directory, catalog, project);
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("30/30 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("33/33 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

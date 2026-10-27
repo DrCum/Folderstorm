@@ -88,7 +88,7 @@ public static class LibraryCatalog
                 else { var length = new FileInfo(path).Length; Contract.Require(length <= Contract.ExpandedLimit + Contract.ManifestLimit - size, "size", "Library revision exceeds the byte limit"); size += length; }
             }
     }
-    internal static byte[] ReadBounded(string path, long limit)
+    public static byte[] ReadBounded(string path, long limit)
     {
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         Contract.Require(input.Length <= limit, "size", "File exceeds its byte limit");

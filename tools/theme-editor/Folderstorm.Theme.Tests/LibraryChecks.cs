@@ -10,7 +10,7 @@ internal static class LibraryChecks
         void Assert(bool value, string message) { if (!value) throw new Exception(message); }
         void Reject(string code, Action action) { try { action(); throw new Exception("Expected " + code); } catch (ThemeException error) { Assert(error.Code == code, error.Message); } }
         var directory = Path.Combine(root, "library-project"); ThemeProject? project = null; byte[]? first = null; byte[]? second = null;
-        var library = Path.Combine(root, "library"); LibraryEntry? entry = null;
+        var library = Path.Combine(root, "thumbnail-library"); LibraryEntry? entry = null;
         test("library thumbnail edits preserve exact bytes, originals, unrelated edits and durable history", () =>
         {
             var samples = catalog.Textures.Values.Where(texture => texture.Source?.EndsWith(".png", StringComparison.OrdinalIgnoreCase) == true).Select(texture => texture.Source!).Distinct(StringComparer.Ordinal).Take(2).ToArray();

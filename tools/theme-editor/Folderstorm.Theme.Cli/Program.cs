@@ -16,6 +16,13 @@ try
     object result;
     switch (values[0])
     {
+        case "capture-contract":
+            using (var fixture = Contract.Parse(File.ReadAllBytes(values[1])))
+            {
+                var input = fixture.RootElement;
+                result = PreviewCapture.Request(Encoding.UTF8.GetBytes(input.GetProperty("request").GetRawText()), input.GetProperty("request_id").GetString()!, input.GetProperty("generation").GetInt64(), input.GetProperty("revision").GetString()!);
+            }
+            break;
         case "manifest":
             result = PackageStore.Manifest(File.ReadAllBytes(values[1])); break;
         case "catalog":

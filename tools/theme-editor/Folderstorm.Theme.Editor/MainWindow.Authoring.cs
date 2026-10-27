@@ -18,8 +18,8 @@ public partial class MainWindow : INotifyPropertyChanged
     private string? appliedColorValue;
     private string[] readOnlyReasons = [];
     public event PropertyChangedEventHandler? PropertyChanged;
-    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !closePending && !copyingProject && !imageOperation && EditCanvas?.IsInteracting != true;
-    public bool CanOpenDocument => !closePending && !copyingProject && !imageOperation && EditCanvas?.IsInteracting != true;
+    public bool CanEditDocument => project != null && readOnlyReasons.Length == 0 && !closePending && !copyingProject && !imageOperation && !previewOperation && EditCanvas?.IsInteracting != true;
+    public bool CanOpenDocument => !closePending && !copyingProject && !imageOperation && !previewOperation && EditCanvas?.IsInteracting != true;
     public bool CanUndo => CanEditDocument && (project!.Undo.Count > 0 || MetadataPending());
     public bool CanRedo => CanEditDocument && project!.Redo.Count > 0 && !MetadataPending();
 
@@ -77,6 +77,7 @@ public partial class MainWindow : INotifyPropertyChanged
             ProjectSummary.Text = project == null ? "" : $"{project.Edits.Colors.Count} color overrides · {project.Edits.ColorLinks.Count} links · {project.Edits.Assets.Count} assets\n{projectDirectory}";
         }
         finally { updatingEditors = false; }
+        RefreshThumbnail();
         UpdateCommandState();
     }
     private void RefreshDocumentEditors()

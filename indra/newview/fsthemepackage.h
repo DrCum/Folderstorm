@@ -40,5 +40,8 @@ std::string hashFile(const std::filesystem::path& path);
 boost::json::value parse(const std::string& bytes);
 Manifest manifest(const std::string& bytes);
 Revision load(const std::filesystem::path& directory,const std::filesystem::path& base);
+struct CaptureRequest {std::string id;int width=0,height=0;};
+CaptureRequest captureRequest(const std::string& bytes,const std::string& requestId,std::int64_t generation,const std::string& revision);
+std::filesystem::path capturePath(const std::filesystem::path& directory,const std::string& leaf);
 }
 #endif

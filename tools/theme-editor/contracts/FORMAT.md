@@ -203,5 +203,23 @@ library. Unsupported headers remain on disk and are reported.
 `preview.png` already belongs to runtime version1. Thumbnail authoring uses the
 existing content-addressed asset and history format, with staged compilation
 before one checkpoint. Replacing a thumbnail keeps its original; reset removes
-the active payload while keeping bytes/history for Undo. Native capture and the
-package browser UI are separate work still in progress.
+the active payload while keeping bytes/history for Undo. The browser decodes the
+chosen PNG before enabling open/preview. Selection validation is serialized;
+queued stale selections are skipped without starting additional package reads.
+
+Optional offline capture protocol1 uses `capture-request.json` and
+`capture-status.json` within the owned preview session. Requests are at most4096
+bytes with capture_version1, the original64-hex request_id, positive generation,
+exact revision (or empty built-in base), fresh64-hex capture_id, and integer
+max_width/max_height1..2048. Unknown fields and duplicate keys are refused.
+The renderer waits for three finished offline UI frames, reads RGB before swap,
+restores pixel-pack/read-buffer state, scales to fit and encodes PNG. Only fixed
+control leaves and `capture-<capture_id>.png` (plus atomic `.tmp`) are writable;
+path components and links are rejected. No capture hook runs for a live viewer.
+
+The response binds the same context and PID, names the request-derived leaf and
+records state, diagnostic, SHA-256, output and source dimensions. The editor
+requires ready (not fallback), its owned process, matching context/hash and PNG
+dimensions, then fully decodes before staging the thumbnail. A capture timeout or
+failure leaves project/history unchanged. Older preview-version1 viewers remain
+usable for preview but cannot perform capture without preview_capture_version1.

@@ -152,19 +152,19 @@ public partial class MainWindow : Window
         var selectedTab = Workspace.SelectedIndex;
         var image = selectedTab == 1 ? SelectedTexture?.Name : null;
         if (selectedTab == 1 && image == null) { StatusText.Text = "Select an image to preview."; return; }
-        try { StatusText.Text = image == null ? "Validating and starting native preview…" : "Starting native button preview: " + image; Workspace.IsEnabled = false;
-            CommitMetadata();
+        CommitMetadata();
+        try { previewOperation = true; UpdateCommandState(); StatusText.Text = image == null ? "Validating and starting native preview…" : "Starting native button preview: " + image; Workspace.IsEnabled = false;
             var theme = image == null ? PackageStore.Compile(projectDirectory, project!, catalog!) : PackageStore.CompileImagePreview(projectDirectory, project!, catalog!, image);
             await preview.StartAsync(ViewerPath.Text, theme, catalog!); StatusText.Text = (image == null ? "Native preview " : "Native button preview: " + image + " · ") + preview.Status + " · PID " + preview.ProcessId; }
         catch (Exception error) { StatusText.Text = error.Message; }
-        finally { Workspace.IsEnabled = true; Workspace.SelectedIndex = selectedTab; }
+        finally { previewOperation = false; Workspace.IsEnabled = true; Workspace.SelectedIndex = selectedTab; UpdateCommandState(); }
     }
     private async void ClosePreview(object sender, RoutedEventArgs args) { await preview.CloseAsync(); StatusText.Text = "Preview closed."; }
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (closing) return; args.Cancel = true;
         if (closePending) return;
-        if (copyingProject || imageOperation || EditCanvas.IsInteracting) { StatusText.Text = "Finish or cancel the current edit before closing."; return; }
+        if (copyingProject || imageOperation || previewOperation || EditCanvas.IsInteracting) { StatusText.Text = "Finish or cancel the current edit before closing."; return; }
         try
         {
             if (!Discard()) return;

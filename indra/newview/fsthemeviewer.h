@@ -6,5 +6,6 @@ namespace FSThemeViewer
 bool configure();
 bool preview();
 bool idlePreview();
+void captureFrame();
 }
 #endif

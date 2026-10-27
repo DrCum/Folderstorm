@@ -620,6 +620,7 @@ FontChecks.Register(Test, root, catalog);
 FontLicenseChecks.Register(Test, root, catalog);
 XuiProjectChecks.Register(Test, root, catalog);
 LibraryChecks.Register(Test, root, catalog);
+CaptureChecks.Register(Test, root, catalog);
 if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith(args[1] switch { "--fonts-only" => "font", "--xui-only" => "xui", _ => "library" }, StringComparison.Ordinal)).ToList();
 var failed = 0;
 foreach (var (name, run) in tests)
