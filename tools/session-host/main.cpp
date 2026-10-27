@@ -26,6 +26,7 @@
 #include "fssessionshortcuts.h"
 #include <imm.h>
 #include "dialog.h"
+#include "host_preview.h"
 #include "chatui.h"
 #include "friendsui.h"
 #include "fssessionmonitortools.h"
@@ -4895,6 +4896,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if (dpiContext) dpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // PER_MONITOR_AWARE_V2
     else SetProcessDPIAware();
     INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES}; InitCommonControlsEx(&common);
+    if(const auto result=fs_host_theme::dispatchPreview(instance,show))return *result;
     if(!fs_update::enter()){MessageBoxA(nullptr,fs_update::lastError().c_str(),"Folderstorm update",MB_OK|MB_ICONINFORMATION);return 1;}
     Host state;
     fs_crash::initialize("host");

@@ -55,6 +55,13 @@ internal static class HostWorkbenchChecks
         host.SetProject(catalog, project, directory);
         Assert(value.Text.Length == 0 && Field<Border>(host, "SampleFrame").Visibility == Visibility.Collapsed, "Unsupported palette left a stale color/sample visible");
         project.Edits = knownEdits; Call(window, "RefreshDocumentEditors");
+        var fakeHost = Path.Combine(root, "unsupported-host"); Directory.CreateDirectory(fakeHost);
+        File.WriteAllBytes(Path.Combine(fakeHost, "host.exe"), []); File.WriteAllText(Path.Combine(fakeHost, "folderstorm-theme-capabilities.json"), "{}");
+        typeof(MainWindow).GetField("hostExecutable", Private)!.SetValue(window, Path.Combine(fakeHost, "host.exe"));
+        Field<TextBox>(window, "ThemeName").Text = "Pending host preview name"; before = Contract.Bytes(project);
+        Call(window, "PreviewHost", window, new RoutedEventArgs());
+        Assert(Contract.Bytes(project).SequenceEqual(before) && Field<HostPreviewSession>(window, "hostPreview").ProcessId == null && Field<TextBlock>(window, "StatusText").Text.Contains("matching host build", StringComparison.Ordinal), "Unsupported host preview committed draft metadata or executed a child");
+        Call(window, "SyncMetadata");
         Console.WriteLine("PASS host alpha/metadata/busy/read-only rejection, scoped Reset/Undo, explicit snapshot and durable Save");
 
         var picker = new ColorPickerDialog(ThemeColor.Parse("#64D8B2"), Path.Combine(root, "host-swatches.json"), (_, _) => ThemeColor.Parse("#112233"), allowOpacity: false);

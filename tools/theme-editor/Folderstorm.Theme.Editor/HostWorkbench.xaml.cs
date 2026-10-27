@@ -14,6 +14,7 @@ public partial class HostWorkbench : UserControl
     private bool refreshing = true;
     private HostPaletteDefinition palette = HostPalette.Midnight;
     public Func<bool>? CanApply { get; set; }
+    public int BaselineChoice => Preset.SelectedIndex == 1 ? 1 : 0;
     public event Action<HostPaletteDefinition?>? ApplyRequested;
     public HostWorkbench() { InitializeComponent(); Preset.SelectedIndex = 0; refreshing = false; }
     public void SetProject(BaseCatalog? nextCatalog, ThemeProject? nextProject, string nextDirectory)

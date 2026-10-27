@@ -2,6 +2,7 @@
   "preview_version": 1,
   "preview_capture_version": 1,
   "host_palette_version": 1,
+  "host_preview_version": 1,
   "source_commit": "@FS_SOURCE_COMMIT@",
   "xui_rules_sha256": "@THEME_RULES_SHA256@",
   "capabilities": ["viewer.overlay.v1", "viewer.preview.v1", "viewer.fonts.v1", "viewer.xui.v1", "host.palette.v1"]

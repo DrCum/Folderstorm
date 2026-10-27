@@ -2447,7 +2447,10 @@ folderstorm_update_target(${VIEWER_BINARY_NAME})
 # a controller or background workers. Keep the binary beside the matching viewer.
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
+      fsthemepackage.cpp
       fsreleasefeed.cpp
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_preview.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/release_json.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"

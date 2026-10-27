@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
+        hostExecutable = Argument("--host");
 
         BasePath.LostKeyboardFocus += async (_, _) =>
         {
@@ -162,7 +163,7 @@ public partial class MainWindow : Window
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { previewOperation = false; Workspace.IsEnabled = true; Workspace.SelectedIndex = selectedTab; UpdateCommandState(); }
     }
-    private async void ClosePreview(object sender, RoutedEventArgs args) { await preview.CloseAsync(); StatusText.Text = "Preview closed."; }
+    private async void ClosePreview(object sender, RoutedEventArgs args) { await Task.WhenAll(preview.CloseAsync(), hostPreview.CloseAsync()); StatusText.Text = "Previews closed."; }
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (closing) return; args.Cancel = true;
@@ -171,7 +172,7 @@ public partial class MainWindow : Window
         try
         {
             if (!Discard()) return;
-            closePending = true; UpdateCommandState(); await preview.DisposeAsync(); StopExternalSessions(); closing = true;
+            closePending = true; UpdateCommandState(); await preview.DisposeAsync(); await hostPreview.DisposeAsync(); StopExternalSessions(); closing = true;
             await Dispatcher.InvokeAsync(Close);
         }
         catch (Exception error) { closePending = closing = false; UpdateCommandState(); StatusText.Text = error.Message; }
