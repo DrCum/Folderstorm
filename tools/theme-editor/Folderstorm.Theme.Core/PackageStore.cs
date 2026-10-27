@@ -212,6 +212,15 @@ public static class PackageStore
     }
 
     public static ValidatedTheme ReadArchive(string path, BaseCatalog? catalog = null)
+        => Validate(ReadArchiveFiles(path), catalog);
+    public static ValidatedTheme ReadArchiveForBase(string path, Func<ThemeManifest, BaseCatalog> selectBase)
+    {
+        var files = ReadArchiveFiles(path);
+        Contract.Require(files.TryGetValue("theme.json", out var bytes), "manifest", "Missing theme.json");
+        var header = Manifest(bytes!);
+        return Validate(files, selectBase(header));
+    }
+    private static Dictionary<string, byte[]> ReadArchiveFiles(string path)
     {
         Contract.Require(new FileInfo(path).Length <= Contract.ArchiveLimit, "size", "Archive exceeds 128 MiB");
         using var input = File.OpenRead(path); using var archive = new ZipArchive(input, ZipArchiveMode.Read);
@@ -233,7 +242,7 @@ public static class PackageStore
             { Contract.Require(output.Length + count <= entry.Length, "size", entry.FullName); output.Write(buffer, 0, count); }
             Contract.Require(output.Length == entry.Length, "size", entry.FullName); files.Add(entry.FullName, output.ToArray());
         }
-        return Validate(files, catalog);
+        return files;
     }
     public static ValidatedTheme ReadRevision(string directory, BaseCatalog? catalog = null)
     {

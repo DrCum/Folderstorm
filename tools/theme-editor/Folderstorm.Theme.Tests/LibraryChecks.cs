@@ -54,5 +54,19 @@ internal static class LibraryChecks
             Assert(LibraryCatalog.Scan(bounded, 1).Truncated, "Library scan did not report truncation");
             Assert(LibraryCatalog.Scan(Path.Combine(root, "missing-library")).Entries.Length == 0 && !Directory.Exists(Path.Combine(root, "missing-library")), "Empty scan created a library");
         });
+        test("library archive selects its declared base before validating XUI payloads", () =>
+        {
+            var folder = Path.Combine(root, "archive-base-project"); var document = ProjectStore.Create(catalog, "Widget package");
+            var payload = "viewer/xui/en/widgets/button.xml";
+            document.Edits.Assets.Add(ProjectAssets.Prepare(folder, payload, catalog.ResolveBytes(payload[7..])));
+            var package = PackageStore.Compile(folder, document, catalog); var archive = Path.Combine(root, "widget-package.fstheme"); PackageStore.Export(archive, package);
+            Reject("base_required", () => PackageStore.ReadArchive(archive));
+            var selected = 0;
+            var opened = PackageStore.ReadArchiveForBase(archive, header =>
+            {
+                ++selected; Assert(header.BaseSkin == catalog.Skin && header.BaseScheme == catalog.Scheme, "Archive base selection lost its header"); return catalog;
+            });
+            Assert(selected == 1 && opened.Revision == package.Revision && opened.Files.All(file => package.Files[file.Key].SequenceEqual(file.Value)), "Base-aware archive read changed bytes or bypassed validation");
+        });
     }
 }

@@ -247,6 +247,33 @@ full WPF run preceded only that row-label/empty-preview presentation change.
 A matching native build, real capture/PNG appearance, desktop open-as-project and
 system-DPI checks remain pending. No installation, source push or publication.
 
+The exact0.15.0/7.2.5.82312 source `2f7ad70da4c9aed8239cc555865190895daa33de`
+is now privately retained with NSIS, runnable viewer, editor, symbols and source
+bundle. All402 editor files and the recorded native artifacts match their hashes.
+The shared checkout is restored, the cache checkpoint identifies82312 and no
+build owner remains. Earlier archives stay unchanged.
+
+An actual Project capture produced a1264x861 native renderer PNG at revision
+`92c4bafef4d9e5364285b540b89a5c775f558da368cee24e04ed7cf9d3412b8c`.
+The image was decoded and reviewed: controls, text and colors are drawn, with
+correct orientation and opaque background. Actual Ctrl+Z removed the thumbnail,
+Ctrl+Y restored it and Ctrl+S saved it. The saved PNG matches the nonce-bound
+native receipt SHA and one durable checkpoint. Both owned processes are absent
+and computer control is disconnected. The later receipt and PNG are outside the
+immutable archive in `theme-editor-library-evidence-20261027`.
+
+Editor desktop capture timed out twice after native launch; subsequent checks
+used supported accessibility/keyboard. Final library image/open-as-project
+desktop checks, changed-state captures and actual system DPI remain open.
+
+The next branch, `codex/ansastorm-compiled-palette`, fixes package import semantics.
+Its first change selects an archive's declared base before validating XUI; the
+0.15 archive picker could otherwise reject valid widget packages for lacking a
+base. The new path preserves the bounded ZIP reader and exact payload bytes.
+Six focused library/capture model groups and the editor build pass. No0.16
+candidate is retained yet. Imported raw palettes still need effective inspection,
+collision-free staged edits/reset, and atomic destination-safe project import.
+
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.

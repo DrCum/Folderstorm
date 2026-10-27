@@ -99,8 +99,9 @@ public sealed class LibraryDialog : Window
             var catalog = new BaseCatalog(baseRoot, entry.Header.BaseSkin, entry.Header.BaseScheme);
             return (LibraryCatalog.Validate(entry, catalog), catalog);
         }
-        var package = PackageStore.ReadArchive(row.Archive!); var source = new BaseCatalog(baseRoot, package.Manifest.BaseSkin, package.Manifest.BaseScheme);
-        return (PackageStore.Validate(package.Files, source), source);
+        BaseCatalog? source = null;
+        var package = PackageStore.ReadArchiveForBase(row.Archive!, header => source = new BaseCatalog(baseRoot, header.BaseSkin, header.BaseScheme));
+        return (package, source!);
     }
     private async Task SelectAsync()
     {
