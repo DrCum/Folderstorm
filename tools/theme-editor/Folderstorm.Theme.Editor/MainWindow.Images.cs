@@ -180,6 +180,21 @@ public partial class MainWindow
         var family = TextureFamilies.Describe(texture.Name).Family;
         ResetImageSelection(catalog.Textures.Keys.Where(name => TextureFamilies.Describe(name).Family == family).ToArray(), family);
     });
+    private async void EditStateFamily(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (!Ready() || !CanReplaceImage || SelectedTexture is not { } texture) return;
+        var images = ImageFamilyEdit.Load(projectDirectory, project!, catalog!, texture.Name);
+        var dialog = new ImageFamilyDialog(this, TextureFamilies.Describe(texture.Name).Family, images, texture.Name, ImageTint.Text);
+        if (dialog.ShowDialog() == true) ApplyFamilyEdits(dialog.Edits, dialog.EditLabel);
+    });
+    private void ApplyFamilyEdits(ImageEdit[] edits, string label)
+    {
+        if (!Ready() || !CanReplaceImage) return;
+        CommitMetadata();
+        var count = ImageProject.SetPngBatch(projectDirectory, project!, catalog!, edits, label);
+        if (count > 0) { changed = true; RefreshImageEditors(); SyncMetadata(); }
+        StatusText.Text = count == 0 ? "Images already match." : count + " images updated. Undo restores the family edit.";
+    }
     private async void ResetAllImages(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (!Ready()) return;

@@ -3,5 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="../../Folderstorm.Theme.Core/Folderstorm.Theme.Core.csproj"/>
     <Compile Include="../../Folderstorm.Theme.Editor/ImageCodec.cs" Link="ImageCodec.cs"/>
+    <Compile Include="../../Folderstorm.Theme.Editor/ImageFamilyEdit.cs" Link="ImageFamilyEdit.cs"/>
   </ItemGroup>
 </Project>

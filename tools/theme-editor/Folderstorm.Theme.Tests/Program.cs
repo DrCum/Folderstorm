@@ -313,6 +313,46 @@ Test("resize blends premultiplied alpha and asymmetric stretch keeps fixed borde
     Reject("image", () => source.Stretch(2, 2, margins));
 });
 
+Test("image batches preserve individual originals and recipes with one durable checkpoint", () =>
+{
+    var directory = Path.Combine(root, "image-batch"); var p = ProjectStore.Create(catalog, "Image batch"); ProjectStore.Save(directory, p);
+    p.Edits.Colors["ThemeAccent"] = "0.2 0.8 0.5 1";
+    var bytes = catalog.ResolveBytes("textures/" + catalog.Textures["PushButton_On"].Attributes["file_name"]);
+    var width = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4)); var height = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+    var names = new[] { "PushButton_Off", "PushButton_Disabled" };
+    var before = names.ToDictionary(name => name, name => ImageProject.Read(directory, p, catalog, name));
+    var edits = names.Select(name => new ImageEdit(name, bytes, TextureGeometry.FromAttributes(width, height, catalog.Textures[name].Attributes), new("tint", new() { ["color"] = System.Text.Json.JsonSerializer.SerializeToElement("0.2 0.8 0.5 1") }))).ToArray();
+    Assert(ImageProject.SetPngBatch(directory, p, catalog, edits, "Tint states") == 2 && p.Undo.Count == 1 && p.Undo[0].Label == "Tint states", "Batch did not create one named checkpoint");
+    foreach (var name in names)
+    {
+        var texture = ImageProject.Resolve(directory, p, catalog, name); var asset = p.Edits.Assets.Single(item => item.PayloadPath == "viewer/textures/" + texture.Attributes["file_name"]);
+        Assert(File.ReadAllBytes(Path.Combine(directory, asset.OriginalPath)).SequenceEqual(before[name]) && p.Edits.Recipes[name].Operation == "tint", "Batch lost an individual original or recipe");
+    }
+    Assert(ImageProject.SetPngBatch(directory, p, catalog, edits, "Repeat") == 0 && p.Undo.Count == 1, "Repeated batch created history");
+    ProjectStore.Save(directory, p); p = ProjectStore.Open(directory);
+    Assert(p.UndoEdit() && names.All(name => ImageProject.Read(directory, p, catalog, name).SequenceEqual(before[name])) && p.Edits.Colors.ContainsKey("ThemeAccent"), "Batch Undo lost originals or unrelated colors");
+    Assert(p.RedoEdit() && names.All(name => ImageProject.Read(directory, p, catalog, name).SequenceEqual(bytes)), "Batch Redo lost a state");
+});
+
+Test("failed image batches leave edits and history unchanged after partial asset preparation", () =>
+{
+    var directory = Path.Combine(root, "image-batch-conflict"); var p = ProjectStore.Create(catalog, "Batch conflict"); ProjectStore.Save(directory, p);
+    ImageEdit Edit(string name, string source, string operation)
+    {
+        var bytes = catalog.ResolveBytes("textures/" + catalog.Textures[source].Attributes["file_name"]);
+        var width = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4)); var height = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+        return new(name, bytes, TextureGeometry.FromAttributes(width, height, catalog.Textures[name].Attributes), new(operation, new()));
+    }
+    var first = Edit("PushButton_Off", "PushButton_On", "tint"); var second = Edit("PushButton_On", "PushButton_Off", "future-operation");
+    var before = Contract.Bytes(p);
+    Reject("recipe", () => ImageProject.SetPngBatch(directory, p, catalog, [first, second], "Fail"));
+    Assert(Contract.Bytes(p).SequenceEqual(before), "Rejected batch changed edits/history");
+    Reject("image_batch", () => ImageProject.SetPngBatch(directory, p, catalog, [first, first], "Duplicate"));
+    var unchanged = Edit("PushButton_Off", "PushButton_Off", "tint");
+    Reject("image", () => ImageProject.SetPngBatch(directory, p, catalog, [unchanged with { Geometry = unchanged.Geometry with { Width = unchanged.Geometry.Width + 1 } }], "Bad output"));
+    Assert(Contract.Bytes(p).SequenceEqual(before), "Invalid batch input changed document/history");
+});
+
 Test("external working copies preserve project bytes, resume locally and reload one undoable image edit", () =>
 {
     var directory = Path.Combine(root, "external-project"); var working = Path.Combine(root, "external-working");

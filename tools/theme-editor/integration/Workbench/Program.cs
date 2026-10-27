@@ -26,6 +26,7 @@ internal static class Program
         {
             // Exercise production handlers and controls without showing windows or running the desktop/viewer.
             var app = new App(); app.InitializeComponent();
+            SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
             var window = new MainWindow();
             var catalog = new BaseCatalog(args[0]); var project = ProjectStore.Create(catalog, "Reset display probe");
             var directory = Path.Combine(Environment.CurrentDirectory, "artifacts", "reset-workbench-" + Guid.NewGuid().ToString("N"));
@@ -128,8 +129,50 @@ internal static class Program
             Call(window, "StopExternalSessions");
             Assert(File.Exists(external.WorkingPath) && !window.CanReloadExternal, "Ending external tracking deleted the working file or left Reload active");
             Console.WriteLine("PASS external reload redraw/history, stale-edit refusal and retained working files");
+            var familyImages = ImageFamilyEdit.Load(directory, project, catalog, "PushButton_Off");
+            var family = new ImageFamilyDialog(null, "PushButton", familyImages, "PushButton_Off", "#64D8B280");
+            T FamilyField<T>(string name) => (T)typeof(ImageFamilyDialog).GetField(name, Private)!.GetValue(family)!;
+            foreach (var (name, card) in FamilyField<Dictionary<string, (CheckBox Check, Image After, TextBlock Dimensions)>>("cards"))
+                if (name is not "PushButton_Off" and not "PushButton_On") card.Check.IsChecked = false;
+            void FamilyPreview()
+            {
+                var task = (Task)typeof(ImageFamilyDialog).GetMethod("PreviewAsync", Private)!.Invoke(family, [])!;
+                var frame = new System.Windows.Threading.DispatcherFrame(); var deadline = DateTime.UtcNow.AddSeconds(30);
+                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+                timer.Tick += (_, _) => { if (task.IsCompleted || DateTime.UtcNow >= deadline) frame.Continue = false; };
+                timer.Start(); if (!task.IsCompleted) System.Windows.Threading.Dispatcher.PushFrame(frame); timer.Stop();
+                Assert(task.IsCompleted, "Family preview timed out"); task.GetAwaiter().GetResult();
+            }
+            var familyBefore = Contract.Bytes(project); FamilyPreview();
+            Assert(FamilyField<Button>("apply").IsEnabled && FamilyField<FamilyResult[]>("prepared").Length == 2 && Contract.Bytes(project).SequenceEqual(familyBefore), "Family preview changed document or failed to enable Apply");
+            FamilyField<TextBox>("tint").Text = "#FF669980";
+            Assert(!FamilyField<Button>("apply").IsEnabled && FamilyField<FamilyResult[]>("prepared").Length == 0, "Changing family settings left stale Apply available");
+            FamilyField<ComboBox>("operation").SelectedIndex = 2; FamilyField<TextBox>("width").Text = "0"; FamilyPreview();
+            Assert(!FamilyField<Button>("apply").IsEnabled && Contract.Bytes(project).SequenceEqual(familyBefore), "Invalid family preview mutated project or enabled Apply");
+            FamilyField<ComboBox>("operation").SelectedIndex = 0; FamilyPreview();
+            var familyResults = FamilyField<FamilyResult[]>("prepared");
+            var visual = (FrameworkElement)family.Content; family.Content = null;
+            ((Panel)visual).Background = family.Background;
+            foreach (var (logicalWidth, logicalHeight, scale) in new[] { (1060, 680, 1d), (820, 500, 1d), (1060, 680, 1.5), (1060, 680, 2d) })
+            {
+                visual.Measure(new Size(logicalWidth, logicalHeight)); visual.Arrange(new Rect(0, 0, logicalWidth, logicalHeight)); visual.UpdateLayout();
+                var render = new RenderTargetBitmap((int)(logicalWidth * scale), (int)(logicalHeight * scale), 96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+                render.Render(visual); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(render));
+                using var output = File.Create(Path.Combine(directory, $"family-layout-{logicalWidth}-{scale.ToString(System.Globalization.CultureInfo.InvariantCulture)}.png")); encoder.Save(output);
+            }
+            family.Close();
+            Assert(Contract.Bytes(project).SequenceEqual(familyBefore), "Cancelling family dialog changed project");
+            var familyHistory = project.Undo.Count; var currentBeforeFamily = Field<RasterImage>(window, "currentImage");
+            Call(window, "ApplyFamilyEdits", familyResults.Select(item => item.Encode()).ToArray(), "Tint button states");
+            Assert(project.Undo.Count == familyHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(familyResults.Single(item => item.Source.Name == "PushButton_Off").Image), "Family Apply did not redraw or created multiple checkpoints");
+            Call(window, "Undo", window, new RoutedEventArgs());
+            Assert(Field<RasterImage>(window, "currentImage").PixelEquals(currentBeforeFamily), "Family Undo left stale pixels");
+            Call(window, "Redo", window, new RoutedEventArgs());
+            Assert(Field<RasterImage>(window, "currentImage").PixelEquals(familyResults.Single(item => item.Source.Name == "PushButton_Off").Image), "Family Redo left stale pixels");
+            Assert(!family.IsVisible, "Family probe unexpectedly showed a window");
+            Console.WriteLine("PASS family dialog preview/settings/invalid/cancel gating and Apply/Undo/Redo redraw with one checkpoint");
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("9/9 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("10/10 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

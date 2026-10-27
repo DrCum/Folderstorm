@@ -28,6 +28,13 @@ image with Open copy resumes a compatible saved working copy. Conflicting image
 edits require a new copy; old working files remain in Working files. Application
 preferences and working sessions stay local and are excluded from exports.
 
+Edit family shows related image states with checkboxes and Before/After samples.
+Choose Tint, Adjust, Resize or Guides from current, then Preview checked. Apply
+updates only changed checked states in one Undo step. Unchecked states retain
+their artwork; each edited state keeps its own imported original and recipes.
+Changing settings invalidates the preview. Unsupported legacy guides are shown
+with a reason and cannot be checked. Cancel does not change the project.
+
 Use .NET 10 on Windows. The editor is x64 WPF, self-contained and non-trimmed;
 core and CLI have no UI or third-party package dependencies.
 

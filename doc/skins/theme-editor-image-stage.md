@@ -142,6 +142,22 @@ groups pass. These cover original/sibling isolation, resized guide geometry,
 exact imported PNG bytes, recovery, no-op reload, malformed/missing files,
 conflict refusal and Undo/Redo. Desktop round-trip validation is in progress.
 
-Bulk/state-family edits and additional import formats remain in progress. PNG remains the package
+The 0.7.0 candidate adds Edit family with checked-state Before/After samples.
+Tint, color/alpha adjustments, resize and guide sharing use each state's own
+source artwork. Preview is explicit and changing a field invalidates Apply.
+One Apply creates one checkpoint after all outputs and assets are prepared;
+unchecked states, originals and prior recipes remain intact. Invalid inherited
+guides stay visible with an explanation and cannot be selected. Family previews
+are bounded to 64 states and 16 megapixels; batch PNG outputs to 128 MiB.
+The document transaction and GUI handler checks cover failure after partial
+asset preparation, neutral/repeated no-ops, Cancel, settings/validation gating,
+durable history and selected-image redraw. Checks pass 32/32 core, 10/10
+image/codec and 10/10 non-visible WPF groups. Both normal and selected-image
+revisions pass the production C++ validator. Reviewed windowless WPF renders at
+1060 and 820 logical pixels show readable controls, wrapping state cards and
+fitting actions. Additional 1.5x/2x bitmap renders are retained. These do not
+establish live desktop or numeric system-DPI acceptance, which remains open.
+
+Additional import formats remain in progress. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.
 Final feature/DPI acceptance is open.

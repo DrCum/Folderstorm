@@ -38,6 +38,14 @@ Continue in this order:
 5. If there is no further human steering, plan and begin customization independent
    of an installed base theme without weakening recovery or compatibility.
 
+Managed authoring checkpoints now include pixel-art tools and shared color
+pickers (0.5.1), recoverable external-editor PNG copies (0.6.0), and checked-state
+family previews/transactions (0.7.0). The family checkpoint passes 32 core,
+10 Windows image/codec and 10 non-visible WPF groups plus two C++ package
+validations. Windowless layouts are reviewed; external-app desktop access and
+full native/DPI acceptance remain open. Each candidate stays retained separately
+while remaining authoring work continues. Native 82310 remains unchanged.
+
 Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future
 computer-control batch must be announced, delayed at least five seconds, kept

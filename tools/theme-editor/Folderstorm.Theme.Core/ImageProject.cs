@@ -5,6 +5,8 @@ using System.Xml.Linq;
 
 namespace Folderstorm.Theme;
 
+public sealed record ImageEdit(string Name, byte[] Png, TextureGeometry Geometry, Recipe Operation);
+
 public static class ImageProject
 {
     private const string RegistrationPath = "viewer/textures/textures.xml";
@@ -58,9 +60,19 @@ public static class ImageProject
     public static void SetPng(string directory, ThemeProject project, BaseCatalog catalog, string name, byte[] png, TextureGeometry geometry, Recipe operation,
         byte[]? importedOriginal = null, string? importedExtension = null)
     {
-        Ready(project, catalog); geometry.Validate(); PackageStore.ValidateImage(png, "image.png");
+        var edits = PreparePng(directory, project, catalog, name, png, geometry, operation, importedOriginal, importedExtension);
+        project.Checkpoint(operation.Operation + " " + name); project.Edits = edits;
+    }
+    private static void ValidateOutput(byte[] png, TextureGeometry geometry)
+    {
+        geometry.Validate(); PackageStore.ValidateImage(png, "image.png");
         Contract.Require(BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(16, 4)) == geometry.Width && BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(20, 4)) == geometry.Height,
             "image", "Image output and guides have different dimensions");
+    }
+    private static ProjectEdits PreparePng(string directory, ThemeProject project, BaseCatalog catalog, string name, byte[] png, TextureGeometry geometry, Recipe operation,
+        byte[]? importedOriginal = null, string? importedExtension = null)
+    {
+        Ready(project, catalog); ValidateOutput(png, geometry);
         Contract.Require(operation.Operation != "replace" || importedOriginal != null, "recipe", "Replacement must retain its imported original");
         var texture = Resolve(directory, project, catalog, name);
         Contract.Require(texture.Attributes.TryGetValue("file_name", out var oldFile), "reference", "Image has no filename: " + name);
@@ -76,7 +88,26 @@ public static class ImageProject
         var registration = PrepareRegistrations(directory, project, catalog, registrations);
         var recipes = new Dictionary<string, Recipe>(project.Edits.Recipes, StringComparer.Ordinal) { [name] = nextRecipe };
         var assets = project.Edits.Assets.Where(asset => asset.PayloadPath != image.PayloadPath && asset.PayloadPath != RegistrationPath).Concat([image, registration]).ToList();
-        project.Checkpoint(operation.Operation + " " + name); project.Edits = project.Edits with { Assets = assets, Recipes = recipes };
+        return project.Edits with { Assets = assets, Recipes = recipes };
+    }
+    public static int SetPngBatch(string directory, ThemeProject project, BaseCatalog catalog, IEnumerable<ImageEdit> changes, string label)
+    {
+        Ready(project, catalog); var selected = changes.Take(65).ToArray();
+        Contract.Require(selected.Length <= 64 && selected.Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() == selected.Length,
+            "image_batch", "Choose at most 64 distinct images");
+        Contract.Require(selected.Sum(item => (long)item.Png.Length) <= 128L * 1024 * 1024, "size", "Image batch exceeds 128 MiB");
+        foreach (var item in selected) ValidateOutput(item.Png, item.Geometry);
+        var staged = project with { Edits = project.Edits }; var count = 0;
+        foreach (var item in selected.OrderBy(item => item.Name, StringComparer.Ordinal))
+        {
+            var texture = Resolve(directory, staged, catalog, item.Name);
+            if (Read(directory, staged, catalog, item.Name).SequenceEqual(item.Png) &&
+                TextureGeometry.FromAttributes(item.Geometry.Width, item.Geometry.Height, texture.Attributes) == item.Geometry) continue;
+            staged.Edits = PreparePng(directory, staged, catalog, item.Name, item.Png, item.Geometry, item.Operation); ++count;
+        }
+        if (count == 0) return 0;
+        // Asset preparation may leave recoverable content-addressed files on failure; only this assignment changes the document.
+        project.Checkpoint(label); project.Edits = staged.Edits; return count;
     }
     public static void SetGeometry(string directory, ThemeProject project, BaseCatalog catalog, string name, TextureGeometry geometry)
     {

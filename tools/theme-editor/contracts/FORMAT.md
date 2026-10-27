@@ -83,6 +83,14 @@ Drawing writes exact RGBA pixels. Each gesture has at most 4096 points and a
 the recipe. Earlier editors preserve this operation read-only. Cancelled or
 pixel-identical gestures do not create project edits.
 
+Family edits retain the existing per-image recipe operations. All checked
+states are prepared before the document changes, then committed in one
+checkpoint. Each logical ID keeps a separate scoped PNG and original reference.
+Duplicate IDs, oversized batches and invalid outputs are rejected before
+commit. Failed preparation can leave unreferenced content-addressed assets for
+recovery; it never changes project edits or history. Byte/geometry-identical
+outputs do not create a checkpoint. No runtime-format change is required.
+
 `external-edit` records the `sha256` of the PNG explicitly reloaded from a local
 working copy. It retains prior recipe steps and imported originals. Reload is
 one image checkpoint; unchanged data creates no checkpoint. Runtime packages
