@@ -341,6 +341,15 @@ public static class XuiPolicy
     private static readonly JsonDocument Rules = JsonDocument.Parse(typeof(XuiPolicy).Assembly.GetManifestResourceStream("Folderstorm.Theme.XuiRules")!);
     public static readonly HashSet<string> Files = ReadNames("paths");
     private static readonly HashSet<string> Attributes = ReadNames("editable_attributes");
+    public static string[] EditableAttributes => Attributes.Order(StringComparer.Ordinal).ToArray();
+    public static bool CanEditAttribute(string name) => Attributes.Contains(name);
+    public static string AttributeKind(string name)
+    {
+        if (!Attributes.Contains(name)) return "protected";
+        foreach (var group in new[] { "nonnegative_integer", "signed_integer", "color", "image" })
+            if (Values.GetProperty(group).EnumerateArray().Any(value => value.GetString() == name)) return group;
+        return "string";
+    }
     private static readonly JsonElement Values = Rules.RootElement.GetProperty("value_rules");
     private static HashSet<string> ReadNames(string name) => Rules.RootElement.GetProperty(name).EnumerateArray().Select(v => v.GetString()!).ToHashSet(StringComparer.Ordinal);
     public static void Validate(string path, byte[] bytes, BaseCatalog catalog)

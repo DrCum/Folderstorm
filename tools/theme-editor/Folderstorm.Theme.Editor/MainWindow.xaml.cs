@@ -109,13 +109,6 @@ public partial class MainWindow : Window
     private async void SaveProject(object sender, RoutedEventArgs args) => await Run(Save);
     private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; CommitMetadata(); if (project!.UndoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Undone."; } });
     private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; if (project!.RedoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Redone."; } });
-    private void PutAsset(string payload, string kind, byte[] bytes, byte[]? original = null)
-    {
-        var extension = Path.GetExtension(payload); var relative = "assets/" + Contract.Hash(bytes) + extension;
-        var originalRelative = "assets/" + Contract.Hash(original ?? bytes) + extension;
-        Contract.AtomicWrite(Contract.Contained(projectDirectory, relative), bytes); Contract.AtomicWrite(Contract.Contained(projectDirectory, originalRelative), original ?? bytes);
-        project!.Edits.Assets.RemoveAll(a => a.PayloadPath == payload); project.Edits.Assets.Add(new(payload, relative, originalRelative, kind)); changed = true;
-    }
     private async void LoadXml(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (catalog == null || XmlFile.SelectedItem is not string file) return;
@@ -126,14 +119,24 @@ public partial class MainWindow : Window
     {
         if (!Ready() || XmlFile.SelectedItem is not string file) return;
         var bytes = System.Text.Encoding.UTF8.GetBytes(XmlEditor.Text); Contract.Xml(bytes);
-        if (file.StartsWith("xui/", StringComparison.Ordinal)) XuiPolicy.Validate(file, bytes, catalog!);
-        var before = Contract.Bytes(project!); var wasChanged = changed;
-        try
+        bool applied;
+        if (file.StartsWith("xui/", StringComparison.Ordinal)) applied = XuiProject.SetXml(projectDirectory, project!, catalog!, file, bytes, "Edit " + file);
+        else
         {
-            project!.Checkpoint("Edit " + file); PutAsset("viewer/" + file, PackageStore.Kind("viewer/" + file), bytes, catalog!.ResolveBytes(file));
-            PackageStore.Compile(projectDirectory, project, catalog); StatusText.Text = "Override validated.";
+            var payload = "viewer/" + file; var previous = project!.Edits.Assets.SingleOrDefault(asset => asset.PayloadPath == payload);
+            var current = previous == null ? catalog!.ResolveBytes(file) : File.ReadAllBytes(Contract.Contained(projectDirectory, previous.AssetPath));
+            applied = !current.SequenceEqual(bytes);
+            if (applied)
+            {
+                var edits = Contract.Read<ProjectEdits>(Contract.Bytes(project.Edits));
+                var asset = ProjectAssets.Prepare(projectDirectory, payload, bytes, previous == null ? catalog!.ResolveBytes(file) : null, preservedOriginal: previous?.OriginalPath);
+                edits.Assets.RemoveAll(asset => asset.PayloadPath == payload); edits.Assets.Add(asset);
+                PackageStore.Compile(projectDirectory, project with { Edits = edits }, catalog!);
+                project.Checkpoint("Edit " + file); project.Edits = edits;
+            }
         }
-        catch { project = Contract.Read<ThemeProject>(before); changed = wasChanged; throw; }
+        if (applied) { changed = true; RefreshDocumentEditors(); }
+        StatusText.Text = applied ? "Override validated." : "Already matches the current document.";
     });
     private async void Export(object sender, RoutedEventArgs args)
     {

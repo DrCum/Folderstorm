@@ -115,9 +115,37 @@ Seven focused core font groups and five windowless WPF font groups pass. The UI
 checks caught stale license text after Undo when equal font-reference records did
 not fire SelectionChanged; reference/inspection/license refresh is now explicit.
 Three collection/license layouts are reviewed at normal/narrow widths. The new
-font/license export passes C++ validation. Actual new collection/license UI and
-native/system-DPI acceptance remain open; the earlier0.11 desktop checks retain
-their original scope. Computer control remains off.
+font/license export passes C++ validation. After retention, the exact0.12.0 build
+passed desktop license Save, visible Undo/Redo, project Save and normal Close in
+an isolated copied project. The saved UTF-8 text matches exactly; the owned
+process is absent and the computer-use kernel is reset. Collection dropdown
+interaction and native/system-DPI acceptance remain open. The receipt is outside
+the immutable archive at `theme-editor-font-collection-evidence-20261027/desktop-runtime-check.json`.
+
+Widget/layout work continues on `codex/ansastorm-widget-editor`. The new model
+exposes control hierarchy, typed/current/inherited properties and source/hash
+provenance. Known-property batches and raw XUI replacements validate before one
+checkpoint; property/file reset restores inheritance and keeps original bytes.
+Protected callbacks, required names and ordered structure retain the existing
+native rules. This first model uses the three already approved XUI files; wider
+file/property coverage still requires the planned explicit adapter/native audit.
+The structured widget UI and state preview remain in progress.
+
+Three focused XUI model groups and one WPF raw-handler group pass. They found
+document-edge newline differences creating false edits, and rejected texture XML
+replacing the shared project object while the font tab retained the old one.
+XML equality now ignores only document-edge whitespace while retaining comments;
+font reference no-op detection uses it too, including a re-serialized unchanged
+reference regression. Raw XML now validates a staged edit copy and retains
+document ownership on failure. Full core checks pass44/44 after the shared
+comparison change. The width/Unicode-label/RGBA widget export passes the C++
+validator as revision3db57a4e5a919962595c6c6189590d3e1375496d6fa4c5db3dbf3e8419b6951e.
+The structured UI/state preview and final expanded UI checks are still required.
+
+The next native rules audit must include boundary parity for UTF-8 attribute
+length versus C# string length, editable-attribute removal and text-node limits,
+alongside wider file/type-specific property coverage. Current small Unicode
+fixtures pass; they do not establish those boundary cases.
 
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay

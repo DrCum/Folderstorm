@@ -151,6 +151,13 @@ public static partial class Contract
         catch (XmlException e) { throw new ThemeException("xml", e.Message); }
     }
     public static byte[] XmlBytes(XDocument document) => Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting) + "\n");
+    public static bool XmlEquivalent(XDocument left, XDocument right)
+    {
+        // Ignore document-edge whitespace added by serialization, retaining meaningful nodes and comments.
+        static XNode[] Nodes(XDocument document) => document.Nodes().Where(node => node is not XText text || !string.IsNullOrWhiteSpace(text.Value)).ToArray();
+        var first = Nodes(left); var second = Nodes(right);
+        return first.Length == second.Length && first.Zip(second).All(pair => XNode.DeepEquals(pair.First, pair.Second));
+    }
     public static double[] Rgba(string value)
     {
         var parts = value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);

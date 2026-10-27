@@ -75,7 +75,7 @@ public static class FontProject
     public static bool Apply(string directory, ThemeProject project, BaseCatalog catalog, byte[] config, string label, IEnumerable<ProjectAsset>? extra = null)
     {
         ProjectStore.EnsureEditable(project); var before = Read(directory, project, catalog); var additions = extra?.ToArray() ?? [];
-        if (Contract.XmlBytes(Document(before)).SequenceEqual(Contract.XmlBytes(Document(config))) && additions.Length == 0) return false;
+        if (Contract.XmlEquivalent(Document(before), Document(config)) && additions.Length == 0) return false;
         var edits = Contract.Read<ProjectEdits>(Contract.Bytes(project.Edits)); var asset = ProjectAssets.Prepare(directory, ConfigPath, config, before);
         edits.Assets.RemoveAll(item => item.PayloadPath == ConfigPath); edits.Assets.Add(asset);
         foreach (var addition in additions) { edits.Assets.RemoveAll(item => item.PayloadPath == addition.PayloadPath); edits.Assets.Add(addition); }

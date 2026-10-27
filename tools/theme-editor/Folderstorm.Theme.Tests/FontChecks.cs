@@ -57,6 +57,8 @@ internal static class FontChecks
             var edited = FontProject.SetReference(baseBytes, role.Index, 0, new("InterVariableFont.ttf", .5, 650));
             Assert(FontProject.Apply(directory, project, catalog, edited, "Font weight") && project.Undo.Count == 1, "Font transaction did not commit once");
             Assert(!FontProject.Apply(directory, project, catalog, edited, "No-op") && project.Undo.Count == 1, "Font no-op added history");
+            var repeated = FontProject.SetReference(FontProject.Read(directory, project, catalog), role.Index, 0, new("InterVariableFont.ttf", .5, 650));
+            Assert(!FontProject.Apply(directory, project, catalog, repeated, "Repeated reference") && project.Undo.Count == 1, "Re-serialized unchanged font reference added history");
             var before = Contract.Bytes(project); var bad = Contract.Xml(edited); bad.Root!.Add(new XElement("callback", "bad")); Reject(() => FontProject.Apply(directory, project, catalog, Contract.XmlBytes(bad), "Invalid"));
             Assert(Contract.Bytes(project).SequenceEqual(before), "Invalid font edit changed project/history");
             ProjectStore.Save(directory, project); var reopened = ProjectStore.Open(directory); Assert(FontProject.Read(directory, reopened, catalog).SequenceEqual(edited), "Saved font config changed");

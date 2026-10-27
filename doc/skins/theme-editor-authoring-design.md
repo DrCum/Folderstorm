@@ -55,6 +55,18 @@ hidden RGB and inherited button pixels. The image workspace exposes these
 operations with scoped derivative storage, retained originals and undo history.
 Model/codec checks remain distinct from the recorded human UI checks.
 
+The widget workspace uses the same three-pane workbench: searchable controls on
+the left, one state preview in the middle and the selected property's inspector
+on the right. File selection stays above it. Show protected properties read-only,
+current versus inherited values, and exact source provenance. Color fields use
+the shared RGBA picker; named colors and image IDs retain their native meaning.
+Set property is explicit, Reset property restores the recorded base and Reset
+file affects only that document. Before/after samples use the same state and
+dimensions and remain labelled as WPF approximations. The actual viewer remains
+the exact resource/behavior check. The initial UI targets approved widget defaults
+and the native sample document; explicit rules must expand before other files
+become editable. Do not flatten unrelated defaults or rewrite required bindings.
+
 The image browser now searches IDs/filenames and previews TGA directly, including
 uncompressed/RLE truecolor, palettes, grayscale, origins and alpha. The decoder
 retains source bytes and uses the native reader's 32-bit-alpha convention even
