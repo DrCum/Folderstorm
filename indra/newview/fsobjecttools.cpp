@@ -44,6 +44,7 @@
 #include "llvoinventorylistener.h"
 #include "rlvactions.h"
 #include <set>
+#include <tuple>
 
 namespace {
 double now(){return LLTimer::getTotalSeconds();}
@@ -105,6 +106,34 @@ struct Mutation;
 struct RunningRead;
 struct TestSession;
 struct Running {std::string source,epoch;LLUUID token,asset;bool running=false,mono=false;double at=0.;};
+using ExecutionKey=std::tuple<LLHost,LLUUID,LLUUID>;
+struct ExecutionState
+{
+    LLUUID account,login;bool uncertain=false;
+    fs_object_tools::ExecutionVersions<ExecutionKey> versions;
+    fs_object_tools::RunningQueries<ExecutionKey> queries;
+    std::map<ExecutionKey,double> queryAt;
+    std::map<ExecutionKey,LLSD> queryItems;
+    std::set<ExecutionKey> uncertainKeys;
+    bool uncertainFor(const ExecutionKey& key)const{return uncertain || uncertainKeys.count(key)!=0;}
+    void markUncertain(const ExecutionKey& key)
+    {if(uncertainKeys.size()<4096)uncertainKeys.insert(key);else uncertain=true;}
+};
+ExecutionState& executionState()
+{
+    static ExecutionState value;
+    if(value.account!=gAgent.getID() || value.login!=gAgent.getSessionID())
+    {value=ExecutionState();value.account=gAgent.getID();value.login=gAgent.getSessionID();}
+    return value;
+}
+ExecutionKey executionKey(LLViewerObject* prim,const LLUUID& item)
+{return {prim->getRegion()->getHost(),prim->getID(),item};}
+U64 executionFor(const LLUUID&,const LLUUID&);
+bool runningQueryPending(LLViewerObject* prim,const LLUUID& item)
+{const auto key=executionKey(prim,item);return executionState().uncertainFor(key) || executionState().queries.pending(key);}
+bool runningEvidenceUncertain(LLViewerObject* prim,const LLUUID& item)
+{return !prim || !prim->getRegion() || executionState().uncertainFor(executionKey(prim,item));}
+const char* runningUncertainError="running_state_uncertain: native retries made replies ambiguous; relog before using assistant script execution";
 struct Service
 {
     std::string source,restrictions;U64 privacyEpoch=0;fs_assistant_social::PrivacyIngressFence diagnosticIngress;
@@ -114,8 +143,6 @@ struct Service
     std::map<std::string,std::uint64_t> cursors;
     fs_object_tools::Receipts<std::shared_ptr<Mutation>> operations;
     std::map<std::pair<LLUUID,LLUUID>,Running> running;
-    fs_object_tools::ExecutionVersions<std::pair<LLUUID,LLUUID>> executionEpoch;
-    fs_object_tools::RunningQueries<std::pair<LLUUID,LLUUID>> runningQueries;
     std::vector<std::shared_ptr<RunningRead>> runningReads;
     std::map<LLUUID,LLHost> derezTransactions;
     std::deque<double> channelSends,touches;
@@ -133,7 +160,7 @@ void syncService()
     {self.restrictions=restrictions;fs_object_tools_privacy_changed();}
     if(self.source==current)return;
     self.source=current;self.diagnosticIngress.advance(0,LLFrameTimer::getElapsedSeconds());self.snapshots.clear();self.scripts.clear();self.cursors.clear();self.diagnostics.clear();
-    self.operations.clear();self.running.clear();self.executionEpoch.clear();self.runningQueries.clear();self.test.reset();self.testIDs.clear();
+    self.operations.clear();self.running.clear();self.test.reset();self.testIDs.clear();
     // Destroy listeners only from maintenance, never from an inventory callback.
 }
 LLSD resultBase(){return llsd::map("viewer_session",FSEventAPIBridge::instance().sessionReference(),"account",gAgent.getID(),"grid",LLGridManager::instance().getGrid());}
@@ -150,15 +177,17 @@ bool diagnosticReceiveAllowed(const LLUUID& sender,S32 type,bool emote)
 }
 void reply(const LLSD& request,const LLSD& result)
 {if(fs_assistant_request_allowed(request))sendReply(result,request);}
+Snapshot* runContentsSnapshot(const LLSD&);
 Snapshot* contentsSnapshot(const LLSD& request,std::string& error)
 {
     const auto it=service().snapshots.find(request["snapshot_id"].asUUID());
-    if(it==service().snapshots.end() || it->second.source!=source() || it->second.epoch!=request["__assistant_epoch"].asString() || now()>it->second.expires)
+    auto* value=it==service().snapshots.end()?runContentsSnapshot(request):&it->second;
+    if(!value || value->source!=source() || value->epoch!=request["__assistant_epoch"].asString() || now()>value->expires)
     {error="snapshot_expired: fetch Contents again";return nullptr;}
-    auto* object=target(it->second.object["object_id"].asUUID(),error);
-    if(!object || object->isInventoryDirty() || !llsd_equals(objectEvidence(object),it->second.object))
+    auto* object=target(value->object["object_id"].asUUID(),error);
+    if(!object || object->isInventoryDirty() || !llsd_equals(objectEvidence(object),value->object))
     {error="conflict: task inventory changed; fetch Contents again";return nullptr;}
-    return &it->second;
+    return value;
 }
 LLSD contentsPage(const LLSD& request,const LLUUID& token,const Snapshot& value,std::string& error)
 {
@@ -391,7 +420,7 @@ struct Mutation:LLVOInventoryListener
     LLUUID confirmedAsset;bool privateRetired=false;
     fs_object_tools::Acquisition acquisition;
     LLNotificationPtr dialog;
-    U64 generation=0;double deadline=0.,refreshAt=0.;bool submitted=false,finished=false,refresh=false;
+    U64 generation=0,execution=0;double deadline=0.,refreshAt=0.;bool submitted=false,finished=false,refresh=false;
     std::set<std::string> previousItems;
     void observe(LLViewerObject* prim){generation=prim->getInventoryServerGeneration();registerVOInventoryListener(prim,nullptr);}
     void inventoryChanged(LLViewerObject*,LLInventoryObject::object_list_t*,S32,void*)override;
@@ -538,6 +567,8 @@ void acquisitionProgress(const std::shared_ptr<Mutation>& value)
 bool requestedRunning(const LLSD& request,bool& running,std::string& error)
 {
     running=false;if(request["running_mode"].asString()!="preserve")return true;
+    if(runningEvidenceUncertain(gObjectList.findObject(request["object_id"].asUUID()),request["item_id"].asUUID()))
+    {error=runningUncertainError;return false;}
     const auto it=service().running.find({request["object_id"].asUUID(),request["item_id"].asUUID()});
     if(it==service().running.end() || it->second.source!=source() || it->second.epoch!=request["__assistant_epoch"].asString() ||
         it->second.token!=request["running_snapshot"].asUUID() || it->second.at+10.<now() || it->second.asset!=request["expected_asset_id"].asUUID())
@@ -569,6 +600,9 @@ bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
     {item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));if(!item){error="task_item_missing";return false;}operation.validation["item"]=itemEvidence(item);}
     if(op=="scriptStatus")
     {
+        if(runningEvidenceUncertain(prim,item->getUUID())){error=runningUncertainError;return false;}
+        if(LLViewerAssetUpload::hasPendingInventoryUpload(item->getUUID()))
+        {error="busy: native script upload is pending";return false;}
         if(!scriptReadable(item)){error="not_permitted: native-readable task script required";return false;}
         for(const auto& entry:service().operations.entries())
         {const auto value=entry.second.value;if(entry.second.pending && value && value->request["object_id"].asUUID()==prim->getID() && value->request["item_id"].asUUID()==item->getUUID() &&
@@ -576,8 +610,13 @@ bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
             {error="busy: reconcile the script execution operation before querying running state";return false;}}
         return true;
     }
-    if((op=="scriptSave" || op=="scriptRunning" || op=="scriptReset") && service().runningQueries.pending({prim->getID(),item->getUUID()}))
-    {error="busy: an earlier native running-state reply must drain before execution can change";return false;}
+    if(op=="scriptSave" || op=="scriptRunning" || op=="scriptReset")
+    {
+        if(runningEvidenceUncertain(prim,item->getUUID())){error=runningUncertainError;return false;}
+        if(runningQueryPending(prim,item->getUUID()))
+        {error="busy: an earlier native running-state reply must drain before execution can change";return false;}
+        operation.validation["execution"]=std::to_string(executionFor(prim->getID(),item->getUUID()));
+    }
     if(!mutationRead(op))
     {
         for(const auto& entry:service().operations.entries())if(entry.second.pending && entry.second.value && entry.second.value->request["object_id"].asUUID()==request["object_id"].asUUID())
@@ -633,6 +672,8 @@ bool liveMutation(const std::shared_ptr<Mutation>& value)
     if(value->source!=source() || (!value->task && !value->submitted) || (value->finished && !value->submitted))return false;
     std::string error;auto* prim=target(value->request["object_id"].asUUID(),error);
     const auto kind=value->request["op"].asString();
+    if((kind=="scriptSave" || kind=="scriptRunning" || kind=="scriptReset") &&
+       (runningEvidenceUncertain(prim,value->request["item_id"].asUUID()) || value->execution!=executionFor(value->request["object_id"].asUUID(),value->request["item_id"].asUUID())))return false;
     if(kind=="take" || kind=="takeCopy")
     {return value->submitted || (prim && llsd_equals(objectEvidence(prim),value->before) && takeEligible(prim,value->request,error));}
     if(!prim)return false;
@@ -672,18 +713,43 @@ bool validateMutation(const FSAssistantPreparedOperation& operation,std::string&
     if(!llsd_equals(latest.validation,operation.validation)){error="conflict: task or source changed after approval";return false;}return true;
 }
 U64 executionFor(const LLUUID& prim,const LLUUID& item)
-{return service().executionEpoch.current({prim,item});}
+{
+    const auto* object=gObjectList.findObject(prim);
+    return object && object->getRegion()?executionState().versions.current({object->getRegion()->getHost(),prim,item}):0;
+}
 bool invalidateRunning(const LLUUID& prim,const LLUUID& item)
 {
-    if(service().runningQueries.pending({prim,item}))return false;
-    if(!service().executionEpoch.advance({prim,item}))return false;service().running.erase({prim,item});return true;
+    auto* object=gObjectList.findObject(prim);if(!object || !object->getRegion() || runningQueryPending(object,item))return false;
+    if(!executionState().versions.advance(executionKey(object,item)))return false;service().running.erase({prim,item});return true;
 }
-bool requestRunning(LLViewerObject* prim,const LLUUID& item)
+bool requestRunning(LLViewerObject* prim,const LLUUID& item,bool nativeObserver=false)
 {
-    using Queries=fs_object_tools::RunningQueries<std::pair<LLUUID,LLUUID>>;
-    const auto admission=service().runningQueries.begin({prim->getID(),item},executionFor(prim->getID(),item));
-    if(admission==Queries::Admission::Blocked)return false;
-    if(admission==Queries::Admission::Join)return true;
+    if(!prim || !prim->getRegion())return false;
+    auto& state=executionState();const auto key=executionKey(prim,item);
+    if(state.uncertainFor(key) && !nativeObserver)return false;
+    const auto* currentItem=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(item));
+    const auto evidence=currentItem?itemEvidence(currentItem):LLSD();
+    using Queries=fs_object_tools::RunningQueries<ExecutionKey>;
+    const auto admission=state.uncertainFor(key)?Queries::Admission::Blocked:state.queries.begin(key,state.versions.current(key));
+    if(admission!=Queries::Admission::Send)
+    {
+        if(!nativeObserver)
+        {
+            const auto old=state.queryItems.find(key);
+            return admission==Queries::Admission::Join && evidence.isMap() && old!=state.queryItems.end() && llsd_equals(old->second,evidence);
+        }
+        const auto at=state.queryAt.find(key);
+        if(!state.uncertainFor(key) && state.queries.pending(key) && at!=state.queryAt.end() && now()<at->second+10.)return true;
+        // Explicit native reopen/retry must recover if a reply was lost. With
+        // multiple indistinguishable wire replies, this key can no longer
+        // supply assistant evidence for this login. Other scripts are unaffected.
+        state.markUncertain(key);service().running.erase({prim->getID(),item});
+    }
+    else
+    {
+        state.queryAt[key]=now();state.queryItems[key]=evidence;
+        if(!evidence.isMap())state.markUncertain(key);
+    }
     LLMessageSystem* msg=gMessageSystem;msg->newMessageFast(_PREHASH_GetScriptRunning);msg->nextBlockFast(_PREHASH_Script);
     msg->addUUIDFast(_PREHASH_ObjectID,prim->getID());msg->addUUIDFast(_PREHASH_ItemID,item);msg->sendReliable(prim->getRegion()->getHost());
     return true;
@@ -765,6 +831,7 @@ void enqueueTaskScript(const std::shared_ptr<Mutation>& value)
         auto upload=std::make_shared<LLScriptAssetUpload>(value->request["object_id"].asUUID(),value->request["item_id"].asUUID(),LLScriptAssetUpload::MONO,
             running,result["experience"].asUUID(),value->request["text"].asString(),finished,failed);
         if(!invalidateRunning(value->request["object_id"].asUUID(),value->request["item_id"].asUUID())){settle(value,"cancelled_before_submission","execution_version_capacity");return;}
+        value->execution=executionFor(value->request["object_id"].asUUID(),value->request["item_id"].asUUID());
         value->upload=upload;value->receipt["requested_running"]=running;value->receipt["experience_preserved"]=true;
         upload->setAssistantHooks({[value](const std::string& stage,bool submit)
         {
@@ -783,6 +850,10 @@ void dispatchMutation(const LLSD& request)
     if(op=="scriptStatus")
     {
         auto* prim=target(request["object_id"].asUUID(),error);if(!prim){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error(error);}
+        if(runningEvidenceUncertain(prim,request["item_id"].asUUID()))
+        {LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error(runningUncertainError);}
+        if(LLViewerAssetUpload::hasPendingInventoryUpload(request["item_id"].asUUID()))
+        {LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error("busy: native script upload is pending");}
         if(service().runningReads.size()>=16){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error("capacity: too many script status readers");}
         auto read=std::make_shared<RunningRead>();read->request=request;read->source=source();read->task=fs_assistant::asyncTask();read->deadline=now()+10.;
         auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(request["item_id"].asUUID()));if(!scriptReadable(item)){LLEventAPI::Response errorResponse(LLSD(),request);return errorResponse.error("script_not_readable");}
@@ -803,6 +874,7 @@ void dispatchMutation(const LLSD& request)
     FSAssistantPreparedOperation prepared;prepared.request=request;if(!prepareMutation(prepared,error))return response.error(error);
     auto value=std::make_shared<Mutation>();value->request=request;value->source=source();value->epoch=request["__assistant_epoch"].asString();value->signature=mutationSignature(request);
     value->key=request["client_request_id"].asUUID().asString();value->before=objectEvidence(prim);value->item=prepared.validation[op=="put"?"agent_source":"item"];value->task=fs_assistant::asyncTask();value->deadline=now()+25.;
+    value->execution=executionFor(prim->getID(),request["item_id"].asUUID());
     value->receipt=resultBase();value->receipt["operation_id"]=request["reqid"];value->receipt["client_request_id"]=request["client_request_id"];value->receipt["object_id"]=prim->getID();value->receipt["item_id"]=request["item_id"];value->receipt["state"]="queued";
     auto* entry=service().operations.admit(value->key,value->signature,value);if(!entry)return response.error("capacity_or_request_id_reused: no new operation was submitted");entry->pending=1;
     if(op=="scriptSave"){enqueueTaskScript(value);response.setResponse(publicReceipt(value));return;}
@@ -827,6 +899,7 @@ void dispatchMutation(const LLSD& request)
     else
     {
         if(!invalidateRunning(prim->getID(),item->getUUID())){settle(value,"cancelled_before_submission","execution_version_capacity");response.setResponse(publicReceipt(value));return;}
+        value->execution=executionFor(prim->getID(),item->getUUID());
         LLMessageSystem* msg=gMessageSystem;msg->newMessageFast(op=="scriptReset"?_PREHASH_ScriptReset:_PREHASH_SetScriptRunning);
         msg->nextBlockFast(_PREHASH_AgentData);msg->addUUIDFast(_PREHASH_AgentID,gAgent.getID());msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
         msg->nextBlockFast(_PREHASH_Script);msg->addUUIDFast(_PREHASH_ObjectID,prim->getID());msg->addUUIDFast(_PREHASH_ItemID,item->getUUID());
@@ -1164,7 +1237,18 @@ struct TestSession
     double tickAt=0.;S32 total=0;
     S32 initialized=-1;double queryAt=0.;U64 inventoryGeneration=0;bool initiated=false,privateCleared=false;
     std::shared_ptr<Mutation> action;std::shared_ptr<ContentsRead> observer;S32 assertions=0;
+    struct InternalSnapshot {LLUUID token;Snapshot value;};
+    std::map<LLUUID,InternalSnapshot> mutationSnapshots;
 };
+Snapshot* runContentsSnapshot(const LLSD& request)
+{
+    auto run=service().test;
+    if(!run || !run->sequence.running() || !run->task || fs_assistant::AsyncScope::current()!=run->task->guard() ||
+        run->source!=source() || run->epoch!=request["__assistant_epoch"].asString() ||
+        (request["op"].asString()!="scriptRunning" && request["op"].asString()!="scriptReset"))return nullptr;
+    const auto it=run->mutationSnapshots.find(request["object_id"].asUUID());
+    return it!=run->mutationSnapshots.end() && it->second.token==request["snapshot_id"].asUUID()?&it->second.value:nullptr;
+}
 LLSD testMaterial(const LLSD& request)
 {return llsd::map("object_ids",request["object_ids"],"steps",request["steps"],"timeout_seconds",request["timeout_seconds"],"fail_on_runtime_errors",request["fail_on_runtime_errors"]);}
 LLSD testChild(const LLSD& request,S32 index)
@@ -1236,7 +1320,9 @@ bool testScopeCurrent(const LLSD& scope,std::string& error,bool* pending=nullptr
     {
         auto* prim=target(row["object_id"].asUUID(),error);auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(row["item_id"].asUUID())):nullptr;
         if(prim && (prim->isInventoryPending() || prim->isInventoryDirty() || !prim->getInventoryRoot())){if(pending)*pending=true;continue;}
-        if(!scriptReadable(item) || item->getAssetUUID()!=row["asset_id"].asUUID()){error="test_script_revision_changed";return false;}
+        if(!scriptReadable(item) || item->getAssetUUID()!=row["asset_id"].asUUID() ||
+           (row.has("item_evidence") && !llsd_equals(itemEvidence(item),row["item_evidence"])))
+        {error="test_script_revision_changed";return false;}
     }
     return true;
 }
@@ -1281,7 +1367,7 @@ bool prepareTest(FSAssistantPreparedOperation& operation,std::string& error)
         {
             auto* prim=target(step["object_id"].asUUID(),error);auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(step["item_id"].asUUID())):nullptr;
             if(!scriptReadable(item)){error="test_script_not_readable";return false;}
-            scope["scripts"].append(llsd::map("object_id",prim->getID(),"item_id",item->getUUID(),"asset_id",item->getAssetUUID()));
+            scope["scripts"].append(llsd::map("object_id",prim->getID(),"item_id",item->getUUID(),"asset_id",item->getAssetUUID(),"item_evidence",itemEvidence(item)));
         }
     }
     operation.validation["scope"]=scope;operation.validation["signature"]=signature;
@@ -1333,7 +1419,7 @@ void dispatchTest(const LLSD& request)
     run->observation.action(service().diagnostics.latest());run->errorCursor=run->observation.cursor();run->total=request["steps"].size();run->task=fs_assistant::asyncTask();run->sequence.start(request["steps"].size(),now(),request["timeout_seconds"].asInteger());
     for(const auto& script:llsd::inArray(run->scope["scripts"]))
     {
-        LLSD row=script;row["content_hash_known"]=false;
+        LLSD row=script;row.erase("item_evidence");row["content_hash_known"]=false;
         for(const auto& snapshot:service().scripts)if(snapshot.second.source==source() && snapshot.second.item["item_id"]==script["item_id"] && snapshot.second.object["object_id"]==script["object_id"] && snapshot.second.item["asset_id"]==script["asset_id"])
         {row["content_hash"]=snapshot.second.hash;row["content_hash_known"]=true;break;}
         run->sources.append(row);
@@ -1347,6 +1433,28 @@ void completeTestStep(const std::shared_ptr<TestSession>& run,const std::string&
     auto result=llsd::map("step",index,"action",step["action"],"object_id",step["object_id"],"state",state,"evidence",fs_content::excerpt(evidence,256));
     if(run->action)result["operation_id"]=run->action->receipt["operation_id"];
     run->results.append(result);run->action.reset();run->observer.reset();run->sequence.next(now());
+}
+bool refreshTestMutationSnapshot(const std::shared_ptr<TestSession>& run,LLSD& child,std::string& error)
+{
+    const auto op=child["op"].asString();if(op!="scriptRunning" && op!="scriptReset")return true;
+    bool pending=false;if(!testScopeCurrent(run->scope,error,&pending) || pending)
+    {if(pending)error="pending_contents: authoritative script evidence unavailable";return false;}
+    auto* prim=target(child["object_id"].asUUID(),error);
+    if(!prim || !prim->isInventoryServerComplete() || prim->isInventoryDirty() || prim->isInventoryPending())
+    {error="incomplete_contents: fresh native inventory required";return false;}
+    auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(child["item_id"].asUUID()));
+    bool approved=false;
+    for(const auto& row:llsd::inArray(run->scope["scripts"]))
+        if(row["object_id"].asUUID()==prim->getID() && row["item_id"].asUUID()==child["item_id"].asUUID() &&
+            row.has("item_evidence") && scriptReadable(item) && llsd_equals(itemEvidence(item),row["item_evidence"]))approved=true;
+    if(!approved){error="test_script_revision_changed: refreshed item differs from approved evidence";return false;}
+    // This token belongs only to this run's durable scope. It never enters the
+    // public snapshot cache, consumes its capacity, or authorizes another item.
+    auto& retained=run->mutationSnapshots[prim->getID()];retained.token=LLUUID::generateNewID();
+    retained.value=Snapshot();retained.value.source=run->source;retained.value.epoch=run->epoch;
+    retained.value.object=objectEvidence(prim);retained.value.expires=now()+120.;
+    retained.value.items.emplace(item->getUUID(),new LLViewerInventoryItem(item));
+    child["snapshot_id"]=retained.token;return true;
 }
 void tickTests()
 {
@@ -1399,7 +1507,9 @@ void tickTests()
         if(action=="assert_running")
         {
             const auto it=service().running.find({prim->getID(),step["item_id"].asUUID()});
-            if(it!=service().running.end() && it->second.source==source() && it->second.at>=run->sequence.stepAt() && it->second.running==step["expected"].asBoolean())
+            const auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(step["item_id"].asUUID()));
+            if(item && it!=service().running.end() && it->second.asset==item->getAssetUUID() && !runningEvidenceUncertain(prim,item->getUUID()) &&
+                !LLViewerAssetUpload::hasPendingInventoryUpload(item->getUUID()) && it->second.source==source() && it->second.at>=run->sequence.stepAt() && it->second.running==step["expected"].asBoolean())
             {completeTestStep(run,"native_state_observed");return;}
         }
         else if(run->observer && run->observer->done && run->observer->succeeded)
@@ -1426,7 +1536,9 @@ void tickTests()
     {
         bool pending=false;if(!testScopeCurrent(run->scope,error,&pending)){run->sequence.finish("inconclusive",error);return;}
         if(pending){if(run->sequence.stepExpired(now(),seconds))run->sequence.finish("inconclusive","pending_contents_timeout");return;}
-        auto child=testChild(run->request,index);FSAssistantPreparedOperation prepared;prepared.request=child;
+        auto child=testChild(run->request,index);
+        if(!refreshTestMutationSnapshot(run,child,error)){run->sequence.finish("inconclusive",error);return;}
+        FSAssistantPreparedOperation prepared;prepared.request=child;
         if(!(interactionOp(child["op"].asString())?prepareInteraction(prepared,error):prepareMutation(prepared,error)))
         {run->sequence.finish("inconclusive",error);return;}
         if(!mutationArguments(child,error)){run->sequence.finish("inconclusive",error);return;}
@@ -1445,7 +1557,7 @@ void clearTestPrivate()
 {
     auto run=service().test;if(!run)return;
     if(run->task && run->task->guard())run->task->guard()->cancel("privacy_changed");run->sequence.stop();run->task.reset();
-    run->results=LLSD::emptyArray();run->sources=LLSD::emptyArray();run->request["steps"]=LLSD::emptyArray();run->privateCleared=true;
+    run->results=LLSD::emptyArray();run->sources=LLSD::emptyArray();run->request["steps"]=LLSD::emptyArray();run->mutationSnapshots.clear();run->privateCleared=true;
 }
 }
 void fs_initialize_object_tools()
@@ -1470,7 +1582,7 @@ void fs_initialize_object_tools()
 }
 void fs_object_tools_tick()
 {
-    syncService();tickMutations();tickTests();auto& reads=service().reads;
+    executionState();syncService();tickMutations();tickTests();auto& reads=service().reads;
     for(auto it=reads.begin();it!=reads.end();)
     {
         auto& read=**it;
@@ -1506,15 +1618,38 @@ void fs_object_tools_debug(const LLChat& chat)
     auto& journal=service().diagnostics;event["sequence"]=std::to_string(journal.latest()+1);
     const auto bytes=chat.mFromName.size()+std::min<std::size_t>(8192,chat.mText.size())+512;journal.append(std::move(event),bytes);
 }
-void fs_object_tools_running_reply(LLMessageSystem* msg)
+bool fs_object_tools_request_running(LLViewerObject* prim,const LLUUID& item)
+{return requestRunning(prim,item,true);}
+void fs_object_tools_native_execution_changed(const LLUUID& object,const LLUUID& item)
 {
-    if(!ready() || msg->getSender()!=gAgent.getRegion()->getHost())return;
+    // Task-compile callers skip this hook only when their own typed service
+    // already advanced execution. Native actions and script installation must
+    // also invalidate reads made under an assistant scope.
+    auto* prim=gObjectList.findObject(object);if(!prim || !prim->getRegion())return;
+    auto& state=executionState();if(!state.versions.advance(executionKey(prim,item)))state.uncertain=true;
+    service().running.erase({object,item});
+}
+bool fs_object_tools_running_reply(LLMessageSystem* msg)
+{
     LLUUID object,itemID;bool running=false,mono=false;
     msg->getUUIDFast(_PREHASH_Script,_PREHASH_ObjectID,object);msg->getUUIDFast(_PREHASH_Script,_PREHASH_ItemID,itemID);
     msg->getBOOLFast(_PREHASH_Script,_PREHASH_Running,running);msg->getBOOLFast(_PREHASH_Script,"Mono",mono);
-    std::uint64_t queryExecution=0;const bool expectedReply=service().runningQueries.drain({object,itemID},queryExecution);
-    std::string error;auto* prim=target(object,error);if(!prim)return;
-    auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(itemID));if(!scriptReadable(item))return;
+    auto& execution=executionState();const ExecutionKey key{msg->getSender(),object,itemID};
+    std::uint64_t queryExecution=0;const bool expectedReply=execution.queries.drain(key,queryExecution);
+    const auto captured=execution.queryItems.find(key);
+    const LLSD queryItem=captured==execution.queryItems.end()?LLSD():captured->second;
+    if(expectedReply){execution.queryAt.erase(key);execution.queryItems.erase(key);}
+    auto* nativePrim=gObjectList.findObject(object);
+    const auto* nativeItem=nativePrim?dynamic_cast<LLViewerInventoryItem*>(nativePrim->getInventoryObject(itemID)):nullptr;
+    const bool current=expectedReply && queryExecution==execution.versions.current(key) && !execution.uncertainFor(key) &&
+        queryItem.isMap() && nativeItem && llsd_equals(queryItem,itemEvidence(nativeItem));
+    // Drain native queries even when MCP is off or the editor has closed.
+    // A stale reply is not delivered as fresh native UI or assistant evidence.
+    const bool nativeCurrent=(current || execution.uncertainFor(key)) && nativePrim && !nativePrim->isDead() &&
+        nativePrim->getRegion() && nativePrim->getRegion()->getHost()==msg->getSender();
+    if(!ready() || msg->getSender()!=gAgent.getRegion()->getHost())return nativeCurrent;
+    std::string error;auto* prim=target(object,error);if(!prim)return nativeCurrent;
+    auto* item=dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(itemID));if(!scriptReadable(item))return nativeCurrent;
     const auto cached=service().running.find({object,itemID});
     if(cached!=service().running.end() && (cached->second.running!=running || cached->second.mono!=mono || cached->second.asset!=item->getAssetUUID()))
         service().running.erase(cached);
@@ -1523,7 +1658,7 @@ void fs_object_tools_running_reply(LLMessageSystem* msg)
         if(read->done || read->source!=source() || read->request["object_id"].asUUID()!=object || read->request["item_id"].asUUID()!=itemID)continue;
         read->done=true;fs_assistant::AsyncScope scope(read->task->guard());
         if(read->privacyEpoch!=service().privacyEpoch){reply(read->request,llsd::map("error","privacy_epoch_changed: query fresh running state"));continue;}
-        if(!expectedReply || read->execution!=queryExecution || read->execution!=executionFor(object,itemID))
+        if(!current || read->execution!=queryExecution || read->execution!=executionFor(object,itemID) || LLViewerAssetUpload::hasPendingInventoryUpload(itemID))
         {reply(read->request,llsd::map("error","execution_changed: query fresh running state"));continue;}
         if(!fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(read->request) || !llsd_equals(read->item,itemEvidence(item)))continue;
         Running state{source(),read->request["__assistant_epoch"].asString(),LLUUID::generateNewID(),item->getAssetUUID(),running,mono,now()};
@@ -1535,11 +1670,12 @@ void fs_object_tools_running_reply(LLMessageSystem* msg)
     for(const auto& entry:service().operations.entries())
     {
         auto value=entry.second.value;
-        if(!expectedReply || queryExecution!=executionFor(object,itemID) || !value || !entry.second.pending || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
+        if(!current || queryExecution!=executionFor(object,itemID) || !value || queryExecution!=value->execution || !entry.second.pending || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
             value->request["object_id"].asUUID()!=object || value->request["item_id"].asUUID()!=itemID)continue;
         value->receipt["observed_running"]=running;
         settle(value,running==value->request["running"].asBoolean()?"simulator_observed":"simulator_observed_different","Native running reply is an observation, not an execution acknowledgment");
     }
+    return nativeCurrent;
 }
 void fs_object_tools_inventory_transaction(LLMessageSystem* msg)
 {

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include "llviewerobject.h"
 
@@ -2906,6 +2907,7 @@ void LLViewerObject::saveScript(
     task_item->setTransactionID(item->getTransactionID());
 
     LLMessageSystem* msg = gMessageSystem;
+    fs_object_tools_native_execution_changed(mID, item->getUUID());
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
