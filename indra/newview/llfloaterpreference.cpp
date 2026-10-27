@@ -5645,7 +5645,7 @@ LLPanelPreferenceSkins::LLPanelPreferenceSkins()
 
 bool LLPanelPreferenceSkins::postBuild()
 {
-    if(auto* lab=findChild<LLButton>("theme_lab"))lab->setClickedCallback([]{FSThemeViewer::openEditor();});
+    if(auto* lab=findChild<LLButton>("theme_lab"))lab->setClickedCallback([](LLUICtrl*,const LLSD&){FSThemeViewer::openEditor();});
     m_pSkinCombo = getChild<LLComboBox>("skin_combobox");
     if (m_pSkinCombo)
         m_pSkinCombo->setCommitCallback(boost::bind(&LLPanelPreferenceSkins::onSkinChanged, this));
