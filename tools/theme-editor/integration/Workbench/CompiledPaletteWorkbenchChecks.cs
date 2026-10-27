@@ -32,6 +32,7 @@ internal static class CompiledPaletteWorkbenchChecks
         Call(window, "RefreshCatalog");
         var list = Field<ListBox>(window, "ColorList"); list.SelectedItem = list.Items.Cast<ColorRow>().Single(row => row.Name == "ThemeAccent");
         Assert(Field<TextBlock>(window, "ColorState").Text == "Imported override" && ThemeColor.Parse(Field<TextBox>(window, "ColorValue").Text).Hex(false) == "#64D8B2", "Imported inspector value/provenance missing");
+        Assert(Field<TextBlock>(window, "ProjectSummary").Text.StartsWith("30 palette overrides", StringComparison.Ordinal), "Project summary missed imported palette overrides: " + Field<TextBlock>(window, "ProjectSummary").Text);
         var beforeSample = Field<PaletteSample>(window, "BeforeSample"); var afterSample = Field<PaletteSample>(window, "AfterSample");
         Assert(Field<IReadOnlyDictionary<string, ThemeColor>>(afterSample, "colors")["ThemeAccent"].Hex(false) == "#64D8B2" && Field<IReadOnlyDictionary<string, ThemeColor>>(beforeSample, "colors")["ThemeAccent"].Hex(false) != "#64D8B2", "Before/after palette ignored imported colors");
         Field<TextBox>(window, "ColorValue").Text = "#FF0000"; Call(window, "SetColor", window, new RoutedEventArgs());

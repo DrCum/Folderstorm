@@ -74,7 +74,13 @@ public partial class MainWindow : INotifyPropertyChanged
         {
             ThemeName.Text = project?.DisplayName ?? ""; ThemeAuthor.Text = project?.Author ?? "";
             PackageVersion.Text = project?.PackageVersion ?? ""; ThemeDescription.Text = project?.Description ?? "";
-            ProjectSummary.Text = project == null ? "" : $"{project.Edits.Colors.Count} color overrides · {project.Edits.ColorLinks.Count} links · {project.Edits.Assets.Count} assets\n{projectDirectory}";
+            var paletteCount = project == null ? 0 : project.Edits.Colors.Count + project.Edits.ColorLinks.Count;
+            if (project != null && catalog != null && readOnlyReasons.Length == 0)
+            {
+                try { var palette = PaletteProject.Read(projectDirectory, project, catalog); paletteCount = palette.Literals.Count + palette.Links.Count; }
+                catch (Exception error) when (error is ThemeException or System.IO.IOException) { }
+            }
+            ProjectSummary.Text = project == null ? "" : $"{paletteCount} palette overrides · {project.Edits.Assets.Count} assets\n{projectDirectory}";
         }
         finally { updatingEditors = false; }
         RefreshThumbnail();

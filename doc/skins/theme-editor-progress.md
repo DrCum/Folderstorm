@@ -331,6 +331,34 @@ show the changed property before the full XML with readable wrapping.
 No native code, XUI policy, image codec or project schema changed.0.17 retention
 and desktop review remain pending; broader full-goal phases continue.
 
+The0.17 sourcefc3275263c is separately retained with402 hash-verified editor
+files and the unchanged82312 native viewer. Desktop review/search showed56
+imported overrides and the correct ThemePanel base/current values; closing the
+review left history unchanged. Native capture and Save preserved the exact PNG
+hash with one thumbnail checkpoint. All owned processes are absent and computer
+control is disconnected. Actual reset interaction remains windowless-tested;
+the retained candidate is available for later human checks.
+
+The mint capture initially appeared violet. Pixel analysis found175 exact mint
+accent pixels in the native link text, where the baseline has none. The window
+body instead matches the inherited Window_Background/Foreground PNG's baked
+RGB26/25/33. This is a difference between a flat color study and textured window
+artwork, not a palette-loading failure. Runtime evidence and the source-image
+comparison stay outside the immutable archive. The next branch clarifies the
+palette sample caption and includes imported overrides in the project summary.
+
+The new host-palette branch starts with a strict4 KiB/seven-role opaque RGB
+contract, matching production Midnight/Daylight defaults, source-preserving edits and
+equivalent-input no-ops. Package activation remains rejected by both consumers
+until native validation, capability negotiation and the host consumer are ready.
+Project/history compatibility, selection/rollback, authoring/picker UI, offline
+host preview, Appearance launch integration and a matching build remain required.
+The contract's3 focused core groups pass. The imported-palette WPF checks pass3
+groups after correcting the summary fixture's expected count to the30 compiled
+accent/alias overrides actually present. The final narrow render keeps the color
+study/artwork explanation readable. This is a foundation checkpoint, without an
+enabled host authoring candidate or new native build.
+
 The exact previously rejected source push was retried after connected GitHub
 confirmed repository ownership and push access. Automatic approval review again
 rejected it because trusted user content does not explicitly approve this public
