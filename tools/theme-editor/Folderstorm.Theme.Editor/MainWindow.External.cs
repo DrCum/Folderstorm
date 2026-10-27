@@ -43,12 +43,13 @@ public partial class MainWindow
         ExternalAppName.ToolTip = externalEditorPath;
         ExternalPath.Visibility = Visibility.Collapsed;
         ExternalChangeStatus.Text = "Save in your editor, then Reload.";
-        if (project == null || SelectedTexture is not { } texture || !externalSessions.TryGetValue(texture.Name, out var item) ||
+        if (project == null || catalog == null || SelectedTexture is not { } texture || !externalSessions.TryGetValue(texture.Name, out var item) ||
             !item.Session.Matches(projectDirectory, project, texture.Name)) return;
         try
         {
             ExternalPath.Text = item.Session.WorkingPath; ExternalPath.ToolTip = item.Session.WorkingPath; ExternalPath.Visibility = Visibility.Visible;
-            ExternalChangeStatus.Text = item.Session.HasChanges ? "Changed externally. Reload to apply." : "Working copy is up to date.";
+            ExternalChangeStatus.Text = !item.Session.IsCurrent(projectDirectory, project, catalog) ? "Project image changed. Open a new copy; this file is kept."
+                : item.Session.HasChanges ? "Changed externally. Reload to apply." : "Working copy is up to date.";
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ThemeException) { ExternalChangeStatus.Text = error.Message; }
     }

@@ -34,7 +34,8 @@ internal static class Program
             DrawingProjectChecks.Run(catalog);
             ExternalProjectChecks.Run(catalog);
             ImageFamilyChecks.Run(catalog);
-            Console.WriteLine("10/10 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
+            ImageImportChecks.Run(catalog);
+            Console.WriteLine("12/12 passed. Windowless model/codec checks only; no UI visual acceptance."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }

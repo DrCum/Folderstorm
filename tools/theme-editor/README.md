@@ -14,6 +14,13 @@ slice guides, stretch/tile samples and image/family/all-image reset. Reset keeps
 stored originals and history; Undo restores the edits. Future projects and
 unsupported operations open read-only.
 
+Import image accepts PNG, TGA, BMP and JPEG. PNG bytes are kept directly; other
+formats become a PNG while the exact imported bytes and extension remain in
+the project. The import applies to the selected logical ID and is undoable.
+When inherited guides are invalid, Reset guides explicitly uses the full image
+and zero slice margins so editing can continue. Artwork bytes stay intact and
+Undo restores the original guides.
+
 Images also has Pen, Line and Circle pixel tools. Zoom in for the optional grid;
 drag a circle from center to edge. Release commits one undoable gesture; Escape
 cancels. Pick buttons open the shared color/opacity picker beside palette, tint,

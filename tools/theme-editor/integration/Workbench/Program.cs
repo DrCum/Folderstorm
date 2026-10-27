@@ -123,6 +123,7 @@ internal static class Program
             Assert(project.Undo.Count == externalHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(externalImage), "External reload handler did not redraw exactly one imported edit");
             Call(window, "Undo", window, new RoutedEventArgs());
             Assert(Field<RasterImage>(window, "currentImage").PixelEquals(beforeExternal), "External Undo did not restore previous pixels");
+            Assert(Field<TextBlock>(window, "ExternalChangeStatus").Text.Contains("Project image changed", StringComparison.Ordinal), "Stale working copy was advertised as up to date");
             var beforeConflict = Contract.Bytes(project);
             Call(window, "ReloadExternalCopy", window, new RoutedEventArgs());
             Assert(Contract.Bytes(project).SequenceEqual(beforeConflict) && Field<TextBlock>(window, "StatusText").Text.Contains("Image changed", StringComparison.Ordinal), "Stale external reload overwrote an undone image");
@@ -171,8 +172,41 @@ internal static class Program
             Assert(Field<RasterImage>(window, "currentImage").PixelEquals(familyResults.Single(item => item.Source.Name == "PushButton_Off").Image), "Family Redo left stale pixels");
             Assert(!family.IsVisible, "Family probe unexpectedly showed a window");
             Console.WriteLine("PASS family dialog preview/settings/invalid/cancel gating and Apply/Undo/Redo redraw with one checkpoint");
+            var importSource = catalog.ResolveBytes("textures/" + catalog.Textures["Inv_FolderClosed"].Attributes["file_name"]);
+            var importPath = Path.Combine(directory, "input.tga"); File.WriteAllBytes(importPath, importSource);
+            var expectedImport = ImageImport.Read(importPath); var beforeImport = Field<RasterImage>(window, "currentImage"); var importHistory = project.Undo.Count;
+            Call(window, "ImportImageFile", importPath);
+            Assert(project.Undo.Count == importHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(expectedImport.Image), "TGA import did not redraw or created extra checkpoints");
+            var importedAsset = project.Edits.Assets.Single(item => item.Kind == "image" && item.PayloadPath.EndsWith(Contract.Hash(System.Text.Encoding.UTF8.GetBytes("PushButton_Off")) + ".png", StringComparison.Ordinal));
+            Assert(importedAsset.OriginalPath.EndsWith(".tga", StringComparison.Ordinal) && File.ReadAllBytes(Path.Combine(directory, importedAsset.OriginalPath)).SequenceEqual(importSource), "TGA import handler lost original bytes");
+            Call(window, "Undo", window, new RoutedEventArgs()); Assert(Field<RasterImage>(window, "currentImage").PixelEquals(beforeImport), "Import Undo left stale pixels");
+            Call(window, "Redo", window, new RoutedEventArgs()); Assert(Field<RasterImage>(window, "currentImage").PixelEquals(expectedImport.Image), "Import Redo left stale pixels");
+            Console.WriteLine("PASS TGA import production handler original retention, redraw and one-checkpoint Undo/Redo");
+            string? legacyName = null;
+            foreach (var candidate in catalog.Textures.Values.OrderBy(item => item.Name, StringComparer.Ordinal))
+            {
+                if (!candidate.Attributes.Keys.Any(key => key.StartsWith("scale.", StringComparison.Ordinal) || key.StartsWith("clip.", StringComparison.Ordinal)) || !candidate.Attributes.TryGetValue("file_name", out var file)) continue;
+                try
+                {
+                    var data = catalog.ResolveBytes("textures/" + file);
+                    var decodedImage = (RasterImage)codec.GetMethod("Decode", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, [data, file])!;
+                    try { _ = TextureGeometry.FromAttributes(decodedImage.Width, decodedImage.Height, candidate.Attributes); }
+                    catch (ThemeException) { legacyName = candidate.Name; break; }
+                }
+                catch (Exception error) when (error is IOException or ThemeException or NotSupportedException or FormatException or TargetInvocationException) { }
+            }
+            Assert(legacyName != null, "Expected legacy guide fixture");
+            Field<TextBox>(window, "TextureSearch").Text = legacyName!; Field<ListBox>(window, "TextureList").SelectedItem = catalog.Textures[legacyName!]; Call(window, "SelectTexture", window, null);
+            Assert(window.CanRepairImageGuides && !window.CanEditImage, "Legacy guides were silently normalized or repair was unavailable");
+            var beforeRepair = Field<RasterImage>(window, "currentImage"); var repairHistory = project.Undo.Count;
+            Call(window, "RepairImageGuides", window, new RoutedEventArgs());
+            Assert(window.CanEditImage && !window.CanRepairImageGuides && project.Undo.Count == repairHistory + 1 && Field<RasterImage>(window, "currentImage").PixelEquals(beforeRepair), "Guide repair changed artwork or failed to enable editing");
+            Call(window, "Undo", window, new RoutedEventArgs()); Assert(window.CanRepairImageGuides && !window.CanEditImage && Field<RasterImage>(window, "currentImage").PixelEquals(beforeRepair), "Guide Undo did not restore inherited invalid bounds");
+            Call(window, "Redo", window, new RoutedEventArgs()); Assert(window.CanEditImage && !window.CanRepairImageGuides, "Guide Redo did not restore editing");
+            Field<ComboBox>(window, "ImageComparison").SelectedIndex = 1; Assert(!window.CanRepairImageGuides && !window.CanEditImage, "Original comparison allowed guide repair/editing");
+            Console.WriteLine("PASS explicit legacy guide repair availability, pixel preservation and Undo/Redo; fixture=" + legacyName);
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("10/10 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("12/12 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

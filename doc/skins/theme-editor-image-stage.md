@@ -158,6 +158,19 @@ revisions pass the production C++ validator. Reviewed windowless WPF renders at
 fitting actions. Additional 1.5x/2x bitmap renders are retained. These do not
 establish live desktop or numeric system-DPI acceptance, which remains open.
 
-Additional import formats remain in progress. PNG remains the package
+The 0.8.0 candidate adds PNG/TGA/BMP/JPEG import with bounded reads, supported
+container checks and retained exact original bytes/extensions. PNG runtime
+bytes stay intact; the other supported formats prepare an RGBA PNG. Import
+continues to affect only the chosen logical ID. An explicit Reset guides button
+appears for decoded images whose inherited bounds cannot be edited. It replaces
+those bounds with full-image clipping and zero margins without changing source
+artwork. Undo restores the inherited attributes. Project-side image edits now
+mark external working copies stale before Reload is attempted.
+Twelve image/codec and twelve non-visible WPF groups pass, including a real
+inherited `BuyArrow_Press` guide fixture. Four import/repair normal and preview
+revisions pass the production C++ validator. Core and its tests are unchanged
+from the 32/32 checked 0.7.0 source. Actual desktop acceptance remains open.
+
+Additional formats requiring native inspection remain unavailable. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.
 Final feature/DPI acceptance is open.

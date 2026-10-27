@@ -43,7 +43,7 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private void UpdateCommandState()
     {
-        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo), nameof(CanReplaceImage), nameof(CanEditImage), nameof(CanReloadExternal), nameof(CanBrowseWorkingFiles) })
+        foreach (var property in new[] { nameof(CanEditDocument), nameof(CanOpenDocument), nameof(CanUndo), nameof(CanRedo), nameof(CanReplaceImage), nameof(CanEditImage), nameof(CanRepairImageGuides), nameof(CanReloadExternal), nameof(CanBrowseWorkingFiles) })
             PropertyChanged?.Invoke(this, new(property));
         if (ProjectLabel == null) return;
         ProjectLabel.Text = project == null ? "Classic AnsaStorm" : project.DisplayName + (changed ? "  •  Unsaved" : "") + "  ·  " + catalog?.Schemes.FirstOrDefault(s => s.Id == project.BaseScheme)?.Name;

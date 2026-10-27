@@ -20,6 +20,7 @@ public partial class MainWindow
     private TextureDefinition? SelectedTexture => TextureList?.SelectedItem as TextureDefinition;
     public bool CanReplaceImage => CanEditDocument && SelectedTexture != null && (ImageComparison?.SelectedIndex ?? 0) == 0;
     public bool CanEditImage => CanReplaceImage && currentImage != null && imageGeometry != null;
+    public bool CanRepairImageGuides => CanReplaceImage && currentImage != null && imageGeometry == null;
 
     private void InitializeImages()
     {
@@ -225,16 +226,25 @@ public partial class MainWindow
     private async void ReplaceImage(object sender, RoutedEventArgs args)
     {
         if (!Ready() || !CanReplaceImage || SelectedTexture is not { } texture) return;
-        var picker = new OpenFileDialog { Filter = "PNG image|*.png" }; if (picker.ShowDialog(this) != true) return;
-        await Run(() =>
-        {
-            Contract.Require(new FileInfo(picker.FileName).Length <= 32L * 1024 * 1024, "size", "PNG exceeds 32 MiB");
-            var bytes = File.ReadAllBytes(picker.FileName); var image = ImageCodec.Decode(bytes, picker.FileName);
-            var geometry = imageGeometry?.Resize(image.Width, image.Height) ?? TextureGeometry.FromAttributes(image.Width, image.Height, texture.Attributes);
-            CommitMetadata(); ImageProject.SetPng(projectDirectory, project!, catalog!, texture.Name, bytes, geometry, ImageStep("replace"), bytes, ".png");
-            changed = true; SelectTexture(sender, null!); StatusText.Text = "PNG imported. Original bytes retained.";
-        });
+        var picker = new OpenFileDialog { Title = "Import image", Filter = "Images|*.png;*.tga;*.bmp;*.jpg;*.jpeg|PNG|*.png|TGA|*.tga|BMP|*.bmp|JPEG|*.jpg;*.jpeg" };
+        if (picker.ShowDialog(this) == true) await Run(() => ImportImageFile(picker.FileName));
     }
+    private void ImportImageFile(string path)
+    {
+        if (!Ready() || !CanReplaceImage || SelectedTexture is not { } texture) return;
+        var imported = ImageImport.Read(path); var image = imported.Image;
+        var attributes = ImageProject.Resolve(projectDirectory, project!, catalog!, texture.Name).Attributes;
+        var geometry = imageGeometry?.Resize(image.Width, image.Height) ?? TextureGeometry.FromAttributes(image.Width, image.Height, attributes);
+        CommitMetadata(); ImageProject.SetPng(projectDirectory, project!, catalog!, texture.Name, imported.Png, geometry, ImageStep("replace"), imported.Original, imported.Extension);
+        changed = true; RefreshImageEditors(); SyncMetadata(); StatusText.Text = imported.Extension == ".png" ? "PNG imported. Original bytes retained." : "Image imported as PNG. Original " + imported.Extension[1..].ToUpperInvariant() + " retained.";
+    }
+    private async void RepairImageGuides(object sender, RoutedEventArgs args) => await Run(() =>
+    {
+        if (!Ready() || !CanRepairImageGuides || currentImage == null || SelectedTexture is not { } texture) return;
+        var geometry = new TextureGeometry(currentImage.Width, currentImage.Height, new(0, currentImage.Height, currentImage.Width, 0), new(0, 0, 0, 0));
+        CommitMetadata(); ImageProject.SetGeometry(projectDirectory, project!, catalog!, texture.Name, geometry);
+        changed = true; RefreshImageEditors(); SyncMetadata(); StatusText.Text = "Guides reset to the full image. Undo restores inherited guides.";
+    });
     private async void TintImage(object sender, RoutedEventArgs args)
     {
         try { var tint = ImageColor(ImageTint.Text); await EditImage(image => image.Tint(tint), geometry => geometry, ImageStep("tint", ("color", tint.NativeText))); }

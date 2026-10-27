@@ -83,6 +83,13 @@ Drawing writes exact RGBA pixels. Each gesture has at most 4096 points and a
 the recipe. Earlier editors preserve this operation read-only. Cancelled or
 pixel-identical gestures do not create project edits.
 
+Static PNG/TGA/BMP/JPEG imports use the existing `replace` operation. The exact
+original bytes and extension remain in content-addressed project assets. PNG
+imports retain their runtime bytes; other supported imports prepare a PNG with
+the decoded pixels. Format mismatches are refused. Explicitly resetting invalid
+legacy guides uses the existing `nine-slice` operation, full-image clipping and
+zero margins. It changes registration attributes without touching artwork.
+
 Family edits retain the existing per-image recipe operations. All checked
 states are prepared before the document changes, then committed in one
 checkpoint. Each logical ID keeps a separate scoped PNG and original reference.
