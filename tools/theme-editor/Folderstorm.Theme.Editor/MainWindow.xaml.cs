@@ -109,8 +109,8 @@ public partial class MainWindow : Window
         CommitMetadata(); ProjectStore.Save(projectDirectory, project!); changed = false; SyncMetadata(); StatusText.Text = "Project saved.";
     }
     private async void SaveProject(object sender, RoutedEventArgs args) => await Run(Save);
-    private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; CommitMetadata(); if (project!.UndoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Undone."; } });
-    private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; if (project!.RedoEdit()) { changed = true; RefreshDocumentEditors(); StatusText.Text = "Redone."; } });
+    private async void Undo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; CommitMetadata(); var previous = project!.Edits; if (project.UndoEdit()) { changed = true; RefreshDocumentEditors(); RefreshChangedXml(previous); StatusText.Text = "Undone."; } });
+    private async void Redo(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; var previous = project!.Edits; if (project.RedoEdit()) { changed = true; RefreshDocumentEditors(); RefreshChangedXml(previous); StatusText.Text = "Redone."; } });
     private async void LoadXml(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (catalog == null || XmlFile.SelectedItem is not string file) return;

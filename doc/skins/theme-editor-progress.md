@@ -305,6 +305,38 @@ Remaining work includes widget/layout editing, project/library/package tools, ho
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.
 
+The0.16 source5f0c05ae71 is now retained as a separate private candidate with402
+hash-verified editor files and the unchanged82312 native viewer. Actual desktop
+checks passed imported mint provenance, Set/Undo/Redo/Save, package-file inspection
+and Open as project into a separate folder with fresh history. A real1264x861
+native renderer capture was decoded and saved with its receipt hash unchanged.
+The desktop receipt remains outside the immutable archive. Owned editor, viewer
+and crash-handler processes are absent; the computer-use connection is reset.
+
+The next project-changes branch adds a searchable/grouped review of palette,
+artwork/registrations, fonts/licenses, formatted XUI, thumbnails and other files.
+Resets use isolated candidate edits and validate the complete result before a
+single appearance checkpoint. Original files, details and imported header remain
+recoverable. An edited registration table resets its related artwork/recipes as
+a group. Invalid scopes, stale authoring/content snapshots and failed package
+compilation leave the source document/history unchanged. The raw XML editor is
+refreshed when its selected override changes. Pending details validate first and
+retain a separate checkpoint, matching the other authoring tools.
+
+Initial focused checks pass5 core groups and3 windowless WPF groups. Full runs
+pass64 core and39 WPF groups. These precede the final XML changed-property summary,
+wrapping and raw-XML refresh on Undo/Redo. Final focused checks pass5 core,
+3 project-change WPF and7 XUI WPF groups. The final narrow/wide comparison renders
+show the changed property before the full XML with readable wrapping.
+No native code, XUI policy, image codec or project schema changed.0.17 retention
+and desktop review remain pending; broader full-goal phases continue.
+
+The exact previously rejected source push was retried after connected GitHub
+confirmed repository ownership and push access. Automatic approval review again
+rejected it because trusted user content does not explicitly approve this public
+branch/destination. No source was pushed. The existing prompt stays pending;
+local branches, bundles and candidates continue without an alternate egress path.
+
 Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future
 computer-control batch must be announced, delayed at least five seconds, kept

@@ -14,6 +14,14 @@ slice guides, stretch/tile samples and image/family/all-image reset. Reset keeps
 stored originals and history; Undo restores the edits. Future projects and
 unsupported operations open read-only.
 
+Project → Review changes compares current overrides with the base. Search or
+filter by resource group, inspect formatted XML and file hashes, then reset a
+resource, group or all appearance overrides. Each reset validates the resulting
+package before one Undo step. Original files, theme details and imported manifest
+provenance remain recoverable. The registration-table row resets its artwork and
+recipes together; individual image rows reset one logical image. Opening or
+closing the review does not change the project. A stale review must be reopened.
+
 Palette tools offers Violet, Mint and Paper starting presets. Ctrl/Shift selects
 colors for bulk Set color, Link to color or Reset checked. Preview lists direct
 edits and effective before/after values, including linked followers. Apply uses

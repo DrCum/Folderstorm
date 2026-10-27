@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
-if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] is not ("--fonts-only" or "--xui-only" or "--library-only" or "--compiled-only")) { Console.Error.WriteLine("Pass the repository or matching viewer root, optionally --fonts-only, --xui-only or --library-only"); return 2; }
+if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] is not ("--fonts-only" or "--xui-only" or "--library-only" or "--compiled-only" or "--changes-only")) { Console.Error.WriteLine("Pass the repository or matching viewer root and an optional focused test flag"); return 2; }
 var tests = new List<(string Name, Action Run)>();
 var root = Path.Combine(Environment.CurrentDirectory, "artifacts", "tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
 var catalog = new BaseCatalog(args[0]);
@@ -622,7 +622,8 @@ XuiProjectChecks.Register(Test, root, catalog);
 LibraryChecks.Register(Test, root, catalog);
 CaptureChecks.Register(Test, root, catalog);
 CompiledPaletteChecks.Register(Test, root, catalog);
-if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith(args[1] switch { "--fonts-only" => "font", "--xui-only" => "xui", "--compiled-only" => "compiled", _ => "library" }, StringComparison.Ordinal)).ToList();
+ProjectChangesChecks.Register(Test, root, catalog);
+if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith(args[1] switch { "--fonts-only" => "font", "--xui-only" => "xui", "--compiled-only" => "compiled", "--changes-only" => "changes", _ => "library" }, StringComparison.Ordinal)).ToList();
 var failed = 0;
 foreach (var (name, run) in tests)
 {
