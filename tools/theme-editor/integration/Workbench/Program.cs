@@ -21,7 +21,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length != 1) { Console.Error.WriteLine("Pass the matching viewer root"); return 2; }
+        if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] != "--fonts-only") { Console.Error.WriteLine("Pass the matching viewer root, optionally --fonts-only"); return 2; }
         try
         {
             // Exercise production handlers and controls without showing windows or running the desktop/viewer.
@@ -33,6 +33,12 @@ internal static class Program
             Directory.CreateDirectory(directory);
             Set(window, "catalog", catalog); Set(window, "project", project); Set(window, "projectDirectory", directory);
             Call(window, "RefreshCatalog");
+            if (args.Length == 2)
+            {
+                FontWorkbenchChecks.Run(window, directory, catalog, project);
+                Assert(!window.IsVisible, "Font probe unexpectedly showed a window");
+                Console.WriteLine("3/3 passed. Focused windowless font-workbench checks. Workspace: " + directory); return 0;
+            }
             var texture = catalog.Textures["PushButton_Off"];
             Field<ListBox>(window, "TextureList").SelectedItem = texture;
             var inherited = Field<RasterImage>(window, "currentImage");
@@ -243,8 +249,9 @@ internal static class Program
             Console.WriteLine("PASS palette preset/bulk preview, invalid/settings/cancel gating, one-checkpoint Apply and Undo/Redo");
             var beforeExtras = Contract.Bytes(project); PaletteExtrasChecks.Run(directory);
             Assert(Contract.Bytes(project).SequenceEqual(beforeExtras), "Picker extras changed the project");
+            FontWorkbenchChecks.Run(window, directory, catalog, project);
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("18/18 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("21/21 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

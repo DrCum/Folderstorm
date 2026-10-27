@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent(); InitializeAuthoring(); InitializeImages(); InitializeExternalEditing();
+        FontWorkspace.Edited += () => { changed = true; SyncMetadata(); UpdateCommandState(); };
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
@@ -97,7 +98,7 @@ public partial class MainWindow : Window
         BaseScheme.ItemsSource = catalog.Schemes; BaseScheme.SelectedValue = catalog.Scheme;
         RefreshPalette();
         RefreshImageFamilies(); RefreshTextures();
-        FontList.ItemsSource = catalog.FontConfigurations; FontList.SelectedIndex = 0;
+        FontWorkspace.SetProject(catalog, project, projectDirectory);
         SyncMetadata();
     }
     private void Save()
@@ -115,23 +116,6 @@ public partial class MainWindow : Window
         Contract.AtomicWrite(Contract.Contained(projectDirectory, relative), bytes); Contract.AtomicWrite(Contract.Contained(projectDirectory, originalRelative), original ?? bytes);
         project!.Edits.Assets.RemoveAll(a => a.PayloadPath == payload); project.Edits.Assets.Add(new(payload, relative, originalRelative, kind)); changed = true;
     }
-    private async void UseFont(object sender, RoutedEventArgs args) => await Run(() =>
-    {
-        if (!Ready() || FontList.SelectedItem is not string font) return;
-        project!.Checkpoint("Use font configuration"); PutAsset("viewer/fonts/fonts.xml", "font_config", File.ReadAllBytes(Path.Combine(catalog!.Root, "fonts", font)));
-        FontStatus.Text = font + " selected. Native preview restarts to load it.";
-    });
-    private async void EmbedFont(object sender, RoutedEventArgs args)
-    {
-        if (!Ready()) return;
-        var picker = new OpenFileDialog { Filter = "Font file|*.ttf;*.otf;*.ttc" }; if (picker.ShowDialog(this) != true) return;
-        await Run(() => { project!.Checkpoint("Embed font"); var name = Path.GetFileName(picker.FileName); PutAsset("viewer/fonts/" + name, "font", File.ReadAllBytes(picker.FileName));
-            var config = Contract.Xml(File.ReadAllBytes(Path.Combine(catalog!.Root, "fonts", FontList.SelectedItem as string ?? "fonts.xml")));
-            foreach (var font in config.Root!.Elements("font").Where(f => (string?)f.Attribute("name") == "SansSerif" || (string?)f.Attribute("name") == "default"))
-            { var first = font.Element("file"); if (first != null) { first.Value = name; first.Attributes().Remove(); } }
-            PutAsset("viewer/fonts/fonts.xml", "font_config", Contract.XmlBytes(config)); FontStatus.Text = name + " embedded. Include its redistribution license before sharing."; });
-    }
-    private async void ResetFont(object sender, RoutedEventArgs args) => await Run(() => { if (!Ready()) return; project!.Checkpoint("Reset font"); project.Edits.Assets.RemoveAll(a => a.PayloadPath.StartsWith("viewer/fonts/", StringComparison.Ordinal)); changed = true; FontStatus.Text = "Inherited font configuration restored."; });
     private async void LoadXml(object sender, RoutedEventArgs args) => await Run(() =>
     {
         if (catalog == null || XmlFile.SelectedItem is not string file) return;

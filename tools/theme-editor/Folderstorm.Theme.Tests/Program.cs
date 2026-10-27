@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
-if (args.Length != 1) { Console.Error.WriteLine("Pass the repository or matching viewer root"); return 2; }
+if (args.Length is < 1 or > 2 || args.Length == 2 && args[1] != "--fonts-only") { Console.Error.WriteLine("Pass the repository or matching viewer root, optionally --fonts-only"); return 2; }
 var tests = new List<(string Name, Action Run)>();
 var root = Path.Combine(Environment.CurrentDirectory, "artifacts", "tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
 var catalog = new BaseCatalog(args[0]);
@@ -616,6 +616,8 @@ Test("image preview binds only the native sample button and leaves the source pr
     Reject("texture", () => PackageStore.CompileImagePreview(projectDirectory, project!, catalog, "MissingImageId"));
 });
 
+FontChecks.Register(Test, root, catalog);
+if (args.Length == 2) tests = tests.Where(test => test.Name.StartsWith("font", StringComparison.Ordinal)).ToList();
 var failed = 0;
 foreach (var (name, run) in tests)
 {

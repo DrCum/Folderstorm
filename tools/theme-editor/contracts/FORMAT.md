@@ -138,3 +138,23 @@ Changed geometry is bounded integer input; changed color/image references must
 resolve in the selected base. Font sizes and offsets must be finite and bounded.
 Scale and clip edges cannot be reversed. These rules are checked independently
 by both implementations before the viewer loads an override.
+
+Font authoring writes the existing runtime font configuration and dependencies;
+it introduces no new package or project version. Role/style/platform structure,
+unmodified attributes and conditional character filters are preserved. Each font
+transaction validates a staged project before one history checkpoint. Failed
+validation leaves project/history unchanged; prepared unreferenced assets remain
+available for recovery. Embedded files use `font-<sha256>.<extension>` names;
+optional license text uses `licenses/font-<sha256>.txt`. Reset removes these font
+assets and licenses, retaining unrelated licenses and edits.
+
+Metadata inspection accepts OpenType SFNT and TTC/OTC collections up to64 MiB,
+128 faces and128 MiB of retained metadata. It reads Unicode names, OS/2 embedding
+flags, fvar axes and cmap4/12/13 mappings with bounded offsets. Unsupported maps
+are reported without claiming coverage. Inspection neither installs fonts nor
+changes the runtime loader. The native loader controls only `wght`, and collection
+loading enumerates its faces rather than selecting an exported face index.
+See Microsoft's [OpenType file structure](https://learn.microsoft.com/en-us/typography/opentype/spec/otff),
+[character maps](https://learn.microsoft.com/en-us/typography/opentype/spec/cmap),
+[variable axes](https://learn.microsoft.com/en-us/typography/opentype/spec/fvar)
+and [embedding flags](https://learn.microsoft.com/en-us/typography/opentype/spec/os2#fstype).

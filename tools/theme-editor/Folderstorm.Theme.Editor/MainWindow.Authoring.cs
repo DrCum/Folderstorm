@@ -81,7 +81,7 @@ public partial class MainWindow : INotifyPropertyChanged
     }
     private void RefreshDocumentEditors()
     {
-        SyncMetadata(); RefreshPalette(); RefreshImageEditors();
+        SyncMetadata(); RefreshPalette(); RefreshImageEditors(); FontWorkspace.SetProject(catalog, project, projectDirectory);
     }
     private async void SaveAsProject(object sender, RoutedEventArgs args)
     {

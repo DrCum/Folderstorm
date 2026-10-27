@@ -77,8 +77,35 @@ Implementation references: [mouse-message coordinates](https://learn.microsoft.c
 [GetPixel](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getpixel),
 [DwmFlush](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmflush)
 and [DPI manifests](https://learn.microsoft.com/en-us/windows/win32/hidpi/setting-the-default-dpi-awareness-for-a-process).
-The remaining font/layout/package/host/distribution/base phases continue while
-this candidate stays available for later testing.
+This candidate is retained locally as0.10.0 at32dc9d6281. Automatic approval
+review rejected its GitHub push because destination/source-egress authorization
+could not be established. An explicit user approval prompt is pending; local
+implementation continues without attempting another external route.
+
+The 0.11.0 font workspace adds role/style selection, Windows fallback editing and
+ordering within platform groups, native weight/hinting/collection options, size
+adjustments and named sizes. Embedded files use content-scoped names and optional
+license payloads. Transactions compile a staged project before one checkpoint;
+Undo/Redo and Reset retain other edits. Inspection reports collection faces,
+variable axes, embedding flags and available license text, with code-point
+coverage across the inspected chain. Conditional emoji, shaping and native
+system fallback behavior remain explicit limitations.
+
+Initial full runs passed39 core groups and21 windowless WPF groups. Font maps
+agree with an independent WPF reader for Inter and DejaVu; a newly exported
+embedded-font/config/license revision passes C++ validation. Normal/minimum-width
+top/details renders are reviewed, including a corrected foreground inheritance
+issue. Actual desktop testing passed readable controls and multilingual sample,
+weight400→650, Undo400, Redo650, details scrolling and Save. The isolated saved
+fixture retains650 and one checkpoint. The owned editor closed normally and
+computer control is off. Final font-only checks also cover later malformed-value,
+empty-search, metadata-budget and stale-inspection guards. Native font visual,
+real system-DPI and mixed-monitor acceptance remain open.
+
+Remaining work includes richer collection/face preview and font-license tools,
+widget/layout editing, project/library/package tools, host/distribution/base
+phases and the outstanding native/desktop acceptance. Retained candidates stay
+available while these phases continue.
 
 Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future

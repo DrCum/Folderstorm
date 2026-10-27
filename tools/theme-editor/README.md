@@ -80,6 +80,24 @@ select its executable in the editor. Projects retain original imports, recipes
 and undo checkpoints. Runtime package imports start a separate compiled-override
 project. Importing never applies a theme to all profiles.
 
+Fonts now lists native roles and style variants with their ordered Windows
+fallback files. Set file edits a reference; Add fallback adds to the common
+platform group. Up/Down reorders within the same platform group. Mac/Linux
+fallbacks and native character filters remain intact. Weight controls the native
+`wght` axis, size adjustment is in points, and named native sizes are separate.
+Collection loading uses all faces in file order. Other variable axes are shown
+for inspection and remain at the font default.
+
+The sample is a WPF approximation. Glyph mapping reports which inspected files
+cover sample code points, including missing files and conditional emoji limits;
+it does not establish shaping or native rendering. Details lists collection
+faces, variable axes, embedding flags and available license text. Embed font adds
+an exact font copy at the start of the selected role under a content-based
+filename. Optional license text travels in `licenses/`. Installed files can be
+referenced as dependencies without copying them. Check the actual redistribution
+license before sharing embedded fonts. Reset fonts restores inheritance; Undo
+restores the changes, embedded fonts and their license files.
+
 `contracts/FORMAT.md` documents the runtime package and project contracts. Build
 the separate `native/` CMake project with the existing Boost include directory;
 it does not configure/download the viewer or require .NET. Replay shared cases:
@@ -96,3 +114,5 @@ Neither a green contract test nor a WPF screenshot establishes native appearance
 handlers, selected-image canvas and override-filtered Undo/Redo without showing
 windows. Pass the matching viewer resource root as its only argument. This is a
 focused UI-state regression check, separate from human visual acceptance.
+Both the core test executable and Workbench accept `--fonts-only` after the base
+path for focused font checks while iterating on this workspace.
