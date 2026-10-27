@@ -5,6 +5,9 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media.Imaging;
 
 internal static class Program
 {
@@ -85,8 +88,31 @@ internal static class Program
             hex.Text = "#64D8B200"; Assert(picker.SelectedColor.Hex() == "#64D8B200" && PickerField<Button>("UseColor").IsEnabled, "Picker lost transparent RGB or did not recover valid hex");
             Assert(!picker.IsVisible, "Probe unexpectedly showed the picker");
             Console.WriteLine("PASS picker initial/edited RGBA, hue, transparency and invalid input gating");
+            var drawingCanvas = Field<ImageCanvas>(window, "EditCanvas"); var drawingCommits = 0;
+            drawingCanvas.DrawingCommitted += (_, _) => ++drawingCommits;
+            void CancelGesture(string handler, RoutedEventArgs eventArgs)
+            {
+                var original = Field<RasterImage>(window, "currentImage"); var document = Contract.Bytes(project);
+                var pending = new PixelStroke(original, PixelTool.Pen, new(0, 0), ThemeColor.Parse("#00AACCFF")); pending.Move(new(5, 0));
+                Assert(pending.HasChanges, "Cancellation fixture did not change pixels");
+                drawingCanvas.SetImage(pending.Preview, geometry);
+                typeof(ImageCanvas).GetField("stroke", Private)!.SetValue(drawingCanvas, pending);
+                Call(window, "UpdateCommandState");
+                Assert(drawingCanvas.IsInteracting && !window.CanEditDocument && !window.CanOpenDocument && !window.CanUndo, "Pending gesture allowed document changes");
+                typeof(ImageCanvas).GetMethod(handler, Private)!.Invoke(drawingCanvas, [eventArgs]);
+                var restored = (RasterImage)typeof(ImageCanvas).GetField("image", Private)!.GetValue(drawingCanvas)!;
+                var bitmap = (BitmapSource)typeof(ImageCanvas).GetField("bitmap", Private)!.GetValue(drawingCanvas)!;
+                var pixels = new byte[original.Width * original.Height * 4]; bitmap.CopyPixels(pixels, original.Width * 4, 0);
+                for (var index = 0; index < pixels.Length; index += 4) (pixels[index], pixels[index + 2]) = (pixels[index + 2], pixels[index]);
+                Assert(!drawingCanvas.IsInteracting && restored.PixelEquals(original) && pixels.SequenceEqual(original.ToRgba()), handler + " left preview pixels/bitmap on the canvas");
+                Assert(drawingCommits == 0 && Contract.Bytes(project).SequenceEqual(document) && window.CanEditDocument && window.CanOpenDocument, handler + " changed history or failed to restore commands");
+                Console.WriteLine("PASS " + handler + " cancels pending drawing, restores bitmap/commands and leaves history unchanged");
+            }
+            using (var keySource = new HwndSource(new HwndSourceParameters("Hidden cancellation probe") { Width = 1, Height = 1, WindowStyle = 0 }))
+                CancelGesture("OnKeyDown", new KeyEventArgs(Keyboard.PrimaryDevice, keySource, 0, Key.Escape) { RoutedEvent = Keyboard.KeyDownEvent });
+            CancelGesture("OnLostMouseCapture", new MouseEventArgs(Mouse.PrimaryDevice, 0));
             Assert(!window.IsVisible, "Probe unexpectedly showed a window");
-            Console.WriteLine("6/6 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
+            Console.WriteLine("8/8 passed. Windowless WPF handler checks only; no desktop visual acceptance. Workspace: " + directory);
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

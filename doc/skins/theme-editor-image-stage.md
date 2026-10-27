@@ -110,6 +110,22 @@ and failed stages remain preserved. Closing the editor now queues the final
 Close call after its first Closing event returns, avoiding reentrant close while
 still disposing only its owned preview.
 
+Actual 0.5.0 desktop checks now confirm the palette picker Cancel path, drawing
+picker saturation/hue/opacity, Pen/Line/Circle, one-gesture Undo/Redo, saved recipes
+and a single-click editor close after its owned preview closes. The saved test
+has exactly three drawing checkpoints. The native preview reported ready with
+the exact saved PNG hash and selected-image/empty-label binding. Its OpenGL
+capture failed twice with `FrameArrived timed out`; no native visual result is
+claimed for the painted icon. The owned viewer/editor were closed and computer
+control disconnected.
+
+The 0.5.1 follow-up widens the clipped brush-size label and adds a canvas tooltip
+for the active tool. Eight non-visible WPF checks pass, including the production
+Escape and lost-capture handlers restoring image data, display bitmap, command
+availability and unchanged project/history. Their gesture state is primed in
+the probe; this is not a claim that Computer Use held the mouse while pressing
+Escape. Core/codec/native-package code remains unchanged from the tested 0.5.0.
+
 Bulk/state-family edits, external editing and additional import formats remain
 in progress. PNG remains the package
 replacement format. Native source and the retained 82310 installer are unchanged.

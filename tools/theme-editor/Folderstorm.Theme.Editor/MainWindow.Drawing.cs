@@ -18,6 +18,8 @@ public partial class MainWindow
     {
         if (EditCanvas == null || DrawingColor == null || DrawingSize == null || ImageTool == null || PixelGrid == null) return;
         EditCanvas.Tool = (PixelTool)Math.Max(0, ImageTool.SelectedIndex);
+        EditCanvas.ToolTip = EditCanvas.Tool == PixelTool.Circle ? "Drag from center to edge. Escape cancels." :
+            EditCanvas.Tool == PixelTool.Inspect ? "Click to pick a pixel color. Drag a yellow guide to move it." : "Drag to draw pixels. Escape cancels.";
         EditCanvas.ShowPixelGrid = PixelGrid.IsChecked == true;
         try
         {
