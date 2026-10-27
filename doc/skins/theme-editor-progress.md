@@ -197,6 +197,32 @@ Final managed checks cover that normalization. Native82310 and retained editors
 remain unchanged. The expanded policy requires a new matching viewer build;
 its private build/retention is the next step, with appearance acceptance pending.
 
+The matching0.14.0/7.2.5.82311 candidate is now privately retained at source
+`0a3e1de458e42950b7e8d4eab3435ff22c694056`, with an NSIS installer, runnable
+viewer, editor, private symbols, source bundle and evidence. All402 editor files,
+installer, viewer, symbols and bundle hashes match their receipt. The native
+capability fingerprint matches the editor. The shared checkout is restored and
+the exclusive build is finished. Earlier candidates remain unchanged.
+
+Exact retained0.14 desktop checks passed native `font.style=BOLD|ITALIC`, visible
+before/after, Undo/Redo and Save in the disposable project. Disk XML retains the
+native field and one checkpoint. Its matching native viewer reported ready with
+no fallback diagnostic. Two native capture attempts timed out; appearance remains
+unverified. One editor Alt+F4 closed its owned child; both exact processes are
+absent and computer control is disconnected. The immutable archive is untouched;
+the later receipt is `theme-editor-xui-rules-evidence-20261027/desktop-runtime-check.json`.
+
+The next branch, `codex/ansastorm-library-preview`, starts package/library work.
+Its model lists bounded library headers without writes, reports unsupported
+headers, checks immutable folder identity, rejects stale selections and validates
+the full chosen revision before use. Thumbnail edits preserve exact PNG bytes,
+stored originals, unrelated edits and one-step history. Three focused model groups
+pass, including save/reopen, no-op/reset/Undo, corrupt preview and future-header
+cases. These are model foundations; the browser UI, native capture protocol and
+image-codec/desktop acceptance are still in progress. Native capture should use
+the isolated viewer's own renderer to generate package thumbnails, with explicit
+session/revision binding, rather than depending on desktop frame capture.
+
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
 available while these phases continue.

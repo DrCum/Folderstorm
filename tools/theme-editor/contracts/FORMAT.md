@@ -191,3 +191,17 @@ See Microsoft's [OpenType file structure](https://learn.microsoft.com/en-us/typo
 [character maps](https://learn.microsoft.com/en-us/typography/opentype/spec/cmap),
 [variable axes](https://learn.microsoft.com/en-us/typography/opentype/spec/fvar)
 and [embedding flags](https://learn.microsoft.com/en-us/typography/opentype/spec/os2#fstype).
+
+The library model lists headers only, bounded by entry count and32 MiB of
+manifest bytes. A displayed header is not a validated revision. Opening a
+selection checks its saved header hash, canonical UUID/revision folders, bounded
+plain file tree and full package/base validation. Changed headers require an
+explicit refresh. Preview bytes match their manifest SHA-256 and size; image
+decoding/render acceptance is separate. Scanning never creates or modifies a
+library. Unsupported headers remain on disk and are reported.
+
+`preview.png` already belongs to runtime version1. Thumbnail authoring uses the
+existing content-addressed asset and history format, with staged compilation
+before one checkpoint. Replacing a thumbnail keeps its original; reset removes
+the active payload while keeping bytes/history for Undo. Native capture and the
+package browser UI are separate work still in progress.
