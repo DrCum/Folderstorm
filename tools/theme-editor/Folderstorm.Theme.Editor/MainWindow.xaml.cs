@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); InitializeAuthoring(); InitializeImages(); InitializeExternalEditing();
         FontWorkspace.Edited += () => { changed = true; SyncMetadata(); UpdateCommandState(); };
+        WidgetWorkspace.Edited += () => { changed = true; SyncMetadata(); UpdateCommandState(); };
         var args = Environment.GetCommandLineArgs();
         string Argument(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : ""; }
         BasePath.Text = Argument("--base"); ViewerPath.Text = Argument("--viewer");
@@ -99,6 +100,7 @@ public partial class MainWindow : Window
         RefreshPalette();
         RefreshImageFamilies(); RefreshTextures();
         FontWorkspace.SetProject(catalog, project, projectDirectory);
+        WidgetWorkspace.SetProject(catalog, project, projectDirectory);
         SyncMetadata();
     }
     private void Save()

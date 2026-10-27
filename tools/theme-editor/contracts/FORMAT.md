@@ -139,6 +139,16 @@ resolve in the selected base. Font sizes and offsets must be finite and bounded.
 Scale and clip edges cannot be reversed. These rules are checked independently
 by both implementations before the viewer loads an override.
 
+Structured XUI edits address a control by its stable preorder index and an
+approved property name. A null change restores the recorded base property;
+`#text` is available only for text elements. Batches contain at most1024 distinct
+properties and compile a staged project before one history checkpoint. Equal XML
+ignores document-edge whitespace only; meaningful text, comments and protected
+structure stay significant. Attribute values use the native4096-byte UTF-8 limit,
+not a UTF-16 character count. Broader attribute-removal and text-node boundary
+parity remain part of the next native rules audit. This stage retains the three
+existing approved paths and does not expand the native allowlist.
+
 Font authoring writes the existing runtime font configuration and dependencies;
 it introduces no new package or project version. Role/style/platform structure,
 unmodified attributes and conditional character filters are preserved. Each font

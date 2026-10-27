@@ -52,5 +52,16 @@ internal static class XuiProjectChecks
             Assert(XuiProject.Reset(directory, project, catalog, path) && project.Edits.Assets.Count == 0 && !XuiProject.Reset(directory, project, catalog, path) && project.UndoEdit(), "File reset/no-op/Undo failed");
             Assert(XuiProject.Inspect(directory, project, catalog, path).Elements.Select(element => (element.Type, element.Name)).SequenceEqual(inspection.Elements.Select(element => (element.Type, element.Name))), "Control names/tree changed");
         });
+        test("xui Unicode attribute limits match the native UTF-8 byte budget", () =>
+        {
+            var directory = Path.Combine(root, "xui-byte-boundary"); var project = ProjectStore.Create(catalog, "Unicode byte boundary");
+            var button = XuiProject.Inspect(directory, project, catalog, path).Elements.Single(element => element.Name == "test_button");
+            var allowed = new string('中', 1365); Assert(System.Text.Encoding.UTF8.GetByteCount(allowed) == 4095, "Boundary fixture size");
+            Assert(XuiProject.Apply(directory, project, catalog, path, [new(button.Index, "label", allowed)], "CJK label"), "Native-size CJK label rejected");
+            var before = Contract.Bytes(project); Reject("xui_value", () => XuiProject.Apply(directory, project, catalog, path, [new(button.Index, "label", new string('中', 1366))], "Too large"));
+            Assert(Contract.Bytes(project).SequenceEqual(before), "Oversized UTF-8 attribute changed history");
+            var theme = PackageStore.Compile(directory, project, catalog); var revision = ThemeLibrary.Publish(theme, Path.Combine(root, "xui-byte-library"));
+            Contract.AtomicWrite(Path.Combine(directory, "result.json"), Contract.Bytes(new { revision = theme.Revision, path = revision }));
+        });
     }
 }

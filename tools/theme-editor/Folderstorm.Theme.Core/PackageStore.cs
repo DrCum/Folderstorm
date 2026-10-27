@@ -377,7 +377,7 @@ public static class XuiPolicy
     private static void ValidateValue(string name, string value, BaseCatalog catalog)
     {
         bool In(string group) => Values.GetProperty(group).EnumerateArray().Any(v => v.GetString() == name);
-        Contract.Require(value.Length <= Values.GetProperty("text_limit").GetInt32(), "xui_value", name);
+        Contract.Require(Encoding.UTF8.GetByteCount(value) <= Values.GetProperty("text_limit").GetInt32(), "xui_value", name + " exceeds the native UTF-8 byte limit");
         if (In("nonnegative_integer") || In("signed_integer"))
         {
             var limit = Values.GetProperty("integer_limit").GetInt32();

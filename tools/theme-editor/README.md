@@ -110,6 +110,19 @@ License text for next embedded font applies only when using Embed font. Installe
 dependencies do not expose a packaged-license editor. Non-UTF8 existing license
 bytes are preserved and reported, rather than silently replaced.
 
+Widgets offers a searchable control hierarchy for the three currently approved
+XUI files. Choose a property, edit its draft, then Set property. Geometry, labels,
+font references, colors and state images retain their native values. Color fields
+use the shared picker; named colors and image IDs have reference lists. Protected
+names, callbacks and bindings are read-only. Reset property restores its base
+value; Reset file restores only the selected document. Both are undoable.
+
+Before/after samples share a scale and selected state. Native artwork and slice
+borders are used for supported samples; WPF text, compositing and behavior remain
+approximate. Preview in viewer checks the exported resources with the matching
+native viewer. Other layout files require explicit adapter/native rules before
+they become editable. The Layout XML tab remains available for validated edits.
+
 `contracts/FORMAT.md` documents the runtime package and project contracts. Build
 the separate `native/` CMake project with the existing Boost include directory;
 it does not configure/download the viewer or require .NET. Replay shared cases:
@@ -127,4 +140,4 @@ handlers, selected-image canvas and override-filtered Undo/Redo without showing
 windows. Pass the matching viewer resource root as its only argument. This is a
 focused UI-state regression check, separate from human visual acceptance.
 Both the core test executable and Workbench accept `--fonts-only` after the base
-path for focused font checks while iterating on this workspace.
+path for focused font checks, or `--xui-only` for focused widget checks.

@@ -129,7 +129,7 @@ checkpoint; property/file reset restores inheritance and keeps original bytes.
 Protected callbacks, required names and ordered structure retain the existing
 native rules. This first model uses the three already approved XUI files; wider
 file/property coverage still requires the planned explicit adapter/native audit.
-The structured widget UI and state preview remain in progress.
+The structured widget UI and state preview are implemented in the0.13.0 source.
 
 Three focused XUI model groups and one WPF raw-handler group pass. They found
 document-edge newline differences creating false edits, and rejected texture XML
@@ -140,12 +140,25 @@ reference regression. Raw XML now validates a staged edit copy and retains
 document ownership on failure. Full core checks pass44/44 after the shared
 comparison change. The width/Unicode-label/RGBA widget export passes the C++
 validator as revision3db57a4e5a919962595c6c6189590d3e1375496d6fa4c5db3dbf3e8419b6951e.
-The structured UI/state preview and final expanded UI checks are still required.
+Those foundation checks retain their original scope.
 
-The next native rules audit must include boundary parity for UTF-8 attribute
-length versus C# string length, editable-attribute removal and text-node limits,
-alongside wider file/type-specific property coverage. Current small Unicode
-fixtures pass; they do not establish those boundary cases.
+The0.13.0 workspace exposes searchable controls, current/base properties,
+protected values, color/image reference lists, the shared picker and explicit
+Set/reset actions. Before/after use a shared comparison scale and state selector.
+Samples use native artwork, clipping and fixed slice borders, with approximate
+WPF text/behavior clearly labelled. Final normal/narrow layouts are reviewed;
+small-row clipping was corrected. Exact asymmetric slice pixels are asserted.
+
+Fresh full runs pass45 core groups,28 windowless WPF groups and12 codec groups,
+including all1641 bundled TGA images. Two final exports pass the C++ validator:
+the widget edits and a4095-byte Unicode attribute. The4098-byte counterpart is
+rejected atomically by the editor. Managed attribute validation now counts UTF-8
+bytes, matching the native limit. New desktop/native-appearance and system-DPI
+acceptance remain open until separately recorded.
+
+The next native rules audit must include editable-attribute removal and text-node
+limits alongside wider exact file/type-specific property coverage. The current
+positive Unicode boundary export does not establish those remaining cases.
 
 Remaining work includes widget/layout editing, project/library/package tools, host/distribution/base
 phases and the outstanding native/desktop acceptance. Retained candidates stay
