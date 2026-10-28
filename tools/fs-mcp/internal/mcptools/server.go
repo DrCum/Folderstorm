@@ -148,6 +148,7 @@ func NewMCPServer(state *Server) *mcp.Server {
 	registerPreferences(s, state, readOnly, mutating)
 	registerBuilding(s, state, readOnly, mutating)
 	registerNavigation(s, state, readOnly, mutating)
+	registerUploads(s, state, readOnly, mutating)
 	registerPose(s, state, readOnly, mutating)
 	registerWorkspaces(s, state, readOnly, mutating)
 	RegisterController(s)

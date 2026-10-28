@@ -40,6 +40,7 @@
 #include "fsbuildlistener.h"
 #include "fsnavigationlistener.h"
 #include "fscontentlistener.h"
+#include "fsfileuploadlistener.h"
 #include "fsgesturelistener.h"
 #include "fspreferenceslistener.h"
 #include "fsposelistener.h"
@@ -382,6 +383,7 @@ public:
         fs_initialize_build_api();
         fs_initialize_navigation_api();
         fs_initialize_content_api();
+        fs_initialize_file_upload_api();
         fs_initialize_gesture_api();
         fs_initialize_preferences_api();
         fs_initialize_pose_api();
@@ -534,7 +536,8 @@ public:
             {fail_response(response,HTTP_BAD_REQUEST,error);return;}
             if(prepared.requiredClasses.empty())
             {fail_response(response,HTTP_FORBIDDEN,"Feature did not declare a permission scope");return;}
-            const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses));
+            const auto decision=fs_assistant::decide(effective_levels(prepared.requiredClasses),
+                api=="FSUpload" && op=="execute" ? prepared.summary["cost"].asInteger() : 0);
             if(decision==fs_assistant::Decision::Deny)
             {fail_response(response,HTTP_FORBIDDEN,ERR_NOT_ALLOWED,policy_error_details(op,prepared.requiredClasses));return;}
             if(decision==fs_assistant::Decision::Ask)enqueueAsk(std::move(prepared),response,api,op);

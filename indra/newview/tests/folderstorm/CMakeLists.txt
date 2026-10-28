@@ -39,6 +39,8 @@ folderstorm_check(shared_pose ../test_fssharedpose.cpp)
 folderstorm_check(chrome_layout
   ../test_fschromelayout.cpp ../../fschromelayout.cpp)
 folderstorm_check(snapshot_upload ../../fssnapshotupload_test.cpp)
+folderstorm_check(file_upload ../test_fsfileuploadmodel.cpp)
+target_include_directories(file_upload PRIVATE ../..)
 folderstorm_check(assistant_pose ../../../../tools/session-host/tests/test_pose_policy.cpp)
 target_include_directories(assistant_pose PRIVATE ../..)
 folderstorm_check(assistant_pose_shared ../../../../tools/session-host/tests/test_pose_shared.cpp)

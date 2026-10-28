@@ -385,6 +385,54 @@ A texture creates a real inventory texture, then sets the folder image. It requi
 
 `inventory_set_thumbnail` is unchanged. It still only points a folder or item at an existing texture UUID, stays on Rename and edit details, and does not spend L$. Allow does not spend L$ on a thumbnail upload or on a texture upload whose quoted cost is L$0.
 
+## Local-file uploads
+
+Matching viewer/sidecar builds advertise `file_uploads: 1`. Every upload tool
+requires an explicit `viewer_session`; files must exist on the machine running
+that viewer and its local MCP sidecar. Remote agent filesystem paths and URLs
+are not upload inputs.
+
+1. Call `inventory_upload_preview` with `folder_id` and either absolute `files`
+   or one absolute `directory`. Supported automatic uploads are PNG/JPEG/TGA/BMP
+   textures, WAV sounds, and ANIM/BVH animations. Directory contents retain their
+   relative folders beneath the destination. Unsupported files refuse the whole
+   preview. Empty directories are not recreated. `max_texture_dimension` is 1024
+   by default, or 2048. Native codecs validate the files and the viewer verifies
+   SHA-256 independently before retaining immutable encoded data.
+2. Inspect the returned `plan_id`, per-file account-specific `cost`, destination,
+   output dimensions and permission masks. Preview creates no inventory or
+   charges. Plans expire after 120 seconds. Limits: 32 files, 64 MiB per source,
+   128 MiB total source/staging, eight folder levels and 64 created folders.
+3. Call `inventory_upload_execute` with that `plan_id`. Requires Read, Create and
+   the separate **Upload local files** permission (Ask by default). A positive
+   total always asks in the viewer. **An actual L$0 quote, including free Premium
+   uploads, needs no price confirmation.** Permission choices set to Ask still
+   apply. Increased account/server fees or an absent server quote stop unsent
+   uploads; they cannot silently turn a free upload into a paid one.
+4. Poll `inventory_upload_status`, or use `inventory_upload_cancel` to stop
+   unsent work. Both require Read. Uploads run sequentially and stop at the first
+   failure. Repeating Execute on the same retained plan returns its original
+   outcome and never resubmits it. Inspect confirmed IDs, created folders and
+   `uncertain` outcomes before deciding what remains to import. Cancellation
+   cannot undo accepted uploads or charges. Do not create a replacement plan to
+   retry an uncertain upload automatically.
+
+Cancelled receipts remain queryable while native work is outstanding. The
+bounded history can replace settled terminal receipts only when admitting a new
+plan; polling never evicts them for capacity.
+
+`inventory_upload_mesh_review` takes one absolute Collada `.dae` `path` and a
+destination `folder_id`. It opens the active character's native mesh importer
+for LOD, physics, rigging and server fee review. It does **not** upload: the result
+is `state: native_review`, `uploaded: false`, and
+`requires_native_completion: true`. The resident explicitly finishes the native
+importer. Referenced local resources may be loaded by that importer. An occupied
+importer is never overwritten. Automatic directory batches do not include DAE.
+
+Uploads never play sounds/animations, wear items, rez objects, execute scripts,
+change upload Preferences, or activate another character. Existing notecard and
+script source-editing tools remain available independently. Host IPC is unchanged.
+
 ## Event API body
 
 ```json

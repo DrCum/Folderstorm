@@ -97,6 +97,7 @@ public:
     void assistantStopped(const LLSD& result,const std::string& stage)
     { if(mAssistantHooks.stopped)mAssistantHooks.stopped(result,stage); }
 
+    virtual bool        requiresQuotedUploadPrice() const { return false; }
     virtual bool        showUploadDialog() const { return true; }
     virtual bool        showInventoryPanel() const { return mShowInventory; }
 
