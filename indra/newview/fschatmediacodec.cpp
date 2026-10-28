@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <limits>
 #include <cstddef>
+#include <mutex>
 #include "third_party/chat_media/libwebp/src/webp/decode.h"
 #include "third_party/chat_media/libwebp/src/webp/demux.h"
 namespace
@@ -181,9 +182,11 @@ Frame scaledFrame(const unsigned char* pixels, int width, int height, Fit target
     return frame;
 }
 }
-std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes)
+std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes, int maxDimension, bool firstFrame)
 {
-    if (bytes.empty() || bytes.size() > MaxImageBytes) return {};
+    static std::mutex decodeMutex;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (bytes.empty() || bytes.size() > MaxImageBytes || maxDimension < 1 || maxDimension > 1024) return {};
     auto image = std::make_shared<Image>(); int width = 0, height = 0, components = 0;
     if (bytes.size() >= 12 && std::memcmp(bytes.data(), "RIFF", 4) == 0 && std::memcmp(bytes.data() + 8, "WEBP", 4) == 0)
     {
@@ -197,10 +200,10 @@ std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes)
         std::unique_ptr<WebPAnimDecoder, decltype(deleter)> decoder(WebPAnimDecoderNew(&data, &options), deleter);
         WebPAnimInfo info{};
         if (!decoder || !WebPAnimDecoderGetInfo(decoder.get(), &info) || !info.frame_count || info.frame_count > MaxFrames) return {};
-        const auto size = fit(width, height, 1024, 1024); image->width = size.width; image->height = size.height;
+        const auto size = fit(width, height, maxDimension, maxDimension); image->width = size.width; image->height = size.height;
         const auto output = std::size_t(size.width) * size.height * 4;
         const bool animate = std::size_t(width) * height * 4 * 4 + output * info.frame_count <= MaxDecodedBytes;
-        const auto count = animate ? info.frame_count : 1u; int previous = 0;
+        const auto count = animate && !firstFrame ? info.frame_count : 1u; int previous = 0;
         for (unsigned i = 0; i < count; ++i)
         {
             unsigned char* frame = nullptr; int timestamp = 0;
@@ -211,13 +214,13 @@ std::shared_ptr<Image> decode(const std::vector<unsigned char>& bytes)
     else
     {
         if (!stbi_info_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &components) || !validDimensions(width, height)) return {};
-        const auto size = fit(width, height, 1024, 1024); image->width = size.width; image->height = size.height;
+        const auto size = fit(width, height, maxDimension, maxDimension); image->width = size.width; image->height = size.height;
         const bool gif = bytes.size() >= 6 && (std::memcmp(bytes.data(), "GIF87a", 6) == 0 || std::memcmp(bytes.data(), "GIF89a", 6) == 0);
         image->gif = gif;
         const auto frames = gif ? gifFrames(bytes) : 1u; if (!frames) return {};
         const auto canvas = std::size_t(width) * height * 4;
         const auto output = std::size_t(size.width) * size.height * 4;
-        const bool animate = gif && canvas * (frames + 4u) + output * frames <= MaxDecodedBytes;
+        const bool animate = gif && !firstFrame && canvas * (frames + 4u) + output * frames <= MaxDecodedBytes;
         int* delays = nullptr; int loadedFrames = 1;
         auto* pixels = animate ? stbi_load_gif_from_memory(bytes.data(), static_cast<int>(bytes.size()), &delays, &width, &height, &loadedFrames, &components, 4) :
             stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &components, 4);
