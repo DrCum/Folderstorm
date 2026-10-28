@@ -101,7 +101,7 @@ struct Source{bool allowed=true;bool valid()const{return allowed;}};
 struct Entry{std::shared_ptr<std::atomic<bool>> cancelled=std::make_shared<std::atomic<bool>>(false);std::shared_ptr<fs_chat_media::Image> image;};
 struct ImageCard:LLPanel{
  Source mSource;std::shared_ptr<Entry> mEntry;std::shared_ptr<bool> mLinkHidden=std::make_shared<bool>(false);Handle mHistory;
- bool mLarge=false;int opens=0,mDragX=0,mDragY=0;
+ bool mLarge=false,mRenderUnavailable=false;int opens=0,mDragX=0,mDragY=0;
  void activate(){++opens;}void setLinkHidden(bool);void syncLinkVisibility();
  S32 desiredHeight(S32 width=0)const;
  bool handleMouseDown(S32,S32,MASK);bool handleKeyHere(KEY,MASK);
@@ -116,6 +116,7 @@ int main(){
  c.mEntry=std::make_shared<Entry>();c.mEntry->image=std::make_shared<Image>();c.mEntry->image->width=640;c.mEntry->image->height=320;
  c.syncLinkVisibility();assert(*c.mLinkHidden&&c.desiredHeight()==160&&c.desiredHeight(160)==80);
  const auto reflows=history.reflows;for(int i=0;i<100;++i){c.syncLinkVisibility();}assert(history.reflows==reflows);
+ c.mRenderUnavailable=true;c.syncLinkVisibility();assert(!*c.mLinkHidden);c.mRenderUnavailable=false;
  *c.mEntry->cancelled=true;c.syncLinkVisibility();assert(!*c.mLinkHidden);*c.mEntry->cancelled=false;
  c.syncLinkVisibility();assert(*c.mLinkHidden);c.mSource.allowed=false;c.syncLinkVisibility();assert(!*c.mLinkHidden);
  c.mSource.allowed=true;host.prefs.mode=0;c.syncLinkVisibility();assert(!*c.mLinkHidden&&c.desiredHeight()==0);
