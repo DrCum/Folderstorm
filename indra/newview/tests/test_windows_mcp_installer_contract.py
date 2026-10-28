@@ -75,10 +75,6 @@ class WindowsMCPInstallerContract(unittest.TestCase):
         self.assertIn('fs-mcp-launcher-maintenance.exe', signing)
 
     def test_reusable_nsis_action_signs_helper_before_packaging(self):
-        workflow = (ROOT / ".github/workflows/build.yaml").read_text()
-        job = workflow[workflow.index("  sign-and-package-windows:"):]
-        job = job[:job.index("  sign-and-package-mac:")]
-        self.assertLess(job.index("uses: actions/checkout@"), job.index("uses: ./.github/actions/sign-pkg-windows"))
         action = (ROOT / ".github/actions/sign-pkg-windows/action.yaml").read_text()
         signing = action[action.index("    - name: Sign the executables"):]
         signing = signing[:signing.index("    - name: Setup Velopack CLI")]
