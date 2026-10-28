@@ -52,6 +52,7 @@
 // [/RLVa:KB]
 
 #include "fsconsoleutils.h"
+#include "fsobjecttools.h"
 #include "fsfloaternearbychat.h"
 #include "llviewernetwork.h"
 
@@ -616,6 +617,9 @@ void LLFloaterIMNearbyChatHandler::processChat(const LLChat& chat_msg,
 
     // <FS:Ansariel> Add notification callback for new chat
     mNewChatSignal(chat);
+
+    // Capture eligible owned-object diagnostics before presentation-only routing.
+    fs_object_tools_debug(chat_msg);
 
     // don't show toast and add message to chat history on receive debug message
     // with disabled setting showing script errors or enabled setting to show script

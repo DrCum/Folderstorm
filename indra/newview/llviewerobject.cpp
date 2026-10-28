@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include "llviewerobject.h"
 
@@ -2906,6 +2907,7 @@ void LLViewerObject::saveScript(
     task_item->setTransactionID(item->getTransactionID());
 
     LLMessageSystem* msg = gMessageSystem;
+    fs_object_tools_native_execution_changed(mID, item->getUUID());
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
@@ -3141,7 +3143,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
             LL_INFOS() << "Inventory loaded for " << task_inv << LL_ENDL;
             obj->mInventorySerialNum = serial;
             obj->mExpectedInventorySerialNum = serial;
-            obj->loadTaskInvLLSD(result);
+            obj->loadTaskInvLLSD(result, !potentially_stale);
         }
         else if (status.getType() == 304)
         {
@@ -3426,7 +3428,7 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
                 LLAssetType::AT_CATEGORY,
                 "Contents");
             object->mInventory->push_front(obj);
-            object->doInventoryCallback();
+            object->doInventoryCallback(true);
             delete ft;
             return;
         }
@@ -3472,7 +3474,7 @@ void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtS
             LL_DEBUGS() << "Processing file that is potentially out of date for task: " << ft->mTaskID << LL_ENDL;
         }
 
-        if (object->loadTaskInvFile(ft->mFilename))
+        if (object->loadTaskInvFile(ft->mFilename, ft->mSerial >= object->mExpectedInventorySerialNum))
         {
 
         // <FS:ND> Crashfix, not sure why object->mInventory can be 0
@@ -3522,13 +3524,13 @@ void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtS
     delete ft;
 }
 
-bool LLViewerObject::loadTaskInvFile(const std::string& filename)
+bool LLViewerObject::loadTaskInvFile(const std::string& filename, bool assistant_complete)
 {
     std::string filename_and_local_path = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, filename);
     llifstream ifs(filename_and_local_path.c_str());
+    U32 fail_count = 0;
     if(ifs.good())
     {
-        U32 fail_count = 0;
         char buffer[MAX_STRING];    /* Flawfinder: ignore */
         // *NOTE: This buffer size is hard coded into scanf() below.
         char keyword[MAX_STRING];   /* Flawfinder: ignore */
@@ -3553,13 +3555,13 @@ bool LLViewerObject::loadTaskInvFile(const std::string& filename)
             else if(0 == strcmp("inv_item", keyword))
             {
                 LLPointer<LLInventoryObject> inv = new LLViewerInventoryItem;
-                inv->importLegacyStream(ifs);
+                if (!inv->importLegacyStream(ifs)) ++fail_count;
                 mInventory->push_front(inv);
             }
             else if(0 == strcmp("inv_object", keyword))
             {
                 LLPointer<LLInventoryObject> inv = new LLInventoryObject;
-                inv->importLegacyStream(ifs);
+                if (!inv->importLegacyStream(ifs)) ++fail_count;
                 inv->rename("Contents");
                 mInventory->push_front(inv);
             }
@@ -3586,14 +3588,15 @@ bool LLViewerObject::loadTaskInvFile(const std::string& filename)
                 << LL_ENDL;
         return false;
     }
-    doInventoryCallback();
+    doInventoryCallback(true, assistant_complete && fail_count == 0);
 
     return true;
 }
 
-void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
+void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result, bool assistant_complete)
 {
-    if (inv_result.has("contents"))
+    bool complete = true;
+    if (inv_result["contents"].isArray())
     {
         if(mInventory)
         {
@@ -3619,6 +3622,7 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
             }
             else
             {
+                complete = false;
                 LL_WARNS_ONCE() << "Unknown inventory entry while reading from inventory file. Entry: '"
                                 << inv_entry << "'" << LL_ENDL;
             }
@@ -3629,11 +3633,17 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
         return;
     }
-    doInventoryCallback();
+    doInventoryCallback(true, assistant_complete && complete);
 }
 
-void LLViewerObject::doInventoryCallback()
+void LLViewerObject::doInventoryCallback(bool from_simulator, bool complete)
 {
+    ++mInventoryChangeGeneration;
+    if (from_simulator)
+    {
+        ++mInventoryServerGeneration;
+        mInventoryServerComplete = complete;
+    }
     for (callback_list_t::iterator iter = mInventoryCallbacks.begin();
          iter != mInventoryCallbacks.end(); )
     {

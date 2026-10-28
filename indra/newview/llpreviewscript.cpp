@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include "llpreviewscript.h"
 
@@ -2833,6 +2834,16 @@ void LLLiveLSLEditor::callbackLSLCompileFailed(const LLSD& compile_errors)
     closeIfNeeded();
 }
 
+bool LLLiveLSLEditor::assistantSourceBusy() const
+{
+    return getVisible() || mIsSaving || fs_content::nativeSourceBusy({!mScriptEd, mPendingUploads > 0,
+        mScriptEd && mScriptEd->mEditor && !mScriptEd->mEditor->isPristine(),
+        mScriptEd && mScriptEd->mLiveFile, mScriptEd && mScriptEd->mEnableSave,
+        mScriptEd && mScriptEd->mSaveDialogShown,
+        mScriptEd && mScriptEd->mLSLProc && mScriptEd->mLSLProc->mWaving,
+        mScriptEd && mScriptEd->mLSLProc && !mScriptEd->mLSLProc->caching_files.empty()});
+}
+
 void LLLiveLSLEditor::loadAsset()
 {
     //LL_INFOS() << "LLLiveLSLEditor::loadAsset()" << LL_ENDL;
@@ -2883,13 +2894,7 @@ void LLLiveLSLEditor::loadAsset()
                         &LLLiveLSLEditor::onLoadComplete,
                         (void*)user_data,
                         true);
-                    LLMessageSystem* msg = gMessageSystem;
-                    msg->newMessageFast(_PREHASH_GetScriptRunning);
-                    msg->nextBlockFast(_PREHASH_Script);
-                    msg->addUUIDFast(_PREHASH_ObjectID, mObjectUUID);
-                    msg->addUUIDFast(_PREHASH_ItemID, mItemUUID);
-                    msg->sendReliable(object->getRegion()->getHost());
-                    mAskedForRunningInfo = true;
+                    mAskedForRunningInfo = fs_object_tools_request_running(object, mItemUUID);
                     mAssetStatus = PREVIEW_ASSET_LOADING;
                 }
             }
@@ -3051,6 +3056,7 @@ void LLLiveLSLEditor::onRunningCheckboxClicked( LLUICtrl*, void* userdata )
 // [/RLVa:KB]
 
         LLMessageSystem* msg = gMessageSystem;
+        fs_object_tools_native_execution_changed(self->mObjectUUID, self->mItemUUID);
         msg->newMessageFast(_PREHASH_SetScriptRunning);
         msg->nextBlockFast(_PREHASH_AgentData);
         msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
@@ -3084,6 +3090,7 @@ void LLLiveLSLEditor::onReset(void *userdata)
 // [/RLVa:KB]
 
         LLMessageSystem* msg = gMessageSystem;
+        fs_object_tools_native_execution_changed(self->mObjectUUID, self->mItemUUID);
         msg->newMessageFast(_PREHASH_ScriptReset);
         msg->nextBlockFast(_PREHASH_AgentData);
         msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
@@ -3320,6 +3327,7 @@ void LLLiveLSLEditor::onSave(void* userdata, bool close_after_save, bool sync)
 // static
 void LLLiveLSLEditor::processScriptRunningReply(LLMessageSystem* msg, void**)
 {
+    const bool current = fs_object_tools_running_reply(msg);
     LLUUID item_id;
     LLUUID object_id;
     msg->getUUIDFast(_PREHASH_Script, _PREHASH_ObjectID, object_id);
@@ -3330,6 +3338,14 @@ void LLLiveLSLEditor::processScriptRunningReply(LLMessageSystem* msg, void**)
     floater_key["itemid"] = item_id;
     if (LLLiveLSLEditor* instance = LLFloaterReg::findTypedInstance<LLLiveLSLEditor>("preview_scriptedit", floater_key))
     {
+        if (!current)
+        {
+            // A native edit may have changed execution while this no-nonce
+            // query was in flight. Drain it, then observe the new execution.
+            instance->mHaveRunningInfo = false;
+            instance->mAskedForRunningInfo = fs_object_tools_request_running(gObjectList.findObject(object_id), item_id);
+            return;
+        }
         instance->mHaveRunningInfo = true;
         bool running;
         msg->getBOOLFast(_PREHASH_Script, _PREHASH_Running, running);

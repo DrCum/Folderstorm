@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include <typeinfo>
 #include <random>
@@ -4536,6 +4537,7 @@ void LLInventoryModel::processBulkUpdateInventory(LLMessageSystem* msg, void**)
         LLInventoryModelBackgroundFetch::instance().scheduleItemFetch((*iit)->getUUID(), true);
     }
 // [SL:KB] - Patch: UI-Notifications | Checked: Catznip-6.5
+    fs_object_tools_inventory_transaction(msg);
     gInventory.notifyObservers(tid);
 // [/SL:KB]
 //  gInventory.notifyObservers();
