@@ -180,3 +180,11 @@ focused UI-state regression check, separate from human visual acceptance.
 Both the core test executable and Workbench accept `--fonts-only` after the base
 path for focused font checks, or `--xui-only` for focused widget checks.
 Use `--library-only` for package/library, thumbnail and capture-contract checks.
+
+Viewer Preferences → Skins can stage a published custom revision for the current
+profile. Refresh themes reads newly published revisions; Restore previous stages
+the prior choice. OK accepts it for the next restart, and Cancel discards it.
+Custom themes fix their required base and preserve toolbar and personal color
+choices. The image in this panel is labeled as the built-in base preview; Theme
+lab provides the selected revision's exact offline preview.
+See `contracts/viewer-selection-v1.md` for recovery and profile transaction rules.

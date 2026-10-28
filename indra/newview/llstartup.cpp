@@ -2099,7 +2099,7 @@ bool idle_startup()
         // Since we connected, save off the settings so the user doesn't have to
         // type the name/password again if we crash.
         gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
-        LLUIColorTable::instance().saveUserSettings();
+        LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
 
         do_startup_frame();
 
@@ -3095,7 +3095,7 @@ bool idle_startup()
 
             // and make sure it's saved
             gSavedSettings.saveToFile( gSavedSettings.getString("ClientSettingsFile") , true );
-            LLUIColorTable::instance().saveUserSettings();
+            LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
         };
         // </FS:Ansariel> [FS Login Panel]
 
@@ -3615,7 +3615,7 @@ void login_callback(S32 option, void *userdata)
         {
             // turn off the setting and write out to disk
             gSavedSettings.saveToFile( gSavedSettings.getString("ClientSettingsFile") , true );
-            LLUIColorTable::instance().saveUserSettings();
+            LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
         }
 
         // Next iteration through main loop should shut down the app cleanly.

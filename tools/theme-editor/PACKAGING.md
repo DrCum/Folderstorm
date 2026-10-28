@@ -9,7 +9,7 @@ Enable the component for a Windows x64 build:
 ```text
 -DFOLDERSTORM_BUILD_THEME_EDITOR=ON
 -DFOLDERSTORM_THEME_EDITOR_DOTNET=C:/path/to/dotnet.exe
--DFOLDERSTORM_THEME_EDITOR_VERSION=0.20.0
+-DFOLDERSTORM_THEME_EDITOR_VERSION=0.21.0
 ```
 
 The optional component requires SDK 10 or newer on the build machine. End users

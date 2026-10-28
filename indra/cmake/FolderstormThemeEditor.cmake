@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 option(FOLDERSTORM_BUILD_THEME_EDITOR "Build/package the optional Windows theme lab" OFF)
-set(FOLDERSTORM_THEME_EDITOR_VERSION "0.20.0" CACHE STRING "Theme lab application version")
+set(FOLDERSTORM_THEME_EDITOR_VERSION "0.21.0" CACHE STRING "Theme lab application version")
 set(FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR "")
 set(FOLDERSTORM_THEME_EDITOR_STAMP "")
 get_filename_component(FOLDERSTORM_THEME_EDITOR_HELPER "${CMAKE_CURRENT_LIST_DIR}/../../scripts/folderstorm_theme_editor.py" ABSOLUTE)

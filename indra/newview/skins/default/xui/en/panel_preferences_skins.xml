@@ -1,156 +1,39 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<panel
- border="true"
- follows="all"
- height="480"
- layout="topleft"
- left="1"
- top="1"
- width="540"
- label="Skins"
- name="skin_panel">
-
-    <button
-     image_color="SL-White"
-     image_color_disabled="SL-White"
-     scale_image="true"
-     display_pressed_state="false"
-     hover_glow_amount="0.0"
-     left="30"
-     top="20"
-     follows="left|top"
-     layout="topleft"
-     width="400"
-     height="225"
-     name="skin_preview"
-     image_selected="Blank"
-     image_unselected="Blank" />
-    <button name="theme_lab" label="Theme lab..." tool_tip="Open the optional theme editor" follows="right|top" layout="topleft" left="440" top="20" width="90" height="23" />
-
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     height="15"
-     layout="topleft"
-     left="30"
-     name="skin_textbox"
-     top_pad="15"
-     width="400">
-        Skin:
-    </text>
-    <combo_box
-     follows="left|top"
-     height="23"
-     layout="topleft"
-     left="50"
-     max_chars="135"
-     name="skin_combobox"
-     width="200">
-    </combo_box>
-    <text
-     font="SansSerifSmall"
-     type="string"
-     text_color="White_50"
-     length="1"
-     follows="left|top"
-     height="18"
-     layout="topleft"
-     left_pad="10"
-     name="skin_textbox1"
-     width="200">
-        (Requires restart)
-    </text>
-
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     height="15"
-     layout="topleft"
-     left="30"
-     top_pad="15"
-     name="theme_textbox"
-     width="200">
-        Colour scheme:
-    </text>
-    <combo_box
-     follows="left|top"
-     height="23"
-     layout="topleft"
-     left="50"
-     name="theme_combobox"
-     width="200">
-    </combo_box>
-    <text
-     font="SansSerifSmall"
-     type="string"
-     text_color="White_50"
-     length="1"
-     follows="left|top"
-     height="18"
-     layout="topleft"
-     left_pad="10"
-     name="theme_textbox2"
-     width="200">
-        (Requires restart)
-    </text>
-
-    <check_box
-     control_name="FSSkinClobbersToolbarPrefs"
-     enabled="true"
-     follows="left|top"
-     height="16"
-     initial_value="true"
+<panel border="true" follows="all" height="480" layout="topleft" left="1" top="1" width="540" label="Skins" name="skin_panel">
+    <button image_color="SL-White" image_color_disabled="SL-White" scale_image="true"
+     display_pressed_state="false" hover_glow_amount="0.0" left="30" top="20" follows="left|top"
+     layout="topleft" width="300" height="169" name="skin_preview" image_selected="Blank" image_unselected="Blank" />
+    <text name="skin_preview_note" font="SansSerifSmall" text_color="White_50" follows="left|top"
+     layout="topleft" left="30" top="192" width="300" height="16">Built-in base preview</text>
+    <button name="theme_lab" label="Theme lab..." tool_tip="Edit a theme or open its exact native preview"
+     follows="right|top" layout="topleft" left="350" top="20" width="160" height="23" />
+    <button name="custom_theme_refresh" label="Refresh themes" tool_tip="Read published revisions from your theme library"
+     follows="right|top" layout="topleft" left="350" top="51" width="160" height="23" />
+    <text name="custom_theme_label" follows="left|top" layout="topleft" left="30" top="211" width="300" height="16">Custom theme:</text>
+    <combo_box name="custom_theme_combobox" follows="left|top" layout="topleft" left="50" top="232" width="330" height="23"
+     tool_tip="Choose a library revision. OK accepts it for this profile; restart activates it. Cancel discards this choice." />
+    <button name="custom_theme_previous" label="Restore previous" follows="right|top" layout="topleft"
+     left="390" top="232" width="120" height="23" tool_tip="Stage the previous theme or built-in base. Use OK to accept it." />
+    <text name="custom_theme_status" font="SansSerifSmall" follows="left|top" layout="topleft" left="50" top="260"
+     width="460" height="28" word_wrap="true" />
+    <text name="skin_textbox" follows="left|top" layout="topleft" left="30" top="294" width="400" height="15">Skin:</text>
+    <combo_box name="skin_combobox" follows="left|top" layout="topleft" left="50" top="314" width="200" height="23" max_chars="135" />
+    <text name="skin_textbox1" font="SansSerifSmall" text_color="White_50" follows="left|top" layout="topleft"
+     left="260" top="317" width="200" height="18">(Requires restart)</text>
+    <text name="theme_textbox" follows="left|top" layout="topleft" left="30" top="343" width="200" height="15">Colour scheme:</text>
+    <combo_box name="theme_combobox" follows="left|top" layout="topleft" left="50" top="363" width="200" height="23" />
+    <text name="theme_textbox2" font="SansSerifSmall" text_color="White_50" follows="left|top" layout="topleft"
+     left="260" top="366" width="200" height="18">(Requires restart)</text>
+    <check_box control_name="FSSkinClobbersToolbarPrefs" enabled="true" follows="left|top" height="16" initial_value="true"
      label="Reset toolbars to the skin's preferred layout when changing skins."
-	 tool_tip="When enabled, this option preserves the skin's designed toolbar button layout and will override your chosen button customisations when you change skins."
-     layout="topleft"
-     left="30"
-     top_pad="15"
-     name="reset_toolbar_settings"
-     width="200" />
-
-    <check_box
-     control_name="FSToolbarsResetOnModeChange"
-     enabled="true"
-     follows="left|top"
-     height="16"
-     initial_value="true"
+     tool_tip="Use the skin's toolbar layout for built-in skin changes. Custom theme activation preserves your toolbar choices."
+     layout="topleft" left="30" top="400" name="reset_toolbar_settings" width="480" />
+    <check_box control_name="FSToolbarsResetOnModeChange" enabled="true" follows="left|top" height="16" initial_value="true"
      label="Reset toolbars to the login mode's preferred layout when changing login modes."
-	 tool_tip="When enabled, this option preserves the login mode's designed toolbar button layout and will override your chosen button customisations when you change login mode."
-     layout="topleft"
-     left="30"
-     top_pad="5"
-     name="FSToolbarsResetOnModeChange"
-     width="200" />
-
-    <check_box
-     control_name="FSUseLegacyCursors"
-     follows="left|top"
-     height="16"
-     initial_value="true"
-     label="Use Viewer 1 style cursors"
-     layout="topleft"
-     left="30"
-     top_pad="5"
-     name="use_legacy_cursors"
-     width="200" />
-    <text
-     font="SansSerifSmall"
-     type="string"
-     text_color="White_50"
-     length="1"
-     follows="left|top"
-     height="18"
-     layout="topleft"
-     left_pad="30"
-     name="theme_textbox3"
-     width="200">
-        (Requires restart)
-    </text>
-
-
-
-
-
+     tool_tip="Use the login mode's toolbar layout when changing login mode."
+     layout="topleft" left="30" top="421" name="FSToolbarsResetOnModeChange" width="480" />
+    <check_box control_name="FSUseLegacyCursors" follows="left|top" height="16" initial_value="true" label="Use Viewer 1 style cursors"
+     layout="topleft" left="30" top="442" name="use_legacy_cursors" width="200" />
+    <text name="theme_textbox3" font="SansSerifSmall" text_color="White_50" follows="left|top" layout="topleft"
+     left="260" top="445" width="200" height="18">(Requires restart)</text>
 </panel>

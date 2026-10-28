@@ -2362,12 +2362,12 @@ bool LLAppViewer::cleanup()
     {
         gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
 
-    LLUIColorTable::instance().saveUserSettings();
+    LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
 
 //<Firestorm Skin Cleanup>
     std::string skinSaved = gSavedSettings.getString("SkinCurrent");
     std::string themeSaved = gSavedSettings.getString("SkinCurrentTheme");
-    if ((skinSaved != mCurrentSkin) || (themeSaved != mCurrentSkinTheme))
+    if (((skinSaved != mCurrentSkin) || (themeSaved != mCurrentSkinTheme)) && !FSThemeViewer::preservePersonalColors() && !FSThemeViewer::customThemeActive())
     {
         LL_INFOS() << "Clearing skin colors." << LL_ENDL;
         // Implementation to only purge skin colors

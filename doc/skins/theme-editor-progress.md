@@ -373,3 +373,26 @@ Computer control is off. Prefer user screenshots for small visual checks, use a
 question prompt for input, and leave the user's personal viewer alone. Any future
 computer-control batch must be announced, delayed at least five seconds, kept
 short and explicitly disconnected when finished.
+
+## Viewer selection checkpoint (0.21)
+
+The retained source stack through 0.20 is available as draft PRs #142–#153.
+The next source checkpoint adds current-profile library selection in Skins,
+Refresh themes, Restore previous and explicit OK/Cancel. Internal initialization
+calls cannot commit the draft; activation waits for restart and keeps the running
+revision captured. The built-in image is labeled as a base preview.
+
+The bounded, legacy-readable selection record carries the required base and a
+previous choice. Apply revalidates the package, takes a profile lock, checks the
+accepted bytes and replaces atomically. Base changes keep recoverable personal
+color bytes; custom transitions preserve toolbars and explicit user colors.
+Matching personal colors survive save, while an explicit Reset returns to
+inheritance. Failed-startup recovery avoids the failed revision even when base
+metadata differs, and retains its reference for inspection.
+
+Five native model groups cover isolated file transactions, legacy/future records,
+rollback/recovery, package/file races, rejected-record backups and a real Windows
+exclusive lock. Static XML bounds cover 18 controls. A private native consumer
+target links the production color serializer for further verification. Full
+native/desktop acceptance is recorded with retained candidates; stopped-profile
+targeting, Folderstorm base support and base-independent authoring remain open.
