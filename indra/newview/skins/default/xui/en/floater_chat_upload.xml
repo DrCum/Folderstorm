@@ -4,7 +4,8 @@
   <text name="host" top="58" left="16" right="-16" height="20" follows="left|right|top"/>
   <text name="public" top="84" left="16" right="-16" height="22">Anyone with the link can view this image.</text>
   <text name="status" top="118" left="210" right="-16" height="124" wrap="true" follows="left|right|top"/>
-  <text name="retention" top="250" left="16" right="-16" height="34" wrap="true">Files last up to 180 days and may be cleaned up earlier. Original files can retain embedded metadata.</text>
+  <check_box name="save_gif" label="Save GIF uploads to My GIFs" left="16" top="242" height="22" tool_tip="Save confirmed GIF links as bookmarks. Files can still expire or be cleaned up."/>
+  <text name="retention" top="268" left="16" right="-16" height="20" use_ellipses="true" tool_tip="Files last up to 180 days and may be cleaned up earlier. Original files can retain embedded metadata.">Public links can expire. Original files can retain metadata.</text>
   <check_box name="automatic" label="Upload future pasted/dropped images without asking" left="16" top="290" height="22" tool_tip="Chat still requires Send. Change this later in Preferences → Chat → Media → Uploads."/>
   <button name="choose" label="Choose image…" left="16" top="326" width="126" height="24"/>
   <button name="paste" label="Paste image" left="152" top="326" width="94" height="24"/>

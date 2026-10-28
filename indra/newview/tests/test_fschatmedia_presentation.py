@@ -96,12 +96,12 @@ int main(){
 '''
 CARD_STUBS = r'''
 struct Handle{LLView* p=nullptr;LLView* get()const{return p;}};
-struct Prefs{bool hideLinks=false;int mode=1;};struct Service{Prefs prefs;};Service host;Service& service(){return host;}
+struct Prefs{bool hideLinks=false,animate=false;int mode=1;};bool automaticMotion(){return true;}struct Service{Prefs prefs;};Service host;Service& service(){return host;}
 struct Source{bool allowed=true;bool valid()const{return allowed;}};
 struct Entry{std::shared_ptr<std::atomic<bool>> cancelled=std::make_shared<std::atomic<bool>>(false);std::shared_ptr<fs_chat_media::Image> image;};
 struct ImageCard:LLPanel{
  Source mSource;std::shared_ptr<Entry> mEntry;std::shared_ptr<bool> mLinkHidden=std::make_shared<bool>(false);Handle mHistory;
- bool mLarge=false,mRenderUnavailable=false;int opens=0,mDragX=0,mDragY=0;
+ bool mLarge=false,mRenderUnavailable=false,mBoard=false,mBoardPlay=false,mBoardVisible=false,mPlaying=false,mPlaybackSet=false;std::function<void()> mInsert;bool playing()const;int opens=0,mDragX=0,mDragY=0;
  void activate(){++opens;}void setLinkHidden(bool);void syncLinkVisibility();
  S32 desiredHeight(S32 width=0)const;
  bool handleMouseDown(S32,S32,MASK);bool handleKeyHere(KEY,MASK);
@@ -125,6 +125,9 @@ int main(){
  c.childHandled=false;c.handleMouseDown(5,5,0);assert(c.opens==1);
  c.handleKeyHere(KEY_RETURN,0);assert(c.opens==2);
  c.mLarge=true;c.handleMouseDown(5,10,0);assert(!gFocusMgr.owner);c.handleMouseDown(5,100,0);assert(gFocusMgr.owner==&c);
+ c.mBoard=true;c.mBoardVisible=true;assert(!c.playing());c.handleKeyHere(' ',0);assert(c.playing()); // Explicit Play works in Manual/reduced-motion mode.
+ c.mBoardVisible=false;assert(!c.playing());c.mBoardVisible=true;c.handleKeyHere(' ',0);c.mBoardPlay=true;assert(!c.playing()); // Explicit Pause beats autoplay.
+ int inserts=0;c.mInsert=[&]{++inserts;};c.handleKeyHere(KEY_RETURN,0);assert(inserts==1);
 }
 '''
 
@@ -145,8 +148,8 @@ class PresentationTests(unittest.TestCase):
     def test_card_state_and_interaction(self):
         text = (ROOT / 'fschatmedia.cpp').read_text()
         methods = ''.join(function(text, signature).replace('S32 width = 0', 'S32 width') for signature in (
-            '    void setLinkHidden(', '    void syncLinkVisibility(', '    S32 desiredHeight(', '    bool handleMouseDown(', '    bool handleKeyHere('))
-        for name in ('setLinkHidden', 'syncLinkVisibility', 'desiredHeight', 'handleMouseDown', 'handleKeyHere'):
+            '    void setLinkHidden(', '    void syncLinkVisibility(', '    S32 desiredHeight(', '    bool handleMouseDown(', '    bool handleKeyHere(', '    bool playing() const'))
+        for name in ('setLinkHidden', 'syncLinkVisibility', 'desiredHeight', 'handleMouseDown', 'handleKeyHere', 'playing'):
             methods = methods.replace(' '+name+'(', ' ImageCard::'+name+'(', 1)
         methods = methods.replace(' override', '')
         self.run_cpp(STUBS + CARD_STUBS + methods + CARD_CASES)

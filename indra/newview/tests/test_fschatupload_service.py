@@ -195,6 +195,7 @@ prepare_at=body.index('Work prepare(')
 controller_at=body.index('struct Controller')
 preamble=body[:prepare_at]
 controller=body[controller_at:]
+preamble+='\nvoid saveGifLink(const std::string&) {}\n'
 admission=source[source.index('std::shared_ptr<Job> newJob('):source.index('class Thumbnail final')]
 stage=source[source.index('void FSChatUpload::stageBytes('):source.index('void FSChatUpload::pasteImage(')]
 with tempfile.TemporaryDirectory(prefix='fs-upload-controller-') as temp:

@@ -1,6 +1,7 @@
 # Folderstorm GIF playback, KLIPY and My GIFs
 
-Status: implementation plan only. Prepared October 22, 2026.
+Status: approved implementation in progress. Prepared October 22, 2026.
+Playback is checkpoint #85; the board/library checkpoint follows above it.
 
 Scope: native viewer Nearby, direct IM, group and conference composers, including
 the normal Conversations window and toolbar Nearby. Host Chat remains deferred.
@@ -309,4 +310,4 @@ No user choice is required to complete the plan. Before shipping KLIPY search:
 
 Repository evidence: `fschatmediacodec.cpp`,
 `fschatmediapolicy.h`, `fschatmedia.cpp` and `fschatupload.cpp` in the #84 tree.
-No production code or published branch has been changed for this plan.
+Implementation and validation progress are recorded in the checkpoint documents.
