@@ -30,6 +30,7 @@
 
 #include "fschathistory.h"
 #include "fschatmedia.h"
+#include "fschatmediapolicy.h"
 
 #include "llavatarnamecache.h"
 #include "llinstantmessage.h"
@@ -72,6 +73,73 @@
 #include "llpanelblockedlist.h"
 #include "rlvactions.h"
 #include "rlvhandler.h"
+
+namespace
+{
+// Keep the native text, link style and clipboard contents. Only layout and ink
+// collapse while the corresponding image is available and the user opts in.
+class FSChatMediaLinkSegment final : public LLNormalTextSegment
+{
+public:
+    FSChatMediaLinkSegment(LLStyleConstSP style, S32 start, S32 end, LLTextBase& editor, std::shared_ptr<bool> hidden, bool editable)
+        : LLNormalTextSegment(style, start, end, editor), mHidden(std::move(hidden)) { setAllowEdit(editable); }
+    LLTextSegmentPtr clone(LLTextBase& target) const override
+    { return new FSChatMediaLinkSegment(cloneStyle(target, getStyle().get()), mStart, mEnd, target, mHidden, canEdit()); }
+    bool getDimensionsF32(S32 first, S32 count, F32& width, S32& height) override
+    { if (*mHidden) { width = 0.f; height = 0; return false; } return LLNormalTextSegment::getDimensionsF32(first, count, width, height); }
+    S32 getNumChars(S32 pixels, S32 offset, S32 line, S32 maximum, S32 lineIndex) const override
+    { return *mHidden ? (std::max)(0, (std::min)(maximum, mEnd - mStart - offset)) : LLNormalTextSegment::getNumChars(pixels, offset, line, maximum, lineIndex); }
+    S32 getOffset(S32 x, S32 offset, S32 count, bool round) const override
+    { return *mHidden ? 0 : LLNormalTextSegment::getOffset(x, offset, count, round); }
+    F32 draw(S32 start, S32 end, S32 a, S32 b, const LLRectf& rect) override
+    { return *mHidden ? rect.mLeft : LLNormalTextSegment::draw(start, end, a, b, rect); }
+    bool handleMouseDown(S32 x, S32 y, MASK mask) override
+    { return !*mHidden && LLNormalTextSegment::handleMouseDown(x, y, mask); }
+    bool handleMouseUp(S32 x, S32 y, MASK mask) override
+    { return !*mHidden && LLNormalTextSegment::handleMouseUp(x, y, mask); }
+    bool handleRightMouseDown(S32 x, S32 y, MASK mask) override
+    { return !*mHidden && LLNormalTextSegment::handleRightMouseDown(x, y, mask); }
+    bool handleHover(S32 x, S32 y, MASK mask) override
+    { return !*mHidden && LLNormalTextSegment::handleHover(x, y, mask); }
+    bool handleToolTip(S32 x, S32 y, MASK mask) override
+    { return !*mHidden && LLNormalTextSegment::handleToolTip(x, y, mask); }
+private:
+    std::shared_ptr<bool> mHidden;
+};
+}
+void FSChatHistory::collapseMediaLink(S32 first, S32 last, const std::string& url, const std::shared_ptr<bool>& hidden)
+{
+    if (first < 0 || last <= first || last > getLength()) return;
+    const auto expected = fs_chat_media::parse(url); if (!expected) return;
+    std::vector<LLTextSegmentPtr> group, replace;
+    const auto flush = [&]
+    {
+        if (group.empty()) return;
+        const auto shown = fs_chat_media::parse(wstring_to_utf8str(getWText().substr(group.front()->getStart(), group.back()->getEnd() - group.front()->getStart())));
+        // A descriptive bracket-link label is a caption, not a raw image URL.
+        if (shown && shown->value == expected->value) replace.insert(replace.end(), group.begin(), group.end());
+        group.clear();
+    };
+    for (auto it = getSegIterContaining(first); it != mSegments.end() && (*it)->getStart() < last; ++it)
+    {
+        const auto& segment = *it; const auto style = segment->getStyle();
+        const auto target = style.notNull() && style->isLink() ? fs_chat_media::parse(style->getLinkHREF()) : std::optional<fs_chat_media::Url>{};
+        if (segment->getStart() < first || segment->getEnd() > last || !dynamic_cast<LLNormalTextSegment*>(segment.get()) ||
+            dynamic_cast<FSChatMediaLinkSegment*>(segment.get()) || !target || target->value != expected->value)
+        { flush(); continue; }
+        if (!group.empty() && group.back()->getEnd() != segment->getStart()) flush();
+        group.push_back(segment);
+    }
+    flush();
+    for (auto prior : replace)
+    {
+        LLTextSegmentPtr replacement = new FSChatMediaLinkSegment(prior->getStyle(), prior->getStart(), prior->getEnd(), *this, hidden, prior->canEdit());
+        replacement->setToolTip(url);
+        // Erase before inserting the identical range: the set orders by end.
+        prior->unlinkFromDocument(this); mSegments.erase(prior); mSegments.insert(replacement); replacement->linkToDocument(this);
+    }
+    if (!replace.empty()) needsReflow(first);
+}
 
 static LLDefaultChildRegistry::Register<FSChatHistory> r("fs_chat_history");
 
@@ -1465,6 +1533,7 @@ static LLTrace::BlockTimerStatHandle FTM_APPEND_MESSAGE("Append Chat Message");
 void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LLStyle::Params& input_append_params)
 {
     LL_RECORD_BLOCK_TIME(FTM_APPEND_MESSAGE);
+    S32 mediaTextStart = -1;
     // Ansa: FIRE-12754: Hack around a weird issue where the doc size magically increases by 1px
     //       during draw if the doc exceeds the visible space and the scrollbar is getting visible.
     mScrollToBottom = (mScroller->isAtBottom() || mScroller->getScrollbar(LLScrollContainer::VERTICAL)->getDocPosMax() <= 1);
@@ -1943,6 +2012,7 @@ void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
         setContentTrusted(chat.mFromID.isNull() && is_p2p); // <FS:Ansariel> Set trusted content temporarily for system messages
         setNearbyChatContent(is_local); // <FS:PP> Use the nearby-chat labeled-link setting for local/object chat
         setPlainText((use_plain_text_chat_history && is_p2p) ? chat.mFromID.notNull() : use_plain_text_chat_history);
+        mediaTextStart = getLength();
         appendText(message, prependNewLineState, body_message_params);  // <FS:Zi> FIRE-8600: TAB out of chat history
         setContentTrusted(is_trusted);
         setNearbyChatContent(false); // <FS:PP> Use the nearby-chat labeled-link setting for local/object chat
@@ -1951,8 +2021,8 @@ void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
         //prependNewLineState = false;
     }
 
-    if (!teleport_separator && !is_conversation_log)
-        FSChatMedia::append(this, chat, is_local);
+    if (!teleport_separator && !is_conversation_log && mediaTextStart >= 0)
+        FSChatMedia::append(this, chat, is_local, mediaTextStart);
 
     blockUndo();    // <FS:Zi> FIRE-8600: TAB out of chat history
 

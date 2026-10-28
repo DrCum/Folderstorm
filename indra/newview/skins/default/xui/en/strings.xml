@@ -3395,6 +3395,8 @@ Your current position: [AVATAR_POS]
  <string name="FSChatMediaAnimationTip">Play or pause this animation. Hidden images stop updating.</string>
  <string name="FSChatMediaPlay">Play ▶</string>
  <string name="FSChatMediaFit">Fit image</string>
+  <string name="FSChatMediaCopyLink">Copy image link</string>
+  <string name="FSChatMediaOriginal">Open original link</string>
   <string name="FSChatUploadAttach">Attach image / upload progress</string>
   <string name="FSChatUploadPending">Image upload pending. Open to review or cancel before sending.</string>
   <string name="FSChatUploadUnavailable">Chat is unavailable.</string>

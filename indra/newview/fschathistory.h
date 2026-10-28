@@ -31,6 +31,7 @@
 
 #include "lltexteditor.h"
 #include "llviewerchat.h"
+#include <memory>
 
 class LLChatEntry;  // <FS_Zi> FIRE-8602: Typing in chat history focuses chat input line
 
@@ -126,6 +127,7 @@ class FSChatHistory : public LLTextEditor   // <FS:Zi> FIRE-8600: TAB out of cha
         void reshape(S32 width, S32 height, bool called_from_parent = true) override;
         void clear() override;
         void draw() override;
+        void collapseMediaLink(S32 first, S32 last, const std::string& url, const std::shared_ptr<bool>& hidden);
 
         typedef boost::signals2::signal<void(S32 unread_messages)> unread_messages_update_callback_t;
         boost::signals2::connection setUnreadMessagesUpdateCallback(const unread_messages_update_callback_t::slot_type& cb)
