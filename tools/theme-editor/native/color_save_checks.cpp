@@ -15,6 +15,12 @@
 namespace
 {
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+std::filesystem::path utf8Path(const std::string& value)
+{
+    std::u8string encoded;encoded.reserve(value.size());
+    for(unsigned char byte:value)encoded.push_back(static_cast<char8_t>(byte));
+    return std::filesystem::path(encoded);
+}
 // Only directory resolution is isolated. The color table, serialization and reset
 // methods under test are linked from the matching production llui library.
 class FixtureDir final : public LLDir
@@ -26,7 +32,7 @@ public:
     U32 countFilesInDir(const std::string&,const std::string&) override {return 0;}
     bool getNextFileInDir(const std::string&,const std::string&,std::string&) override {return false;}
     std::string getCurPath() override {return mOSUserAppDir;}
-    bool fileExists(const std::string& path) const override {return std::filesystem::exists(std::filesystem::u8path(path));}
+    bool fileExists(const std::string& path) const override {return std::filesystem::exists(utf8Path(path));}
     std::string getLLPluginLauncher() override {return {};}
     std::string getLLPluginFilename(std::string) override {return {};}
 };
@@ -55,14 +61,14 @@ int main(int count,char** args)
     try
     {
         check(count==2,"Pass a new isolated fixture directory with redirected APPDATA/LOCALAPPDATA");
-        const auto root=std::filesystem::absolute(std::filesystem::u8path(args[1])).lexically_normal();
+        const auto root=std::filesystem::absolute(utf8Path(args[1])).lexically_normal();
         const auto roaming=LLStringUtil::getoptenv("APPDATA"),local=LLStringUtil::getoptenv("LOCALAPPDATA");
-        check(roaming && local && std::filesystem::absolute(std::filesystem::u8path(*roaming)).parent_path()==root && std::filesystem::absolute(std::filesystem::u8path(*local)).parent_path()==root,"Fixture environment is not isolated");
+        check(roaming && local && std::filesystem::absolute(utf8Path(*roaming)).parent_path()==root && std::filesystem::absolute(utf8Path(*local)).parent_path()==root,"Fixture environment is not isolated");
         const auto profile=root/"profile";std::filesystem::create_directories(profile/"user_settings");
         const auto base=root/"base";std::filesystem::create_directories(base/"skins/default");
         {std::ofstream output(base/"skins/default/colors.xml");output<<"<colors><color name=\"ThemeAccent\" value=\"0.25 0.5 0.75 1\"/><color name=\"InheritedOnly\" value=\"0.8 0.2 0.4 1\"/></colors>\n";check(static_cast<bool>(output),"Could not create fixture colors");}
         FixtureDir directory(profile.string(),base.string());UseDir use(directory);
-        const auto file=std::filesystem::u8path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"colors.xml"));
+        const auto file=utf8Path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS,"colors.xml"));
         check(file.lexically_normal()==profile/"user_settings/colors.xml","Color serializer escaped its fixture profile");
         auto& table=LLUIColorTable::instance();table.clear();
         const LLColor4 accent(0.25f,0.5f,0.75f,1.f),personal(0.8f,0.2f,0.4f,1.f);

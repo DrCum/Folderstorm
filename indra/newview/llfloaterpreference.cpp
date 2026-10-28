@@ -5692,7 +5692,7 @@ void LLPanelPreferenceSkins::refreshThemeControls()
         m_pCustomThemeCombo->clearRows();
         for (const auto& option : FSThemeViewer::preferenceOptions(*m_ThemePreferences))
             m_pCustomThemeCombo->add(option.label, option.token);
-        m_pCustomThemeCombo->setSelectedByValue(FSThemeViewer::preferenceToken(*m_ThemePreferences));
+        m_pCustomThemeCombo->setSelectedByValue(FSThemeViewer::preferenceToken(*m_ThemePreferences), true);
     }
     const bool custom = FSThemeViewer::preferenceCustom(*m_ThemePreferences);
     if (m_pSkinCombo) m_pSkinCombo->setEnabled(!custom);

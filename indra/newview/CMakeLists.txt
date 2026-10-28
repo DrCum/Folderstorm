@@ -1974,7 +1974,7 @@ list(APPEND viewer_HEADER_FILES fsthemepackage.h fsthemeviewer.h fsthemeeditor.h
 if(WINDOWS)
   add_executable(fs-theme-color-save-checks EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/color_save_checks.cpp")
   target_link_libraries(fs-theme-color-save-checks PRIVATE llui)
-  set_target_properties(fs-theme-color-save-checks PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/theme-editor-checks")
+  set_target_properties(fs-theme-color-save-checks PROPERTIES EXCLUDE_FROM_DEFAULT_BUILD TRUE RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/theme-editor-checks")
 endif()
 add_subdirectory(third_party/chat_media)
 list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp fschatupload.cpp fschatuploadhttp.cpp fschatuploadreply.cpp)
