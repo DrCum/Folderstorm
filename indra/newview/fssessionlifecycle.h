@@ -9,6 +9,14 @@ namespace fs_session
 inline bool sessionRenderAllowed(bool disconnected, bool readyApplied, Mode mode)
 { return disconnected || !readyApplied || mode == Mode::Active; }
 
+enum class CharacterQuickAction { Unavailable, OpenLogin, Activate, ShowViewer };
+inline CharacterQuickAction characterQuickAction(bool running, bool ready, bool managed, bool blocked)
+{
+    if (blocked) return CharacterQuickAction::Unavailable;
+    if (!running) return CharacterQuickAction::OpenLogin;
+    return ready && managed ? CharacterQuickAction::Activate : CharacterQuickAction::ShowViewer;
+}
+
 // Used by the real host. Management selection is independent of the active
 // world; an unavailable character must remain selectable for lifecycle actions.
 class HostLifecycle

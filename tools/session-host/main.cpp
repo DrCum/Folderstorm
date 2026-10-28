@@ -503,8 +503,34 @@ struct Host
     }
     std::wstring quickLabel(unsigned int id) const
     {
+        if (const int slot=characterQuickSlot(id); validSlot(slot)) return profileName(slot);
         const auto* c=shellCommand(id);if(!c)return L"";
         return c->label;
+    }
+    std::wstring quickChoiceLabel(unsigned int id) const
+    {
+        const auto* c=shellCommand(id);if(!c)return L"";
+        const auto label=quickLabel(id);
+        return characterQuickSlot(id)>=0 && label!=c->label ? std::wstring(c->label)+L" · "+label : label;
+    }
+    CharacterQuickAction characterAction(int index) const
+    {
+        if(!validSlot(index))return CharacterQuickAction::Unavailable;
+        const auto* slot=slots[index].get();
+        return characterQuickAction(slot && slot->running(),slot && slot->snapshot.state==State::Ready,
+            slot && !slot->detached && slot->pipe.alive() && !slot->recovery.active(),
+            busy() || closing || (slot && slot->restart.phase()!=Restart::Phase::Idle));
+    }
+    std::wstring characterQuickTip(int index) const
+    {
+        const auto name=characterName(index);
+        switch(characterAction(index))
+        {
+        case CharacterQuickAction::OpenLogin:return L"Open "+name+L" login";
+        case CharacterQuickAction::Activate:return index==active?name+L" · active":L"Switch to "+name;
+        case CharacterQuickAction::ShowViewer:return L"Show "+name+(slots[index]->snapshot.state!=State::Ready && slots[index]->snapshot.state!=State::Disconnected?L" login":L" viewer");
+        default:return name+L" · finish the current switch, restart or close action first";
+        }
     }
     unsigned int windowKey(HWND panel) const
     {
@@ -722,13 +748,14 @@ struct Host
         for(const auto& command:shellCommands())
         {
             if(command.id==206 && std::find(experience.quick.begin(),experience.quick.end(),206)==experience.quick.end())continue;
-            quickChoices.push_back(&command);commands.push_back(command.label);
+            quickChoices.push_back(&command);commands.push_back(quickChoiceLabel(command.id));
         }
         const auto quickStart=fields.size();
         for(std::size_t i=0;i<12;++i)
         {
             unsigned int choice=0;if(i<experience.quick.size())for(std::size_t j=0;j<quickChoices.size();++j)if(quickChoices[j]->id==experience.quick[i])choice=static_cast<unsigned int>(j)+1;
             const auto field=add(PrefQuick,{L"Position "+std::to_wstring(i+1),std::to_wstring(choice),FieldType::Choice,commands});fields[field].rowHeight=28;
+            fields[field].help=L"Character buttons switch or open login for that saved profile. Compact buttons show its slot number; reordering cards does not change the target.";
         }
         const auto stateTextField=add(PrefAccessibility,{L"Show text states on audio buttons",experience.audioStateText?L"1":L"0",FieldType::Check});
         fields[stateTextField].help=L"Add On/Off/Muted when audio quick-action labels are shown. Accessible toggle state is always available.";
@@ -871,7 +898,7 @@ struct Host
             for(unsigned int i=0;i<12;++i)
             {
                 const auto n=static_cast<unsigned int>(std::wcstoul(readField(quickStart+i).c_str(),nullptr,10));if(!n || n>quickChoices.size())continue;const auto& command=*quickChoices[n-1];
-                if(!full.empty())full+=L" | ";full+=command.label;
+                if(!full.empty())full+=L" | ";full+=quickLabel(command.id);
             }
             fields[quickPreview].value=full.empty()?L"Toolbar preview: no quick actions":L"Toolbar: "+full;
             if(fields[quickPreview].control)SetWindowTextW(fields[quickPreview].control,fields[quickPreview].value.c_str());
@@ -1675,6 +1702,18 @@ struct Host
             RECT stripe=draw.rcItem;stripe.right=stripe.left+scaled(4);
             const HBRUSH brush=CreateSolidBrush(accountColor(owner));FillRect(draw.hDC,&stripe,brush);DeleteObject(brush);return true;
         }
+        if(draw.CtlID>=QuickBase && draw.CtlID<QuickBase+12)
+        {
+            const auto position=static_cast<std::size_t>(draw.CtlID-QuickBase);
+            const int owner=position<experience.quick.size()?characterQuickSlot(experience.quick[position]):-1;
+            if(validSlot(owner))
+            {
+                theme.button(draw);
+                if(owner==active){const HBRUSH selected=CreateSolidBrush(theme.accent);FrameRect(draw.hDC,&draw.rcItem,selected);DeleteObject(selected);}
+                RECT stripe=draw.rcItem;stripe.right=stripe.left+scaled(4);
+                const HBRUSH brush=CreateSolidBrush(accountColor(owner));FillRect(draw.hDC,&stripe,brush);DeleteObject(brush);return true;
+            }
+        }
         if(theme.button(draw))return true;
         if (draw.CtlType != ODT_COMBOBOX || (draw.CtlID != ActiveCharacter && draw.CtlID != ChatAccount)) return theme.drawCombo(draw);
         const int index = draw.itemID == static_cast<UINT>(-1) ? (draw.CtlID == ActiveCharacter ? lifecycle.selection() : chatIndex) : static_cast<int>(draw.itemID);
@@ -1713,6 +1752,21 @@ struct Host
     {
         for (int i = 0; i < MaxCharacters; ++i) if (!slots[i] || !slots[i]->running()) { launch(i); return; }
         message(L"All character slots are occupied. Use Session to restart or close a selected character.");
+    }
+    void openCharacter(int index)
+    {
+        const auto action=characterAction(index);
+        if(action==CharacterQuickAction::Unavailable){message(L"Finish the current switch, restart or close action before opening this character.");return;}
+        lifecycle.observeSelection(index);SendMessageW(characterControl,CB_SETCURSEL,index,0);
+        if(action==CharacterQuickAction::OpenLogin)launch(index);
+        else if(action==CharacterQuickAction::Activate)switchTo(index);
+        else if(auto surface=slots[index]->surface())
+        {
+            if(IsIconic(surface))ShowWindow(surface,SW_RESTORE);
+            SetForegroundWindow(surface);
+        }
+        else message(L"This character's viewer is already opening. Wait for its login window; a second viewer was not launched.");
+        layout();
     }
     void refreshCharacters()
     {
@@ -1960,12 +2014,15 @@ struct Host
         {
             const auto* c=shellCommand(actions[i]);if(!c)continue;
             const auto visual=fs_host_ui::commandVisual(actions[i],{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
-            AppendMenuW(menu,MF_STRING|(visual.checked&&*visual.checked?MF_CHECKED:0),static_cast<UINT>(i+1),c->label);
+            const int character=characterQuickSlot(actions[i]);
+            const bool enabled=character<0 || characterAction(character)!=CharacterQuickAction::Unavailable;
+            const auto label=quickLabel(actions[i]);
+            AppendMenuW(menu,MF_STRING|(enabled?0:MF_GRAYED)|(visual.checked&&*visual.checked?MF_CHECKED:0)|(character>=0&&character==active?MF_CHECKED:0),static_cast<UINT>(i+1),label.c_str());
         }
         POINT point=fs_host_ui::popupPoint();menuOpen=true;const auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,window,nullptr);menuOpen=false;DestroyMenu(menu);
         if(choice && choice<=actions.size())
         {
-            if(slots[target].get()!=original || (original && !ChatKey{identity.worker,identity.generation,identity.account,identity.grid,{}}.owns(original->snapshot)))
+            if(characterQuickSlot(actions[choice-1])<0 && (slots[target].get()!=original || (original && !ChatKey{identity.worker,identity.generation,identity.account,identity.grid,{}}.owns(original->snapshot))))
             {message(L"Character changed while the menu was open; choose the action again.");return;}
             sessionMenu(0,actions[choice-1],target);
         }
@@ -1988,6 +2045,7 @@ struct Host
         if(direct==ViewActions){editPreferences(PrefLayout);return;}
         if(direct==SettingsActions){editPreferences();return;}
         focusRequested=false;RemovePropW(window,L"FolderstormViewportFocusIntent");
+        if(const int character=characterQuickSlot(direct);validSlot(character)){openCharacter(character);return;}
         const int index = validSlot(target)?target:selectedSlot(characterControl);
         auto* slot = slots[index].get();
         Message action;
@@ -3938,7 +3996,9 @@ struct Host
         refreshPins(); refreshAttention();
         refreshCharacters();
         refreshVoiceStatus();
-        std::uint64_t signature=static_cast<std::uint64_t>(lifecycle.selection()+1);for(int i=0;i<MaxCharacters;++i)if(slots[i])signature=signature*131+static_cast<unsigned int>(slots[i]->snapshot.state)*7+static_cast<unsigned int>(slots[i]->restart.phase())+(slots[i]->pipe.alive()?0u:100u)+(slots[i]->recovery.active()?200u:0u);
+        std::uint64_t signature=static_cast<std::uint64_t>(lifecycle.selection()+1);
+        signature=signature*131+static_cast<unsigned int>(active+1);signature=signature*131+(busy()||closing?1u:0u);
+        for(int i=0;i<MaxCharacters;++i)if(slots[i])signature=signature*131+static_cast<unsigned int>(slots[i]->snapshot.state)*7+static_cast<unsigned int>(slots[i]->restart.phase())+(slots[i]->pipe.alive()?0u:100u)+(slots[i]->recovery.active()?200u:0u);
         if(signature!=layoutState){layoutState=signature;layout();}
         if (active < 0) SetWindowTextW(compactInfo, L"Choose a character · details in Session");
         updateMonitors();
@@ -4148,7 +4208,7 @@ struct Host
                 const auto badge=std::to_wstring(attentionCount);labels.push_back(command==274?L"Attention · "+badge:quickLabel(command));
                 const auto visual=fs_host_ui::commandVisual(command,{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
                 if(visualOptions().audioStateText && (command==204 || command==205))labels.back()+=std::wstring(L" · ")+visual.suffix;
-                const int compact=command==274?textWidth(badge):28;
+                const int compact=command==274?textWidth(badge):characterQuickSlot(command)>=0?(std::max)(28,textWidth(std::to_wstring(characterQuickSlot(command)+1))):28;
                 sizes.push_back({visualOptions().labels==2?compact:textWidth(labels.back())+(visualOptions().labels==0?24:0),compact});
             }
             if(dc){if(previous)SelectObject(dc,previous);ReleaseDC(parent,dc);}
@@ -4158,15 +4218,18 @@ struct Host
             {
                 const auto command=experience.quick[i];if(i>=fit.visible){overflowActions.push_back(command);continue;}
                 const bool compact=visualOptions().labels==2 || fit.widths[i]<sizes[i].full;
-                name(quickButtons[i],(compact&&command==274?std::to_wstring(attentionCount):labels[i]).c_str());
+                const int character=characterQuickSlot(command);
+                const auto compactLabel=command==274?std::to_wstring(attentionCount):character>=0?std::to_wstring(character+1):labels[i];
+                name(quickButtons[i],(compact?compactLabel:labels[i]).c_str());
                 const auto visual=fs_host_ui::commandVisual(command,{voice,!muteBackground,attentionWindow&&IsWindowVisible(attentionWindow),chatDetached,controlsDetached,experience.diagnostics});
-                fs_host_ui::setButtonIcon(quickButtons[i],compact?(command==274?fs_host_ui::Icon::None:visual.icon):visualOptions().labels==0?visual.icon:fs_host_ui::Icon::None,!compact&&visualOptions().labels==0);
+                fs_host_ui::setButtonIcon(quickButtons[i],compact?(command==274||character>=0?fs_host_ui::Icon::None:visual.icon):visualOptions().labels==0?visual.icon:fs_host_ui::Icon::None,!compact&&visualOptions().labels==0);
                 theme.checkButton(quickButtons[i],visual.checked);
+                EnableWindow(quickButtons[i],character<0 || characterAction(character)!=CharacterQuickAction::Unavailable);
                 move(quickButtons[i],quickX,quickY,fit.widths[i]);quickX+=fit.widths[i]+4;
                 if(const auto* commandInfo=shellCommand(command))
                 {
-                    std::wstring tip=commandInfo->tip;if(command==204 || command==205)tip=std::wstring(commandInfo->label)+L": "+visual.suffix+L". "+tip;
-                    addTooltip(quickButtons[i],tip.c_str());theme.accessible.set(quickButtons[i],commandInfo->label,tip);
+                    std::wstring tip=character>=0?characterQuickTip(character):commandInfo->tip;if(command==204 || command==205)tip=std::wstring(commandInfo->label)+L": "+visual.suffix+L". "+tip;
+                    addTooltip(quickButtons[i],tip.c_str());theme.accessible.set(quickButtons[i],labels[i],tip);
                 }
             }
             if(fit.overflow&&available>0){fs_host_ui::setButtonIcon(quickOverflow,fs_host_ui::Icon::Ellipsis);move(quickOverflow,quickX,quickY,(std::min)(28,available));}

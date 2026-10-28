@@ -8,6 +8,16 @@ int main()
     assert(colorContrast(visibleAccent(0xffffff,0xf7f5fb,0x211a2b),0xf7f5fb)>=3.);assert(visibleAccent(0xbfa4fc,0x111016,0xf5f3fa)==0xbfa4fc);
     assert(HostExperience::decode(e.encode(),out));assert(out.theme==1 && out.pinned[3] && out.quick==e.quick && out.keys[0]==e.keys[0]);
     auto menus=e;menus.quick={SelectedActions,ViewActions,SettingsActions,SetActions,RecoverShell};assert(HostExperience::decode(menus.encode(),out) && out.quick==menus.quick);
+    auto characters=e;characters.quick={274};
+    for(int i=0;i<MaxCharacters;++i)
+    {
+        const auto command=CharacterQuickBase+static_cast<unsigned int>(i);
+        assert(characterQuickSlot(command)==i && shellCommand(command));characters.quick.push_back(command);
+    }
+    std::reverse(characters.order.begin(),characters.order.end());
+    assert(HostExperience::decode(characters.encode(),out) && out.quick==characters.quick && out.order==characters.order);
+    assert(characterQuickSlot(CharacterQuickBase-1)==-1 && characterQuickSlot(CharacterQuickBase+MaxCharacters)==-1 && characterQuickSlot(~0u)==-1);
+    characters.quick.push_back(CharacterQuickBase);assert(!characters.valid());characters.quick={CharacterQuickBase+MaxCharacters};assert(!characters.valid());
     auto v4=e.encode();v4.replace(0,4,"FSX4");v4.resize(v4.size()-12);assert(HostExperience::decode(v4,out) && out.toolbarLabels==0 && out.hostContrast==0 && !out.audioStateText);
     auto v3=v4;v3.replace(0,4,"FSX3");v3.resize(v3.size()-32);assert(HostExperience::decode(v3,out) && out.cycleSeconds==10 && out.requirePauseToChat);
     auto v2=v3;v2.replace(0,4,"FSX2");v2.resize(v2.size()-4);assert(HostExperience::decode(v2,out) && out.dockedArea==0 && out.toolbarVersion==1);
