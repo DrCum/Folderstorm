@@ -3386,4 +3386,13 @@ Your current position: [AVATAR_POS]
   <string name="OmnifilterButtonLabel" translate="false">BUTTON_LABEL</string>
   <string name="FSAvatarAlignToggleMini">Mini</string>
   <string name="FSAvatarAlignToggleFull">Full</string>
+ <string name="FSChatMediaLoad">Load image</string>
+ <string name="FSChatMediaOpen">Open preview</string>
+ <string name="FSChatMediaLoading">Loading…</string>
+ <string name="FSChatMediaRetry">Retry image</string>
+ <string name="FSChatMediaPause">Pause</string>
+ <string name="FSChatMediaPrivacy">Loading contacts the image site and reveals your IP address. The original link remains in the message.</string>
+ <string name="FSChatMediaAnimationTip">Play or pause this animation. Hidden images stop updating.</string>
+ <string name="FSChatMediaPlay">Play ▶</string>
+ <string name="FSChatMediaFit">Fit image</string>
 </strings>
