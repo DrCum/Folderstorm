@@ -29,6 +29,7 @@
 #if LL_WINDOWS && !LL_MESA_HEADLESS
 
 #include "llwindowwin32.h"
+#include "llclipboardimage.h"
 
 // LLWindow library includes
 #include "llkeyboardwin32.h"
@@ -3656,6 +3657,53 @@ bool LLWindowWin32::convertCoords(LLCoordGL from, LLCoordScreen *to)
 }
 
 
+bool LLWindowWin32::isClipboardImageAvailable()
+{
+    const auto png = RegisterClipboardFormatW(L"PNG");
+    return (png && IsClipboardFormatAvailable(png)) || IsClipboardFormatAvailable(CF_DIBV5) ||
+        IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_HDROP);
+}
+
+bool LLWindowWin32::pasteImageFromClipboard(LLClipboardImage& image)
+{
+    image = {};
+    if (!OpenClipboard(mWindowHandle)) return false;
+    struct Close { ~Close() { CloseClipboard(); } } close;
+    try
+    {
+        const auto png = RegisterClipboardFormatW(L"PNG");
+        const UINT formats[] = {png, CF_DIBV5, CF_DIB};
+        for (const auto format : formats)
+        {
+            if (!format || !IsClipboardFormatAvailable(format)) continue;
+            const auto handle = static_cast<HGLOBAL>(GetClipboardData(format)); if (!handle) continue;
+            const auto size = GlobalSize(handle);
+            const auto limit = format == png ? ll_clipboard_image::MaxPngBytes : ll_clipboard_image::MaxBitmapBytes;
+            if (!size || size > limit) continue;
+            const auto* data = static_cast<const unsigned char*>(GlobalLock(handle)); if (!data) continue;
+            struct Unlock { HGLOBAL value; ~Unlock() { GlobalUnlock(value); } } unlock{handle};
+            image.bytes.assign(data, data + size); image.dib = format != png;
+            return true;
+        }
+        if (IsClipboardFormatAvailable(CF_HDROP))
+        {
+            const auto drop = static_cast<HDROP>(GetClipboardData(CF_HDROP)); if (!drop) return false;
+            const auto count = DragQueryFileW(drop, 0xffffffff, nullptr, 0);
+            if (!count || count > ll_clipboard_image::MaxFiles) return false;
+            for (UINT i = 0; i < count; ++i)
+            {
+                const auto length = DragQueryFileW(drop, i, nullptr, 0); if (!length || length > 4096) return false;
+                std::wstring file(static_cast<std::size_t>(length) + 1, L'\0');
+                if (DragQueryFileW(drop, i, file.data(), length + 1) != length) return false;
+                file.resize(length); image.files.push_back(ll_convert_wide_to_string(file));
+            }
+            return true;
+        }
+    }
+    catch (...) { image = {}; }
+    return false;
+}
+
 bool LLWindowWin32::isClipboardTextAvailable()
 {
     return IsClipboardFormatAvailable(CF_UNICODETEXT);
@@ -4818,6 +4866,12 @@ LLWindowCallbacks::DragNDropResult LLWindowWin32::completeDragNDropRequest( cons
 {
     ASSERT_MAIN_THREAD();
     return mCallbacks->handleDragNDrop( this, gl_coord, mask, action, url );
+}
+
+LLWindowCallbacks::DragNDropResult LLWindowWin32::completeFileDragNDropRequest(LLCoordGL pos, MASK mask, LLWindowCallbacks::DragNDropAction action, const std::vector<std::string>& files)
+{
+    ASSERT_MAIN_THREAD();
+    return mCallbacks->handleFileDragNDrop(this, pos, mask, action, files);
 }
 
 // Handle WM_IME_REQUEST message.

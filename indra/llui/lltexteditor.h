@@ -135,6 +135,9 @@ public:
     virtual bool    canCopy() const;
     virtual void    paste();
     virtual bool    canPaste() const;
+    virtual bool    hasImagePasteHandler() const { return false; }
+    virtual bool    canPasteImage() const { return false; }
+    virtual void    pasteImage() {}
 
     virtual void    updatePrimary();
     virtual void    copyPrimary();

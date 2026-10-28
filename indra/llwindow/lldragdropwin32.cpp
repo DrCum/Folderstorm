@@ -34,6 +34,8 @@
 #include "llkeyboardwin32.h"
 #include "llwindowcallbacks.h"
 #include "lldragdropwin32.h"
+#include "llclipboardimage.h"
+#include <shellapi.h>
 
 class LLDragDropWin32Target:
     public IDropTarget
@@ -98,6 +100,16 @@ class LLDragDropWin32Target:
         //
         HRESULT __stdcall DragEnter( IDataObject* pDataObject, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect )
         {
+            mDropFiles.clear();
+            FORMATETC fileFormat = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+            if (pDataObject->QueryGetData(&fileFormat) == S_OK)
+            {
+                mDropUrl.clear(); mAllowDrop = readFiles(pDataObject, mDropFiles);
+                if (!mAllowDrop) mDropFiles.clear();
+                *pdwEffect = DROPEFFECT_NONE;
+                if (mAllowDrop) { sendFiles(pt, LLWindowCallbacks::DNDA_START_TRACKING, pdwEffect); SetFocus(mAppWindowHandle); }
+                return S_OK;
+            }
             FORMATETC fmtetc = { CF_TEXT, 0, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
 
             // support CF_TEXT using a HGLOBAL?
@@ -165,6 +177,7 @@ class LLDragDropWin32Target:
         //
         HRESULT __stdcall DragOver( DWORD grfKeyState, POINTL pt, DWORD* pdwEffect )
         {
+            if (!mDropFiles.empty()) { sendFiles(pt, LLWindowCallbacks::DNDA_TRACK, pdwEffect); return S_OK; }
             if ( mAllowDrop )
             {
                 // XXX MAJOR MAJOR HACK!
@@ -214,6 +227,7 @@ class LLDragDropWin32Target:
         //
         HRESULT __stdcall DragLeave( void )
         {
+            if (!mDropFiles.empty()) { DWORD effect = 0; sendFiles(POINTL{}, LLWindowCallbacks::DNDA_STOP_TRACKING, &effect); mDropFiles.clear(); mAllowDrop = false; return S_OK; }
             // XXX MAJOR MAJOR HACK!
             LLWindowWin32 *window_imp = (LLWindowWin32 *)GetWindowLongPtr( mAppWindowHandle, GWLP_USERDATA );
             if (NULL != window_imp)
@@ -229,6 +243,13 @@ class LLDragDropWin32Target:
         //
         HRESULT __stdcall Drop( IDataObject* pDataObject, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect )
         {
+            if (!mDropFiles.empty())
+            {
+                std::vector<std::string> current; *pdwEffect = DROPEFFECT_NONE;
+                if (readFiles(pDataObject, current) && current == mDropFiles) sendFiles(pt, LLWindowCallbacks::DNDA_DROPPED, pdwEffect);
+                DWORD effect = 0; sendFiles(pt, LLWindowCallbacks::DNDA_STOP_TRACKING, &effect);
+                mDropFiles.clear(); mAllowDrop = false; return S_OK;
+            }
             if ( mAllowDrop )
             {
                 // window impl stored in Window data (neat!)
@@ -284,6 +305,39 @@ class LLDragDropWin32Target:
     ////////////////////////////////////////////////////////////////////////////////
     //
     private:
+        static bool readFiles(IDataObject* object, std::vector<std::string>& files)
+        {
+            files.clear(); FORMATETC format = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL}; STGMEDIUM medium{};
+            if (object->GetData(&format, &medium) != S_OK) return false;
+            struct Release { STGMEDIUM* value; ~Release() { ReleaseStgMedium(value); } } release{&medium};
+            if (medium.tymed != TYMED_HGLOBAL || !medium.hGlobal) return false;
+            try
+            {
+                const auto drop = reinterpret_cast<HDROP>(medium.hGlobal);
+                const auto count = DragQueryFileW(drop, 0xffffffff, nullptr, 0);
+                if (!count || count > ll_clipboard_image::MaxFiles) return false;
+                for (UINT i = 0; i < count; ++i)
+                {
+                    const auto length = DragQueryFileW(drop, i, nullptr, 0); if (!length || length > 4096) return false;
+                    std::wstring file(static_cast<std::size_t>(length) + 1, L'\0');
+                    if (DragQueryFileW(drop, i, file.data(), length + 1) != length) return false;
+                    file.resize(length); files.push_back(ll_convert_wide_to_string(file));
+                }
+                return true;
+            }
+            catch (...) { files.clear(); return false; }
+        }
+        void sendFiles(POINTL point, LLWindowCallbacks::DragNDropAction action, DWORD* effect)
+        {
+            *effect = DROPEFFECT_NONE;
+            auto* window = reinterpret_cast<LLWindowWin32*>(GetWindowLongPtr(mAppWindowHandle, GWLP_USERDATA));
+            if (!window) return;
+            POINT local{point.x, point.y}; ScreenToClient(mAppWindowHandle, &local);
+            LLCoordWindow coords(local.x, local.y);
+            const auto result = window->completeFileDragNDropRequest(coords.convert(), gKeyboard->currentMask(true), action, mDropFiles);
+            if (result == LLWindowCallbacks::DND_COPY) *effect = DROPEFFECT_COPY;
+        }
+        std::vector<std::string> mDropFiles;
         LONG mRefCount;
         HWND mAppWindowHandle;
         bool mAllowDrop;
