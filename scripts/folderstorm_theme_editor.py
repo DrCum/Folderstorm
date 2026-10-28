@@ -9,6 +9,7 @@ import shutil
 import struct
 import stat
 import os
+import zipfile
 
 MARKER = ".folderstorm-theme-editor.json"
 MAX_FILES, MAX_BYTES = 1024, 512 * 1024 * 1024
@@ -87,6 +88,8 @@ def runtime(root, entries):
 
 def seal(root, source, version):
     root = Path(root); identity(source, version); entries = files(root); runtime(root, entries)
+    if any(Path(name).name.casefold().startswith("createdump") for name in entries):
+        raise ValueError("Editor publish contains createdump; publish to a fresh directory with the diagnostic tool excluded before sealing")
     document = {"schema": 1, "kind": "folderstorm-theme-editor", "source_commit": source, "editor_version": version,
                 "platform": "windows-x64", "self_contained": True, "files": entries}
     (root / MARKER).write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
@@ -142,6 +145,50 @@ def validate_bundle(root, bundle):
     if os.path.lexists(folder):
         raise ValueError("Editor files are present in a bundle configured without the editor")
     return None
+
+
+def validate_archive(root, bundle, package):
+    """Check the installed editor bytes, including transforms performed by vpk."""
+    root = Path(root)
+    document = validate_bundle(root, bundle)
+    expected = document["files"] if document else {}
+    marker = (root / "theme-editor" / MARKER).read_bytes() if document else None
+    prefix = "lib/app/theme-editor/"
+    try:
+        with zipfile.ZipFile(package) as archive:
+            entries = {}
+            folded = set()
+            for entry in archive.infolist():
+                if not entry.filename.casefold().startswith(prefix) or entry.is_dir():
+                    continue
+                name = entry.filename[len(prefix):]
+                if (entry.filename[:len(prefix)] != prefix or name.casefold() in folded
+                        or len(entries) >= MAX_FILES + 1 or stat.S_ISLNK(entry.external_attr >> 16)):
+                    raise ValueError("Packaged editor has invalid or duplicate entries")
+                entries[name] = entry
+                folded.add(name.casefold())
+            names = set(expected) | ({MARKER} if document else set())
+            if set(entries) != names:
+                missing = sorted(names - entries.keys())
+                extra = sorted(entries.keys() - names)
+                raise ValueError(f"Packaged editor inventory differs: missing {missing}, extra {extra}")
+            for name, entry in entries.items():
+                size = len(marker) if name == MARKER else expected[name]["size"]
+                if entry.file_size != size:
+                    raise ValueError(f"Packaged editor size changed: {name}")
+                with archive.open(entry) as stream:
+                    if name == MARKER:
+                        if stream.read() != marker:
+                            raise ValueError("Packaged editor manifest changed")
+                    else:
+                        value = hashlib.sha256()
+                        for block in iter(lambda: stream.read(1024 * 1024), b""):
+                            value.update(block)
+                        if value.hexdigest() != expected[name]["sha256"]:
+                            raise ValueError(f"Packaged editor hash changed: {name}")
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
+        raise ValueError(f"Cannot read packaged editor: {error}") from error
+    return document
 
 
 def main():

@@ -6,4 +6,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../Folderstorm.Theme.Core/Folderstorm.Theme.Core.csproj" /></ItemGroup>
+  <!-- Velopack strips this optional runtime diagnostic tool. Exclude it before sealing. -->
+  <Target Name="ExcludeCreateDumpFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'createdump.exe'" />
+    </ItemGroup>
+  </Target>
 </Project>

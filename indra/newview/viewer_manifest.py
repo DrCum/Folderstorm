@@ -1186,6 +1186,11 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
         # Velopack outputs to a Releases directory
         releases_dir = os.path.join(os.path.dirname(pack_dir), 'Releases')
+        full_package = Path(releases_dir) / (pack_id + '-' + pack_version + '-full.nupkg')
+        try:
+            theme_editor_package.validate_archive(Path(pack_dir), bundle, full_package)
+        except (OSError, ValueError) as error:
+            raise ManifestError("Packaged theme editor validation failed: %s" % error) from error
 
         # Move the setup exe INTO pack_dir so it's included in the Windows-app artifact
         # IMPORTANT: Use hyphen format (-Setup.exe) to avoid the *_Setup.exe exclusion pattern

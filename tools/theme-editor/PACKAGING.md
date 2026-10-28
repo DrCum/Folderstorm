@@ -23,6 +23,18 @@ file hashes. NSIS receives explicit file records under `theme-editor/`; Velopack
 validates the same component before packing its staged directory. Private PDBs
 stay in the publish output for retention and are omitted from installed files.
 
+The editor publish excludes the optional `createdump.exe` diagnostic utility before
+sealing. Velopack 0.0.1535 always filters this utility, so including it in the sealed
+inventory would make installed files fail validation. The self-contained runtime
+remains required. Sealing rejects stale publish output containing a dump utility;
+use the source/version-specific fresh publish directory. Existing sealed archives
+remain verifiable without relaxing their inventories.
+
+Local native Velopack packaging and `scripts/folderstorm_velopack.py --pack` also
+check the finished Full `.nupkg`: its editor inventory, manifest bytes, sizes and
+hashes must match the sealed staged editor. Missing, extra or changed files fail
+packaging even when the external tool exits successfully.
+
 Changing the option to OFF removes only a recognized, manifest-owned staged
 editor folder. Unrecognized or linked folders cause an error. Packaged revisions
 and user theme libraries are outside this staging operation.
