@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="gif_report" title="Report to KLIPY" width="380" height="170" can_resize="false" single_instance="true" reuse_instance="true" layout="topleft">
+ <text left="14" top="34" right="-14" height="24">Choose a reason for this report.</text>
+ <combo_box name="reason" left="14" top="66" right="-14" height="24">
+  <combo_box.item label="Offensive content" value="offensive"/><combo_box.item label="Nudity / sexual content" value="nudity"/>
+  <combo_box.item label="Violence" value="violence"/><combo_box.item label="Hate speech" value="hate_speech"/>
+  <combo_box.item label="Spam" value="spam"/><combo_box.item label="Broken GIF" value="broken"/><combo_box.item label="Other" value="other"/>
+ </combo_box>
+ <button name="report" label="Report" right="-110" bottom="-16" width="90" height="24"/>
+ <button name="cancel" label="Cancel" right="-14" bottom="-16" width="90" height="24"/>
+</floater>

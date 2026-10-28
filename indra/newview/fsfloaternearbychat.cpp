@@ -860,6 +860,7 @@ void FSFloaterNearbyChat::reshapeChatLayoutPanel()
 
 void FSFloaterNearbyChat::sendChat( EChatType type )
 {
+    FSChatUpload::SendScope gifSend(mInputEditor);
     if (FSChatUpload::blocksSend(mInputEditor)) return;
     if (mInputEditor)
     {

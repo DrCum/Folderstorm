@@ -1,7 +1,9 @@
 #include "fschatanimation.h"
 #include "fixtures/chat_media_images.inc"
 #include "fixtures/chat_animation_disposal.inc"
+#include "fixtures/chat_animation_regressions.inc"
 #include <cassert>
+#include <utility>
 using namespace fs_chat_media;
 // Repeating the fixture's complete three-frame record set preserves palettes/LZW.
 std::vector<unsigned char> longGif(unsigned count)
@@ -40,6 +42,22 @@ int main()
     // A missing/invalid first image does not become an accepted poster.
     assert(!decode(std::vector<unsigned char>(gifBytes.begin(), gifBytes.begin() + 50), 320, true));
     auto memory = animationMemory(); assert(memory.encoded == 0 && memory.decoded == 0 && memory.scratch == 0);
+    // Opaque disposal restores the logical background; an initially partial
+    // image also leaves the uncovered logical screen in that background color.
+    for (const auto& fixture : {std::make_pair(&opaqueBackgroundBytes, &opaqueBackgroundPixels),
+                               std::make_pair(&partialBackgroundBytes, &partialBackgroundPixels)})
+    {
+        auto source = AnimationSource::create(*fixture.first, 320); assert(source);
+        AnimationDecoder player(source);
+        for (const auto& expected : *fixture.second) { auto frame = player.next(live); assert(frame && frame->rgba == expected); }
+    }
+    {
+        auto invalidBackground = opaqueBackgroundBytes; invalidBackground[11] = 255;
+        auto source = AnimationSource::create(invalidBackground, 320); assert(source);
+        AnimationDecoder player(source);
+        assert(player.next(live) && player.next(live));
+        auto frame = player.next(live); assert(frame && frame->rgba[4 * 4 + 3] == 0); // Invalid background index is never dereferenced.
+    }
     // Disposal 3 restores the canvas before the previous image; no stale frame pointers.
     auto source = AnimationSource::create(disposalBytes, 320); assert(source && source->loops == 3);
     AnimationDecoder player(source);

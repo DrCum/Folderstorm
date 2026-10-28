@@ -4,6 +4,7 @@
      For example, the strings used in avatar chat bubbles, and strings
      that are returned from one component and may appear in many places-->
 <strings>
+ <string name="FSGifReport">Report to KLIPY…</string>
  <string name="FSGifOpen">Open GIF picker</string>
  <string name="FSGifNoTarget">Open GIFs from a chat to choose its destination.</string>
  <string name="FSGifSave">Save to My GIFs</string>

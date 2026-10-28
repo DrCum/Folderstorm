@@ -3,6 +3,7 @@
 #include "third_party/chat_media/giflib/gif_lib.h"
 #include "third_party/chat_media/libwebp/src/webp/decode.h"
 #include "third_party/chat_media/libwebp/src/webp/demux.h"
+#include <array>
 #include <cstring>
 #include <limits>
 
@@ -148,14 +149,29 @@ struct AnimationDecoder::Impl
         const auto n = (std::min)(std::size_t(requested), bytes.size() - self.offset);
         std::memcpy(output, bytes.data() + self.offset, n); self.offset += n; return static_cast<int>(n);
     }
+    void fillBackground(int left, int top, int width, int height, const GraphicsControlBlock& frame)
+    {
+        // Transparent GIFs clear to transparency. Opaque ones restore the
+        // logical screen's global background, independent of a local palette.
+        std::array<unsigned char, 4> color{};
+        const auto* palette = gif->SColorMap;
+        const auto index = gif->SBackGroundColor;
+        if (frame.TransparentColor == NO_TRANSPARENT_COLOR && palette && palette->Colors && index >= 0 && index < palette->ColorCount)
+        {
+            const auto c = palette->Colors[index];
+            color = {c.Red, c.Green, c.Blue, 255};
+        }
+        for (int y = top; y < top + height; ++y)
+            for (int x = left; x < left + width; ++x)
+                std::copy(color.begin(), color.end(), canvas.data() + (std::size_t(y) * source->sourceWidth + x) * 4);
+    }
     bool gifFrame()
     {
         if (count)
         {
             if (prior.DisposalMode == DISPOSE_PREVIOUS && !previous.empty()) canvas = previous;
             else if (prior.DisposalMode == DISPOSE_BACKGROUND)
-                for (int y = old.Top; y < old.Top + old.Height; ++y)
-                    std::memset(canvas.data() + (std::size_t(y) * source->sourceWidth + old.Left) * 4, 0, std::size_t(old.Width) * 4);
+                fillBackground(old.Left, old.Top, old.Width, old.Height, prior);
         }
         GifRecordType type{};
         while (!cancellation || !*cancellation)
@@ -176,6 +192,7 @@ struct AnimationDecoder::Impl
             if (image.Width < 1 || image.Height < 1 || image.Left < 0 || image.Top < 0 ||
                 image.Width > source->sourceWidth - image.Left || image.Height > source->sourceHeight - image.Top) return false;
             const auto* palette = image.ColorMap ? image.ColorMap : gif->SColorMap; if (!palette) return false;
+            if (!count) fillBackground(0, 0, source->sourceWidth, source->sourceHeight, control);
             if (control.DisposalMode == DISPOSE_PREVIOUS) previous = canvas;
             const auto row = [&](int y)
             {

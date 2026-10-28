@@ -34,6 +34,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fschatupload.h"
 #include "fschatmedia.h"
+#include "fsklipyclient.h"
 #include "fspreferenceslistener.h"
 #include "fssessionworker.h"
 
@@ -1012,6 +1013,7 @@ void LLFloaterPreference::saveSettings()
 void LLFloaterPreference::apply()
 {
     FSChatMedia::applyPreferences();
+    FSKlipy::applyPreferences();
     FSChatUpload::applyPreferences();
     LLAvatarPropertiesProcessor::getInstance()->addObserver( gAgent.getID(), this );
 
@@ -1153,6 +1155,7 @@ void LLFloaterPreference::onOpen(const LLSD& key)
     // the independently owned native Preferences baseline.
     FSPreferencesNativeOpening assistant_preview;
     FSChatMedia::preferencesOpening();
+    FSKlipy::preferencesOpening();
     FSChatUpload::preferencesOpening();
     // this variable and if that follows it are used to properly handle do not disturb mode response message
     static bool initialized = false;
