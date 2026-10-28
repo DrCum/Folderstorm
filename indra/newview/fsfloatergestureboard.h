@@ -32,6 +32,9 @@ public:
     void playTile(const std::string& tile);
     void focusItem(const LLUUID& item) { mFocusReference = item; }
     bool current() const;
+    bool selecting() const { return mSelecting; }
+    void selectTile(const std::string& id, MASK mask);
+    bool handleKeyHere(KEY key, MASK mask) override;
     const LLUUID& windowID() const { return mWindowID; }
     const std::string& selectedBoard() const { return mBoard; }
     void selectBoard(const std::string& id);
@@ -46,6 +49,8 @@ private:
     void tileAction(const std::string& action, const std::string& board, const std::string& tile, const LLSD& expected);
     void deleteBoard();
     void closeEditors();
+    void selectionMode(bool enabled);
+    void editSelected();
     LLTimer mRefreshTimer;
     LLUUID mAccount, mSession, mFocusReference;
     const LLUUID mWindowID = LLUUID::generateNewID();
@@ -54,6 +59,8 @@ private:
     S32 mGridWidth = 0, mGridHeight = 0, mPage = 0;
     std::string mDisplayedBoard;
     bool mBuilt = false;
+    bool mSelecting = false, mRebuildSelection = false;
+    FSGestureBoard::Selection mSelection;
     std::vector<FSGestureBoardTile*> mTiles;
     LLHandle<LLContextMenu> mMenu;
 };
@@ -86,6 +93,8 @@ private:
     LLSD mKey, mExpected;
     LLUUID mAccount, mSession, mToken;
     FSGestureBoard::Tile mTile;
+    FSGestureBoard::Style mOriginalStyle;
+    std::set<std::string> mSelection;
     bool mUpdatingPreview = false;
 };
 #endif

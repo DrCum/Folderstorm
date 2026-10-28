@@ -35,7 +35,7 @@ int main()
         expect(!data["boards"][0]["tiles"][0].has(excluded), "Only references and tile presentation are serialized");
     auto reject = [&](LLSD bad)
     { Collection untouched = source; expect(!decode(bad, untouched) && encode(untouched) == data, "Rejected data cannot replace an existing collection"); };
-    auto bad = data; bad["version"] = 3; reject(bad);
+    auto bad = data; bad["version"] = VERSION + 1; reject(bad);
     bad = data; bad["selected"] = LLUUID::generateNewID(); reject(bad);
     bad = data; bad["boards"][0]["tiles"][0]["item"] = "uuid text"; reject(bad);
     bad = data; bad["boards"][0]["tiles"][0]["id"] = LLUUID::null; reject(bad);
@@ -62,6 +62,66 @@ int main()
     auto legacy = data; legacy["version"] = 1; legacy["boards"][0].erase("compact");
     expect(decode(legacy, parsed) && parsed.boards.front().compact && parsed.boards.front().tiles.front().width == 0,
            "Existing version-one boards migrate to compact defaults without losing references");
+    legacy = data; legacy["version"] = 2;
+    expect(decode(legacy, parsed) && encode(parsed) == data && !parsed.defaults.custom_color,
+           "Version-two boards retain their appearance before any defaults are configured");
+    auto inherited = source; auto& inherited_board = inherited.boards[0];
+    inherited.defaults.custom_color = true; inherited.defaults.color = {.7f, .2f, .9f};
+    inherited.defaults.width = 112; inherited.defaults.height = 36;
+    auto shown = presentation(inherited, inherited_board, inherited_board.tiles[1]);
+    expect(shown.custom_color && shown.color == inherited.defaults.color && shown.width == 112 && shown.height == 36,
+           "All-board defaults apply to tiles without overrides");
+    shown = presentation(inherited, inherited_board, inherited_board.tiles[0]);
+    expect(shown.color == inherited_board.tiles[0].color && shown.width == 112, "Existing tile color overrides win independently of inherited size");
+    inherited_board.defaults.width = 160; inherited_board.defaults.height = 50;
+    inherited_board.defaults.theme_color = true;
+    shown = presentation(inherited, inherited_board, inherited_board.tiles[1]);
+    expect(!shown.custom_color && shown.width == 160 && shown.height == 50, "A board can explicitly use theme color and override global size");
+    inherited_board.tiles[1].width = 72; inherited_board.tiles[1].height = 24;
+    inherited_board.defaults.theme_color = false;
+    shown = presentation(inherited, inherited_board, inherited_board.tiles[1]);
+    expect(shown.custom_color && shown.color == inherited.defaults.color && shown.width == 72 && shown.height == 24,
+           "Tile size and inherited color remain independent");
+    inherited_board.tiles[1].theme_color = true;
+    expect(!presentation(inherited, inherited_board, inherited_board.tiles[1]).custom_color, "Explicit tile theme color overrides a custom parent");
+    const auto defaults_data = encode(inherited);
+    expect(decode(defaults_data, parsed) && encode(parsed) == defaults_data, "Global/board defaults and explicit theme overrides roundtrip");
+    bad = defaults_data; bad["defaults"]["width"] = 0; reject(bad);
+    bad = defaults_data; bad["boards"][0]["defaults"].erase("height"); reject(bad);
+    bad = defaults_data; bad["defaults"]["color"][1] = std::numeric_limits<double>::quiet_NaN(); reject(bad);
+    bad = defaults_data; bad["defaults"]["theme_color"] = true; reject(bad);
+    bad = defaults_data; bad["boards"][0]["tiles"][1]["theme_color"] = "yes"; reject(bad);
+    bad = defaults_data; bad["boards"][0]["defaults"]["asset"] = LLUUID::generateNewID(); reject(bad);
+    bad = defaults_data; bad["version"] = 2; reject(bad);
+    bad = data; bad["unknown"] = true; reject(bad);
+    auto bulk = inherited_board; const auto before_bulk = bulk;
+    const std::set<std::string> selected{bulk.tiles[0].id, bulk.tiles[1].id};
+    Style change; change.custom_color = true; change.color = {.1f, .8f, .4f}; change.width = 240; change.height = 80;
+    expect(applyStyle(bulk, selected, change, true, false), "Bulk color editing accepts a stable selection");
+    for (size_t i = 0; i < bulk.tiles.size(); ++i)
+        expect(bulk.tiles[i].color == change.color && bulk.tiles[i].width == before_bulk.tiles[i].width && bulk.tiles[i].height == before_bulk.tiles[i].height &&
+               bulk.tiles[i].id == before_bulk.tiles[i].id && bulk.tiles[i].item == before_bulk.tiles[i].item && bulk.tiles[i].label == before_bulk.tiles[i].label,
+               "Bulk color preserves mixed sizes, tile identity, Inventory references and text");
+    const auto color_only = bulk;
+    expect(applyStyle(bulk, {bulk.tiles[1].id}, change, false, true) && sameStyle(bulk.tiles[0], color_only.tiles[0]) && bulk.tiles[1].width == 240,
+           "Bulk size touches only selected tiles and preserves their color");
+    const auto before_bad_bulk = bulk;
+    expect(!applyStyle(bulk, {bulk.tiles[0].id, uuid()}, change, true, true) && sameBoard(bulk, before_bad_bulk),
+           "A missing selected tile rejects the complete edit without partial changes");
+    expect(!applyStyle(bulk, selected, change, false, false) && sameBoard(bulk, before_bad_bulk), "Unchecked properties do not change tiles");
+    change.height = MAX_TILE_HEIGHT + 1;
+    expect(!applyStyle(bulk, selected, change, true, true) && sameBoard(bulk, before_bad_bulk), "Invalid style changes are atomic");
+    expect(applyStyle(bulk, selected, Style{}, true, true) && !bulk.tiles[0].custom_color && !bulk.tiles[1].theme_color && bulk.tiles[1].width == 0,
+           "Bulk reset restores inheritance without baking parent defaults into tiles");
+    Selection selection; selection.choose(inherited_board, inherited_board.tiles[0].id, false);
+    selection.choose(inherited_board, inherited_board.tiles[1].id, true);
+    expect(selection.ids == selected, "Range selection follows board order");
+    selection.choose(inherited_board, inherited_board.tiles[0].id, false);
+    expect(selection.ids.size() == 1, "Selecting a selected tile toggles it off");
+    selection.all(inherited_board); auto removed_tile = inherited_board; removed_tile.tiles.erase(removed_tile.tiles.begin()); selection.retain(removed_tile);
+    expect(selection.ids.size() == 1 && selection.anchor.empty(), "Removed tiles and anchors cannot linger in selection");
+    selection.choose(removed_tile, uuid(), false); expect(selection.ids.size() == 1, "Unknown tile IDs do not affect selection");
+    selection.clear(); expect(selection.ids.empty() && selection.anchor.empty(), "Selections can be cleared independently of saved configuration");
     auto sized = source; sized.boards.front().compact = false;
     sized.boards.front().tiles.front().width = 73; sized.boards.front().tiles.front().height = 37;
     expect(decode(encode(sized), parsed) && parsed.boards.front().tiles.front().width == 73 &&
@@ -105,6 +165,10 @@ int main()
     auto pages = paginate(sized.boards.front(), 264, 126);
     expect(pages.size() == 1 && pages[0][0].width == 73 && pages[0][0].height == 37,
            "Individual requested dimensions override regular board density");
+    pages = paginate(inherited_board, 400, 200, inherited.defaults);
+    expect(pages[0][0].width == 160 && pages[0][0].height == 50 && pages[0][1].width == 72 && pages[0][1].height == 24,
+           "Pagination uses the same global/board/tile size inheritance as rendering");
+    pages = paginate(sized.boards.front(), 264, 126);
     sized.boards.front().tiles.front().label = std::string(64, 'w');
     auto renamed = paginate(sized.boards.front(), 264, 126);
     expect(renamed[0][0].width == pages[0][0].width && renamed[0][0].height == pages[0][0].height,
@@ -120,8 +184,9 @@ int main()
     for (int header : {20, 25, 32})
         for (const auto& size : {std::array<int, 2>{220, 120}, {220, 215}, {280, 190}, {530, 565}})
             for (bool multiple : {false, true})
+            for (bool selecting : {false, true})
             {
-                const auto frame = layoutFrame(size[0], size[1], header, multiple);
+                const auto frame = layoutFrame(size[0], size[1], header, multiple, selecting);
                 const std::array<Rect, 5> controls{frame.boards, frame.status, frame.add, frame.stop, frame.options};
                 for (size_t i = 0; i < controls.size(); ++i)
                 {
@@ -132,6 +197,17 @@ int main()
                 }
                 expect(frame.boards.y == header + 4, "No legacy-header blank strip remains above the selector");
                 expect(inside(frame.grid, size[0], size[1]), "The fitted tile canvas stays within final window bounds");
+                if (selecting)
+                {
+                    expect(inside(frame.selection, size[0], size[1]) && !overlaps(frame.selection, frame.grid), "Selection controls stay outside the tile canvas");
+                    for (const auto& c : controls) expect(!overlaps(c, frame.selection), "Selection tools do not cover board controls");
+                    const std::array<Rect, 3> tools{frame.selected_count, frame.edit_selected, frame.done_selecting};
+                    for (size_t i = 0; i < tools.size(); ++i)
+                    {
+                        expect(inside(tools[i], frame.selection.width, frame.selection.height), "Selection tools fit the minimum window width");
+                        for (size_t j = 0; j < i; ++j) expect(!overlaps(tools[i], tools[j]), "Selection tools cannot overlap");
+                    }
+                }
                 if (multiple)
                 {
                     expect(inside(frame.pagination, size[0], size[1]) && !overlaps(frame.grid, frame.pagination),

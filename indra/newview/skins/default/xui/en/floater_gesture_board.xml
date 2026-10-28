@@ -15,7 +15,7 @@
  <string name="load_failed">The gesture could not be loaded. Try again or replace its tile.</string>
  <string name="timeout">The gesture did not load within 30 seconds. No delayed play is queued.</string>
  <string name="changed">The board, item or login changed. Reopen the editor/picker and try again.</string>
- <string name="full">Maximum: 16 boards and 64 tiles per board. Your saved setup was kept.</string>
+ <string name="full">Maximum: 16 boards and 1,024 tiles per board. Your saved setup was kept.</string>
  <string name="exists">That board name is already used. Choose another name.</string>
  <string name="invalid_name">Use 1–64 characters for board names and up to 64 for tile text; avoid control characters.</string>
  <string name="saved">Board configuration saved. Inventory items were unchanged.</string>
@@ -34,13 +34,28 @@
  <string name="board_title">Gesture board — [NAME]</string>
  <string name="windows_full">Maximum: 16 open gesture board windows. Close a window to open another.</string>
  <string name="sound_item">Inventory sound</string>
+ <string name="board_defaults">Board defaults…</string>
+ <string name="board_global_defaults">Defaults for all boards…</string>
+ <string name="board_select">Select tiles…</string>
+ <string name="board_finish_selection">Finish selecting</string>
+ <string name="board_edit_selected">Edit selected tiles…</string>
+ <string name="board_select_all">Select all tiles</string>
+ <string name="board_clear_selection">Clear selection</string>
+ <string name="action_edit_selected">Edit selected tiles…</string>
+ <string name="selected_count">[COUNT] selected</string>
+ <string name="tile_selecting">Click to toggle selection; Shift-click selects a range. Items do not play while selecting.</string>
  <string name="compact">Compact tiles</string>
  <string name="page_count">[CURRENT] / [TOTAL]</string>
  <combo_box name="boards" left="8" top="30" right="-100" height="22" follows="left|right|top" tool_tip="Select gesture board"/>
  <text name="status" right="-88" top="32" width="10" height="18" follows="right|top" mouse_opaque="true">!</text>
  <button name="add_items" label="" image_overlay="AddItem_Off" right="-62" top="30" width="24" height="22" follows="right|top" tool_tip="Add gestures or sounds from Inventory"/>
  <button name="stop" label="" image_overlay="Stop_Off" right="-36" top="30" width="24" height="22" follows="right|top" tool_tip="Stop board gestures and cancel pending plays"/>
- <button name="options" label="" image_overlay="OptionsMenu_Off" right="-8" top="30" width="24" height="22" follows="right|top" tool_tip="Board options and compact tiles. Right-click a tile to edit its text, color or size. Drag tiles to reorder."/>
+ <button name="options" label="" image_overlay="OptionsMenu_Off" right="-8" top="30" width="24" height="22" follows="right|top" tool_tip="Board options, defaults and selection. Ctrl-click to select tiles; Shift-click selects a range. Drag unselected tiles to reorder."/>
+ <panel name="selection" left="8" top="56" right="-8" height="22" follows="left|right|top" visible="false" layout="topleft">
+  <text name="selected_count" left="0" top="2" width="52" height="18" use_ellipses="true" tool_tip="Click tiles to toggle selection. Shift-click selects a range; Ctrl+A selects all pages. Selection never plays items."/>
+  <button name="edit_selected" label="Edit selected" left="56" top="0" width="96" height="22"/>
+  <button name="done_selecting" label="Done" left="156" top="0" width="48" height="22" tool_tip="Return to normal playback (Esc)"/>
+ </panel>
  <panel name="grid" left="8" top="58" right="-8" bottom="-6" follows="all"/>
  <text name="empty" left="12" top="64" right="-12" height="24" follows="left|right|top" use_ellipses="true">No gestures or sounds</text>
  <panel name="pagination" left="8" right="-8" bottom="-6" height="22" follows="left|right|bottom" layout="topleft" visible="false">
