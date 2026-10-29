@@ -118,6 +118,9 @@ set(viewer_SOURCE_FILES
     fsworkspacepreview.cpp
     fsworkspacelayout.cpp
     fsworkspaceserialization.cpp
+    fsworkspacebackgroundmodel.cpp
+    fsworkspacebackground.cpp
+    fspanelpreferencebackgrounds.cpp
     fsworkspacecontextui.cpp
     fsassistantsocial.cpp
     fsnavigationlistener.cpp
@@ -1065,6 +1068,9 @@ set(viewer_HEADER_FILES
     fssettingssearch.h
     fsworkspaceinventoryfloater.h
     fspanelpreferenceworkspaces.h
+    fsworkspacebackgroundmodel.h
+    fsworkspacebackground.h
+    fspanelpreferencebackgrounds.h
     fschromelayout.h
     fschromelayoutcontroller.h
     fsinventorybulk.h

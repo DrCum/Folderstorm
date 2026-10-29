@@ -9,6 +9,20 @@
       <key>Type</key><string>LLSD</string>
       <key>Value</key><map />
     </map>
+    <key>FSWorkspaceBackground</key>
+    <map>
+      <key>Comment</key><string>Current workspace background choice; missing data inherits the shared default.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><map/>
+    </map>
+    <key>FSWorkspaceBackgroundDefault</key>
+    <map>
+      <key>Comment</key><string>Default background inherited by workspaces without a custom background.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><map/>
+    </map>
     <key>FSWorkspaceProfiles</key>
     <map>
       <key>Comment</key><string>Named account-local viewport and allowlisted utility-window workspaces.</string>

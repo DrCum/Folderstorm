@@ -106,6 +106,7 @@ bool selectGroups(const Workspace& source, int components, bool toolbars, Worksp
     if (!(selected.components & Graphics)) selected.context.graphics = {};
     if (!(selected.components & Camera)) selected.context.camera = {};
     if (!(selected.components & HUDs)) selected.context.huds.clear();
+    if (!(selected.components & Background)) selected.background = {};
     result = std::move(selected);
     return true;
 }

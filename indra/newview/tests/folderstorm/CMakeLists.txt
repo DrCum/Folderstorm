@@ -11,6 +11,8 @@ enable_language(C)
 if(NOT WIN32)
   find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
+    add_test(NAME workspace_background_adapters COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_fsworkspacebackground.py")
+    set_tests_properties(workspace_background_adapters PROPERTIES ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}")
     add_test(NAME session_character_actions COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../tools/session-host/tests/test_character_actions.py")
     set_tests_properties(session_character_actions PROPERTIES ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}")
     add_test(NAME chat_media_klipy_client COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_fsklipy_client.py")
@@ -142,6 +144,7 @@ folderstorm_check(link_replacement
 folderstorm_check(assistant_permissions ../test_fsassistantpermissions.cpp)
 folderstorm_check(inventory_bulk
   ../test_fsinventorybulkmodel.cpp ../../fsinventorybulkmodel.cpp)
+folderstorm_check(workspace_background ../test_fsworkspacebackground.cpp)
 folderstorm_check(workspace_layout
   ../test_fsworkspacelayout.cpp ../../fsworkspacelayout.cpp)
 folderstorm_check(snapshot_geometry ../test_fssnapshotgeometry.cpp)

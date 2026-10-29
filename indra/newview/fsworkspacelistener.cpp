@@ -147,7 +147,7 @@ bool fs_prepare_workspace(FSAssistantPreparedOperation& operation, std::string& 
     std::string groups;
     for (const auto& group : std::vector<std::pair<int, const char*>>{{FSWorkspaceLayout::Chrome, "viewport and bars"},
         {FSWorkspaceLayout::Inventory, "Inventory windows"}, {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "compatible chat"},
-        {FSWorkspaceLayout::Graphics, "graphics settings"}, {FSWorkspaceLayout::Camera, "camera settings"}, {FSWorkspaceLayout::HUDs, "selected HUDs"}})
+        {FSWorkspaceLayout::Background, "workspace background"}, {FSWorkspaceLayout::Graphics, "graphics settings"}, {FSWorkspaceLayout::Camera, "camera settings"}, {FSWorkspaceLayout::HUDs, "selected HUDs"}})
         if (definition["components"].asInteger() & group.first) { if (!groups.empty()) groups += ", "; groups += group.second; }
     if (definition["remember_toolbars"].asBoolean()) { if (!groups.empty()) groups += ", "; groups += "toolbar buttons"; }
     row["after_name"] = "Restore: " + groups; summary["subjects"].append(row);

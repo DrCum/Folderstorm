@@ -50,7 +50,7 @@ bool isLayout(const std::string& key) { return key.compare(0, 7, LAYOUT_PREFIX) 
 namespace {
 int captureComponents(LLView* view)
 {
-    int mask = 0;
+    int mask = view->getChild<LLCheckBoxCtrl>("capture_background")->get() ? FSWorkspaceLayout::Background : 0;
     if (view->getChild<LLCheckBoxCtrl>("capture_chrome")->get()) mask |= FSWorkspaceLayout::Chrome;
     if (view->getChild<LLCheckBoxCtrl>("capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
     if (view->getChild<LLCheckBoxCtrl>("capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
@@ -109,7 +109,7 @@ void FSFloaterWorkspaces::onOpen(const LLSD& key)
     FSWorkspaceContextUI::setOptions(this, {});
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
     getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
-    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat"}) getChild<LLCheckBoxCtrl>(name)->set(true);
+    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_background"}) getChild<LLCheckBoxCtrl>(name)->set(true);
     getChild<LLCheckBoxCtrl>("capture_toolbars")->set(false);
     refresh(true);
 }
@@ -232,7 +232,7 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("display_recovery")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->setEnabled(can_switch && getChild<LLCheckBoxCtrl>("capture_inventory")->get());
-    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
+    for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_background", "capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(can_switch);
     std::string name = getChild<LLLineEditor>("workspace_name")->getText();
     LLStringUtil::trim(name);
     getChild<LLButton>("save")->setEnabled(can_switch && !name.empty() && (captureComponents(this) != 0 || getChild<LLCheckBoxCtrl>("capture_toolbars")->get()));
@@ -279,7 +279,7 @@ void FSFloaterWorkspaces::refreshGroups()
         for (const auto& group : std::vector<std::pair<int, std::string>>{
              {FSWorkspaceLayout::Camera, "camera"}, {FSWorkspaceLayout::Graphics, "graphics"},
              {FSWorkspaceLayout::Chrome, "chrome"}, {FSWorkspaceLayout::Inventory, "inventory"},
-             {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}, {FSWorkspaceLayout::HUDs, "huds"}})
+             {FSWorkspaceLayout::Maps, "maps"}, {FSWorkspaceLayout::Chat, "chat"}, {FSWorkspaceLayout::HUDs, "huds"}, {FSWorkspaceLayout::Background, "background"}})
             if (workspace.components & group.first) groups->add(getString("group_" + group.second), LLSD(group.second));
         if (workspace.remember_toolbars) groups->add(getString("group_toolbars"), LLSD("toolbars"));
     }
@@ -302,6 +302,7 @@ void FSFloaterWorkspaces::applySelectedGroup()
     else if (group == "maps") components = FSWorkspaceLayout::Maps;
     else if (group == "chat") components = FSWorkspaceLayout::Chat;
     else if (group == "huds") components = FSWorkspaceLayout::HUDs;
+    else if (group == "background") components = FSWorkspaceLayout::Background;
     else if (group != "toolbars") return;
     if (controller.quickSwitchWorkspaceGroups(key.substr(10), components, group == "windows" || group == "toolbars")) closeFloater(false);
     else { mActionStatus = "switch_failed"; updateButtons(); }
