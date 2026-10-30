@@ -1,0 +1,6337 @@
+{
+  "implementation_head": "ed052e24b57a84e75856f886af80c17501bb146b",
+  "complete": true,
+  "accepted": 84,
+  "planned": 84,
+  "missing": [],
+  "excluded_or_unrun": [
+    {
+      "file": "event14s-timing-r1-direct-a1-g0-normal.json",
+      "status": "before_check"
+    }
+  ],
+  "cases": [
+    {
+      "cell": [
+        "default",
+        32,
+        0,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-default-a32-g0-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 2546,
+        "requested_bytes": 1247014,
+        "baseline_bytes": 0,
+        "live_bytes": 9535,
+        "peak_bytes": 35534,
+        "first_frame_calls": 74,
+        "first_frame_bytes": 35759,
+        "later_calls": 2472,
+        "later_bytes": 1211255
+      }
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        500,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-default-a32-g500-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 500,
+        "frames": 64,
+        "new_calls": 3218,
+        "requested_bytes": 1557014,
+        "baseline_bytes": 0,
+        "live_bytes": 9535,
+        "peak_bytes": 35534,
+        "first_frame_calls": 74,
+        "first_frame_bytes": 35759,
+        "later_calls": 3144,
+        "later_bytes": 1521255
+      }
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        1,
+        "busy",
+        true
+      ],
+      "file": "event14s-alloc-r1-default-a8-g0-busy.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 8,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 618,
+        "requested_bytes": 274880,
+        "baseline_bytes": 0,
+        "live_bytes": 2464,
+        "peak_bytes": 8304,
+        "first_frame_calls": 22,
+        "first_frame_bytes": 8120,
+        "later_calls": 596,
+        "later_bytes": 266760
+      }
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        1,
+        "closed",
+        true
+      ],
+      "file": "event14s-alloc-r1-default-a8-g0-closed.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 8,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 526,
+        "requested_bytes": 266168,
+        "baseline_bytes": 0,
+        "live_bytes": 2104,
+        "peak_bytes": 6200,
+        "first_frame_calls": 22,
+        "first_frame_bytes": 8120,
+        "later_calls": 504,
+        "later_bytes": 258048
+      }
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        0,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-direct-a32-g0-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 0,
+        "requested_bytes": 0,
+        "baseline_bytes": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "first_frame_calls": 0,
+        "first_frame_bytes": 0,
+        "later_calls": 0,
+        "later_bytes": 0
+      }
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        500,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-direct-a32-g500-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 500,
+        "frames": 64,
+        "new_calls": 0,
+        "requested_bytes": 0,
+        "baseline_bytes": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "first_frame_calls": 0,
+        "first_frame_bytes": 0,
+        "later_calls": 0,
+        "later_bytes": 0
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        0,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-event-a32-g0-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 4814,
+        "requested_bytes": 2293264,
+        "baseline_bytes": 0,
+        "live_bytes": 360,
+        "peak_bytes": 26359,
+        "first_frame_calls": 74,
+        "first_frame_bytes": 35759,
+        "later_calls": 4740,
+        "later_bytes": 2257505
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        500,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-event-a32-g500-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 500,
+        "frames": 64,
+        "new_calls": 2234,
+        "requested_bytes": 1172557,
+        "baseline_bytes": 0,
+        "live_bytes": 109453,
+        "peak_bytes": 125477,
+        "first_frame_calls": 107,
+        "first_frame_bytes": 85718,
+        "later_calls": 2127,
+        "later_bytes": 1086839
+      }
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        1,
+        "busy",
+        true
+      ],
+      "file": "event14s-alloc-r1-event-a8-g0-busy.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 8,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 618,
+        "requested_bytes": 274880,
+        "baseline_bytes": 0,
+        "live_bytes": 2464,
+        "peak_bytes": 8304,
+        "first_frame_calls": 22,
+        "first_frame_bytes": 8120,
+        "later_calls": 596,
+        "later_bytes": 266760
+      }
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        1,
+        "closed",
+        true
+      ],
+      "file": "event14s-alloc-r1-event-a8-g0-closed.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 8,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 526,
+        "requested_bytes": 266168,
+        "baseline_bytes": 0,
+        "live_bytes": 2104,
+        "peak_bytes": 6200,
+        "first_frame_calls": 22,
+        "first_frame_bytes": 8120,
+        "later_calls": 504,
+        "later_bytes": 258048
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        0,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-owned-a32-g0-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 0,
+        "frames": 64,
+        "new_calls": 2123,
+        "requested_bytes": 1117910,
+        "baseline_bytes": 0,
+        "live_bytes": 59134,
+        "peak_bytes": 75518,
+        "first_frame_calls": 107,
+        "first_frame_bytes": 85718,
+        "later_calls": 2016,
+        "later_bytes": 1032192
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        500,
+        1,
+        "normal",
+        true
+      ],
+      "file": "event14s-alloc-r1-owned-a32-g500-normal.json",
+      "exe_sha256": "D96954DC737A183C87C82B2F17D294233C0596B23A2013F8C5472AFA08BB474F",
+      "allocations": {
+        "avatars": 32,
+        "gap_us": 500,
+        "frames": 64,
+        "new_calls": 2123,
+        "requested_bytes": 1117910,
+        "baseline_bytes": 0,
+        "live_bytes": 59134,
+        "peak_bytes": 75518,
+        "first_frame_calls": 107,
+        "first_frame_bytes": 85718,
+        "later_calls": 2016,
+        "later_bytes": 1032192
+      }
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 7400,
+          "p95": 8800,
+          "max": 13400
+        },
+        "owner_cycles": {
+          "p50": 27360,
+          "p95": 32400,
+          "max": 50400
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1000,
+          "max": 3100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 1500
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 4500,
+          "max": 5300
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 300,
+          "max": 800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 7400,
+        "p95": 8800,
+        "max": 13400
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 1955880,
+      "worker_cycles_window": 425160,
+      "combined_cycles_window": 2381040,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 115400,
+          "p95": 119600,
+          "max": 121500
+        },
+        "owner_cycles": {
+          "p50": 416160,
+          "p95": 429120,
+          "max": 440280
+        },
+        "capture_ns": {
+          "p50": 1500,
+          "p95": 3200,
+          "max": 6900
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 1600,
+          "max": 2500
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 200,
+          "max": 300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 7400,
+          "p95": 8800,
+          "max": 9000
+        },
+        "cleanup_ns": {
+          "p50": 600,
+          "p95": 1000,
+          "max": 1300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 15400,
+        "p95": 19600,
+        "max": 21500
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 59,
+        "accepted": 5,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 26371080,
+      "worker_cycles_window": 691560,
+      "combined_cycles_window": 27062640,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2027000,
+          "p95": 2100000,
+          "max": 2420500
+        },
+        "owner_cycles": {
+          "p50": 6945840,
+          "p95": 7273800,
+          "max": 7312680
+        },
+        "capture_ns": {
+          "p50": 3000,
+          "p95": 5000,
+          "max": 13200
+        },
+        "submit_ns": {
+          "p50": 2300,
+          "p95": 4300,
+          "max": 4900
+        },
+        "consume_ns": {
+          "p50": 1100,
+          "p95": 2100,
+          "max": 2200
+        },
+        "apply_ns": {
+          "p50": 2400,
+          "p95": 4600,
+          "max": 5700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 33800,
+          "max": 56900
+        },
+        "cleanup_ns": {
+          "p50": 2600,
+          "p95": 4400,
+          "max": 18400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 26900,
+        "p95": 67500,
+        "max": 418100
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 2,
+        "accepted": 62,
+        "callbacks": 64,
+        "applied": 59,
+        "fallback": 5,
+        "stale": 0,
+        "sampled_joints": 1888
+      },
+      "owner_cycles_window": 437582160,
+      "worker_cycles_window": 10262160,
+      "combined_cycles_window": 447844320,
+      "applied_fraction": 0.921875,
+      "sampled_jobs": 59,
+      "delivery_ns": {
+        "p50": 1147700,
+        "p95": 1654000,
+        "max": 1882900
+      },
+      "kernel_ns": {
+        "p50": 33500,
+        "p95": 108200,
+        "max": 526100
+      }
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 520200,
+          "p95": 538800,
+          "max": 574800
+        },
+        "owner_cycles": {
+          "p50": 1863720,
+          "p95": 1943640,
+          "max": 2037240
+        },
+        "capture_ns": {
+          "p50": 2300,
+          "p95": 5300,
+          "max": 13000
+        },
+        "submit_ns": {
+          "p50": 200,
+          "p95": 2700,
+          "max": 3400
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 400,
+          "max": 500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 8400,
+          "p95": 16300,
+          "max": 45400
+        },
+        "cleanup_ns": {
+          "p50": 1000,
+          "p95": 2200,
+          "max": 2600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 20200,
+        "p95": 38700,
+        "max": 74800
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 34,
+        "accepted": 30,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 119837160,
+      "worker_cycles_window": 1570680,
+      "combined_cycles_window": 121407840,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 415000,
+          "p95": 539100,
+          "max": 678500
+        },
+        "owner_cycles": {
+          "p50": 1484640,
+          "p95": 1699200,
+          "max": 2370960
+        },
+        "capture_ns": {
+          "p50": 36600,
+          "p95": 74100,
+          "max": 314900
+        },
+        "submit_ns": {
+          "p50": 200,
+          "p95": 3100,
+          "max": 4500
+        },
+        "consume_ns": {
+          "p50": 1000,
+          "p95": 1500,
+          "max": 11000
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 184800,
+          "p95": 210600,
+          "max": 380800
+        },
+        "cleanup_ns": {
+          "p50": 11900,
+          "p95": 13200,
+          "max": 50800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 414900,
+        "p95": 539100,
+        "max": 678500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 40,
+        "accepted": 24,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 96387120,
+      "worker_cycles_window": 2031840,
+      "combined_cycles_window": 98418960,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 440200,
+          "p95": 680400,
+          "max": 975600
+        },
+        "owner_cycles": {
+          "p50": 1579680,
+          "p95": 2400480,
+          "max": 3130560
+        },
+        "capture_ns": {
+          "p50": 32900,
+          "p95": 56600,
+          "max": 133400
+        },
+        "submit_ns": {
+          "p50": 200,
+          "p95": 2700,
+          "max": 3800
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 1700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 142600,
+          "p95": 207400,
+          "max": 267700
+        },
+        "cleanup_ns": {
+          "p50": 8800,
+          "p95": 20100,
+          "max": 34100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 340200,
+        "p95": 580400,
+        "max": 825000
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 48,
+        "accepted": 16,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 1024
+      },
+      "owner_cycles_window": 104613480,
+      "worker_cycles_window": 2334960,
+      "combined_cycles_window": 106948440,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 1,
+      "delivery_ns": {
+        "p50": 78300,
+        "p95": 78300,
+        "max": 78300
+      },
+      "kernel_ns": {
+        "p50": 189800,
+        "p95": 189800,
+        "max": 189800
+      }
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2617500,
+          "p95": 2786800,
+          "max": 2825700
+        },
+        "owner_cycles": {
+          "p50": 9368640,
+          "p95": 9773280,
+          "max": 10098360
+        },
+        "capture_ns": {
+          "p50": 42000,
+          "p95": 69600,
+          "max": 79100
+        },
+        "submit_ns": {
+          "p50": 800,
+          "p95": 5100,
+          "max": 5700
+        },
+        "consume_ns": {
+          "p50": 1000,
+          "p95": 2000,
+          "max": 4800
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 34300
+        },
+        "fallback_ns": {
+          "p50": 200800,
+          "p95": 244300,
+          "max": 260500
+        },
+        "cleanup_ns": {
+          "p50": 18900,
+          "p95": 24800,
+          "max": 29800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 617500,
+        "p95": 786800,
+        "max": 825500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 34,
+        "accepted": 30,
+        "callbacks": 2048,
+        "applied": 96,
+        "fallback": 1952,
+        "stale": 0,
+        "sampled_joints": 6144
+      },
+      "owner_cycles_window": 600996600,
+      "worker_cycles_window": 7192080,
+      "combined_cycles_window": 608188680,
+      "applied_fraction": 0.046875,
+      "sampled_jobs": 6,
+      "delivery_ns": {
+        "p50": 1690500,
+        "p95": 1925600,
+        "max": 1925600
+      },
+      "kernel_ns": {
+        "p50": 184200,
+        "p95": 1125000,
+        "max": 1125000
+      }
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 979700,
+          "p95": 1240200,
+          "max": 1341000
+        },
+        "owner_cycles": {
+          "p50": 3483720,
+          "p95": 4429800,
+          "max": 4645800
+        },
+        "capture_ns": {
+          "p50": 43500,
+          "p95": 63800,
+          "max": 108300
+        },
+        "submit_ns": {
+          "p50": 1700,
+          "p95": 4800,
+          "max": 6100
+        },
+        "consume_ns": {
+          "p50": 1100,
+          "p95": 1900,
+          "max": 3700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18800
+        },
+        "fallback_ns": {
+          "p50": 192600,
+          "p95": 269900,
+          "max": 304600
+        },
+        "cleanup_ns": {
+          "p50": 13700,
+          "p95": 33500,
+          "max": 51100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 479700,
+        "p95": 740100,
+        "max": 840900
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 28,
+        "accepted": 36,
+        "callbacks": 2048,
+        "applied": 64,
+        "fallback": 1984,
+        "stale": 0,
+        "sampled_joints": 5120
+      },
+      "owner_cycles_window": 228392280,
+      "worker_cycles_window": 6004440,
+      "combined_cycles_window": 234396720,
+      "applied_fraction": 0.03125,
+      "sampled_jobs": 5,
+      "delivery_ns": {
+        "p50": 356300,
+        "p95": 458400,
+        "max": 458400
+      },
+      "kernel_ns": {
+        "p50": 168900,
+        "p95": 242000,
+        "max": 242000
+      }
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        1,
+        "busy",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a8-g0-busy.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 59400,
+          "p95": 87400,
+          "max": 262300
+        },
+        "owner_cycles": {
+          "p50": 215280,
+          "p95": 309240,
+          "max": 591840
+        },
+        "capture_ns": {
+          "p50": 5400,
+          "p95": 9100,
+          "max": 19300
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 3800
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 400,
+          "max": 800
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 28600,
+          "p95": 39900,
+          "max": 71700
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 2300,
+          "max": 10900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 59400,
+        "p95": 87400,
+        "max": 262200
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 15268680,
+      "worker_cycles_window": 705240,
+      "combined_cycles_window": 15973920,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        1,
+        "closed",
+        false
+      ],
+      "file": "event14s-timing-r1-default-a8-g0-closed.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 63600,
+          "p95": 101000,
+          "max": 129800
+        },
+        "owner_cycles": {
+          "p50": 229320,
+          "p95": 366120,
+          "max": 472680
+        },
+        "capture_ns": {
+          "p50": 5500,
+          "p95": 9500,
+          "max": 27300
+        },
+        "submit_ns": {
+          "p50": 400,
+          "p95": 1000,
+          "max": 3700
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 500,
+          "max": 800
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 31200,
+          "p95": 44800,
+          "max": 47300
+        },
+        "cleanup_ns": {
+          "p50": 1600,
+          "p95": 2900,
+          "max": 6000
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 63600,
+        "p95": 100900,
+        "max": 129800
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 64,
+        "accepted": 0,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 16770240,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 16770240,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a1-g0-normal-attempt2.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 10300,
+          "p95": 11500,
+          "max": 21300
+        },
+        "owner_cycles": {
+          "p50": 38160,
+          "p95": 42480,
+          "max": 80280
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 5500,
+          "p95": 6600,
+          "max": 9800
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 10200,
+        "p95": 11500,
+        "max": 21200
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 2606040,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 2606040,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 106900,
+          "p95": 113100,
+          "max": 172800
+        },
+        "owner_cycles": {
+          "p50": 385560,
+          "p95": 409320,
+          "max": 437400
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3900,
+          "p95": 7800,
+          "max": 10100
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6900,
+        "p95": 13100,
+        "max": 72800
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 25003440,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 25003440,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2030100,
+          "p95": 2067700,
+          "max": 2080600
+        },
+        "owner_cycles": {
+          "p50": 7264800,
+          "p95": 7400880,
+          "max": 7428960
+        },
+        "capture_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 500
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 200,
+          "max": 400
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 17900,
+          "p95": 43400,
+          "max": 46500
+        },
+        "cleanup_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 30100,
+        "p95": 67400,
+        "max": 70400
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 462246840,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 462246840,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 509600,
+          "p95": 519400,
+          "max": 565600
+        },
+        "owner_cycles": {
+          "p50": 1828800,
+          "p95": 1868040,
+          "max": 1999080
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 400
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 5600,
+          "p95": 14200,
+          "max": 44700
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 9600,
+        "p95": 19400,
+        "max": 65400
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 117756000,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 117756000,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 302200,
+          "p95": 374400,
+          "max": 378700
+        },
+        "owner_cycles": {
+          "p50": 1091880,
+          "p95": 1334880,
+          "max": 1340640
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 1600
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 151600,
+          "p95": 203100,
+          "max": 206800
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 302200,
+        "p95": 374400,
+        "max": 378700
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 68437080,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 68437080,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 456200,
+          "p95": 644100,
+          "max": 693600
+        },
+        "owner_cycles": {
+          "p50": 1638360,
+          "p95": 2129400,
+          "max": 2419920
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300
+        },
+        "consume_ns": {
+          "p50": 900,
+          "p95": 1300,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 177200,
+          "p95": 197000,
+          "max": 367300
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 356200,
+        "p95": 544000,
+        "max": 593600
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 108661320,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 108661320,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2321200,
+          "p95": 2577600,
+          "max": 2696100
+        },
+        "owner_cycles": {
+          "p50": 8332200,
+          "p95": 9152280,
+          "max": 9666720
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 200,
+          "max": 800
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1300,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 129900,
+          "p95": 207500,
+          "max": 234400
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 321200,
+        "p95": 577500,
+        "max": 696000
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 542581920,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 542581920,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-direct-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 748600,
+          "p95": 1050100,
+          "max": 1208700
+        },
+        "owner_cycles": {
+          "p50": 2685240,
+          "p95": 3624120,
+          "max": 4286880
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "consume_ns": {
+          "p50": 700,
+          "p95": 1200,
+          "max": 1700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 121400,
+          "p95": 209700,
+          "max": 283400
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 248600,
+        "p95": 550000,
+        "max": 708500
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 182765160,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 182765160,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 9700,
+          "p95": 13400,
+          "max": 17900
+        },
+        "owner_cycles": {
+          "p50": 36000,
+          "p95": 47880,
+          "max": 66240
+        },
+        "capture_ns": {
+          "p50": 900,
+          "p95": 1500,
+          "max": 3400
+        },
+        "submit_ns": {
+          "p50": 2100,
+          "p95": 2600,
+          "max": 6100
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 5500,
+          "max": 7900
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 500,
+          "max": 1100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 9700,
+        "p95": 13400,
+        "max": 17800
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 2,
+        "accepted": 62,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 64
+      },
+      "owner_cycles_window": 2549160,
+      "worker_cycles_window": 1753200,
+      "combined_cycles_window": 4302360,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 2,
+      "delivery_ns": {
+        "p50": 1800,
+        "p95": 2600,
+        "max": 2600
+      },
+      "kernel_ns": {
+        "p50": 6200,
+        "p95": 9600,
+        "max": 9600
+      }
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 116900,
+          "p95": 121700,
+          "max": 133100
+        },
+        "owner_cycles": {
+          "p50": 418320,
+          "p95": 437760,
+          "max": 486000
+        },
+        "capture_ns": {
+          "p50": 1600,
+          "p95": 3000,
+          "max": 7800
+        },
+        "submit_ns": {
+          "p50": 5800,
+          "p95": 8300,
+          "max": 13500
+        },
+        "consume_ns": {
+          "p50": 300,
+          "p95": 600,
+          "max": 1300
+        },
+        "apply_ns": {
+          "p50": 1100,
+          "p95": 1600,
+          "max": 1700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 9300
+        },
+        "cleanup_ns": {
+          "p50": 900,
+          "p95": 1500,
+          "max": 2200
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 16900,
+        "p95": 21700,
+        "max": 33100
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 1,
+        "accepted": 63,
+        "callbacks": 64,
+        "applied": 62,
+        "fallback": 2,
+        "stale": 0,
+        "sampled_joints": 1984
+      },
+      "owner_cycles_window": 27073440,
+      "worker_cycles_window": 5338800,
+      "combined_cycles_window": 32412240,
+      "applied_fraction": 0.96875,
+      "sampled_jobs": 62,
+      "delivery_ns": {
+        "p50": 15900,
+        "p95": 38000,
+        "max": 72000
+      },
+      "kernel_ns": {
+        "p50": 8800,
+        "p95": 14200,
+        "max": 22400
+      }
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2022700,
+          "p95": 2042900,
+          "max": 2079200
+        },
+        "owner_cycles": {
+          "p50": 7264440,
+          "p95": 7298280,
+          "max": 7335360
+        },
+        "capture_ns": {
+          "p50": 2000,
+          "p95": 4400,
+          "max": 10600
+        },
+        "submit_ns": {
+          "p50": 7000,
+          "p95": 11400,
+          "max": 56600
+        },
+        "consume_ns": {
+          "p50": 600,
+          "p95": 1300,
+          "max": 2400
+        },
+        "apply_ns": {
+          "p50": 1400,
+          "p95": 3300,
+          "max": 3700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 1700,
+          "p95": 3700,
+          "max": 4500
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 22700,
+        "p95": 42600,
+        "max": 79000
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 464615640,
+      "worker_cycles_window": 8834040,
+      "combined_cycles_window": 473449680,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 18800,
+        "p95": 27700,
+        "max": 33800
+      },
+      "kernel_ns": {
+        "p50": 17700,
+        "p95": 44600,
+        "max": 46200
+      }
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 520500,
+          "p95": 539800,
+          "max": 771000
+        },
+        "owner_cycles": {
+          "p50": 1831680,
+          "p95": 1872360,
+          "max": 1887480
+        },
+        "capture_ns": {
+          "p50": 1900,
+          "p95": 7900,
+          "max": 15200
+        },
+        "submit_ns": {
+          "p50": 5900,
+          "p95": 11200,
+          "max": 25000
+        },
+        "consume_ns": {
+          "p50": 500,
+          "p95": 700,
+          "max": 6100
+        },
+        "apply_ns": {
+          "p50": 1200,
+          "p95": 1700,
+          "max": 10200
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 1300,
+          "p95": 2500,
+          "max": 12300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 18700,
+        "p95": 31700,
+        "max": 39500
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 116449920,
+      "worker_cycles_window": 5888160,
+      "combined_cycles_window": 122338080,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 15600,
+        "p95": 20500,
+        "max": 29800
+      },
+      "kernel_ns": {
+        "p50": 9400,
+        "p95": 21700,
+        "max": 39700
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 441500,
+          "p95": 728300,
+          "max": 5210800
+        },
+        "owner_cycles": {
+          "p50": 1586520,
+          "p95": 2491200,
+          "max": 3164760
+        },
+        "capture_ns": {
+          "p50": 49100,
+          "p95": 80800,
+          "max": 132600
+        },
+        "submit_ns": {
+          "p50": 7700,
+          "p95": 11000,
+          "max": 23800
+        },
+        "consume_ns": {
+          "p50": 1000,
+          "p95": 1500,
+          "max": 1700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 190000,
+          "p95": 281400,
+          "max": 826800
+        },
+        "cleanup_ns": {
+          "p50": 12100,
+          "p95": 33400,
+          "max": 217400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 441500,
+        "p95": 728300,
+        "max": 5210800
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 18,
+        "accepted": 46,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 108511920,
+      "worker_cycles_window": 3366000,
+      "combined_cycles_window": 111877920,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 377100,
+          "p95": 549600,
+          "max": 639800
+        },
+        "owner_cycles": {
+          "p50": 1358640,
+          "p95": 1980000,
+          "max": 2311920
+        },
+        "capture_ns": {
+          "p50": 28900,
+          "p95": 50000,
+          "max": 83900
+        },
+        "submit_ns": {
+          "p50": 3300,
+          "p95": 7700,
+          "max": 12100
+        },
+        "consume_ns": {
+          "p50": 900,
+          "p95": 1300,
+          "max": 1800
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 117500,
+          "p95": 195100,
+          "max": 200800
+        },
+        "cleanup_ns": {
+          "p50": 6900,
+          "p95": 13300,
+          "max": 24700
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 277100,
+        "p95": 449500,
+        "max": 539700
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 92505960,
+      "worker_cycles_window": 29311200,
+      "combined_cycles_window": 121817160,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 11800,
+        "p95": 20100,
+        "max": 28600
+      },
+      "kernel_ns": {
+        "p50": 109100,
+        "p95": 133300,
+        "max": 186700
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2311700,
+          "p95": 2482300,
+          "max": 2588000
+        },
+        "owner_cycles": {
+          "p50": 8205120,
+          "p95": 8737560,
+          "max": 9084600
+        },
+        "capture_ns": {
+          "p50": 34200,
+          "p95": 44400,
+          "max": 54400
+        },
+        "submit_ns": {
+          "p50": 8400,
+          "p95": 11600,
+          "max": 22600
+        },
+        "consume_ns": {
+          "p50": 3000,
+          "p95": 4000,
+          "max": 4700
+        },
+        "apply_ns": {
+          "p50": 22900,
+          "p95": 45100,
+          "max": 46700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 15100,
+          "p95": 23400,
+          "max": 28600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 311600,
+        "p95": 482300,
+        "max": 587900
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 527069520,
+      "worker_cycles_window": 41226480,
+      "combined_cycles_window": 568296000,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 20500,
+        "p95": 27100,
+        "max": 28700
+      },
+      "kernel_ns": {
+        "p50": 170500,
+        "p95": 213300,
+        "max": 245800
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 777600,
+          "p95": 985400,
+          "max": 1202200
+        },
+        "owner_cycles": {
+          "p50": 2790000,
+          "p95": 3465720,
+          "max": 3647160
+        },
+        "capture_ns": {
+          "p50": 36800,
+          "p95": 63100,
+          "max": 112100
+        },
+        "submit_ns": {
+          "p50": 8400,
+          "p95": 13000,
+          "max": 91900
+        },
+        "consume_ns": {
+          "p50": 3200,
+          "p95": 3800,
+          "max": 4500
+        },
+        "apply_ns": {
+          "p50": 22100,
+          "p95": 45600,
+          "max": 49100
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 191300
+        },
+        "cleanup_ns": {
+          "p50": 15400,
+          "p95": 22100,
+          "max": 52000
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 277600,
+        "p95": 471000,
+        "max": 554500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 1,
+        "accepted": 63,
+        "callbacks": 2048,
+        "applied": 1984,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 63488
+      },
+      "owner_cycles_window": 183179160,
+      "worker_cycles_window": 44851680,
+      "combined_cycles_window": 228030840,
+      "applied_fraction": 0.96875,
+      "sampled_jobs": 62,
+      "delivery_ns": {
+        "p50": 18700,
+        "p95": 28200,
+        "max": 50600
+      },
+      "kernel_ns": {
+        "p50": 185900,
+        "p95": 238100,
+        "max": 306000
+      }
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        1,
+        "busy",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a8-g0-busy.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 61000,
+          "p95": 69300,
+          "max": 108800
+        },
+        "owner_cycles": {
+          "p50": 221040,
+          "p95": 250560,
+          "max": 397080
+        },
+        "capture_ns": {
+          "p50": 5400,
+          "p95": 7200,
+          "max": 29600
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 4200
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 400,
+          "max": 500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 30100,
+          "p95": 33900,
+          "max": 35900
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 1600,
+          "max": 4200
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 61000,
+        "p95": 69200,
+        "max": 108700
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 14810400,
+      "worker_cycles_window": 834480,
+      "combined_cycles_window": 15644880,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        1,
+        "closed",
+        false
+      ],
+      "file": "event14s-timing-r1-event-a8-g0-closed.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 91900,
+          "p95": 103500,
+          "max": 132200
+        },
+        "owner_cycles": {
+          "p50": 331920,
+          "p95": 374040,
+          "max": 480960
+        },
+        "capture_ns": {
+          "p50": 8600,
+          "p95": 9500,
+          "max": 32700
+        },
+        "submit_ns": {
+          "p50": 500,
+          "p95": 1000,
+          "max": 10800
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 400,
+          "max": 500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 41800,
+          "p95": 50600,
+          "max": 59900
+        },
+        "cleanup_ns": {
+          "p50": 2600,
+          "p95": 3000,
+          "max": 6400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 91900,
+        "p95": 103400,
+        "max": 132200
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 64,
+        "accepted": 0,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 21759480,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 21759480,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 8200,
+          "p95": 10000,
+          "max": 20300
+        },
+        "owner_cycles": {
+          "p50": 29880,
+          "p95": 36000,
+          "max": 74160
+        },
+        "capture_ns": {
+          "p50": 700,
+          "p95": 800,
+          "max": 6800
+        },
+        "submit_ns": {
+          "p50": 3900,
+          "p95": 5400,
+          "max": 11200
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 400,
+          "p95": 400,
+          "max": 600
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 400,
+          "max": 800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8100,
+        "p95": 9900,
+        "max": 20300
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 2059920,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 2059920,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 300,
+        "max": 2100
+      },
+      "kernel_ns": {
+        "p50": 3300,
+        "p95": 4500,
+        "max": 10600
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 108900,
+          "p95": 130400,
+          "max": 173900
+        },
+        "owner_cycles": {
+          "p50": 392040,
+          "p95": 436320,
+          "max": 513360
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 2200,
+          "max": 8200
+        },
+        "submit_ns": {
+          "p50": 4300,
+          "p95": 9500,
+          "max": 34000
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 300,
+          "p95": 1200,
+          "max": 3100
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 1300,
+          "max": 2700
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8900,
+        "p95": 21100,
+        "max": 42500
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 25274880,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 25274880,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 500,
+        "max": 1700
+      },
+      "kernel_ns": {
+        "p50": 3700,
+        "p95": 8600,
+        "max": 32400
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2026200,
+          "p95": 2070300,
+          "max": 2098200
+        },
+        "owner_cycles": {
+          "p50": 7266600,
+          "p95": 7383960,
+          "max": 7440120
+        },
+        "capture_ns": {
+          "p50": 2000,
+          "p95": 3900,
+          "max": 19200
+        },
+        "submit_ns": {
+          "p50": 11600,
+          "p95": 46900,
+          "max": 68400
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 600
+        },
+        "apply_ns": {
+          "p50": 1200,
+          "p95": 4000,
+          "max": 5400
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 3900,
+          "max": 4100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 26100,
+        "p95": 70200,
+        "max": 98000
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 463642920,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 463642920,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 500,
+        "p95": 900,
+        "max": 1900
+      },
+      "kernel_ns": {
+        "p50": 10500,
+        "p95": 45300,
+        "max": 64800
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 515500,
+          "p95": 524900,
+          "max": 549100
+        },
+        "owner_cycles": {
+          "p50": 1849680,
+          "p95": 1885680,
+          "max": 1978560
+        },
+        "capture_ns": {
+          "p50": 1300,
+          "p95": 2200,
+          "max": 5400
+        },
+        "submit_ns": {
+          "p50": 7100,
+          "p95": 13000,
+          "max": 37400
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 700
+        },
+        "apply_ns": {
+          "p50": 700,
+          "p95": 1400,
+          "max": 4300
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 700,
+          "p95": 1500,
+          "max": 3800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 15500,
+        "p95": 24900,
+        "max": 49100
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 118114200,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 118114200,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 400,
+        "p95": 600,
+        "max": 1800
+      },
+      "kernel_ns": {
+        "p50": 6200,
+        "p95": 11800,
+        "max": 35500
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        0,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 275200,
+          "p95": 409500,
+          "max": 578500
+        },
+        "owner_cycles": {
+          "p50": 986400,
+          "p95": 1459080,
+          "max": 2033280
+        },
+        "capture_ns": {
+          "p50": 22700,
+          "p95": 34900,
+          "max": 67700
+        },
+        "submit_ns": {
+          "p50": 115600,
+          "p95": 162500,
+          "max": 191600
+        },
+        "consume_ns": {
+          "p50": 1300,
+          "p95": 2000,
+          "max": 2400
+        },
+        "apply_ns": {
+          "p50": 11400,
+          "p95": 18200,
+          "max": 27800
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 7400,
+          "p95": 14400,
+          "max": 17200
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 275200,
+        "p95": 409400,
+        "max": 578500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 71320680,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 71320680,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 800,
+        "p95": 1300,
+        "max": 9700
+      },
+      "kernel_ns": {
+        "p50": 114500,
+        "p95": 160300,
+        "max": 188000
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        100,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 366700,
+          "p95": 499000,
+          "max": 662900
+        },
+        "owner_cycles": {
+          "p50": 1318320,
+          "p95": 1798560,
+          "max": 2190600
+        },
+        "capture_ns": {
+          "p50": 22300,
+          "p95": 34100,
+          "max": 56000
+        },
+        "submit_ns": {
+          "p50": 112000,
+          "p95": 154600,
+          "max": 164000
+        },
+        "consume_ns": {
+          "p50": 1200,
+          "p95": 1800,
+          "max": 2100
+        },
+        "apply_ns": {
+          "p50": 12100,
+          "p95": 17900,
+          "max": 84900
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 7300,
+          "p95": 12800,
+          "max": 19800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 266700,
+        "p95": 398900,
+        "max": 562900
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 88557840,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 88557840,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 800,
+        "p95": 1600,
+        "max": 2600
+      },
+      "kernel_ns": {
+        "p50": 110800,
+        "p95": 152100,
+        "max": 161100
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        2000,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2326700,
+          "p95": 2516400,
+          "max": 2640000
+        },
+        "owner_cycles": {
+          "p50": 8348040,
+          "p95": 8989920,
+          "max": 9385920
+        },
+        "capture_ns": {
+          "p50": 23800,
+          "p95": 35900,
+          "max": 73400
+        },
+        "submit_ns": {
+          "p50": 115100,
+          "p95": 164600,
+          "max": 193000
+        },
+        "consume_ns": {
+          "p50": 1400,
+          "p95": 2000,
+          "max": 2300
+        },
+        "apply_ns": {
+          "p50": 15200,
+          "p95": 28600,
+          "max": 34000
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 8700,
+          "p95": 18100,
+          "max": 25900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 326700,
+        "p95": 516400,
+        "max": 639900
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 541207080,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 541207080,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 900,
+        "p95": 1600,
+        "max": 3000
+      },
+      "kernel_ns": {
+        "p50": 114000,
+        "p95": 161800,
+        "max": 190100
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        500,
+        1,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r1-owned-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 865300,
+          "p95": 972500,
+          "max": 1179300
+        },
+        "owner_cycles": {
+          "p50": 3079440,
+          "p95": 3470760,
+          "max": 4093560
+        },
+        "capture_ns": {
+          "p50": 28000,
+          "p95": 35600,
+          "max": 59400
+        },
+        "submit_ns": {
+          "p50": 128700,
+          "p95": 189700,
+          "max": 217300
+        },
+        "consume_ns": {
+          "p50": 1500,
+          "p95": 2100,
+          "max": 2400
+        },
+        "apply_ns": {
+          "p50": 15800,
+          "p95": 32700,
+          "max": 76100
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 11200,
+          "p95": 17800,
+          "max": 24800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 365200,
+        "p95": 472400,
+        "max": 679200
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 197003160,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 197003160,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 900,
+        "p95": 1700,
+        "max": 2600
+      },
+      "kernel_ns": {
+        "p50": 127100,
+        "p95": 186800,
+        "max": 213200
+      }
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 7400,
+          "p95": 9000,
+          "max": 14300
+        },
+        "owner_cycles": {
+          "p50": 27720,
+          "p95": 33840,
+          "max": 53640
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1100,
+          "max": 2900
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 1700
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 4700,
+          "max": 8100
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 300,
+          "max": 900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 7400,
+        "p95": 9000,
+        "max": 14200
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 2001600,
+      "worker_cycles_window": 604440,
+      "combined_cycles_window": 2606040,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 107600,
+          "p95": 113400,
+          "max": 169200
+        },
+        "owner_cycles": {
+          "p50": 387720,
+          "p95": 409320,
+          "max": 433080
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 2600,
+          "max": 2900
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 500,
+          "max": 1300
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 5700,
+          "max": 8300
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 700,
+          "max": 1100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 7600,
+        "p95": 13400,
+        "max": 69200
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 60,
+        "accepted": 4,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 25104960,
+      "worker_cycles_window": 446040,
+      "combined_cycles_window": 25551000,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2006400,
+          "p95": 2024000,
+          "max": 2025800
+        },
+        "owner_cycles": {
+          "p50": 7214040,
+          "p95": 7239960,
+          "max": 7254000
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 2700,
+          "max": 5800
+        },
+        "submit_ns": {
+          "p50": 500,
+          "p95": 1900,
+          "max": 3600
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 1000,
+          "max": 1400
+        },
+        "apply_ns": {
+          "p50": 500,
+          "p95": 2500,
+          "max": 2800
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 400,
+          "p95": 2200,
+          "max": 2700
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6400,
+        "p95": 24000,
+        "max": 25800
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 461189160,
+      "worker_cycles_window": 4143960,
+      "combined_cycles_window": 465333120,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 445100,
+        "p95": 1177900,
+        "max": 1203400
+      },
+      "kernel_ns": {
+        "p50": 6400,
+        "p95": 25800,
+        "max": 29900
+      }
+    },
+    {
+      "cell": [
+        "default",
+        1,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 508600,
+          "p95": 519800,
+          "max": 543800
+        },
+        "owner_cycles": {
+          "p50": 1828800,
+          "p95": 1866240,
+          "max": 1933560
+        },
+        "capture_ns": {
+          "p50": 1000,
+          "p95": 2900,
+          "max": 8200
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 1500,
+          "max": 2100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 300,
+          "max": 500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3800,
+          "p95": 8800,
+          "max": 23800
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 1100,
+          "max": 1600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8600,
+        "p95": 19800,
+        "max": 43800
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 47,
+        "accepted": 17,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 116746920,
+      "worker_cycles_window": 923760,
+      "combined_cycles_window": 117670680,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 264700,
+          "p95": 392800,
+          "max": 485100
+        },
+        "owner_cycles": {
+          "p50": 951480,
+          "p95": 1394280,
+          "max": 1723320
+        },
+        "capture_ns": {
+          "p50": 22200,
+          "p95": 41700,
+          "max": 55700
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 2400,
+          "max": 4800
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 119200,
+          "p95": 173200,
+          "max": 237200
+        },
+        "cleanup_ns": {
+          "p50": 7000,
+          "p95": 11200,
+          "max": 20400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 264700,
+        "p95": 392800,
+        "max": 485100
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 54,
+        "accepted": 10,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 65496600,
+      "worker_cycles_window": 918000,
+      "combined_cycles_window": 66414600,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 377300,
+          "p95": 501100,
+          "max": 672500
+        },
+        "owner_cycles": {
+          "p50": 1355400,
+          "p95": 1788840,
+          "max": 2274480
+        },
+        "capture_ns": {
+          "p50": 23300,
+          "p95": 42600,
+          "max": 91000
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 3200,
+          "max": 5300
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 1600
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 122900,
+          "p95": 175800,
+          "max": 224800
+        },
+        "cleanup_ns": {
+          "p50": 6900,
+          "p95": 12200,
+          "max": 93400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 276300,
+        "p95": 401100,
+        "max": 572500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 50,
+        "accepted": 14,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 91532880,
+      "worker_cycles_window": 1209600,
+      "combined_cycles_window": 92742480,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2199800,
+          "p95": 2515100,
+          "max": 2684700
+        },
+        "owner_cycles": {
+          "p50": 7867800,
+          "p95": 9018000,
+          "max": 9546480
+        },
+        "capture_ns": {
+          "p50": 25000,
+          "p95": 42300,
+          "max": 59900
+        },
+        "submit_ns": {
+          "p50": 800,
+          "p95": 3600,
+          "max": 4800
+        },
+        "consume_ns": {
+          "p50": 2300,
+          "p95": 3800,
+          "max": 4300
+        },
+        "apply_ns": {
+          "p50": 15800,
+          "p95": 38800,
+          "max": 47300
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 146800,
+          "max": 214400
+        },
+        "cleanup_ns": {
+          "p50": 9200,
+          "p95": 21800,
+          "max": 24900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 199800,
+        "p95": 515100,
+        "max": 684600
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 1888,
+        "fallback": 160,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 519540480,
+      "worker_cycles_window": 34875360,
+      "combined_cycles_window": 554415840,
+      "applied_fraction": 0.921875,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 939100,
+        "p95": 1938400,
+        "max": 1986100
+      },
+      "kernel_ns": {
+        "p50": 130700,
+        "p95": 187000,
+        "max": 212000
+      }
+    },
+    {
+      "cell": [
+        "default",
+        32,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 795500,
+          "p95": 937100,
+          "max": 1076500
+        },
+        "owner_cycles": {
+          "p50": 2852280,
+          "p95": 3361680,
+          "max": 3589200
+        },
+        "capture_ns": {
+          "p50": 31000,
+          "p95": 48600,
+          "max": 53500
+        },
+        "submit_ns": {
+          "p50": 200,
+          "p95": 2600,
+          "max": 3400
+        },
+        "consume_ns": {
+          "p50": 900,
+          "p95": 1300,
+          "max": 1600
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 124100,
+          "p95": 184800,
+          "max": 232700
+        },
+        "cleanup_ns": {
+          "p50": 7300,
+          "p95": 17600,
+          "max": 23700
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 295500,
+        "p95": 437100,
+        "max": 566600
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 37,
+        "accepted": 27,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 1024
+      },
+      "owner_cycles_window": 189169920,
+      "worker_cycles_window": 2555280,
+      "combined_cycles_window": 191725200,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 1,
+      "delivery_ns": {
+        "p50": 364800,
+        "p95": 364800,
+        "max": 364800
+      },
+      "kernel_ns": {
+        "p50": 213700,
+        "p95": 213700,
+        "max": 213700
+      }
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        2,
+        "busy",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a8-g0-busy.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 59300,
+          "p95": 85000,
+          "max": 157200
+        },
+        "owner_cycles": {
+          "p50": 214560,
+          "p95": 244440,
+          "max": 537480
+        },
+        "capture_ns": {
+          "p50": 5300,
+          "p95": 8400,
+          "max": 25300
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 3200
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 500,
+          "max": 700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 28800,
+          "p95": 36600,
+          "max": 56000
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 1700,
+          "max": 6400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 59200,
+        "p95": 85000,
+        "max": 157200
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 14700240,
+      "worker_cycles_window": 545040,
+      "combined_cycles_window": 15245280,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "default",
+        8,
+        0,
+        2,
+        "closed",
+        false
+      ],
+      "file": "event14s-timing-r2-default-a8-g0-closed.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 58800,
+          "p95": 100000,
+          "max": 132200
+        },
+        "owner_cycles": {
+          "p50": 212400,
+          "p95": 349920,
+          "max": 437040
+        },
+        "capture_ns": {
+          "p50": 5300,
+          "p95": 8500,
+          "max": 16800
+        },
+        "submit_ns": {
+          "p50": 300,
+          "p95": 800,
+          "max": 2300
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 300,
+          "max": 400
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 28100,
+          "p95": 46100,
+          "max": 48000
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 2600,
+          "max": 9600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 58800,
+        "p95": 100000,
+        "max": 132200
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 64,
+        "accepted": 0,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 14844240,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 14844240,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 6200,
+          "p95": 7500,
+          "max": 12100
+        },
+        "owner_cycles": {
+          "p50": 23400,
+          "p95": 28080,
+          "max": 45720
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3400,
+          "p95": 4600,
+          "max": 5000
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6200,
+        "p95": 7500,
+        "max": 12000
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 1601640,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 1601640,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 106500,
+          "p95": 111200,
+          "max": 202700
+        },
+        "owner_cycles": {
+          "p50": 384120,
+          "p95": 401400,
+          "max": 567360
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3500,
+          "p95": 7200,
+          "max": 41900
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6500,
+        "p95": 11200,
+        "max": 63500
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 24951240,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 24951240,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2010500,
+          "p95": 2023800,
+          "max": 2048000
+        },
+        "owner_cycles": {
+          "p50": 7222320,
+          "p95": 7265520,
+          "max": 7292880
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 6100,
+          "p95": 14100,
+          "max": 30100
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 10500,
+        "p95": 23800,
+        "max": 47800
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 462080160,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 462080160,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        1,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 506600,
+          "p95": 515800,
+          "max": 567900
+        },
+        "owner_cycles": {
+          "p50": 1823400,
+          "p95": 1859400,
+          "max": 1862280
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3700,
+          "p95": 8400,
+          "max": 8600
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6600,
+        "p95": 15700,
+        "max": 17400
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 116866440,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 116866440,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 225500,
+          "p95": 243800,
+          "max": 320200
+        },
+        "owner_cycles": {
+          "p50": 812520,
+          "p95": 870120,
+          "max": 972360
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1100,
+          "max": 1200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 112900,
+          "p95": 124300,
+          "max": 191600
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 225400,
+        "p95": 243700,
+        "max": 320200
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 52455240,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 52455240,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 392500,
+          "p95": 547200,
+          "max": 625300
+        },
+        "owner_cycles": {
+          "p50": 1412640,
+          "p95": 1835280,
+          "max": 2231640
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 1600
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 139500,
+          "p95": 197300,
+          "max": 258300
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 292500,
+        "p95": 447200,
+        "max": 525200
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 92949840,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 92949840,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2355900,
+          "p95": 2664700,
+          "max": 2742400
+        },
+        "owner_cycles": {
+          "p50": 8447400,
+          "p95": 9395280,
+          "max": 9828360
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 600
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 200,
+          "max": 200
+        },
+        "consume_ns": {
+          "p50": 900,
+          "p95": 1300,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 145900,
+          "p95": 247500,
+          "max": 284300
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 200,
+          "max": 300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 355900,
+        "p95": 656300,
+        "max": 742200
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 550687680,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 550687680,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "direct",
+        32,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-direct-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 738300,
+          "p95": 877900,
+          "max": 976800
+        },
+        "owner_cycles": {
+          "p50": 2658600,
+          "p95": 3098160,
+          "max": 3478680
+        },
+        "capture_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "submit_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 200
+        },
+        "consume_ns": {
+          "p50": 700,
+          "p95": 1100,
+          "max": 1300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 117200,
+          "p95": 169900,
+          "max": 207100
+        },
+        "cleanup_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 238300,
+        "p95": 361100,
+        "max": 476800
+      },
+      "totals": {
+        "predicted": 0,
+        "masked": 0,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 176095800,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 176095800,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 10300,
+          "p95": 12500,
+          "max": 25900
+        },
+        "owner_cycles": {
+          "p50": 37800,
+          "p95": 46080,
+          "max": 86040
+        },
+        "capture_ns": {
+          "p50": 1000,
+          "p95": 2000,
+          "max": 10400
+        },
+        "submit_ns": {
+          "p50": 2100,
+          "p95": 3100,
+          "max": 4700
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 200
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 3600,
+          "p95": 5200,
+          "max": 6900
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 400,
+          "max": 900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 10300,
+        "p95": 12400,
+        "max": 25900
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 6,
+        "accepted": 58,
+        "callbacks": 64,
+        "applied": 0,
+        "fallback": 64,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 2608920,
+      "worker_cycles_window": 1678320,
+      "combined_cycles_window": 4287240,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 106500,
+          "p95": 111400,
+          "max": 124700
+        },
+        "owner_cycles": {
+          "p50": 384480,
+          "p95": 400320,
+          "max": 452520
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1600,
+          "max": 4200
+        },
+        "submit_ns": {
+          "p50": 2100,
+          "p95": 3900,
+          "max": 9700
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 300,
+          "max": 800
+        },
+        "apply_ns": {
+          "p50": 300,
+          "p95": 800,
+          "max": 1500
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 400,
+          "p95": 1100,
+          "max": 2800
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 6500,
+        "p95": 11400,
+        "max": 24700
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 24975360,
+      "worker_cycles_window": 2816640,
+      "combined_cycles_window": 27792000,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 6000,
+        "p95": 8000,
+        "max": 18100
+      },
+      "kernel_ns": {
+        "p50": 4200,
+        "p95": 5900,
+        "max": 8400
+      }
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2010400,
+          "p95": 2023800,
+          "max": 2029400
+        },
+        "owner_cycles": {
+          "p50": 7221960,
+          "p95": 7262640,
+          "max": 7280640
+        },
+        "capture_ns": {
+          "p50": 900,
+          "p95": 2600,
+          "max": 6900
+        },
+        "submit_ns": {
+          "p50": 3300,
+          "p95": 7000,
+          "max": 8200
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 900,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 700,
+          "p95": 1900,
+          "max": 2700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 600,
+          "p95": 2400,
+          "max": 3500
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 10400,
+        "p95": 23700,
+        "max": 29400
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 461271600,
+      "worker_cycles_window": 4628880,
+      "combined_cycles_window": 465900480,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 10200,
+        "p95": 18900,
+        "max": 23400
+      },
+      "kernel_ns": {
+        "p50": 5800,
+        "p95": 23900,
+        "max": 33700
+      }
+    },
+    {
+      "cell": [
+        "event",
+        1,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 518100,
+          "p95": 520900,
+          "max": 541600
+        },
+        "owner_cycles": {
+          "p50": 1841040,
+          "p95": 1874160,
+          "max": 1881000
+        },
+        "capture_ns": {
+          "p50": 1600,
+          "p95": 2100,
+          "max": 6600
+        },
+        "submit_ns": {
+          "p50": 5900,
+          "p95": 7300,
+          "max": 11400
+        },
+        "consume_ns": {
+          "p50": 400,
+          "p95": 600,
+          "max": 900
+        },
+        "apply_ns": {
+          "p50": 900,
+          "p95": 1500,
+          "max": 1800
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 1100,
+          "p95": 1700,
+          "max": 2100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 17400,
+        "p95": 20200,
+        "max": 30500
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 118375560,
+      "worker_cycles_window": 4222800,
+      "combined_cycles_window": 122598360,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 12000,
+        "p95": 16200,
+        "max": 20000
+      },
+      "kernel_ns": {
+        "p50": 6000,
+        "p95": 11100,
+        "max": 26800
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 279800,
+          "p95": 353900,
+          "max": 465300
+        },
+        "owner_cycles": {
+          "p50": 1006200,
+          "p95": 1277280,
+          "max": 1640880
+        },
+        "capture_ns": {
+          "p50": 30300,
+          "p95": 40500,
+          "max": 59100
+        },
+        "submit_ns": {
+          "p50": 3500,
+          "p95": 6400,
+          "max": 8700
+        },
+        "consume_ns": {
+          "p50": 800,
+          "p95": 1200,
+          "max": 1300
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 122900,
+          "p95": 155800,
+          "max": 174900
+        },
+        "cleanup_ns": {
+          "p50": 7000,
+          "p95": 10800,
+          "max": 24300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 279700,
+        "p95": 353800,
+        "max": 465200
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 67296600,
+      "worker_cycles_window": 3480480,
+      "combined_cycles_window": 70777080,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 381900,
+          "p95": 504900,
+          "max": 551400
+        },
+        "owner_cycles": {
+          "p50": 1373760,
+          "p95": 1811520,
+          "max": 1986840
+        },
+        "capture_ns": {
+          "p50": 33000,
+          "p95": 50800,
+          "max": 60100
+        },
+        "submit_ns": {
+          "p50": 3700,
+          "p95": 5700,
+          "max": 9600
+        },
+        "consume_ns": {
+          "p50": 900,
+          "p95": 1300,
+          "max": 1500
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 117700,
+          "p95": 158100,
+          "max": 218200
+        },
+        "cleanup_ns": {
+          "p50": 7200,
+          "p95": 12500,
+          "max": 31100
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 281900,
+        "p95": 404900,
+        "max": 451400
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 0,
+        "fallback": 2048,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 92445840,
+      "worker_cycles_window": 30205080,
+      "combined_cycles_window": 122650920,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 13500,
+        "p95": 21000,
+        "max": 40900
+      },
+      "kernel_ns": {
+        "p50": 110800,
+        "p95": 153600,
+        "max": 162300
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2280600,
+          "p95": 2515400,
+          "max": 2617600
+        },
+        "owner_cycles": {
+          "p50": 8188560,
+          "p95": 8926920,
+          "max": 9014760
+        },
+        "capture_ns": {
+          "p50": 34500,
+          "p95": 41600,
+          "max": 81300
+        },
+        "submit_ns": {
+          "p50": 7400,
+          "p95": 12900,
+          "max": 13900
+        },
+        "consume_ns": {
+          "p50": 2700,
+          "p95": 4200,
+          "max": 4400
+        },
+        "apply_ns": {
+          "p50": 23100,
+          "p95": 39400,
+          "max": 55500
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 14200,
+          "p95": 26600,
+          "max": 56500
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 280600,
+        "p95": 515300,
+        "max": 617500
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 528618240,
+      "worker_cycles_window": 40913280,
+      "combined_cycles_window": 569531520,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 19300,
+        "p95": 29700,
+        "max": 62800
+      },
+      "kernel_ns": {
+        "p50": 155500,
+        "p95": 212400,
+        "max": 364000
+      }
+    },
+    {
+      "cell": [
+        "event",
+        32,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 669300,
+          "p95": 761000,
+          "max": 993500
+        },
+        "owner_cycles": {
+          "p50": 2410200,
+          "p95": 2662920,
+          "max": 2916360
+        },
+        "capture_ns": {
+          "p50": 24400,
+          "p95": 37700,
+          "max": 96000
+        },
+        "submit_ns": {
+          "p50": 3800,
+          "p95": 7800,
+          "max": 9700
+        },
+        "consume_ns": {
+          "p50": 1900,
+          "p95": 2900,
+          "max": 3200
+        },
+        "apply_ns": {
+          "p50": 15100,
+          "p95": 20900,
+          "max": 27400
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 8700,
+          "p95": 15500,
+          "max": 67600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 169300,
+        "p95": 257000,
+        "max": 493400
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 64,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 157445280,
+      "worker_cycles_window": 33876000,
+      "combined_cycles_window": 191321280,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 11800,
+        "p95": 19900,
+        "max": 35000
+      },
+      "kernel_ns": {
+        "p50": 128900,
+        "p95": 173400,
+        "max": 267500
+      }
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        2,
+        "busy",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a8-g0-busy.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 58700,
+          "p95": 68000,
+          "max": 167100
+        },
+        "owner_cycles": {
+          "p50": 212400,
+          "p95": 245880,
+          "max": 561960
+        },
+        "capture_ns": {
+          "p50": 5300,
+          "p95": 6600,
+          "max": 52100
+        },
+        "submit_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 2300
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 400,
+          "max": 700
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 28300,
+          "p95": 32900,
+          "max": 45100
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 1700,
+          "max": 4900
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 58700,
+        "p95": 68000,
+        "max": 167000
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 63,
+        "accepted": 1,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 14440680,
+      "worker_cycles_window": 668160,
+      "combined_cycles_window": 15108840,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "event",
+        8,
+        0,
+        2,
+        "closed",
+        false
+      ],
+      "file": "event14s-timing-r2-event-a8-g0-closed.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 58600,
+          "p95": 63900,
+          "max": 75800
+        },
+        "owner_cycles": {
+          "p50": 212040,
+          "p95": 230040,
+          "max": 274680
+        },
+        "capture_ns": {
+          "p50": 5200,
+          "p95": 5600,
+          "max": 14000
+        },
+        "submit_ns": {
+          "p50": 400,
+          "p95": 400,
+          "max": 1200
+        },
+        "consume_ns": {
+          "p50": 200,
+          "p95": 400,
+          "max": 600
+        },
+        "apply_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "fallback_ns": {
+          "p50": 27900,
+          "p95": 32200,
+          "max": 36600
+        },
+        "cleanup_ns": {
+          "p50": 1500,
+          "p95": 1600,
+          "max": 3000
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 58600,
+        "p95": 63900,
+        "max": 75800
+      },
+      "totals": {
+        "predicted": 512,
+        "masked": 1536,
+        "rejected": 64,
+        "accepted": 0,
+        "callbacks": 512,
+        "applied": 0,
+        "fallback": 512,
+        "stale": 0,
+        "sampled_joints": 0
+      },
+      "owner_cycles_window": 13771080,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 13771080,
+      "applied_fraction": 0.0,
+      "sampled_jobs": 0,
+      "delivery_ns": null,
+      "kernel_ns": null
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a1-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 8900,
+          "p95": 16000,
+          "max": 47300
+        },
+        "owner_cycles": {
+          "p50": 32400,
+          "p95": 57960,
+          "max": 73440
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 1500,
+          "max": 6200
+        },
+        "submit_ns": {
+          "p50": 4500,
+          "p95": 7000,
+          "max": 8200
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 400,
+          "p95": 600,
+          "max": 1000
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 400,
+          "p95": 1000,
+          "max": 36400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8900,
+        "p95": 16000,
+        "max": 47200
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 2461680,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 2461680,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 500,
+        "max": 1700
+      },
+      "kernel_ns": {
+        "p50": 3900,
+        "p95": 6000,
+        "max": 7300
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a1-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 108400,
+          "p95": 116000,
+          "max": 153900
+        },
+        "owner_cycles": {
+          "p50": 390600,
+          "p95": 405720,
+          "max": 435960
+        },
+        "capture_ns": {
+          "p50": 700,
+          "p95": 1800,
+          "max": 5900
+        },
+        "submit_ns": {
+          "p50": 4000,
+          "p95": 6700,
+          "max": 8800
+        },
+        "consume_ns": {
+          "p50": 100,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 300,
+          "p95": 700,
+          "max": 1700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 700,
+          "max": 2000
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8400,
+        "p95": 16000,
+        "max": 20500
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 25168680,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 25168680,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 500,
+        "max": 1700
+      },
+      "kernel_ns": {
+        "p50": 3400,
+        "p95": 5800,
+        "max": 7700
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a1-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2012500,
+          "p95": 2037200,
+          "max": 2128900
+        },
+        "owner_cycles": {
+          "p50": 7232400,
+          "p95": 7283160,
+          "max": 7387560
+        },
+        "capture_ns": {
+          "p50": 800,
+          "p95": 2700,
+          "max": 7100
+        },
+        "submit_ns": {
+          "p50": 5700,
+          "p95": 14900,
+          "max": 42700
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 400,
+          "p95": 2300,
+          "max": 4100
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 400,
+          "p95": 2800,
+          "max": 4400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 12500,
+        "p95": 28800,
+        "max": 55700
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 462346920,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 462346920,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 700,
+        "max": 1600
+      },
+      "kernel_ns": {
+        "p50": 5100,
+        "p95": 13900,
+        "max": 40600
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        1,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a1-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 508500,
+          "p95": 518200,
+          "max": 560400
+        },
+        "owner_cycles": {
+          "p50": 1829880,
+          "p95": 1842120,
+          "max": 1867320
+        },
+        "capture_ns": {
+          "p50": 700,
+          "p95": 2100,
+          "max": 5800
+        },
+        "submit_ns": {
+          "p50": 4200,
+          "p95": 7000,
+          "max": 10500
+        },
+        "consume_ns": {
+          "p50": 0,
+          "p95": 100,
+          "max": 100
+        },
+        "apply_ns": {
+          "p50": 300,
+          "p95": 1200,
+          "max": 1600
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 300,
+          "p95": 1200,
+          "max": 2700
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 8500,
+        "p95": 18100,
+        "max": 26200
+      },
+      "totals": {
+        "predicted": 64,
+        "masked": 192,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 64,
+        "applied": 64,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 2048
+      },
+      "owner_cycles_window": 116794080,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 116794080,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 300,
+        "p95": 400,
+        "max": 1700
+      },
+      "kernel_ns": {
+        "p50": 3600,
+        "p95": 6400,
+        "max": 9500
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        0,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a32-g0-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 266100,
+          "p95": 392200,
+          "max": 586700
+        },
+        "owner_cycles": {
+          "p50": 958680,
+          "p95": 1413720,
+          "max": 2077920
+        },
+        "capture_ns": {
+          "p50": 22400,
+          "p95": 34300,
+          "max": 57700
+        },
+        "submit_ns": {
+          "p50": 112700,
+          "p95": 162200,
+          "max": 207800
+        },
+        "consume_ns": {
+          "p50": 1300,
+          "p95": 1800,
+          "max": 2300
+        },
+        "apply_ns": {
+          "p50": 11100,
+          "p95": 16800,
+          "max": 29700
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 7200,
+          "p95": 12300,
+          "max": 16600
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 266100,
+        "p95": 392200,
+        "max": 586700
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 64955880,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 64955880,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 800,
+        "p95": 1400,
+        "max": 2400
+      },
+      "kernel_ns": {
+        "p50": 111400,
+        "p95": 159700,
+        "max": 204600
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        100,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a32-g100-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 370300,
+          "p95": 478200,
+          "max": 637000
+        },
+        "owner_cycles": {
+          "p50": 1333440,
+          "p95": 1727640,
+          "max": 1941120
+        },
+        "capture_ns": {
+          "p50": 22000,
+          "p95": 29800,
+          "max": 62200
+        },
+        "submit_ns": {
+          "p50": 112300,
+          "p95": 125800,
+          "max": 151400
+        },
+        "consume_ns": {
+          "p50": 1300,
+          "p95": 1900,
+          "max": 2200
+        },
+        "apply_ns": {
+          "p50": 11100,
+          "p95": 15700,
+          "max": 25000
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 7200,
+          "p95": 13400,
+          "max": 26300
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 270300,
+        "p95": 378200,
+        "max": 537000
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 87458040,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 87458040,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 800,
+        "p95": 1100,
+        "max": 2900
+      },
+      "kernel_ns": {
+        "p50": 111100,
+        "p95": 123900,
+        "max": 147900
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        2000,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a32-g2000-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 2723300,
+          "p95": 2886100,
+          "max": 3722800
+        },
+        "owner_cycles": {
+          "p50": 9697680,
+          "p95": 9999000,
+          "max": 10362600
+        },
+        "capture_ns": {
+          "p50": 38400,
+          "p95": 53800,
+          "max": 85100
+        },
+        "submit_ns": {
+          "p50": 209100,
+          "p95": 234100,
+          "max": 303700
+        },
+        "consume_ns": {
+          "p50": 1900,
+          "p95": 2500,
+          "max": 12200
+        },
+        "apply_ns": {
+          "p50": 37900,
+          "p95": 47400,
+          "max": 63500
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 21900,
+          "p95": 25800,
+          "max": 58400
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 723200,
+        "p95": 882500,
+        "max": 959300
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 618046560,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 618046560,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 1600,
+        "p95": 2200,
+        "max": 5500
+      },
+      "kernel_ns": {
+        "p50": 205100,
+        "p95": 231600,
+        "max": 299700
+      }
+    },
+    {
+      "cell": [
+        "owned",
+        32,
+        500,
+        2,
+        "normal",
+        false
+      ],
+      "file": "event14s-timing-r2-owned-a32-g500-normal.json",
+      "exe_sha256": "EA8514747F7868F29E21BC04D99F8BCDC7DA9E63FEE67F57CA67DB06B52C1190",
+      "costs": {
+        "total_ns": {
+          "p50": 810300,
+          "p95": 1125600,
+          "max": 1239300
+        },
+        "owner_cycles": {
+          "p50": 2902320,
+          "p95": 3789360,
+          "max": 4396320
+        },
+        "capture_ns": {
+          "p50": 23400,
+          "p95": 42700,
+          "max": 85400
+        },
+        "submit_ns": {
+          "p50": 122400,
+          "p95": 178400,
+          "max": 237400
+        },
+        "consume_ns": {
+          "p50": 1500,
+          "p95": 2000,
+          "max": 2300
+        },
+        "apply_ns": {
+          "p50": 12600,
+          "p95": 32000,
+          "max": 49300
+        },
+        "fallback_ns": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "cleanup_ns": {
+          "p50": 8000,
+          "p95": 28200,
+          "max": 48200
+        }
+      },
+      "owner_without_synthetic_gap_ns": {
+        "p50": 310300,
+        "p95": 625600,
+        "max": 739200
+      },
+      "totals": {
+        "predicted": 2048,
+        "masked": 6144,
+        "rejected": 0,
+        "accepted": 0,
+        "callbacks": 2048,
+        "applied": 2048,
+        "fallback": 0,
+        "stale": 0,
+        "sampled_joints": 65536
+      },
+      "owner_cycles_window": 196717320,
+      "worker_cycles_window": 0,
+      "combined_cycles_window": 196717320,
+      "applied_fraction": 1.0,
+      "sampled_jobs": 64,
+      "delivery_ns": {
+        "p50": 900,
+        "p95": 1800,
+        "max": 2600
+      },
+      "kernel_ns": {
+        "p50": 121300,
+        "p95": 175600,
+        "max": 234400
+      }
+    }
+  ],
+  "normalized_lf_sha256": {
+    "event14s-alloc-r1-default-a32-g0-normal.json": "1899215986f4ce5b04b773c205b0c0844f396988fcbba2a25eea92ebd51be675",
+    "event14s-alloc-r1-default-a32-g0-normal.csv": "8e700efc9fb0b29b26c48f3c18b970060380ed1f1dfb1b3bd9d6efe4b08f5157",
+    "event14s-alloc-r1-default-a32-g500-normal.json": "d619450bdff6aa7c4e395139471af6d16f89a3e7a2ba4d7d3a555363c18ad5c2",
+    "event14s-alloc-r1-default-a32-g500-normal.csv": "ca0382450833301ee2bc286eeee09396252c00d269e6ab29902bee379396648f",
+    "event14s-alloc-r1-default-a8-g0-busy.json": "6cfbcbed19fcef1a7b97cc3f4e8cc8929ce487187b95dab82dd644408ea05fb6",
+    "event14s-alloc-r1-default-a8-g0-busy.csv": "2ccc6af69d159b574ef325019c87c59d288c339d7ab4cd983c1eb2cbbfb63468",
+    "event14s-alloc-r1-default-a8-g0-closed.json": "7e0536a89c124d653b6c403825f1a0192aa73f17e83045b4865898c4aee85ab1",
+    "event14s-alloc-r1-default-a8-g0-closed.csv": "610bdf1926bf11dabf3c452156f2e7470d0bc59b6d6918e3d87ce81da5527297",
+    "event14s-alloc-r1-direct-a32-g0-normal.json": "d5c10acb6ace8b94e19a1124ff220eade375c14ed77359e71cae0af7959ec164",
+    "event14s-alloc-r1-direct-a32-g0-normal.csv": "598303a935a6f05b97dc9f373259c0e75f9cceabe4346a25e027a883c05a7f26",
+    "event14s-alloc-r1-direct-a32-g500-normal.json": "11c584df952b61e2ddeeeb3fa74756ec50ad61d8cff8561247d4ec218659f3a2",
+    "event14s-alloc-r1-direct-a32-g500-normal.csv": "dc7bd1829ac529b9e8d912ea6fd9935359b80deac7758f25b40a2f83605be80a",
+    "event14s-alloc-r1-event-a32-g0-normal.json": "c2d7c69ce24422ff3385321930eca7e65df2808fedc97b2aafdf973dba7d67df",
+    "event14s-alloc-r1-event-a32-g0-normal.csv": "9a81957a490879cdaf5c4d42aa5ad65d13358cc6e91ddfb4d75595ef24b47031",
+    "event14s-alloc-r1-event-a32-g500-normal.json": "059d395f2839d4bbf5ce5621ecf0d78721ece5d03b37f0882d9a5de8b193316e",
+    "event14s-alloc-r1-event-a32-g500-normal.csv": "ca37eaee8fb41266990ab3ac4c20dcd27704a9361264303e08d22603a912cf78",
+    "event14s-alloc-r1-event-a8-g0-busy.json": "0f5ac17b91800d88df4aa2e8f5924c72c59a95f65f989cd5dbbfb3a4c57bd68d",
+    "event14s-alloc-r1-event-a8-g0-busy.csv": "d2d7f96223cd0d0a0082d1b1add4044de6fa312581dec4cfae897ea310034189",
+    "event14s-alloc-r1-event-a8-g0-closed.json": "d706a7fa78d63c24c46c1d536b0b34b04272d256c71014f452bf3f3b7bece817",
+    "event14s-alloc-r1-event-a8-g0-closed.csv": "0897ffca4a6450bbb4973404db9d5f82a74dab478d0c0e23f2ea572f595e96f1",
+    "event14s-alloc-r1-owned-a32-g0-normal.json": "00ccf23456b5cb90f3d3f686ee7487f70dc9084841b1866da29433e67acd6161",
+    "event14s-alloc-r1-owned-a32-g0-normal.csv": "50846d46f339ac6f230ea192d05d1dd8d051322fef5c8b3a339d55d519bd3f76",
+    "event14s-alloc-r1-owned-a32-g500-normal.json": "862a673eb0a26d5e10e6bbb3e2cc630e8eb79a9c312e31c01a51cd9f5ee82edd",
+    "event14s-alloc-r1-owned-a32-g500-normal.csv": "fc9aed9a0b8b83f808d0121d36816c667aef25ec9745d42e17f9c530e94a1efe",
+    "event14s-timing-r1-default-a1-g0-normal.json": "3772b5eba5db71e9da3802dbefe2f42c9b09bfadb98b4b0f5beed09c45bf67cf",
+    "event14s-timing-r1-default-a1-g0-normal.csv": "9752c5ea4aa822d270b27eeafc3d694333b19104046eaf6f4668e3ab5244b62f",
+    "event14s-timing-r1-default-a1-g100-normal.json": "81d215c7c947820376467f7b885e5862668f90231dba2c483760b343efc84af8",
+    "event14s-timing-r1-default-a1-g100-normal.csv": "69124d75b277deada9895570cfa21d5bcfb1714b91e7a14a1025eb5e299664e7",
+    "event14s-timing-r1-default-a1-g2000-normal.json": "2af3dea4b20c4fcf1204b3a250fd55d98baba38a3f3dfc5c1333839cc4651dcc",
+    "event14s-timing-r1-default-a1-g2000-normal.csv": "aa962c89965ef5d2896d61228bf0017020033d543e84adb06b213ba9714ad8e8",
+    "event14s-timing-r1-default-a1-g500-normal.json": "1629a3b4356b7105ab26e63df499869ee2ab2cdd32883f2c4608e229f14640e6",
+    "event14s-timing-r1-default-a1-g500-normal.csv": "a9bbd29db57b0034867f5cf8a6f45a7e37a9e2311333cefd4b7bfb0302e623d3",
+    "event14s-timing-r1-default-a32-g0-normal.json": "5e6d386b9c5b73ef553d9605b3bec2cf3b3889a3571fbbffb25929a4e46f35ac",
+    "event14s-timing-r1-default-a32-g0-normal.csv": "42726d08c2c69f08158b7fbe97ce26e66827e252ca21da6649832c68a0469d4f",
+    "event14s-timing-r1-default-a32-g100-normal.json": "d82445704462e6678b9151f33ebfafd517deba63fbe6655ef889e491d2175407",
+    "event14s-timing-r1-default-a32-g100-normal.csv": "3859ddd58667c77c16832f2b765554f8ca9f02e9b5dd37a6db88f610c77e63f9",
+    "event14s-timing-r1-default-a32-g2000-normal.json": "3bcf2ea84e02d01aed68688eca0cb8f55204689143fa74d33ec5efd5862bb83a",
+    "event14s-timing-r1-default-a32-g2000-normal.csv": "44d692ed062e42a0b68a7e982ba7fcc9fe507efdc96309e0e10c1e8a20009c0d",
+    "event14s-timing-r1-default-a32-g500-normal.json": "ffcc398d740c86bfa836c6d018b050e93eb415bd16a8ed272a3d240f231ac127",
+    "event14s-timing-r1-default-a32-g500-normal.csv": "f103eaba6ede4803ead7969069220561d3de058424440122c266e62f4093e316",
+    "event14s-timing-r1-default-a8-g0-busy.json": "c54d7e86132961469e81836217dba40074f7cf1733e5563108619143a67a2ff3",
+    "event14s-timing-r1-default-a8-g0-busy.csv": "79e8d1a91730657ffec847f28e4e37b0bd30e072acad7f0fafb99b1ae9af5014",
+    "event14s-timing-r1-default-a8-g0-closed.json": "f8ab804009772b9d9eb52c1857d6b6797a812cddba9ec5b714f255ff343280a6",
+    "event14s-timing-r1-default-a8-g0-closed.csv": "06bc3dbf3ff99ed2c663a0010afbc089ac6d0dfa5f0e10c5e4053cd23390ddfb",
+    "event14s-timing-r1-direct-a1-g0-normal-attempt2.json": "fccccc35e7cc5e3b7eab84cb3e4d47de20051d1863d90cc4abaccb3d936b75fe",
+    "event14s-timing-r1-direct-a1-g0-normal-attempt2.csv": "15f752a3a630c0d1226c69a3ce158bdeb7cc11e10056177616b84ab042e8e187",
+    "event14s-timing-r1-direct-a1-g0-normal.json": "0164faf415e7f84df07f8c3933313373348ecf3786beac3f49d58f0cc498e65f",
+    "event14s-timing-r1-direct-a1-g100-normal.json": "7158b42d2e7fac6b0a1116a061c2699bd88bb138d202a46848ad9cd7f890e1e4",
+    "event14s-timing-r1-direct-a1-g100-normal.csv": "ed72fb744b39d400d7bc2151aba2410a9783456a467ac8b869768837f424f990",
+    "event14s-timing-r1-direct-a1-g2000-normal.json": "70495c324291056f772637d125e438aa0216e86c1f226d0576e5c428b7436a93",
+    "event14s-timing-r1-direct-a1-g2000-normal.csv": "100ed1cff76326eca43831bb8767fe4a9eb72005c78f6cf702b693e06a4444b3",
+    "event14s-timing-r1-direct-a1-g500-normal.json": "e4175c4e99a9622558555bf591420159f7bc49e9c21c44ab045fe4276ce5f1c7",
+    "event14s-timing-r1-direct-a1-g500-normal.csv": "bd384667aa0e47d81719d29451a505c3ca957cf7e193812859dbc29e8952a44d",
+    "event14s-timing-r1-direct-a32-g0-normal.json": "672cdb533e01894f484efaba6f9c22fe4536aa1a43166351fc095fc06043c768",
+    "event14s-timing-r1-direct-a32-g0-normal.csv": "5f1252b30526ffc1bd970c6cee9da6afdb3ea0cd6e62dcccb5a70a236d88cafb",
+    "event14s-timing-r1-direct-a32-g100-normal.json": "0505f29ccfa2467b872ba5d54abb863c259082b41fa4dc835613f0c6133c0bf8",
+    "event14s-timing-r1-direct-a32-g100-normal.csv": "ed340ca6549daeb763e2b91c6447d9f9a87fe0023c2aabfca9dd931df6339f8a",
+    "event14s-timing-r1-direct-a32-g2000-normal.json": "c846127f96f620f9e32f289a5714e9f4009210f69ae686cd6d5c4fc5a4d934f6",
+    "event14s-timing-r1-direct-a32-g2000-normal.csv": "c101517332760c6cff31bcfb2ef3f1de4d3e31fd8979b5a95e26b5d0c60501af",
+    "event14s-timing-r1-direct-a32-g500-normal.json": "caa14056c51ae13aa94a87a6a3f6f781aedbd2952220c4a1cf025d1720abeb25",
+    "event14s-timing-r1-direct-a32-g500-normal.csv": "1ce64e47a44137b2ae1f58b9b3638b2a6b1e83d2abafb27e3d1f31dcf5fff2fe",
+    "event14s-timing-r1-event-a1-g0-normal.json": "2b50aabc739748701ab87bc1045cd212180b20f8b80f671790df29a01cf9daf6",
+    "event14s-timing-r1-event-a1-g0-normal.csv": "ccb7b7c013f69a067b3aa93a6907820e6dc6070e42a580f65d389090a084149e",
+    "event14s-timing-r1-event-a1-g100-normal.json": "f175959d71a4f44d5718536d324d6870e1bf3b1349c8e432baa95e6cffcb0b72",
+    "event14s-timing-r1-event-a1-g100-normal.csv": "034260720efbe98d08db421812c11aef72cee9aac3b5106c805d1364df94ddb7",
+    "event14s-timing-r1-event-a1-g2000-normal.json": "089ec28c6bee8f939e8dd6c962f63fa4ba07be5ccbd785b50b3bbd914dc24906",
+    "event14s-timing-r1-event-a1-g2000-normal.csv": "9a692ba50d80b4c48be9ac12f5478a633c6144ee23903b2223e41b4f76c8f617",
+    "event14s-timing-r1-event-a1-g500-normal.json": "4cf231c61a5b5a1b5bbae3fecc4306710a01796feeb8c30ef29f3d42fc6b6439",
+    "event14s-timing-r1-event-a1-g500-normal.csv": "1a5bd9018c9837102cc73d368657f48245398656c27304a452a2faf71b9424cc",
+    "event14s-timing-r1-event-a32-g0-normal.json": "c2dbd3573f88484619151f46f42c0269bb9b32e76bdc88e76850ca613361e48a",
+    "event14s-timing-r1-event-a32-g0-normal.csv": "61b8b117da2ffc84177e823d944cb58345d02aa426613b3c234a7ab8e16c8446",
+    "event14s-timing-r1-event-a32-g100-normal.json": "1683dbf8a5379011b8fbf7c5fd7b5aa040bc61797914e0eedf60237c76bcbbdd",
+    "event14s-timing-r1-event-a32-g100-normal.csv": "321a94a7e613d610dc1904260af3693d391847f7e7e6d97f08f6d33693724e3c",
+    "event14s-timing-r1-event-a32-g2000-normal.json": "9d3a4cf791a33bbb83b7438ff8b2f4860cffe0fef9441e73f4a87ba0dc07bdd2",
+    "event14s-timing-r1-event-a32-g2000-normal.csv": "d5bcdbec37d9dbdda2d58129f97ce64d10aa9bef27f94f6ad92c8439f58c0f39",
+    "event14s-timing-r1-event-a32-g500-normal.json": "61fba87f8fd684bb1d7adbacb2856badeb400e5d2b69d1ec589b1eeefe20ae16",
+    "event14s-timing-r1-event-a32-g500-normal.csv": "da139c2fab8b03d6a260f1c2632d4625e12f8f62401df3baf675162d70b78902",
+    "event14s-timing-r1-event-a8-g0-busy.json": "0806221a1d91301a36fa3f7105292c4ae97161dda557bb0be6185819e5fcbadc",
+    "event14s-timing-r1-event-a8-g0-busy.csv": "f224da2650416425aac2bbf241013615985ac8e0a7815e0018bb0e96942d8363",
+    "event14s-timing-r1-event-a8-g0-closed.json": "12b1b6f19b065eac34538a59a98d91c62af7b2f167b95396d144504a80d89812",
+    "event14s-timing-r1-event-a8-g0-closed.csv": "d65267580b0194e3c9a05ef2e6d3b2618a100a42e3e2148f2b4516cb8c7975d6",
+    "event14s-timing-r1-owned-a1-g0-normal.json": "3878b3b238edfc96ffff3fb74d68c5c618ceffa9a1440cb5cce8cfafe015f3fa",
+    "event14s-timing-r1-owned-a1-g0-normal.csv": "02e622e2c341516d3b0dd0518f356efcb88fadfb039ed81d4d9ebc5ac06e0390",
+    "event14s-timing-r1-owned-a1-g100-normal.json": "d0f192c6e9aca1d17a8d194b98bb3a3349dd4f916ede955bc021dc6881fd5416",
+    "event14s-timing-r1-owned-a1-g100-normal.csv": "6c8875502b944db3dc77d41b842ca2005b85ad03a51fa8989e50ba393831e347",
+    "event14s-timing-r1-owned-a1-g2000-normal.json": "1f37b084f46f58ad99b6ed7e4744d8cce398ec325d2120fdb387698a149cf625",
+    "event14s-timing-r1-owned-a1-g2000-normal.csv": "9d05d2edca4cc81bbeae34d94c981ad4e96bdad675de8621a8fb1d139f5f6866",
+    "event14s-timing-r1-owned-a1-g500-normal.json": "4573b7cec0dbbe285fe684e5b3e304c089b5f2ffaf35395c5a82c8da816d9f98",
+    "event14s-timing-r1-owned-a1-g500-normal.csv": "d3685b9549f5ae4479b9b55c2fc8ece9210455919099c3f393838a3972661a13",
+    "event14s-timing-r1-owned-a32-g0-normal.json": "615678832612d742c1a5b57a607cc89948b30a60dd2367e78774910d26c7823c",
+    "event14s-timing-r1-owned-a32-g0-normal.csv": "911eba3734cb9c0c05b938f612eea6dc8b2dc3f117c65000eca021af95433987",
+    "event14s-timing-r1-owned-a32-g100-normal.json": "864304f94c55684dc947e89731fda2ca423e6e72b4631f294d544b76b7744dd4",
+    "event14s-timing-r1-owned-a32-g100-normal.csv": "4c58a76a2c89d0bbf478ed21b7d174841127c496d6f242ee39721ab7e217bec6",
+    "event14s-timing-r1-owned-a32-g2000-normal.json": "77af2f2b9c2e465bc0a9c8dad7cd41db72a2928339b0e46869974362273b0d48",
+    "event14s-timing-r1-owned-a32-g2000-normal.csv": "6f2032b8c678a3599ff9b639af71dd31c259974da70344a01a048d976cec78e0",
+    "event14s-timing-r1-owned-a32-g500-normal.json": "cb4b52843591d4b695b139665014fe142e306c60f363a64918a2a0987ca30d07",
+    "event14s-timing-r1-owned-a32-g500-normal.csv": "f1ecbd917be7d3870d8b2cc71fc9191449fbe418b16eaad1744a2a91b9a34595",
+    "event14s-timing-r2-default-a1-g0-normal.json": "2ff9802b443df8f3a94b841be3485ab9a047da7a7a965692193d5083fe6cc406",
+    "event14s-timing-r2-default-a1-g0-normal.csv": "eac2ded295c594784cbfe3dafccd97d66f3da8d3af34d74fe6a0cded9d14e27d",
+    "event14s-timing-r2-default-a1-g100-normal.json": "aa50627bc41191d9cc86031753aa1deec1cd85bd53d68a301483801a05884b74",
+    "event14s-timing-r2-default-a1-g100-normal.csv": "c1885ae07465d8a4f2467c11406c0d394b027a29ccb5e3032936e5a56c19b373",
+    "event14s-timing-r2-default-a1-g2000-normal.json": "8b82ec7884da0543a28fa2e60221d4b2c3a7229ae35441d463a914636712351c",
+    "event14s-timing-r2-default-a1-g2000-normal.csv": "b42ea2cd11747953f41dd3667a716780f2d2da96ef2f03fc9e2c2293955dabd8",
+    "event14s-timing-r2-default-a1-g500-normal.json": "fc21813a45195d40cf951d496fcc61fd4dcc64cc6cf63b5d97ab021b121d2370",
+    "event14s-timing-r2-default-a1-g500-normal.csv": "3af38ebd1990e264ab7c813068b8c022dbd695ecb1ceaf4434a2afdcb38c678b",
+    "event14s-timing-r2-default-a32-g0-normal.json": "327a1b0ac7b0723fb18b315ffc9556dc028e89b3a3bd03c41d88392c11cb0008",
+    "event14s-timing-r2-default-a32-g0-normal.csv": "f7759e761d3e370e8a304bcada3c5024afb8bb7ca4a0c30a548b43b576c782ce",
+    "event14s-timing-r2-default-a32-g100-normal.json": "06051f406e5ca14aaa7856dac7f51b6d5808eee29fe257b21f1adff5e2577df0",
+    "event14s-timing-r2-default-a32-g100-normal.csv": "f8e0b8bcc7010d18ccf33e685a037bfd25efc0c078f0c632e9dba1246e75388c",
+    "event14s-timing-r2-default-a32-g2000-normal.json": "0eb8ccfde2891240ecde6cf1f6e37a9aa6c60c5099bbb5a149204e754d160297",
+    "event14s-timing-r2-default-a32-g2000-normal.csv": "90994d2bdc12b379441f3a6cf6c2fdec4c660973154c03630f81014a3f47f7e3",
+    "event14s-timing-r2-default-a32-g500-normal.json": "0e094aea53a1c806257bb4a522cb588cbcd3a39c595277c0307c2c50817df879",
+    "event14s-timing-r2-default-a32-g500-normal.csv": "3a07726531cd1166b295cafbef3544f52713617921b0e9eb724058cefa12bbf9",
+    "event14s-timing-r2-default-a8-g0-busy.json": "7242e7e90badcee788519053602ea1d96aa5bb12d72151d972a07316742fc620",
+    "event14s-timing-r2-default-a8-g0-busy.csv": "527a8141e7a7881b69526c10cc6dd72cd4c09211ffac15ffe4704ba330879adf",
+    "event14s-timing-r2-default-a8-g0-closed.json": "5d4714a5af4eab7c50b0b6912905fe11e2034c90f4fd7ca5332772623aa9549f",
+    "event14s-timing-r2-default-a8-g0-closed.csv": "95fada8798ca84d7083701bdc547860a9bd0b0c8cb25146a05636b189274bf50",
+    "event14s-timing-r2-direct-a1-g0-normal.json": "62d13af7cda30f7f30fe3fbf3eddcaaf08a0efa0c058058e23b5709b3b1f02d1",
+    "event14s-timing-r2-direct-a1-g0-normal.csv": "cf09026451cd125e069220922d695b75a634ab447b971a8fba6849057a5ebaa7",
+    "event14s-timing-r2-direct-a1-g100-normal.json": "244033b5c633f6feaa81fb3b086011542ff47034e662a302c666d885cca35532",
+    "event14s-timing-r2-direct-a1-g100-normal.csv": "56c840e12d4e569224034c3b08b7e84f9ced7c3e72f89239b96909a5c3b60cdb",
+    "event14s-timing-r2-direct-a1-g2000-normal.json": "8b36afd944c0bb7b7b5421f481e4eae34c8daf579bb1a4dfedb8658c876301e7",
+    "event14s-timing-r2-direct-a1-g2000-normal.csv": "22c0e508456511f6107d73962474a4704a8176bddf309e9baf4ce50cf2aea346",
+    "event14s-timing-r2-direct-a1-g500-normal.json": "9d329d762d22eaf6aa6247df78b229038de0c32a7d3bf897cd470ce639760d59",
+    "event14s-timing-r2-direct-a1-g500-normal.csv": "cd0c38124bb3a28d5f81e06bfcde2c1e4fb30c56ec50c420ea627d38763f87e5",
+    "event14s-timing-r2-direct-a32-g0-normal.json": "b082935a7761dd08a7bcde4a168e8929d3f5e5e410bbb54def5bb61a25fcf813",
+    "event14s-timing-r2-direct-a32-g0-normal.csv": "d5065fd905459d1e0fbde24d0db41bbc45f3a90740f0ad2ea7c4ea969ffe3085",
+    "event14s-timing-r2-direct-a32-g100-normal.json": "4d1512359c4b2191bace51f1786cc018483585056a5c4cc28df274650ae3d824",
+    "event14s-timing-r2-direct-a32-g100-normal.csv": "9229a1eaf9a87831bf19bbab77ebb26eb3ee1686b4d4196980d0efb45ce43ab3",
+    "event14s-timing-r2-direct-a32-g2000-normal.json": "3aaab89f086b35a2c73f8e2b5a70352f0865b4c86d8be17a162fd8a09eddbd41",
+    "event14s-timing-r2-direct-a32-g2000-normal.csv": "f67da79960fa1dd248060d34e10f7e2faaef12705afce085b0cbbdbd30702f76",
+    "event14s-timing-r2-direct-a32-g500-normal.json": "0ad56290f669aaee015cbba01d0abab4928a981503e0c30517a367bd84403454",
+    "event14s-timing-r2-direct-a32-g500-normal.csv": "bc84d4d5714392235ded1a00a66487fc5559f75824e05a758d8aa7aeb2ee282a",
+    "event14s-timing-r2-event-a1-g0-normal.json": "9048e4963ee6b642b62c7be508fede00579a5af351c672f864840d9c2dedc6fe",
+    "event14s-timing-r2-event-a1-g0-normal.csv": "ed5fc46bc28ad5cb4188d8742ddb090d0a972b876cd8434077384339ff38e52f",
+    "event14s-timing-r2-event-a1-g100-normal.json": "8623b29b06384e529544e202e7c6835f16af5d297157d9532c28231e0dcbc3cc",
+    "event14s-timing-r2-event-a1-g100-normal.csv": "016e70921a10f3dbd060304314e341586de4a7ebbddc9075a8b32722bb244d23",
+    "event14s-timing-r2-event-a1-g2000-normal.json": "cf8b2e644910dd5fd27ef643503c6c78466f71f4e546a1fd979ccc42d45c4580",
+    "event14s-timing-r2-event-a1-g2000-normal.csv": "ebe208daab85ce1d53390915f9b8db65cb33882e27484a0733e0d6dcbaa009dd",
+    "event14s-timing-r2-event-a1-g500-normal.json": "b706a6e77f06aad34dea13479f957d808d34212ffc6569956e3129281b03d850",
+    "event14s-timing-r2-event-a1-g500-normal.csv": "33bc1f9ce41d4dc0804b5a0382c1869ff5415537d86c62acb511ed982a5c9948",
+    "event14s-timing-r2-event-a32-g0-normal.json": "ba2c96c1926591e0fe8a9dccdefbef7013f3f84716edbea65b1ee13f4255ff4b",
+    "event14s-timing-r2-event-a32-g0-normal.csv": "de23ed74ee94b1983f46180ed2344c08275a343cb32f35870dae486bba3894b2",
+    "event14s-timing-r2-event-a32-g100-normal.json": "5f2338a8cfc8ac7b6a95cd05c5c76051add3d2aae0d35b4d023bb351d7cfb36f",
+    "event14s-timing-r2-event-a32-g100-normal.csv": "ecd10c47772d8a4aefdbfa0d8cdf033ae4d4de67906148f1ee98f3e4c0777880",
+    "event14s-timing-r2-event-a32-g2000-normal.json": "159dd7e901e8f6b2d1b1c20b769b2f2e80e4891b7148324e69fa1af905127489",
+    "event14s-timing-r2-event-a32-g2000-normal.csv": "a6584be77f87f9508494386de68c6d61a87e08f949d7769beabf5dd4559ae318",
+    "event14s-timing-r2-event-a32-g500-normal.json": "b511ecf4b512755ac4b1765412ff0ebd603b9c405719cbe74aecdfd605ed9d77",
+    "event14s-timing-r2-event-a32-g500-normal.csv": "ad37d48b50703e48ba2b3ee1708b96cc64c9ce3d56267b97ef42aec30f031a08",
+    "event14s-timing-r2-event-a8-g0-busy.json": "a59e0218cabe2f1530ece7a8a76cee8208816355131de8c3edbb2f2f2fbc127e",
+    "event14s-timing-r2-event-a8-g0-busy.csv": "5261e969ec77fd93fa939505ae5bebea2b76b08d0746f808319f8440f6c926b7",
+    "event14s-timing-r2-event-a8-g0-closed.json": "f2e3594f3863f8ba3085fa1b5386ae82b2a0f41b768bceb6ce0084cecd1f9931",
+    "event14s-timing-r2-event-a8-g0-closed.csv": "ec0303b68a66a43c1603ef1c5e933fcd9c0dc4e6135ee5a913ecf02d465e3356",
+    "event14s-timing-r2-owned-a1-g0-normal.json": "474f5e63e0170f2e9eadac1d90bbc185a7c4e6dd8fe421a08dca757fd880c0af",
+    "event14s-timing-r2-owned-a1-g0-normal.csv": "3f776e0f5c437ef34b13dff19332c4faa8abf98183711fd8ca799512a1a6c88c",
+    "event14s-timing-r2-owned-a1-g100-normal.json": "c73bfaa037c3083304adf27d3608652d1788f0682f84e7c1c17b0734065cff28",
+    "event14s-timing-r2-owned-a1-g100-normal.csv": "f5e6cb62a8fd443c228efec3e203cb2ab256cfa7b3c08e4f78248f260afd6a3f",
+    "event14s-timing-r2-owned-a1-g2000-normal.json": "825aab50a3afa26879e97fffe03f688c26309372f87d2a6703a6e0d9c8e07d1d",
+    "event14s-timing-r2-owned-a1-g2000-normal.csv": "c35ce2cc50c79a78b4c706f5f48fa81608fe842c20f5d5584c2cef063da399e1",
+    "event14s-timing-r2-owned-a1-g500-normal.json": "33f7810961f3ba471836d520355d4be1f0b6e7c47b9ee30b6e80362206c8e127",
+    "event14s-timing-r2-owned-a1-g500-normal.csv": "52590257ecd4f7b41d6635cedaa2b20f75f2c7ae2734b323c411f099b2bf563d",
+    "event14s-timing-r2-owned-a32-g0-normal.json": "0735fd0b60c0960c25138687d3312723b2717c516a50fa0d9f9cf4a0c22d9652",
+    "event14s-timing-r2-owned-a32-g0-normal.csv": "31b44d03ae752357c7da59658a7516e3f6150eb221429325352e240caa8eb596",
+    "event14s-timing-r2-owned-a32-g100-normal.json": "4e6486ecb74b8dbea334383b7faf392897b6b696f9a89fdbc9d40d78122e7217",
+    "event14s-timing-r2-owned-a32-g100-normal.csv": "ae40a2051592681979acf24305a400dde03927faccb35b4c8b116bab50ef976d",
+    "event14s-timing-r2-owned-a32-g2000-normal.json": "3720ce4a7ee1dd5f7125f461b2561f18c74d96a6bcd0a170785002ad787c163b",
+    "event14s-timing-r2-owned-a32-g2000-normal.csv": "c53cbd79f313e11b5e1459e648d3c1d5636ebaf583652415d7d5469451be1841",
+    "event14s-timing-r2-owned-a32-g500-normal.json": "eeb6896ee406f38ba2eb53e4c09a53423f72703220fec3e66823bbd866fdc2cf",
+    "event14s-timing-r2-owned-a32-g500-normal.csv": "aacbd42c94291a2716a44d68516cdfe7ef802c6d5523274b0107c83ed54e6857"
+  },
+  "nonoverlap_verified": true,
+  "limits": [
+    "Synthetic cohorts/gaps; no live viewer, real deadline, power or FPS acceptance.",
+    "Owner/worker windows include loop bookkeeping and final drain; per-job cycles are attribution only.",
+    "Allocation split is first owner boundary versus later work/drain, not a drained warm-up comparison.",
+    "Before/after host idle guards do not control unrelated desktop load, power or timer policy."
+  ]
+}

@@ -1,0 +1,2 @@
+cold_reads=1538,new_calls=0,bytes=0,nodes=0
+312 stats read checks; 0 failures

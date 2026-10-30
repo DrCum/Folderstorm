@@ -44,6 +44,7 @@
 // This is necessary because llcharacter.h includes this file.
 //-----------------------------------------------------------------------------
 class LLCharacter;
+namespace FSSampling { class ShadowScope; }
 
 //-----------------------------------------------------------------------------
 // LLMotionRegistry
@@ -134,6 +135,10 @@ public:
     // minimal update (e.g. while hidden)
     void updateMotionsMinimal();
 
+    struct SamplingClock { F32 animTime = 0.f; bool callbacks = false; };
+    // Diagnostic projection only; will_unpause mirrors LLCharacter's pending pause-handle release.
+    bool predictSamplingClock(bool force_update, SamplingClock& projected, bool will_unpause = false) const;
+
     void clearBlenders() { mPoseBlender.clearBlenders(); }
 
     // flush motions
@@ -178,6 +183,10 @@ public:
 
 protected:
     // internal operations act on motion instances directly
+    friend class FSSampling::ShadowScope;
+    bool invokeMotionUpdate(LLMotion& motion, F32 time, U8* mask);
+    bool predictSamplingTime(LLMotion& motion, const SamplingClock& clock, F32& time) const;
+    bool predictSamplingMask(const LLMotion& motion, U8 (&covered)[2][LL_CHARACTER_MAX_ANIMATED_JOINTS]) const; // </FS:Perf>
     // as there can be duplicate motions per id during blending overlap
     void deleteAllMotions();
     bool activateMotionInstance(LLMotion *motion, F32 time);

@@ -1,0 +1,18 @@
+Date: 2026-10-23; Windows x64; AMD Ryzen 5 3600.
+MSVC 19.51.36244 /O2 /fp:precise /arch:AVX2 /std:c++20; benchmark assertions enabled.
+Source: indra/llcharacter/tests/queue_wake_benchmark.cpp; --benchmark.
+Fresh benchmark source, cached unchanged llcommon/dependencies linked read only.
+No concurrent compiler/validation process during these callbacks. Desktop load otherwise uncontrolled.
+No viewer, no General-pool changes, no whole-frame/FPS claim.
+
+Isolated wake probe: 64 callbacks after 5ms requested idle, 2s requested idle CPU sample.
+CPU counters can quantize short samples to zero; no FPS or sustained-load inference.
+FSWakeCurrentDefault,timer=default,workers=1,samples=64,min_us=3.000,median_us=30.200,p95_us=16018.300,p99_us=16052.500,max_us=16052.500
+FSWakeCurrentDefault,idle_wall_ms=2005.414,idle_thread_cpu_ms=0.000,idle_core_percent=0.000
+FSWakeStockDefault,timer=default,workers=1,samples=64,min_us=9.000,median_us=16.400,p95_us=31.700,p99_us=42.200,max_us=42.200
+FSWakeStockDefault,idle_wall_ms=2007.422,idle_thread_cpu_ms=0.000,idle_core_percent=0.000
+Explicit timer-period request accepted_ms=1
+FSWakeCurrentTimer,timer=requested1ms,workers=1,samples=64,min_us=1.600,median_us=1942.800,p95_us=2003.800,p99_us=2042.900,max_us=2042.900
+FSWakeCurrentTimer,idle_wall_ms=2000.034,idle_thread_cpu_ms=0.000,idle_core_percent=0.000
+FSWakeStockTimer,timer=requested1ms,workers=1,samples=64,min_us=7.500,median_us=12.000,p95_us=16.400,p99_us=17.000,max_us=17.000
+FSWakeStockTimer,idle_wall_ms=2001.023,idle_thread_cpu_ms=0.000,idle_core_percent=0.000

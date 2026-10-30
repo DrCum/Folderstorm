@@ -1,0 +1,29 @@
+{
+  "parent": "e08cf82050215fd0ab335ba7611c52ff3f03b528",
+  "recorded_utc": "2026-10-24T07:07:32.635717+00:00",
+  "compiler": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "storage": "map",
+  "source_files": {
+    "indra/llcharacter/llcharacter.cpp": {
+      "before_sha256": "a8e84af282c98d9492ab81c14c822b7b6e7ab4b3e51bfc8b5fad8b16f37e3e4d",
+      "after_sha256": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e"
+    },
+    "indra/llcharacter/llkeyframemotion.cpp": {
+      "before_sha256": "b47153b6157b89d009f811dac12fc8d3e7a3c76a6a869ad9515dc2846cf0e30d",
+      "after_sha256": "b675c0d6f01be9989d74d7138ea4b274ffbe0a9962cafb931818d85ed95db9dc"
+    }
+  },
+  "order": [
+    "before-r1",
+    "after-r1",
+    "after-r2",
+    "before-r2"
+  ],
+  "rows_per_run": 81,
+  "iterations_per_row": 1000,
+  "benchmark_executable_sha256": {
+    "current-motion-cost-before14f1.exe": "60ea168157145f98b5cea6d8c6447ac6bc58cdba5a716f34237faa0e6c57fce5",
+    "current-motion-cost14f1.exe": "1d5a9c9c65a620ebd22a3179fa9d7f33bdb0a3c7f99f145530ee371e48dc9362"
+  },
+  "scope": "Generated warmed four-key curves, no constraints/emotes, fixed time; owner component timings only, no worker/queue/full avatar/FPS claim. Separate allocation executable. Shared activeBuild null and full native-process inventory empty before measurement. Cached dependencies read only."
+}

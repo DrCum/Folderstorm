@@ -1,0 +1,28 @@
+{
+  "case": "worker-policy-delivery14q-r1-event",
+  "mode": "event",
+  "round": 1,
+  "before": {
+    "utc": "2026-10-24T21:10:53.6181444Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "after": {
+    "utc": "2026-10-24T21:10:54.0837525Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "status": "completed",
+  "exit": 0,
+  "exeSha256": "9A310FDD4E1A431F965A452A600C5A7F4733E47A5D446EED948C37F6C0D3312A",
+  "scope": "Actual constructor/production installation, resolved width1, requested1ms; no timing pass threshold or viewer/FPS claim",
+  "limits": "Only before/after build-idle observed; desktop load/power/timer policy uncontrolled"
+}

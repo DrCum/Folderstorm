@@ -1012,6 +1012,7 @@ set(viewer_HEADER_FILES
     fsassistantsettings.h
     fsassistantpolicy.h
     fsfloaterinventorybulk.h
+    fsavatarpalette.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
     fsblocklistmenu.h
@@ -3323,6 +3324,19 @@ if (LL_TESTS)
           llplugin
           llappearance
     )
+
+  # <FS> Exercise actual stat reads without initializing a viewer or window.
+  get_property(performance_stats_read_includes TARGET ${VIEWER_BINARY_NAME}
+    PROPERTY INTERFACE_INCLUDE_DIRECTORIES)
+  add_executable(performance_stats_read_test tests/performance_stats_read_test.cpp)
+  target_include_directories(performance_stats_read_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}" ${performance_stats_read_includes})
+  target_link_libraries(performance_stats_read_test PRIVATE
+    ${test_libs} llrender llprimitive llwindow)
+  target_compile_definitions(performance_stats_read_test PRIVATE FS_SAMPLING_ALLOCATION_PROBE=1)
+  add_custom_command(TARGET performance_stats_read_test POST_BUILD
+    COMMAND $<TARGET_FILE:performance_stats_read_test> VERBATIM)
+  # </FS>
 
   set_source_files_properties(
     llworldmap.cpp

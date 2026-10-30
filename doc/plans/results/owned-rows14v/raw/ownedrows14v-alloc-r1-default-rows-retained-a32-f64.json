@@ -1,0 +1,34 @@
+{
+  "case": "ownedrows14v-alloc-r1-default-rows-retained-a32-f64",
+  "kind": "alloc",
+  "round": 1,
+  "attempt": 1,
+  "mode": "default-rows-retained",
+  "avatars": 32,
+  "frames": 64,
+  "gapUs": 0,
+  "load": "normal",
+  "before": {
+    "utc": "2026-10-25T00:16:14.6511174Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "after": {
+    "utc": "2026-10-25T00:16:14.8775080Z",
+    "activeBuild": null,
+    "phase": "IDLE_MONITORING",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": true
+  },
+  "status": "completed",
+  "exit": 0,
+  "exeSha256": "1A0DA21F647513F8EC7B372ED43A8C6C8EEF03B686594B5BF0A18924AE670EAB",
+  "scope": "Private fixed-cohort bounded row publication; actual controller work, no gates/gap/wait in timed requests; no viewer deadline/FPS acceptance",
+  "limits": "Before/after build/probe idle only; desktop/power/timer state uncontrolled; requested1ms timer"
+}

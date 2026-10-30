@@ -197,8 +197,11 @@ bool LLHandMotion::onUpdate(F32 time, U8* joint_mask)
         }
     }
 
-    mCharacter->removeAnimationData("Hand Pose");
-    mCharacter->removeAnimationData("Hand Pose Priority");
+    // <FS:Perf> Reuse the character's stable key names at the same cleanup boundary.
+    // mCharacter->removeAnimationData("Hand Pose");
+    // mCharacter->removeAnimationData("Hand Pose Priority");
+    mCharacter->clearHandPoseAnimationData();
+    // </FS:Perf>
 
 //  if (requestedHandPose)
 //      LL_INFOS() << "Hand Pose " << *requestedHandPose << LL_ENDL;

@@ -1,0 +1,33 @@
+{
+  "base_commit": "ef49e4614faa730d5803edc6dcd4a37f599cca52",
+  "production_parent": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/blender_pool_multimotion_benchmark.cpp": "4507dad8d5c7e9c4ab61c2b577672b14e555d960955a36c5dfa2f115605fd0ea",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7"
+  },
+  "probe_sha256_normalized_lf": "cbb90d3c70af3b14402598b58d5b7200367c6551a82dddf08cc2a6e8f1c8096f",
+  "report_sha256_normalized_lf": "8e057932dc1c4749e75b05339ec3c9bc3ac0ba62fed9037189e34ad232762b87",
+  "exe_sha256": "ccb8a61dfccc8d9e982970e3188ea81046073e8239963c14e305d0704ae72035",
+  "log_sha256": "d29378a9567e7374b92d6ad706abdba32ebe4b5d8aa385b8460199887ba79f15",
+  "rsp_sha256": "e2518eba1df13fd32c6e2f6633f35de1a4b9c9a13e38fa8e8f216849493f056c",
+  "dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "configuration": "Native MSVC x64 AVX2 optimized precise, assertions enabled, Tracy OFF, map curves; FS_SAMPLING_ALLOCATION_PROBE=1",
+  "rows": 12,
+  "scope": "Separate allocation executable, not timing. 128 joints; 1/8 motions; partial/disjoint/saturated; diagnostic OFF/ON. Exact pre/post poses, zero counted retained bytes and zero binding capacity required. Ordinary-new accounting excludes custom aligned blocks/RSS. Fresh pose/core; frozen internal libraries and read-only external packages.",
+  "status": "Baseline recorded; mask admission implementation not started"
+}

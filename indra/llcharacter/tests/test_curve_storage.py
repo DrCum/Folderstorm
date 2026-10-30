@@ -1,0 +1,413 @@
+"""Generate an opt-in animation-key container experiment using production samplers."""
+from pathlib import Path
+import argparse
+import test_curve_sampling
+
+PREFIX = r"""
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <iomanip>
+#include <memory>
+#include <limits>
+#include <boost/container/flat_map.hpp>
+
+struct AllocationStats
+{
+    std::size_t calls=0, total=0, live=0, peak=0;
+};
+struct MapTag { inline static AllocationStats stats; };
+struct FlatTag { inline static AllocationStats stats; };
+struct BulkTag { inline static AllocationStats stats; };
+template<class T, class Tag> struct CountingAllocator
+{
+    using value_type = T;
+    using counter_tag = Tag;
+    using is_always_equal = std::true_type;
+    CountingAllocator() = default;
+    template<class U> CountingAllocator(const CountingAllocator<U,Tag>&) {}
+    template<class U> struct rebind { using other = CountingAllocator<U,Tag>; };
+    T* allocate(std::size_t n)
+    {
+        T* result = std::allocator<T>{}.allocate(n);
+        auto& s=Tag::stats; ++s.calls; s.total+=n*sizeof(T); s.live+=n*sizeof(T);
+        s.peak=std::max(s.peak,s.live);
+        return result;
+    }
+    void deallocate(T* pointer, std::size_t n)
+    {
+        Tag::stats.live-=n*sizeof(T); std::allocator<T>{}.deallocate(pointer,n);
+    }
+    template<class U> bool operator==(const CountingAllocator<U,Tag>&) const { return true; }
+    template<class U> bool operator!=(const CountingAllocator<U,Tag>&) const { return false; }
+};
+"""
+
+EXPERIMENT = r"""
+namespace StorageExperiment
+{
+using Clock = std::chrono::steady_clock;
+volatile std::uint64_t outputSink=0;
+unsigned crossComparisons=0;
+template<class Key> auto& value(Key& key)
+{
+    if constexpr(requires { key.mRotation; }) return key.mRotation;
+    else if constexpr(requires { key.mScale; }) return key.mScale;
+    else return key.mPosition;
+}
+template<class Key> std::vector<Key> keys(unsigned count, unsigned seed, unsigned order, bool duplicates)
+{
+    std::mt19937 random(seed);
+    std::vector<Key> result;
+    for(unsigned i=0;i<count;++i)
+    {
+        Key key; key.mTime=static_cast<F32>(i)/30.f;
+        auto lane=[&] { return static_cast<F32>(static_cast<int>(random()%2049)-1024)/128.f; };
+        if constexpr(requires { key.mRotation; })
+        {
+            value(key)=LLQuaternion(lane(),LLVector3::x_axis)*LLQuaternion(lane(),LLVector3::z_axis);
+            if(i%2) for(auto& component:value(key).mQ) component=-component;
+        }
+        else value(key)=LLVector3(lane(),lane(),lane());
+        result.push_back(key);
+        if(duplicates && i%7==0)
+        {
+            if constexpr(requires { key.mRotation; }) value(key)=LLQuaternion::DEFAULT;
+            else value(key)=LLVector3(-1.f,0.f,1.f);
+            result.push_back(key);
+        }
+    }
+    if(order==1) std::reverse(result.begin(),result.end());
+    if(order==2) std::shuffle(result.begin(),result.end(),random);
+    return result;
+}
+template<class Curve, class Keys> void load(Curve& curve, const Keys& input)
+{
+    curve.mKeys.clear(); curve.mNumKeys=static_cast<S32>(input.size());
+    auto insert=[&](auto& destination)
+    {
+        for(const auto& source:input)
+        {
+            typename Curve::key_type key;
+            key.mTime=source.mTime; value(key)=value(source);
+            destination[key.mTime]=key;
+        }
+    };
+    if constexpr(requires { Curve::bulk_load; })
+    {
+        using Entry=std::pair<const F32,typename Curve::key_type>;
+        using Alloc=typename std::allocator_traits<typename Curve::key_map_t::allocator_type>::template rebind_alloc<Entry>;
+        std::map<F32,typename Curve::key_type,std::less<F32>,Alloc> scratch;
+        insert(scratch);
+        curve.mKeys=typename Curve::key_map_t(boost::container::ordered_unique_range,scratch.begin(),scratch.end());
+    }
+    else insert(curve.mKeys);
+    curve.mLoopInKey={}; curve.mLoopOutKey={};
+    curve.mLoopInKey.mTime=0.375f; curve.mLoopOutKey.mTime=1.625f;
+}
+template<class Curve> std::vector<unsigned char> storageState(const Curve& curve)
+{
+    std::vector<unsigned char> bytes;
+    auto scalar=[&](const auto& v) {CurveMapFixture::append(bytes,&v,sizeof(v));};
+    auto key=[&](const auto& k)
+    {
+        scalar(k.mTime);
+        const auto& v=value(k);
+        CurveMapFixture::append(bytes,CurveMapFixture::data(v),CurveMapFixture::lanes(v)*sizeof(F32));
+    };
+    scalar(curve.mInterpolationType); scalar(curve.mNumKeys);
+    key(curve.mLoopInKey); key(curve.mLoopOutKey);
+    for(const auto& item:curve.mKeys) {scalar(item.first);key(item.second);}
+    return bytes;
+}
+template<class MapCurve,class FlatCurve> void equivalence()
+{
+    for(unsigned count:{0,1,2,4,15,32,64,128,512,1024})
+        for(unsigned order:{0,1,2})
+            for(unsigned mode:{0,1,2})
+            {
+                const auto input=keys<typename MapCurve::key_type>(count,0x46534353+count,order,true);
+                MapCurve map; FlatCurve flat;
+                load(map,input); load(flat,input);
+                map.mInterpolationType=static_cast<decltype(map.mInterpolationType)>(mode);
+                flat.mInterpolationType=static_cast<decltype(flat.mInterpolationType)>(mode);
+                auto reference=map;
+                const auto before=storageState(map);
+                CurveMapFixture::require(before==storageState(flat),"Storage changed sorted keys/duplicate replacement");
+                const F32 end=static_cast<F32>(count)/30.f;
+                std::vector<F32> times={-10.f,-0.f,0.f,end*0.25f,end*0.5f,end,end+1.f,1.e6f};
+                for(const auto& item:map.mKeys)
+                {
+                    times.push_back(item.first);
+                    times.push_back(std::nextafter(item.first,-1000.f));
+                    times.push_back(std::nextafter(item.first,1000.f));
+                }
+                for(F32 time:times)
+                {
+                    const auto expected=CurveMapFixture::legacy(reference,time,3.f);
+                    CurveMapFixture::require(CurveMapFixture::exact(expected,map.getValue(time,3.f)) &&
+                        CurveMapFixture::exact(expected,flat.getValue(time,3.f)),"Container sampling differs from frozen map behavior");
+                    ++crossComparisons;
+                }
+                CurveMapFixture::require(before==storageState(map) && before==storageState(flat),
+                    "Container sampling changed key/metadata state");
+                // Loop keys can be edited independently of the container.
+                map.mLoopInKey.mTime=flat.mLoopInKey.mTime=0.75f;
+                CurveMapFixture::require(CurveMapFixture::exact(map.getValue(end*0.5f,4.f),flat.getValue(end*0.5f,4.f)),
+                    "Edited-loop sample changed");
+            }
+}
+struct Query { unsigned curve; F32 time; };
+std::vector<Query> queries(unsigned count,unsigned pattern)
+{
+    std::vector<Query> result; result.reserve(65536);
+    std::mt19937 random(0x46535155);
+    const F32 duration=std::max(1.f/30.f,static_cast<F32>(count)/30.f);
+    for(unsigned i=0;i<65536;++i)
+    {
+        const F32 time=pattern==1 ? duration*static_cast<F32>(random()%65536)/65536.f :
+            std::fmod(static_cast<F32>(i/32)/60.f+(pattern==2 ? duration*0.9f : 0.f),duration);
+        result.push_back({(i*17)%32,time});
+    }
+    return result;
+}
+#ifdef _MSC_VER
+#define FS_SAMPLE_NOINLINE __declspec(noinline)
+#else
+#define FS_SAMPLE_NOINLINE __attribute__((noinline))
+#endif
+template<class Curve> FS_SAMPLE_NOINLINE void sample(const std::vector<Curve>& curves,
+    const std::vector<Query>& input,std::vector<typename Curve::value_type>& output)
+{
+    for(std::size_t i=0;i<input.size();++i) output[i]=curves[input[i].curve].getValue(input[i].time,10.f);
+}
+template<class Value> void consume(const std::vector<Value>& output)
+{
+    std::uint64_t hash=0;
+    for(const auto& v:output)
+        for(std::size_t i=0;i<CurveMapFixture::lanes(v);++i)
+        {
+            std::uint32_t bits; std::memcpy(&bits,CurveMapFixture::data(v)+i,sizeof(bits));
+            hash=(hash*33)^bits;
+        }
+    outputSink=hash;
+}
+template<class Curve> double timedSample(const std::vector<Curve>& curves,const std::vector<Query>& input,
+    std::vector<typename Curve::value_type>& output)
+{
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    const auto start=Clock::now(); sample(curves,input,output); const auto finish=Clock::now();
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    consume(output);
+    return std::chrono::duration<double,std::nano>(finish-start).count()/input.size();
+}
+double median(std::vector<double> values) { std::sort(values.begin(),values.end()); return values[values.size()/2]; }
+template<class MapCurve,class FlatCurve> void samplingBench(const char* kind)
+{
+    for(unsigned count:{1,4,15,32,64,128,512,1024})
+    {
+        std::vector<MapCurve> map(32); std::vector<FlatCurve> flat(32);
+        for(unsigned i=0;i<32;++i)
+        {
+            const auto input=keys<typename MapCurve::key_type>(count,0x46534353+i,0,false);
+            load(map[i],input); load(flat[i],input);
+        }
+        for(unsigned pattern:{0,1,2})
+        {
+            const auto input=queries(count,pattern);
+            std::vector<typename MapCurve::value_type> mapOutput(input.size()),flatOutput(input.size());
+            sample(map,input,mapOutput); sample(flat,input,flatOutput);
+            for(std::size_t i=0;i<input.size();++i)
+                CurveMapFixture::require(CurveMapFixture::exact(mapOutput[i],flatOutput[i]),"Benchmark output mismatch");
+            std::vector<double> mapTimes,flatTimes;
+            for(unsigned repeat=0;repeat<9;++repeat)
+            {
+                auto mapRun=[&] {mapTimes.push_back(timedSample(map,input,mapOutput));};
+                auto flatRun=[&] {flatTimes.push_back(timedSample(flat,input,flatOutput));};
+                if(repeat%2) {flatRun();mapRun();} else {mapRun();flatRun();}
+            }
+            std::cout<<"sample,"<<kind<<','<<count<<','<<pattern<<','<<median(mapTimes)<<','<<median(flatTimes)
+                <<','<<*std::min_element(mapTimes.begin(),mapTimes.end())<<','<<*std::max_element(mapTimes.begin(),mapTimes.end())
+                <<','<<*std::min_element(flatTimes.begin(),flatTimes.end())<<','<<*std::max_element(flatTimes.begin(),flatTimes.end())<<'\n';
+        }
+    }
+}
+template<class Curve> double timedLoad(const std::vector<typename Curve::key_type>& input)
+{
+    const unsigned instances=input.size()<64 ? 4096 : (input.size()<256 ? 512 : 64);
+    const auto start=Clock::now();
+    std::vector<Curve> curves(instances);
+    for(auto& curve:curves) load(curve,input);
+    const auto finish=Clock::now();
+    outputSink=curves.front().mKeys.size();
+    return std::chrono::duration<double,std::nano>(finish-start).count()/curves.size();
+}
+template<class Curve,class Tag> AllocationStats allocationProbe(const std::vector<typename Curve::key_type>& input)
+{
+    CurveMapFixture::require(Tag::stats.live==0,"Live key allocations before counter reset");
+    Tag::stats={};
+    Curve curve; load(curve,input);
+    CurveMapFixture::require(input.empty() || (Tag::stats.calls>0 && Tag::stats.live>0),"Allocation probe missed live key storage");
+    return Tag::stats;
+}
+template<class MapCurve,class FlatCurve,class TrackedMap,class TrackedFlat> void loadingBench(const char* kind)
+{
+    for(unsigned count:{1,32,128,512,1024}) for(unsigned order:{0,1,2})
+    {
+        const auto mapInput=keys<typename MapCurve::key_type>(count,0x46534353,order,true);
+        const auto flatInput=keys<typename FlatCurve::key_type>(count,0x46534353,order,true);
+        const auto mapStats=allocationProbe<TrackedMap,MapTag>(keys<typename TrackedMap::key_type>(count,0x46534353,order,true));
+        using FlatCounter=typename TrackedFlat::key_map_t::allocator_type::counter_tag;
+        const auto flatStats=allocationProbe<TrackedFlat,FlatCounter>(keys<typename TrackedFlat::key_type>(count,0x46534353,order,true));
+        std::vector<double> mapTimes,flatTimes;
+        for(unsigned repeat=0;repeat<9;++repeat)
+        {
+            auto mapRun=[&] {mapTimes.push_back(timedLoad<MapCurve>(mapInput));};
+            auto flatRun=[&] {flatTimes.push_back(timedLoad<FlatCurve>(flatInput));};
+            if(repeat%2) {flatRun();mapRun();} else {mapRun();flatRun();}
+        }
+        auto report=[&](const char* container,const std::vector<double>& times,const AllocationStats& s,std::size_t objectSize)
+        {
+            std::cout<<"load,"<<kind<<','<<count<<','<<order<<','<<container<<','<<median(times)<<','
+                <<*std::min_element(times.begin(),times.end())<<','<<*std::max_element(times.begin(),times.end())
+                <<','<<s.calls<<','<<s.total<<','<<s.live<<','<<s.peak<<','<<objectSize<<'\n';
+        };
+        report("map",mapTimes,mapStats,sizeof(MapCurve)); report("flat",flatTimes,flatStats,sizeof(FlatCurve));
+    }
+}
+int run(bool benchmark)
+{
+    CurveMapFixture::run(); CurveFlatFixture::run();
+    equivalence<CurveMapFixture::LLKeyframeMotion::ScaleCurve,CurveFlatFixture::LLKeyframeMotion::ScaleCurve>();
+    equivalence<CurveMapFixture::LLKeyframeMotion::PositionCurve,CurveFlatFixture::LLKeyframeMotion::PositionCurve>();
+    equivalence<CurveMapFixture::LLKeyframeMotion::RotationCurve,CurveFlatFixture::LLKeyframeMotion::RotationCurve>();
+    std::cout<<crossComparisons<<" map/flat storage comparisons passed\n";
+    if(!benchmark) return 0;
+    std::cout<<"9 alternating samples; 32 curve instances; 65536 queries/sample; warmed; default linear interpolation\n"
+        <<"sample,kind,keys,pattern(0=forward/1=seek/2=wrap),map_ns,flat_ns,map_min,map_max,flat_min,flat_max\n"
+        <<std::fixed<<std::setprecision(3);
+    samplingBench<CurveMapTiming::LLKeyframeMotion::PositionCurve,CurveFlatTiming::LLKeyframeMotion::PositionCurve>("position");
+    samplingBench<CurveMapTiming::LLKeyframeMotion::RotationCurve,CurveFlatTiming::LLKeyframeMotion::RotationCurve>("rotation");
+    std::cout<<"load,kind,keys,order(0=sorted/1=reverse/2=shuffle),container,ns_per_curve,min,max,allocations,allocated_bytes,retained_bytes,peak_bytes,curve_object_bytes\n";
+    loadingBench<CurveMapTiming::LLKeyframeMotion::PositionCurve,CurveFlatTiming::LLKeyframeMotion::PositionCurve,
+        CurveMapFixture::LLKeyframeMotion::PositionCurve,CurveFlatFixture::LLKeyframeMotion::PositionCurve>("position");
+    loadingBench<CurveMapTiming::LLKeyframeMotion::RotationCurve,CurveFlatTiming::LLKeyframeMotion::RotationCurve,
+        CurveMapFixture::LLKeyframeMotion::RotationCurve,CurveFlatFixture::LLKeyframeMotion::RotationCurve>("rotation");
+    return 0;
+}
+}
+int main(int argc,char** argv)
+{
+    if(argc>2 || (argc==2 && std::strcmp(argv[1],"--benchmark")!=0))
+    { std::cerr<<"Usage: curve_storage [--benchmark]\n";return 2; }
+    return StorageExperiment::run(argc==2);
+}
+"""
+
+POSITION_DIAGNOSTICS = r"""
+namespace CurveBulkFixture
+{
+void checkPositionDiagnostics()
+{
+    for(F32 bad:{std::numeric_limits<F32>::infinity(),-std::numeric_limits<F32>::infinity(),std::numeric_limits<F32>::quiet_NaN()})
+        for(F32 time:{-1.f,0.75f,10.f})
+        {
+            LLKeyframeMotion::PositionCurve curve;
+            setKeys(curve,{position(0.75f,LLVector3(bad,0.f,0.f))});
+            bool diagnosed=false;
+            try {curve.getValue(time,3.f);} catch(const CurveAssertion&) {diagnosed=true;}
+            require(diagnosed,"One-key position sampling skipped finiteness diagnostic");
+        }
+    std::cout<<"9 non-finite one-key position diagnostics passed\n";
+}
+}
+"""
+
+
+def refined_fixture(fixture: str) -> str:
+    marker = "template<class Key> struct CurveData\n{\n"
+    if fixture.count(marker) != 1:
+        raise ValueError("Sampling fixture data contract changed")
+    fixture = fixture.replace(marker, marker + "    inline static constexpr bool bulk_load=true;\n")
+    for kind in test_curve_sampling.KINDS:
+        value = "LLQuaternion" if kind == "Rotation" else "LLVector3"
+        method = test_curve_sampling.function(fixture, f"{value} LLKeyframeMotion::{kind}Curve::getValue(")
+        point = "    key_map_t::const_iterator right = mKeys.lower_bound(time);"
+        if method.count(point) != 1:
+            raise ValueError("Single-key experiment insertion point changed")
+        field = {"Scale": "mScale", "Position": "mPosition", "Rotation": "mRotation"}[kind]
+        shortcut = f"    if (mKeys.size() == 1) return mKeys.begin()->second.{field};\n\n"
+        if kind == "Position":
+            shortcut = ("    if (mKeys.size() == 1)\n    {\n"
+                        "        value = mKeys.begin()->second.mPosition;\n"
+                        "        llassert(value.isFinite());\n        return value;\n    }\n\n")
+        candidate = method.replace(point, shortcut + point)
+        fixture = fixture.replace(method, candidate, 1)
+    assertion = '#define llassert(condition) require(bool(condition), "Production curve assertion failed")'
+    if assertion in fixture:
+        # Let the correctness fixture observe the diagnostic without terminating the process.
+        fixture = fixture.replace(assertion,
+            'struct CurveAssertion {};\n'
+            'void curveAssertion(bool condition) {if(!condition) throw CurveAssertion{};}\n'
+            '#define llassert(condition) curveAssertion(bool(condition))', 1)
+    return fixture
+
+
+def generate(source: Path, refined: bool = False) -> str:
+    baseline = test_curve_sampling.generate(source, reference_storage=True)
+    main = "int main() { return CurveFixture::run(); }"
+    if baseline.count(main) != 1:
+        raise ValueError("Sampling harness entry point changed")
+    baseline = baseline.replace(main, "")
+    if baseline.count("std::map<F32, Key>") != 1:
+        raise ValueError("Sampling harness key-container alias changed")
+    map_fixture = baseline.replace("CurveFixture", "CurveMapFixture").replace(
+        "std::map<F32, Key>",
+        "std::map<F32, Key, std::less<F32>, CountingAllocator<std::pair<const F32,Key>,MapTag>>")
+    flat_fixture = baseline.replace("CurveFixture", "CurveFlatFixture").replace(
+        "std::map<F32, Key>",
+        "boost::container::flat_map<F32, Key, std::less<F32>, CountingAllocator<std::pair<F32,Key>,FlatTag>>")
+    # Put the common math/includes first, and allocator types before both fixtures.
+    boundary = map_fixture.index("namespace CurveMapFixture")
+    map_timing = baseline.replace("CurveFixture", "CurveMapTiming")
+    flat_timing = baseline.replace("CurveFixture", "CurveFlatTiming").replace(
+        "std::map<F32, Key>", "boost::container::flat_map<F32, Key>")
+    # Timing matches release assertion behavior; correctness fixtures keep assertions active.
+    assertion = '#define llassert(condition) require(bool(condition), "Production curve assertion failed")'
+    if baseline.count(assertion) != 1:
+        raise ValueError("Sampling harness assertion contract changed")
+    map_timing = map_timing.replace(assertion, "#define llassert(condition) ((void)0)")
+    flat_timing = flat_timing.replace(assertion, "#define llassert(condition) ((void)0)")
+    fixtures = map_fixture[boundary:] + flat_fixture + map_timing + flat_timing
+    experiment = EXPERIMENT
+    if refined:
+        fixtures += refined_fixture(flat_fixture.replace("CurveFlatFixture", "CurveBulkFixture").replace("FlatTag", "BulkTag"))
+        fixtures += refined_fixture(flat_timing.replace("CurveFlatTiming", "CurveBulkTiming"))
+        fixtures += POSITION_DIAGNOSTICS
+        extra_checks = "    CurveBulkFixture::run();\n    CurveBulkFixture::checkPositionDiagnostics();\n"
+        extra_bench = ""
+        for kind in test_curve_sampling.KINDS:
+            extra_checks += (f"    equivalence<CurveMapFixture::LLKeyframeMotion::{kind}Curve,"
+                             f"CurveBulkFixture::LLKeyframeMotion::{kind}Curve>();\n")
+        for kind in ("Position", "Rotation"):
+            extra_bench += (f'    samplingBench<CurveMapTiming::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkTiming::LLKeyframeMotion::{kind}Curve>("{kind.lower()}_bulk");\n')
+            extra_bench += (f'    loadingBench<CurveMapTiming::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkTiming::LLKeyframeMotion::{kind}Curve,CurveMapFixture::LLKeyframeMotion::{kind}Curve,'
+                            f'CurveBulkFixture::LLKeyframeMotion::{kind}Curve>("{kind.lower()}_bulk");\n')
+        check_point = '    std::cout<<crossComparisons'
+        bench_point = '    return 0;\n}\n}'
+        if experiment.count(check_point) != 1 or experiment.count(bench_point) != 1:
+            raise ValueError("Storage experiment entry points changed")
+        experiment = experiment.replace(check_point, extra_checks + check_point, 1)
+        experiment = experiment.replace(bench_point, extra_bench + bench_point, 1)
+    return map_fixture[:boundary] + PREFIX + fixtures + experiment
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=test_curve_sampling.ROOT / "llkeyframemotion.cpp")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--refined", action="store_true", help="Include staged bulk loading and single-key sampling candidate")
+    args = parser.parse_args()
+    args.output.write_text(generate(args.source, args.refined), encoding="utf-8")

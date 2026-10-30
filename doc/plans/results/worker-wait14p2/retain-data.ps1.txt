@@ -1,0 +1,42 @@
+$ErrorActionPreference = 'Stop'
+$destination = Join-Path $PSScriptRoot '..\viewer-performance\doc\plans\results\worker-wait14p2'
+New-Item -ItemType Directory -Path $destination -Force | Out-Null
+$manifest = [ordered]@{}
+$sourceBytes = [ordered]@{}
+foreach ($source in Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object { $_.Name -like 'worker-wait14p2-r*.json' -or $_.Name -like 'worker-wait14p2-r*.csv' }) {
+    $target = Join-Path $destination $source.Name
+    $content = [IO.File]::ReadAllText($source.FullName).Replace("`r`n", "`n")
+    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($content)))
+    $sourceBytes[$source.Name] = (Get-FileHash -LiteralPath $source.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (Test-Path -LiteralPath $target) {
+        if ([IO.File]::ReadAllText($target).Replace("`r`n", "`n") -cne $content) { throw "Retained case changed: $($source.Name)" }
+    }
+    [IO.File]::WriteAllText($target, $content)
+    $manifest[$source.Name] = $hash.ToLowerInvariant()
+}
+$cases = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'worker-wait14p2-r*.json' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
+$summary = [ordered]@{
+    status='In progress; do not use partial matrix for adoption'; source_commit='4bae43e6a595855510609c0ad7306c13c871bf4f';
+    accepted=@($cases | Where-Object status -eq 'completed').Count;
+    excluded=@($cases | Where-Object status -like '*exclude*').Count;
+    requested_total=48; controls='Round1 current/stock, round2 stock/current; widths1/3/8, default/requested1ms, empty/finite fiber waits; 30 seconds idle each';
+    correction='Two initial cases overlapped because the next command was started before an exec session completed. Both entire cases excluded, raw data retained, clean attempt2 replacements completed. Full-host concurrent probe guard added.';
+    native='MSVC x64 AVX2 /O2 /fp:precise, fresh workqueue.cpp, immutable32 internal libraries, bundled Boost1.90.0';
+    source_sha256_normalized_lf=[ordered]@{}; artifact_sha256=[ordered]@{};
+    scratch_raw_byte_sha256=$sourceBytes; retained_raw_sha256_normalized_lf=$manifest;
+    limits=@('Only accepted full-host build-idle before/after cases are comparable','Other desktop load, power state and timer policy uncontrolled','Raw cycles are not elapsed time or power; Windows CPU time is quantized','Generated queue throughput is not viewer FPS','No production scheduler policy changes')
+}
+if ($summary.accepted -eq $summary.requested_total) {
+    $summary.status = 'Complete private matrix; full viewer and production selection acceptance pending'
+}
+foreach ($relative in @('indra/llcommon/tests/scheduler_probe.h','indra/llcommon/tests/threadpool_scheduler_test.cpp','indra/llcommon/tests/threadpool_scheduler_benchmark.cpp','indra/llcommon/workqueue.cpp','indra/llcommon/threadpool.cpp','indra/llcommon/threadsafeschedule.h','indra/llcommon/CMakeLists.txt')) {
+    $text = [IO.File]::ReadAllText((Join-Path "$PSScriptRoot\..\viewer-performance" $relative)).Replace("`r`n", "`n")
+    $summary.source_sha256_normalized_lf[$relative] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()
+}
+foreach ($relative in @('worker-scheduler-cost14p2.cpp','worker-scheduler-cost14p2.exe','worker-scheduler-cost14p2.rsp','run-worker-wait-case14p2.ps1','retain-worker-wait-data14p2.ps1','dependencies-shadow-20261024/manifest.json')) {
+    $summary.artifact_sha256[$relative] = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $relative) -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+$summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $destination 'progress.json')
+Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-worker-wait-case14p2.ps1') | Set-Content -LiteralPath (Join-Path $destination 'run-case.ps1.txt')
+Get-Content -LiteralPath (Join-Path $PSScriptRoot 'retain-worker-wait-data14p2.ps1') | Set-Content -LiteralPath (Join-Path $destination 'retain-data.ps1.txt')
+"Retained $($summary.accepted) accepted and $($summary.excluded) excluded cases."
