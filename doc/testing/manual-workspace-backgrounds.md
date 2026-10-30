@@ -18,12 +18,23 @@ Configure `indra/newview/tests/folderstorm` as usual. Build only `workspace_back
 
 ```sh
 ctest --test-dir <build-dir> --output-on-failure \
-  -R '^(workspace_background|workspace_background_adapters|workspace_layout|workspace_usability|world_view_geometry)$'
+  -R '^(workspace_background|workspace_background_adapters|workspace_background_native|workspace_layout|workspace_usability|world_view_geometry)$'
 ```
 
 The adapter entry runs seven Python/C++ cases: strict background records and legacy migration, the existing workspace serialization suite, current/default editing without unrelated group changes, repeated-source texture reuse and cropped drawing, asynchronous import ownership/cancellation, native wiring contracts, and XUI bindings/bounds. Portable LLSD/UI fixtures test production model/adapter code; they do not validate real XML persistence or GPU output.
 
-The five focused CTest entries pass. Real-header C++20 syntax checks pass for the new background model/runtime/panel and changed workspace/controller/renderer adapters. Standalone `llappviewer.cpp` checking stops at the environment's missing pre-existing `cef/dullahan_version.h`. A complete viewer link, Windows/MSVC build and graphical acceptance have not been performed.
+The native-boundary entry adds two regressions. The first executes production JPEG recovery declarations/handlers across two overlapping threads, rejects the old shared-buffer declarations safely, and compiles the existing ARM64 guards. The second executes the native texture factories/cache and directory append helpers: an existing managed file fails skin lookup, succeeds through its local-file URL, and reuses the same cached texture. Paths include spaces and Unicode; missing files and cross-grid texture references still fail safely. Hashing, file decoding and GL upload remain boundary fixtures.
+
+The six focused CTest entries pass. The JPEG regression also passes when linked to the available native libjpeg archive, with 64 malformed-header errors returning to their owning thread. To repeat that check against your native dependencies:
+
+```sh
+FS_BACKGROUND_JPEG_INCLUDE=<directory-containing-jpeglib.h> \
+FS_BACKGROUND_JPEG_LIBRARY=<path-to-libjpeg-archive> \
+python3 indra/newview/tests/test_fsworkspacebackground_native.py \
+  NativeBackgroundBoundaries.test_jpeg_error_context_is_thread_local -v
+```
+
+JPEG's error buffer is thread-local on non-ARM64 platforms; the existing ARM64 guards are unchanged. Managed images use `getFetchedTextureFromUrl` with `FTT_LOCAL_FILE`, bypassing the skin-relative file helper while retaining viewer caching. Real-header C++20 syntax checks pass for the changed JPEG codec and background runtime, in addition to the original background/workspace checks. Standalone `llappviewer.cpp` checking stops at the environment's missing pre-existing `cef/dullahan_version.h`. A complete viewer link, Windows/MSVC build and graphical acceptance have not been performed.
 
 ## Windows acceptance
 

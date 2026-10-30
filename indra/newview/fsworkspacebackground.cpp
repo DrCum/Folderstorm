@@ -114,7 +114,8 @@ struct Service
             if (!localAsset(image.asset)) return;
             const auto path = directory()+gDirUtilp->getDirDelimiter()+image.asset;
             if (!LLFile::isfile(path)) { errors[id]="Image is missing. Locate a replacement."; return; }
-            texture = LLViewerTextureManager::getFetchedTextureFromFile(path);
+            // FromFile searches skin textures; managed profile images use the local URL path.
+            texture = LLViewerTextureManager::getFetchedTextureFromUrl("file://"+path,FTT_LOCAL_FILE);
         }
         if (texture) textures.emplace(id,std::move(texture));
     }

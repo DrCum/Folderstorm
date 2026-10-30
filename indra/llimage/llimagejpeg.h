@@ -79,7 +79,8 @@ protected:
     S32             mEncodeQuality;     // on a scale from 1 to 100
 private:
 #if !LL_ARM64
-    static jmp_buf  sSetjmpBuffer;      // To allow the library to abort.
+    // Each native/worker codec operation must recover on its own thread.
+    static thread_local jmp_buf sSetjmpBuffer;
 #endif
 };
 

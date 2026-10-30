@@ -40,7 +40,7 @@ def fixtures():
 
 
 class WorkspaceBackgrounds(unittest.TestCase):
-    def cpp(self, source, *files):
+    def cpp(self, source, *files, flags=(), expected=0):
         with tempfile.TemporaryDirectory(prefix='workspace-background-') as tmp:
             folder = Path(tmp)
             uuid, sd = fixtures()
@@ -52,8 +52,9 @@ class WorkspaceBackgrounds(unittest.TestCase):
             subprocess.run(shlex.split(os.environ.get('CXX', 'c++')) + [
                 '-std=c++17', '-Wall', '-Wextra', '-Werror', '-UNDEBUG',
                 '-I'+str(folder), '-I'+str(VIEWER), str(folder/'test.cpp'),
-                *[str(VIEWER/file) for file in files], '-o', str(output)], check=True)
-            subprocess.run([str(output)], check=True, timeout=20)
+                *[str(VIEWER/file) for file in files], *flags, '-o', str(output)], check=True)
+            result=subprocess.run([str(output)], timeout=20)
+            self.assertEqual(result.returncode,expected)
 
     def test_background_schema_and_migration(self):
         self.cpp(r'''
