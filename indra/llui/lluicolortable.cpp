@@ -172,6 +172,7 @@ void LLUIColorTable::insertFromParams(const Params& p, string_color_map_t& table
 
 void LLUIColorTable::clear()
 {
+    mResetToDefault.clear();
     clearTable(mLoadedColors);
     clearTable(mUserSetColors);
 }
@@ -198,6 +199,7 @@ LLUIColor LLUIColorTable::getColor(std::string_view name, const LLColor4& defaul
 // update user color, loaded colors are parsed on initialization
 void LLUIColorTable::setColor(std::string_view name, const LLColor4& color)
 {
+    mResetToDefault.erase(std::string(name));
     auto it = mUserSetColors.find(name);
     if(it != mUserSetColors.end())
     {
@@ -251,12 +253,14 @@ void LLUIColorTable::resetToDefault(std::string_view name)
         if (default_iter != mLoadedColors.end())
         {
             iter->second = default_iter->second.get();
+            mResetToDefault.emplace(name);
         }
     }
 }
 
 bool LLUIColorTable::loadFromSettings()
 {
+    mResetToDefault.clear();
     bool result = false;
 
     // pass constraint=LLDir::ALL_SKINS because we want colors.xml from every
@@ -275,13 +279,20 @@ bool LLUIColorTable::loadFromSettings()
 
 void LLUIColorTable::saveUserSettings() const
 {
+    saveUserSettings(!gDirUtilp->getCustomThemeDir().empty());
+}
+
+void LLUIColorTable::saveUserSettings(bool preserveMatchingOverrides) const
+{
     Params params;
 
     for (const auto& color_pair : mUserSetColors)
     {
-        // Compare user color value with the default value, skip if equal
+        // A custom layer must not erase an equal personal override. Explicit
+        // reset still returns to inheritance without invalidating live handles.
         string_color_map_t::const_iterator itd = mLoadedColors.find(color_pair.first);
-        if(itd != mLoadedColors.end() && itd->second == color_pair.second)
+        if(itd != mLoadedColors.end() && itd->second == color_pair.second &&
+           (!preserveMatchingOverrides || mResetToDefault.count(color_pair.first)))
             continue;
 
         ColorEntryParams color_entry;
@@ -409,6 +420,7 @@ bool LLUIColorTable::loadFromFilename(const std::string& filename, string_color_
 
 void LLUIColorTable::insertFromParams(const Params& p)
 {
+    for (const auto& entry : p.color_entries) mResetToDefault.erase(entry.name());
     insertFromParams(p, mUserSetColors);
 }
 

@@ -23,6 +23,23 @@ int main()
         assert(original.encode()==restored.encode());
     }
     assert(!HostPreferences::decode(bytes+"x",restored));
+    assert(bytes.substr(0,4)=="FHP1" && restored.hostTheme.empty() && restored.encode()==bytes);
+    const HostThemeReference palette{"11111111-2222-3333-4444-555555555555",std::string(64,'a')};
+    auto custom=saved;custom.hostTheme.current=palette;const auto customBytes=custom.encode();
+    assert(customBytes.substr(0,4)=="FHP2" && HostPreferences::decode(customBytes,restored) && restored.encode()==customBytes);
+    assert(restored.experience.theme==1 && restored.chat.profileNames[2]=="Sodie" && restored.options.standby[2]==Mode::Economy && restored.hostTheme.current==palette);
+    custom.hostTheme.previous=palette;custom.hostTheme.current.reset();
+    const auto reset=custom.encode();assert(reset.substr(0,4)=="FHP2" && HostPreferences::decode(reset,restored) && !restored.hostTheme.current && restored.hostTheme.previous==palette);
+    for(std::size_t i=0;i<customBytes.size();++i)
+    {auto before=restored;assert(!HostPreferences::decode(customBytes.substr(0,i),restored) && restored.encode()==before.encode());}
+    auto future=customBytes;future[3]='3';assert(!HostPreferences::decode(future,restored));
+    auto invalidTheme=customBytes;invalidTheme.back()='Z';assert(!HostPreferences::decode(invalidTheme,restored));
+    custom.hostTheme.current=HostThemeReference{"../escape",std::string(64,'a')};assert(custom.encode().empty());
+    HostThemeSelection selection;const auto emptyTheme=selection.encode();
+    assert(HostThemeSelection::decode(emptyTheme,selection) && selection.empty());
+    assert(!HostThemeSelection::decode(emptyTheme+"x",selection));
+    auto badFlags=emptyTheme;badFlags[4]=4;assert(!HostThemeSelection::decode(badFlags,selection));
+    assert(HostPreferences::decode(bytes,restored) && restored.encode()==bytes);
     auto oversized=bytes;oversized[4]=static_cast<char>(255);oversized[5]=static_cast<char>(255);oversized[6]=static_cast<char>(255);
     assert(!HostPreferences::decode(oversized,restored));
     auto invalid=saved;invalid.presentation.shortcuts=true;invalid.experience.keys[0]=invalid.presentation.bindings[0];

@@ -6,6 +6,11 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import importlib.util
+
+_editor_spec = importlib.util.spec_from_file_location("folderstorm_theme_editor", Path(__file__).with_name("folderstorm_theme_editor.py"))
+_editor = importlib.util.module_from_spec(_editor_spec)
+_editor_spec.loader.exec_module(_editor)
 
 
 def command(bundle_dir, output):
@@ -27,6 +32,7 @@ def command(bundle_dir, output):
         path = bundle_dir / name
         if not path.is_file() or not path.stat().st_size:
             raise ValueError(f"Missing bundle component: {name}")
+    _editor.validate_bundle(bundle_dir, bundle)
     parts = version.rsplit(".", 1)
     return ["vpk", "pack", "--packId", bundle["app_id"], "--packVersion", "-".join(parts),
             "--packDir", str(bundle_dir), "--mainExe", guide, "--packTitle", "Folderstorm",
@@ -47,8 +53,8 @@ def main():
         invocation = command(source, output)
         print(json.dumps({"command": invocation, "previous": str(args.previous) if args.previous else None}, indent=2))
         if args.pack:
-            version = subprocess.run(["vpk", "--version"], capture_output=True, text=True, check=True).stdout
-            if "0.0.1535" not in version:
+            version = subprocess.run(["vpk", "--help"], capture_output=True, text=True, check=True).stdout
+            if not re.search(r"\bVelopack CLI 0\.0\.1535(?:[-+\s]|$)", version):
                 raise ValueError("Use vpk 0.0.1535 to match the pinned native SDK")
             if args.previous:
                 previous = args.previous.resolve(strict=True)
@@ -58,6 +64,9 @@ def main():
             output.mkdir(parents=True, exist_ok=True)
             # vpk uses retained full packages in output to generate deltas.
             subprocess.run(invocation, check=True)
+            bundle = json.loads((source / "folderstorm-bundle.json").read_text(encoding="utf-8"))
+            pack_version = invocation[invocation.index("--packVersion") + 1]
+            _editor.validate_archive(source, bundle, output / f"{bundle['app_id']}-{pack_version}-full.nupkg")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
 

@@ -11,7 +11,17 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
         string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+" "\\1" VIEWER_VERSION_MAJOR ${VIEWER_SHORT_VERSION})
         string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+" "\\1" VIEWER_VERSION_MINOR ${VIEWER_SHORT_VERSION})
         string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+)" "\\1" VIEWER_VERSION_PATCH ${VIEWER_SHORT_VERSION})
-        if (DEFINED ENV{revision})
+        # Private feature branches can have fewer commits than newer retained builds.
+        # A process-local override preserves monotonic package identity without a sticky cache value.
+        if (DEFINED ENV{FOLDERSTORM_BUILD_REVISION} AND NOT "$ENV{FOLDERSTORM_BUILD_REVISION}" STREQUAL "")
+           string(LENGTH "$ENV{FOLDERSTORM_BUILD_REVISION}" override_length)
+           if(NOT "$ENV{FOLDERSTORM_BUILD_REVISION}" MATCHES "^[1-9][0-9]*$" OR override_length GREATER 9)
+             message(FATAL_ERROR "FOLDERSTORM_BUILD_REVISION must be a positive build number of at most nine digits")
+           endif()
+           set(VIEWER_VERSION_REVISION "$ENV{FOLDERSTORM_BUILD_REVISION}")
+           message(STATUS "Revision (from private build override): ${VIEWER_VERSION_REVISION}")
+
+        elseif (DEFINED ENV{revision})
            set(VIEWER_VERSION_REVISION $ENV{revision})
            message(STATUS "Revision (from environment): ${VIEWER_VERSION_REVISION}")
 
@@ -19,7 +29,7 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
            set(VIEWER_VERSION_REVISION $ENV{AUTOBUILD_BUILD_ID})
            message(STATUS "Revision (from autobuild environment): ${VIEWER_VERSION_REVISION}")
 
-        else (DEFINED ENV{revision})
+        else ()
             find_program(GIT git)
             if (DEFINED GIT )
                 execute_process(
@@ -37,7 +47,7 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
                 message(STATUS "Revision not set: 'git' found; using 0")
                 set(VIEWER_VERSION_REVISION 0)
             endif (DEFINED GIT)
-        endif (DEFINED ENV{revision})
+        endif ()
         message(STATUS "Building '${VIEWER_CHANNEL}' Version ${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}")
     else ( EXISTS ${VIEWER_VERSION_BASE_FILE} )
         message(SEND_ERROR "Cannot get viewer version from '${VIEWER_VERSION_BASE_FILE}'") 

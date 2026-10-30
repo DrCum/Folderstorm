@@ -39,6 +39,7 @@
 #include "llsearcheditor.h"
 #include "llsetkeybinddialog.h"
 #include "llkeyconflict.h"
+#include <memory>
 
 #include "llaudioengine.h" // <FS:Ansariel> Output device selection
 
@@ -55,6 +56,7 @@ class LLSD;
 class LLTextBox;
 class LLComboBox;
 class LLLineEditor;
+namespace FSThemeViewer {struct Preferences;}
 
 // <FS:Zi> FIRE-19539 - Include the alert messages in Prefs>Notifications>Alerts in preference Search.
 class LLFilterEditor;
@@ -537,6 +539,7 @@ public:
     /*virtual*/ bool postBuild();
     /*virtual*/ void apply();
     /*virtual*/ void cancel(const std::vector<std::string> settings_to_skip = {});
+    bool commitThemeSelection();
     void callbackRestart(const LLSD& notification, const LLSD& response);   // <FS:CR> Callback for restart dialogs
 protected:
     void onSkinChanged();
@@ -545,6 +548,10 @@ protected:
     void refreshSkinThemeList();
     void refreshPreviewImage(); // <FS:PP> FIRE-1689: Skins preview image
     void showSkinChangeNotification();
+    void onCustomThemeChanged();
+    void onRestorePreviousTheme();
+    void onRefreshThemes();
+    void refreshThemeControls();
 
 protected:
     std::string m_Skin;
@@ -555,6 +562,12 @@ protected:
     LLSD        m_SkinsInfo;
     std::string m_SkinName;
     std::string m_SkinThemeName;
+    LLComboBox* m_pCustomThemeCombo = nullptr;
+    std::shared_ptr<FSThemeViewer::Preferences> m_ThemePreferences;
+    bool m_ThemeRefreshing = false;
+    bool m_ThemeRestartPending = false;
+    bool m_ThemeKeepPersonal = false;
+    bool m_ThemeApplyAccepted = false;
 
     LOG_CLASS(LLPanelPreferenceSkins);
 };
