@@ -140,7 +140,7 @@ void FSPanelPreferenceBackgrounds::controls()
     getChild<LLComboBox>("background_source")->setValue(static_cast<int>(mImage.source));
     getChild<LLComboBox>("background_mode")->setValue(static_cast<int>(mImage.mode));
     getChild<LLColorSwatchCtrl>("background_color")->set(LLColor4(mImage.color[0],mImage.color[1],mImage.color[2],1.f));
-    getChild<LLSliderCtrl>("background_brightness")->setValue(ll_round(mImage.brightness*100.f));
+    getChild<LLSliderCtrl>("background_brightness")->setValue(static_cast<F32>(ll_round(mImage.brightness*100.f)));
     getChild<LLTextureCtrl>("background_texture")->setImageAssetID(mImage.source==Source::Texture ? LLUUID(mImage.asset) : LLUUID::null);
     getChild<LLLineEditor>("background_uuid")->setValue(mImage.source==Source::Texture ? mImage.asset : "");
     for (const char* name:{"background_source","background_color"}) getChild<LLView>(name)->setEnabled(canEdit);
