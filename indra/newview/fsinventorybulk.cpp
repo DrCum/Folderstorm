@@ -35,6 +35,7 @@
 #include "llcallbacklist.h"
 #include "llsdutil.h"
 #include "rlvactions.h"
+#include "rlvhandler.h"
 #include "rlvlocks.h"
 #include <algorithm>
 #include <set>
@@ -523,6 +524,11 @@ void executeNative(const std::string& id, std::function<void(const LLSD&)> compl
 void clear() { sync(); store->clear(); }
 void retireAssistant() { store->retireAssistant(); }
 void stop(const std::string& id) { sync(); store->stop(id); }
+bool ordinaryTaskDestination(const LLUUID& id)
+{
+    return ordinaryFolder(id.asString()) &&
+        (!rlv_handler_t::isEnabled() || !RlvFolderLocks::instance().isLockedFolder(id,RLV_LOCK_ADD));
+}
 void permissionsChanged()
 {
     for (auto it = native_gates.begin(); it != native_gates.end();)

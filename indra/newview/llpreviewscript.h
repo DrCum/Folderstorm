@@ -375,6 +375,7 @@ public:
 
 
     static void processScriptRunningReply(LLMessageSystem* msg, void**);
+    bool assistantSourceBusy() const;
 
     virtual void callbackLSLCompileSucceeded(const LLUUID& task_id,
                                             const LLUUID& item_id,

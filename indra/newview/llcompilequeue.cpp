@@ -33,6 +33,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "fsobjecttools.h"
 
 #include "llcompilequeue.h"
 
@@ -730,6 +731,7 @@ bool LLFloaterResetQueue::resetObjectScripts(LLHandle<LLFloaterScriptQueue> hflo
     floater->addStringMessage(buffer);
 
     LLMessageSystem* msg = gMessageSystem;
+    fs_object_tools_native_execution_changed(object->getID(), inventory->getUUID());
     msg->newMessageFast(_PREHASH_ScriptReset);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
@@ -787,6 +789,7 @@ bool LLFloaterRunQueue::runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater
     floater->addStringMessage(buffer);
 
     LLMessageSystem* msg = gMessageSystem;
+    fs_object_tools_native_execution_changed(object->getID(), inventory->getUUID());
     msg->newMessageFast(_PREHASH_SetScriptRunning);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
@@ -844,6 +847,7 @@ bool LLFloaterNotRunQueue::stopObjectScripts(LLHandle<LLFloaterScriptQueue> hflo
     floater->addStringMessage(buffer);
 
     LLMessageSystem* msg = gMessageSystem;
+    fs_object_tools_native_execution_changed(object->getID(), inventory->getUUID());
     msg->newMessageFast(_PREHASH_SetScriptRunning);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());

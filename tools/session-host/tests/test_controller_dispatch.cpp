@@ -2,6 +2,7 @@
 // Compile the production UI adapter against bounded native substitutes. This
 // exercises real dispatch/preparation/revalidation, not a second policy model.
 #include "../controller_model.h"
+#include "fssessionconnection.h"
 #include "fssessionmonitortools.h"
 #include "fssessionrestart.h"
 #include <cassert>
@@ -41,6 +42,7 @@ struct ProfileCopyRequest {};
 struct Pipe {bool live=true;bool alive()const{return live;}bool writing()const{return false;}};
 struct Slot
 {
+    LinkRecovery recovery;
     Message snapshot;WorkerId id{};Pipe pipe;Restart restart;
     std::string controllerViewerSession;ChatKey controllerSessionSource;
     bool detached=false,waiting=false,hasPendingSend=false,hasPendingTyping=false,hasPendingAction=false,hasPendingReview=false,alive=true;

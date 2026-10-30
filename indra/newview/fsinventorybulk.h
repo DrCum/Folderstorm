@@ -43,6 +43,8 @@ void clear();
 void retireAssistant();
 void stop(const std::string& operation_id);
 void permissionsChanged();
+// Exact ordinary destination, including native special-folder and lock rules.
+bool ordinaryTaskDestination(const LLUUID&);
 // Internal legacy adapter: prepares the exact same frozen plan without Read
 // permission and preserves the legacy response fields on completion.
 bool prepareLegacy(const LLSD& request, std::string& plan_id, std::string& error);
