@@ -331,7 +331,7 @@ int main()
            selected.windows.empty() && selected.context.huds.empty(), "Toolbar-only load never applies viewport placement or other groups");
     expect(fromLLSD(toLLSD(selected), parsed, error), "Toolbar-only subset remains valid");
     const LLSD before_failure = toLLSD(selected);
-    expect(!selectGroups(mixed, 0, false, selected) && !selectGroups(mixed, 128, true, selected) &&
+    expect(!selectGroups(mixed, 0, false, selected) && !selectGroups(mixed, 256, true, selected) &&
            !selectGroups(mixed, -1, false, selected) && toLLSD(selected) == before_failure,
            "Empty and unknown selections fail without mutating output");
     expect(!selectGroups(fixture(), Camera, false, selected), "An absent group does not apply invented defaults");
@@ -345,7 +345,7 @@ int main()
            "32-profile limit allows replacement only");
     profiles["Profile 0"]["future_extension"] = true;
     expect(!canSaveProfile(profiles, "Profile 0", error), "Unknown extensions remain protected on replacement");
-    profiles["Profile 0"]["schema"] = 2;
+    profiles["Profile 0"]["schema"] = SCHEMA_VERSION + 1;
     expect(!canSaveProfile(profiles, "Profile 0", error), "Future-schema definition cannot be overwritten accidentally");
     expect(!canSaveProfile(LLSD("bad collection"), "New", error), "Malformed collection is not discarded");
     expect(!canSaveProfile(LLSD::emptyMap(), "builtin:driving", error), "Builtin names cannot be saved");

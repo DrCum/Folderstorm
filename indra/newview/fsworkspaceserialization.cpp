@@ -294,6 +294,7 @@ LLSD toLLSD(const Workspace& workspace)
     data["schema"] = SCHEMA_VERSION;
     data["type"] = "workspace";
     data["components"] = workspace.components;
+    if (workspace.components & Background) data["background"] = FSWorkspaceBackground::toLLSD(workspace.background);
     if (workspace.components & Graphics) data["graphics"] = groupData(workspace.context.graphics, false);
     if (workspace.components & Camera) data["camera"] = groupData(workspace.context.camera, true);
     if (workspace.components & HUDs)
@@ -345,7 +346,9 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         return false;
     }
     if (!data["type"].isString() || data["type"].asString() != "workspace") return fail(error, "type");
-    if (data.has("components") && !integer(data, "components", parsed.components, 0, schema == 1 ? All : AllComponents)) return fail(error, "components");
+    if (data.has("components") && !integer(data, "components", parsed.components, 0, schema == 1 ? All : schema == 2 ? 127 : AllComponents)) return fail(error, "components");
+    if (data.has("background") && (schema < 3 || !(parsed.components & Background))) return fail(error,"background");
+    if (data.has("background") && !FSWorkspaceBackground::fromLLSD(data["background"],parsed.background)) return fail(error,"background");
     for (bool camera : {false, true})
     {
         const char* field = camera ? "camera" : "graphics";
@@ -396,6 +399,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         parsed.remember_toolbars = true;
     }
     if (parsed.components == 0 && !parsed.remember_toolbars) return fail(error, "empty components");
+    if (schema < 3) parsed.components |= Background; // Valid legacy workspaces inherit the shared default.
     if (!chromeFromLLSD(data["chrome"], parsed.chrome, parsed.ignored_details, error)) return false;
     if (!boolean(data, "world_view_in_mouselook", parsed.world_view_in_mouselook))
         return fail(error, "world_view_in_mouselook");
@@ -427,7 +431,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
     if (data.has("extra_inventory"))
     {
         const LLSD& extras = data["extra_inventory"];
-        if (!extras.isArray() || extras.size() > static_cast<size_t>(MAX_EXTRA_INVENTORY_WINDOWS))
+        if (!extras.isArray() || extras.size() > MAX_EXTRA_INVENTORY_WINDOWS)
             return fail(error, "extra_inventory");
         if (!(parsed.components & Inventory) && extras.size()) return fail(error, "excluded Inventory");
         for (auto it = extras.beginArray(); it != extras.endArray(); ++it)
@@ -454,7 +458,7 @@ bool fromLLSD(const LLSD& data, Workspace& workspace, std::string& error)
         countUnknown(inbox, {"expanded", "height_ui"}, parsed.ignored_details);
     }
     if (parsed.remember_inventory_folders && !(parsed.components & Inventory)) return fail(error, "excluded folders");
-    countUnknown(data, {"schema", "type", "components", "toolbars", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels", "graphics", "camera", "huds"},
+    countUnknown(data, {"schema", "type", "components", "toolbars", "chrome", "world_view_in_mouselook", "remember_inventory_folders", "frame", "windows", "extra_inventory", "panels", "graphics", "camera", "huds", "background"},
                  parsed.ignored_details);
     workspace = parsed;
     return true;
