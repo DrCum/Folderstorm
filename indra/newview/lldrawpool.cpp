@@ -659,7 +659,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
 
-    if (!avatar)
+    if (!avatar || !skinInfo)
     {
         return false;
     }
