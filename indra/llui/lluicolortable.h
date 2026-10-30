@@ -28,6 +28,7 @@
 #define LL_LLUICOLORTABLE_H_
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "llinitparam.h"
 #include "llsingleton.h"
@@ -92,6 +93,7 @@ public:
 
     // saves colors specified by the user to the users skin directory
     void saveUserSettings() const;
+    void saveUserSettings(bool preserveMatchingOverrides) const;
     void saveUserSettingsPaletteOnly() const; // AO, saves the user pallete, excluding skips skin-related files
 
     const auto& getLoadedColors() { return mLoadedColors; }
@@ -107,6 +109,7 @@ private:
 
     string_color_map_t mLoadedColors;
     string_color_map_t mUserSetColors;
+    std::unordered_set<std::string> mResetToDefault;
 };
 
 #endif // LL_LLUICOLORTABLE_H

@@ -5,6 +5,8 @@
 #include "fssessionchatprefs.h"
 #include "fssessionchatmodel.h"
 #include "fssessionexperience.h"
+#include "fssessionthemeselection.h"
+#include <vector>
 namespace fs_session
 {
 // One transaction for related choices. No transcripts, drafts or credentials.
@@ -15,12 +17,15 @@ struct HostPreferences
     PresentationStore presentation;
     HostExperience experience;
     ChatPreferences chat;
+    HostThemeSelection hostTheme;
     std::string encode() const
     {
-        const std::array<std::string,4> parts{options.encode(),presentation.encode(),experience.encode(),chat.encode()};
+        std::vector<std::string> parts{options.encode(),presentation.encode(),experience.encode(),chat.encode()};
         HostOptions checked;
         if(!HostOptions::decode(parts[0],checked) || bindingsConflict(experience,presentation))return {};
-        std::string result="FHP1";
+        const auto theme=hostTheme.encode();if(theme.empty())return {};
+        const bool custom=!hostTheme.empty();if(custom)parts.push_back(theme);
+        std::string result=custom?"FHP2":"FHP1";
         for(const auto& part:parts)
         {
             if(part.empty())return {};
@@ -32,8 +37,10 @@ struct HostPreferences
     }
     static bool decode(const std::string& data,HostPreferences& output)
     {
-        if(data.size()<20 || data.size()>MaxBytes || data.compare(0,4,"FHP1")!=0)return false;
-        std::array<std::string,4> parts;std::size_t at=4;
+        if(data.size()<20 || data.size()>MaxBytes)return false;
+        const bool custom=data.compare(0,4,"FHP2")==0;
+        if(!custom && data.compare(0,4,"FHP1")!=0)return false;
+        std::vector<std::string> parts(custom?5:4);std::size_t at=4;
         for(auto& part:parts)
         {
             if(data.size()-at<4)return false;
@@ -44,6 +51,7 @@ struct HostPreferences
         HostPreferences next;
         if(at!=data.size() || !HostOptions::decode(parts[0],next.options) || !PresentationStore::decode(parts[1],next.presentation) ||
             !HostExperience::decode(parts[2],next.experience) || !ChatPreferences::decode(parts[3],next.chat) ||
+            custom && !HostThemeSelection::decode(parts[4],next.hostTheme) ||
             bindingsConflict(next.experience,next.presentation))return false;
         output=std::move(next);return true;
     }

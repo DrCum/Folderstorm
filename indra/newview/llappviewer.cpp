@@ -35,6 +35,7 @@
 #include "fscrash.h"
 #include "fsupdate.h"
 #include "fsinstallviewer.h"
+#include "fsthemeviewer.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -2361,12 +2362,12 @@ bool LLAppViewer::cleanup()
     {
         gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
 
-    LLUIColorTable::instance().saveUserSettings();
+    LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
 
 //<Firestorm Skin Cleanup>
     std::string skinSaved = gSavedSettings.getString("SkinCurrent");
     std::string themeSaved = gSavedSettings.getString("SkinCurrentTheme");
-    if ((skinSaved != mCurrentSkin) || (themeSaved != mCurrentSkinTheme))
+    if (((skinSaved != mCurrentSkin) || (themeSaved != mCurrentSkinTheme)) && !FSThemeViewer::preservePersonalColors() && !FSThemeViewer::customThemeActive())
     {
         LL_INFOS() << "Clearing skin colors." << LL_ENDL;
         // Implementation to only purge skin colors
@@ -3465,6 +3466,8 @@ bool LLAppViewer::initConfiguration()
         gSavedSettings.setBOOL("RenderDebugGLSession", false);
     }
 
+    if (!FSThemeViewer::configure()) return false;
+
     // <FS:TT> Hacking to save the skin and theme for future use.
     mCurrentSkin = gSavedSettings.getString("SkinCurrent");
     mCurrentSkinTheme = gSavedSettings.getString("SkinCurrentTheme");
@@ -3969,7 +3972,7 @@ bool LLAppViewer::initWindow()
     // Determine if the window should start maximized on initial run based
     // on graphics capability
     //
-    if (gSavedSettings.getBOOL("FirstLoginThisInstall") && meetsRequirementsForMaximizedStart())
+    if (!FSThemeViewer::preview() && gSavedSettings.getBOOL("FirstLoginThisInstall") && meetsRequirementsForMaximizedStart())
     {
         LL_INFOS("AppInit") << "This client met the requirements for a maximized initial screen." << LL_ENDL;
         gSavedSettings.setBOOL("WindowMaximized", true);
@@ -5199,7 +5202,8 @@ static LLNotificationFunctorRegistration finish_quit_reg("ConfirmQuit", finish_q
 void LLAppViewer::userQuit()
 {
     LL_INFOS() << "User requested quit" << LL_ENDL;
-    if (gDisconnected
+    if (FSThemeViewer::preview()
+        || gDisconnected
         || !gViewerWindow
         || !gViewerWindow->getProgressView()
         || gViewerWindow->getProgressView()->getVisible())

@@ -1963,10 +1963,22 @@ configure_file(
 list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/fsversionvalues.h)
 include(FolderstormReleases)
 include(FolderstormSentry)
+include(FolderstormThemeEditor)
 include(FolderstormUpdates)
 list(APPEND viewer_SOURCE_FILES fscrashviewer.cpp fsinstallviewer.cpp)
 list(APPEND viewer_HEADER_FILES fsinstallviewer.h)
 list(APPEND viewer_SOURCE_FILES fsreleasefeed.cpp fsreleaseviewer.cpp)
+include("${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/ThemeRules.cmake")
+folderstorm_theme_rules("${CMAKE_SOURCE_DIR}/../tools/theme-editor/contracts/xui-edit-rules.json")
+configure_file("${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/fsthemerules.h.in" "${CMAKE_CURRENT_BINARY_DIR}/fsthemerules.h" @ONLY)
+configure_file(fsthemecapabilities.json.in "${CMAKE_CURRENT_BINARY_DIR}/folderstorm-theme-capabilities.json" @ONLY)
+list(APPEND viewer_SOURCE_FILES fsthemepackage.cpp fsthemeviewer.cpp fsthemeeditor.cpp fsthemeselection.cpp)
+list(APPEND viewer_HEADER_FILES fsthemepackage.h fsthemeviewer.h fsthemeeditor.h fsthemeselection.h)
+if(WINDOWS)
+  add_executable(fs-theme-color-save-checks EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../tools/theme-editor/native/color_save_checks.cpp")
+  target_link_libraries(fs-theme-color-save-checks PRIVATE llui)
+  set_target_properties(fs-theme-color-save-checks PROPERTIES EXCLUDE_FROM_DEFAULT_BUILD TRUE RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/theme-editor-checks")
+endif()
 add_subdirectory(third_party/chat_media)
 list(APPEND viewer_SOURCE_FILES fschatmedia.cpp fschatmediahttp.cpp fschatmediaresolver.cpp fschatupload.cpp fschatuploadhttp.cpp fschatuploadreply.cpp)
 list(APPEND viewer_SOURCE_FILES fsfloatergifboard.cpp fsgiflibrary.cpp)
@@ -2444,7 +2456,13 @@ folderstorm_update_target(${VIEWER_BINARY_NAME})
 # a controller or background workers. Keep the binary beside the matching viewer.
 if (WINDOWS)
   add_executable(folderstorm-session-host WIN32
+      fsthemeeditor.cpp
+      fsthemepackage.cpp
       fsreleasefeed.cpp
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme_state.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_theme_windows.cpp"
+      "${CMAKE_SOURCE_DIR}/../tools/session-host/host_preview.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/release_json.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/main.cpp"
       "${CMAKE_SOURCE_DIR}/../tools/session-host/accessibility.cpp"
@@ -2675,6 +2693,8 @@ if (WINDOWS)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--tracy=${USE_TRACY}"
+        "--theme-editor=$<IF:$<BOOL:${FOLDERSTORM_BUILD_THEME_EDITOR}>,ON,OFF>"
+        "--theme-editor-source=${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
         --build=${CMAKE_CURRENT_BINARY_DIR}
         --buildtype=$<CONFIG>
@@ -2691,6 +2711,9 @@ if (WINDOWS)
         stage_third_party_libs
         llwebrtc
         ${COPY_INPUT_DEPENDENCIES}
+        ${FOLDERSTORM_THEME_EDITOR_STAMP}
+        ${FOLDERSTORM_THEME_EDITOR_HELPER}
+        ${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json
       COMMENT "Performing viewer_manifest copy"
       )
 
@@ -2786,6 +2809,8 @@ if (WINDOWS)
               "--openal=${USE_OPENAL}"
               "--tracy=${USE_TRACY}"
               "--velopack=${USE_VELOPACK}"
+              "--theme-editor=$<IF:$<BOOL:${FOLDERSTORM_BUILD_THEME_EDITOR}>,ON,OFF>"
+              "--theme-editor-source=${FOLDERSTORM_THEME_EDITOR_PUBLISH_DIR}"
               "--avx2=${USE_AVX2_OPTIMIZATION}"
               --build=${CMAKE_CURRENT_BINARY_DIR}
               --buildtype=$<CONFIG>
@@ -2802,6 +2827,9 @@ if (WINDOWS)
             ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
             ${CMAKE_CURRENT_BINARY_DIR}/viewer_version.txt
             ${COPY_INPUT_DEPENDENCIES}
+            ${FOLDERSTORM_THEME_EDITOR_STAMP}
+            ${FOLDERSTORM_THEME_EDITOR_HELPER}
+            ${CMAKE_CURRENT_BINARY_DIR}/folderstorm-bundle.json
         )
 
       add_custom_target(llpackage ALL DEPENDS
@@ -2909,6 +2937,10 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         fs::glod # <FS:Beq/> restore GLOD dependencies
         fs::discord # <FS:Ansariel> Discord  support
         )
+
+if (WINDOWS)
+   target_link_libraries(${VIEWER_BINARY_NAME} bcrypt)
+endif ()
 
 if (USE_DISCORD)
    target_link_libraries(${VIEWER_BINARY_NAME} ll::discord_sdk )
@@ -3457,6 +3489,9 @@ endif (LL_TESTS)
 check_message_template(${VIEWER_BINARY_NAME})
 
 if(TARGET copy_w_viewer_manifest)
+  if(TARGET folderstorm-theme-editor)
+    add_dependencies(copy_w_viewer_manifest folderstorm-theme-editor)
+  endif()
   add_dependencies(copy_w_viewer_manifest migrate-settings fs-mcp fs-mcp-launcher-maintenance folderstorm-session-host)
   if(TARGET folderstorm-update)
     add_dependencies(copy_w_viewer_manifest folderstorm-update)

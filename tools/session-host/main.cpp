@@ -26,6 +26,11 @@
 #include "fssessionshortcuts.h"
 #include <imm.h>
 #include "dialog.h"
+#include "host_preview.h"
+#include "host_palette_ui.h"
+#include "host_theme_state.h"
+#include "host_theme_windows.h"
+#include "fsthemeeditor.h"
 #include "chatui.h"
 #include "friendsui.h"
 #include "fssessionmonitortools.h"
@@ -458,6 +463,8 @@ struct Host
     std::wstring saveError;
     bool preferencesOpen=false,pauseAllAssistant=false;
     std::optional<HostExperience> visualPreview;
+    fs_host_theme::State hostTheme;
+    std::optional<fs_host_theme::State> visualHostTheme;
     HWND voiceStatusControl=nullptr,detachedVoiceStatus=nullptr;
     std::wstring voiceText,voiceName,voiceDescription;
     const HostExperience& visualOptions() const {return visualPreview?*visualPreview:experience;}
@@ -494,7 +501,9 @@ struct Host
     }
     void applyTheme()
     {
-        theme.set(visualOptions().theme,visualOptions().hostContrast!=0);fs_host_ui::dialogTheme=&theme;
+        const auto& source=visualPreview && visualHostTheme?*visualHostTheme:hostTheme;
+        std::optional<fs_host_ui::Palette> custom;if(source.loaded)custom=fs_host_theme::uiPalette(source.loaded->palette);
+        theme.set(visualOptions().theme,visualOptions().hostContrast!=0,custom?&*custom:nullptr);fs_host_ui::dialogTheme=&theme;
         for(HWND panel:{window,chatWindow,controlsWindow,attentionWindow})theme.window(panel);
         if(sharedFriends.window){friendsFont(sharedFriends);layoutFriends(sharedFriends);}
         for(auto& m:monitors)if(m.window){if(m.friends.window){friendsFont(m.friends);layoutFriends(m.friends);}theme.window(m.window);m.dirty=true;}
@@ -632,6 +641,34 @@ struct Host
         const auto chatField=add(PrefLayout,{L"Shared Chat",std::to_wstring(!showChat?0:chatDetached?2:1),FieldType::Choice,{L"Hidden",L"Docked",L"Separate window"}});
         const auto controlsDetachedField=add(PrefLayout,{L"Separate character controls",controlsDetached?L"1":L"0",FieldType::Check});
         const auto themeField=add(PrefAppearance,{L"Theme",std::to_wstring(experience.theme),FieldType::Choice,{L"Folderstorm Midnight",L"Folderstorm Daylight",L"Follow Windows"}});
+        fields[themeField].help=L"Built-in host theme. Also used when a custom host palette is missing or unavailable.";
+        struct HostPaletteChoice {std::optional<fs_host_theme::Choice> reference;std::wstring label;};
+        std::vector<HostPaletteChoice> hostPaletteChoices{{{},L"Built-in theme"}};std::filesystem::path hostLibrary;
+        std::wstring hostPaletteStatus;
+        try
+        {
+            hostLibrary=fs_host_theme::libraryRoot();
+            for(const auto& item:fs_host_theme::available(hostLibrary))hostPaletteChoices.push_back({item.choice,wide(item.name)+L" · "+wide(item.version)+L" · "+wide(item.choice.revision.substr(0,8))});
+        }
+        catch(const std::exception&){hostPaletteStatus=L"The host theme library is unavailable.";}
+        const auto ensureHostChoice=[&](const std::optional<fs_host_theme::Choice>& choice)
+        {
+            for(std::size_t i=0;i<hostPaletteChoices.size();++i)if(hostPaletteChoices[i].reference==choice)return i;
+            hostPaletteChoices.push_back({choice,L"Saved palette · "+wide(choice->revision.substr(0,8))+L" (unavailable)"});return hostPaletteChoices.size()-1;
+        };
+        const auto currentHostChoice=ensureHostChoice(hostTheme.selected.current);ensureHostChoice(hostTheme.selected.previous);
+        std::vector<std::wstring> hostPaletteNames;for(const auto& item:hostPaletteChoices)hostPaletteNames.push_back(item.label);
+        const auto hostPaletteField=add(PrefAppearance,{L"Custom host palette",std::to_wstring(currentHostChoice),FieldType::Choice,hostPaletteNames});
+        fields[hostPaletteField].help=L"Applies only to this host. Viewer profiles keep their own themes. Apply saves the choice; Cancel discards this preview. High contrast takes precedence.";
+        const auto hostRollbackField=add(PrefAppearance,{L"Restore previous palette",L"Restore",FieldType::Action});
+        fields[hostRollbackField].enabled=hostTheme.selected.current.has_value() || hostTheme.selected.previous.has_value();
+        if(!hostTheme.diagnostic.empty())hostPaletteStatus=L"Saved palette unavailable. The built-in theme is active.";
+        const auto hostPaletteNote=add(PrefAppearance,{L"",hostPaletteStatus,FieldType::Note});fields[hostPaletteNote].transient=true;
+        const auto themeLabField=add(PrefAppearance,{L"Theme lab",L"Open theme lab…",FieldType::Action});
+        fields[themeLabField].action=[&](HWND owner)
+        {
+            std::string diagnostic;if(!fs_theme::launchEditor(viewer.parent_path(),viewer,viewer.parent_path()/L"folderstorm-session-host.exe",false,diagnostic))MessageBoxW(owner,wide(diagnostic).c_str(),L"Theme lab",MB_OK|MB_ICONINFORMATION);
+        };
         const auto densityField=add(PrefAppearance,{L"Button spacing",std::to_wstring(experience.density),FieldType::Choice,{L"Compact",L"Comfortable"}});
         const auto cardsField=add(PrefAppearance,{L"Character cards in Expanded mode",experience.cards?L"1":L"0",FieldType::Check});
         const auto toolbarLabelsField=add(PrefAppearance,{L"Toolbar button labels",std::to_wstring(experience.toolbarLabels),FieldType::Choice,{L"Icon and text",L"Text only",L"Icons only"}});
@@ -909,10 +946,24 @@ struct Host
             auto draft=experience;const auto value=[&](std::size_t at){return static_cast<unsigned int>(std::wcstoul(readField(at).c_str(),nullptr,10));};
             draft.theme=value(themeField);draft.density=value(densityField);draft.labels=value(labelsField);
             draft.toolbarLabels=value(toolbarLabelsField);draft.hostContrast=value(contrastField);draft.audioStateText=value(stateTextField)!=0;
+            visualHostTheme=hostTheme;
+            try
+            {
+                const auto at=value(hostPaletteField);fs_theme::require(at<hostPaletteChoices.size(),"host_selection","Choose a host palette");
+                visualHostTheme=fs_host_theme::prepare(hostTheme,hostPaletteChoices[at].reference,hostLibrary,viewer.parent_path());
+                fields[hostPaletteNote].value=visualHostTheme->diagnostic.empty()?L"":L"Saved palette unavailable. The built-in theme is active.";
+            }
+            catch(const std::exception&){fields[hostPaletteNote].value=L"This palette cannot be loaded. Choose another palette or the built-in theme.";}
+            if(fields[hostPaletteNote].control)SetWindowTextW(fields[hostPaletteNote].control,fields[hostPaletteNote].value.c_str());
             visualPreview=std::move(draft);applyTheme();layout();if(owner)theme.window(owner);
         };
-        for(const auto source:{themeField,densityField,labelsField,toolbarLabelsField,contrastField,stateTextField})fields[source].changed=previewAppearance;
-        showPerson();refreshAssistant();dependencies(nullptr);updateQuick(nullptr);HostPreferences accepted;
+        for(const auto source:{themeField,hostPaletteField,densityField,labelsField,toolbarLabelsField,contrastField,stateTextField})fields[source].changed=previewAppearance;
+        fields[hostRollbackField].action=[&](HWND owner)
+        {
+            const auto at=ensureHostChoice(hostTheme.selected.previous);fields[hostPaletteField].value=std::to_wstring(at);
+            if(fields[hostPaletteField].control)SendMessageW(fields[hostPaletteField].control,CB_SETCURSEL,at,0);previewAppearance(owner);
+        };
+        showPerson();refreshAssistant();dependencies(nullptr);updateQuick(nullptr);HostPreferences accepted;fs_host_theme::State acceptedHost;
 
         const auto validate=[&](HWND owner)
         {
@@ -941,6 +992,13 @@ struct Host
                 next.chat.profileNames[i]=account.profileLabel(originalLabels[i],label,next.chat.profileNames[i],p.source.name);
             }
             const auto error=[&](std::size_t at,const std::wstring& message){MessageBoxW(owner,message.c_str(),L"Preferences not applied",MB_OK|MB_ICONINFORMATION);revealEditorField(owner,fields[at]);return false;};
+            if(n(hostPaletteField)>=hostPaletteChoices.size())return error(hostPaletteField,L"Choose a host palette.");
+            try
+            {
+                acceptedHost=fs_host_theme::prepare(hostTheme,hostPaletteChoices[n(hostPaletteField)].reference,hostLibrary,viewer.parent_path());
+                next.hostTheme=acceptedHost.selected;
+            }
+            catch(const std::exception&){return error(hostPaletteField,L"This host palette could not be validated. Choose another palette or the built-in theme.");}
             for(unsigned int i=0;i<10;++i)for(unsigned int j=0;j<i;++j)
             {
                 const auto x=i<7?next.presentation.bindings[i]:next.experience.keys[i-7],y=j<7?next.presentation.bindings[j]:next.experience.keys[j-7];
@@ -983,7 +1041,7 @@ struct Host
         }
         const bool dockChat=accepted.options.chatDetached,dockControls=accepted.options.controlsDetached;
         accepted.options.chatDetached=chatDetached;accepted.options.controlsDetached=controlsDetached;
-        const auto previousChrome=chrome;saveDraft(true);applyPreferences(accepted);visualPreview.reset();const auto nextChrome=chrome;chrome=previousChrome;setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(nextChrome);
+        const auto previousChrome=chrome;saveDraft(true);applyPreferences(accepted,&acceptedHost);visualPreview.reset();visualHostTheme.reset();const auto nextChrome=chrome;chrome=previousChrome;setPanelDetached(true,dockChat,showChat);setPanelDetached(false,dockControls);setChrome(nextChrome);
         SendMessageW(embedControl,BM_SETCHECK,embedding?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(showChatControl,BM_SETCHECK,showChat?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(voiceControl,BM_SETCHECK,voice?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(muteControl,BM_SETCHECK,muteBackground?BST_CHECKED:BST_UNCHECKED,0);
         for(int i=0;i<MaxCharacters;++i){SendMessageW(standbyControl[i],CB_SETCURSEL,standby[i]==Mode::Economy?1:0,0);if(slots[i])slots[i]->soundPrepared=false;}
         activeReadClock={};applyTheme();refreshChat(true,true);refreshCharacters();updateMonitors();refreshAttention();refreshPins();layout();
@@ -1000,6 +1058,8 @@ struct Host
             if(!fields[pair.first].enabled){fields[pair.first].value=std::to_wstring(pair.second);if(fields[pair.first].control)SetWindowTextW(fields[pair.first].control,fields[pair.first].value.c_str());}
         const bool saved=saveOptions();fields[saveField].enabled=!saved;if(fields[saveField].control)EnableWindow(fields[saveField].control,!saved);
         if(!saved)return false;
+        fields[hostRollbackField].enabled=hostTheme.selected.current.has_value() || hostTheme.selected.previous.has_value();
+        if(fields[hostRollbackField].control)EnableWindow(fields[hostRollbackField].control,fields[hostRollbackField].enabled);
         const bool crashConsent=readField(crashConsentField)==L"1";
         if(crashConsent!=originalCrashConsent)
         {
@@ -1020,7 +1080,7 @@ struct Host
         };
         preferencesOpen=true;refreshAssistantEditor=refreshAssistant;
         edit(window,L"Folderstorm Host Preferences",fields,{},page,true,validate,navigation,apply,&preferencesPage,profileDialogOwner());
-        refreshAssistantEditor={};preferencesOpen=false;visualPreview.reset();applyTheme();layout();if(preview && preview==playbackSerial)playAlert({});
+        refreshAssistantEditor={};preferencesOpen=false;visualPreview.reset();visualHostTheme.reset();applyTheme();layout();if(preview && preview==playbackSerial)playAlert({});
         if(pendingCommand)
         {
             if(slots[pendingTarget].get()!=pendingSlot || (pendingSlot && !ChatKey{pendingIdentity.worker,pendingIdentity.generation,pendingIdentity.account,pendingIdentity.grid,{}}.owns(pendingSlot->snapshot)))
@@ -1649,9 +1709,17 @@ struct Host
         presentation.pins=pins.saved();
         if(attentionWindow)experience.attentionRect=liveRect(attentionWindow,attentionDpi);
     }
-    HostPreferences preferences() const {return {options(),presentation,experience,chatPreferences};}
-    void applyPreferences(const HostPreferences& value)
+    HostPreferences preferences() const {return {options(),presentation,experience,chatPreferences,hostTheme.selected};}
+    void applyPreferences(const HostPreferences& value,const fs_host_theme::State* preparedHost=nullptr)
     {
+        fs_theme::require(!preparedHost || preparedHost->selected.encode()==value.hostTheme.encode(),"host_selection","Prepared host choice differs from accepted preferences");
+        if(preparedHost)hostTheme=*preparedHost;
+        else if(value.hostTheme.encode()!=hostTheme.selected.encode())
+        {
+            try{hostTheme=fs_host_theme::restore(value.hostTheme,fs_host_theme::libraryRoot(),viewer.parent_path());}
+            catch(const std::exception& error){hostTheme={value.hostTheme,{},error.what()};}
+            if(!hostTheme.diagnostic.empty())lastNotice=L"Saved host palette unavailable. The built-in theme is active; its selection can be restored in Appearance.";
+        }
         const auto& o=value.options;standby=o.standby;voice=o.voice;muteBackground=o.muteBackground;
         embedding=o.hosted;showChat=o.chat;chrome=o.chrome;chatDetached=o.chatDetached;controlsDetached=o.controlsDetached;
         monitorSize=o.previewSize;monitorRate=o.previewRate;cinematic=o.cinematic;
@@ -4895,6 +4963,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
     if (dpiContext) dpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))); // PER_MONITOR_AWARE_V2
     else SetProcessDPIAware();
     INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES}; InitCommonControlsEx(&common);
+    if(const auto result=fs_host_theme::dispatchPreview(instance,show))return *result;
     if(!fs_update::enter()){MessageBoxA(nullptr,fs_update::lastError().c_str(),"Folderstorm update",MB_OK|MB_ICONINFORMATION);return 1;}
     Host state;
     fs_crash::initialize("host");

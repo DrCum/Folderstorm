@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Folderstorm host palette v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "colors"],
+  "properties": {
+    "format_version": { "const": 1 },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["background", "panel", "input", "text", "muted", "accent", "border"],
+      "properties": {
+        "background": { "$ref": "#/$defs/rgb" },
+        "panel": { "$ref": "#/$defs/rgb" },
+        "input": { "$ref": "#/$defs/rgb" },
+        "text": { "$ref": "#/$defs/rgb" },
+        "muted": { "$ref": "#/$defs/rgb" },
+        "accent": { "$ref": "#/$defs/rgb" },
+        "border": { "$ref": "#/$defs/rgb" }
+      }
+    }
+  },
+  "$defs": { "rgb": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" } }
+}

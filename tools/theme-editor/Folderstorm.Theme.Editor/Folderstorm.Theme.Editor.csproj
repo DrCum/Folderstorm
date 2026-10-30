@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier><SelfContained>true</SelfContained><PublishTrimmed>false</PublishTrimmed>
+    <AssemblyName>Folderstorm.Theme.Editor</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Folderstorm.Theme.Core/Folderstorm.Theme.Core.csproj" /></ItemGroup>
+  <!-- Velopack strips this optional runtime diagnostic tool. Exclude it before sealing. -->
+  <Target Name="ExcludeCreateDumpFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'createdump.exe'" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1146,6 +1146,13 @@ void LLDir::setSkinFolder(const std::string &skin_folder, const std::string& the
     addSearchSkinDir(mUserDefaultSkinDir);
     // then user-defined skins.
     addSearchSkinDir(mUserSkinDir);
+    if (!mCustomThemeDir.empty()) addSearchSkinDir(mCustomThemeDir);
+}
+
+void LLDir::setCustomThemeDir(const std::string& directory)
+{
+    mCustomThemeDir = directory;
+    mSkinDirCache.clear();
 }
 
 void LLDir::addSearchSkinDir(const std::string& skindir)
