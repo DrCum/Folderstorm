@@ -1,0 +1,21 @@
+{
+  "parent_commit": "c7ce8ec6d7769c13a1decba496260feb5dd8bdd7",
+  "legacy_parent_commit": "b8c82e686def15937fdfad1620845d557e995a89",
+  "status": "Baseline only, production pool unchanged; failure retained for the next fix",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "f83740f180ed59028949e00a545dc167edddd148a04d77a502d268e39a632c4f",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/tests/blender_pool_failure_test.cpp": "d078f8444f7abd8c99a4e907fbb0a777e3e401bd6560bfbcc7fd7aa0fa66ca6b",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "033547f7d83637ece98958ba571b023ced5a53bdd8bc0fa49fa3a238f5316501"
+  },
+  "executables_sha256": {
+    "blender-pool-cold-failure-before14j.exe": "7292db574936d8b2b73b283f495601bc93b3129c188e881e6b7fb3e818d6dada",
+    "blender-pool-legacy112-cold-failure14j.exe": "d1e80fdeeff9b568783ed7c060d6646ac960f666b1f6a027b0a9b146aa74fab6"
+  },
+  "definitions": [
+    "FS_CONTIGUOUS_ANIMATION_KEYS=0",
+    "FS_SAMPLING_ALLOCATION_PROBE=1",
+    "FS_EXPECT_SAFE_BLENDER_POOL=0"
+  ],
+  "scope": "Four injected cold allocation failures in each real implementation. Pool-node failure after two successful constructor allocations leaves 112 ordinary-new bytes retained after owning-container teardown, with no published pool entry. Custom aligned object allocation is excluded; restored joint-state references alone do not prove pool ownership. Both current and legacy reproduce the issue; no timing/FPS claim."
+}

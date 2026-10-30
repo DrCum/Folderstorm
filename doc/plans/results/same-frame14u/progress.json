@@ -1,0 +1,12 @@
+{
+  "status": "complete_test_only_experiment",
+  "implementation_head": "6c5012aadc2fac5a5158e0809f705938deda9399",
+  "current_proof": "provenance.json",
+  "results": "summary.json",
+  "native_checks": 123711,
+  "controlled_transition_cases": 52,
+  "accepted_timing_cases": 16,
+  "accepted_allocation_cases": 8,
+  "historical_partial_proof": "progress-before-transition-controls.json",
+  "viewer_integration": false
+}

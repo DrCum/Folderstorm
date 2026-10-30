@@ -30,6 +30,10 @@ namespace LL
         using super = LLInstanceTracker<ThreadPoolBase, std::string>;
 
     public:
+        // <FS> Startup-only experiment; all existing callers retain platform policy.
+        enum class WaitPolicy { PlatformDefault, EventWaitSingleWorker };
+        // </FS>
+
         /**
          * Pass ThreadPoolBase a string name. This can be used to look up the
          * relevant WorkQueue.
@@ -39,8 +43,15 @@ namespace LL
          * setting with a key matching this ThreadPool name, that setting
          * overrides this parameter.
          */
+        // <FS> Resolve the optional policy against the constructor's actual width.
+        // ThreadPoolBase(const std::string& name, size_t threads,
+        //                WorkQueueBase* queue, bool auto_shutdown = true);
         ThreadPoolBase(const std::string& name, size_t threads,
-                       WorkQueueBase* queue, bool auto_shutdown = true);
+                       WorkQueueBase* queue, bool auto_shutdown = true,
+                       WaitPolicy wait_policy = WaitPolicy::PlatformDefault);
+        // Effective immutable policy, which may reject an unsupported request.
+        WaitPolicy getWaitPolicy() const noexcept { return mWaitPolicy; }
+        // </FS>
         virtual ~ThreadPoolBase();
 
         /**
@@ -95,6 +106,9 @@ namespace LL
 
         std::string mName;
         size_t mThreadCount;
+        // <FS> Selected once before any worker starts.
+        const WaitPolicy mWaitPolicy;
+        // </FS>
     };
 
     /**
@@ -118,11 +132,19 @@ namespace LL
          * Constraining the queue can cause a submitter to block. Do not
          * constrain any ThreadPool accepting work from the main thread.
          */
+        // <FS> Explicit policy opt-in, preserving all previous argument defaults.
+        // ThreadPoolUsing(const std::string& name,
+        //                 size_t threads=1,
+        //                 size_t capacity=1024*1024,
+        //                 bool auto_shutdown = true):
+        //     ThreadPoolBase(name, threads, new queue_t(name, capacity, false), auto_shutdown)
         ThreadPoolUsing(const std::string& name,
                         size_t threads=1,
                         size_t capacity=1024*1024,
-                        bool auto_shutdown = true):
-            ThreadPoolBase(name, threads, new queue_t(name, capacity, false), auto_shutdown)
+                        bool auto_shutdown = true,
+                        WaitPolicy wait_policy = WaitPolicy::PlatformDefault):
+            ThreadPoolBase(name, threads, new queue_t(name, capacity, false), auto_shutdown, wait_policy)
+        // </FS>
         {}
         ~ThreadPoolUsing() override {}
 

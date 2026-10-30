@@ -1,0 +1,43 @@
+param(
+ [Parameter(Mandatory=$true)][ValidateSet('direct','event-first-retained','event-later-retained','default-later-retained')][string]$Mode,
+ [Parameter(Mandatory=$true)][ValidateSet(1,32)][int]$Avatars,
+ [Parameter(Mandatory=$true)][ValidateSet(64,1024)][int]$Frames,
+ [Parameter(Mandatory=$true)][ValidateSet('timing','alloc')][string]$Kind,
+ [Parameter(Mandatory=$true)][ValidateRange(1,2)][int]$Round,
+ [ValidateRange(1,3)][int]$Attempt=1
+)
+$ErrorActionPreference='Stop'
+$workspaceRoot=Split-Path -Parent $PSScriptRoot
+$label="readiness14u-$Kind-r$Round-$Mode-a$Avatars-f$Frames"
+if($Attempt -gt 1){$label+="-attempt$Attempt"}
+$recordPath=Join-Path $PSScriptRoot "$label.json"
+$outputPath=Join-Path $PSScriptRoot "$label.csv"
+if((Test-Path -LiteralPath $recordPath) -or (Test-Path -LiteralPath $outputPath)){throw "Retain existing observation: $label"}
+function Get-IdleObservation {
+ $state=Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-state.json') -Raw | ConvertFrom-Json
+ $monitor=Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-build-monitor.json') -Raw | ConvertFrom-Json
+ $worker=Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-worker-checkpoint.json') -Raw | ConvertFrom-Json
+ $processes=@(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+  $_.ProcessName -match '^(cl|link|MSBuild|cmake|ninja|vpk)$|^(event-sampling14|worker-policy14q|threadpool-scheduler|worker-wait)' } |
+  Select-Object Id,ProcessName,StartTime,CPU)
+ [ordered]@{utc=[DateTime]::UtcNow.ToString('o');activeBuild=$state.activeBuild;phase=$monitor.phase;
+  workerStatus=$worker.status;workerCurrent=$worker.current;buildOrProbeProcesses=$processes;
+  idle=(!$state.activeBuild -and !$worker.current -and $worker.status -eq 'idle' -and
+   $monitor.phase -eq 'IDLE_MONITORING' -and $processes.Count -eq 0)}
+}
+$exe=Join-Path $PSScriptRoot $(if($Kind -eq 'alloc'){'event-sampling14u-alloc-controls-final.exe'}else{'event-sampling14u-controls-final.exe'})
+$record=[ordered]@{case=$label;kind=$Kind;round=$Round;attempt=$Attempt;mode=$Mode;avatars=$Avatars;frames=$Frames;gapUs=0;load='normal';
+ before=(Get-IdleObservation);after=$null;status='before_check';exit=$null;exeSha256=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash;
+ scope='Private fixed-cohort later-callback consumption; actual controller work, no gates/gap/wait in timed requests; no viewer deadline/FPS acceptance';
+ limits='Before/after build/probe idle only; desktop/power/timer state uncontrolled; requested1ms timer'}
+$record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $recordPath
+if(!$record.before.idle){throw "Build/probe ownership prevents measurement: $label"}
+$record.status='running';$record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $recordPath
+$argument=if($Kind -eq 'alloc'){'--allocations'}else{'--benchmark'}
+& $exe $argument $Mode $Avatars 0 $Frames normal > $outputPath 2>&1
+$record.exit=$LASTEXITCODE;$record.after=Get-IdleObservation
+$record.status=if($record.exit -ne 0){'probe_failed'}elseif(!$record.after.idle){'overlap_exclude'}else{'completed'}
+$record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $recordPath
+if($record.exit -ne 0){throw "Probe failed: $label"}
+if(!$record.after.idle){throw "Ownership changed; retain/exclude: $label"}
+[pscustomobject]@{case=$label;status=$record.status}

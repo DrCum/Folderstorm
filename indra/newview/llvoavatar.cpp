@@ -31,6 +31,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <sstream>
+#include <optional>
+#include "fssamplingshadow.h"
 
 #include "llaudioengine.h"
 #include "noise.h"
@@ -122,6 +124,7 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include "fsavatarpalette.h"
 #include "fsavatarrenderpersistence.h"
 #include "fscommon.h"
 #include "fsdata.h"
@@ -1297,8 +1300,34 @@ void LLVOAvatar::initClass()
 }
 
 
+namespace
+{
+void reportAvatarSamplingShadow(bool report_empty = false)
+{
+    const auto totals = FSSampling::ShadowScope::totals();
+    if (!FSSampling::ShadowScope::resetTotals() || (!totals.scopes && !report_empty)) return;
+    std::ostringstream report;
+    report << "scopes=" << totals.scopes << " batches=" << totals.batches << " predicted=" << totals.predicted
+        << " matched=" << totals.matched << " mismatched=" << totals.mismatched
+        << " unused=" << totals.unused << " unpredicted=" << totals.unpredicted
+        << " masked=" << totals.masked << " masked_observed=" << totals.maskedObserved
+        << " masked_unobserved=" << totals.maskedUnobserved
+        << " excluded=" << totals.excluded << " rejected=" << totals.rejected
+        << " nested=" << totals.nested << " destroyed=" << totals.destroyed
+        << " prepare_ns=" << totals.prepareNs << " validation_ns=" << totals.validationNs
+        << " observation_ns=" << totals.observationNs << " first_matched=" << totals.firstMatched
+        << " cleanup_ns=" << totals.cleanupNs << " buffer_bytes_peak=" << totals.bufferBytesPeak
+        << " retained_keys_peak=" << totals.retainedKeysPeak << " matched_gap_ns_pow2_buckets=";
+    for (auto count : totals.matchedGapNs) report << count << ',';
+    report << " first_matched_gap_ns_pow2_buckets=";
+    for (auto count : totals.firstMatchedGapNs) report << count << ',';
+    LL_INFOS("AvatarSamplingShadow") << report.str() << LL_ENDL;
+}
+}
+
 void LLVOAvatar::cleanupClass()
 {
+    reportAvatarSamplingShadow();
 }
 
 LLPartSysData LLVOAvatar::sCloud;
@@ -1666,16 +1695,21 @@ void LLVOAvatar::calculateSpatialExtents(LLVector4a& newMin, LLVector4a& newMax)
     if (box_detail>=3)
     {
         updateRiggingInfo();
-        for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS; joint_num++)
+        // <FS:Perf> Retrieve only joints that can contribute to rigged bounds.
+        // for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS; joint_num++)
+        // Originally getJoint() ran before the table/rigged checks below.
+        for (S32 joint_num = 0; joint_num < LL_CHARACTER_MAX_ANIMATED_JOINTS &&
+                               joint_num < mJointRiggingInfoTab.size(); joint_num++)
         {
-            LLJoint *joint = getJoint(joint_num);
-            LLJointRiggingInfo *rig_info = NULL;
-            if (joint_num < mJointRiggingInfoTab.size())
+            LLJointRiggingInfo *rig_info = &mJointRiggingInfoTab[joint_num];
+            if (!rig_info->isRiggedTo())
             {
-                rig_info = &mJointRiggingInfoTab[joint_num];
+                continue;
             }
 
-            if (joint && rig_info && rig_info->isRiggedTo())
+            LLJoint *joint = getJoint(joint_num);
+            if (joint)
+            // </FS:Perf>
             {
                 LLViewerJointAttachment *as_joint_attach = dynamic_cast<LLViewerJointAttachment*>(joint);
                 if (as_joint_attach && as_joint_attach->getIsHUDAttachment())
@@ -1683,9 +1717,12 @@ void LLVOAvatar::calculateSpatialExtents(LLVector4a& newMin, LLVector4a& newMax)
                     // Ignore bounding box of HUD joints
                     continue;
                 }
-                LLMatrix4a mat;
                 LLVector4a new_extents[2];
-                mat.loadu(joint->getWorldMatrix());
+                // <FS:Perf> Reuse the joint's existing aligned matrix cache.
+                // LLMatrix4a mat;
+                // mat.loadu(joint->getWorldMatrix());
+                const LLMatrix4a& mat = joint->getWorldMatrix4a();
+                // </FS:Perf>
                 matMulBoundBox(mat, rig_info->getRiggedExtents(), new_extents);
                 update_min_max(newMin, newMax, new_extents[0]);
                 update_min_max(newMin, newMax, new_extents[1]);
@@ -5466,6 +5503,7 @@ void LLVOAvatar::updateTimeStep()
 
 void LLVOAvatar::updateRootPositionAndRotation(LLAgent& agent, F32 speed, bool was_sit_ground_constrained)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
     if (!(isSitting() && getParent()))
     {
         // This case includes all configurations except sitting on an
@@ -5665,12 +5703,21 @@ bool LLVOAvatar::computeNeedsUpdate()
 //------------------------------------------------------------------------
 bool LLVOAvatar::updateCharacter(LLAgent &agent)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
+    static LLCachedControl<bool> sampling_shadow(gSavedSettings, "FSAvatarSamplingShadow", false);
+    static bool shadow_was_enabled = false;
+    if (!sampling_shadow && shadow_was_enabled) reportAvatarSamplingShadow(true);
+    shadow_was_enabled = sampling_shadow;
     updateDebugText();
 
     if (!mIsBuilt)
     {
         return false;
     }
+
+    std::optional<FSSampling::ShadowScope> shadow;
+    if (sampling_shadow)
+        shadow.emplace(mMotionController, true, mSpecialRenderMode == 1, !hasMotionPauseRequests());
 
     bool visible = isVisible();
 
@@ -5789,8 +5836,13 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
     // Generate footstep sounds when feet hit the ground
     updateFootstepSounds();
 
-    // Update child joints as needed.
-    mRoot->updateWorldMatrixChildren();
+    // <FS:Perf> Profile the whole traversal rather than every recursive joint.
+    {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar child world matrices");
+        // Update child joints as needed.
+        mRoot->updateWorldMatrixChildren();
+    }
+    // </FS:Perf>
 
     if (visible)
     {
@@ -5806,6 +5858,7 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
 //-----------------------------------------------------------------------------
 void LLVOAvatar::updateHeadOffset()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <FS:Perf> Crowd CPU attribution.
     // since we only care about Z, just grab one of the eyes
     LLVector3 midEyePt = mEyeLeftp->getWorldPosition();
     midEyePt -= mDrawable.notNull() ? mDrawable->getWorldPosition() : mRoot->getWorldPosition();
@@ -11265,35 +11318,36 @@ const LLVOAvatar::MatrixPaletteCache& LLVOAvatar::updateSkinInfoMatrixPalette(co
         //build matrix palette
         U32 count = LLSkinningUtil::getMeshJointCount(skin);
         entry.mMatrixPalette.resize(count);
-        LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
-
-        const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
-
-        entry.mGLMp.resize(count * 12);
-
-        F32* mp = &(entry.mGLMp[0]);
-
-        for (U32 i = 0; i < count; ++i)
+        // <FS:Perf> Separate matrix calculation from packing on cache misses.
         {
-            F32* m = (F32*)mat[i].mMatrix[0].getF32ptr();
-
-            U32 idx = i * 12;
-
-            mp[idx + 0] = m[0];
-            mp[idx + 1] = m[1];
-            mp[idx + 2] = m[2];
-            mp[idx + 3] = m[12];
-
-            mp[idx + 4] = m[4];
-            mp[idx + 5] = m[5];
-            mp[idx + 6] = m[6];
-            mp[idx + 7] = m[13];
-
-            mp[idx + 8] = m[8];
-            mp[idx + 9] = m[9];
-            mp[idx + 10] = m[10];
-            mp[idx + 11] = m[14];
+            LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar skinning matrices");
+            // <FS:Perf> LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
+            LLSkinningUtil::initSkinningMatrixPalette(entry.mMatrixPalette.data(), count, skin, this);
         }
+
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("Avatar palette packing");
+            // <FS:Perf> const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
+            const LLMatrix4a* mat = entry.mMatrixPalette.data();
+
+            entry.mGLMp.resize(count * 12);
+
+            // <FS:Perf> F32* mp = &(entry.mGLMp[0]);
+            F32* mp = entry.mGLMp.data();
+
+            for (U32 i = 0; i < count; ++i)
+            {
+                // <FS:Perf> Preserve the twelve scalar assignments for upstream comparison.
+                // F32* m = (F32*)mat[i].mMatrix[0].getF32ptr();
+                // U32 idx = i * 12;
+                // mp[idx + 0] = m[0]; mp[idx + 1] = m[1]; mp[idx + 2] = m[2]; mp[idx + 3] = m[12];
+                // mp[idx + 4] = m[4]; mp[idx + 5] = m[5]; mp[idx + 6] = m[6]; mp[idx + 7] = m[13];
+                // mp[idx + 8] = m[8]; mp[idx + 9] = m[9]; mp[idx + 10] = m[10]; mp[idx + 11] = m[14];
+                FSAvatarPalette::packMatrix(mat[i].getF32ptr(), mp + i * 12);
+                // </FS:Perf>
+            }
+        }
+        // </FS:Perf>
     }
 
     return entry;

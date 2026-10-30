@@ -28,6 +28,10 @@
 // Header Files
 //-----------------------------------------------------------------------------
 #include "linden_common.h"
+#include <utility> // </FS:Perf> Move canonical asset owners without another reference-count copy.
+#include <cstring> // </FS:Perf> Exact query-input comparison before sample application.
+#include <array>
+#include "llframetimer.h"
 
 #include "llmath.h"
 #include "llanimationstates.h"
@@ -49,6 +53,7 @@
 // Static Definitions
 //-----------------------------------------------------------------------------
 LLKeyframeDataCache::keyframe_data_map_t    LLKeyframeDataCache::sKeyframeDataMap;
+static std::atomic<U64> sSamplingInstanceIDs{1};
 
 //-----------------------------------------------------------------------------
 // Globals
@@ -151,8 +156,10 @@ LLKeyframeMotion::ScaleCurve::~ScaleCurve()
 //-----------------------------------------------------------------------------
 // getValue()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
+LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLVector3 value;
 
     if (mKeys.empty())
@@ -161,7 +168,16 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        return mKeys.begin()->second.mScale;
+    }
+#endif
+    // </FS:Perf>
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -176,16 +192,21 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        ScaleKey& scale_before = left->second;
-        ScaleKey& scale_after = right->second;
-        if (right == mKeys.end())
-        {
-            scale_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // ScaleKey& scale_before = left->second;
+        // ScaleKey& scale_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     scale_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const ScaleKey& scale_before = left->second;
+        const ScaleKey& scale_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, scale_before, scale_after);
@@ -196,7 +217,8 @@ LLVector3 LLKeyframeMotion::ScaleCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, ScaleKey& before, ScaleKey& after)
+// <FS:Perf> LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, ScaleKey& before, ScaleKey& after)
+LLVector3 LLKeyframeMotion::ScaleCurve::interp(F32 u, const ScaleKey& before, const ScaleKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -231,8 +253,10 @@ LLKeyframeMotion::RotationCurve::~RotationCurve()
 //-----------------------------------------------------------------------------
 // RotationCurve::getValue()
 //-----------------------------------------------------------------------------
-LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
+LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLQuaternion value;
 
     if (mKeys.empty())
@@ -241,7 +265,16 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        return mKeys.begin()->second.mRotation;
+    }
+#endif
+    // </FS:Perf>
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -256,16 +289,21 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        RotationKey& rot_before = left->second;
-        RotationKey& rot_after = right->second;
-        if (right == mKeys.end())
-        {
-            rot_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // RotationKey& rot_before = left->second;
+        // RotationKey& rot_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     rot_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const RotationKey& rot_before = left->second;
+        const RotationKey& rot_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, rot_before, rot_after);
@@ -276,7 +314,8 @@ LLQuaternion LLKeyframeMotion::RotationCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, RotationKey& before, RotationKey& after)
+// <FS:Perf> LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, RotationKey& before, RotationKey& after)
+LLQuaternion LLKeyframeMotion::RotationCurve::interp(F32 u, const RotationKey& before, const RotationKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -312,8 +351,10 @@ LLKeyframeMotion::PositionCurve::~PositionCurve()
 //-----------------------------------------------------------------------------
 // PositionCurve::getValue()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
+// <FS:Perf> LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
+LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration) const
 {
+    (void)duration; // </FS:Perf> Retained argument; sampling clamps to the final key.
     LLVector3 value;
 
     if (mKeys.empty())
@@ -322,7 +363,18 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
         return value;
     }
 
-    key_map_t::iterator right = mKeys.lower_bound(time);
+    // <FS:Perf> Direct one-key sampling only in the experimental build.
+#if FS_CONTIGUOUS_ANIMATION_KEYS
+    if (mKeys.size() == 1)
+    {
+        value = mKeys.begin()->second.mPosition;
+        llassert(value.isFinite());
+        return value;
+    }
+#endif
+    // </FS:Perf>
+    // <FS:Perf> key_map_t::iterator right = mKeys.lower_bound(time);
+    key_map_t::const_iterator right = mKeys.lower_bound(time); // </FS:Perf>
     if (right == mKeys.end())
     {
         // Past last key
@@ -337,16 +389,21 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
     else
     {
         // Between two keys
-        key_map_t::iterator left = right; --left;
+        // <FS:Perf> key_map_t::iterator left = right; --left;
+        key_map_t::const_iterator left = right; --left; // </FS:Perf>
         F32 index_before = left->first;
         F32 index_after = right->first;
-        PositionKey& pos_before = left->second;
-        PositionKey& pos_after = right->second;
-        if (right == mKeys.end())
-        {
-            pos_after = mLoopInKey;
-            index_after = duration;
-        }
+        // <FS:Perf> The outer end branch already handled end(), so these keys are read-only.
+        // PositionKey& pos_before = left->second;
+        // PositionKey& pos_after = right->second;
+        // if (right == mKeys.end())
+        // {
+        //     pos_after = mLoopInKey;
+        //     index_after = duration;
+        // }
+        const PositionKey& pos_before = left->second;
+        const PositionKey& pos_after = right->second;
+        // </FS:Perf>
 
         F32 u = (time - index_before) / (index_after - index_before);
         value = interp(u, pos_before, pos_after);
@@ -360,7 +417,8 @@ LLVector3 LLKeyframeMotion::PositionCurve::getValue(F32 time, F32 duration)
 //-----------------------------------------------------------------------------
 // interp()
 //-----------------------------------------------------------------------------
-LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, PositionKey& before, PositionKey& after)
+// <FS:Perf> LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, PositionKey& before, PositionKey& after)
+LLVector3 LLKeyframeMotion::PositionCurve::interp(F32 u, const PositionKey& before, const PositionKey& after) const // </FS:Perf>
 {
     switch (mInterpolationType)
     {
@@ -454,12 +512,238 @@ LLKeyframeMotion::~LLKeyframeMotion()
     mConstraints.clear();
 }
 
+// <FS:Perf> Keep live constraints from outliving their shared asset data during replacement.
+void LLKeyframeMotion::adoptJointMotionList(std::shared_ptr<JointMotionList> data)
+{
+    if (mJointMotionList != data.get())
+    {
+        invalidateOwnedSampling();
+        mSamplingAuthority.bindings.clear();
+        mSamplingAuthority.character = nullptr;
+        for_each(mConstraints.begin(), mConstraints.end(), DeletePointer());
+        mConstraints.clear();
+    }
+    mJointMotionOwner = std::move(data);
+    mJointMotionList = mJointMotionOwner.get();
+}
+
+std::shared_ptr<const LLKeyframeMotion::JointMotionList> LLKeyframeMotion::getKeyframeSamplingLease() const
+{
+    // Embedded/borrowed subclass data is not eligible for asynchronous sampling.
+    return mJointMotionOwner.get() == mJointMotionList ? mJointMotionOwner : nullptr;
+}
+// </FS:Perf>
+
+// <FS:Perf> Pure sampling reads only owned inputs and immutable curve fields.
+LLKeyframeMotion::SamplingRequest LLKeyframeMotion::SamplingResult::takeRequest()
+{
+    mReady = false;
+    auto request = std::move(mRequest);
+    mRequest = SamplingRequest{};
+    return request;
+}
+
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
+bool LLKeyframeMotion::sampleKeyframes(SamplingRequest request, SamplingResult& result)
+{
+    FSSampling::ScopedNumericContext numeric_scope(request.numericContext);
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    result.mReady = false;
+    result.mRequest = std::move(request);
+    const auto& input = result.mRequest;
+    if (!numeric_scope.isActive() || !input.asset || !llfinite(input.time) || !llfinite(input.duration) ||
+        input.asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        input.usage.size() != input.asset->mJointMotionArray.size())
+    {
+        result.mJoints.clear();
+        return false;
+    }
+
+    result.mJoints.resize(input.usage.size());
+    for (U32 i = 0; i < input.usage.size(); ++i)
+    {
+        const JointMotion* joint = input.asset->getJointMotion(i);
+        if (!joint)
+        {
+            result.mJoints.clear();
+            return false;
+        }
+        auto& output = result.mJoints[i];
+        const U32 usage = input.usage[i];
+        output.usage = 0;
+        if ((usage & LLJointState::SCALE) && joint->mScaleCurve.mNumKeys)
+        {
+            output.scale = joint->mScaleCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::SCALE;
+        }
+        if ((usage & LLJointState::ROT) && joint->mRotationCurve.mNumKeys)
+        {
+            output.rotation = joint->mRotationCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::ROT;
+        }
+        if ((usage & LLJointState::POS) && joint->mPositionCurve.mNumKeys)
+        {
+            output.position = joint->mPositionCurve.getValue(input.time, input.duration);
+            output.usage |= LLJointState::POS;
+        }
+    }
+    result.mReady = true;
+    return true;
+}
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
+
+bool LLKeyframeMotion::samplingResultMatches(const SamplingResult& result, const SamplingRequest& current)
+{
+    return samplingInputsMatch(result, current.asset, current.identity, current.numericContext,
+                               current.time, current.duration, current.usage.data(), current.usage.size());
+}
+
+bool LLKeyframeMotion::samplingInputsMatch(const SamplingResult& result, const std::shared_ptr<const JointMotionList>& asset,
+    const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+    const U32* usage, size_t count)
+{
+    return result.isReady() && result.mJoints.size() == count &&
+        samplingQueryMatches(result.mRequest, asset, identity, numeric_context, time, duration, usage, count);
+}
+
+bool LLKeyframeMotion::samplingQueryMatches(const SamplingRequest& input, const std::shared_ptr<const JointMotionList>& asset,
+    const SamplingIdentity& identity, FSSampling::NumericContext numeric_context, F32 time, F32 duration,
+    const U32* usage, size_t count)
+{
+    if (count && !usage) return false;
+    if (!(asset && input.asset.get() == asset.get() &&
+        !input.asset.owner_before(asset) && !asset.owner_before(input.asset) &&
+        input.identity == identity && numeric_context.isSupported() && input.numericContext == numeric_context &&
+        std::memcmp(&input.time, &time, sizeof(F32)) == 0 &&
+        std::memcmp(&input.duration, &duration, sizeof(F32)) == 0 &&
+        input.usage.size() == count && count == asset->mJointMotionArray.size()))
+        return false;
+    for (size_t i = 0; i < count; ++i) if (input.usage[i] != usage[i]) return false;
+    return true;
+}
+// </FS:Perf>
+
 //-----------------------------------------------------------------------------
 // create()
 //-----------------------------------------------------------------------------
 LLMotion *LLKeyframeMotion::create(const LLUUID &id)
 {
-    return new LLKeyframeMotion(id);
+    auto* motion = new LLKeyframeMotion(id);
+    motion->mSamplingAuthority.instance = FSSampling::takeIdentity(sSamplingInstanceIDs);
+    return motion;
+}
+
+LLKeyframeMotion::SamplingAuthority& LLKeyframeMotion::SamplingAuthority::operator=(const SamplingAuthority& other)
+{
+    if (this != &other)
+    {
+        instance = 0; lifecycle = 1; bindings.clear(); character = nullptr; skeleton = 0;
+    }
+    return *this;
+}
+
+bool LLKeyframeMotion::permitsOwnedSampling() const
+{
+    return mSamplingAuthority.instance != 0 && mSamplingAuthority.lifecycle != 0 &&
+        mCharacter && mCharacter->allowsOwnedKeyframeSampling();
+}
+
+void LLKeyframeMotion::invalidateOwnedSampling()
+{
+    if (mSamplingAuthority.instance) FSSampling::advanceGeneration(mSamplingAuthority.lifecycle);
+}
+
+bool LLKeyframeMotion::captureOwnedSamplingIdentity(SamplingIdentity& identity)
+{
+    if (!permitsOwnedSampling() || !isActive() || !mCharacter || mAssetStatus != ASSET_LOADED ||
+        !mJointMotionOwner || mJointMotionOwner.get() != mJointMotionList ||
+        !mJointMotionList->getSamplingRevision() ||
+        mJointMotionList->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        mJointMotionList->mJointMotionArray.size() > mJointStates.size()) return false;
+
+    auto& authority = mSamplingAuthority;
+    const size_t count = mJointMotionList->mJointMotionArray.size();
+    const U32 skeleton = mCharacter->getSkeletonSerialNum();
+    bool changed = authority.bindings.size() != count || authority.character != mCharacter || authority.skeleton != skeleton;
+    for (size_t i = 0; !changed && i < count; ++i)
+        changed = authority.bindings[i].state != mJointStates[i] ||
+            authority.bindings[i].joint != (mJointStates[i] ? mJointStates[i]->getJoint() : nullptr);
+    if (changed)
+    {
+        invalidateOwnedSampling();
+        if (!permitsOwnedSampling()) return false;
+        authority.bindings.resize(count);
+        for (size_t i = 0; i < count; ++i)
+        {
+            authority.bindings[i].state = mJointStates[i];
+            authority.bindings[i].joint = mJointStates[i] ? mJointStates[i]->getJoint() : nullptr;
+        }
+        authority.character = mCharacter; authority.skeleton = skeleton;
+    }
+    const F64 clock = LLFrameTimer::getElapsedSeconds();
+    if (!llfinite(clock)) return false;
+    identity = {authority.instance, authority.lifecycle, LLFrameTimer::getFrameCount(), skeleton,
+                mJointMotionList->getSamplingRevision()};
+    static_assert(sizeof(clock) == sizeof(identity.frameTimeBits));
+    std::memcpy(&identity.frameTimeBits, &clock, sizeof(clock));
+    std::memcpy(&identity.stopTimeBits, &mStopTimestamp, sizeof(mStopTimestamp));
+    identity.appearance = mCharacter->getAppearanceSerialNum();
+    identity.stopped = mStopped;
+    return true;
+}
+
+bool LLKeyframeMotion::prepareOwnedSampling(F32 time, SamplingRequest& request)
+{
+    SamplingIdentity identity;
+    if (!captureOwnedSamplingIdentity(identity)) { request = SamplingRequest{}; return false; }
+    return prepareKeyframeSampling(time, identity, request);
+}
+
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma float_control(precise, on, push)
+#pragma fenv_access(on)
+#endif
+bool LLKeyframeMotion::matchesOwnedSamplingQuery(F32 time, const SamplingRequest& query)
+{
+    FSSampling::ScopedNumericContext preserve(FSSampling::NumericContext::capture());
+    if (!preserve.isActive()) return false;
+    // A changed publication/shape is stale without growing diagnostic binding storage.
+    if (!mJointMotionList || query.asset.get() != mJointMotionList ||
+        query.identity.instance != mSamplingAuthority.instance ||
+        mSamplingAuthority.bindings.size() != mJointMotionList->mJointMotionArray.size()) return false;
+    SamplingIdentity identity;
+    return captureOwnedSamplingIdentity(identity) &&
+        matchesCurrentQuery(query, resolveKeyframeUpdateTime(time).sampleTime, identity);
+}
+#if defined(_MSC_VER) && defined(_M_X64)
+#pragma fenv_access(off)
+#pragma float_control(pop)
+#endif
+
+bool LLKeyframeMotion::releaseOwnedSamplingBindings(U64 instance)
+{
+    if (!instance || instance != mSamplingAuthority.instance) return false;
+    invalidateOwnedSampling();
+    std::vector<SamplingAuthority::Binding>().swap(mSamplingAuthority.bindings);
+    mSamplingAuthority.character = nullptr;
+    return true;
+}
+
+bool LLKeyframeMotion::updateWithOwnedSampling(F32 time, U8* joint_mask, const SamplingResult& result, bool& sample_applied)
+{
+    SamplingIdentity identity;
+    if (!captureOwnedSamplingIdentity(identity))
+    {
+        sample_applied = false;
+        return onUpdate(time, joint_mask); // Keep virtual subclass behavior on every ineligible path.
+    }
+    return updateWithSample(time, joint_mask, result, identity, sample_applied);
 }
 
 //-----------------------------------------------------------------------------
@@ -529,12 +813,14 @@ LLMotion::LLMotionInitStatus LLKeyframeMotion::onInitialize(LLCharacter *charact
         break;
     }
 
-    LLKeyframeMotion::JointMotionList* joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID());
+    // <FS:Perf> LLKeyframeMotion::JointMotionList* joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID());
+    auto joint_motion_list = LLKeyframeDataCache::getKeyframeData(getID()); // </FS:Perf>
 
     if(joint_motion_list)
     {
         // motion already existed in cache, so grab it
-        mJointMotionList = joint_motion_list;
+        // <FS:Perf> mJointMotionList = joint_motion_list;
+        adoptJointMotionList(std::move(joint_motion_list)); // </FS:Perf>
 
         mJointStates.reserve(mJointMotionList->getNumJointMotions());
 
@@ -665,6 +951,7 @@ bool LLKeyframeMotion::setupPose()
 //-----------------------------------------------------------------------------
 bool LLKeyframeMotion::onActivate()
 {
+    invalidateOwnedSampling();
     // If the keyframe anim has an associated emote, trigger it.
     if (mJointMotionList->mEmoteID.notNull())
     {
@@ -691,57 +978,165 @@ bool LLKeyframeMotion::hasEmbeddedEmote() const
 bool LLKeyframeMotion::onUpdate(F32 time, U8* joint_mask)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    const auto resolved = resolveKeyframeUpdateTime(time);
+    mLastLoopedTime = resolved.sampleTime;
+    applyKeyframes(mLastLoopedTime);
+    return finishKeyframeUpdate(resolved.updateTime, joint_mask);
+}
+
+// <FS:Perf> Resolve on the owner thread without changing the live motion.
+LLKeyframeMotion::KeyframeUpdateTime LLKeyframeMotion::resolveKeyframeUpdateTime(F32 time) const
+{
     // llassert(time >= 0.f);       // This will fire
     time = llmax(0.f, time);
+    F32 looped_time;
 
     if (mJointMotionList->mLoop)
     {
         if (mJointMotionList->mDuration == 0.0f)
         {
             time = 0.f;
-            mLastLoopedTime = 0.0f;
+            looped_time = 0.0f;
         }
         else if (mStopped)
         {
-            mLastLoopedTime = llmin(mJointMotionList->mDuration, mLastLoopedTime + time - mLastUpdateTime);
+            looped_time = llmin(mJointMotionList->mDuration, mLastLoopedTime + time - mLastUpdateTime);
         }
         else if (time > mJointMotionList->mLoopOutPoint)
         {
             if ((mJointMotionList->mLoopOutPoint - mJointMotionList->mLoopInPoint) == 0.f)
             {
-                mLastLoopedTime = mJointMotionList->mLoopOutPoint;
+                looped_time = mJointMotionList->mLoopOutPoint;
             }
             else
             {
-                mLastLoopedTime = mJointMotionList->mLoopInPoint +
+                looped_time = mJointMotionList->mLoopInPoint +
                     fmod(time - mJointMotionList->mLoopOutPoint,
                     mJointMotionList->mLoopOutPoint - mJointMotionList->mLoopInPoint);
             }
         }
         else
         {
-            mLastLoopedTime = time;
+            looped_time = time;
         }
     }
     else
     {
-        mLastLoopedTime = time;
+        looped_time = time;
     }
+    return {time, looped_time};
+}
 
-    applyKeyframes(mLastLoopedTime);
+bool LLKeyframeMotion::buildKeyframeSamplingRequest(F32 sample_time, const SamplingIdentity& identity,
+                                                   SamplingRequest& request) const
+{
+    auto asset = getKeyframeSamplingLease();
+    const auto numeric_context = FSSampling::NumericContext::capture();
+    if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
+        !numeric_context.isSupported() ||
+        !llfinite(sample_time) || !llfinite(asset->mDuration) ||
+        asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        asset->mJointMotionArray.size() > mJointStates.size())
+    {
+        request = SamplingRequest{};
+        return false;
+    }
+    for (const auto* joint : asset->mJointMotionArray)
+    {
+        if (!joint)
+        {
+            request = SamplingRequest{};
+            return false;
+        }
+    }
+    request.asset = std::move(asset);
+    request.identity = identity;
+    request.numericContext = numeric_context;
+    request.time = sample_time;
+    request.duration = request.asset->mDuration;
+    request.usage.resize(request.asset->mJointMotionArray.size());
+    for (U32 i = 0; i < request.usage.size(); ++i)
+    {
+        request.usage[i] = mJointStates[i] ? mJointStates[i]->getUsage() : 0;
+    }
+    return true;
+}
 
+bool LLKeyframeMotion::prepareKeyframeSampling(F32 time, const SamplingIdentity& identity,
+                                              SamplingRequest& request) const
+{
+    if (!mJointMotionList)
+    {
+        request = SamplingRequest{};
+        return false;
+    }
+    return buildKeyframeSamplingRequest(resolveKeyframeUpdateTime(time).sampleTime, identity, request);
+}
+
+bool LLKeyframeMotion::matchesCurrentSampling(const SamplingResult& result, F32 sample_time, const SamplingIdentity& identity) const
+{
+    return result.isReady() && result.getJoints().size() == result.getRequest().usage.size() &&
+        matchesCurrentQuery(result.getRequest(), sample_time, identity);
+}
+
+bool LLKeyframeMotion::matchesCurrentQuery(const SamplingRequest& query, F32 sample_time, const SamplingIdentity& identity) const
+{
+    const auto asset = getKeyframeSamplingLease();
+    if (!mCharacter || mAssetStatus != ASSET_LOADED || !asset ||
+        !llfinite(sample_time) || !llfinite(asset->mDuration) ||
+        asset->mJointMotionArray.size() > LL_CHARACTER_MAX_ANIMATED_JOINTS ||
+        asset->mJointMotionArray.size() > mJointStates.size()) return false;
+    // Only the fully initialized prefix is inspected; the view never escapes this owner call.
+    std::array<U32, LL_CHARACTER_MAX_ANIMATED_JOINTS> usage;
+    for (size_t i = 0; i < asset->mJointMotionArray.size(); ++i)
+    {
+        if (!asset->mJointMotionArray[i]) return false;
+        usage[i] = mJointStates[i] ? mJointStates[i]->getUsage() : 0;
+    }
+    return samplingQueryMatches(query, asset, identity, FSSampling::NumericContext::capture(),
+                               sample_time, asset->mDuration, usage.data(), asset->mJointMotionArray.size());
+}
+
+bool LLKeyframeMotion::updateWithSample(F32 time, U8* joint_mask, const SamplingResult& result,
+                                       const SamplingIdentity& current_identity, bool& sample_applied)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    const auto resolved = resolveKeyframeUpdateTime(time);
+    sample_applied = matchesCurrentSampling(result, resolved.sampleTime, current_identity);
+    mLastLoopedTime = resolved.sampleTime;
+    if (sample_applied)
+    {
+        for (U32 i = 0; i < result.getJoints().size(); ++i)
+        {
+            if (!mJointStates[i]) continue;
+            const auto& row = result.getJoints()[i];
+            if (row.usage & LLJointState::SCALE) mJointStates[i]->setScale(row.scale);
+            if (row.usage & LLJointState::ROT) mJointStates[i]->setRotation(row.rotation);
+            if (row.usage & LLJointState::POS) mJointStates[i]->setPosition(row.position);
+        }
+        publishHandPose();
+    }
+    else
+    {
+        applyKeyframes(mLastLoopedTime);
+    }
+    return finishKeyframeUpdate(resolved.updateTime, joint_mask);
+}
+
+bool LLKeyframeMotion::finishKeyframeUpdate(F32 update_time, U8* joint_mask)
+{
     applyConstraints(mLastLoopedTime, joint_mask);
-
-    mLastUpdateTime = time;
-
+    mLastUpdateTime = update_time;
     return mLastLoopedTime <= mJointMotionList->mDuration;
 }
+// </FS:Perf>
 
 //-----------------------------------------------------------------------------
 // applyKeyframes()
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::applyKeyframes(F32 time)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // </FS:Perf> Attribute curve sampling and state application.
     llassert_always (mJointMotionList->getNumJointMotions() <= mJointStates.size());
     for (U32 i=0; i<mJointMotionList->getNumJointMotions(); i++)
     {
@@ -750,19 +1145,30 @@ void LLKeyframeMotion::applyKeyframes(F32 time)
                                                       mJointMotionList->mDuration );
     }
 
-    LLJoint::JointPriority* pose_priority = (LLJoint::JointPriority* )mCharacter->getAnimationData("Hand Pose Priority");
+    publishHandPose();
+}
+
+void LLKeyframeMotion::publishHandPose()
+{
+    const auto* pose_priority = mCharacter->getHandPoseAnimationPriority();
     if (pose_priority)
     {
         if (mJointMotionList->mMaxPriority >= *pose_priority)
         {
-            mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
-            mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+            // <FS:Perf> Copy the winning values into character-owned storage.
+            // mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
+            // mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+            mCharacter->setHandPoseAnimationData(mJointMotionList->mHandPose, mJointMotionList->mMaxPriority);
+            // </FS:Perf>
         }
     }
     else
     {
-        mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
-        mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+        // <FS:Perf> Copy the winning values into character-owned storage.
+        // mCharacter->setAnimationData("Hand Pose", &mJointMotionList->mHandPose);
+        // mCharacter->setAnimationData("Hand Pose Priority", &mJointMotionList->mMaxPriority);
+        mCharacter->setHandPoseAnimationData(mJointMotionList->mHandPose, mJointMotionList->mMaxPriority);
+        // </FS:Perf>
     }
 }
 
@@ -795,6 +1201,7 @@ void LLKeyframeMotion::applyConstraints(F32 time, U8* joint_mask)
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::onDeactivate()
 {
+    invalidateOwnedSampling();
     for (JointConstraint* constraintp : mConstraints)
     {
         deactivateConstraint(constraintp);
@@ -807,6 +1214,7 @@ void LLKeyframeMotion::onDeactivate()
 // time is in seconds since character creation
 void LLKeyframeMotion::setStopTime(F32 time)
 {
+    invalidateOwnedSampling();
     LLMotion::setStopTime(time);
 
     if (mJointMotionList->mLoop && mJointMotionList->mLoopOutPoint != mJointMotionList->mDuration)
@@ -1567,6 +1975,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
         // scan rotation curve keys
         //---------------------------------------------------------------------
         RotationCurve *rCurve = &joint_motion->mRotationCurve;
+        FSAnimationKeys::Builder<RotationCurve::key_map_t> rotation_keys(rCurve->mKeys); // </FS:Perf>
 
         for (S32 k = 0; k < joint_motion->mRotationCurve.mNumKeys; k++)
         {
@@ -1668,8 +2077,10 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
                 return false;
             }
 
-            rCurve->mKeys[time] = rot_key;
+            // <FS:Perf> rCurve->mKeys[time] = rot_key;
+            rotation_keys.set(time, rot_key); // </FS:Perf>
         }
+        rotation_keys.commit(); // </FS:Perf> Publish keys and release per-curve scratch.
 
         if (joint_motion->mRotationCurve.mNumKeys > joint_motion->mRotationCurve.mKeys.size())
         {
@@ -1699,6 +2110,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
         // scan position curve keys
         //---------------------------------------------------------------------
         PositionCurve *pCurve = &joint_motion->mPositionCurve;
+        FSAnimationKeys::Builder<PositionCurve::key_map_t> position_keys(pCurve->mKeys); // </FS:Perf>
         bool is_pelvis = joint_motion->mJointName == "mPelvis";
         for (S32 k = 0; k < joint_motion->mPositionCurve.mNumKeys; k++)
         {
@@ -1777,7 +2189,8 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
                 return false;
             }
 
-            pCurve->mKeys[pos_key.mTime] = pos_key;
+            // <FS:Perf> pCurve->mKeys[pos_key.mTime] = pos_key;
+            position_keys.set(pos_key.mTime, pos_key); // </FS:Perf>
 
             if (is_pelvis)
             {
@@ -1785,6 +2198,7 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
             }
         }
 
+        position_keys.commit(); // </FS:Perf> Publish keys and release per-curve scratch.
         if (joint_motion->mPositionCurve.mNumKeys > joint_motion->mPositionCurve.mKeys.size())
         {
             position_duplicates++;
@@ -2038,8 +2452,12 @@ bool LLKeyframeMotion::deserialize(LLDataPacker& dp, const LLUUID& asset_id, boo
     }
 
     // *FIX: support cleanup of old keyframe data
-    mJointMotionList = joint_motion_list.release(); // release from unique_ptr to member;
-    LLKeyframeDataCache::addKeyframeData(getID(),  mJointMotionList);
+    // <FS:Perf> Create one owner at successful publication, then share that owner with the cache.
+    // mJointMotionList = joint_motion_list.release(); // release from unique_ptr to member;
+    // LLKeyframeDataCache::addKeyframeData(getID(),  mJointMotionList);
+    adoptJointMotionList(std::shared_ptr<JointMotionList>(std::move(joint_motion_list)));
+    LLKeyframeDataCache::addKeyframeData(getID(), mJointMotionOwner);
+    // </FS:Perf>
     mAssetStatus = ASSET_LOADED;
 
     setupPose();
@@ -2084,7 +2502,7 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
 
     for (U32 i = 0; i < mJointMotionList->getNumJointMotions(); i++)
     {
-        JointMotion* joint_motionp = mJointMotionList->getJointMotion(i);
+        const JointMotion* joint_motionp = mJointMotionList->getJointMotion(i);
         success &= dp.packString(joint_motionp->mJointName, "joint_name");
         success &= dp.packS32(joint_motionp->mPriority, "joint_priority");
         success &= dp.packS32(static_cast<S32>(joint_motionp->mRotationCurve.mKeys.size()), "num_rot_keys");
@@ -2093,9 +2511,9 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
             << " name: " << joint_motionp->mJointName
             << " Rotation keys: " << joint_motionp->mRotationCurve.mKeys.size()
             << " Position keys: " << joint_motionp->mPositionCurve.mKeys.size() << LL_ENDL;
-        for (RotationCurve::key_map_t::value_type& rot_pair : joint_motionp->mRotationCurve.mKeys)
+        for (const RotationCurve::key_map_t::value_type& rot_pair : joint_motionp->mRotationCurve.mKeys)
         {
-            RotationKey& rot_key = rot_pair.second;
+            const RotationKey& rot_key = rot_pair.second;
             U16 time_short = F32_to_U16(rot_key.mTime, 0.f, mJointMotionList->mDuration);
             success &= dp.packU16(time_short, "time");
 
@@ -2114,38 +2532,41 @@ bool LLKeyframeMotion::serialize(LLDataPacker& dp) const
         }
 
         success &= dp.packS32(static_cast<S32>(joint_motionp->mPositionCurve.mKeys.size()), "num_pos_keys");
-        for (PositionCurve::key_map_t::value_type& pos_pair : joint_motionp->mPositionCurve.mKeys)
+        for (const PositionCurve::key_map_t::value_type& pos_pair : joint_motionp->mPositionCurve.mKeys)
         {
-            PositionKey& pos_key = pos_pair.second;
+            const PositionKey& pos_key = pos_pair.second;
             U16 time_short = F32_to_U16(pos_key.mTime, 0.f, mJointMotionList->mDuration);
             success &= dp.packU16(time_short, "time");
 
             U16 x, y, z;
-            pos_key.mPosition.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            x = F32_to_U16(pos_key.mPosition.mV[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            y = F32_to_U16(pos_key.mPosition.mV[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
-            z = F32_to_U16(pos_key.mPosition.mV[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            // <FS:Perf> Export and size queries must not quantize shared live keys.
+            LLVector3 position = pos_key.mPosition;
+            position.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            x = F32_to_U16(position.mV[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            y = F32_to_U16(position.mV[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            z = F32_to_U16(position.mV[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+            // </FS:Perf>
             success &= dp.packU16(x, "pos_x");
             success &= dp.packU16(y, "pos_y");
             success &= dp.packU16(z, "pos_z");
 
-            LL_DEBUGS("BVH") << "  pos: t " << pos_key.mTime << " pos " << pos_key.mPosition.mV[VX] <<","<< pos_key.mPosition.mV[VY] <<","<< pos_key.mPosition.mV[VZ] << LL_ENDL;
+            LL_DEBUGS("BVH") << "  pos: t " << pos_key.mTime << " pos " << position.mV[VX] <<","<< position.mV[VY] <<","<< position.mV[VZ] << LL_ENDL;
         }
     }
 
     success &= dp.packS32(static_cast<S32>(mJointMotionList->mConstraints.size()), "num_constraints");
     LL_DEBUGS("BVH") << "num_constraints " << mJointMotionList->mConstraints.size() << LL_ENDL;
-    for (JointConstraintSharedData* shared_constraintp : mJointMotionList->mConstraints)
+    for (const JointConstraintSharedData* shared_constraintp : mJointMotionList->mConstraints)
     {
         success &= dp.packU8(shared_constraintp->mChainLength, "chain_length");
         success &= dp.packU8(shared_constraintp->mConstraintType, "constraint_type");
-        char source_volume[16]; /* Flawfinder: ignore */
+        char source_volume[16] = {}; /* Flawfinder: ignore */
         snprintf(source_volume, sizeof(source_volume), "%s",    /* Flawfinder: ignore */
                  mCharacter->findCollisionVolume(shared_constraintp->mSourceConstraintVolume)->getName().c_str());
 
         success &= dp.packBinaryDataFixed((U8*)source_volume, 16, "source_volume");
         success &= dp.packVector3(shared_constraintp->mSourceConstraintOffset, "source_offset");
-        char target_volume[16]; /* Flawfinder: ignore */
+        char target_volume[16] = {}; /* Flawfinder: ignore */
         if (shared_constraintp->mConstraintTargetType == CONSTRAINT_TARGET_TYPE_GROUND)
         {
             snprintf(target_volume,sizeof(target_volume), "%s", "GROUND");  /* Flawfinder: ignore */
@@ -2273,6 +2694,7 @@ void LLKeyframeMotion::setPriority(S32 priority)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         S32 priority_delta = priority - mJointMotionList->mBasePriority;
         mJointMotionList->mBasePriority = (LLJoint::JointPriority)priority;
         mJointMotionList->mMaxPriority = mJointMotionList->mBasePriority;
@@ -2294,6 +2716,7 @@ void LLKeyframeMotion::setPriority(S32 priority)
 //-----------------------------------------------------------------------------
 void LLKeyframeMotion::setEmote(const LLUUID& emote_id)
 {
+    mJointMotionList->invalidateSampling();
     const char* emote_name = gAnimLibrary.animStateToString(emote_id);
     if (emote_name)
     {
@@ -2314,6 +2737,7 @@ void LLKeyframeMotion::setEaseIn(F32 ease_in)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mEaseInDuration = llmax(ease_in, 0.f);
     }
 }
@@ -2325,6 +2749,7 @@ void LLKeyframeMotion::setEaseOut(F32 ease_in)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mEaseOutDuration = llmax(ease_in, 0.f);
     }
 }
@@ -2346,6 +2771,7 @@ void LLKeyframeMotion::setLoop(bool loop)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoop = loop;
         mSendStopTimestamp = F32_MAX;
     }
@@ -2359,6 +2785,7 @@ void LLKeyframeMotion::setLoopIn(F32 in_point)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoopInPoint = in_point;
 
         // set up loop keys
@@ -2388,6 +2815,7 @@ void LLKeyframeMotion::setLoopOut(F32 out_point)
 {
     if (mJointMotionList)
     {
+        mJointMotionList->invalidateSampling();
         mJointMotionList->mLoopOutPoint = out_point;
 
         // set up loop keys
@@ -2523,7 +2951,8 @@ void LLKeyframeDataCache::dumpDiagInfo()
     {
         U32 joint_motion_kb;
 
-        LLKeyframeMotion::JointMotionList *motion_list_p = data_pair.second;
+        // <FS:Perf> LLKeyframeMotion::JointMotionList *motion_list_p = data_pair.second;
+        LLKeyframeMotion::JointMotionList* motion_list_p = data_pair.second.get(); // </FS:Perf>
 
         LL_INFOS() << "Motion: " << data_pair.first << LL_ENDL;
 
@@ -2543,10 +2972,13 @@ void LLKeyframeDataCache::dumpDiagInfo()
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::addKeyframeData()
 //--------------------------------------------------------------------
-void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList* joint_motion_listp)
+// <FS:Perf> void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, LLKeyframeMotion::JointMotionList* joint_motion_listp)
+void LLKeyframeDataCache::addKeyframeData(const LLUUID& id, asset_ptr_t data)
 {
-    sKeyframeDataMap[id] = joint_motion_listp;
+    // sKeyframeDataMap[id] = joint_motion_listp;
+    sKeyframeDataMap[id] = std::move(data);
 }
+// </FS:Perf>
 
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::removeKeyframeData()
@@ -2556,7 +2988,8 @@ void LLKeyframeDataCache::removeKeyframeData(const LLUUID& id)
     keyframe_data_map_t::iterator found_data = sKeyframeDataMap.find(id);
     if (found_data != sKeyframeDataMap.end())
     {
-        delete found_data->second;
+        // <FS:Perf> delete found_data->second;
+        // Outstanding motion/request owners keep this asset alive. </FS:Perf>
         sKeyframeDataMap.erase(found_data);
     }
 }
@@ -2564,7 +2997,8 @@ void LLKeyframeDataCache::removeKeyframeData(const LLUUID& id)
 //--------------------------------------------------------------------
 // LLKeyframeDataCache::getKeyframeData()
 //--------------------------------------------------------------------
-LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LLUUID& id)
+// <FS:Perf> LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LLUUID& id)
+LLKeyframeDataCache::asset_ptr_t LLKeyframeDataCache::getKeyframeData(const LLUUID& id) // </FS:Perf>
 {
     keyframe_data_map_t::iterator found_data = sKeyframeDataMap.find(id);
     if (found_data == sKeyframeDataMap.end())
@@ -2577,7 +3011,7 @@ LLKeyframeMotion::JointMotionList* LLKeyframeDataCache::getKeyframeData(const LL
 bool LLKeyframeDataCache::hasEmbeddedEmote(const LLUUID& id)
 {
     const auto found=sKeyframeDataMap.find(id);
-    const auto* data=found==sKeyframeDataMap.end()?nullptr:found->second;
+    const auto* data=found==sKeyframeDataMap.end()?nullptr:found->second.get(); // </FS:Perf> Owned cache value.
     return data && (!data->mEmoteName.empty() || data->mEmoteID.notNull());
 }
 
@@ -2594,7 +3028,8 @@ LLKeyframeDataCache::~LLKeyframeDataCache()
 //-----------------------------------------------------------------------------
 void LLKeyframeDataCache::clear()
 {
-    for_each(sKeyframeDataMap.begin(), sKeyframeDataMap.end(), DeletePairedPointer());
+    // <FS:Perf> for_each(sKeyframeDataMap.begin(), sKeyframeDataMap.end(), DeletePairedPointer());
+    // Drop cache owners; outstanding motions/requests retain their assets. </FS:Perf>
     sKeyframeDataMap.clear();
 }
 

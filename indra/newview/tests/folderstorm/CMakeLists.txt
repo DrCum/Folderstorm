@@ -1,15 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
 project(FolderstormRegressionTests LANGUAGES CXX)
 
-# These production helpers have no viewer/prebuilt dependencies. This project
+# These production helpers have no viewer runtime dependencies. This project
 # can run in ordinary CI without configuring or downloading the entire viewer.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 enable_testing()
 enable_language(C)
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME general_worker_wait_scope COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../test_general_wait_policy.py")
+endif()
 if(NOT WIN32)
-  find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
     add_test(NAME session_character_actions COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../tools/session-host/tests/test_character_actions.py")
     set_tests_properties(session_character_actions PROPERTIES ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}")
@@ -37,6 +41,58 @@ function(folderstorm_check name)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+folderstorm_check(avatar_animation_keys_map ../../../llcharacter/tests/test_fsanimationkeys.cpp)
+target_include_directories(avatar_animation_keys_map PRIVATE ../../../llcharacter)
+target_compile_definitions(avatar_animation_keys_map PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=0)
+add_test(NAME avatar_animation_keys_configuration COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/animation-keys-configuration"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/tests/test_animation_keys_config.cmake")
+find_path(FS_ANIMATION_BOOST_INCLUDE_DIR boost/container/flat_map.hpp)
+if(FS_ANIMATION_BOOST_INCLUDE_DIR)
+  folderstorm_check(avatar_animation_keys_contiguous ../../../llcharacter/tests/test_fsanimationkeys.cpp)
+  target_include_directories(avatar_animation_keys_contiguous PRIVATE ../../../llcharacter "${FS_ANIMATION_BOOST_INCLUDE_DIR}")
+  target_compile_definitions(avatar_animation_keys_contiguous PRIVATE FS_CONTIGUOUS_ANIMATION_KEYS=1)
+else()
+  message(STATUS "Skipping contiguous animation-key helper test: set FS_ANIMATION_BOOST_INCLUDE_DIR to bundled Boost headers")
+endif()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/PaletteArchitecture.cmake")
+folderstorm_palette_needs_sse2neon(palette_needs_sse2neon)
+add_test(NAME avatar_palette_architecture COMMAND "${CMAKE_COMMAND}"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/../test_palette_architecture.cmake")
+if(palette_needs_sse2neon)
+  find_path(FS_PALETTE_SSE2NEON_INCLUDE_DIR sse2neon.h)
+endif()
+if(NOT palette_needs_sse2neon OR FS_PALETTE_SSE2NEON_INCLUDE_DIR)
+  folderstorm_check(avatar_palette_packing ../test_fsavatarpalette.cpp)
+  if(FS_PALETTE_SSE2NEON_INCLUDE_DIR)
+    target_include_directories(avatar_palette_packing PRIVATE "${FS_PALETTE_SSE2NEON_INCLUDE_DIR}")
+  endif()
+else()
+  message(STATUS "Skipping avatar palette test: set FS_PALETTE_SSE2NEON_INCLUDE_DIR on ARM")
+endif()
+
+if(Python3_Interpreter_FOUND)
+  set(avatar_bounds_source "${CMAKE_CURRENT_BINARY_DIR}/avatar_rigged_bounds.cpp")
+  add_custom_command(OUTPUT "${avatar_bounds_source}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_avatar_rigged_bounds.py"
+      --output "${avatar_bounds_source}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../test_avatar_rigged_bounds.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../llvoavatar.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/lljoint.h"
+    VERBATIM)
+  folderstorm_check(avatar_rigged_bounds "${avatar_bounds_source}")
+  set(skinning_generation_source "${CMAKE_CURRENT_BINARY_DIR}/skinning_generation.cpp")
+  add_custom_command(OUTPUT "${skinning_generation_source}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../test_skinning_generation.py"
+      --output "${skinning_generation_source}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../test_skinning_generation.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../llskinningutil.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../../llcharacter/lljoint.h"
+    VERBATIM)
+  folderstorm_check(skinning_generation "${skinning_generation_source}")
+endif()
 
 add_subdirectory(../../third_party/chat_media chat_media_dependencies)
 folderstorm_check(chat_upload_clipboard ../test_fsclipboardimage.cpp)

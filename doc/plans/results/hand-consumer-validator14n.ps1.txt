@@ -1,0 +1,21 @@
+$ErrorActionPreference='Stop'
+$manifest=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'dependencies-shadow-20261024/manifest.json') -Raw|ConvertFrom-Json
+foreach($lib in $manifest.libraries){if((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('dependencies-shadow-20261024/'+$lib.path))).Hash.ToLowerInvariant() -cne $lib.sha256){throw 'Immutable library identity changed'}}
+$jobs=@(
+ @{source='hand-consumer-current14n.cpp';name='hand-consumer-current-map14n';defs=@();args=@('--trace')},
+ @{source='hand-consumer-current14n.cpp';name='hand-consumer-current-contiguous14n';defs=@('FS_CONTIGUOUS_ANIMATION_KEYS=1');args=@('--trace')},
+ @{source='hand-consumer-current14n.cpp';name='hand-consumer-alloc-map14n';defs=@('FS_SAMPLING_ALLOCATION_PROBE=1');args=@('--allocations')},
+ @{source='hand-consumer-current14n.cpp';name='hand-consumer-alloc-contiguous14n';defs=@('FS_SAMPLING_ALLOCATION_PROBE=1','FS_CONTIGUOUS_ANIMATION_KEYS=1');args=@('--allocations')},
+ @{source='hand-lifetime-current14n.cpp';name='hand-lifetime-current-map14n';defs=@();args=@()},
+ @{source='hand-lifetime-current14n.cpp';name='hand-lifetime-current-contiguous14n';defs=@('FS_CONTIGUOUS_ANIMATION_KEYS=1');args=@()},
+ @{source='hand-consumer-after14n.cpp';name='hand-consumer-after14n';defs=@('FS_SAMPLING_ALLOCATION_PROBE=1');args=@()}
+)
+foreach($job in $jobs){
+ $buildArgs=@{SourcePath=(Join-Path $PSScriptRoot $job.source);Name=$job.name;Definitions=$job.defs;ProgramArguments=$job.args;LibrarySnapshot=(Join-Path $PSScriptRoot 'dependencies-shadow-20261024')}
+ & (Join-Path $PSScriptRoot 'native-shadow-program.ps1') @buildArgs | Select-Object -Last 1
+ if($LASTEXITCODE -ne 0){throw $job.name}
+ if($job.name.StartsWith('hand-consumer-alloc-')){
+  & (Join-Path $PSScriptRoot ($job.name+'.exe')) --cold | Tee-Object -FilePath (Join-Path $PSScriptRoot ($job.name+'-cold.log'))
+  if($LASTEXITCODE -ne 0){throw 'Cold allocation/cleanup test failed'}
+ }
+}

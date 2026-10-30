@@ -1,0 +1,2 @@
+mode,plain_calls,disabled_calls,plain_bytes,disabled_bytes,enabled_calls,enabled_live_delta
+alloc,128,128,3840,3840,7,0

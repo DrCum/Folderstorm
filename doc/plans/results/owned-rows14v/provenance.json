@@ -1,0 +1,306 @@
+{
+  "parent_pr": 123,
+  "parent_head": "6daba8aa6619e678f19fbada673c8295922f867b",
+  "implementation_head": "783a615808a80362e99d42c34823d10d2121fa6c",
+  "status": "complete_test_only_experiment",
+  "accepted_performance_cases": 0,
+  "native_checks": 161684,
+  "allocation_instrumented_checks": 161716,
+  "controlled_row_transition_cases": 36,
+  "preceding_batch_transition_cases": 52,
+  "primitive_normal_checks": 85,
+  "primitive_allocation_checks": 98,
+  "row_limits": {
+    "groups": 2,
+    "rows_per_group": 32,
+    "fixed_group_bytes": 18032,
+    "sampled_joint_bytes": 44
+  },
+  "primitive_normal_note": "85-check lifetime4 predates addition of allocation-only fault controls; current98-check allocation build includes them. Both current units pass normal/Tracy syntax.",
+  "sources": {
+    "indra/llcharacter/tests/event_sampling_cost.cpp": {
+      "bytes": 50971,
+      "sha256": "35b7c4bddbaa264654771eba29d846e4fe31f29f97d3c5cc1de2b3efe43e2d5a"
+    },
+    "indra/llcharacter/tests/make_event_sampling_controller.py": {
+      "bytes": 2458,
+      "sha256": "a1798e758264419dd2ad2d2aae4a73dafe0e202a8a54633bd00a95cc028e3325"
+    },
+    "indra/llcharacter/CMakeLists.txt": {
+      "bytes": 18556,
+      "sha256": "2eb4469f86eecf7d7521c6b42f7d664e90738400182fbc0791980264149a88fc"
+    },
+    "indra/llcommon/threadpool.cpp": {
+      "bytes": 8120,
+      "sha256": "2e6c2306f104abdcc3a2dbd3f992b149103b7781cadea6e10c48082961ad09b0"
+    },
+    "indra/llcommon/threadpool.h": {
+      "bytes": 6151,
+      "sha256": "392806d37dd2e7cbd99208d081d2989413783b3a23751dd329539f77447148f7"
+    },
+    "indra/llcommon/workqueue.cpp": {
+      "bytes": 10019,
+      "sha256": "ce349a39683b1a72b87b748b2a396e023652d234bc1dc8cf142647d529276526"
+    },
+    "indra/llcommon/workqueue.h": {
+      "bytes": 25783,
+      "sha256": "1368f2f66b6a5884e18a2b7612ffe83b334b21d6eb39dea23185b69ca2741bc4"
+    },
+    "indra/llcommon/threadsafeschedule.h": {
+      "bytes": 17325,
+      "sha256": "32488a8de4fd48fa13bab8644d310cc2a40d630f13a0235976d22997b27b5b4d"
+    },
+    "indra/llcharacter/fssamplingcontext.cpp": {
+      "bytes": 1565,
+      "sha256": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802"
+    },
+    "indra/llcharacter/fssamplingcontext.h": {
+      "bytes": 1319,
+      "sha256": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c"
+    },
+    "indra/llcharacter/llpose.cpp": {
+      "bytes": 18632,
+      "sha256": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce"
+    },
+    "indra/llcharacter/llpose.h": {
+      "bytes": 4390,
+      "sha256": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d"
+    },
+    "indra/llcharacter/llmotioncontroller.cpp": {
+      "bytes": 43918,
+      "sha256": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3"
+    },
+    "indra/llcharacter/llmotioncontroller.h": {
+      "bytes": 9220,
+      "sha256": "d7bedffa086f9a32a9fede9c814ad82584a2af34bbd906746d22ec8d2894ea29"
+    },
+    "indra/llcharacter/llkeyframemotion.cpp": {
+      "bytes": 120309,
+      "sha256": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f"
+    },
+    "indra/llcharacter/llkeyframemotion.h": {
+      "bytes": 24909,
+      "sha256": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1"
+    },
+    "indra/llcharacter/llmotion.cpp": {
+      "bytes": 5548,
+      "sha256": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b"
+    },
+    "indra/llcharacter/llcharacter.cpp": {
+      "bytes": 18580,
+      "sha256": "8ac509c6dee6d2cdf5aa23a109910279e0f77071874cd13472a820e2a24abae9"
+    },
+    "indra/llcharacter/fssamplingshadow.cpp": {
+      "bytes": 10000,
+      "sha256": "87a0c40c5ba061ed99b2aa97ae3ccf5233680c366b857585a340e58c6753964b"
+    },
+    "indra/llcharacter/tests/current_motion_fixture.h": {
+      "bytes": 4377,
+      "sha256": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447"
+    },
+    "indra/llcharacter/tests/sampling_cost_fixture.h": {
+      "bytes": 10584,
+      "sha256": "290b120bf15b2895c9c6e1d45a57d64d9bbb2f6855cf5f831961954958158339"
+    },
+    "indra/llcharacter/tests/bounded_sampling_executor.h": {
+      "bytes": 9066,
+      "sha256": "f90e3acc14de07dbfbae511a6cb71b2c5ed90a14978acda41599c12b542a9092"
+    },
+    "indra/llcharacter/tests/owned_sampling_rows.h": {
+      "bytes": 10835,
+      "sha256": "f679c2a03a511ae0a22bc89e46be468fb270e7a0a3fe13a681a0b46d07aff064"
+    },
+    "indra/llcharacter/tests/owned_sampling_rows_test.cpp": {
+      "bytes": 11768,
+      "sha256": "df08793e43e3598228e28619339867877b19038e8e3e2f3a0bdad37e4b63a7ed"
+    },
+    "indra/llcharacter/tests/analyze_owned_row_publication.py": {
+      "bytes": 9384,
+      "sha256": "bf3c8f2ea48e3b33b568b7da740d0c280dfeb8b2c6aa992b11214dc64e8d5da5"
+    },
+    "indra/llcharacter/tests/sampling_allocation_probe.h": {
+      "bytes": 6399,
+      "sha256": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7"
+    },
+    "indra/llcharacter/tests/sampling_test_context.h": {
+      "bytes": 419,
+      "sha256": "8253dc59a57e012c478d8111c5c8caf166a59946e0461d19636a8b00e2f19c24"
+    }
+  },
+  "programs": {
+    "timing": {
+      "name": "event-sampling14v-final.exe",
+      "bytes": 4542464,
+      "sha256": "a9a65179da309d41aa6fc2db43a5dac6838b839b8532f300cef7ffd74f0f7d1c"
+    },
+    "alloc": {
+      "name": "event-sampling14v-alloc-final.exe",
+      "bytes": 4557312,
+      "sha256": "1a0da21f647513f8ec7b372ed43a8c6c8eef03b686594b5bf0a18924ae670eab"
+    }
+  },
+  "native_artifacts": {
+    "event-sampling14v.cpp": {
+      "bytes": 651,
+      "sha256": "f0fccad51c74f55860117008e4faff385af39cb2b5ff0ae44de009d2b59069fb"
+    },
+    "owned-rows14v.cpp": {
+      "bytes": 570,
+      "sha256": "bcf06aa8c5baee64b7923a4ceca2828361000ee4f02b7dca31cff678e66adbeb"
+    },
+    "event-controller14v.cpp": {
+      "bytes": 44471,
+      "sha256": "e608f4a7941ff0a7a0e9762547fedaf50b75a4cdd3106bb3324ceafb58eadd95"
+    },
+    "event-controller14v.provenance.json": {
+      "bytes": 455,
+      "sha256": "e38906a2ad98d0bf36f74e92baac6e7240575853346f8337f1345a8c4294ce90"
+    },
+    "event-controller14s.cpp": {
+      "bytes": 44471,
+      "sha256": "e608f4a7941ff0a7a0e9762547fedaf50b75a4cdd3106bb3324ceafb58eadd95"
+    },
+    "run-ownedrows14v.ps1": {
+      "bytes": 3397,
+      "sha256": "a34f9e02bb6917040f61e28f4c8bdd13601b9af751fcd2bbae244904464bc6ac"
+    },
+    "run-ownedrows-matrix14v.ps1": {
+      "bytes": 1225,
+      "sha256": "ffab055c828ed13f977b752740686dab594d5b4d74a149b3066039de1bdfbc68"
+    },
+    "event-sampling14v-integration1.exe": {
+      "bytes": 4531712,
+      "sha256": "4e08c5252d2eaec1f817f52da26a436fc503b3c787500e23e75d1c83f27eaa09"
+    },
+    "event-sampling14v-integration1.rsp": {
+      "bytes": 12075,
+      "sha256": "27f429129426ef475d6753bdb6bd45f2c21732a9f6fe58a503b485d3bb89211c"
+    },
+    "event-sampling14v-integration1.log": {
+      "bytes": 657,
+      "sha256": "3eaa88e07ff1d07463e2914f91e760808c6dcb12f5b48f29be83f3a49ede4afa"
+    },
+    "event-sampling14v-transitions2.exe": {
+      "bytes": 4541952,
+      "sha256": "73cc39b1595e89b28a5721438d57b9de4ecc351640d795005f6a73968d145f79"
+    },
+    "event-sampling14v-transitions2.rsp": {
+      "bytes": 12075,
+      "sha256": "652a71e6b923008703ad6c82597cb98b9c91f076a6ef655524138596cb7bafc0"
+    },
+    "event-sampling14v-transitions2.log": {
+      "bytes": 657,
+      "sha256": "5d094512d59e37c8cf4aee9b3ff2bec63859b0d696ab7b905d5db97fc19ec1d5"
+    },
+    "event-sampling14v-final.exe": {
+      "bytes": 4542464,
+      "sha256": "a9a65179da309d41aa6fc2db43a5dac6838b839b8532f300cef7ffd74f0f7d1c"
+    },
+    "event-sampling14v-final.rsp": {
+      "bytes": 12061,
+      "sha256": "0d353a6195c09296ef58315493d85fe00676e8b3b6d9a6d3f7afaa76311eb6e3"
+    },
+    "event-sampling14v-final.log": {
+      "bytes": 643,
+      "sha256": "84f5b4ec3ed774e750576b128827d5a87c4907111e2cec045639232f63a3f415"
+    },
+    "event-sampling14v-alloc-final.exe": {
+      "bytes": 4557312,
+      "sha256": "1a0da21f647513f8ec7b372ed43a8c6c8eef03b686594b5bf0a18924ae670eab"
+    },
+    "event-sampling14v-alloc-final.rsp": {
+      "bytes": 12106,
+      "sha256": "ac2a68ec36aa1b984d7d190fc5e01ca53f0c8c1a4a616791a57be4e9bca4bb2b"
+    },
+    "event-sampling14v-alloc-final.log": {
+      "bytes": 655,
+      "sha256": "e17a615369b00f5344735de0e0077d5ce996904c669066390eabcae3aa43d467"
+    },
+    "owned-rows14v-lifetime4.exe": {
+      "bytes": 4234752,
+      "sha256": "64f2db9d17faabc59c60c52190ef5b44ec8dff3e9d5aa1e8660e886d4093b1af"
+    },
+    "owned-rows14v-lifetime4.rsp": {
+      "bytes": 12057,
+      "sha256": "9cb01fddbf366ec5da619329aea5474554ed798fe5290f1e3c74aa3213ab7c79"
+    },
+    "owned-rows14v-lifetime4.log": {
+      "bytes": 615,
+      "sha256": "afebc68e75990d4c30ce83f48a93bda15d0c3ed3da547f8ea031c1ea624ded45"
+    },
+    "owned-rows14v-alloc-failure5.exe": {
+      "bytes": 4242432,
+      "sha256": "3aed54d82418425ec9ceaed7ca4f056545251ec2b36e43c1d227a7b9e1ffae05"
+    },
+    "owned-rows14v-alloc-failure5.rsp": {
+      "bytes": 12100,
+      "sha256": "b73726f52066d5a97777d6ae09a7ce844586b37df8475e72027ee2243dda4083"
+    },
+    "owned-rows14v-alloc-failure5.log": {
+      "bytes": 625,
+      "sha256": "04b718f3cb38c7bad18aea1e750ed305b48c6aad8b30ccdf7f5fdf542944165b"
+    },
+    "event_sampling_cost-normal-rows14v-final.rsp": {
+      "bytes": 4090,
+      "sha256": "ca5a9708180ba06322666674c950b080d823d662e3aa003a32045b2a2b763c55"
+    },
+    "event_sampling_cost-normal-rows14v-final.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "event_sampling_cost-tracy-rows14v-final.rsp": {
+      "bytes": 4284,
+      "sha256": "7311030e9bc4f685279a2b8b10eb86eb43f7ac020adbc5f32b7cc64212294a38"
+    },
+    "event_sampling_cost-tracy-rows14v-final.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "owned_sampling_rows_test-normal-rows14v-final.rsp": {
+      "bytes": 4095,
+      "sha256": "65b04147f8ab0fed97495dabf708d6e6ff4243602eabc3aeb69eec5d344fb112"
+    },
+    "owned_sampling_rows_test-normal-rows14v-final.log": {
+      "bytes": 321,
+      "sha256": "a770be59cbefc9cec77781ccf4140c23b1ec255f48c6a49323bde96dff592b4c"
+    },
+    "owned_sampling_rows_test-tracy-rows14v-final.rsp": {
+      "bytes": 4289,
+      "sha256": "299d11794ca01fe0b80e9eafd4e75e639ed2e575ce972044736a69a82ba07856"
+    },
+    "owned_sampling_rows_test-tracy-rows14v-final.log": {
+      "bytes": 321,
+      "sha256": "a770be59cbefc9cec77781ccf4140c23b1ec255f48c6a49323bde96dff592b4c"
+    }
+  },
+  "immutable_libraries": {
+    "bytes": 6422,
+    "sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4"
+  },
+  "all_immutable_library_hashes_verified": true,
+  "matrix_plan_normalized_sha256": "25240d0fb16f9aeff703cf3030393cde7a4978033ab20a8561a4a902142f8788",
+  "limits": [
+    "Private fixed cohort and owned immutable queries only; no live scene/deadline/FPS acceptance.",
+    "No delivery gate/owner hook/forced readiness/gap in timed requests; startup controls are outside windows.",
+    "Full owner/worker cycles include bookkeeping and final drain; owner window also includes group destruction and binding cleanup. Per-job cycles are attribution only.",
+    "Fixed-group/pool/executor and owned observation storage setup precedes windows; fixed cells and vector capacities are reported separately, excluding shared assets/control blocks/allocator overhead.",
+    "Before/after full-host build/probe idle cannot control unrelated desktop/power/timer load; requested1ms timer.",
+    "Private retention is limited to controlled Scene lifetime. No general deprecated/reentrant resolver or mutable live-asset ownership claim. Full CMake targets and other-platform runtime remain unproved."
+  ],
+  "accepted_timing_cases": 16,
+  "accepted_allocation_cases": 8,
+  "accepted_timing_frames": 16384,
+  "accepted_timing_callbacks": 270336,
+  "nonoverlap_verified": true,
+  "decision": "Promising private32-character owner savings in both orders with18percent higher combined CPU; solo is worse. Keep dispatch private and establish crossover plus real owner-phase feasibility before considering a viewer pilot.",
+  "analysis_sources": {
+    "indra/llcharacter/tests/analyze_owned_row_publication.py": {
+      "bytes": 9384,
+      "sha256": "bf3c8f2ea48e3b33b568b7da740d0c280dfeb8b2c6aa992b11214dc64e8d5da5"
+    },
+    "indra/llcharacter/tests/analyze_event_sampling_cost.py": {
+      "bytes": 8750,
+      "sha256": "1a2e7191d9f33a70e85431d9a470ad2f2aa6a1e286ca5287e0e396a75e18d0f2"
+    }
+  }
+}

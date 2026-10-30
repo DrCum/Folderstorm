@@ -1,0 +1,40 @@
+param(
+    [Parameter(Mandatory=$true)][ValidateSet('default','event')][string]$Mode,
+    [Parameter(Mandatory=$true)][ValidateRange(1,2)][int]$Round
+)
+$ErrorActionPreference = 'Stop'
+$workspaceRoot = Split-Path -Parent $PSScriptRoot
+$label = "worker-policy-delivery14q-r$Round-$Mode"
+$metadata = Join-Path $PSScriptRoot "$label.json"
+$output = Join-Path $PSScriptRoot "$label.csv"
+if ((Test-Path -LiteralPath $metadata) -or (Test-Path -LiteralPath $output)) { throw "Preserve existing observation: $label" }
+function Get-IdleObservation {
+    $state = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-state.json') -Raw | ConvertFrom-Json
+    $monitor = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-build-monitor.json') -Raw | ConvertFrom-Json
+    $worker = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-worker-checkpoint.json') -Raw | ConvertFrom-Json
+    $processes = @(Get-Process -Name cl,link,MSBuild,cmake,ninja,vpk,worker-policy14q-release -ErrorAction SilentlyContinue |
+        Select-Object Id,ProcessName,StartTime,CPU)
+    [ordered]@{utc=[DateTime]::UtcNow.ToString('o');activeBuild=$state.activeBuild;phase=$monitor.phase;
+        workerStatus=$worker.status;workerCurrent=$worker.current;buildOrProbeProcesses=$processes;
+        idle=(!$state.activeBuild -and !$worker.current -and $worker.status -eq 'idle' -and
+            $monitor.phase -eq 'IDLE_MONITORING' -and $processes.Count -eq 0)}
+}
+$record = [ordered]@{case=$label;mode=$Mode;round=$Round;before=(Get-IdleObservation);after=$null;
+    status='before_check';exit=$null;exeSha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'worker-policy14q-release.exe') -Algorithm SHA256).Hash;
+    scope='Actual constructor/production installation, resolved width1, requested1ms; no timing pass threshold or viewer/FPS claim';
+    limits='Only before/after build-idle observed; desktop load/power/timer policy uncontrolled'}
+$record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $metadata
+if (!$record.before.idle) { throw "Build ownership or compiler/package/probe activity prevents measurement: $label" }
+$record.status='running'; $record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $metadata
+& (Join-Path $PSScriptRoot 'worker-policy14q-release.exe') --wake $Mode > $output 2>&1
+$record.exit=$LASTEXITCODE; $record.after=Get-IdleObservation
+$record.status=if ($record.exit -ne 0) { 'probe_failed' } elseif (!$record.after.idle) { 'overlap_exclude' } else { 'completed' }
+$record | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $metadata
+if ($record.exit -ne 0) { throw "Delivery probe failed: $($record.exit)" }
+if (!$record.after.idle) { throw 'Build ownership changed; retain and exclude observation' }
+$rows = @(Import-Csv -LiteralPath $output)
+$admitted = @($rows | Where-Object status -eq 'ok')
+$latencies = @($admitted | ForEach-Object { [double]$_.wall_ns / 1000 } | Sort-Object)
+[pscustomobject]@{case=$label;rows=$rows.Count;admitted=$admitted.Count;rejected=$rows.Count-$admitted.Count;
+    p50us=if ($latencies.Count) {$latencies[[Math]::Ceiling(.50*$latencies.Count)-1]} else {$null};
+    p95us=if ($latencies.Count) {$latencies[[Math]::Ceiling(.95*$latencies.Count)-1]} else {$null}} | ConvertTo-Json -Compress

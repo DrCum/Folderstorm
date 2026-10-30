@@ -1,0 +1,93 @@
+{
+  "status": "Implemented and native checked; exact-head full viewer build and runtime acceptance pending",
+  "implementation_commit": "8720509deb393c05e51bdef94235945ccd0a8c7b",
+  "base_commit": "db9be862ab1168362b9cca6f767614248dd892ea",
+  "private_probe_commit": "ccad4c341cb10ca33e8f0a8fc20a0d340f548335",
+  "source_sha256_normalized_lf": {
+    "indra/llcommon/threadsafeschedule.h": "32488a8de4fd48fa13bab8644d310cc2a40d630f13a0235976d22997b27b5b4d",
+    "indra/llcommon/workqueue.cpp": "ce349a39683b1a72b87b748b2a396e023652d234bc1dc8cf142647d529276526",
+    "indra/llcommon/threadpool.cpp": "06dd412f0c93f9200507e75bd19303977f8a22f064255461600c3ac08f83d154",
+    "indra/llcommon/CMakeLists.txt": "05189dc8008ca8df7aff8ac15117cc55b04af228b5dc478303b4d3cfdfcf533a",
+    "indra/llcommon/tests/scheduled_queue_deadline_test.cpp": "32891527d04ecc0551991764a8502d2799a4033dbf3c6706b79e700a7f9b8208"
+  },
+  "scratch_artifact_sha256": {
+    "scheduled-queue14p1.cpp": "42ab9a6cde93ddaffcb9c653757096db2dc2b8492e08ca99a40537a3210cb8c9",
+    "scheduled-queue-old14p1.exe": "3dbad2c94d547fec1b79c77a28a9868d811201f4a9832307cd1dadc878424303",
+    "scheduled-queue-old14p1.rsp": "46c523c9c2bb54462e4e11b78a9ea8917602c2501fe5a637ce790f5073b7ff1d",
+    "scheduled-queue-old14p1-repro.log": "263b3aca5a9fe58d702850ce922c31dc25197b9e1f799d887f706ff9ed4572dd",
+    "scheduled-queue-old-header14p1.h.txt": "30a8a8fcfbcb4ba8a0d6207bf82a4b6e33f889e05b8034f721a3256281b020f0",
+    "scheduled-queue-test14p1.cpp.txt": "32891527d04ecc0551991764a8502d2799a4033dbf3c6706b79e700a7f9b8208",
+    "scheduled-queue-fixed14p1.exe": "b8d8f61d93669903cdae26f61956586600491c9bb37c445681d2593760eab389",
+    "scheduled-queue-fixed14p1.rsp": "c1cb49c96a1daba533f7c5d8597fb762c8c230e29265f37a004eaa8c03e88131",
+    "scheduled-queue-fixed14p1.log": "251f80c11dfb901e9c3126350cf46f3bf0699d2575e0ff6b0ae5a2572ace8dd4",
+    "worker-scheduler-fixed14p1.cpp": "2c713b12fc726582c9eacd2498b667845d2da28a1b2095b805da757a8dd9d1c0",
+    "worker-scheduler-fixed14p1.exe": "caf29d61146d6c256520479f3e61fed45d7f92443fbe672571059349e8998f4a",
+    "worker-scheduler-fixed14p1.rsp": "6033c8178d8ea623d5003a73277cfc2d70f4d8cb4518646ed8144ed2d061bde0",
+    "worker-scheduler-fixed14p1.log": "2ba8a5fc2ad04451234a184f202382ed3cc4a64f332833d04622a2acf13aca09",
+    "frozen-worker-probe-ccad/scheduler_probe.h": "55c7929a3ad12f947d6dcdf0ba616301feff279e389ce4dccca9c03b7a1639e9",
+    "frozen-worker-probe-ccad/threadpool_scheduler_test.cpp": "efa083cc33844e9ee35eefd69c7147289548b6f4d57786ef0bc38fecfbba1c40"
+  },
+  "syntax_log_sha256": {
+    "workqueue-normal-scheduled14p1.log": "f49fdb129ad042b5f61651d106b719a5514fe14c7c95c43aa755903231bae63f",
+    "scheduled_queue_deadline_test-normal-scheduled14p1.log": "1687934d30878d66ebdcf4cb53e0eefa937afc001ef38963d9e6ec53c94b79a1",
+    "workqueue-tracy-scheduled14p1.log": "f49fdb129ad042b5f61651d106b719a5514fe14c7c95c43aa755903231bae63f",
+    "scheduled_queue_deadline_test-tracy-scheduled14p1.log": "1687934d30878d66ebdcf4cb53e0eefa937afc001ef38963d9e6ec53c94b79a1"
+  },
+  "old_diagnostic": {
+    "timed_close_intentionally_skipped": "Known old watchdog stall retained in private ccad probe",
+    "checks": 22,
+    "earlier_head_without_poke": false,
+    "empty_future_without_poke": false,
+    "caller_limit_consumed_future": true,
+    "failures": 4,
+    "exit": 1
+  },
+  "fixed": {
+    "timed_close_widths": [
+      1,
+      3,
+      8
+    ],
+    "checks": 340,
+    "earlier_head_without_poke": true,
+    "empty_future_without_poke": true,
+    "caller_limit_consumed_future": false,
+    "failures": 0,
+    "exit": 0
+  },
+  "unchanged_private_scheduler_fixture": {
+    "checks": 6686,
+    "exit": 0,
+    "modes": [
+      "current",
+      "stock"
+    ],
+    "widths": [
+      1,
+      3,
+      8
+    ],
+    "frozen_sources_unchanged": true
+  },
+  "fresh_workqueue_cpp": true,
+  "public_expired_lock": "Existing outer timed mutex may reject expired attempt; test allows this and verifies ready item is retained. Initial pop after acquiring lock remains intact.",
+  "native": "MSVC x64 AVX2 optimized /O2 /fp:precise, assertions enabled, actual Boost 1.90.0 packages read only, 32 immutable internal libraries",
+  "frozen_dependencies": {
+    "all_hashes_reverified": true,
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4"
+  },
+  "standalone_syntax": [
+    "fresh workqueue.cpp normal",
+    "test normal",
+    "fresh workqueue.cpp Tracy",
+    "test Tracy"
+  ],
+  "limits": [
+    "Functional observation bounds, no latency/CPU/FPS claim",
+    "No production scheduler or thread-count change",
+    "No viewer login/rendered/crowded-scene acceptance",
+    "No idle-desktop assertion for correctness checks",
+    "Full builds and retention belong to independent builder"
+  ]
+}

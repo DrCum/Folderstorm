@@ -1,0 +1,47 @@
+{
+  "prNumber": 120,
+  "sourceHead": "55f66ec851701fdc6b9bfd2c81794abc5ee80ccf",
+  "version": "7.2.5.82290",
+  "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-120\\7.2.5.82290-head-55f66ec851-velopack-sentry-tracy-OFF-clean",
+  "status": "complete",
+  "installer": "D:\\Folderstorm-performance-builds\\normal\\pr-120\\7.2.5.82290-head-55f66ec851-velopack-sentry-tracy-OFF-clean\\Phoenix-FolderstormOS-Nightly_AVX2-7-2-5-82290_Setup.exe",
+  "installerSha256": "3F1DF55D3EE3F8D7A7FC7C950BCD78C55C3C1882316512D574EC2C129A8752F8",
+  "nativeTestCount": 39,
+  "focusedReceiptCount": 39,
+  "tracyEnabled": false,
+  "animationKeys": "OFF",
+  "configuration": "ReleaseFS_open_AVX2",
+  "architecture": 64,
+  "channel": "Folderstorm-Nightly",
+  "buildExitCode": 0,
+  "defaultVerification": {
+    "status": "passed",
+    "setting": "FSGeneralPoolEventWait",
+    "source": {
+      "type": "Boolean",
+      "value": false,
+      "persist": false,
+      "sha256": "3f7a438e609acdde277dcc5596d1849eb8589bdd6016cb3dc8fbcc3459f8ebdd"
+    },
+    "staged": {
+      "type": "Boolean",
+      "value": false,
+      "persist": false,
+      "sha256": "3f7a438e609acdde277dcc5596d1849eb8589bdd6016cb3dc8fbcc3459f8ebdd"
+    },
+    "packaged": {
+      "type": "Boolean",
+      "value": false,
+      "persist": false,
+      "sha256": "3f7a438e609acdde277dcc5596d1849eb8589bdd6016cb3dc8fbcc3459f8ebdd"
+    },
+    "fullPackage": "D:\\Folderstorm-stack-build\\newview\\Releases\\Folderstorm.opensim.nightly.x86_64.avx2-7.2.5-82290-full.nupkg",
+    "packageEntry": "lib/app/app_settings/settings.xml",
+    "allPrecedingControlsUnchangedFrom119": true,
+    "userSettingsOperated": false,
+    "normalBuildPolicy": "Platform default; no startup override applied"
+  },
+  "helperCorrection": "Dependency guard corrected without product patch or rebuild; exact staged hashes preserved",
+  "runtimeAcceptance": false,
+  "scope": "Independent build/link/package and focused-check receipt, not live viewer/crowd/CPU/FPS acceptance"
+}

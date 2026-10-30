@@ -1,0 +1,50 @@
+param(
+    [Parameter(Mandatory=$true)][ValidateSet('current','stock')][string]$Mode,
+    [Parameter(Mandatory=$true)][ValidateSet(1,3,8)][int]$Width,
+    [Parameter(Mandatory=$true)][ValidateSet('default','request')][string]$Timer,
+    [Parameter(Mandatory=$true)][ValidateSet('empty','timed')][string]$Wait,
+    [Parameter(Mandatory=$true)][ValidateRange(1,2)][int]$Round,
+    [ValidateRange(1,2)][int]$Attempt = 1
+)
+$ErrorActionPreference = 'Stop'
+$workspaceRoot = Split-Path -Parent $PSScriptRoot
+$label = "worker-wait14p2-r$Round-$Mode-w$Width-$Timer-$Wait"
+if ($Attempt -gt 1) { $label += "-a$Attempt" }
+$recordPath = Join-Path $PSScriptRoot "$label.json"
+$outputPath = Join-Path $PSScriptRoot "$label.csv"
+if ((Test-Path -LiteralPath $recordPath) -or (Test-Path -LiteralPath $outputPath)) {
+    throw "Preserve existing case; choose the next unrun case: $label"
+}
+function Get-IdleObservation {
+    $state = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-state.json') -Raw | ConvertFrom-Json
+    $monitor = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-build-monitor.json') -Raw | ConvertFrom-Json
+    $worker = Get-Content -LiteralPath (Join-Path $workspaceRoot 'performance-worker-checkpoint.json') -Raw | ConvertFrom-Json
+    $processes = @(Get-Process -Name cl,link,MSBuild,cmake,ninja,vpk -ErrorAction SilentlyContinue |
+        Select-Object Id,ProcessName,StartTime,CPU)
+    $probes = @(Get-Process -Name worker-scheduler-cost14p2 -ErrorAction SilentlyContinue |
+        Select-Object Id,ProcessName,StartTime,CPU)
+    [ordered]@{
+        utc=[DateTime]::UtcNow.ToString('o'); activeBuild=$state.activeBuild;
+        monitorPhase=$monitor.phase; workerStatus=$worker.status; workerCurrent=$worker.current;
+        buildProcesses=$processes; concurrentProbes=$probes; idle=(!$state.activeBuild -and !$worker.current -and
+            $worker.status -eq 'idle' -and $monitor.phase -eq 'IDLE_MONITORING' -and
+            $processes.Count -eq 0 -and $probes.Count -eq 0)
+    }
+}
+$record = [ordered]@{case=$label; mode=$Mode; width=$Width; timer=$Timer; wait=$Wait; round=$Round;
+    requestedIdleSeconds=30; before=(Get-IdleObservation); status='before_check'; after=$null;
+    exit=$null; executableSha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'worker-scheduler-cost14p2.exe') -Algorithm SHA256).Hash;
+    note='Full host build process visibility required. Idle observation is not a guarantee of an idle desktop or unchanged power/timer policy.'}
+$record | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $recordPath
+if (!$record.before.idle) { throw "Build ownership or host compiler/package activity prevents measurement: $label" }
+$record.status = 'running'
+$record | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $recordPath
+& (Join-Path $PSScriptRoot 'worker-scheduler-cost14p2.exe') --case $Mode $Width $Timer $Wait 30 > $outputPath 2>&1
+$record.exit = $LASTEXITCODE
+$record.after = Get-IdleObservation
+$record.status = if ($record.exit -ne 0) { 'probe_failed' } elseif (!$record.after.idle) { 'build_overlap_exclude' } else { 'completed' }
+$record | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $recordPath
+Get-Content -LiteralPath $outputPath | Select-Object -Last 2
+"$label : $($record.status)"
+if ($record.exit -ne 0) { throw "Private probe failed: $($record.exit)" }
+if (!$record.after.idle) { throw 'Build activity changed; preserve and exclude this observation' }
