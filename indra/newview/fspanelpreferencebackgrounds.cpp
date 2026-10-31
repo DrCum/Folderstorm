@@ -25,6 +25,7 @@ S32 pixel(double value) { return static_cast<S32>(std::lround(value)); }
 class BackgroundDiagram : public LLPanel
 {
 public:
+    struct Params : public LLInitParam::Block<Params, LLPanel::Params> {};
     BackgroundDiagram(const Params& p) : LLPanel(p) {}
     Config config;
     int selected = -1;

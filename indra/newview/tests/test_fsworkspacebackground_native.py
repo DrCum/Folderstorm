@@ -1,4 +1,4 @@
-"""Regressions for native JPEG recovery and managed-file texture routing.
+"""Regressions for widget registration, JPEG recovery and managed-file routing.
 
 Production declarations, handlers and texture factories are source-extracted.
 The default JPEG fixture mocks libjpeg's destruction boundary. Set
@@ -15,6 +15,97 @@ from test_fsgestureboardsounds import ROOT, VIEWER, function
 
 class NativeBackgroundBoundaries(unittest.TestCase):
     cpp=portable.WorkspaceBackgrounds.cpp
+
+    def test_background_widget_registration_before_main(self):
+        source=(VIEWER/'fspanelpreferencebackgrounds.cpp').read_text()
+        factory_header=(ROOT/'indra/llui/lluictrlfactory.h').read_text()
+        factory_source=(ROOT/'indra/llui/lluictrlfactory.cpp').read_text()
+        panel_source=(ROOT/'indra/llui/llpanel.cpp').read_text()
+        diagram=function(source,'class BackgroundDiagram : public LLPanel')+';\n'
+        # Keep the production type, Params and constructor; rendering/input are unrelated.
+        diagram=diagram.replace(function(diagram,'    void draw() override').rstrip(),'    void draw() override {}')
+        diagram=diagram.replace(function(diagram,'    bool handleMouseDown(').rstrip(),
+                                '    bool handleMouseDown(S32,S32,MASK) override { return false; }')
+        registrar=function(factory_header,'template<typename DERIVED>\ntemplate<typename T>\nLLChildRegistry<DERIVED>::Register<T>::Register(')
+        guard=function(factory_source,'void LLUICtrlFactory::registerWidget(')
+        panel_registration=re.search(r'static LLDefaultChildRegistry::Register<LLPanel>[^;]+;',panel_source).group()
+        diagram_registration=re.search(r'static LLDefaultChildRegistry::Register<BackgroundDiagram>[^;]+;',source).group()
+        prelude=r'''
+#include "fsworkspacebackgroundmodel.h"
+#include <cassert>
+#include <csignal>
+#include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <string>
+#include <typeindex>
+#include <type_traits>
+using namespace FSWorkspaceBackground;
+using S32=int;using MASK=unsigned;
+struct LLRect {};
+namespace LLInitParam {template<class Derived,class Base>struct Block:Base {};}
+class LLPanel {
+public:
+    struct Params {};
+    explicit LLPanel(const Params&){}
+    virtual ~LLPanel()=default;
+    virtual void draw(){}
+    virtual bool handleMouseDown(S32,S32,MASK){return false;}
+    static void fromXML(){}
+};
+class LLWidgetNameRegistry {
+public:
+    std::map<std::type_index,std::string> names;
+    static auto& instance(){static LLWidgetNameRegistry registry;return registry;}
+    std::string* getValue(std::type_index type){auto found=names.find(type);return found==names.end()?nullptr:&found->second;}
+    auto& defaultRegistrar(){return *this;}
+    void add(std::type_index type,const std::string& name){names.emplace(type,name);}
+};
+using LLWidgetCreatorFunc=void(*)();
+class LLUICtrlFactory {
+public:
+    static bool instanceExists(){return true;}
+    static void createInstance(){}
+    static auto& instance(){static LLUICtrlFactory factory;return factory;}
+    template<class T>static void defaultBuilder(){}
+    static void registerWidget(std::type_index,std::type_index,const std::string&);
+};
+template<class Derived>class LLChildRegistry {
+public:
+    struct StaticRegistrar {StaticRegistrar(const char*,LLWidgetCreatorFunc){}};
+    template<class T>class Register:public StaticRegistrar {
+    public:Register(const char*,LLWidgetCreatorFunc=nullptr);
+    };
+};
+class LLDefaultChildRegistry:public LLChildRegistry<LLDefaultChildRegistry> {};
+'''
+        arm_signal=r'''
+// Run the real duplicate guard in its own process, without producing a core file.
+struct CatchFixtureCrash {
+    CatchFixtureCrash(){std::signal(SIGSEGV,[](int){std::_Exit(42);});}
+} catchFixtureCrash;
+'''
+        main=r'''
+int main(){
+    assert((!std::is_same<BackgroundDiagram::Params,LLPanel::Params>::value));
+    assert((std::is_base_of<LLPanel::Params,BackgroundDiagram::Params>::value));
+    auto& registry=LLWidgetNameRegistry::instance();
+    assert(registry.names.size()==2);
+    assert(*registry.getValue(typeid(LLPanel::Params))=="panel");
+    assert(*registry.getValue(typeid(BackgroundDiagram::Params))=="workspace_background_diagram");
+    BackgroundDiagram::Params params;BackgroundDiagram widget(params);
+    std::cout<<"Distinct widget Params registered before main\n";
+}
+'''
+        old_diagram=re.sub(r'\s*struct Params : public LLInitParam::Block<Params, LLPanel::Params> \{\};','',diagram)
+        self.assertNotEqual(old_diagram,diagram)
+        for order in [(diagram_registration,panel_registration),(panel_registration,diagram_registration)]:
+            tail=registrar+guard+arm_signal+'\n'.join(order)+main
+            # widget_type is unused in the existing native guard, not in the fixture.
+            flags=['-Wno-unused-parameter','-O0']
+            self.cpp(prelude+diagram+tail,flags=flags)
+            self.cpp(prelude+old_diagram+tail,flags=flags,expected=42)
 
     def test_jpeg_error_context_is_thread_local(self):
         header=(ROOT/'indra/llimage/llimagejpeg.h').read_text()
