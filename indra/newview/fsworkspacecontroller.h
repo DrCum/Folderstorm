@@ -44,6 +44,7 @@ public:
     void commitPendingSettings();
     void cancelPreferencesSession();
     bool preview(const std::string& id);
+    bool editBackground(const FSWorkspaceBackground::Choice& choice, const FSWorkspaceBackground::Config* defaults = nullptr);
     bool canQuickSwitch() const;
     // Includes deferred work whose later callbacks can still change settings.
     bool preferencesBusy() const;
@@ -64,8 +65,8 @@ public:
     bool returnPrevious();
     bool previousWorkspace(FSWorkspaceLayout::Workspace& workspace) const;
     void acceptAssistantSwitch(std::function<bool()> allowed);
-    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
-    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
+    bool saveCurrentNow(const std::string& name, bool remember_folders = false, int components = FSWorkspaceLayout::Arrangement, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
+    bool saveCurrent(const std::string& name, bool overwrite = false, bool remember_folders = false, int components = FSWorkspaceLayout::Arrangement, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {});
     bool remembersInventoryFolders(const std::string& name) const;
     bool rename(const std::string& old_name, const std::string& new_name);
     bool remove(const std::string& name);
@@ -122,7 +123,7 @@ private:
         FSWorkspaceLayout::Window window;
         std::string subject;
     };
-    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::All, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {}) const;
+    FSWorkspaceLayout::Workspace capture(bool remember_folders = false, int components = FSWorkspaceLayout::Arrangement, bool remember_toolbars = false, const FSWorkspaceContext::Options& context = {}) const;
     void applyContext(const FSWorkspaceLayout::Workspace& workspace);
     void acceptHUDs();
     void pollHUDs();
@@ -183,7 +184,8 @@ private:
     unsigned long mRevision = 0;
     unsigned long mGeneration = 0;
     LLUUID mAccount, mSession;
-    LLSD mProfiles;
+    LLSD mProfiles, mBackgroundDefault;
+    bool mBackgroundTouched = false;
     std::string mActive;
     std::string mStatus = "ready";
     FSWorkspaceLayout::Workspace mBaseline, mPending, mExpected;

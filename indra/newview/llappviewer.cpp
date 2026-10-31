@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacebackground.h"
 #include "fschatupload.h"
 #include "fschatmedia.h"
 #include "fsklipyclient.h"
@@ -2066,6 +2067,7 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    FSWorkspaceBackground::shutdown();
     FSChatUpload::shutdown();
     FSKlipy::shutdown();
     FSChatMedia::shutdown(); // Cancel external previews before HTTP/GL cleanup.

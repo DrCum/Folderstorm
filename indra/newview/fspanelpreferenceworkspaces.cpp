@@ -32,7 +32,7 @@
 namespace {
 int captureComponents(LLView* view)
 {
-    int mask = 0;
+    int mask = view->getChild<LLCheckBoxCtrl>("workspace_capture_background")->get() ? FSWorkspaceLayout::Background : 0;
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_chrome")->get()) mask |= FSWorkspaceLayout::Chrome;
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get()) mask |= FSWorkspaceLayout::Inventory;
     if (view->getChild<LLCheckBoxCtrl>("workspace_capture_maps")->get()) mask |= FSWorkspaceLayout::Maps;
@@ -118,6 +118,7 @@ void FSPanelPreferenceWorkspaces::refresh()
         remember->set(ready && controller.remembersInventoryFolders(selected()));
         FSWorkspaceLayout::Workspace saved;
         const int mask = ready && controller.readProfile(selected(), saved) ? saved.components : FSWorkspaceLayout::All;
+        getChild<LLCheckBoxCtrl>("workspace_capture_background")->set((mask & FSWorkspaceLayout::Background) != 0);
         getChild<LLCheckBoxCtrl>("workspace_capture_chrome")->set((mask & FSWorkspaceLayout::Chrome) != 0);
         getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->set((mask & FSWorkspaceLayout::Inventory) != 0);
         getChild<LLCheckBoxCtrl>("workspace_capture_maps")->set((mask & FSWorkspaceLayout::Maps) != 0);
@@ -131,7 +132,7 @@ void FSPanelPreferenceWorkspaces::refresh()
     getChild<LLView>("workspace_context")->setEnabled(ready);
     getChild<LLButton>("recover_windows")->setEnabled(ready);
     remember->setEnabled(ready && getChild<LLCheckBoxCtrl>("workspace_capture_inventory")->get());
-    for (const char* name : {"workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat", "workspace_capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
+    for (const char* name : {"workspace_capture_background", "workspace_capture_chrome", "workspace_capture_inventory", "workspace_capture_maps", "workspace_capture_chat", "workspace_capture_toolbars"}) getChild<LLCheckBoxCtrl>(name)->setEnabled(ready);
     getChild<LLComboBox>("workspace_startup_mode")->setEnabled(ready);
     getChild<LLComboBox>("workspace_startup_name")->setEnabled(ready && getChild<LLComboBox>("workspace_startup_mode")->getValue().asString() == "named");
     combo->setEnabled(ready && combo->getItemCount());

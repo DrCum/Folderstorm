@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsworkspacebackground.h"
 #include "fssessionworker.h"
 
 #include "llviewerdisplay.h"
@@ -1651,6 +1652,7 @@ void render_ui(F32 zoom_factor, int subfield)
 
     // apply gamma correction and post effects
     gPipeline.renderFinalize();
+    FSWorkspaceBackground::draw();
 
     {
         LLGLState::checkStates();

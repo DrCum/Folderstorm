@@ -75,6 +75,7 @@ void FSFloaterWorkspacePreview::refresh()
     if (!valid) { getChild<LLTextBox>("details")->setText(getString("invalid")); return; }
     const auto diagram = controller.diagram(workspace); canvas->setDiagram(diagram);
     std::string groups = "Restores: ";
+    if (workspace.components & FSWorkspaceLayout::Background) groups += "background; ";
     if (workspace.components & FSWorkspaceLayout::Chrome) groups += "viewport/bars; ";
     if (workspace.components & FSWorkspaceLayout::Inventory) groups += "Inventory; ";
     if (workspace.components & FSWorkspaceLayout::Maps) groups += "maps; ";

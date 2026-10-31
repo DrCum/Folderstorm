@@ -17,6 +17,7 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacecontroller.h"
+#include "fsworkspacebackground.h"
 #include "fspreferenceslistener.h"
 #include "fspreferencesmodel.h"
 #include "fsworkspacecontextadapter.h"
@@ -159,6 +160,30 @@ bool FSWorkspaceController::sameSession() const
 {
     return mAccount == gAgent.getID() && mSession == gAgent.getSessionID();
 }
+bool FSWorkspaceController::editBackground(const FSWorkspaceBackground::Choice& choice, const FSWorkspaceBackground::Config* defaults)
+{
+    beginPreferencesSession();
+    if (!available() || !mTransaction || !sameSession()) return false;
+    FSWorkspaceBackground::Choice validated;
+    if (!FSWorkspaceBackground::fromLLSD(FSWorkspaceBackground::toLLSD(choice),validated)) return false;
+    FSWorkspaceBackground::Config checkedDefault;
+    if (defaults && !FSWorkspaceBackground::fromLLSD(FSWorkspaceBackground::toLLSD(*defaults),checkedDefault)) return false;
+    mBackgroundTouched = true;
+    gSavedPerAccountSettings.setLLSD("FSWorkspaceBackground",FSWorkspaceBackground::toLLSD(validated));
+    if (defaults) gSavedPerAccountSettings.setLLSD("FSWorkspaceBackgroundDefault",FSWorkspaceBackground::toLLSD(checkedDefault));
+    // Editing a background changes that group only in the current named workspace.
+    // Geometry and other pending workspace changes still require their normal Save.
+    FSWorkspaceLayout::Workspace saved;
+    std::string error;
+    if (mProfiles.has(mActive) && FSWorkspaceLayout::fromLLSD(mProfiles[mActive],saved,error) && !saved.ignored_details)
+    {
+        saved.background=validated; saved.components |= FSWorkspaceLayout::Background;
+        mProfiles[mActive]=FSWorkspaceLayout::toLLSD(saved);
+    }
+    FSWorkspaceBackground::refresh();
+    mComparisonDirty = true; ++mRevision;
+    return true;
+}
 FSWorkspaceController::RestoreReport FSWorkspaceController::restoreReport() const
 {
     return available() && mReportAccount == gAgent.getID() && mReportSession == gAgent.getSessionID() ? mReport : RestoreReport{};
@@ -203,7 +228,7 @@ void FSWorkspaceController::abandon()
     mQuickSwitch = false;
     mTransaction = false;
     mHUDReviewed = mHUDPreviewPending = false; mHUDAllowed = {};
-    mContextControls.clear(); mContextTouched = mCameraTouched = false;
+    mContextControls.clear(); mContextTouched = mCameraTouched = mBackgroundTouched = false;
     mRuntime.clear(); mControls.clear(); mPendingHandles.clear(); mTouched.clear(); mCreated.clear();
     mExtraControls.clear(); mExtraRuntime.clear(); mPendingExtraInventory.clear();
     mFocus.markDead();
@@ -214,6 +239,7 @@ FSWorkspaceLayout::Workspace FSWorkspaceController::capture(bool remember_folder
 {
     FSWorkspaceLayout::Workspace result;
     result.components = components;
+    if (components & FSWorkspaceLayout::Background) result.background = FSWorkspaceBackground::current();
     result.context = context;
     for (bool camera : {false, true})
     {
@@ -346,7 +372,8 @@ void FSWorkspaceController::beginPreferencesSession()
     mAccount = gAgent.getID(); mSession = gAgent.getSessionID();
     mProfiles = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     mActive = gSavedPerAccountSettings.getString("FSActiveWorkspace");
-    mBaseline = capture(false, FSWorkspaceLayout::All, true, FSWorkspaceContext::liveOptions());
+    mBaseline = capture(false, FSWorkspaceLayout::Arrangement, true, FSWorkspaceContext::liveOptions());
+    mBackgroundDefault = gSavedPerAccountSettings.getLLSD("FSWorkspaceBackgroundDefault");
     // Capture the saved/effective stacks at Preferences open, before another
     // panel or a camera setting callback can change them during a preview.
     auto remember_context = [&](const std::string& name)
@@ -406,7 +433,7 @@ bool FSWorkspaceController::preferencesBusy() const
 }
 bool FSWorkspaceController::dormantPreferencesBaseline() const
 {
-    const bool edited = mContextTouched || mCameraTouched || mToolbarTouched || mInboxTouched ||
+    const bool edited = mBackgroundTouched || mContextTouched || mCameraTouched || mToolbarTouched || mInboxTouched ||
         !mTouched.empty() || !mCreated.empty() || !mRenamed.empty() || mReportPreview ||
         std::any_of(mExtraRuntime.begin(),mExtraRuntime.end(),[](const ExtraInventoryBaseline& entry){return entry.touched;});
     const bool deferred = mPendingPlacement || mQuickSwitch || mStartupScheduled || mDisplayPending ||
@@ -490,7 +517,7 @@ void FSWorkspaceController::finishQuickSwitch()
     acceptHUDs();
     if (!mRestoreLayout && !mActive.empty() && mProfiles.has(mActive))
     {
-        const auto live = capture(mPending.remember_inventory_folders, mPending.components & FSWorkspaceLayout::All, mPending.remember_toolbars, mPending.context);
+        const auto live = capture(mPending.remember_inventory_folders, mPending.components & FSWorkspaceLayout::Arrangement, mPending.remember_toolbars, mPending.context);
         mExpected = mPending;
         if (mPending.components & FSWorkspaceLayout::Chrome)
         { mExpected.chrome = live.chrome; mExpected.world_view_in_mouselook = live.world_view_in_mouselook; }
@@ -516,6 +543,7 @@ void FSWorkspaceController::finishQuickSwitch()
         if (mExpected.has_inbox)
         { mExpected.has_inbox = live.has_inbox; mExpected.inbox_expanded = live.inbox_expanded; mExpected.inbox_height = live.inbox_height; }
         if (mExpected.remember_toolbars) mExpected.toolbars = live.toolbars;
+        if (mExpected.components & FSWorkspaceLayout::Background) mExpected.background = live.background;
         mExpectedDefinition = mProfiles[mActive]; mExpectedId = mActive;
         mExpectedAccount = mAccount; mExpectedSession = mSession;
         mComparisonDirty = true;
@@ -531,7 +559,7 @@ bool FSWorkspaceController::rememberPrevious(const FSWorkspaceContext::Options& 
     FSWorkspaceContext::Options options;
     if (context.graphics.mode != FSWorkspaceContext::Mode::Off) options.graphics.mode = FSWorkspaceContext::Mode::Current;
     if (context.camera.mode != FSWorkspaceContext::Mode::Off) options.camera.mode = FSWorkspaceContext::Mode::Current;
-    const auto current = capture(true, FSWorkspaceLayout::All, true, options);
+    const auto current = capture(true, FSWorkspaceLayout::Arrangement, true, options);
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (!FSWorkspaceLayout::fromLLSD(FSWorkspaceLayout::toLLSD(current), validated, error))
     { mStatus = current.extra_inventory.size() > FSWorkspaceLayout::MAX_EXTRA_INVENTORY_WINDOWS ? "too_many_inventory_windows" : "invalid_data"; return false; }
@@ -585,7 +613,7 @@ bool FSWorkspaceController::saveCurrent(const std::string& name, bool overwrite,
     std::string error;
     if (!FSWorkspaceLayout::canSaveProfile(mProfiles, name, error)) { mStatus = "invalid_name_or_data"; return false; }
     if (mProfiles.has(name) && !overwrite) { mStatus = "exists"; return false; }
-    const auto current = capture(remember_folders, components & FSWorkspaceLayout::All, remember_toolbars, context);
+    const auto current = capture(remember_folders, components & FSWorkspaceLayout::Arrangement, remember_toolbars, context);
     const auto too_many_branches = [](const FSWorkspaceLayout::Window& window)
     { return window.inventory_folder.expanded_folders.size() > FSWorkspaceLayout::MAX_EXPANDED_INVENTORY_FOLDERS; };
     if (std::any_of(current.windows.begin(), current.windows.end(), [&](const std::pair<const Role, FSWorkspaceLayout::Window>& entry) { return too_many_branches(entry.second); }) ||
@@ -665,6 +693,12 @@ bool FSWorkspaceController::startPreview(const FSWorkspaceLayout::Workspace& wor
     mHUDPreviewPending = !workspace.context.huds.empty();
     mPending = workspace; mFolderSkipped = mChatSkipped = mDependentSkipped = false; mApplied = mAdjusted = 0; mSkipped = workspace.ignored_details;
     applyContext(workspace);
+    if (workspace.components & FSWorkspaceLayout::Background)
+    {
+        gSavedPerAccountSettings.setLLSD("FSWorkspaceBackground",FSWorkspaceBackground::toLLSD(workspace.background));
+        FSWorkspaceBackground::refresh();
+        report("background","restored");
+    }
     mFocus.markDead();
     if (auto* focus = dynamic_cast<LLView*>(gFocusMgr.getKeyboardFocus())) mFocus = focus->getDerivedHandle<LLView>();
     if (workspace.components & FSWorkspaceLayout::Chrome)
@@ -994,6 +1028,9 @@ void FSWorkspaceController::cancelPreferencesSession()
         LLFloaterPreference::refreshEnabledGraphics();
         LLPresetsManager::instance().triggerChangeSignal(); LLPresetsManager::instance().triggerChangeCameraSignal();
     }
+    gSavedPerAccountSettings.setLLSD("FSWorkspaceBackground",FSWorkspaceBackground::toLLSD(mBaseline.background));
+    gSavedPerAccountSettings.setLLSD("FSWorkspaceBackgroundDefault",mBackgroundDefault);
+    FSWorkspaceBackground::refresh();
     if (mToolbarTouched) applyToolbars(mBaseline);
     FSChromeLayoutController::instance().applySnapshot(mBaseline.chrome);
     gSavedSettings.setBOOL("FSWorldViewInMouselook", mBaseline.world_view_in_mouselook);
@@ -1120,9 +1157,10 @@ bool FSWorkspaceController::modified() const
         const auto extras = extraInventoryFloaters();
         for (size_t i = 0; i < saved.extra_inventory.size(); ++i) fit_saved(saved.extra_inventory[i], i < extras.size() ? extras[i] : nullptr);
     }
-    const auto current = capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::All, saved.remember_toolbars, saved.context);
+    const auto current = capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::Arrangement, saved.remember_toolbars, saved.context);
     bool changed = (saved.components & FSWorkspaceLayout::Chrome) && (FSChromeLayoutController::snapshotToLLSD(saved.chrome) != FSChromeLayoutController::snapshotToLLSD(current.chrome) ||
         saved.world_view_in_mouselook != current.world_view_in_mouselook);
+    if ((saved.components & FSWorkspaceLayout::Background) && FSWorkspaceBackground::toLLSD(saved.background) != FSWorkspaceBackground::toLLSD(current.background)) changed = true;
     for (const auto& entry : saved.windows)
     {
         auto it = current.windows.find(entry.first);
@@ -1169,7 +1207,7 @@ void FSWorkspaceController::requestUpdateCurrent()
     const auto name = activeId();
     FSWorkspaceLayout::Workspace saved;
     if (!readProfile(name, saved) || saved.ignored_details != 0 || !isCustom(name) || (saved.remember_inventory_folders && !gInventory.isInventoryUsable())) return;
-    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::All, saved.remember_toolbars, saved.context));
+    const auto reviewed = FSWorkspaceLayout::toLLSD(capture(saved.remember_inventory_folders, saved.components & FSWorkspaceLayout::Arrangement, saved.remember_toolbars, saved.context));
     const auto originals = gSavedPerAccountSettings.getLLSD("FSWorkspaceProfiles");
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (!FSWorkspaceLayout::fromLLSD(reviewed, validated, error)) return;
@@ -1361,7 +1399,7 @@ void FSWorkspaceController::saveLastArrangement()
     if (!canQuickSwitch() || !gInventory.isInventoryUsable() || gDisconnected ||
         gSavedPerAccountSettings.getString("FSWorkspaceStartupMode") != "last") return;
     if (mQuickSwitch) finishQuickSwitch();
-    const auto data = FSWorkspaceLayout::toLLSD(capture(true, FSWorkspaceLayout::All, true, FSWorkspaceContext::liveOptions()));
+    const auto data = FSWorkspaceLayout::toLLSD(capture(true, FSWorkspaceLayout::Arrangement, true, FSWorkspaceContext::liveOptions()));
     FSWorkspaceLayout::Workspace validated; std::string error;
     if (FSWorkspaceLayout::fromLLSD(data, validated, error))
         gSavedPerAccountSettings.setLLSD("FSWorkspaceLastArrangement", data);
