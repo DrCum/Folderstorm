@@ -567,6 +567,9 @@ public:
     LLViewerInventoryItem* getInventoryItemByAsset(const LLUUID& asset_id);
     LLViewerInventoryItem* getInventoryItemByAsset(const LLUUID& asset_id, LLAssetType::EType type);
     S16 getInventorySerial() const { return mInventorySerialNum; }
+    U64 getInventoryChangeGeneration() const { return mInventoryChangeGeneration; }
+    U64 getInventoryServerGeneration() const { return mInventoryServerGeneration; }
+    bool isInventoryServerComplete() const { return mInventoryServerComplete; }
 
     // These functions does viewer-side only object inventory modifications
     void updateViewerInventoryAsset(
@@ -931,9 +934,12 @@ protected:
     //
 
     static void processTaskInvFile(void** user_data, S32 error_code, LLExtStat ext_status);
-    bool loadTaskInvFile(const std::string& filename);
-    void loadTaskInvLLSD(const LLSD &inv_result);
-    void doInventoryCallback();
+    bool loadTaskInvFile(const std::string& filename, bool assistant_complete = true);
+    void loadTaskInvLLSD(const LLSD &inv_result, bool assistant_complete = true);
+    void doInventoryCallback(bool from_simulator = false, bool complete = true);
+    U64 mInventoryServerGeneration = 0;
+    U64 mInventoryChangeGeneration = 0;
+    bool mInventoryServerComplete = false;
 
     bool isOnMap();
 

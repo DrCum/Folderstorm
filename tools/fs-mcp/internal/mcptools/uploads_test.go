@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -102,7 +103,7 @@ func TestUploadRejectsUnsupportedDuplicateSpecialAndOversized(t *testing.T) {
 func TestUploadCountAndDepthLimits(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < 33; i++ {
-		writeUpload(t, filepath.Join(root, string(rune('a'+i))+".wav"))
+		writeUpload(t, filepath.Join(root, fmt.Sprintf("file-%02d.wav", i)))
 	}
 	if _, err := uploadInputs(uploadPreviewArgs{Directory: root}); err == nil {
 		t.Fatal("count limit")
