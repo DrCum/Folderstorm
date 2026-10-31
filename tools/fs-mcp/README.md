@@ -31,6 +31,9 @@ Talk to one logged-in Folderstorm process on this machine:
 - Search by name, description, creator, type, worn state, permissions, favorite, and creation time.
 - Create folders and a limited set of new items. Rename, describe, thumbnail, favorite, link, move, copy, trash, and restore.
 - Read notecard text, LSL source, and landmark locations. Those reads do not save edits.
+- Inspect owned world-object Contents, install copyable inventory items, edit/compile installed scripts, query/start/stop/reset them, and read scoped owner/runtime diagnostics.
+- Take owned objects or copies into inventory, package copyable inventory objects into another prim, and track unconfirmed rez candidates explicitly.
+- Touch owned test prims, answer their live game dialogs/text boxes, send explicit script-channel commands, and run bounded test recipes.
 - List My Outfits and the Current Outfit. Wear an outfit or individual items, or detach them, after confirmation.
 - Read and set the camera, including named portrait and full-body presets, then return a JPEG snapshot.
 
@@ -42,12 +45,45 @@ The viewer uses a closed manifest of typed inventory, appearance, camera, worksp
 
 Also out of scope:
 
-- Task inventory (objects you are sitting on or editing in-world).
+- Attached, unowned or nonmodifiable object Contents; scripts inside un-rezzed inventory objects; no-copy transfers into Contents.
 - Marketplace listings and purchases.
 - Remote or multi-user access. The HTTP listener is `127.0.0.1` only.
 - Push notifications. `inventory_changes` is request/response. Poll it with the `generation` from `viewer_status`.
 
 Restrained Love locks are honored. A locked wearable, attachment, or folder returns an error instead of changing the avatar or the inventory.
+
+## In-world script development
+
+Use matching viewer/MCP binaries. Enable opt-in **World read**, **Object Contents read**, inventory **Read**, and **Script diagnostics** in Local assistant. Writes use separate Ask-capable permissions for Contents changes, source edits, script execution, taking objects, game interaction and test runs. Managed writes require the active character; no tool switches characters implicitly.
+
+1. Use exact prim UUIDs with `object_contents_list`, including separate snapshots for linked child prims. `object_script_get` returns source, its complete-read token, asset UUID and hash.
+2. Use the existing inventory script tools to create a script, then `object_contents_put` to copy it into the prim. New scripts insert stopped by default. Poll `object_operation_status` for the **task** item UUID; do not substitute the source inventory UUID.
+3. Use `object_script_preview` and `object_script_save_compile` to revise the installed item with its fresh source token/hash. Close native script editors first. Source saving and compiler success are separate facts. Mono/raw source is supported; preprocessing is not. Experience metadata is preserved; grids without the necessary metadata capability are refused.
+4. Query `object_script_status` before requesting preserve-running mode. Running tokens expire after ten seconds and are invalidated by execution changes. Native editors and MCP share a query tracker, including while MCP is off. A timed-out query must drain before another assistant execution change; ScriptRunningReply has no request nonce. Native editors can retry a lost reply, but that script then reports `running_state_uncertain` to MCP until relog because the replies cannot be distinguished. Poll `object_operation_status` for a pending execution write before requesting another status read.
+5. Start diagnostics using `script_debug_poll` with `start: "now"`, then retain its cursor. Only owner/runtime output from eligible owned prims is exposed, subject to native receive/privacy restrictions. Script identity or line numbers are not invented when the simulator omits them. A gap makes dependent assertions inconclusive.
+6. Use `object_touch`, `object_dialog_list`/`object_dialog_reply`, and `object_channel_send` for gameplay. Dialog tools answer only exact live game dialogs, never permission/payment/teleport/inventory offers. Channel sends are avatar-origin broadcasts on explicit nonzero channels, limited to six per minute. They do not expose arbitrary hidden-channel reception.
+7. Use `object_take`/`object_take_copy`, then inspect the receipt's actual inventory UUID before `object_contents_put` packaging. Acquisition needs both matching native transaction inventory arrival and simulator acknowledgment. Original removal is separate evidence. Tracked rez uses `client_request_id`; `object_rez_identify` records an explicit candidate choice, **not** server-confirmed rez identity.
+
+Every write needs a fresh UUID `client_request_id`. Reuse the same ID with unchanged arguments after a lost response; inspect the original receipt. Never replay an uncertain write under a new ID. Retired IDs remain unusable for the session. Do not automatically delete fixtures or retry a partially completed take/upload/install.
+
+`script_test_begin` freezes up to 32 prims, 64 typed steps and a 1–600 second deadline. It approves all step permissions together. Supported actions are `touch`, `reset`, `running`, `send_channel`, `wait_output`, `assert_running`, `assert_contents`, and `delay`; install/edit/package remain separate reviewed calls. A minimal recipe after installing and starting the [controller fixture](../../doc/examples/mcp-script-test-controller.lsl) is:
+
+```json
+{
+  "viewer_session": "REPLACE_WITH_CURRENT_SESSION",
+  "client_request_id": "REPLACE_WITH_FRESH_UUID",
+  "object_ids": ["REPLACE_WITH_EXACT_PRIM_UUID"],
+  "timeout_seconds": 30,
+  "steps": [
+    {"action": "touch", "object_id": "REPLACE_WITH_EXACT_PRIM_UUID"},
+    {"action": "wait_output", "object_id": "REPLACE_WITH_EXACT_PRIM_UUID", "text": "fixture: touched", "match": "contains", "expected": true, "timeout_seconds": 10}
+  ]
+}
+```
+
+Poll `script_test_status`; status never advances steps. Each action starts a new observation window so old output cannot satisfy the next action. Runtime errors fail by default; use explicit `fail_on_runtime_errors: false` only when testing error handling. Source changes, unavailable revision evidence, diagnostic gaps and uncertain outcomes cannot produce a pass. A recipe without assertions finishes `completed_unverified`. `script_test_stop` cancels unsent steps even after individual permissions are revoked; it does not stop LSL scripts or delete objects. Bridge access itself must still be on.
+
+Native Windows/SL/OpenSim acceptance remains pending. The [implementation checklist](../../doc/plans/mcp-script-testing.md#final-native-acceptance) covers native editors, late replies, restrictions and full packaging.
 
 ## Building and inventory next-owner permissions
 

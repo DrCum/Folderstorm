@@ -44,6 +44,10 @@
 #include "llviewerassetupload.h"
 #include "fscontentupload.h"
 #include "fsfileuploadmodel.h"
+#include "fsobjecttools.h"
+#include "llviewerobject.h"
+#include "llviewerobjectlist.h"
+#include "llviewerregion.h"
 #include <map>
 #include "llappviewer.h"
 #include "llviewerstats.h"
@@ -72,9 +76,28 @@ fs_content::PendingSourceOwners<LLUUID> sPendingLegacyInventoryUploads;
 struct PendingInventoryUpload
 {
     explicit PendingInventoryUpload(const LLResourceUploadInfo::ptr_t& upload):info(upload.get())
-    {auto& entry=sPendingInventoryUploads[info];entry.first=upload->getItemId();++entry.second;}
-    ~PendingInventoryUpload(){const auto found=sPendingInventoryUploads.find(info);if(found!=sPendingInventoryUploads.end() && !--found->second.second)sPendingInventoryUploads.erase(found);}
+    {
+        auto& entry=sPendingInventoryUploads[info];entry.first=upload->getItemId();++entry.second;
+        if(const auto* script=dynamic_cast<const LLScriptAssetUpload*>(info);script && !script->assistantOwned())
+        {
+            task=script->getTaskId();item=script->getItemId();account=gAgent.getID();login=gAgent.getSessionID();
+            if(const auto* object=gObjectList.findObject(task);object && object->getRegion())host=object->getRegion()->getHost();
+        }
+    }
+    ~PendingInventoryUpload()
+    {
+        // Success, failure, cancellation and exceptions all release this lease.
+        // A query made during an uncertain native compile must not become
+        // post-upload evidence merely because the upload marker disappeared.
+        const auto* object=gObjectList.findObject(task);
+        if(task.notNull() && account==gAgent.getID() && login==gAgent.getSessionID() &&
+            object && object->getRegion() && object->getRegion()->getHost()==host)
+            fs_object_tools_native_execution_changed(task,item);
+        const auto found=sPendingInventoryUploads.find(info);if(found!=sPendingInventoryUploads.end() && !--found->second.second)sPendingInventoryUploads.erase(found);
+    }
     const LLResourceUploadInfo* info;
+    LLUUID task,item,account,login;
+    LLHost host;
 };
 }
 bool LLViewerAssetUpload::hasPendingInventoryUpload(const LLUUID& itemId,const LLResourceUploadInfo* except)
@@ -897,6 +920,7 @@ LLSD LLScriptAssetUpload::generatePostBody()
     }
     else
     {
+        if (!assistantOwned()) fs_object_tools_native_execution_changed(getTaskId(), getItemId());
         body["task_id"] = getTaskId();
         body["item_id"] = getItemId();
         // <FS:Ansariel> OpenSim expects an integer here...

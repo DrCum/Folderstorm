@@ -2,6 +2,8 @@
 
 E1 hardens existing reads. E6 adds notecard writes; E7 adds script source save/compile. Depends on E0; E7 reuses E6's guarded upload/receipt service. Task inventory and in-world script execution are excluded.
 
+The separate [object script development extension](mcp-script-testing.md) now implements those task-inventory/execution capabilities through `FSObjects`; this document's agent-inventory endpoints retain their original scope.
+
 ## Harden the existing reads first
 
 inventory_read_notecard and inventory_read_script already exist. Align them with native editor permissions rather than treating inventory metadata Read as unrestricted asset access. Audit native COPY requirements for notecards and COPY+MODIFY for script source, including the native Library exception; do not invent broader godlike access. Use item-bound getInvItemAsset context as native editors do, not a raw arbitrary asset UUID fetch.

@@ -127,6 +127,7 @@ set(viewer_SOURCE_FILES
     fsbuildlistener.cpp
     fsworldlistener.cpp
     fsfileuploadlistener.cpp
+    fsobjecttools.cpp
     fscontentlistener.cpp
     fsgesturelistener.cpp
     fspreferenceslistener.cpp
@@ -1045,6 +1046,9 @@ set(viewer_HEADER_FILES
     fsassistantassetfetch.h
     fsfileuploadlistener.h
     fsfileuploadmodel.h
+    fsobjecttools.h
+    fsobjecttoolsmodel.h
+    fsscripttestmodel.h
     fscontentlistener.h
     fscontentupload.h
     fscontentreadpolicy.h

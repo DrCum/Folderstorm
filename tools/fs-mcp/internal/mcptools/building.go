@@ -13,8 +13,8 @@ func registerBuilding(server *mcp.Server, state *Server, readOnly, mutating *mcp
 	mcp.AddTool(server, &mcp.Tool{Name: "build_object_transform", Description: "Move, rotate or resize an owned nonphysical unattached root at its exact expected_revision. Region coordinates; quaternion [x,y,z,w]. Linked roots move/rotate together; linked resizing is refused. Requires active character, World read and Ask-capable Build edit.", Annotations: withTitle(mutating, "build object transform")}, state.buildingTransform)
 	mcp.AddTool(server, &mcp.Tool{Name: "build_object_surface", Description: "Edit one legacy face color RGBA, glow, fullbright and UV transform. Optional diffuse texture_item must be owned full-permission agent inventory. PBR overrides use native Build. Requires exact revision, active character and Build edit.", Annotations: withTitle(mutating, "build object surface")}, state.buildingSurface)
 	mcp.AddTool(server, &mcp.Tool{Name: "build_object_material", Description: "Assign a full-permission owned inventory PBR material to one face, clearing existing overrides. Requires exact revision, active character, inventory Read and Build edit. Asynchronous guarded submission; inspect receipt and object before considering another operation.", Annotations: withTitle(mutating, "build object material")}, state.buildingMaterial)
-	mcp.AddTool(server, &mcp.Tool{Name: "build_rez_primitive", Description: "Rez cube, sphere, cylinder or cone with explicit region position, scale and quaternion within 64m on current buildable parcel. Simulator-default permissions; native selection stays unchanged. Submitted does not confirm object creation or identify its UUID. Never retry an uncertain rez.", Annotations: withTitle(mutating, "build rez primitive")}, state.buildingPrimitive)
-	mcp.AddTool(server, &mcp.Tool{Name: "build_rez_inventory", Description: "Rez one owned copyable agent-inventory object within 64m on current buildable parcel. Source retained; inventory permissions are packed natively. Requires inventory/World read, active character and Build rez. Never replay an uncertain rez.", Annotations: withTitle(mutating, "build rez inventory")}, state.buildingRezInventory)
+	mcp.AddTool(server, &mcp.Tool{Name: "build_rez_primitive", Description: "Rez cube, sphere, cylinder or cone with explicit region position, scale and quaternion within 64m on current buildable parcel. Simulator-default permissions; native selection stays unchanged. Submitted does not confirm object creation. An optional client_request_id UUID adds a retained receipt and unconfirmed candidates. Never retry an uncertain rez.", Annotations: withTitle(mutating, "build rez primitive")}, state.buildingPrimitive)
+	mcp.AddTool(server, &mcp.Tool{Name: "build_rez_inventory", Description: "Rez one owned copyable agent-inventory object within 64m on current buildable parcel. Source retained; inventory permissions are packed natively. Optional client_request_id UUID adds a retained receipt and candidates; association remains unconfirmed. Requires inventory/World read, active character and Build rez. Never replay an uncertain rez.", Annotations: withTitle(mutating, "build rez inventory")}, state.buildingRezInventory)
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_permissions_get", Description: "Read finished owned agent-inventory item permissions and an exact expected_revision. Excludes links, Library and Trash. Does not fetch task inventory.", Annotations: withTitle(readOnly, "inventory permissions get")}, state.buildingPermissions)
 	mcp.AddTool(server, &mcp.Tool{Name: "inventory_next_owner_set", Description: "Set explicit next-owner Copy/Modify/Transfer at the exact expected_revision. Native Properties eligibility, base rights and fair-use apply. Other permissions and sale settings are preserved; object slam flag updated. Requires Read and Ask-capable Inventory permissions; no-copy/no-transfer is refused.", Annotations: withTitle(mutating, "inventory next owner set")}, state.buildingNextOwner)
 }
@@ -56,18 +56,20 @@ type buildingMaterialArgs struct {
 	ViewerPID        int    `json:"viewer_pid,omitempty"`
 }
 type buildingPrimitiveArgs struct {
-	Shape         string    `json:"shape"`
-	Position      []float64 `json:"position"`
-	Rotation      []float64 `json:"rotation"`
-	Scale         []float64 `json:"scale"`
-	ViewerSession string    `json:"viewer_session"`
-	ViewerPID     int       `json:"viewer_pid,omitempty"`
+	ClientRequestID string    `json:"client_request_id,omitempty" jsonschema:"optional unique request UUID for tracked rez receipts and candidates; requires object_lifecycle version 1"`
+	Shape           string    `json:"shape"`
+	Position        []float64 `json:"position"`
+	Rotation        []float64 `json:"rotation"`
+	Scale           []float64 `json:"scale"`
+	ViewerSession   string    `json:"viewer_session"`
+	ViewerPID       int       `json:"viewer_pid,omitempty"`
 }
 type buildingRezArgs struct {
-	ID            string    `json:"id"`
-	Position      []float64 `json:"position"`
-	ViewerSession string    `json:"viewer_session"`
-	ViewerPID     int       `json:"viewer_pid,omitempty"`
+	ClientRequestID string    `json:"client_request_id,omitempty" jsonschema:"optional unique request UUID for tracked rez receipts and candidates; requires object_lifecycle version 1"`
+	ID              string    `json:"id"`
+	Position        []float64 `json:"position"`
+	ViewerSession   string    `json:"viewer_session"`
+	ViewerPID       int       `json:"viewer_pid,omitempty"`
 }
 type buildingNextOwnerArgs struct {
 	ID               string `json:"id"`
@@ -103,6 +105,12 @@ func buildingParams(op string, args any) (map[string]any, bool) {
 	}
 	delete(p, "viewer_session")
 	delete(p, "viewer_pid")
+	if client, ok := p["client_request_id"]; ok {
+		text, valid := client.(string)
+		if !valid || !validContentUUID(text) {
+			return nil, false
+		}
+	}
 	id, _ := p["id"].(string)
 	if op != "rezPrimitive" && !socialUUID(id) {
 		return nil, false
@@ -218,6 +226,9 @@ func (s *Server) callWorldFeature(ctx context.Context, session string, pid int, 
 	}
 	if len(health) > 65536 || json.Unmarshal(health, &h) != nil || h.Capabilities[capability] != 1 {
 		return errorResult("unsupported_feature", "Update matching viewer and sidecar; required capability is unavailable", nil)
+	}
+	if apiName == "FSBuild" && params["client_request_id"] != nil && h.Capabilities["object_lifecycle"] != 1 {
+		return errorResult("unsupported_feature", "Tracked rez requires matching object_lifecycle version 1", nil)
 	}
 	return apiResult(api.CallNamed(ctx, apiName, op, params))
 }

@@ -158,6 +158,13 @@ std::string FSAssistantApproval::describe(const LLSD& summary)
         text << "\n" << getString("content_replacement") << "\n" << replacement << "\n";
         text << getString("content_compiler") << format(summary["compiler"]) << "\n";
     }
+    if (summary.has("test_steps"))
+    {
+        auto steps = utf8str_truncate(summary["test_steps"].asString(), 65536);
+        for (char& c : steps)
+            if ((static_cast<unsigned char>(c) < 32 && c != '\n' && c != '\r' && c != '\t') || c == 127) c = ' ';
+        text << "\n" << getString("object_test_steps") << "\n" << steps << "\n";
+    }
     for (const LLSD& warning : llsd::inArray(summary["consequences"]))
     {
         text << "\n" << getString(warning.asString()) << "\n";

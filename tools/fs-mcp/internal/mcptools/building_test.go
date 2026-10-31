@@ -139,3 +139,20 @@ func TestBuildingSchemasKeepExplicitSession(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildingTrackedRezRequiresCapability(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		state, api := buildingFixture()
+		client := buildingClient(t, state)
+		if supported {
+			api.health = json.RawMessage(`{"capabilities":{"building_tools":1,"object_lifecycle":1}}`)
+		}
+		r := call(t, client, "build_rez_inventory", map[string]any{"viewer_session": "login-a", "id": buildID, "position": []float64{20, 25, 30}, "client_request_id": contentOperation})
+		if r.IsError == supported {
+			t.Fatalf("capability=%v result=%s", supported, textOf(r))
+		}
+		if supported && api.lastNamed["client_request_id"] != contentOperation {
+			t.Fatal("tracking request not forwarded")
+		}
+	}
+}
