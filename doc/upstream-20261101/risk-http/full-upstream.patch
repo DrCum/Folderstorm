@@ -1,0 +1,49 @@
+commit 1af02acdf5719fc56400499a80c2a052d1cb6f41
+Author:     Andrey Kleshchev <117672381+akleshchev@users.noreply.github.com>
+AuthorDate: Wed Oct 21 23:10:44 2026 +0300
+Commit:     Andrey Kleshchev <117672381+akleshchev@users.noreply.github.com>
+CommitDate: Thu Oct 22 22:29:04 2026 +0300
+
+    #6486 HTTP crash during shutdown
+
+diff --git a/indra/llcorehttp/_httpservice.cpp b/indra/llcorehttp/_httpservice.cpp
+index e14a533479..a954668c3c 100644
+--- a/indra/llcorehttp/_httpservice.cpp
++++ b/indra/llcorehttp/_httpservice.cpp
+@@ -164,6 +164,22 @@ void HttpService::term()
+             {
+                 ms_sleep(100);
+             }
++
++            if (RUNNING == sState)
++            {
++                // Thread did not stop cooperatively in time.  Since callers
++                // (e.g. HttpRequest::destroyService()) are about to tear down
++                // objects (HTTPStats, HttpPolicy, HttpLibcurl, ...) that the
++                // worker thread may still be touching, we must not proceed
++                // with a still-running thread.  Force-terminate it before
++                // deleting anything it could reference to avoid use-after-free.
++                LL_WARNS(LOG_CORE) << "HttpService worker thread failed to stop cooperatively.  "
++                    << "Forcing hard cancel."
++                    << LL_NEWLINE << "Last policy: " << U32(sInstance->mLastPolicy) << LL_ENDL;
++
++                sInstance->mThread->cancel();
++                ms_sleep(10);
++            }
+         }
+ 
+         delete sInstance;
+diff --git a/indra/llcorehttp/httprequest.cpp b/indra/llcorehttp/httprequest.cpp
+index d8fcd6a03f..1972e49a80 100644
+--- a/indra/llcorehttp/httprequest.cpp
++++ b/indra/llcorehttp/httprequest.cpp
+@@ -503,8 +503,8 @@ HttpStatus HttpRequest::destroyService()
+ 
+     if (has_inited)
+     {
++        HttpService::term(); // depends on HTTPStats
+         HTTPStats::deleteSingleton();
+-        HttpService::term();
+         HttpRequestQueue::term();
+         has_inited = false;
+     }
