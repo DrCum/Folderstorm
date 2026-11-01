@@ -1,0 +1,17 @@
+{
+  "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "entries": [
+    {
+      "source": "d632b85899e76529c9b42affc4fe12df75c1af5e",
+      "applied": false,
+      "dryRunReturnCode": 1,
+      "dryRunDiagnostics": "error: patch failed: indra/llwebrtc/llwebrtc.cpp:819\nerror: indra/llwebrtc/llwebrtc.cpp: patch does not apply\nerror: patch failed: indra/llwebrtc/llwebrtc_impl.h:553\nerror: indra/llwebrtc/llwebrtc_impl.h: patch does not apply\n"
+    },
+    {
+      "source": "1bb852e5a40d9bd31dcfeed9e1c4e87f2141a2d5",
+      "applied": false,
+      "dryRunReturnCode": 1,
+      "dryRunDiagnostics": "error: patch failed: autobuild.xml:2858\nerror: autobuild.xml: patch does not apply\nerror: patch failed: indra/llwebrtc/CMakeLists.txt:40\nerror: indra/llwebrtc/CMakeLists.txt: patch does not apply\nerror: patch failed: indra/llwebrtc/llwebrtc.cpp:983\nerror: indra/llwebrtc/llwebrtc.cpp: patch does not apply\nerror: patch failed: indra/newview/app_settings/settings.xml:24306\nerror: indra/newview/app_settings/settings.xml: patch does not apply\nerror: patch failed: indra/newview/llvoicewebrtc.cpp:312\nerror: indra/newview/llvoicewebrtc.cpp: patch does not apply\n"
+    }
+  ]
+}

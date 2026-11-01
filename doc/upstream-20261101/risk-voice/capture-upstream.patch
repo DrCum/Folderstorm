@@ -1,0 +1,717 @@
+commit 1bb852e5a40d9bd31dcfeed9e1c4e87f2141a2d5
+Author:     Hecklezz <tj8@live.com.au>
+AuthorDate: Wed Oct 28 19:58:46 2026 +1000
+Commit:     Hecklezz <tj8@live.com.au>
+CommitDate: Wed Oct 28 20:12:36 2026 +1000
+
+    Implement option to stop mic capture when muted
+    
+    Setting can be found at the bottom of Preferences->Sound & Media->Sound tab under "Bluetooth only"
+    Also includes some small upstream changes in 26.5 LL made after my original commit
+
+diff --git a/autobuild.xml b/autobuild.xml
+index 5adb1afa34..4c5687ee25 100644
+--- a/autobuild.xml
++++ b/autobuild.xml
+@@ -2858,11 +2858,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
+             <key>archive</key>
+             <map>
+               <key>hash</key>
+-              <string>8590471da4019b8a6eb894747058466570c97785</string>
++              <string>516b69b841109d38bd14286d28a8d77ee67e1c52</string>
+               <key>hash_algorithm</key>
+               <string>sha1</string>
+               <key>url</key>
+-              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.20/webrtc-m144.7559.06.20.36004322351-darwin64-36004322351.tar.zst</string>
++              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.22/webrtc-m144.7559.06.22.38629291819-darwin64-38629291819.tar.zst</string>
+             </map>
+             <key>name</key>
+             <string>darwin64</string>
+@@ -2872,11 +2872,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
+             <key>archive</key>
+             <map>
+               <key>hash</key>
+-              <string>2baa19cebc78b0009e919fb7a4fc74674ff44eae</string>
++              <string>69429645f9f5eb0080546af0f4e32082f285a852</string>
+               <key>hash_algorithm</key>
+               <string>sha1</string>
+               <key>url</key>
+-              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.20/webrtc-m144.7559.06.20.36004322351-linux64-36004322351.tar.zst</string>
++              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.22/webrtc-m144.7559.06.22.38629291819-linux64-38629291819.tar.zst</string>
+             </map>
+             <key>name</key>
+             <string>linux64</string>
+@@ -2886,11 +2886,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
+             <key>archive</key>
+             <map>
+               <key>hash</key>
+-              <string>4838e91071b6cb8169f1987418a483b28d2513c7</string>
++              <string>a9ef8bafede7a26d561faca7d770a31aebeda3a5</string>
+               <key>hash_algorithm</key>
+               <string>sha1</string>
+               <key>url</key>
+-              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.20/webrtc-m144.7559.06.20.36004322351-windows64-36004322351.tar.zst</string>
++              <string>https://github.com/secondlife/3p-webrtc-build/releases/download/m144.7559.06.22/webrtc-m144.7559.06.22.38629291819-windows64-38629291819.tar.zst</string>
+             </map>
+             <key>name</key>
+             <string>windows64</string>
+@@ -2903,7 +2903,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
+         <key>copyright</key>
+         <string>Copyright (c) 2011, The WebRTC project authors. All rights reserved.</string>
+         <key>version</key>
+-        <string>m144.7559.06.19.hot-mic.29761579711</string>
++        <string>m144.7559.06.22.38629291819</string>
+         <key>name</key>
+         <string>webrtc</string>
+         <key>vcs_branch</key>
+diff --git a/indra/llwebrtc/CMakeLists.txt b/indra/llwebrtc/CMakeLists.txt
+index a3deba5da4..04989d7b42 100644
+--- a/indra/llwebrtc/CMakeLists.txt
++++ b/indra/llwebrtc/CMakeLists.txt
+@@ -40,8 +40,8 @@ if (WINDOWS)
+                                        msdmo
+                                        strmiids
+                                        iphlpapi
+-                                       crypt32
+-                                       libcmt)
++                                       libcmt
++                                       crypt32)
+     # as the webrtc libraries are release, build this binary as release as well.
+     target_compile_options(llwebrtc PRIVATE "/MT" "/Zc:wchar_t")
+     if (USE_BUGSPLAT)
+diff --git a/indra/llwebrtc/llwebrtc.cpp b/indra/llwebrtc/llwebrtc.cpp
+index 9a9b87480f..7b7b8270ff 100644
+--- a/indra/llwebrtc/llwebrtc.cpp
++++ b/indra/llwebrtc/llwebrtc.cpp
+@@ -59,13 +59,15 @@ using namespace std::chrono_literals;
+ namespace llwebrtc
+ {
+ #if WEBRTC_WIN
+-static int16_t PLAYOUT_DEVICE_DEFAULT = webrtc::AudioDeviceModule::kDefaultCommunicationDevice;
+-static int16_t RECORD_DEVICE_DEFAULT  = webrtc::AudioDeviceModule::kDefaultCommunicationDevice;
++static int16_t PLAYOUT_DEVICE_DEFAULT = webrtc::AudioDeviceModule::kDefaultDevice;
++static int16_t RECORD_DEVICE_DEFAULT  = webrtc::AudioDeviceModule::kDefaultDevice;
+ #else
+ static int16_t PLAYOUT_DEVICE_DEFAULT = 0;
+ static int16_t RECORD_DEVICE_DEFAULT  = 0;
+ #endif
+ 
++constexpr int32_t MIC_CAPTURE_STOP_DELAY_MS = 40;
++
+ 
+ //
+ // LLWebRTCAudioTransport implementation
+@@ -279,19 +281,18 @@ void LLWebRTCAudioDeviceModule::SetTuning(bool tuning, bool mute)
+     tuning_ = tuning;
+     if (tuning)
+     {
+-        // Ensure capture is running (it's normally already running -- capture is
+-        // session-long) so the mic-level meter works, and stop rendering the
+-        // call while tuning.  The recording calls are no-ops if capture is
+-        // already active, so this won't cold-start it.
++        // Ensure capture is running so the mic-level meter works, and stop rendering
++        // the call while tuning.  The recording calls are no-ops if capture is already
++        // active (it may not be, with "stop capture while muted" enabled).
+         inner_->InitMicrophone();
+         inner_->InitRecording();
+         inner_->StartRecording();
+         inner_->StopPlayout();
+     }
+-    // On exit, capture is deliberately left running (mute is handled by gain,
+-    // not by stopping the device, so there's no AEC cold-start hiss).  Playout
+-    // is restored by the caller via workerOpenPlayout(), keeping it gated on
+-    // there being a connection to render.
++    // On exit, capture is left running here; with "stop capture while muted" the
++    // caller (setTuningMode) stops it again if we're muted or have no connection.
++    // Playout is restored by the caller via workerOpenPlayout(), keeping it gated
++    // on there being a connection to render.
+ }
+ 
+ //
+@@ -656,16 +657,21 @@ void LLWebRTCImpl::unsetDevicesObserver(LLWebRTCDevicesObserver *observer)
+ }
+ 
+ // must be run in the worker thread.  Selects the configured capture device and
+-// starts recording.  Capture runs the whole time voice is enabled (it's never
+-// stopped for mute or between calls, so the AEC never cold-starts -- there's no
+-// hiss on unmute), so this is a no-op when already recording.  Device changes
+-// go through workerDeployDevices(), which stops recording first to force a
+-// clean re-select; voice off goes through setVoiceEnabled(false).
++// starts recording.  By default capture only runs while unmuted and once a
++// connection's audio is established.  With "stop capture while muted" disabled,
++// capture runs the whole time voice is enabled (never stopped for mute or between
++// calls, so the AEC never cold-starts -- no hiss on unmute), so this is a no-op
++// when already recording.  Device changes go through workerDeployDevices(), which stops
++// recording first to force a clean re-select; voice off goes through setVoiceEnabled(false).
+ void LLWebRTCImpl::workerStartRecording()
+ {
+     // Only run capture while voice is enabled, and never cold-start it when
+-    // it's already running (that would cause the unmute hiss).
+-    if (!mDeviceModule || !mVoiceEnabled || mDeviceModule->Recording())
++    // it's already running (that would cause the unmute hiss).  With "stop
++    // capture while muted", also hold it off while muted or with no connection's
++    // audio is established.
++    if (!mDeviceModule || !mVoiceEnabled || mDeviceModule->Recording() ||
++        (mStopCaptureOnMute.load() && !mTuningMode &&
++        (mMute || !mAudioEstablished)))
+     {
+         // <FS:minerjr> [FIRE-36022]
+         // If the device is not avaiable, then make sure the flag for the WebRTC updated devices flag is turned off for the co-routine
+@@ -729,7 +735,9 @@ void LLWebRTCImpl::workerStartRecording()
+     // disable before InitRecording so the recording stream is configured to
+     // use only WebRTC's software APM.
+     workerDisableBuiltInAudioProcessing();
+-    mDeviceModule->InitRecording();
++    // With "stop capture while muted", capture as media; otherwise as communications.
++    mDeviceModule->ForceInitRecording(mStopCaptureOnMute.load() ? webrtc::AudioDeviceModule::AudioCategory::kMedia
++                                                                : webrtc::AudioDeviceModule::AudioCategory::kCommunications);
+     mDeviceModule->ForceStartRecording();
+ }
+ 
+@@ -983,9 +991,9 @@ void LLWebRTCImpl::setVoiceEnabled(bool enable)
+             }
+             if (enable)
+             {
+-                // Voice on: start the capture device (it then stays running
+-                // across calls and mute/unmute), and start playout if there's
+-                // already a connection to render.
++                // Voice on: start the capture device (with "stop capture while muted" disabled
++                // it then stays running across calls and mute/unmute), and start playout if
++                // there's already a connection to render.
+                 mDeviceModule->Init();
+                 workerDeployDevices(false);
+             }
+@@ -1000,6 +1008,33 @@ void LLWebRTCImpl::setVoiceEnabled(bool enable)
+         });
+ }
+ 
++void LLWebRTCImpl::setStopCaptureOnMute(bool stop)
++{
++    if (mStopCaptureOnMute.exchange(stop) == stop)
++    {
++        return;
++    }
++
++    mWorkerThread->PostTask([this, stop]
++    {
++        if (!mVoiceEnabled || !mDeviceModule || mTuningMode)
++        {
++            return;
++        }
++        if (stop)
++        {
++            if (mMute || !mAudioEstablished)
++            {
++                intSetMute(true, MIC_CAPTURE_STOP_DELAY_MS);
++            }
++        }
++        else
++        {
++            intSetMute(false, 0);
++        }
++    });
++}
++
+ // updateDevices needs to happen on the worker thread.
+ void LLWebRTCImpl::updateDevices()
+ {
+@@ -1237,6 +1272,11 @@ void LLWebRTCImpl::setTuningMode(bool enable)
+             mDeviceModule->SetTuning(mTuningMode, mMute);
+             if (!mTuningMode)
+             {
++                if (mStopCaptureOnMute.load() && (mMute || !mAudioEstablished))
++                {
++                    intSetMute(true, MIC_CAPTURE_STOP_DELAY_MS);
++                }
++
+                 // Restore playout after tuning, gated on there being a
+                 // connection to render (so the output device isn't left
+                 // spinning with no engine data).
+@@ -1321,15 +1361,73 @@ void LLWebRTCImpl::setMute(bool mute, int delay_ms)
+ void LLWebRTCImpl::intSetMute(bool mute, int delay_ms)
+ {
+     // Mute by zeroing the captured (post-APM) gain; the sender track is also
+-    // disabled per connection (see LLWebRTCPeerConnectionImpl::setMute).  The
+-    // capture device deliberately stays running for the whole session, so
+-    // muting/unmuting never stops or starts it -- that's what avoids the AEC
+-    // cold-start hiss on unmute.  Capture start/stop is tied to device
+-    // selection (workerStartRecording) and shutdown, not to mute.
++    // disabled per connection (see LLWebRTCPeerConnectionImpl::setMute). By
++    // default the capture device stops after the mute delay and restarts on
++    // unmute. With "stop capture while muted" disabled, it stays running for
++    // the whole session, so muting/unmuting never stops or starts it -- that's
++    // what avoids the AEC cold-start hiss on unmute.
+     if (mPeerCustomProcessor)
+     {
+         mPeerCustomProcessor->setGain(mMute ? 0.0f : mGain);
+     }
++
++    if (mute && !mStopCaptureOnMute.load())
++    {
++        return;
++    }
++
++    // Prevent a delayed stop from an earlier mute from stopping a newly restarted recording after a rapid mute/unmute.
++    static std::atomic<uint32_t> mute_sequence(0);
++    uint32_t current_sequence = ++mute_sequence;
++
++    auto setRecording = [this, current_sequence](bool start)
++    {
++        if (!mDeviceModule || !mVoiceEnabled || mTuningMode ||
++            current_sequence != mute_sequence.load())
++        {
++            return;
++        }
++
++        // <FS:TJ> [FIRE-36022] - Removing my USB headset crashes entire viewer
++        try
++        {
++        std::unique_lock lock(gAudioDeviceMutex, 1s);
++        if (!lock.owns_lock())
++        {
++            return;
++        }
++
++        gWebRTCUpdateDevices = true;
++        // </FS:TJ>
++        mDeviceModule->ForceStopRecording();
++        if (start)
++        {
++            mDeviceModule->ForceInitRecording(mStopCaptureOnMute.load() ? webrtc::AudioDeviceModule::AudioCategory::kMedia
++                                                                        : webrtc::AudioDeviceModule::AudioCategory::kCommunications);
++            mDeviceModule->ForceStartRecording();
++        }
++        // <FS:TJ> [FIRE-36022] - Removing my USB headset crashes entire viewer
++        gWebRTCUpdateDevices = false;
++        }
++        catch (const std::exception& e)
++        {
++            mLogSink->OnLogMessage(std::string("Exception: WebRTC: ") + e.what());
++            gWebRTCUpdateDevices = false;
++        }
++        // </FS:TJ>
++    };
++
++    if (mute)
++    {
++        mWorkerThread->PostDelayedTask([setRecording]
++        {
++            setRecording(false);
++        }, webrtc::TimeDelta::Millis(delay_ms));
++    }
++    else
++    {
++        mWorkerThread->PostTask([setRecording] { setRecording(true); });
++    }
+ }
+ 
+ //
+@@ -1340,18 +1438,20 @@ LLWebRTCPeerConnectionInterface *LLWebRTCImpl::newPeerConnection()
+ {
+     webrtc::scoped_refptr<LLWebRTCPeerConnectionImpl> peerConnection = webrtc::scoped_refptr<LLWebRTCPeerConnectionImpl>(new webrtc::RefCountedObject<LLWebRTCPeerConnectionImpl>(mEnv));
+     peerConnection->init(this);
+-    if (mPeerConnections.empty())
++    bool first_connection = mPeerConnections.empty();
++    mPeerConnections.emplace_back(peerConnection);
++    if (first_connection)
+     {
+         intSetMute(mMute);
+     }
+-    mPeerConnections.emplace_back(peerConnection);
+ 
+     // Playout is intentionally NOT started here.  This runs when the connection
+     // is created/connecting; starting the output device now leaves it spinning
+     // with no decoded audio during the handshake, which is heard as a buzz.
+     // Playout is started from OnConnectionChange(kConnected) instead, once audio
+-    // is actually established (see startPlayout()).  Capture follows
+-    // voice-enabled state, so it's not touched here either.
++    // is actually established (see startPlayout()).  Capture isn't started here
++    // either: with "stop capture while muted" it waits for audio to be
++    // established, and the first connection's intSetMute() above may only stop it.
+ 
+     peerConnection->enableSenderTracks(false);
+     peerConnection->resetMute();
+@@ -1368,10 +1468,12 @@ void LLWebRTCImpl::freePeerConnection(LLWebRTCPeerConnectionInterface* peer_conn
+         mPeerConnections.erase(it);
+         if (mPeerConnections.empty())
+         {
++            mAudioEstablished = false;
+             intSetMute(true);
+             // Last connection gone: stop playout (there's nothing to render).
+-            // Capture stays running while voice is enabled so it's ready -- with
+-            // no cold-start hiss -- when the next call comes up.  But if voice
++            // Capture stays running while voice is enabled so it's ready -- with no
++            // cold-start hiss -- when the next call comes up, unless "stop capture while
++            // muted" is on (intSetMute(true) above stops it).  But if voice
+             // has been disabled, stop capture now: setVoiceEnabled(false) tried
+             // to, but the engine's send stream was still active then (and the
+             // engine's own StopRecording is intentionally a no-op), so the stop
+@@ -1397,17 +1499,27 @@ void LLWebRTCImpl::freePeerConnection(LLWebRTCPeerConnectionInterface* peer_conn
+ 
+ void LLWebRTCImpl::startPlayout()
+ {
+-    // Called when a connection's audio is established.  Only playout is started
+-    // here: it's gated on there being a connection to render, because running
+-    // the output device with no engine data is heard as a buzz.  Capture is
+-    // NOT touched here -- it follows voice-enabled state (setVoiceEnabled), so
+-    // it's already running if voice is on and must stay off if voice is off.
+-    // Starting it here would also let a stray kConnected during voice-disable
+-    // teardown re-open the mic.
++    // Called when a connection's audio is established.  Playout is started here:
++    // it's gated on there being a connection to render, because running the
++    // output device with no engine data is heard as a buzz.
++    // Capture normally follows voice-enabled state (setVoiceEnabled), so it's
++    // already running if voice is on. The exception is "stop capture while
++    // muted", where it's held off until unmuted and audio is established.
++    // workerStartRecording() is gated on mVoiceEnabled, so this can't re-open
++    // the mic during voice-disable teardown.
+     mWorkerThread->PostTask(
+         [this]()
+         {
++            if (mPeerConnections.empty())
++            {
++                return;
++            }
++            mAudioEstablished = true;
+             workerStartPlayout();
++            if (mStopCaptureOnMute.load())
++            {
++                workerStartRecording();
++            }
+         });
+ }
+ 
+@@ -1897,9 +2009,10 @@ void LLWebRTCPeerConnectionImpl::OnConnectionChange(webrtc::PeerConnectionInterf
+         case webrtc::PeerConnectionInterface::PeerConnectionState::kConnected:
+         {
+             // Audio is established now -- start playout for this connection.
+-            // (Capture follows voice-enabled state, so it's already running and
+-            // isn't touched here.)  Doing playout here rather than at connection
+-            // creation avoids running the output device with no decoded audio
++            // (Capture normally follows voice-enabled state, so it's already running;
++            // startPlayout() starts it only for "stop capture while muted".)
++            // Doing playout here rather than at connection creation
++            // avoids running the output device with no decoded audio
+             // during the handshake (heard as a buzz).
+             mWebRTCImpl->startPlayout();
+             mPendingJobs++;
+diff --git a/indra/llwebrtc/llwebrtc.h b/indra/llwebrtc/llwebrtc.h
+index 447b506d15..b3adb36f5b 100644
+--- a/indra/llwebrtc/llwebrtc.h
++++ b/indra/llwebrtc/llwebrtc.h
+@@ -166,10 +166,14 @@ class LLWebRTCDeviceInterface
+     // Enable/disable the audio devices, set when voice is enabled/disabled.
+     // The capture (microphone) and playout (speaker) devices only run while this
+     // is enabled, so neither is held open when the user has voice off.  While
+-    // enabled, capture stays running across calls and mute/unmute so the AEC
+-    // never cold-starts (no unmute hiss); playout still only runs when there's a
+-    // connection to render.
++    // enabled, capture normally stays running across calls and mute/unmute so the
++    // AEC never cold-starts (no unmute hiss), unless setStopCaptureOnMute() is on;
++    // playout still only runs when there's a connection to render.
+     virtual void setVoiceEnabled(bool enable) = 0;
++    // When true, capture is stopped while muted (or with no connection) and
++    // restarted on unmute, so Bluetooth headsets aren't held in call mode.
++    // May cause a brief hiss on unmute.
++    virtual void setStopCaptureOnMute(bool stop) = 0;
+ 
+     // Device observers for device change callbacks.
+     virtual void setDevicesObserver(LLWebRTCDevicesObserver *observer) = 0;
+diff --git a/indra/llwebrtc/llwebrtc_impl.h b/indra/llwebrtc/llwebrtc_impl.h
+index 916820fffb..7a6c1f374f 100644
+--- a/indra/llwebrtc/llwebrtc_impl.h
++++ b/indra/llwebrtc/llwebrtc_impl.h
+@@ -234,7 +234,7 @@ public:
+     int32_t SetRecordingDevice(WindowsDeviceType type) override { return inner_->SetRecordingDevice(type); }
+ 
+     // --- Init/start/stop (forward) ---
+-    int32_t InitPlayout() override { return inner_->InitPlayout(); }
++    int32_t InitPlayout(AudioCategory category = AudioCategory::kMedia) override { return inner_->InitPlayout(category); }
+     bool    PlayoutIsInitialized() const override { return inner_->PlayoutIsInitialized(); }
+     int32_t StartPlayout() override {
+         if (tuning_) return 0;  // For tuning, don't allow playout
+@@ -243,7 +243,14 @@ public:
+     int32_t StopPlayout() override { return inner_->StopPlayout(); }
+     bool    Playing() const override { return inner_->Playing(); }
+ 
+-    int32_t InitRecording() override { return inner_->InitRecording(); }
++    int32_t InitRecording(AudioCategory category = AudioCategory::kMedia) override
++    {
++        // Ignore webrtc.lib's InitRecording (sent when a send stream starts), as
++        // with StartRecording/StopRecording: it would leave capture initialised even
++        // while we hold capture off. The app initialises capture itself via ForceInitRecording.
++        return 0;
++    }
++    int32_t ForceInitRecording(AudioCategory category = AudioCategory::kMedia) { return inner_->InitRecording(category); }
+     bool    RecordingIsInitialized() const override { return inner_->RecordingIsInitialized(); }
+     int32_t StartRecording() override {
+         // ignore start recording as webrtc.lib will
+@@ -442,6 +449,7 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
+     void setRenderDevice(const std::string& id) override;
+ 
+     void setVoiceEnabled(bool enable) override;
++    void setStopCaptureOnMute(bool stop) override;
+ 
+     void setTuningMode(bool enable) override;
+     float getTuningAudioLevel() override;
+@@ -521,8 +529,9 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
+     void freePeerConnection(LLWebRTCPeerConnectionInterface* peer_connection);
+ 
+     // Start playout once a connection's audio is established (playout is gated
+-    // on there being a connection to render).  Capture is not touched here --
+-    // it follows voice-enabled state, not connection state.  Safe to call from
++    // on there being a connection to render).  Capture normally follows
++    // voice-enabled state, not connection state; the exception is "stop capture
++    // while muted", where it's also started here if unmuted.  Safe to call from
+     // any thread (work is posted to the worker thread).
+     void startPlayout();
+ 
+@@ -584,6 +593,11 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
+     // Whether voice is enabled; gates whether the capture/playout devices run.
+     bool                                                       mVoiceEnabled;
+     float                                                      mGain;
++    std::atomic<bool>                                          mStopCaptureOnMute{ false };
++    // True once any connection's audio has been established, until the last
++    // connection is freed (not a count of currently-connected peers). Used to
++    // hold capture off until a call is actually up.
++    std::atomic<bool>                                          mAudioEstablished{ false };
+ 
+     LLCustomProcessorStatePtr                                  mPeerCustomProcessor;
+ 
+diff --git a/indra/newview/app_settings/settings.xml b/indra/newview/app_settings/settings.xml
+index 2ef45f1438..743d1f9369 100644
+--- a/indra/newview/app_settings/settings.xml
++++ b/indra/newview/app_settings/settings.xml
+@@ -24306,29 +24306,39 @@ Change of this parameter will affect the layout of buttons in notification toast
+       <key>Value</key>
+       <integer>0</integer>
+     </map>
+-
+-  <key>ScriptEditorDisableSyntaxHighlight</key>
+-  <map>
+-    <key>Comment</key>
+-    <string>Disable syntax highlighting in script editor for performance testing</string>
+-    <key>Persist</key>
+-    <integer>1</integer>
+-    <key>Type</key>
+-    <string>Boolean</string>
+-    <key>Value</key>
+-    <integer>0</integer>
+-  </map>
+-  <key>FSNetMapPhantomOpacity</key>
+-  <map>
+-    <key>Comment</key>
+-    <string>Percentage of opacity for phantom objects on netmap.</string>
+-    <key>Persist</key>
+-    <integer>1</integer>
+-    <key>Type</key>
+-    <string>U32</string>
+-    <key>Value</key>
+-    <integer>90</integer>
+-  </map>
++    <key>ScriptEditorDisableSyntaxHighlight</key>
++    <map>
++      <key>Comment</key>
++      <string>Disable syntax highlighting in script editor for performance testing</string>
++      <key>Persist</key>
++      <integer>1</integer>
++      <key>Type</key>
++      <string>Boolean</string>
++      <key>Value</key>
++      <integer>0</integer>
++    </map>
++    <key>StopMicCaptureWhenMuted</key>
++    <map>
++      <key>Comment</key>
++      <string>Check to stop microphone capture while muted. May cause a hiss on unmute but prevents bluetooth devices always being in voice mode.</string>
++      <key>Persist</key>
++      <integer>1</integer>
++      <key>Type</key>
++      <string>S32</string>
++      <key>Value</key>
++      <integer>1</integer>
++    </map>
++    <key>FSNetMapPhantomOpacity</key>
++    <map>
++      <key>Comment</key>
++      <string>Percentage of opacity for phantom objects on netmap.</string>
++      <key>Persist</key>
++      <integer>1</integer>
++      <key>Type</key>
++      <string>U32</string>
++      <key>Value</key>
++      <integer>90</integer>
++    </map>
+     <key>FSBuildPrefs_Phantom</key>
+     <map>
+       <key>Comment</key>
+diff --git a/indra/newview/llvoicewebrtc.cpp b/indra/newview/llvoicewebrtc.cpp
+index a202de4113..98876eca36 100644
+--- a/indra/newview/llvoicewebrtc.cpp
++++ b/indra/newview/llvoicewebrtc.cpp
+@@ -98,6 +98,7 @@ namespace {
+     const uint32_t SET_HIDDEN_RESTORE_DELAY_MS = 200;  // 200 ms to unmute again after hiding during teleport
+     const uint32_t MUTE_FADE_DELAY_MS       = 500;   // 20ms fade followed by 480ms silence gets rid of the click just after unmuting.
+                                                      // This is because the buffers and processing is cleared by the silence.
++                                                     // With StopMicCaptureWhenMuted, this is also the delay before capture is actually stopped.
+ 
+     const F32 SPEAKING_AUDIO_LEVEL = 0.30f; // <FS:minerjr> add missing f for float
+ 
+@@ -262,6 +263,11 @@ void LLWebRTCVoiceClient::cleanupSingleton()
+         mAvatarNameCacheConnection.disconnect();
+     }
+ 
++    if (mStopMicCaptureOnMuteConnection.connected())
++    {
++        mStopMicCaptureOnMuteConnection.disconnect();
++    }
++
+     sShuttingDown = true;
+     if (mSession)
+     {
+@@ -312,6 +318,21 @@ void LLWebRTCVoiceClient::initWebRTC()
+         });
+     }
+ 
++    // Connect StopMicCaptureWhenMuted control so the changes apply instantly
++    if (!mStopMicCaptureOnMuteConnection.connected())
++    {
++        mStopMicCaptureOnMuteConnection =
++            gSavedSettings.getControl("StopMicCaptureWhenMuted")->getSignal()->connect(
++                [this](LLControlVariable*, const LLSD& new_val, const LLSD&)
++                {
++                    if (mWebRTCDeviceInterface)
++                    {
++                        mWebRTCDeviceInterface->setStopCaptureOnMute(new_val.asInteger());
++                    }
++                });
++    }
++    mWebRTCDeviceInterface->setStopCaptureOnMute(gSavedSettings.getS32("StopMicCaptureWhenMuted"));
++
+     refreshDeviceLists();
+ }
+ 
+@@ -1817,14 +1838,20 @@ void LLWebRTCVoiceClient::setMuteMic(bool muted)
+ 
+     mMuteMic = muted;
+ 
+-    if (mIsInTuningMode)
++    if (mIsInTuningMode &&!gSavedSettings.getS32("StopMicCaptureWhenMuted"))
+     {
+         return;
+     }
+ 
+     if (mWebRTCDeviceInterface)
+     {
+-        mWebRTCDeviceInterface->setMute(muted, muted ? MUTE_FADE_DELAY_MS : 0);  // delay for 40ms on mute to allow buffers to empty
++        // Delay on mute to let the fade and silence flush buffers (and, if enabled, before capture stops)
++        mWebRTCDeviceInterface->setMute(muted, muted ? MUTE_FADE_DELAY_MS : 0);
++    }
++
++    if (mIsInTuningMode)
++    {
++        return;
+     }
+ 
+     // when you're hidden, your mic is always muted.
+diff --git a/indra/newview/llvoicewebrtc.h b/indra/newview/llvoicewebrtc.h
+index 0eebe22749..d9381fcbc8 100644
+--- a/indra/newview/llvoicewebrtc.h
++++ b/indra/newview/llvoicewebrtc.h
+@@ -461,6 +461,7 @@ public:
+     static void predAvatarNameResolution(const LLWebRTCVoiceClient::sessionStatePtr_t &session, LLUUID id, std::string name);
+ 
+     boost::signals2::connection mAvatarNameCacheConnection;
++    boost::signals2::connection mStopMicCaptureOnMuteConnection;
+ 
+ private:
+     // init or restart the WebRTC device interface.
+diff --git a/indra/newview/skins/default/xui/de/panel_preferences_sound.xml b/indra/newview/skins/default/xui/de/panel_preferences_sound.xml
+index 7a34b6cbbc..9c5ffaf334 100644
+--- a/indra/newview/skins/default/xui/de/panel_preferences_sound.xml
++++ b/indra/newview/skins/default/xui/de/panel_preferences_sound.xml
+@@ -236,7 +236,13 @@
+ 				Ausgabegerät:
+ 			</text>
+ 		</panel>
+-
++		<text name="bluetooth_lbl">
++			Nur Bluetooth
++		</text>
++		<radio_group name="bluetooth_behavior">
++			<radio_item label="Besseres Voice" name="better_voice"/>
++			<radio_item label="Besseres In-World-Audio" name="better_audio"/>
++		</radio_group>
+ 	</panel>
+ 
+ 	<!-- Media -->
+diff --git a/indra/newview/skins/default/xui/en/panel_preferences_sound.xml b/indra/newview/skins/default/xui/en/panel_preferences_sound.xml
+index 16796516f4..a21a69effb 100644
+--- a/indra/newview/skins/default/xui/en/panel_preferences_sound.xml
++++ b/indra/newview/skins/default/xui/en/panel_preferences_sound.xml
+@@ -729,7 +729,7 @@
+          background_visible="false"
+          border="false"
+          follows="top|left|right"
+-         height="100"
++         height="30"
+          layout="topleft"
+          left="10"
+          right="-5"
+@@ -780,6 +780,48 @@
+              top_delta="-5"
+              right="-5" />
+         </panel>
++
++        <text
++         type="string"
++         length="1"
++         follows="left|top"
++         layout="topleft"
++         left="15"
++         top_pad="5"
++         font.style="BOLD"
++         name="bluetooth_lbl"
++         height="15"
++         width="110">
++             Bluetooth only
++        </text>
++        <radio_group
++         control_name="StopMicCaptureWhenMuted"
++         follows="left|top"
++         height="60"
++         layout="topleft"
++         left="25"
++         name="bluetooth_behavior"
++         top_pad="3"
++         width="480">
++          <radio_item
++           height="18"
++           label="Better voice"
++           layout="topleft"
++           left="0"
++           name="better_voice"
++           value="0"
++           top="0"
++           width="480" />
++          <radio_item
++           height="18"
++           label="Better in-world audio"
++           layout="topleft"
++           left_delta="0"
++           name="better_audio"
++           value="1"
++           top_pad="0"
++           width="480" />
++        </radio_group>
+     </panel>
+ 
+     <!-- Media -->
+@@ -1026,7 +1068,6 @@
+          width="90">
+             meters
+         </text>
+-
+     </panel>
+ 
+     <!-- Music -->
