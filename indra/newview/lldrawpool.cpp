@@ -689,7 +689,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
     llassert(skinInfo);
     llassert(LLGLSLShader::sCurBoundShaderPtr);
 
-    if (!avatar)
+    if (!avatar || !skinInfo)
     {
         return false;
     }
@@ -726,7 +726,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
     llassert(skinInfo);
     llassert(LLGLSLShader::sCurBoundShaderPtr);
 
-    if (!avatar)
+    if (!avatar || !skinInfo)
     {
         return false;
     }
