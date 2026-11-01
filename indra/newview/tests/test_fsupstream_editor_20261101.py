@@ -30,12 +30,16 @@ int main(){LLFolderView view;LLFolderViewModelItem noCopyLink{false,true},noCopy
   self.run_cpp(r'''
 #include <cassert>
 #include <cstddef>
-using LLColor4=int;
-struct LLUIColor {LLColor4 mColor=0;const LLUIColor* mColorPtr=nullptr;LLUIColor()=default;LLUIColor(int v):mColor(v){}LLUIColor(const LLUIColor* v):mColorPtr(v){}
+#include <sstream>
+#define llassert(x) assert(x)
+#define LL_WARNS_ONCE() std::ostringstream()
+#define LL_ENDL ""
+struct LLColor4 {int value=0;static const LLColor4 magenta;};const LLColor4 LLColor4::magenta{-1};
+struct LLUIColor {LLColor4 mColor;const LLUIColor* mColorPtr=nullptr;LLUIColor()=default;LLUIColor(int v):mColor{v}{}LLUIColor(const LLUIColor* v):mColorPtr(v){}
  const LLColor4& get()const;operator const LLColor4&()const{return get();}};
 struct LLUIColorTable {LLUIColor base{7};static LLUIColorTable& instance(){static LLUIColorTable t;return t;}LLUIColor getColor(const char*){return LLUIColor(&base);}};
 '''+function(color,'const LLColor4& LLUIColor::get() const')+'int main(){\n'+declaration+r'''
- struct Token{LLUIColor color;};Token token{cur_color};assert(token.color.get()==7);LLUIColorTable::instance().base.mColor=12;assert(token.color.get()==12);}
+ struct Token{LLUIColor color;};Token token{cur_color};assert(token.color.get().value==7);LLUIColorTable::instance().base.mColor.value=12;assert(token.color.get().value==12);}
 ''')
  def test_browser_failure_overlay_is_above_visible_browser(self):
   for name in ['floater_web_content.xml','floater_media_browser.xml','floater_marketplace.xml']:
