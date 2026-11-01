@@ -1747,7 +1747,7 @@ struct AssetRead
     fs_assistant::AsyncTaskPtr task;
 };
 
-void finish_asset_read(AssetRead* raw, S32 status)
+void finish_asset_read(AssetRead* raw, const LLUUID& asset, S32 status)
 {
     std::unique_ptr<AssetRead> request(raw);
     fs_assistant::AsyncScope scope(request->task->guard());
@@ -1760,10 +1760,10 @@ void finish_asset_read(AssetRead* raw, S32 status)
         sendReply(llsd::map("error","Content authority or item revision changed; read again","id",request->item_id),request->request);
         return;
     }
-    if (status != 0)
+    if (status != 0 || asset.isNull() || (request->asset_id.notNull() && request->asset_id != asset))
     {
         sendReply(llsd::map(
-            "error", "Asset download failed",
+            "error", "Item-bound asset download failed or returned a different known asset",
             "id", request->item_id,
             "asset_id", request->asset_id,
             "stale", stale), request->request);
@@ -1771,7 +1771,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     }
 
     const LLAssetType::EType type = request->notecard ? LLAssetType::AT_NOTECARD : LLAssetType::AT_LSL_TEXT;
-    LLFileSystem file(request->asset_id, type);
+    LLFileSystem file(asset, type);
     const S32 file_length = file.getSize();
     if (file_length <= 0 || static_cast<std::size_t>(file_length)>fs_content::assetLimit)
     {
@@ -1826,7 +1826,7 @@ void finish_asset_read(AssetRead* raw, S32 status)
     LLSD reply;
     reply["ok"] = true;
     reply["id"] = request->item_id;
-    reply["asset_id"] = request->asset_id;
+    reply["asset_id"] = asset;
     reply["text"] = text;
     reply["truncated"] = truncated;
     reply["stale"] = false;
@@ -1837,9 +1837,9 @@ void finish_asset_read(AssetRead* raw, S32 status)
     sendReply(reply, request->request);
 }
 
-void on_asset_read(const LLUUID&, LLAssetType::EType, void* user_data, S32 status, LLExtStat)
+void on_asset_read(const LLUUID& asset, LLAssetType::EType, void* user_data, S32 status, LLExtStat)
 {
-    finish_asset_read(static_cast<AssetRead*>(user_data), status);
+    finish_asset_read(static_cast<AssetRead*>(user_data), asset, status);
 }
 
 void reply_landmark(const LLSD& request, const LLUUID& item_id, const LLUUID& asset_id, LLLandmark* landmark)

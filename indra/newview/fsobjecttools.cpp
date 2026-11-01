@@ -76,14 +76,19 @@ LLSD objectEvidence(LLViewerObject* object)
         "server_generation",std::to_string(object->getInventoryServerGeneration()),
         "change_generation",std::to_string(object->getInventoryChangeGeneration()));
 }
-bool scriptReadable(const LLViewerInventoryItem* item)
+const char* scriptReadBlocker(const LLViewerInventoryItem* item)
 {
-    return item && item->getActualType()==LLAssetType::AT_LSL_TEXT && item->getAssetUUID().notNull() &&
-        item->getPermissions().getOwner()==gAgent.getID() && !item->getIsLinkType() &&
-        gAgent.allowOperation(PERM_COPY,item->getPermissions(),GP_OBJECT_MANIPULATE) &&
-        gAgent.allowOperation(PERM_MODIFY,item->getPermissions(),GP_OBJECT_MANIPULATE) &&
-        !gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT);
+    if(!item)return "task_item_missing";
+    if(item->getActualType()!=LLAssetType::AT_LSL_TEXT || item->getIsLinkType())return "exact_script_required";
+    if(item->getPermissions().getOwner()!=gAgent.getID())return "script_owner_required";
+    if(!gAgent.allowOperation(PERM_COPY,item->getPermissions(),GP_OBJECT_MANIPULATE))return "native_copy_required";
+    if(!gAgent.allowOperation(PERM_MODIFY,item->getPermissions(),GP_OBJECT_MANIPULATE))return "native_modify_required";
+    if(gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT))return "rlva_viewscript_restricted";
+    // Like the native editor, resolve unknown asset IDs through getInvItemAsset.
+    // A missing cached asset UUID is not a native source permission failure.
+    return nullptr;
 }
+bool scriptReadable(const LLViewerInventoryItem* item){return !scriptReadBlocker(item);}
 LLSD itemEvidence(const LLViewerInventoryItem* item)
 {LLSD value;item->asLLSD(value);value["asset_id"]=item->getAssetUUID();value["native_asset_type"]=static_cast<S32>(item->getActualType());return value;}
 LLSD itemRow(const LLViewerInventoryItem* item)
@@ -92,7 +97,8 @@ LLSD itemRow(const LLViewerInventoryItem* item)
         "type",LLAssetType::lookup(item->getActualType()),"native_source_readable",scriptReadable(item),
         "copy",gAgent.allowOperation(PERM_COPY,item->getPermissions(),GP_OBJECT_MANIPULATE),
         "modify",gAgent.allowOperation(PERM_MODIFY,item->getPermissions(),GP_OBJECT_MANIPULATE));
-    if(scriptReadable(item))value["asset_id"]=item->getAssetUUID();
+    if(const auto* blocker=scriptReadBlocker(item))value["source_read_blocker"]=blocker;
+    else {value["asset_id"]=item->getAssetUUID();value["asset_id_known"]=item->getAssetUUID().notNull();}
     return value;
 }
 struct Snapshot
@@ -100,7 +106,9 @@ struct Snapshot
     std::string source,epoch;LLSD object;double expires=0.;
     std::map<LLUUID,LLPointer<LLViewerInventoryItem>> items;
 };
-struct SourceSnapshot {std::string source,epoch,text,hash;LLSD object,item;double expires=0.;};
+// Keep simulator metadata unchanged for conflict checks; the item-bound source
+// transfer can resolve an asset UUID that Contents does not disclose.
+struct SourceSnapshot {std::string source,epoch,text,hash;LLSD object,item;LLUUID asset;double expires=0.;};
 struct ContentsRead;
 struct Mutation;
 struct RunningRead;
@@ -249,9 +257,10 @@ void scriptLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 stat
     auto* item=prim?dynamic_cast<LLViewerInventoryItem*>(prim->getInventoryObject(read->item["item_id"].asUUID())):nullptr;
     if(read->source!=source() || !fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(read->request) ||
        !prim || prim->isInventoryDirty() || !llsd_equals(objectEvidence(prim),read->object) || !scriptReadable(item) || !llsd_equals(itemEvidence(item),read->item))return;
-    if(status || asset!=item->getAssetUUID()){reply(read->request,llsd::map("error","Task-bound source download failed"));return;}
+    if(status || asset.isNull() || (item->getAssetUUID().notNull() && asset!=item->getAssetUUID()))
+    {reply(read->request,llsd::map("error","Task-bound source download failed or returned a different known asset"));return;}
     LLFileSystem file(asset,LLAssetType::AT_LSL_TEXT);const S32 size=file.getSize();
-    if(size<0 || static_cast<std::size_t>(size)>fs_content::assetLimit){reply(read->request,llsd::map("error","Script asset exceeds bounded source limit"));return;}
+    if(size<=0 || static_cast<std::size_t>(size)>fs_content::assetLimit){reply(read->request,llsd::map("error","Script asset is unavailable, empty or exceeds bounded source limit"));return;}
     std::string text(static_cast<std::size_t>(size),'\0');
     if(size && (!file.read(reinterpret_cast<U8*>(&text[0]),size) || file.getLastBytesRead()!=size)){reply(read->request,llsd::map("error","Incomplete source download"));return;}
     if(!text.empty() && text.back()=='\0')text.pop_back();
@@ -264,7 +273,7 @@ void scriptLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 stat
         auto& entries=service().scripts;
         for(auto it=entries.begin();it!=entries.end();)if(now()>it->second.expires)it=entries.erase(it);else ++it;
         if(entries.size()>=8){reply(read->request,llsd::map("error","capacity: source snapshots full; wait for expiry"));return;}
-        entries.emplace(token,SourceSnapshot{source(),read->request["__assistant_epoch"].asString(),text,hash,read->object,read->item,now()+120.});
+        entries.emplace(token,SourceSnapshot{source(),read->request["__assistant_epoch"].asString(),text,hash,read->object,read->item,asset,now()+120.});
         result["source_snapshot"]=token;result["content_hash"]=hash;
     }
     reply(read->request,result);
@@ -340,7 +349,8 @@ public:
         {
             operation.requiredClasses.push_back("read");auto* value=contentsSnapshot(request,error);if(!value)return false;
             const auto it=value->items.find(request["item_id"].asUUID());
-            if(it==value->items.end() || !scriptReadable(it->second)){error="not_permitted: native COPY/MODIFY task script source required";return false;}
+            const auto* blocker=scriptReadBlocker(it==value->items.end()?nullptr:it->second.get());
+            if(blocker){error=std::string("not_permitted: task script source unavailable: ")+blocker;return false;}
             operation.validation["item"]=itemEvidence(it->second);
         }
         return true;
@@ -459,7 +469,7 @@ SourceSnapshot* scriptSnapshot(const LLSD& request,std::string& error)
     const auto it=service().scripts.find(request["source_snapshot"].asUUID());
     if(it==service().scripts.end() || it->second.source!=source() || it->second.epoch!=request["__assistant_epoch"].asString() ||
        it->second.expires<now() || it->second.hash!=request["content_hash"].asString() ||
-       it->second.item["asset_id"].asUUID()!=request["expected_asset_id"].asUUID() ||
+       it->second.asset!=request["expected_asset_id"].asUUID() ||
        it->second.object["object_id"].asUUID()!=request["object_id"].asUUID() || it->second.item["item_id"].asUUID()!=request["item_id"].asUUID())
     {error="conflict: complete fresh installed-script source snapshot required";return nullptr;}
     auto* prim=target(request["object_id"].asUUID(),error);
@@ -567,11 +577,14 @@ void acquisitionProgress(const std::shared_ptr<Mutation>& value)
 bool requestedRunning(const LLSD& request,bool& running,std::string& error)
 {
     running=false;if(request["running_mode"].asString()!="preserve")return true;
+    const auto* snapshot=scriptSnapshot(request,error);if(!snapshot)return false;
     if(runningEvidenceUncertain(gObjectList.findObject(request["object_id"].asUUID()),request["item_id"].asUUID()))
     {error=runningUncertainError;return false;}
     const auto it=service().running.find({request["object_id"].asUUID(),request["item_id"].asUUID()});
+    // Running replies are tied to captured native metadata, not the separate
+    // UUID resolved by a source download. scriptSnapshot checked both above.
     if(it==service().running.end() || it->second.source!=source() || it->second.epoch!=request["__assistant_epoch"].asString() ||
-        it->second.token!=request["running_snapshot"].asUUID() || it->second.at+10.<now() || it->second.asset!=request["expected_asset_id"].asUUID())
+        it->second.token!=request["running_snapshot"].asUUID() || it->second.at+10.<now() || it->second.asset!=snapshot->item["asset_id"].asUUID())
     {error="running_snapshot_expired: query native script status again";return false;}
     running=it->second.running;return true;
 }
@@ -1401,6 +1414,18 @@ LLSD testReport(const std::shared_ptr<TestSession>& run)
     result["assertions"]=run->assertions;result["private_payloads_removed"]=run->privateCleared;
     result["scope"]="Declared assertions only; submitted UDP actions do not prove script execution";return result;
 }
+const SourceSnapshot* testSourceSnapshot(const LLSD& script,const std::string& epoch)
+{
+    for(const auto& candidate:service().scripts)
+    {
+        const auto& snapshot=candidate.second;
+        if(!llsd_equals(snapshot.item,script["item_evidence"]))continue;
+        const auto request=llsd::map("source_snapshot",candidate.first,"object_id",script["object_id"],"item_id",script["item_id"],
+            "expected_asset_id",snapshot.asset,"content_hash",snapshot.hash,"__assistant_epoch",epoch);
+        std::string error;if(scriptSnapshot(request,error))return &snapshot;
+    }
+    return nullptr;
+}
 void dispatchTest(const LLSD& request)
 {
     LLEventAPI::Response response(LLSD(),request);std::string error;const auto op=request["op"].asString();auto current=service().test;
@@ -1420,8 +1445,8 @@ void dispatchTest(const LLSD& request)
     for(const auto& script:llsd::inArray(run->scope["scripts"]))
     {
         LLSD row=script;row.erase("item_evidence");row["content_hash_known"]=false;
-        for(const auto& snapshot:service().scripts)if(snapshot.second.source==source() && snapshot.second.item["item_id"]==script["item_id"] && snapshot.second.object["object_id"]==script["object_id"] && snapshot.second.item["asset_id"]==script["asset_id"])
-        {row["content_hash"]=snapshot.second.hash;row["content_hash_known"]=true;break;}
+        if(const auto* snapshot=testSourceSnapshot(script,run->epoch))
+        {row["asset_id"]=snapshot->asset;row["content_hash"]=snapshot->hash;row["content_hash_known"]=true;}
         run->sources.append(row);
     }
     for(const auto& step:llsd::inArray(request["steps"]))if(step["action"].asString()=="wait_output" || step["action"].asString()=="assert_running" || step["action"].asString()=="assert_contents")++run->assertions;
