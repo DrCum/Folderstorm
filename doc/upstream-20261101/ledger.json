@@ -89,11 +89,15 @@
       "source": "fd2040cf16",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
       "fullSource": "fd2040cf169e416f855d914c704179a2ddcf43e7",
       "subject": "#6501 Crash at LLFloater::getHost",
       "files": [
@@ -106,17 +110,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": false,
       "patchID": "3fa98e27adc5f3de0081127fcd96721d990ce18c",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "89a5c6d003",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
       "fullSource": "89a5c6d0038bd18d7d6b713da92d5032fe8ff0a8",
       "subject": "#6555 fix crash at LLDirPicker::getDir",
       "files": [
@@ -128,17 +137,24 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "7a8d302c61e48403b4f7a632c6d79b86a54dce24",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "6d88ec304f",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
-      "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
       "fullSource": "6d88ec304f493180d25e36b90872d388e3b4d20b",
       "subject": "Fix uninitialised LLWorld members read by LLPanelObject::postBuild",
       "files": [
@@ -150,17 +166,24 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "3aaebb583f8979175fcc49ed53309d77f6570169",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "08a4fb5c44",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
-      "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
       "fullSource": "08a4fb5c44aa6ef90e0cee16cd0e24bfdf32f82d",
       "subject": "Fix invalid downcasts in FSFloaterPoser scroll lists",
       "files": [
@@ -172,17 +195,24 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "2b7cd97d1e5cddfc782e6178bb7cfcb0f17694c2",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "524b32142f",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
-      "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
       "fullSource": "524b32142f73e9af4995e8f8b51b6d329da3d5b3",
       "subject": "Fix use of uninitialised mIsAnimesh in LLVOAvatar",
       "files": [
@@ -194,17 +224,24 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "9b9cb8172b255d50fd3c772c3ef6357ca3c5a0a8",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "168ac4d590",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
-      "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
       "fullSource": "168ac4d5903f2e3097aef7c85ae4635ce9e6dfe3",
       "subject": "Fix use of uninitialised mVisibleTyping in LLVOAvatar",
       "files": [
@@ -217,17 +254,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": false,
       "patchID": "eb34f0b8d40a52225c1528bd3d23bfbe92bdf9e7",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "88ef9b00a5",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
       "fullSource": "88ef9b00a56037b4f9072dc0a872dbf4a936169f",
       "subject": "Fix FSPanelLogin callbacks undefined behaviour during destruction",
       "files": [
@@ -240,17 +282,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "a0ab3a3c695097b115e3bbed95196af9f19081cf",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "aa72e4d949",
       "group": "Crash and lifetime safety",
       "priority": 1,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
       "fullSource": "aa72e4d9494b285428d4233a8d7cdb31fafde825",
       "subject": "Fix undefined behaviour using FS modified e_insertion_point",
       "files": [
@@ -262,7 +309,8 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "c69118e1d0b381e7a50524ff0f2f2454fe6bd154",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "2200e164f4",
@@ -298,11 +346,15 @@
       "source": "9879049d15",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "9879049d15ebf13de76e1338bf139c36528a91a1",
       "subject": "Fix mHypergrid in fsslurl being undefined and being overwritten to false in some constructors",
       "files": [
@@ -315,17 +367,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "3910e2d04cc760994a7e5392f7c2bbf4f5d2683b",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "f34effb391",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "f34effb39127d32d37053c7651955a0eaa7de6b2",
       "subject": "Preserve UTF-8 region names when parsing OpenSim SLURLs",
       "files": [
@@ -337,17 +394,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "163905de01d6274591f2b9db9acd9e2dcb83e437",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "00da4e64b3",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "00da4e64b3c8e75ab55cf1dd0bd2e14a04dc6bc5",
       "subject": "Resolve grid aliases before storing the selected grid",
       "files": [
@@ -359,17 +421,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "d822e7a8ccd7c435418d3239c533eec851417ff9",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "b4c12a79fc",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "b4c12a79fc1feab8d3aa71383bbbec56867e99eb",
       "subject": "Return nickname and label matches when probing saved grids",
       "files": [
@@ -381,17 +448,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "9e0a0bd1253dc9e35a233b56b05ec729ba0059c0",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "528481bec4",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "528481bec46b46f16c7670559ed095b1452c5141",
       "subject": "Keep map block requests within the 64-region server limit",
       "files": [
@@ -403,17 +475,22 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": true,
       "patchID": "ab04601238725fa91b41f04bce64c55d71a94ec5",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "a9c503e0f4",
       "group": "OpenSim navigation and cache correctness",
       "priority": 2,
-      "status": "pending",
+      "status": "implemented",
       "evidence": [],
-      "pr": null,
-      "branch": null,
-      "tests": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
       "fullSource": "a9c503e0f4b937a7809a15b4068463f2616dbec5",
       "subject": "Skip reconnect when no login endpoint is available",
       "files": [
@@ -425,7 +502,8 @@
       "reverseAppliesAtBase": false,
       "forwardAppliesAtBase": false,
       "patchID": "97e6e78cf02c761a01c0f635a6de51d4ab3a4f77",
-      "equivalentMainCommit": null
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd"
     },
     {
       "source": "1ecc5eacc1",

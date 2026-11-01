@@ -10,9 +10,9 @@ Review base: `e462dd1d1f7444b3922989ec30677814bd63c3cd`.
 Firestorm: `6d88ec304f493180d25e36b90872d388e3b4d20b`.
 SL: `373addb1cbdb6ae505c8e797c33729cb1ad75dba`.
 
-Completed: [#163](https://github.com/DrCum/Folderstorm/pull/163), native memory
-safety (3 sources). Next: UI-lifetime fixes, then OpenSim/cache correctness.
-All other candidates remain under applicability/dependency review, not omitted.
+Completed: #163 memory safety (3 sources), #165 UI lifetimes (4), #166 avatar/
+world initialization (4), #167 OpenSim routing/maps (6). Cache accounting is
+being validated. Remaining candidates continue under applicability review.
 
 #32 (`9e9a8a5cbb`) and #66 (`6eef8a47ae`) are ancestors of current main. The
 225 post-fork non-merge commits were checked by stable patch ID; none of the 41
