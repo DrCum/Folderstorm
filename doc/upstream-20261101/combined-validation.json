@@ -1,0 +1,92 @@
+{
+  "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "method": "Apply independent branch diffs to a temporary detached working tree; no combined branch, merge or commit published.",
+  "branches": [
+    {
+      "branch": "upstream/20261101-memory-safety",
+      "head": "64966618596f071752e1f85bcb8f980d2f4004c6",
+      "files": 5
+    },
+    {
+      "branch": "upstream/20261101-ui-lifetimes",
+      "head": "e095a178191f0699837b01c16d4fb235d7fe68ac",
+      "files": 8
+    },
+    {
+      "branch": "upstream/20261101-avatar-initialization",
+      "head": "26131a98082be749327fa30c66a211561f56e6db",
+      "files": 5
+    },
+    {
+      "branch": "upstream/20261101-opensim-routing",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "files": 7
+    },
+    {
+      "branch": "upstream/20261101-cache-accounting",
+      "head": "cec200d09b711da71a4a3ad317c0c79334049a7a",
+      "files": 4
+    },
+    {
+      "branch": "upstream/20261101-render-animation",
+      "head": "257a42b7814ce1ea992f3dd2717fab4c659b2268",
+      "files": 7
+    },
+    {
+      "branch": "upstream/20261101-editor-usability",
+      "head": "7390cabf6b664e869c67bc0b9c477237ca656c1d",
+      "files": 10
+    },
+    {
+      "branch": "upstream/20261101-rlva-correctness",
+      "head": "a2cf70168f2a3ea52e70ed24b0b0bf6788700c16",
+      "files": 7
+    },
+    {
+      "branch": "fix/mcp-script-source-resolution",
+      "head": "1cf4a72d044fb4592f383c86a5ba95dd5addbe42",
+      "files": 7
+    }
+  ],
+  "changedFiles": 60,
+  "overlappingFiles": [],
+  "tests": {
+    "upstreamPythonChecks": {
+      "count": 24,
+      "result": "passed"
+    },
+    "existingNavigationChecks": {
+      "count": 6,
+      "result": "passed"
+    },
+    "existingPoseSourceContracts": {
+      "count": 23,
+      "result": "passed"
+    },
+    "priorInventoryParserUploadChecks": {
+      "count": 3,
+      "result": "passed"
+    },
+    "focusedCTests": {
+      "count": 8,
+      "result": "passed"
+    },
+    "cachedDiffCheck": "passed"
+  },
+  "optionalRiskThemeCrossCheck": "3 editor tests also pass with #172 getter; risk getter restored/excluded from ordinary snapshot.",
+  "combinedRealHeaderSyntax": {
+    "result": "passed",
+    "files": [
+      "indra/newview/fsobjecttools.cpp",
+      "indra/newview/fscontentlistener.cpp",
+      "indra/newview/llinventorylistener.cpp",
+      "indra/newview/pipeline.cpp",
+      "indra/llui/llfolderview.cpp",
+      "indra/llui/llkeywords.cpp",
+      "indra/llfilesystem/lldiskcache.cpp",
+      "indra/llfilesystem/lldir.cpp"
+    ]
+  },
+  "nativeAcceptance": "Not run: Windows/MSVC full linking, GL/UI/audio/simulator, native display scaling, real worker/device and installer acceptance.",
+  "updatedEditorFixture": "Three changed editor checks re-run on latest head, then also with optional risk theme getter; both pass. Production code unchanged."
+}

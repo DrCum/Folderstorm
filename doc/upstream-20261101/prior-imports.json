@@ -1,0 +1,46 @@
+{
+  "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "mainPostForkNonMergeCommits": 225,
+  "priorIntegrations": [
+    {
+      "pr": 32,
+      "commit": "9e9a8a5cbb2a0110e3b1cc4a01c874a7c2bd9537",
+      "ancestorOfBase": true
+    },
+    {
+      "pr": 66,
+      "commit": "6eef8a47aee4610330fda803a0c2b5677c56400b",
+      "ancestorOfBase": true
+    }
+  ],
+  "pr32SourcePatchIDs": [
+    {
+      "source": "087f80feeddbcbdff51c8365c786c2549173a1a7",
+      "import": "aa0beabd17b4ee2a81479eb1d8b87be09531e892",
+      "sourcePatchID": "cf14d41ba825733575c75f04a3184242ea44a432",
+      "importPatchID": "cf14d41ba825733575c75f04a3184242ea44a432",
+      "equal": true
+    },
+    {
+      "source": "c33f34cd9c01ccac7c9a0a1eaaf3538c7c35239c",
+      "import": "f0ad5559797f204b1ae273e8aa3da64bd64bc38e",
+      "sourcePatchID": "877900ade0297613a690c27325be9ed3d4492455",
+      "importPatchID": "877900ade0297613a690c27325be9ed3d4492455",
+      "equal": true
+    },
+    {
+      "source": "ccfb6e02c759176beb29271a47344a9ac429cbf6",
+      "import": "f216f8d87a04fb1d850d03e659bdf18ae4cfedde",
+      "sourcePatchID": "108723850a965af3fbaa462dadf89c1248b1e9e5",
+      "importPatchID": "108723850a965af3fbaa462dadf89c1248b1e9e5",
+      "equal": true
+    },
+    {
+      "source": "62aa89611d2385ee9178bae00916e6cad323a007",
+      "import": "7b970da732a854ea730e32071bb5c9b4e0a3cbee",
+      "sourcePatchID": "679116aae9a280cad78b13d2bc77ba90f07df79c",
+      "importPatchID": "679116aae9a280cad78b13d2bc77ba90f07df79c",
+      "equal": true
+    }
+  ]
+}
