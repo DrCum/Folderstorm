@@ -36,16 +36,18 @@ struct LLScriptAssetUpload:LLResourceUploadInfo {
 '''
 METADATA=r'''
 namespace LLCore {
- struct HttpRequest {static constexpr int DEFAULT_POLICY_ID=0;};
+ struct HttpRequest {using ptr_t=std::shared_ptr<HttpRequest>;static constexpr int DEFAULT_POLICY_ID=0;};
  struct HttpOptions{void setRetries(int){}void setFollowRedirects(bool){}};
+ struct HttpStatus{int type;explicit operator bool()const{return type>=200&&type<300;}int getType()const{return type;}int getStatus()const{return static_cast<bool>(*this)?0:1;}std::string getMessage()const{return "HTTP fixture failure";}};
 }
 LLSD serverResult,lastMetadata;std::function<void()> afterMetadata;
 namespace LLCoreHttpUtil {
  struct HttpCoroutineAdapter {
+  using ptr_t=std::shared_ptr<HttpCoroutineAdapter>;
   static constexpr const char* HTTP_RESULTS="http";
-  struct Status{int type;explicit operator bool()const{return type==200;}int getType()const{return type;}int getStatus()const{return 0;}};
+  using Status=LLCore::HttpStatus;
   HttpCoroutineAdapter(const char*,int){}
-  LLSD postAndSuspend(const std::shared_ptr<LLCore::HttpRequest>&,const std::string&,const LLSD& data,const std::shared_ptr<LLCore::HttpOptions>&){
+  LLSD postAndSuspend(const std::shared_ptr<LLCore::HttpRequest>&,const std::string&,const LLSD& data,const std::shared_ptr<LLCore::HttpOptions>& = {}){
    lastMetadata=data;if(afterMetadata)afterMetadata();
    if(!data["object-id"].isUUID()||!data["item-id"].isUUID())return llsd::map("http",400);
    return serverResult;
@@ -80,11 +82,11 @@ int main(){
   assert(body["experience"].isUUID()&&body["experience"].asUUID()==field.asUUID());assert(body["task_id"].asUUID()==object&&body["item_id"].asUUID()==id);
   assert(m->receipt["experience_preserved"].asBoolean()&&m->task->guard()->submitted()==0);
  }
- // Missing/malformed/failed metadata must never be treated as no association.
- for(int bad=0;bad<4;++bad){serverResult=llsd::map("http",bad==0?403:200);
-  if(bad==2)serverResult["experience"]="malformed";if(bad==3)serverResult["experience"]=false;
+ // Malformed supplied fields and failed HTTP must never become no association.
+ for(int bad=0;bad<3;++bad){serverResult=llsd::map("http",bad==0?403:200);
+  if(bad==1)serverResult["experience"]="malformed";if(bad==2)serverResult["experience"]=false;
   auto m=begin();enqueueTaskScript(m);assert(queued.empty()&&m->finished&&m->receipt["metadata_http_type"].asInteger()==(bad==0?403:200));
-  assert(m->receipt["experience_metadata"].asString()==(bad==0?"metadata_http_error":bad==1?"metadata_missing_experience":"metadata_invalid_experience"));
+  assert(m->receipt["experience_metadata"].asString()==(bad==0?"metadata_http_error":"metadata_invalid_experience"));
  }
  serverResult=llsd::map("http",200,"experience",exp);
  for(int changed=0;changed<5;++changed){auto m=begin();afterMetadata=[&,changed](){if(changed==0)currentSource="other";if(changed==1)live=false;if(changed==2)m->task->guard()->cancel("revoked");if(changed==3)m->task.reset();if(changed==4)item.permissions.modify=false;};
@@ -92,6 +94,57 @@ int main(){
  }
  auto m=begin();enqueueTaskScript(m);assert(queued.size()==1);auto upload=queued.back();
  m->task->guard()->cancel("revoked after metadata");assert(!upload->hooks.before("capability",true));assert(m->task->guard()->submitted()==0);
+}
+'''
+
+NATIVE_EXPERIENCE=r'''
+#define LL_WARNS(tag) std::ostringstream()
+#define LL_ENDL std::endl
+struct LLExperienceCache {
+ using ExperienceGetFn_t=std::function<void(const LLSD&)>;
+ static constexpr const char* EXPERIENCE_ID="public_id";
+ std::string mCapability(const char*){return "metadata";}
+ void get(const LLUUID& id,const ExperienceGetFn_t& fn){if(fn)fn(llsd::map(EXPERIENCE_ID,id));}
+ void fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&,LLUUID,LLUUID,std::string,ExperienceGetFn_t);
+};
+template<class T>struct LLHandle{T* value;T* get()const{return value;}};
+struct ScriptEd{LLUUID experience;void setAssociatedExperience(const LLUUID& id){experience=id;}};
+struct LLLiveLSLEditor {
+ ScriptEd core;ScriptEd* mScriptEd=&core;void updateExperiencePanel(){}
+ static void setAssociatedExperience(LLHandle<LLLiveLSLEditor>,const LLSD&);
+};
+'''
+MISSING_EXPERIENCE_CASES=r'''
+int main(){
+ const LLUUID object("11111111-1111-4111-8111-111111111111"),id("22222222-2222-4222-8222-222222222222"),exp("33333333-3333-4333-8333-333333333333");
+ LLExperienceCache cache;LLLiveLSLEditor editor;auto http=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("native",0);
+ auto begin=[&](){queued.clear();auto m=std::make_shared<Mutation>();m->source="source";m->request=llsd::map("object_id",object.asString(),"item_id",id.asString(),"text","source");m->task=std::make_shared<fs_assistant::AsyncTask>(guard());return m;};
+ for(bool associated:{false,true}){
+  serverResult=llsd::map("http",200);if(associated)serverResult["experience"]=exp;
+  LLSD nativeResult;cache.fetchAssociatedExperienceCoro(http,object,id,"metadata",[&](const LLSD& result){nativeResult=result;LLLiveLSLEditor::setAssociatedExperience({&editor},result);});
+  if(!associated)assert(nativeResult["error"].asInteger()==-1&&nativeResult["message"].asString()=="no experience");
+  assert(editor.core.experience==(associated?exp:LLUUID::null));
+  auto m=begin();enqueueTaskScript(m);assert(queued.size()==1&&!m->finished);
+  const auto body=std::dynamic_pointer_cast<LLScriptAssetUpload>(queued.back())->generatePostBody();
+  assert(body["experience"].isUUID()&&body["experience"].asUUID()==editor.core.experience);
+  assert(m->receipt["experience_metadata"].asString()==(associated?"known_association":"known_none"));
+  assert(m->receipt["metadata_http_type"].asInteger()==200&&m->receipt["metadata_http_status"].asInteger()==0);
+  assert(m->receipt["experience_preserved"].asBoolean()&&m->task->guard()->submitted()==0);
+ }
+ // Failed reads cannot authorize saving, even with a valid supplied UUID.
+ for(int status:{0,403,500})for(bool associated:{false,true}){
+  serverResult=llsd::map("http",status);if(associated)serverResult["experience"]=exp;
+  auto m=begin();enqueueTaskScript(m);assert(queued.empty()&&m->finished&&m->task->guard()->submitted()==0);
+  assert(m->receipt["experience_metadata"].asString()=="metadata_http_error");
+ }
+ // A successful no-Experience response does not bypass live source guards.
+ serverResult=llsd::map("http",200);
+ for(int changed=0;changed<4;++changed){auto m=begin();afterMetadata=[&,changed](){if(changed==0)currentSource="other";if(changed==1)live=false;if(changed==2)m->task->guard()->cancel("revoked");if(changed==3)item.permissions.modify=false;};
+  enqueueTaskScript(m);assert(queued.empty()&&m->finished&&m->task->guard()->submitted()==0);
+  assert(m->receipt["state"].asString()=="cancelled_before_submission");afterMetadata={};currentSource="source";live=true;item.permissions.modify=true;
+ }
+ auto m=begin();enqueueTaskScript(m);assert(queued.size()==1);auto upload=queued.back();
+ m->task->guard()->cancel("revoked after metadata");assert(!upload->hooks.before("capability",true)&&m->task->guard()->submitted()==0);
 }
 '''
 
@@ -137,7 +190,7 @@ class ScriptSaveNativeTests(unittest.TestCase):
             subprocess.run(shlex.split(os.environ.get('CXX','c++'))+['-std=c++17','-Wall','-Wextra','-Werror','-Wno-misleading-indentation','-UNDEBUG','-I'+str(ROOT),str(cpp),'-o',str(exe)],check=True)
             subprocess.run([str(exe)],check=True)
 
-    def test_task_metadata_typed_identity_empty_association_and_live_guards(self):
+    def metadata_source(self):
         text=(ROOT/'fsobjecttools.cpp').read_text()
         source=BASE+UPLOADS+METADATA
         for name in ['LLSD taskExperienceRequest(const LLSD& request)',
@@ -145,7 +198,16 @@ class ScriptSaveNativeTests(unittest.TestCase):
                      'void enqueueTaskScript(const std::shared_ptr<Mutation>& value)']:
             source+=function(text,name)
         source+=function((ROOT/'llviewerassetupload.cpp').read_text(),'LLSD LLScriptAssetUpload::generatePostBody()')
-        self.run_native(source+METADATA_CASES)
+        return source
+
+    def test_task_metadata_typed_identity_empty_association_and_live_guards(self):
+        self.run_native(self.metadata_source()+METADATA_CASES)
+
+    def test_missing_experience_matches_native_lookup_and_editor(self):
+        source=self.metadata_source()+NATIVE_EXPERIENCE
+        source+=function((ROOT.parent/'llmessage/llexperiencecache.cpp').read_text(),'void LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLUUID objectId, LLUUID itemId, std::string url, ExperienceGetFn_t fn)')
+        source+=function((ROOT/'llpreviewscript.cpp').read_text(),'void LLLiveLSLEditor::setAssociatedExperience( LLHandle<LLLiveLSLEditor> editor, const LLSD& experience )')
+        self.run_native(source+MISSING_EXPERIENCE_CASES)
 
     def test_optional_update_price_does_not_mutate_response_or_bypass_ceiling(self):
         text=(ROOT/'llviewerassetupload.cpp').read_text()

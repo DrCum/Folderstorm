@@ -40,6 +40,7 @@ struct LLUUID {
 };
 const LLUUID LLUUID::null;
 struct LLSD {
+ using Integer=int;
  using Map=std::map<std::string,LLSD>;using Array=std::vector<LLSD>;
  std::variant<std::monostate,bool,int,double,std::string,LLUUID,Map,Array> value;
  LLSD()=default;LLSD(bool v):value(v){}LLSD(int v):value(v){}LLSD(double v):value(v){}
@@ -54,7 +55,7 @@ struct LLSD {
  const LLSD& operator[](const std::string& k)const{static LLSD empty;return has(k)?std::get<Map>(value).at(k):empty;}
  bool has(const std::string& k)const{return isMap()&&std::get<Map>(value).count(k);}
  bool operator==(const LLSD& b)const{return value==b.value;}bool operator!=(const LLSD& b)const{return !(*this==b);}
- static LLSD emptyArray(){LLSD v;v.value=Array();return v;}void append(LLSD v){std::get<Array>(value).push_back(std::move(v));}
+ static LLSD emptyArray(){LLSD v;v.value=Array();return v;}void append(LLSD v){if(!isArray())value=Array();std::get<Array>(value).push_back(std::move(v));}
 };
 namespace llsd {
  LLSD map(){LLSD v;v.value=LLSD::Map();return v;}

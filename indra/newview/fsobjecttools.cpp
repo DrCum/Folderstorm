@@ -829,11 +829,10 @@ LLSD taskExperienceRequest(const LLSD& request)
 }
 bool taskExperienceAssociation(const LLSD& result,LLUUID& experience,std::string& error)
 {
-    if(!result.has("experience")){error="metadata_missing_experience";return false;}
     const auto& field=result["experience"];
-    // Native Experience lookup accepts a present empty/undef field as no
-    // association. Missing fields and failed requests are still unknown.
-    if(field.isUndefined() || (field.isString() && field.asString().empty()))
+    // Called only after HTTP success. LLExperienceCache reports an absent field
+    // as "no experience", which the native editor saves with a nil association.
+    if(!result.has("experience") || field.isUndefined() || (field.isString() && field.asString().empty()))
     {experience=LLUUID::null;return true;}
     if(field.isUUID() || (field.isString() && LLUUID::validate(field.asString())))
     {experience=field.asUUID();return true;}
