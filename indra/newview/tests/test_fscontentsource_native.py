@@ -56,6 +56,7 @@ struct LLSD {
  bool has(const std::string& k)const{return isMap()&&std::get<Map>(value).count(k);}
  void erase(const std::string& k){if(isMap())std::get<Map>(value).erase(k);}
  bool operator==(const LLSD& b)const{return value==b.value;}bool operator!=(const LLSD& b)const{return !(*this==b);}
+ static LLSD emptyMap(){LLSD v;v.value=Map();return v;}
  static LLSD emptyArray(){LLSD v;v.value=Array();return v;}void append(LLSD v){if(!isArray())value=Array();std::get<Array>(value).push_back(std::move(v));}
 };
 namespace llsd {

@@ -46,6 +46,11 @@ private-read epoch invalidate the proof. Scripts whose source cannot be read,
 and unsupported undisclosed asset types, can still be copied where permitted,
 but their receipt cannot claim a verified destination identity.
 
+Primitive creation has no existing object ID. Building approval summaries now
+read optional request fields through const LLSD, preserving the frozen material
+instead of inserting an undefined `id` and cancelling with
+`operation_source_changed` before dispatch.
+
 ## Focused checks
 
 The standalone CMake/CTest target `script_save_native` compiles extracted
@@ -74,10 +79,22 @@ Refresh/cache clearing and local removal/restoration cases exercise the same
 verification continuations. Terminal save receipt validation is tested separately
 from active transport, retaining source/signature and permission revocation checks.
 
+`building_native` compiles the production building preparation, material freeze,
+ticket and validation functions plus bridge guard registration. Native admission,
+scene state and summary serialization are fixtures. It covers all four primitive
+shapes with/without a tracking ID, inventory rez, changed arguments, live native
+denial, changed login/state, expired tickets and revocation before submission.
+
 ## Windows / Second Life acceptance
 
 Use a matching rebuilt viewer/MCP and disposable, owned QA scripts. Do not change
 existing project scripts without authorization.
+
+- Create one QA cube on a buildable parcel with explicit position, scale and
+  rotation, both with and without a tracking request UUID. It should pass the
+  unchanged-material guard. Changed native permission, account, parcel or request
+  arguments must still stop submission. A tracked rez remains unconfirmed until
+  its candidate is explicitly associated; never replay an uncertain creation.
 
 - Read a fresh inventory script, preview, then save/compile a small edit. Verify
   source readback and native compiler diagnostics. Repeat an explicitly requested
