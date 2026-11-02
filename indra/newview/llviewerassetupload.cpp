@@ -78,7 +78,7 @@ struct PendingInventoryUpload
     explicit PendingInventoryUpload(const LLResourceUploadInfo::ptr_t& upload):info(upload.get())
     {
         auto& entry=sPendingInventoryUploads[info];entry.first=upload->getItemId();++entry.second;
-        if(const auto* script=dynamic_cast<const LLScriptAssetUpload*>(info);script && !script->assistantOwned())
+        if(const auto* script=dynamic_cast<const LLScriptAssetUpload*>(info))
         {
             task=script->getTaskId();item=script->getItemId();account=gAgent.getID();login=gAgent.getSessionID();
             if(const auto* object=gObjectList.findObject(task);object && object->getRegion())host=object->getRegion()->getHost();
@@ -87,7 +87,7 @@ struct PendingInventoryUpload
     ~PendingInventoryUpload()
     {
         // Success, failure, cancellation and exceptions all release this lease.
-        // A query made during an uncertain native compile must not become
+        // A query made during a native or assistant compile must not become
         // post-upload evidence merely because the upload marker disappeared.
         const auto* object=gObjectList.findObject(task);
         if(task.notNull() && account==gAgent.getID() && login==gAgent.getSessionID() &&

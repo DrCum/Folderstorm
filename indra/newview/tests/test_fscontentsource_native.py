@@ -54,6 +54,7 @@ struct LLSD {
  LLSD& operator[](const std::string& k){if(!isMap())value=Map();return std::get<Map>(value)[k];}
  const LLSD& operator[](const std::string& k)const{static LLSD empty;return has(k)?std::get<Map>(value).at(k):empty;}
  bool has(const std::string& k)const{return isMap()&&std::get<Map>(value).count(k);}
+ void erase(const std::string& k){if(isMap())std::get<Map>(value).erase(k);}
  bool operator==(const LLSD& b)const{return value==b.value;}bool operator!=(const LLSD& b)const{return !(*this==b);}
  static LLSD emptyArray(){LLSD v;v.value=Array();return v;}void append(LLSD v){if(!isArray())value=Array();std::get<Array>(value).push_back(std::move(v));}
 };
@@ -62,11 +63,12 @@ namespace llsd {
  template<class K,class V,class... Rest> LLSD map(K key,V value,Rest... rest){auto result=map(rest...);result[key]=value;return result;}
 }
 bool llsd_equals(const LLSD& a,const LLSD& b){return a==b;}
-namespace LLAssetType {enum EType {AT_UNKNOWN,AT_LSL_TEXT,AT_NOTECARD};const char* lookup(EType t){return t==AT_LSL_TEXT?"lsltext":"notecard";}}
+namespace LLAssetType {enum EType {AT_UNKNOWN,AT_LSL_TEXT,AT_NOTECARD,AT_OBJECT};const char* lookup(EType t){return t==AT_LSL_TEXT?"lsltext":"notecard";}}
 enum {PERM_COPY,PERM_MODIFY,GP_OBJECT_MANIPULATE,RLV_BHVR_VIEWSCRIPT,RLV_BHVR_VIEWNOTE};
 struct Permissions {LLUUID owner{"account"};bool copy=true,modify=true;LLUUID getOwner()const{return owner;}};
-struct InventoryObject {virtual ~InventoryObject()=default;};
+struct InventoryObject {virtual ~InventoryObject()=default;virtual LLUUID getUUID()const{return {};}};
 struct LLViewerInventoryItem:InventoryObject {
+ LLViewerInventoryItem()=default;explicit LLViewerInventoryItem(const LLViewerInventoryItem* p):LLViewerInventoryItem(*p){}
  LLUUID uuid{"item"},asset;Permissions permissions;bool link=false,finished=true;LLAssetType::EType type=LLAssetType::AT_LSL_TEXT;
  LLUUID getUUID()const{return uuid;}LLUUID getAssetUUID()const{return asset;}
  LLAssetType::EType getActualType()const{return type;}LLAssetType::EType getType()const{return type;}

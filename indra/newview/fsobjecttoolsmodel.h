@@ -11,8 +11,8 @@
 
 namespace fs_object_tools {
 // ScriptRunningReply has no request nonce. A caller timing out or cancelling
-// cannot discard this wire fence: a late reply must drain before execution can
-// change, or it could be mistaken for an observation of the next execution.
+// cannot discard this wire fence: late replies retain their original execution
+// version and must never be reassigned to an observation of the next execution.
 template<class Key> class RunningQueries
 {
 public:
@@ -59,6 +59,8 @@ struct Insertion {std::string id;bool ambiguous=false;};
 inline Insertion correlateInsertion(const std::set<std::string>& before,const std::vector<Candidate>& after,const std::string& asset,int type)
 {
     Insertion result;
+    // Two undisclosed UUIDs are not evidence that the assets are identical.
+    if(asset.empty() || asset=="00000000-0000-0000-0000-000000000000")return result;
     for(const auto& item:after)
     {
         if(before.count(item.id) || item.asset!=asset || item.type!=type)continue;

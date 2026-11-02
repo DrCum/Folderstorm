@@ -31,6 +31,8 @@ int main()
     assert(match.id.empty() && match.ambiguous);
     match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"wrong-type","asset",5}},"asset",10);
     assert(match.id.empty() && !match.ambiguous);
+    match=fs_object_tools::correlateInsertion(before,{{"new","00000000-0000-0000-0000-000000000000",10}},"00000000-0000-0000-0000-000000000000",10);
+    assert(match.id.empty() && !match.ambiguous); // Undisclosed is not an identity.
     fs_object_tools::Acquisition ackFirst;ackFirst.acknowledge(true);assert(!ackFirst.confirmed());
     ackFirst.observe("result");assert(ackFirst.confirmed());ackFirst.observe("result");assert(ackFirst.confirmed());
     assert(!ackFirst.sourceRemovalObserved());ackFirst.observeSourceKill();assert(ackFirst.sourceRemovalObserved());

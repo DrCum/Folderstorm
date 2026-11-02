@@ -65,7 +65,7 @@ bool liveMutation(const std::shared_ptr<Mutation>& m){return live&&m->source==so
 void settle(const std::shared_ptr<Mutation>& m,const std::string& state,const std::string& reason){m->finished=true;m->receipt["state"]=state;m->receipt["reason"]=reason;}
 bool requestedRunning(const LLSD&,bool& running,std::string&){running=false;return true;}
 void finishTaskUpload(const std::shared_ptr<Mutation>&,const LLSD&,bool,const std::string&){}
-bool invalidateRunning(const LLUUID&,const LLUUID&){return true;}unsigned executionFor(const LLUUID&,const LLUUID&){return 1;}
+bool invalidateRunning(const LLUUID&,const LLUUID&,bool){return true;}unsigned executionFor(const LLUUID&,const LLUUID&){return 1;}
 void fs_object_tools_native_execution_changed(const LLUUID&,const LLUUID&){}
 std::vector<LLResourceUploadInfo::ptr_t> queued;
 struct LLViewerAssetUpload {static void EnqueueInventoryUpload(const std::string&,LLResourceUploadInfo::ptr_t p){queued.push_back(std::move(p));}};
@@ -194,6 +194,7 @@ class ScriptSaveNativeTests(unittest.TestCase):
         text=(ROOT/'fsobjecttools.cpp').read_text()
         source=BASE+UPLOADS+METADATA
         for name in ['LLSD taskExperienceRequest(const LLSD& request)',
+                     'bool stoppedCompile(const LLSD& request)',
                      'bool taskExperienceAssociation(const LLSD& result,LLUUID& experience,std::string& error)',
                      'void enqueueTaskScript(const std::shared_ptr<Mutation>& value)']:
             source+=function(text,name)
