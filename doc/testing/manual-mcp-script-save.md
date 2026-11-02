@@ -128,3 +128,29 @@ existing project scripts without authorization.
 
 Real metadata transport, native Windows compilation, paid uploads and in-world
 save/readback remain manual acceptance steps.
+
+## Mutation locking and retained callbacks
+
+Receipt retention and exclusive mutation access are separate. A completed
+insertion releases the prim even while obsolete item-bound verification reads
+remain outstanding. Those callbacks retain their original receipt and cannot
+change its settled result or release a newer operation's lock. Retained receipts
+still count against the bounded journal capacity and never authorize replay.
+
+An active write or an explicitly unresolved submitted outcome remains exclusive.
+A save whose source bytes were submitted without a known saved-source result
+keeps this protection after its transport closes. A confirmed saved source,
+including local refresh conflict, does not need the lock. Late authoritative
+rename/remove observations can still reconcile a timed-out write.
+
+On a busy refusal, retain the reported `operation_id`, `op`, `state` and `reason`,
+then inspect that exact receipt. Status also reports `mutation_blocking`,
+`blocking_reason`, `retained_pending` and `verification_callbacks`. Capture these
+before relogging, since receipts belong to the exact source session.
+
+For the competing-candidate regression, verify A while B's lookup is pending,
+then deliver a newer authoritative snapshot containing only A. The insertion
+must finish with a retained B callback and permit a subsequent write. Deliver B
+late, including during that newer write, and verify both receipts remain correct.
+Repeat with revocation, source-account change, unknown save outcome, and late
+rename/remove confirmation. Use only disposable owned QA objects/scripts.

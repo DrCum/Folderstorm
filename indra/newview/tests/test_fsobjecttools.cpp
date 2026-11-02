@@ -24,6 +24,14 @@ int main()
     late->value="late-confirmed-id";assert(ledger.find("late")->value=="late-confirmed-id");
     late->pending=0;assert(ledger.admit("fourth","args-d","new"));assert(!ledger.find("late"));
     assert(!ledger.admit("late","args-a","must not replay"));
+    fs_object_tools::Receipts<std::string> locks(1);
+    auto* lock=locks.admit("write","args","queued");assert(lock->blocksMutation());
+    lock->terminal=true;lock->pending=1;assert(!lock->blocksMutation());
+    assert(!locks.admit("other","args","new")); // Callback retention still bounds capacity.
+    lock->unresolved=true;assert(lock->blocksMutation());
+    lock->pending=0;assert(!locks.admit("other","args","new")); // Uncertain writes cannot be evicted.
+    lock->unresolved=false;assert(locks.admit("other","args","new"));
+    assert(!locks.admit("write","args","must not replay"));
     const std::set<std::string> before{"old"};
     auto match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"new","asset",10},{"other","different",10}},"asset",10);
     assert(match.id=="new" && !match.ambiguous);

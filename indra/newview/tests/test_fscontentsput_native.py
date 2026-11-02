@@ -34,6 +34,7 @@ struct LLViewerObject {
  InventoryObject* getInventoryObject(const LLUUID& id){for(const auto& p:contents){auto* i=dynamic_cast<LLViewerInventoryItem*>(p.get());if(i&&i->uuid==id)return i;}return nullptr;}
  void saveScript(const LLViewerInventoryItem*,bool run,bool){++sent;lastRunning=run;}
  void updateInventory(LLViewerInventoryItem*,int,bool){++sent;}
+ void updateViewerInventoryAsset(LLViewerInventoryItem* i,LLUUID asset){i->asset=asset;}
 }prim;
 LLSD objectEvidence(LLViewerObject* p){return llsd::map("object_id",p->uuid,"server_generation",static_cast<int>(p->generation));}
 struct LLVOInventoryListener {
@@ -55,6 +56,8 @@ struct AssetStorage {
  void complete(std::size_t index,const LLUUID& asset,int status=0){auto r=reads.at(index);reads.erase(reads.begin()+index);r.callback(asset,LLAssetType::AT_LSL_TEXT,r.data,status,0);}
 }storage;
 AssetStorage* gAssetStorage=&storage;
+struct LLLiveLSLEditor{bool assistantSourceBusy(){return true;}bool invalidateAssistantSource(void*){return false;}void* getEditor(){return nullptr;}};
+struct LLFloaterReg{static inline bool busy=false;template<class T>static T* findTypedInstance(const char*,const LLSD&){static T editor;return busy?&editor:nullptr;}};
 '''
 
 SERVICE = r'''
@@ -155,6 +158,87 @@ int main(){
 }
 '''
 
+CASES_LOCK = r'''
+int main(){
+ // A newer authoritative snapshot removes B after A is verified. B's read
+ // still owns its receipt, but can no longer affect this completed insertion.
+ auto p=beginPut();p->receipt["operation_id"]=LLUUID("put-receipt");enqueueContentsPut(p);
+ addItem("a");addItem("b");observe(p);storage.complete(0,LLUUID("asset"));
+ std::string error;assert(!primMutationAvailable(prim.uuid,error));
+ assert(error.find("operation_id=put-receipt; op=put; state=submitted_unknown; reason=awaiting_native_observation")!=std::string::npos);
+ prim.contents.pop_back();observe(p);auto* entry=service().operations.find(p->key);
+ assert(confirmed(p)&&p->finished&&!p->task&&p->insertionReads==1&&entry->pending==1);
+ assert(!entry->blocksMutation()&&primMutationAvailable(prim.uuid,error));
+ auto next=std::make_shared<Mutation>();next->request=llsd::map("object_id",prim.uuid,"op","rename");
+ next->receipt=llsd::map("operation_id",LLUUID("next-receipt"),"state","queued");next->key="next";
+ auto* nextEntry=service().operations.admit(next->key,"args",next);nextEntry->pending=1;
+ assert(!primMutationAvailable(prim.uuid,error)&&error.find("next-receipt")!=std::string::npos);
+ // Duplicate inventory delivery and a late obsolete read cannot overwrite the
+ // settled receipt, acquire the lock again, or release the newer mutation.
+ for(int i=0;i<65;++i)addItem("later-"+std::to_string(i));observe(p);
+ assert(p->receipt["correlation"].asString()=="fresh_contents_verified_asset");
+ storage.complete(0,LLUUID("asset"));
+ assert(confirmed(p)&&p->receipt["task_item_id"].asUUID()==LLUUID("a")&&entry->pending==0);
+ assert(!entry->blocksMutation()&&nextEntry->blocksMutation()&&!primMutationAvailable(prim.uuid,error));
+ settle(next,"simulator_observed","done");assert(primMutationAvailable(prim.uuid,error));
+ // Separate callbacks for duplicate native reads each drain their own lease.
+ p=beginPut();enqueueContentsPut(p);auto* a=addItem("a");observe(p);
+ assert(readInsertionAsset(p,&prim,a,false)&&p->insertionReads==2);
+ storage.complete(0,LLUUID("asset"));assert(confirmed(p)&&p->insertionReads==1);
+ storage.complete(0,LLUUID("other"));assert(confirmed(p)&&p->insertionReads==0&&service().operations.find(p->key)->pending==0);
+ // Revoke before submission: retain its read, but it cannot send a write.
+ p=beginPut(LLUUID());enqueueContentsPut(p);p->task->guard()->cancel("revoked");
+ settle(p,"cancelled_before_submission","revoked");assert(primMutationAvailable(prim.uuid,error));
+ storage.complete(0,LLUUID("asset"));assert(sent==0&&primMutationAvailable(prim.uuid,error));
+ // Revocation/timeout after a write remains exclusive even after reads drain.
+ for(const char* op:{"put","scriptSave","scriptRunning","take","takeCopy"}){
+  p=beginPut();enqueueContentsPut(p);addItem("a");observe(p);p->request["op"]=op;
+  p->task->guard()->cancel("revoked");settle(p,"submitted_unknown","revoked",true);
+  assert(!primMutationAvailable(prim.uuid,error)&&error.find("submitted_outcome_unresolved")!=std::string::npos);
+  storage.complete(0,LLUUID("asset"));assert(!primMutationAvailable(prim.uuid,error));
+ }
+ // Account changes clear the journal. An old read with the same request key
+ // must neither decrement nor unlock the new login's entry.
+ p=beginPut();enqueueContentsPut(p);addItem("a");observe(p);
+ currentSource="another-login";service().operations.clear();
+ next=std::make_shared<Mutation>();next->request=llsd::map("object_id",prim.uuid);next->key=p->key;
+ nextEntry=service().operations.admit(next->key,"args",next);nextEntry->pending=1;
+ storage.complete(0,LLUUID("asset"));assert(nextEntry->pending==1&&nextEntry->blocksMutation()&&!confirmed(p));
+ // Late authoritative rename/remove evidence can still reconcile a timed-out
+ // submitted write, without making another native submission.
+ for(const char* op:{"rename","remove"}){
+  p=beginPut();p->request["op"]=op;p->request["item_id"]=LLUUID("a");p->request["name"]="02-Gameplay";
+  p->observe(&prim);p->submitted=true;p->task->guard()->cancel("timeout");settle(p,"submitted_unknown","timeout",true);
+  assert(!primMutationAvailable(prim.uuid,error));
+  if(std::string(op)=="rename")addItem("a");observe(p);
+  assert(primMutationAvailable(prim.uuid,error)&&service().operations.find(p->key)->pending==0&&sent==0);
+ }
+}
+'''
+
+CASES_SAVE_LOCK = r'''
+int main(){
+ auto beginSave=[](bool bytes){auto p=beginPut();p->request["op"]="scriptSave";p->request["text"]="private source";
+  auto yes=[](){return true;};assert(p->progress.before("capability",true,yes,yes));
+  if(bytes)assert(p->progress.before("source",true,yes,yes));p->submitted=true;return p;};
+ std::string error;
+ auto p=beginSave(false);finishTaskUpload(p,LLSD(),false,"capability failed");
+ assert(p->receipt["source_saved_known"].asBoolean()&&!p->receipt["source_saved"].asBoolean()&&primMutationAvailable(prim.uuid,error));
+ p=beginSave(true);finishTaskUpload(p,LLSD(),false,"result lost");
+ assert(!p->receipt["source_saved_known"].asBoolean()&&!primMutationAvailable(prim.uuid,error));
+ assert(service().operations.find(p->key)->unresolved&&!p->task&&!p->request.has("text"));
+ const auto completed=llsd::map("state","complete","new_asset",LLUUID("saved"),"compiled",true);
+ finishTaskUpload(p,completed,true,"");assert(!primMutationAvailable(prim.uuid,error)); // Duplicate completion cannot rewrite an uncertain receipt.
+ for(int changed=0;changed<3;++changed){
+  p=beginSave(true);LLFloaterReg::busy=changed==1;
+  if(changed==2)p->task->guard()->cancel("revoked");
+  finishTaskUpload(p,completed,changed==0,"");
+  assert(p->receipt["source_saved_known"].asBoolean()&&p->receipt["source_saved"].asBoolean()&&primMutationAvailable(prim.uuid,error));
+  finishTaskUpload(p,LLSD(),false,"late failure");assert(primMutationAvailable(prim.uuid,error));
+ }
+}
+'''
+
 VALIDATION_FIXTURES = r'''
 struct FSAssistantPreparedOperation{LLSD request,validation;};
 std::shared_ptr<Mutation> ownMutation(const LLSD&){auto* entry=service().operations.find("operation");return entry?entry->value:nullptr;}
@@ -191,13 +275,17 @@ class ContentsPutNativeTests(unittest.TestCase):
         source+=function(text,'LLSD itemEvidence(const LLViewerInventoryItem* item)')
         source+=function(text,'struct Mutation:LLVOInventoryListener')+';\n'+SERVICE
         for name in ['void settle(const std::shared_ptr<Mutation>& value,const std::string& state,const std::string& reason,bool pending=false)',
+                     'std::string mutationBlockReason(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)',
+                     'std::string mutationBusy(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)',
+                     'bool primMutationAvailable(const LLUUID& object,std::string& error)',
                      'void submitContentsPut(const std::shared_ptr<Mutation>& value)',
                      'struct InsertionRead',
                      'void insertionAssetLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 status,LLExtStat)',
                      'bool readInsertionAsset(const std::shared_ptr<Mutation>& value,LLViewerObject* prim,LLViewerInventoryItem* item,bool agent)',
                      'void enqueueContentsPut(const std::shared_ptr<Mutation>& value)',
                      'void Mutation::checkInsertion(LLViewerObject* prim)',
-                     'void Mutation::inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_list_t* contents,S32,void*)']:
+                     'void Mutation::inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_list_t* contents,S32,void*)',
+                     'void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,bool success,const std::string& reason)']:
             source+=function(text,name)+(';' if name.startswith('struct ') else '')+'\n'
         if terminal:
             source+=VALIDATION_FIXTURES+function(text,'bool validateMutation(const FSAssistantPreparedOperation& operation,std::string& error)')
@@ -215,6 +303,12 @@ class ContentsPutNativeTests(unittest.TestCase):
 
     def test_native_insertion_bounded_reads_and_receipt_retention(self):
         self.run_native(CASES_BOUNDS)
+
+    def test_completed_insertion_releases_lock_with_retained_callbacks(self):
+        self.run_native(CASES_LOCK)
+
+    def test_save_lock_distinguishes_transport_completion_from_known_outcome(self):
+        self.run_native(CASES_SAVE_LOCK)
 
     def test_terminal_save_status_keeps_source_and_permission_gates(self):
         self.run_native(CASES_TERMINAL, terminal=True)

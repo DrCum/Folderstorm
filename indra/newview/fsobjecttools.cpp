@@ -461,7 +461,7 @@ void settle(const std::shared_ptr<Mutation>& value,const std::string& state,cons
 {
     value->receipt["state"]=state;value->receipt["reason"]=value->privateRetired && value->request["op"].asString()=="scriptSave"?std::string("private_results_removed"):fs_content::excerpt(reason,1024);value->finished=true;
     auto* entry=service().operations.find(value->key);
-    if(entry && entry->value==value){entry->terminal=true;entry->pending=(pending?1U:0U)+value->insertionReads;}
+    if(entry && entry->value==value){entry->terminal=true;entry->unresolved=pending;entry->pending=(pending?1U:0U)+value->insertionReads;}
     if(!pending){value->task.reset();value->refresh=false;value->dialog.reset();value->request.erase("text");}
 }
 bool taskEditorBusy(const LLUUID& object,const LLUUID& item,const LLResourceUploadInfo* own=nullptr)
@@ -548,9 +548,33 @@ std::shared_ptr<Mutation> receiptOperation(const LLSD& request,std::string& erro
         }
     error="operation_expired: receipt is unavailable for this exact source";return {};
 }
+std::string mutationBlockReason(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)
+{
+    if(!entry.blocksMutation())return "none";
+    if(entry.unresolved)return "submitted_outcome_unresolved";
+    return entry.value && entry.value->submitted?"awaiting_native_observation":"awaiting_submission_or_source_lookup";
+}
+std::string mutationBusy(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)
+{
+    const auto value=entry.value;
+    return "busy: reconcile the previous operation on this prim first; operation_id="+value->receipt["operation_id"].asUUID().asString()+
+        "; op="+value->request["op"].asString()+"; state="+value->receipt["state"].asString()+"; reason="+mutationBlockReason(entry);
+}
+bool primMutationAvailable(const LLUUID& object,std::string& error)
+{
+    for(const auto& entry:service().operations.entries())
+        if(entry.second.blocksMutation() && entry.second.value && entry.second.value->request["object_id"].asUUID()==object)
+        {error=mutationBusy(entry.second);return false;}
+    return true;
+}
 LLSD publicReceipt(const std::shared_ptr<Mutation>& value)
 {
     auto result=value->receipt;const auto op=value->request["op"].asString();std::string error;
+    if(const auto* entry=service().operations.find(value->key);entry && entry->value==value)
+    {
+        result["mutation_blocking"]=entry->blocksMutation();result["blocking_reason"]=mutationBlockReason(*entry);
+        result["retained_pending"]=static_cast<S32>(entry->pending);result["verification_callbacks"]=static_cast<S32>(value->insertionReads);
+    }
     if(op=="scriptSave")
     {
         auto* prim=target(value->request["object_id"].asUUID(),error);
@@ -625,9 +649,9 @@ bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
         {error="busy: native script upload is pending";return false;}
         if(!scriptReadable(item)){error="not_permitted: native-readable task script required";return false;}
         for(const auto& entry:service().operations.entries())
-        {const auto value=entry.second.value;if(entry.second.pending && value && value->request["object_id"].asUUID()==prim->getID() && value->request["item_id"].asUUID()==item->getUUID() &&
+        {const auto value=entry.second.value;if(entry.second.blocksMutation() && value && value->request["object_id"].asUUID()==prim->getID() && value->request["item_id"].asUUID()==item->getUUID() &&
             (value->request["op"].asString()=="scriptSave" || value->request["op"].asString()=="scriptRunning" || value->request["op"].asString()=="scriptReset"))
-            {error="busy: reconcile the script execution operation before querying running state";return false;}}
+            {error=mutationBusy(entry.second);return false;}}
         return true;
     }
     if(op=="scriptSave" || op=="scriptRunning" || op=="scriptReset")
@@ -637,11 +661,7 @@ bool prepareMutation(FSAssistantPreparedOperation& operation,std::string& error)
         {error="busy: an earlier native running-state reply must drain; an explicit running_mode=stopped save remains available";return false;}
         operation.validation["execution"]=std::to_string(executionFor(prim->getID(),item->getUUID()));
     }
-    if(!mutationRead(op))
-    {
-        for(const auto& entry:service().operations.entries())if(entry.second.pending && entry.second.value && entry.second.value->request["object_id"].asUUID()==request["object_id"].asUUID())
-        {error="busy: reconcile the previous operation on this prim first";return false;}
-    }
+    if(!mutationRead(op) && !primMutationAvailable(prim->getID(),error))return false;
     if(op=="scriptSave" || op=="scriptPreview")
     {
         operation.requiredClasses.push_back("read");auto* value=scriptSnapshot(request,error);if(!value)return false;
@@ -893,10 +913,12 @@ void Mutation::checkInsertion(LLViewerObject* prim)
     if(match.id.empty())return;
     receipt["task_item_id"]=LLUUID(match.id);receipt["destination_present"]=true;receipt["state"]="simulator_observed";
     receipt["correlation"]="fresh_contents_verified_asset";finished=true;refresh=false;
-    entry->terminal=true;entry->pending=insertionReads;task.reset();
+    entry->terminal=true;entry->unresolved=false;entry->pending=insertionReads;task.reset();
 }
 void Mutation::inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_list_t* contents,S32,void*)
 {
+    const auto* retained=service().operations.find(key);
+    if(finished && (!retained || retained->value.get()!=this || !retained->unresolved || request["op"].asString()=="put"))return;
     if(source!=::source() || !submitted || !contents || !prim->isInventoryServerComplete() || prim->getInventoryServerGeneration()<=generation)return;
     generation=prim->getInventoryServerGeneration();const auto op=request["op"].asString();LLViewerInventoryItem* matched=nullptr;
     if(op=="put")
@@ -920,7 +942,7 @@ void Mutation::inventoryChanged(LLViewerObject* prim,LLInventoryObject::object_l
         else return;
     }
     receipt["state"]="simulator_observed";receipt["correlation"]="fresh_contents";finished=true;refresh=false;
-    auto* entry=service().operations.find(key);if(entry && entry->value.get()==this){entry->terminal=true;entry->pending=0;}
+    auto* entry=service().operations.find(key);if(entry && entry->value.get()==this){entry->terminal=true;entry->unresolved=false;entry->pending=0;}
     task.reset();
 }
 void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,bool success,const std::string& reason)
@@ -947,7 +969,10 @@ void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,
         if(editor && (editor->assistantSourceBusy() || !editor->invalidateAssistantSource(editor->getEditor())))localConflict=true;
         else if(item)prim->updateViewerInventoryAsset(item,asset);
     }
-    settle(value,localConflict?"server_confirmed_local_conflict":outcome.state,localConflict?"Native editor changed before cache refresh":reason);
+    const bool unresolved=value->progress.sourceSubmitted() && !outcome.sourceSavedKnown;
+    settle(value,localConflict?"server_confirmed_local_conflict":outcome.state,localConflict?"Native editor changed before cache refresh":reason,unresolved);
+    // Transport is closed even if the simulator outcome is still uncertain.
+    value->task.reset();value->request.erase("text");
 }
 LLSD taskExperienceRequest(const LLSD& request)
 {
@@ -1144,6 +1169,7 @@ bool prepareLifecycle(FSAssistantPreparedOperation& operation,std::string& error
     }
     else
     {
+        if(!primMutationAvailable(prim->getID(),error))return false;
         auto* snapshot=contentsSnapshot(request,error);if(!snapshot || snapshot->object["object_id"].asUUID()!=prim->getID() || !takeEligible(prim,request,error))return false;
         if(service().derezTransactions.size()>=4096){error="capacity: native acquisition transaction tombstones full; restart viewer before more takes";return false;}
         operation.validation["destination"]=request["destination_folder"];
@@ -1843,7 +1869,7 @@ bool fs_object_tools_running_reply(LLMessageSystem* msg)
     for(const auto& entry:service().operations.entries())
     {
         auto value=entry.second.value;
-        if(!current || queryExecution!=executionFor(object,itemID) || !value || queryExecution!=value->execution || !entry.second.pending || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
+        if(!current || queryExecution!=executionFor(object,itemID) || !value || queryExecution!=value->execution || !entry.second.blocksMutation() || !value->submitted || value->source!=source() || value->request["op"].asString()!="scriptRunning" ||
             value->request["object_id"].asUUID()!=object || value->request["item_id"].asUUID()!=itemID)continue;
         value->receipt["observed_running"]=running;
         settle(value,running==value->request["running"].asBoolean()?"simulator_observed":"simulator_observed_different","Native running reply is an observation, not an execution acknowledgment");

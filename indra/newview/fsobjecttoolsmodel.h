@@ -95,7 +95,13 @@ private:
 template<class Payload> class Receipts
 {
 public:
-    struct Entry {std::string signature;Payload value;unsigned pending=0;bool terminal=false;};
+    struct Entry
+    {
+        std::string signature;Payload value;unsigned pending=0;bool terminal=false,unresolved=false;
+        // Retained callbacks may outlive completion. Only an active mutation or
+        // an explicitly unresolved native outcome needs exclusive access.
+        bool blocksMutation()const{return !terminal || unresolved;}
+    };
     explicit Receipts(std::size_t limit=32):mLimit(limit){}
     Entry* find(const std::string& key)
     {const auto it=mEntries.find(key);return it==mEntries.end()?nullptr:&it->second;}
@@ -107,7 +113,7 @@ public:
         // A retired receipt is not permission to replay an old mutation.
         if(mSeen.count(key) || mSeen.size()>=4096)return nullptr;
         for(auto it=mEntries.begin();it!=mEntries.end() && mEntries.size()>=mLimit;)
-            if(it->second.terminal && !it->second.pending)it=mEntries.erase(it);else ++it;
+            if(it->second.terminal && !it->second.pending && !it->second.unresolved)it=mEntries.erase(it);else ++it;
         if(mEntries.size()>=mLimit)return nullptr;
         mSeen.insert(key);
         return &mEntries.emplace(key,Entry{signature,std::move(value),0,false}).first->second;

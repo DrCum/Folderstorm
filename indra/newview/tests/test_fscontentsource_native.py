@@ -48,6 +48,8 @@ struct LLSD {
  bool isString()const{return std::holds_alternative<std::string>(value);}
  bool isUUID()const{return std::holds_alternative<LLUUID>(value);}bool isUndefined()const{return std::holds_alternative<std::monostate>(value);}
  bool isInteger()const{return std::holds_alternative<int>(value);}int asInteger()const{return isInteger()?std::get<int>(value):0;}
+ bool isBoolean()const{return std::holds_alternative<bool>(value);}
+ int size()const{return static_cast<int>(isArray()?std::get<Array>(value).size():isMap()?std::get<Map>(value).size():0);}
  bool isMap()const{return std::holds_alternative<Map>(value);}bool isArray()const{return std::holds_alternative<Array>(value);}
  std::string asString()const{return isString()?std::get<std::string>(value):std::holds_alternative<LLUUID>(value)?std::get<LLUUID>(value).asString():std::string();}
  LLUUID asUUID()const{return LLUUID(asString());}bool asBoolean()const{return std::holds_alternative<bool>(value)&&std::get<bool>(value);}
@@ -60,6 +62,7 @@ struct LLSD {
  static LLSD emptyArray(){LLSD v;v.value=Array();return v;}void append(LLSD v){if(!isArray())value=Array();std::get<Array>(value).push_back(std::move(v));}
 };
 namespace llsd {
+ const LLSD::Array& inArray(const LLSD& v){static const LLSD::Array empty;return v.isArray()?std::get<LLSD::Array>(v.value):empty;}
  LLSD map(){LLSD v;v.value=LLSD::Map();return v;}
  template<class K,class V,class... Rest> LLSD map(K key,V value,Rest... rest){auto result=map(rest...);result[key]=value;return result;}
 }
@@ -100,6 +103,7 @@ struct LLFileSystem {
  int getSize()const{return assets.count(asset)?static_cast<int>(assets.at(asset).size()):-1;}
  bool read(U8* buffer,int n){last=shortRead?n-1:n;if(last>0)std::memcpy(buffer,assets.at(asset).data(),last);return last>0;}
  int getLastBytesRead()const{return last;}
+ static void removeFile(const LLUUID& id,LLAssetType::EType){assets.erase(id);}
 };
 std::vector<LLSD> delivered;bool requestAllowed=true;
 bool fs_assistant_request_allowed(const LLSD&){return requestAllowed;}
