@@ -33,13 +33,20 @@ struct LLUUID {
  bool operator!=(const LLUUID& b)const{return !(*this==b);}bool operator<(const LLUUID& b)const{return value<b.value;}
  std::string asString()const{return value;}
  static LLUUID generateNewID(){static int next=0;return LLUUID("snapshot-"+std::to_string(++next));}
+ static const LLUUID null;
+ static bool validate(const std::string& s){if(s.size()!=36)return false;for(std::size_t i=0;i<s.size();++i){
+  if(i==8||i==13||i==18||i==23){if(s[i]!='-')return false;}
+  else if(!((s[i]>='0'&&s[i]<='9')||(s[i]>='a'&&s[i]<='f')||(s[i]>='A'&&s[i]<='F')))return false;}return true;}
 };
+const LLUUID LLUUID::null;
 struct LLSD {
  using Map=std::map<std::string,LLSD>;using Array=std::vector<LLSD>;
  std::variant<std::monostate,bool,int,double,std::string,LLUUID,Map,Array> value;
  LLSD()=default;LLSD(bool v):value(v){}LLSD(int v):value(v){}LLSD(double v):value(v){}
  LLSD(const char* v):value(std::string(v)){}LLSD(std::string v):value(std::move(v)){}LLSD(LLUUID v):value(std::move(v)){}
  bool isString()const{return std::holds_alternative<std::string>(value);}
+ bool isUUID()const{return std::holds_alternative<LLUUID>(value);}bool isUndefined()const{return std::holds_alternative<std::monostate>(value);}
+ bool isInteger()const{return std::holds_alternative<int>(value);}int asInteger()const{return isInteger()?std::get<int>(value):0;}
  bool isMap()const{return std::holds_alternative<Map>(value);}bool isArray()const{return std::holds_alternative<Array>(value);}
  std::string asString()const{return isString()?std::get<std::string>(value):std::holds_alternative<LLUUID>(value)?std::get<LLUUID>(value).asString():std::string();}
  LLUUID asUUID()const{return LLUUID(asString());}bool asBoolean()const{return std::holds_alternative<bool>(value)&&std::get<bool>(value);}
@@ -79,8 +86,9 @@ namespace fs_content {
  constexpr std::size_t textLimit=65536,assetLimit=262144;
  bool agentInventory(const LLUUID&){return true;}bool library(const LLUUID&){return false;}
  // Hashing is a fixture boundary; production snapshot validation is unchanged.
- std::string hash(const std::string&){return std::string(64,'h');}
- LLSD evidence(const LLViewerInventoryItem* p){LLSD v;p->asLLSD(v);v["account"]=gAgent.getID();v["session"]=gAgent.getSessionID();return v;}
+ std::string hash(const std::string& text){std::string result(64,'0');auto value=std::hash<std::string>{}(text);
+  for(std::size_t i=0;i<sizeof(value)*2;++i){result[i]="0123456789abcdef"[value&15];value>>=4;}return result;}
+ LLSD evidence(const LLViewerInventoryItem* p){LLSD v;p->asLLSD(v);v["account"]=gAgent.getID();v["session"]=gAgent.getSessionID();v["grid"]="grid";return v;}
 }
 struct LLFileSystem {
  static inline std::map<LLUUID,std::string> assets;static inline bool shortRead=false;

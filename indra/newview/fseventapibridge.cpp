@@ -1014,7 +1014,10 @@ private:
             });
             if(prepared && (api=="LLAppearance" || fs_assistant::featureAPI(api)))
             {
-                const auto frozen=*prepared;
+                auto frozen=*prepared;
+                // Bind content's queued-upload lease to this execution, not an
+                // earlier write with identical source/diff arguments.
+                if(api=="FSContent")frozen.request["__assistant_guard"]=request_id;
                 posted.async->checkWith([weak,frozen](){std::string error;const auto self=weak.lock();return self && self->validateOperation(frozen,error)?std::string():std::string("operation_source_changed");});
             }
             if(fs_assistant::needsActiveCharacter(api,op))

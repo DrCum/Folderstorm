@@ -130,10 +130,13 @@ bool baseSnapshot(const LLSD& request,Snapshot*& snapshot,LLViewerInventoryItem*
 }
 std::shared_ptr<Write> ownWrite(const LLSD& request)
 {
-    const auto key=signature(request);
-    for(const auto& entry:sWrites)
-        if(entry.second->signature==key && sameSourceEpoch(entry.second->request["__assistant_epoch"].asString(),request["__assistant_epoch"].asString()))
-            return entry.second;
+    const auto guard=request["__assistant_guard"].asUUID();
+    if(guard.isNull())return {};
+    const auto found=sWrites.find(guard);
+    if(found!=sWrites.end() && found->second->request["__assistant_guard"].asUUID()==guard &&
+       found->second->signature==signature(request) &&
+       sameSourceEpoch(found->second->request["__assistant_epoch"].asString(),request["__assistant_epoch"].asString()))
+        return found->second;
     return {};
 }
 bool liveWrite(const std::shared_ptr<Write>& write)

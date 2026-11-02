@@ -1018,9 +1018,13 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
 
         // An assistant approval is a spending ceiling, including a zero-cost
         // Premium quote. Never transfer bytes after a higher server quote.
+        // Const lookup must not insert an absent upload_price before has() is
+        // evaluated. Existing script/notecard update capabilities omit it.
+        const LLSD& quoteResult=result;
+        const LLSD& quotedPrice=quoteResult["upload_price"];
         if (uploadInfo->assistantOwned() && !fs_file_upload::serverQuoteAccepted(
-            uploadInfo->requiresQuotedUploadPrice(), result.has("upload_price"),
-            result["upload_price"].isInteger(), uploadInfo->getExpectedUploadCost(), result["upload_price"].asInteger()))
+            uploadInfo->requiresQuotedUploadPrice(), quoteResult.has("upload_price"),
+            quotedPrice.isInteger(), uploadInfo->getExpectedUploadCost(), quotedPrice.asInteger()))
         {
             uploadInfo->assistantStopped(result,"price_increased");
             if (uploadInfo->showUploadDialog()) LLUploadDialog::modalUploadFinished();

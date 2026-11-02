@@ -821,6 +821,24 @@ void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,
     }
     settle(value,localConflict?"server_confirmed_local_conflict":outcome.state,localConflict?"Native editor changed before cache refresh":reason);
 }
+LLSD taskExperienceRequest(const LLSD& request)
+{
+    // GetMetadata uses native LLSD UUIDs, not the JSON strings from MCP.
+    auto data=llsd::map("object-id",request["object_id"].asUUID(),"item-id",request["item_id"].asUUID());
+    data["fields"]=LLSD::emptyArray();data["fields"].append("experience");return data;
+}
+bool taskExperienceAssociation(const LLSD& result,LLUUID& experience,std::string& error)
+{
+    if(!result.has("experience")){error="metadata_missing_experience";return false;}
+    const auto& field=result["experience"];
+    // Native Experience lookup accepts a present empty/undef field as no
+    // association. Missing fields and failed requests are still unknown.
+    if(field.isUndefined() || (field.isString() && field.asString().empty()))
+    {experience=LLUUID::null;return true;}
+    if(field.isUUID() || (field.isString() && LLUUID::validate(field.asString())))
+    {experience=field.asUUID();return true;}
+    error="metadata_invalid_experience";return false;
+}
 void enqueueTaskScript(const std::shared_ptr<Mutation>& value)
 {
     const auto origin=value->source;const auto primID=value->request["object_id"].asUUID();std::string error;
@@ -831,10 +849,19 @@ void enqueueTaskScript(const std::shared_ptr<Mutation>& value)
         if(origin!=source() || !fs_assistant::asyncTaskAllowed(value->task) || !liveMutation(value)){settle(value,"cancelled_before_submission","source_or_authority_changed");return;}
         auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("AssistantScriptMetadata",LLCore::HttpRequest::DEFAULT_POLICY_ID);
         auto http=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();options->setRetries(0);options->setFollowRedirects(false);
-        auto data=llsd::map("object-id",value->request["object_id"],"item-id",value->request["item_id"]);data["fields"]=LLSD::emptyArray();data["fields"].append("experience");
+        const auto data=taskExperienceRequest(value->request);
         const auto result=adapter->postAndSuspend(http,metadata,data,options);
         const auto status=LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
-        if(!status || (!result["experience"].isUUID() && !result["experience"].isString()) || !LLUUID::validate(result["experience"].asString())){settle(value,"failed","Cannot preserve native Experience association: metadata unavailable");return;}
+        value->receipt["metadata_http_type"]=static_cast<S32>(status.getType());
+        value->receipt["metadata_http_status"]=static_cast<S32>(status.getStatus());
+        LLUUID experience;std::string metadataError;
+        if(!status || !taskExperienceAssociation(result,experience,metadataError))
+        {
+            if(!status)metadataError="metadata_http_error";
+            value->receipt["experience_metadata"]=metadataError;
+            settle(value,"failed","Cannot preserve native Experience association: "+metadataError);return;
+        }
+        value->receipt["experience_metadata"]=experience.isNull()?"known_none":"known_association";
         if(!value->task || value->finished){settle(value,"cancelled_before_submission","operation_stopped");return;}
         fs_assistant::AsyncScope scope(value->task->guard());
         if(!fs_assistant::asyncAllowed() || origin!=source() || !liveMutation(value)){settle(value,"cancelled_before_submission","source_or_authority_changed");return;}
@@ -842,7 +869,7 @@ void enqueueTaskScript(const std::shared_ptr<Mutation>& value)
         auto finished=[value](LLUUID,LLUUID,LLUUID,LLSD result){finishTaskUpload(value,result,true,"");};
         auto failed=[value](LLUUID,LLUUID,LLSD result,std::string reason){finishTaskUpload(value,result,false,reason);return true;};
         auto upload=std::make_shared<LLScriptAssetUpload>(value->request["object_id"].asUUID(),value->request["item_id"].asUUID(),LLScriptAssetUpload::MONO,
-            running,result["experience"].asUUID(),value->request["text"].asString(),finished,failed);
+            running,experience,value->request["text"].asString(),finished,failed);
         if(!invalidateRunning(value->request["object_id"].asUUID(),value->request["item_id"].asUUID())){settle(value,"cancelled_before_submission","execution_version_capacity");return;}
         value->execution=executionFor(value->request["object_id"].asUUID(),value->request["item_id"].asUUID());
         value->upload=upload;value->receipt["requested_running"]=running;value->receipt["experience_preserved"]=true;
