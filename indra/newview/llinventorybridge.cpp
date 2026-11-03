@@ -894,6 +894,13 @@ void hide_context_entries(LLMenuGL& menu,
 
             menu_item->setEnabled(enabled);
         }
+
+        // Shared by tree and Gallery inventory, including multi-selection.
+        if (name == "Wearable And Object Wear" &&
+            !gSavedSettings.getBOOL("FSInventoryAllowContextMenuWear"))
+        {
+            menu_item->setEnabled(false);
+        }
     }
 }
 

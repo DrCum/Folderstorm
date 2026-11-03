@@ -475,6 +475,17 @@ bool LLToastAlertPanel::hasTitleBar() const
 
 bool LLToastAlertPanel::handleKeyHere(KEY key, MASK mask )
 {
+    // Opt-in cancellation for confirmations which must never accept via Escape.
+    if (key == KEY_ESCAPE && mask == MASK_NONE)
+    {
+        const std::string cancel = mNotification->getPayload()["escape_button"].asString();
+        if (!cancel.empty())
+        {
+            auto* button = findChild<LLButton>(cancel);
+            if (button && button->getVisible() && button->getEnabled()) button->onCommit();
+            return true;
+        }
+    }
     if( KEY_RETURN == key && mask == MASK_NONE )
     {
         LLButton* defaultBtn = getDefaultButton();

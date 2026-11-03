@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <notifications>
+ <notification name="ConfirmInventoryAddOutfit" type="alertmodal">
+  Add items from “[FOLDERS]” to your current outfit?
+  <tag>confirm</tag>
+  <form name="form">
+   <button index="0" name="Add" text="Add" />
+   <button index="1" name="Cancel" text="Cancel" default="true" />
+  </form>
+ </notification>
+ <notification name="ConfirmInventoryReplaceOutfit" type="alertmodal">
+  Replace your current outfit using “[FOLDERS]”?
+  <tag>confirm</tag>
+  <form name="form">
+   <button index="0" name="Replace" text="Replace" />
+   <button index="1" name="Cancel" text="Cancel" default="true" />
+  </form>
+ </notification>
+ <notification name="InventoryOutfitChangeUnavailable" type="alertmodal">
+  These folders can no longer change your outfit. Select them again and retry.
+  <usetemplate name="okbutton" yestext="OK" />
+ </notification>
  <notification name="ConfirmGestureBoardDelete" type="alertmodal">
   Delete the board “[NAME]” and its tile configuration? Inventory gestures will be kept.
   <usetemplate name="okcancelbuttons" yestext="Delete board" notext="Cancel" />

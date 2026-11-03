@@ -2700,6 +2700,21 @@ void LLInventoryPanel::updateSelection()
 
 void LLInventoryPanel::doToSelected(const LLSD& userdata)
 {
+    const std::string action = userdata.asString();
+    if (action == "wear" && !gSavedSettings.getBOOL("FSInventoryAllowContextMenuWear")) return;
+    if (action == "replaceoutfit" || action == "addtooutfit")
+    {
+        uuid_vec_t folders;
+        if (mInventory != &gInventory || !mFolderRoot.get()) return;
+        for (auto* selected : mFolderRoot.get()->getSelectionList())
+        {
+            auto* item = dynamic_cast<LLFolderViewModelItemInventory*>(selected->getViewModelItem());
+            if (!item) return;
+            folders.push_back(item->getUUID());
+        }
+        confirm_inventory_folder_outfit(folders, action == "addtooutfit");
+        return;
+    }
     if (("purge" == userdata.asString()))
     {
         purgeSelectedItems();
