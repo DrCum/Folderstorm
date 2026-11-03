@@ -11,7 +11,7 @@ import (
 
 func objectsFixture(t *testing.T) (*mcp.ClientSession, *preferencesTestAPI) {
 	t.Helper()
-	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask","object_take":"ask","build_rez":"ask","object_interact":"ask","script_test":"ask","notifications_read":"allow","chat_send_nearby":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"task_inventory":1,"script_diagnostics":1,"task_scripts":1,"object_lifecycle":1,"object_interaction":1,"test_sessions":1}}`)}
+	api := &preferencesTestAPI{fakeAPI: fakeAPI{status: json.RawMessage(`{"policy_generation":1,"permissions":{"read":"allow","world_read":"allow","task_inventory_read":"allow","script_debug_read":"allow","task_inventory_write":"ask","task_inventory_remove":"ask","script_run":"ask","content_edit":"ask","object_take":"ask","build_rez":"ask","object_interact":"ask","script_test":"ask","notifications_read":"allow","chat_send_nearby":"ask"}}`)}, health: json.RawMessage(`{"capabilities":{"contents_reconciliation":1,"task_inventory":1,"script_diagnostics":1,"task_scripts":1,"object_lifecycle":1,"object_interaction":1,"test_sessions":1}}`)}
 	s := reviewServer(api)
 	inst := testInstance(11)
 	inst.ViewerSession = "login-a"
@@ -204,6 +204,65 @@ func TestObjectsPrivateConsentAndCapabilities(t *testing.T) {
 			if op == "FSObjects.debugPoll" {
 				t.Fatal("native access without consent/capability")
 			}
+		}
+	}
+}
+
+func TestObjectsPutReconciliation(t *testing.T) {
+	args := func() map[string]any {
+		return map[string]any{"viewer_session": "login-a", "object_id": buildID, "item_id": contentItem, "snapshot_id": buildRevision, "operation_id": contentOperation, "client_request_id": contentAsset}
+	}
+	client, api := objectsFixture(t)
+	for i := 0; i < 2; i++ {
+		if r := call(t, client, "object_contents_reconcile", args()); r.IsError {
+			t.Fatal(textOf(r))
+		}
+	}
+	count := 0
+	for _, op := range api.opsCopy() {
+		if op == "FSObjects.put" {
+			t.Fatal("reconciliation resubmitted copy")
+		}
+		if op == "FSObjects.reconcilePut" {
+			count++
+		}
+	}
+	if count != 2 || api.lastNamed["operation_id"] != contentOperation || api.lastNamed["item_id"] != contentItem || api.lastNamed["snapshot_id"] != buildRevision {
+		t.Fatal(count, api.lastNamed)
+	}
+	for _, field := range []string{"viewer_session", "object_id", "item_id", "snapshot_id", "operation_id", "client_request_id"} {
+		c, a := objectsFixture(t)
+		p := args()
+		delete(p, field)
+		if r := call(t, c, "object_contents_reconcile", p); !r.IsError {
+			t.Fatal("missing field accepted", field)
+		}
+		if len(a.opsCopy()) != 0 {
+			t.Fatal("invalid request reached viewer", field, a.opsCopy())
+		}
+	}
+	for _, permission := range []string{"read", "world_read", "task_inventory_read", "task_inventory_write"} {
+		c, a := objectsFixture(t)
+		permissions := map[string]string{"read": "allow", "world_read": "allow", "task_inventory_read": "allow", "task_inventory_write": "allow"}
+		permissions[permission] = "deny"
+		a.status, _ = json.Marshal(map[string]any{"permissions": permissions})
+		if r := call(t, c, "object_contents_reconcile", args()); !r.IsError {
+			t.Fatal("denied permission accepted", permission)
+		}
+		for _, op := range a.opsCopy() {
+			if op == "FSObjects.reconcilePut" {
+				t.Fatal("reconciliation sent despite denial", permission)
+			}
+		}
+	}
+	c, a := objectsFixture(t)
+	a.health = json.RawMessage(`{"capabilities":{"task_inventory":1}}`)
+	if r := call(t, c, "object_contents_reconcile", args()); !r.IsError {
+		t.Fatal("old viewer without reconciliation capability accepted")
+	}
+	for _, op := range a.opsCopy() {
+		if op == "FSObjects.reconcilePut" {
+			t.Fatal("unsupported viewer called")
 		}
 	}
 }

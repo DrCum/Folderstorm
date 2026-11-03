@@ -107,6 +107,12 @@ public:
     {const auto it=mEntries.find(key);return it==mEntries.end()?nullptr:&it->second;}
     const Entry* find(const std::string& key)const
     {const auto it=mEntries.find(key);return it==mEntries.end()?nullptr:&it->second;}
+    // Local receipt reconciliation consumes a replay tombstone, not a live
+    // mutation slot. Reserve one extra tombstone per possible submission so
+    // exhausting the submission budget cannot prevent its one-time recovery.
+    bool requestAvailable(const std::string& key)const{return !mSeen.count(key) && mSeen.size()<8192;}
+    bool reserveRequest(const std::string& key)
+    {if(!requestAvailable(key))return false;mSeen.insert(key);return true;}
     Entry* admit(const std::string& key,const std::string& signature,Payload value)
     {
         if(auto* entry=find(key))return entry->signature==signature?entry:nullptr;

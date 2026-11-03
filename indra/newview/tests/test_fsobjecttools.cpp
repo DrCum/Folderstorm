@@ -32,6 +32,23 @@ int main()
     lock->pending=0;assert(!locks.admit("other","args","new")); // Uncertain writes cannot be evicted.
     lock->unresolved=false;assert(locks.admit("other","args","new"));
     assert(!locks.admit("write","args","must not replay"));
+    fs_object_tools::Receipts<std::string> recovery(1);
+    auto* uncertain=recovery.admit("copy","args","unknown");uncertain->terminal=true;uncertain->unresolved=true;uncertain->pending=1;
+    assert(recovery.reserveRequest("association") && recovery.entries().size()==1);
+    assert(!recovery.reserveRequest("association") && !recovery.reserveRequest("copy"));
+    assert(!recovery.admit("association","args","must not replay"));
+    assert(recovery.find("copy")==uncertain && uncertain->blocksMutation());
+    fs_object_tools::Receipts<std::string> exhausted(1);
+    for(int i=0;i<4096;++i)
+    {
+        auto* entry=exhausted.admit(std::to_string(i),"args","submitted");assert(entry);entry->terminal=true;
+    }
+    auto* last=exhausted.find("4095");last->unresolved=true;last->pending=1;
+    assert(!exhausted.admit("new-copy","args","new"));
+    assert(exhausted.reserveRequest("recover-last") && exhausted.find("4095")==last && last->blocksMutation());
+    last->unresolved=false;last->pending=0;
+    assert(!exhausted.reserveRequest("recover-last") && !exhausted.admit("recover-last","args","must not replay"));
+    assert(!exhausted.admit("new-copy","args","budget still exhausted"));
     const std::set<std::string> before{"old"};
     auto match=fs_object_tools::correlateInsertion(before,{{"old","asset",10},{"new","asset",10},{"other","different",10}},"asset",10);
     assert(match.id=="new" && !match.ambiguous);
