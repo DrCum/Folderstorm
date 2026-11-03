@@ -63,9 +63,9 @@ struct LLFloaterReg{static inline bool busy=false;template<class T>static T* fin
 
 SERVICE = r'''
 struct Snapshot {std::string source,epoch;LLSD object;double expires=0.;std::map<LLUUID,LLPointer<LLViewerInventoryItem>> items;};
-struct Service{U64 privacyEpoch=0;fs_object_tools::Receipts<std::shared_ptr<Mutation>> operations{2};std::map<LLUUID,Snapshot> snapshots;std::vector<std::shared_ptr<RunningRead>> runningReads;};
+struct Service{U64 privacyEpoch=0;fs_object_tools::Receipts<std::shared_ptr<Mutation>> operations{2};std::map<LLUUID,Snapshot> snapshots;std::map<LLUUID,SourceSnapshot> scripts;std::vector<std::shared_ptr<RunningRead>> runningReads;};
 double clockValue=10.;double now(){return clockValue;}
-void reply(const LLSD&,const LLSD&){}
+void reply(const LLSD&,const LLSD& result){delivered.push_back(result);}
 Snapshot* runContentsSnapshot(const LLSD&){return nullptr;}
 
 Service& service(){static Service s;return s;}
@@ -73,6 +73,7 @@ bool liveMutation(const std::shared_ptr<Mutation>& p){return p->source==source()
 auto beginPut(LLUUID asset=LLUUID("asset"),LLAssetType::EType type=LLAssetType::AT_LSL_TEXT){
  assert(storage.reads.empty());service()=Service();prim=LLViewerObject();item=LLViewerInventoryItem();item.uuid=LLUUID("source-item");item.asset=asset;item.type=type;
  currentSource="source";editable=true;sent=0;clockValue=10.;storage=AssetStorage();gRlvHandler.script=false;
+ delivered.clear();requestAllowed=true;LLFileSystem::assets.clear();LLFileSystem::shortRead=false;
  auto p=std::make_shared<Mutation>();p->key="operation";p->source=source();p->epoch="epoch";p->before=objectEvidence(&prim);p->deadline=now()+25.;p->request=llsd::map("op","put","object_id",prim.uuid,"source_item",item.uuid,"running",false);
  p->item=itemEvidence(&item);p->task=std::make_shared<fs_assistant::AsyncTask>(guard());p->receipt=llsd::map("state","queued","operation_id",LLUUID("put-operation"));
  service().operations.admit(p->key,"material",p)->pending=1;return p;
@@ -284,6 +285,7 @@ std::string mutationSignature(const LLSD&);
 std::shared_ptr<Mutation> receiptOperation(const LLSD&,std::string&);
 bool preparePutReconciliation(FSAssistantPreparedOperation&,std::string&);
 void dispatchPutReconciliation(const LLSD&);
+bool validateMutation(const FSAssistantPreparedOperation&,std::string&);
 bool prepareMutation(FSAssistantPreparedOperation& op,std::string& error){
  op.validation=llsd::map("source",source(),"material",mutationSignature(op.request));return preparePutReconciliation(op,error);
 }
@@ -303,6 +305,20 @@ auto choose(const std::shared_ptr<Mutation>& p,const char* chosen="new-object",c
 }
 bool prepare(const LLSD& request){std::string error;FSAssistantPreparedOperation op;op.request=request;return prepareMutation(op,error);}
 void reconcile(const LLSD& request){latestResponse=LLSD();dispatchPutReconciliation(request);}
+auto validationGuard(const FSAssistantPreparedOperation& prepared){
+ auto authority=guard();authority->checkWith([prepared](){std::string error;return validateMutation(prepared,error)?std::string():error;});return authority;
+}
+void reconcilePrepared(const FSAssistantPreparedOperation& prepared){fs_assistant::AsyncScope scope(validationGuard(prepared));reconcile(prepared.request);}
+LLSD resultBase(){return LLSD::emptyMap();}
+void scriptLoaded(const LLUUID&,LLAssetType::EType,void*,S32,LLExtStat);
+LLSD readCandidate(LLViewerInventoryItem* candidate,const LLUUID& asset){
+ LLFileSystem::assets[asset]="default { state_entry() {} }";delivered.clear();
+ auto request=llsd::map("op","scriptGet","object_id",prim.uuid,"item_id",candidate->getUUID(),"__assistant_epoch","epoch");
+ auto* read=new AssetRead{request,objectEvidence(&prim),itemEvidence(candidate),source(),std::make_shared<fs_assistant::AsyncTask>(guard()),service().privacyEpoch};
+ scriptLoaded(asset,LLAssetType::AT_LSL_TEXT,read,0,0);
+ assert(delivered.size()==1&&!delivered.back().has("error"));const auto& result=delivered.back();
+ request["source_snapshot"]=result["source_snapshot"];request["content_hash"]=result["content_hash"];request["expected_asset_id"]=asset;return request;
+}
 '''
 
 CASES_RECONCILE = r'''
@@ -395,6 +411,83 @@ int main(){
 }
 '''
 
+CASES_RECONCILE_FIRST_DISPATCH = r'''
+int main(){
+ auto p=beginPut(LLUUID(),LLAssetType::AT_OBJECT);enqueueContentsPut(p);addItem("new-object");observe(p);
+ auto request=choose(p);FSAssistantPreparedOperation prepared;prepared.request=request;std::string error;
+ assert(prepareMutation(prepared,error));const auto evidence=prepared.validation;
+ // The bridge validates before any first dispatch, then keeps that validator
+ // on its actual AsyncOperation guard. A replay-only check misses this path.
+ assert(validateMutation(prepared,error)&&"unchanged first reconciliation must validate");
+ assert(prepared.validation==evidence&&!prepared.validation.has("reconciliation_replay"));
+ auto authority=validationGuard(prepared);assert(authority->allowed());
+ {fs_assistant::AsyncScope scope(authority);reconcile(request);assert(!latestResponse.has("error"));assert(fs_assistant::asyncAllowed());}
+ assert(sent==1&&p->receipt["state"].asString()=="associated_unverified"&&primMutationAvailable(prim.uuid,error));
+ const auto receipt=p->receipt;clockValue+=500.;prim.contents.clear();
+ for(int i=0;i<3;++i){reconcilePrepared(prepared);assert(!latestResponse.has("error")&&p->receipt==receipt&&sent==1);}
+ // An actually changed snapshot still cancels this same first-dispatch guard
+ // without reserving a request UUID or changing the original receipt.
+ p=beginPut(LLUUID(),LLAssetType::AT_OBJECT);enqueueContentsPut(p);addItem("new-object");observe(p);
+ prepared=FSAssistantPreparedOperation();prepared.request=choose(p);assert(prepareMutation(prepared,error));
+ ++prim.generation;const auto original=p->receipt;reconcilePrepared(prepared);
+ assert(latestResponse.has("error")&&p->receipt==original&&service().operations.requestAvailable("reconcile-request")&&!primMutationAvailable(prim.uuid,error));
+}
+'''
+
+CASES_RECONCILE_SOURCE_CACHE = r'''
+int main(){
+ std::string error;
+ // A timeout retires the put's verification result, while a subsequent public
+ // scriptGet callback independently creates a still-valid source snapshot.
+ auto p=beginPut();enqueueContentsPut(p);auto* candidate=addItem("new-object");observe(p);
+ clockValue=p->deadline+1.;tickMutations();storage.complete(0,LLUUID("different-asset"));
+ assert(p->finished&&p->insertionProbes.at(candidate->uuid).asset.isNull());
+ FSAssistantPreparedOperation prepared;prepared.request=choose(p);assert(prepareMutation(prepared,error));
+ auto read=readCandidate(candidate,LLUUID("different-asset"));auto* known=scriptSnapshot(read,error);
+ assert(known&&known->asset==LLUUID("different-asset")&&candidate->getAssetUUID().isNull());
+ assert(!prepare(prepared.request)&&"current independently read asset conflict must be rejected");
+ assert(!validateMutation(prepared,error)&&error.find("asset_mismatch")!=std::string::npos);
+ auto blocked=validationGuard(prepared);assert(!blocked->allowed()&&blocked->reason().find("asset_mismatch")!=std::string::npos);
+ const auto original=p->receipt;{fs_assistant::AsyncScope scope(blocked);reconcile(prepared.request);}
+ assert(latestResponse["error"].asString().find("asset_mismatch")!=std::string::npos&&p->receipt==original&&sent==1);
+ assert(!p->insertionAssociation.isMap()&&service().operations.requestAvailable("reconcile-request")&&!primMutationAvailable(prim.uuid,error));
+ // A matching cached asset must not mask another valid conflicting snapshot.
+ readCandidate(candidate,LLUUID("asset"));assert(!prepare(prepared.request));
+ // Expired, different-login/epoch, changed-item/object and no-longer-readable
+ // caches cannot act as current asset identity evidence. Explicit association
+ // still records an unknown outcome rather than promoting any cached identity.
+ for(int stale=0;stale<10;++stale){
+  p=beginPut();enqueueContentsPut(p);candidate=addItem("new-object");observe(p);
+  clockValue=p->deadline+1.;tickMutations();storage.complete(0,LLUUID("different-asset"));
+  read=readCandidate(candidate,LLUUID("different-asset"));assert(scriptSnapshot(read,error));
+  auto& cached=service().scripts.at(read["source_snapshot"].asUUID());
+  if(stale==0)clockValue=cached.expires+1.;
+  if(stale==1)cached.source="other-login";
+  if(stale==2)cached.epoch="other-epoch";
+  if(stale==3)++prim.generation;
+  if(stale==4)cached.item["copy"]=false;
+  if(stale==5)candidate->permissions.copy=false;
+  if(stale==6)candidate->permissions.modify=false;
+  if(stale==7)gRlvHandler.script=true;
+  if(stale==8)cached.object["object_id"]=LLUUID("other-prim");
+  if(stale==9)cached.item["item_id"]=LLUUID("other-item");
+  assert(!scriptSnapshot(read,error));prepared=FSAssistantPreparedOperation();prepared.request=choose(p);
+  assert(prepareMutation(prepared,error)&&validateMutation(prepared,error));reconcilePrepared(prepared);
+  assert(!latestResponse.has("error")&&p->receipt["state"].asString()=="associated_unverified"&&!p->receipt["asset_identity_verified"].asBoolean());
+  assert(p->receipt["copy_outcome"].asString()=="unknown"&&sent==1&&primMutationAvailable(prim.uuid,error));
+ }
+ // Matching, current independent source evidence permits the same explicit
+ // unverified path; first dispatch and expired-snapshot replay stay idempotent.
+ p=beginPut();enqueueContentsPut(p);candidate=addItem("new-object");observe(p);
+ clockValue=p->deadline+1.;tickMutations();storage.complete(0,LLUUID("asset"));
+ read=readCandidate(candidate,LLUUID("asset"));assert(scriptSnapshot(read,error));
+ prepared=FSAssistantPreparedOperation();prepared.request=choose(p);assert(prepareMutation(prepared,error)&&validateMutation(prepared,error));
+ reconcilePrepared(prepared);assert(!latestResponse.has("error")&&p->receipt["state"].asString()=="associated_unverified");
+ const auto recorded=p->receipt;clockValue+=500.;reconcilePrepared(prepared);
+ assert(!latestResponse.has("error")&&p->receipt==recorded&&sent==1);
+}
+'''
+
 class ContentsPutNativeTests(unittest.TestCase):
     def run_native(self, cases, terminal=False, reconcile=False):
         text=(ROOT/'fsobjecttools.cpp').read_text()
@@ -402,7 +495,8 @@ class ContentsPutNativeTests(unittest.TestCase):
         source+=function(text,'const char* scriptReadBlocker(const LLViewerInventoryItem* item)')
         source+=function(text,'bool scriptReadable(const LLViewerInventoryItem* item)')
         source+=function(text,'LLSD itemEvidence(const LLViewerInventoryItem* item)')
-        source+=function(text,'struct Mutation:LLVOInventoryListener')+';\n'+function(text,'struct RunningRead')+';\n'+SERVICE
+        source+=function(text,'struct Mutation:LLVOInventoryListener')+';\n'+function(text,'struct RunningRead')+';\n'
+        source+=function(text,'struct SourceSnapshot')+';\n'+SERVICE
         for name in ['void settle(const std::shared_ptr<Mutation>& value,const std::string& state,const std::string& reason,bool pending=false)',
                      'std::string mutationBlockReason(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)',
                      'std::string mutationBusy(const fs_object_tools::Receipts<std::shared_ptr<Mutation>>::Entry& entry)',
@@ -417,12 +511,15 @@ class ContentsPutNativeTests(unittest.TestCase):
                      'void finishTaskUpload(const std::shared_ptr<Mutation>& value,const LLSD& result,bool success,const std::string& reason)']:
             source+=function(text,name)+(';' if name.startswith('struct ') else '')+'\n'
         if reconcile:
-            source+=RECONCILE_FIXTURES
+            source+=function(text,'struct AssetRead')+';\n'+RECONCILE_FIXTURES
             for name in ['LLSD mutationMaterial(const LLSD& request)',
                          'std::string mutationSignature(const LLSD& request)',
                          'std::shared_ptr<Mutation> ownMutation(const LLSD& request)',
                          'std::shared_ptr<Mutation> receiptOperation(const LLSD& request,std::string& error)',
                          'Snapshot* contentsSnapshot(const LLSD& request,std::string& error)',
+                         'void scriptLoaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 status,LLExtStat)',
+                         'SourceSnapshot* scriptSnapshot(const LLSD& request,std::string& error)',
+                         'bool scriptAssetConflict(const LLSD& request,const LLUUID& expected)',
                          'bool preparePutReconciliation(FSAssistantPreparedOperation& operation,std::string& error)',
                          'void dispatchPutReconciliation(const LLSD& request)',
                          'bool validateMutation(const FSAssistantPreparedOperation& operation,std::string& error)',
@@ -453,6 +550,12 @@ class ContentsPutNativeTests(unittest.TestCase):
 
     def test_hidden_object_requires_explicit_fresh_server_association(self):
         self.run_native(CASES_RECONCILE, reconcile=True)
+
+    def test_reconciliation_validates_before_first_guarded_dispatch(self):
+        self.run_native(CASES_RECONCILE_FIRST_DISPATCH, reconcile=True)
+
+    def test_reconciliation_uses_independent_authorized_script_snapshots(self):
+        self.run_native(CASES_RECONCILE_SOURCE_CACHE, reconcile=True)
 
     def test_terminal_save_status_keeps_source_and_permission_gates(self):
         self.run_native(CASES_TERMINAL, terminal=True)

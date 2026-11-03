@@ -486,6 +486,20 @@ SourceSnapshot* scriptSnapshot(const LLSD& request,std::string& error)
     {error="conflict: installed script or Contents changed";return nullptr;}
     return &it->second;
 }
+bool scriptAssetConflict(const LLSD& request,const LLUUID& expected)
+{
+    if(expected.isNull())return false;
+    // Check every current read: a matching snapshot cannot hide a conflicting one.
+    for(const auto& candidate:service().scripts)
+    {
+        const auto& snapshot=candidate.second;
+        if(snapshot.asset.isNull() || snapshot.asset==expected)continue;
+        const auto read=llsd::map("source_snapshot",candidate.first,"object_id",request["object_id"],"item_id",request["item_id"],
+            "expected_asset_id",snapshot.asset,"content_hash",snapshot.hash,"__assistant_epoch",request["__assistant_epoch"]);
+        std::string error;if(scriptSnapshot(read,error))return true;
+    }
+    return false;
+}
 bool prepareLifecycle(FSAssistantPreparedOperation&,std::string&);
 void dispatchLifecycle(const LLSD&);
 bool mutationArguments(const LLSD& request,std::string& error)
@@ -644,7 +658,7 @@ bool preparePutReconciliation(FSAssistantPreparedOperation& operation,std::strin
         const auto probe=value->insertionProbes.find(current->getUUID());
         if(probe!=value->insertionProbes.end() && llsd_equals(probe->second.item,itemEvidence(current)))asset=probe->second.asset;
     }
-    if(value->insertionAsset.notNull() && asset.notNull() && value->insertionAsset!=asset)
+    if(value->insertionAsset.notNull() && ((asset.notNull() && value->insertionAsset!=asset) || scriptAssetConflict(request,value->insertionAsset)))
     {error="asset_mismatch: selected item contradicts the known source asset";return false;}
     if(!service().operations.requestAvailable(request["client_request_id"].asUUID().asString()))
     {error="capacity_or_request_id_reused: use a fresh reconciliation request UUID";return false;}
@@ -828,8 +842,9 @@ bool validateMutation(const FSAssistantPreparedOperation& operation,std::string&
     {
         FSAssistantPreparedOperation latest;latest.request=request;
         if(!prepareMutation(latest,error))return false;
-        if(latest.validation["reconciliation_replay"].asBoolean())return true;
-        if(!llsd_equals(latest.validation,operation.validation)){error="conflict: reconciliation evidence changed after approval";return false;}
+        const LLSD& validation=latest.validation;
+        if(validation["reconciliation_replay"].asBoolean())return true;
+        if(!llsd_equals(validation,operation.validation)){error="conflict: reconciliation evidence changed after approval";return false;}
         return true;
     }
     if(auto own=ownMutation(request))

@@ -37,8 +37,11 @@ absent from the pre-submission inventory UUID set, and present unchanged in a
 complete server snapshot newer than submission. The snapshot must still match
 the current prim/root/local-ID/region and inventory evidence at approval and
 dispatch. A known conflicting asset UUID is rejected, including an eligible
-item-bound script-read result whose item evidence still matches. Multiple
-candidates remain an explicit choice; the viewer never picks the first candidate.
+item-bound script-read result whose item evidence still matches. Independently
+read script source snapshots also reject conflicts while their login, epoch,
+expiry, native/RLVa read permission and exact object/item evidence remain current.
+A matching cached read cannot mask a conflicting current read. Multiple candidates
+remain an explicit choice; the viewer never picks the first candidate.
 
 The original operation ID and receipt remain addressable. Its new state is
 `associated_unverified`, correlation `explicit_selection`, with
@@ -102,7 +105,11 @@ spawner, project objects, or the incident's IDs.
 8. Also test two manual additions, stale/expired snapshots, optimistic local
    inventory changes, timeout before association, revoked permissions between
    approval and dispatch, and a different login. These must never make an
-   automatic association or resubmit the copy. Capture all original receipts
+   automatic association or resubmit the copy. For a script candidate, let the
+   put time out, read that candidate with `object_script_get`, and then attempt
+   reconciliation. A still-valid source snapshot proving a different asset must
+   refuse association without consuming its reconciliation UUID or releasing the
+   original lock. Capture all original receipts
    before relogging. Clean up only fixtures you are authorized to remove.
 
 Focused automated coverage compiles the production preparation, dispatch,
