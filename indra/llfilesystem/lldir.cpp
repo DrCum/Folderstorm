@@ -120,7 +120,11 @@ std::vector<std::string> LLDir::getFilesInDir(const std::string &dirname)
             {
                 if (boost::filesystem::is_regular_file(dir_itr->status()))
                 {
+#if LL_WINDOWS
+                    v.push_back(ll_convert<std::string>(dir_itr->path().filename().wstring()));
+#else
                     v.push_back(dir_itr->path().filename().string());
+#endif
                 }
             }
         }
@@ -153,7 +157,11 @@ std::vector<std::string> LLDir::getDirectoriesInDir(const std::string &dirname)
             {
                 if (boost::filesystem::is_directory(dir_itr->status()))
                 {
+#if LL_WINDOWS
+                    v.push_back(ll_convert<std::string>(dir_itr->path().filename().wstring()));
+#else
                     v.push_back(dir_itr->path().filename().string());
+#endif
                 }
             }
         }
