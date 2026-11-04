@@ -297,6 +297,11 @@ public:
     void                setFilterLinks(U64 filter_link);
     U64                 getFilterLinks() const;
 
+    void setViewFolders(std::set<LLUUID> ids);
+    const std::set<LLUUID>& getViewFolders() const { return mViewFolders; }
+    void refreshViewFolders();
+    bool passesViewFolders(const LLUUID& id) const;
+
     // sets params for Link-only search and backs up search settings for future restoration
     void                setFindAllLinksMode(const std::string &search_name, const LLUUID& search_id);
 
@@ -396,6 +401,7 @@ private:
     FilterOps               mFilterOps;
     FilterOps               mDefaultFilterOps;
     FilterOps               mBackupFilterOps; // for backup purposes when leaving 'search link' mode
+    std::set<LLUUID> mViewFolders, mLiveViewFolders, mViewAncestors;
 
     std::string             mFilterSubString;
 

@@ -164,6 +164,7 @@ void FSInventoryCustomTabs::registerCommitCallbacks(LLPanelMainInventory* parent
         return;
     }
     auto& reg = parent->getCommitCallbackRegistrar();
+    reg.add("FSInventoryCustomTab.Folders", [parent](LLUICtrl*, const LLSD& action) { if (auto* self = instanceFor(parent)) self->changeFolderScope(action); });
     reg.add("FSInventoryCustomTab.Rename", [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onRenameClicked(); });
     reg.add("FSInventoryCustomTab.Clone",  [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onCloneClicked();  });
     reg.add("FSInventoryCustomTab.Close",  [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onCloseClicked();  });
@@ -187,6 +188,10 @@ bool FSInventoryCustomTabs::handleRightMouseDown(S32 x, S32 y)
     }
 
     mContextPanel = inv_panel;
+    const bool selected = !selectedFolders().empty();
+    menu->setItemEnabled("add_folders", selected);
+    menu->setItemEnabled("replace_folders", selected);
+    menu->setItemEnabled("clear_folders", !inv_panel->getFilter().getViewFolders().empty());
     menu->buildDrawLabels();
     menu->updateParent(LLMenuGL::sMenuContainer);
     LLMenuGL::showPopup(mParent, menu, x, y);
@@ -698,6 +703,65 @@ LLInventoryPanel* FSInventoryCustomTabs::addTab(const std::string& explicit_name
     return panel;
 }
 
+std::set<LLUUID> FSInventoryCustomTabs::selectedFolders() const
+{
+    std::set<LLUUID> roots;
+    auto* panel = mParent->getActivePanel();
+    if (mParent->isSingleFolderMode() || !panel || !panel->getRootFolder()) return roots;
+    const auto& selected = panel->getRootFolder()->getSelectionList();
+    if (selected.size() > 32) return roots;
+    const auto trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+    for (auto* row : selected)
+    {
+        const auto* item = dynamic_cast<const LLFolderViewModelItemInventory*>(row->getViewModelItem());
+        if (!item) return {};
+        const auto id = item->getUUID();
+        if (!gInventory.getCategory(id) || id == gInventory.getRootFolderID()
+            || !gInventory.isObjectDescendentOf(id, gInventory.getRootFolderID())
+            || gInventory.isObjectDescendentOf(id, trash)) return {};
+        roots.insert(id);
+    }
+    return roots;
+}
+
+bool FSInventoryCustomTabs::canCreateFolderView(LLPanelMainInventory* parent)
+{
+    auto* self = instanceFor(parent);
+    return self && self->mLoadedOk && self->mPanels.size() < MAX_TABS && !self->selectedFolders().empty();
+}
+
+void FSInventoryCustomTabs::createFolderView(LLPanelMainInventory* parent)
+{
+    auto* self = instanceFor(parent);
+    if (!self || !self->mLoadedOk) return;
+    auto roots = self->selectedFolders();
+    if (roots.empty()) return;
+    const auto label = sanitizeTabName(gInventory.getCategory(*roots.begin())->getName());
+    if (auto* panel = self->addTab(label, "", true))
+    {
+        panel->getFilter().setViewFolders(std::move(roots));
+        self->save();
+        self->mContextPanel = panel;
+        self->onRenameClicked();
+    }
+}
+
+void FSInventoryCustomTabs::changeFolderScope(const LLSD& action)
+{
+    if (!isCustomTab(mContextPanel) || !mLoadedOk) return;
+    auto& filter = mContextPanel->getFilter();
+    std::set<LLUUID> roots;
+    if (action.asString() != "clear")
+    {
+        roots = selectedFolders();
+        if (roots.empty()) return;
+        if (action.asString() == "add") roots.insert(filter.getViewFolders().begin(), filter.getViewFolders().end());
+        if (roots.size() > 32) { LLNotificationsUtil::add("FSInventoryViewFolderLimit"); return; }
+    }
+    filter.setViewFolders(std::move(roots));
+    save();
+}
+
 void FSInventoryCustomTabs::onRenameClicked()
 {
     if (!isCustomTab(mContextPanel))
@@ -766,6 +830,7 @@ void FSInventoryCustomTabs::onCloneClicked()
     {
         return;
     }
+    new_panel->getFilter().setViewFolders(src_filter.getViewFolders());
     LLInventoryFilter::Params filter_params;
     src_filter.toParams(filter_params);
     if (filter_params.validateBlock(false))
@@ -1031,6 +1096,12 @@ void FSInventoryCustomTabs::doLoad()
         ++attempted;
         if (auto* new_panel = addTab(explicit_name, filter, false))
         {
+            std::set<LLUUID> folders;
+            const LLSD& saved = entry["view_folders"];
+            if (saved.isArray() && saved.size() <= 32)
+                for (auto it = saved.beginArray(); it != saved.endArray(); ++it)
+                    if (it->asUUID().notNull()) folders.insert(it->asUUID());
+            if (!folders.empty()) new_panel->getFilter().setViewFolders(std::move(folders));
             ++added;
             if (entry.has("states") && entry["states"].isMap())
             {
@@ -1129,6 +1200,7 @@ void FSInventoryCustomTabs::save()
         LLSD entry;
         entry["name"] = mExplicitlyNamed.count(inv_panel) ? inv_panel->getLabel() : std::string();
         entry["filter"] = inv_panel->getFilter().getFilterSubStringOrig();
+        for (const auto& id : inv_panel->getFilter().getViewFolders()) entry["view_folders"].append(id);
 
         auto& filter = inv_panel->getFilter();
         LLInventoryFilter::Params filter_params;
@@ -1174,7 +1246,7 @@ bool FSInventoryCustomTabs::isUnchangedSetting(const LLSD& array) const
     }
     for (LLSD::Integer i = 0; i < array.size(); ++i)
     {
-        if (current[i]["name"].asString() != array[i]["name"].asString() || current[i]["filter"].asString() != array[i]["filter"].asString() || current[i][TABHIDDEN_KEY].asBoolean() != array[i][TABHIDDEN_KEY].asBoolean() || !llsd_equals(current[i]["states"], array[i]["states"]))
+        if (current[i]["name"].asString() != array[i]["name"].asString() || current[i]["filter"].asString() != array[i]["filter"].asString() || current[i][TABHIDDEN_KEY].asBoolean() != array[i][TABHIDDEN_KEY].asBoolean() || !llsd_equals(current[i]["view_folders"], array[i]["view_folders"]) || !llsd_equals(current[i]["states"], array[i]["states"]))
         {
             return false;
         }

@@ -3520,6 +3520,8 @@ See https://wiki.secondlife.com/wiki/Adding_Spelling_Dictionaries
     </form>
   </notification>
 
+  <notification icon="notifytip.tga" name="FSInventoryViewFolderLimit" type="notifytip">A saved view can include up to 32 folders.</notification>
+
   <notification
    icon="alertmodal.tga"
    label="Rename Filter Tab"

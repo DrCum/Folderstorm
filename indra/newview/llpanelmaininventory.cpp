@@ -2710,6 +2710,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
         FSFloaterInventoryBulk::showForSelection(getActivePanel());
         return;
     }
+    if (command_name == "save_folder_view")
+    {
+        FSInventoryCustomTabs::createFolderView(this);
+        return;
+    }
     if (command_name == "assistant_inventory_history")
     {
         FSFloaterInventoryBulk::showHistory();
@@ -3011,6 +3016,7 @@ bool LLPanelMainInventory::isSaveTextureEnabled(const LLSD& userdata)
 bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
 {
     const std::string command_name = userdata.asString();
+    if (command_name == "save_folder_view") return FSInventoryCustomTabs::canCreateFolderView(this);
     if (command_name == "review_bulk_changes")
     {
         auto* panel = getActivePanel();
