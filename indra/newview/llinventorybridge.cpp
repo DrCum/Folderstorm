@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsinventoryarchive.h"
 #include "llinventorybridge.h"
 
 // external projects
@@ -3895,6 +3896,11 @@ void LLInventoryCopyAndWearObserver::changed(U32 mask)
 
 void LLFolderBridge::performAction(LLInventoryModel* model, std::string action)
 {
+    if (action == "archive_folder" || action == "unarchive_folder")
+    {
+        if (model == &gInventory) fs_inventory_archive::set(mUUID, action == "archive_folder");
+        return;
+    }
     if ("open" == action)
     {
         LLFolderViewFolder *f = dynamic_cast<LLFolderViewFolder   *>(mInventoryPanel.get()->getItemByID(mUUID));
@@ -4964,6 +4970,9 @@ void LLFolderBridge::buildContextMenuOptions(U32 flags, menuentry_vec_t&   items
 {
     LLInventoryModel* model = getInventoryModel();
     llassert(model != NULL);
+
+    if (model == &gInventory && fs_inventory_archive::eligible(mUUID))
+        items.push_back(fs_inventory_archive::marked(mUUID) ? "unarchive_folder" : "archive_folder");
 
     const LLUUID &trash_id = model->findCategoryUUIDForType(LLFolderType::FT_TRASH);
     const LLUUID &lost_and_found_id = model->findCategoryUUIDForType(LLFolderType::FT_LOST_AND_FOUND);

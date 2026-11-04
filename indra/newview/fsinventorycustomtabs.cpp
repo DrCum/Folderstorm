@@ -653,6 +653,7 @@ LLInventoryPanel* FSInventoryCustomTabs::addTab(const std::string& explicit_name
     panel->setSortOrder(gSavedSettings.getU32(LLInventoryPanel::DEFAULT_SORT_ORDER));
     panel->getFilter().markDefault();
     panel->setSelectCallback(boost::bind(&LLPanelMainInventory::onSelectionChange, mParent, panel, _1, _2));
+    mParent->applyArchiveFilter(panel->getFilter());
     mPanels.insert(panel);
     mPendingRootOpen.insert(panel);
 

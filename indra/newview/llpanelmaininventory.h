@@ -106,6 +106,7 @@ public:
     LLInventoryPanel* getActivePanel() { return mActivePanel; }
     const LLInventoryPanel* getActivePanel() const { return mActivePanel; }
     LLInventoryPanel* getAllItemsPanel();
+    void applyArchiveFilter(LLInventoryFilter& filter) const;
     void selectAllItemsPanel();
     // <FS:Ansariel> FIRE-19493: "Show Original" should open main inventory panel
     void showAllItemsPanel();
@@ -268,6 +269,9 @@ private:
     LLLayoutPanel* mNavigationBtnsPanel;
 
     LLPanel* mDefaultViewPanel;
+    bool mIncludeArchived = false;
+    boost::signals2::scoped_connection mArchiveConnection;
+    void updateArchiveFilters();
     LLPanel* mCombinationViewPanel;
 
     bool mSingleFolderMode;

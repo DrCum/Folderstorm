@@ -764,7 +764,7 @@ bool LLInventoryGallery::applyFilter(LLInventoryGalleryItem* item, const std::st
 
 bool LLInventoryGallery::checkAgainstFilters(LLInventoryGalleryItem* item, const std::string& filter_substring)
 {
-    if (!item) return false;
+    if (!item || !mFilter->passesArchive(item->getUUID())) return false;
 
     if (item->isFolder() && (mFilter->getShowFolderState() == LLInventoryFilter::SHOW_ALL_FOLDERS))
     {

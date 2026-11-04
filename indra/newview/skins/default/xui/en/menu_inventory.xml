@@ -669,6 +669,12 @@
          function="Inventory.DoToSelected"
          parameter="open_in_current_window" />
     </menu_item_call>
+    <menu_item_call label="Archive folder" name="archive_folder">
+        <menu_item_call.on_click function="Inventory.DoToSelected" parameter="archive_folder" />
+    </menu_item_call>
+    <menu_item_call label="Unarchive folder" name="unarchive_folder">
+        <menu_item_call.on_click function="Inventory.DoToSelected" parameter="unarchive_folder" />
+    </menu_item_call>
     <menu_item_call
      label="Open in new window"
      layout="topleft"

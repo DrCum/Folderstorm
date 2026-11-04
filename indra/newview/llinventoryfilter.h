@@ -315,6 +315,8 @@ public:
     bool                check(const LLInventoryItem* item);
     bool                checkFolder(const LLFolderViewModelItem* item) const;
     bool                checkFolder(const LLUUID& folder_id) const;
+    void setArchivedFolders(const std::set<LLUUID>& ids);
+    bool passesArchive(const LLUUID& id) const;
 
     bool                showAllResults() const;
 
@@ -389,6 +391,7 @@ private:
     bool                checkAgainstSearchVisibility(const class LLFolderViewModelItemInventory* listener) const;
     bool                checkAgainstClipboard(const LLUUID& object_id) const;
 
+    std::set<LLUUID>        mArchivedFolders;
     FilterOps               mFilterOps;
     FilterOps               mDefaultFilterOps;
     FilterOps               mBackupFilterOps; // for backup purposes when leaving 'search link' mode

@@ -24,6 +24,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsinventoryarchive.h"
 
 #include "llinventorygallery.h"
 #include "llinventorygallerymenu.h"
@@ -101,6 +102,11 @@ void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
 {
     std::string action = userdata.asString();
     if (mUUIDs.empty()) return;
+    if (action == "archive_folder" || action == "unarchive_folder")
+    {
+        if (mUUIDs.size() == 1) fs_inventory_archive::set(mUUIDs.front(), action == "archive_folder");
+        return;
+    }
     if (action == "wear" && !gSavedSettings.getBOOL("FSInventoryAllowContextMenuWear")) return;
     if (action == "replaceoutfit" || action == "addtooutfit")
     {
@@ -628,6 +634,8 @@ void LLInventoryGalleryContextMenu::updateMenuItemsVisibility(LLContextMenu* men
 
     if (is_folder)
     {
+        if (mUUIDs.size() == 1 && !isRootFolder() && fs_inventory_archive::eligible(selected_id))
+            items.push_back(fs_inventory_archive::marked(selected_id) ? "unarchive_folder" : "archive_folder");
         if(!isRootFolder())
         {
             items.push_back(std::string("Copy Separator"));
