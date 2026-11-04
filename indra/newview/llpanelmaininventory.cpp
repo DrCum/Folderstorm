@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsinventoryarchive.h"
 #include "llpanelmaininventory.h"
+#include "fsfloaterfolderjump.h"
 #include "fsfloaterinventorybulk.h"
 #include "fsworkspacelayout.h"
 
@@ -582,6 +583,12 @@ void LLPanelMainInventory::startSearch()
 bool LLPanelMainInventory::handleKeyHere(KEY key, MASK mask)
 {
     // <FS:Ansariel> CTRL-F focusses local search editor
+    if (key == 'J' && mask == MASK_CONTROL)
+    {
+        FSFloaterFolderJump::showFrom(*this);
+        return true;
+    }
+
     if (FSCommon::isFilterEditorKeyCombo(key, mask))
     {
         mFilterEditor->setFocus(true);
@@ -2724,6 +2731,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
     {
         newWindow();
     }
+    if (command_name == "go_to_folder")
+    {
+        FSFloaterFolderJump::showFrom(*this);
+        return;
+    }
     if (command_name == "sort_by_name")
     {
         const LLSD arg = "name";
@@ -3024,6 +3036,7 @@ bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
         const auto count = panel->getRootFolder()->getSelectionList().size();
         return count > 0 && count <= 50;
     }
+    if (command_name == "go_to_folder") return gInventory.isInventoryUsable();
     // <FS:Ansariel> Unused changes from STORM-2091 that has been fixed by LL differently in the meantime
     //if (command_name == "not_empty")
     //{

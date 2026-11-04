@@ -156,6 +156,7 @@ set(viewer_SOURCE_FILES
     fsfloateraddtocontactset.cpp
     fsfavoritegroups.cpp
     fsinventorycustomtabs.cpp
+    fsfloaterfolderjump.cpp
     fsfloaterinventorybulk.cpp
     fsfloaterassetblacklist.cpp
     fsfloateravataralign.cpp
@@ -1015,6 +1016,7 @@ set(viewer_HEADER_FILES
     fsassistantpermissions.h
     fsassistantsettings.h
     fsassistantpolicy.h
+    fsfloaterfolderjump.h
     fsfloaterinventorybulk.h
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h

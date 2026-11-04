@@ -328,6 +328,8 @@ public:
 
     std::string::size_type getStringMatchOffset(LLFolderViewModelItem* item) const;
     std::string::size_type getFilterStringSize() const;
+    // Folder navigation checks cached visibility without requesting folder contents.
+    bool checkFolder(const LLUUID& folder_id, bool fetch_contents) const;
 
     // +-------------------------------------------------------------------+
     // + Presentation
