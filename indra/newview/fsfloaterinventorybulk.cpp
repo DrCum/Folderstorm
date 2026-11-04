@@ -20,6 +20,8 @@
 #include "lltextbox.h"
 #include "llinventoryfunctions.h"
 #include "llpanelmaininventory.h"
+#include "llfloatersidepanelcontainer.h"
+#include "llsidepanelinventory.h"
 #include "fsinventorybulk.h"
 #include "llagent.h"
 #include "llappviewer.h"
@@ -180,8 +182,11 @@ void FSFloaterInventoryBulk::browseDestination()
     auto* inventory = dynamic_cast<LLPanelMainInventory*>(mInventoryWindow.get());
     if (!inventory || !inventory->isInVisibleChain())
     {
-        auto* panel = LLInventoryPanel::getActiveInventoryPanel(true);
-        inventory = panel ? panel->getParentByType<LLPanelMainInventory>() : nullptr;
+        // A partial inventory window has no main panel. Open the ordinary inventory through its visibility guard.
+        auto* window = LLFloaterReg::showTypedInstance<LLFloaterSidePanelContainer>("inventory", LLSD(), false);
+        auto* panel = window ? window->findChild<LLSidepanelInventory>("main_panel") : nullptr;
+        if (panel) panel->showInventoryPanel();
+        inventory = panel ? panel->getMainInventoryPanel() : nullptr;
     }
     if (!inventory) { reportError(getString("need_inventory")); return; }
 
