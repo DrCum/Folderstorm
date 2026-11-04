@@ -130,6 +130,7 @@ protected:
     void onWearablesLoading();
 private:
     LLPanel*                    mListCommands;
+    LLButton* mPreviousLookBtn = nullptr;
     LLButton*                   mWearBtn = nullptr;
     // List Commands                                                                //
     //////////////////////////////////////////////////////////////////////////////////
