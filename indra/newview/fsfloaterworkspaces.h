@@ -27,6 +27,8 @@ class FSFloaterWorkspaces final : public LLFloater
 public:
     explicit FSFloaterWorkspaces(const LLSD& key);
     bool postBuild() override;
+    bool hasAccelerators() const override { return true; }
+    bool handleKeyHere(KEY key, MASK mask) override;
     void onOpen(const LLSD& key) override;
     void draw() override;
 
@@ -36,12 +38,12 @@ private:
     void switchSelected();
     void refreshGroups();
     void applySelectedGroup();
-    void setSaveExpanded(bool expanded);
     void toggleFavorite();
     void moveFavorite(bool forward);
     void manageSelected();
     void saveCurrent();
     std::string selected() const;
+    std::string populateList();
     void addHeading(const std::string& label);
     void addEntry(const std::string& key, const std::string& label, bool layout);
 
@@ -51,8 +53,7 @@ private:
     std::set<std::string> mFavorites;
     unsigned long mRevision = 0;
     bool mReady = false;
-    bool mSaveExpanded = true; // XUI starts expanded; postBuild collapses it.
-    S32 mSaveSectionHeight = 0;
+    std::string mQuery;
     std::string mGroupKey;
     LLSD mGroupDefinition;
     std::string mActionStatus, mSavedName;

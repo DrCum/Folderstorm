@@ -29,7 +29,9 @@
 #include "llfloaterreg.h"
 #include "lllineeditor.h"
 #include "llscrolllistctrl.h"
-#include "llscrollcontainer.h"
+#include "llfiltereditor.h"
+#include "lltabcontainer.h"
+#include "fscommon.h"
 #include "lltextbox.h"
 #include "lltexteditor.h"
 #include "llinventorymodel.h"
@@ -66,8 +68,14 @@ FSFloaterWorkspaces::FSFloaterWorkspaces(const LLSD& key) : LLFloater(key) {}
 bool FSFloaterWorkspaces::postBuild()
 {
     FSWorkspaceContextUI::initialize(this);
-    mSaveSectionHeight = getChild<LLView>("save_controls")->getRect().mTop - getChild<LLView>("workspace_utilities")->getRect().mTop;
-    getChild<LLButton>("save_toggle")->setCommitCallback([this](LLUICtrl*, const LLSD&) { setSaveExpanded(!mSaveExpanded); });
+    getChild<LLFilterEditor>("profile_filter")->setCommitCallback([this](LLUICtrl* ctrl, const LLSD&) {
+        auto query = utf8str_tolower(ctrl->getValue().asString());
+        LLStringUtil::trim(query);
+        if (mQuery == query) return;
+        mQuery = std::move(query);
+        refresh(true);
+        getChild<LLScrollListCtrl>("profiles")->scrollToShowSelected();
+    });
     getChild<LLComboBox>("apply_group")->setCommitCallback([this](LLUICtrl*, const LLSD&) { updateButtons(); });
     getChild<LLButton>("apply_selected_group")->setCommitCallback([this](LLUICtrl*, const LLSD&) { applySelectedGroup(); });
     getChild<LLButton>("recover_windows")->setCommitCallback([](LLUICtrl*, const LLSD&) { FSWorkspaceController::instance().recoverWindows(); });
@@ -91,20 +99,23 @@ bool FSFloaterWorkspaces::postBuild()
     getChild<LLLineEditor>("workspace_name")->setKeystrokeCallback([](LLLineEditor*, void* userdata)
     { static_cast<FSFloaterWorkspaces*>(userdata)->updateButtons(); }, this);
     auto* list = getChild<LLScrollListCtrl>("profiles");
+    getChild<LLPanel>("switch_page")->setDefaultBtn(getChild<LLButton>("switch"));
     list->setCommitOnSelectionChange(true);
+    list->setCommitOnKeyboardMovement(true);
     list->setCommitCallback([this](LLUICtrl*, const LLSD&) { mActionStatus.clear(); updateButtons();
         if (auto* preview = LLFloaterReg::findTypedInstance<FSFloaterWorkspacePreview>("workspace_preview"))
             if (preview->LLView::getVisible()) preview->select(selected());
     });
     list->setDoubleClickCallback([this]() { switchSelected(); });
-    setSaveExpanded(false);
     refresh(true);
     return LLFloater::postBuild();
 }
 void FSFloaterWorkspaces::onOpen(const LLSD& key)
 {
     mActionStatus.clear();
-    setSaveExpanded(false);
+    getChild<LLTabContainer>("workspace_pages")->selectFirstTab();
+    mQuery.clear();
+    getChild<LLFilterEditor>("profile_filter")->setText(LLStringExplicit(""));
     mGroupKey.clear();
     FSWorkspaceContextUI::setOptions(this, {});
     getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
@@ -112,7 +123,32 @@ void FSFloaterWorkspaces::onOpen(const LLSD& key)
     for (const char* name : {"capture_chrome", "capture_inventory", "capture_maps", "capture_chat", "capture_background"}) getChild<LLCheckBoxCtrl>(name)->set(true);
     getChild<LLCheckBoxCtrl>("capture_toolbars")->set(false);
     refresh(true);
+    if (mReady) getChild<LLFilterEditor>("profile_filter")->setFocus(true);
 }
+
+bool FSFloaterWorkspaces::handleKeyHere(KEY key, MASK mask)
+{
+    auto* query = getChild<LLFilterEditor>("profile_filter");
+    auto* list = getChild<LLScrollListCtrl>("profiles");
+    if (FSCommon::isFilterEditorKeyCombo(key, mask) && mReady)
+    {
+        getChild<LLTabContainer>("workspace_pages")->selectFirstTab();
+        query->setFocus(true);
+        return true;
+    }
+    if (key == KEY_DOWN && mask == MASK_NONE && query->hasFocus() && list->getFirstSelected())
+    {
+        list->setFocus(true);
+        return true;
+    }
+    if (key == KEY_RETURN && mask == MASK_NONE && (query->hasFocus() || list->hasFocus()))
+    {
+        if (getChild<LLButton>("switch")->getEnabled()) switchSelected();
+        return true;
+    }
+    return LLFloater::handleKeyHere(key, mask);
+}
+
 void FSFloaterWorkspaces::draw()
 {
     if (mRefreshTimer.getElapsedTimeF32() >= .5f)
@@ -145,6 +181,38 @@ void FSFloaterWorkspaces::addEntry(const std::string& key, const std::string& la
     row["columns"][1]["value"] = getString(layout ? "layout_type" : "workspace_type");
     getChild<LLScrollListCtrl>("profiles")->addElement(row);
 }
+std::string FSFloaterWorkspaces::populateList()
+{
+    const auto entries = FSWorkspaceQuickAccess::entries();
+    std::string first_key;
+    auto append = [&](const FSWorkspaceQuickAccess::Entry& entry, const char* heading, bool& started) {
+        if (!mQuery.empty() && utf8str_tolower(entry.label).find(mQuery) == std::string::npos) return;
+        if (!started)
+        {
+            addHeading(getString(heading));
+            started = true;
+        }
+        if (first_key.empty()) first_key = entry.key;
+        addEntry(entry.key, entry.label, entry.layout);
+    };
+    bool started = false;
+    for (const auto& favorite : FSWorkspaceQuickAccess::orderedFavorites(entries))
+    {
+        mFavorites.insert(favorite.key);
+        append(favorite, "favorites_heading", started);
+    }
+    for (bool layout : {false, true})
+    {
+        started = false;
+        for (const auto& entry : entries)
+        {
+            if (entry.layout == layout && !mFavorites.count(entry.key))
+                append(entry, layout ? "layouts_heading" : "workspaces_heading", started);
+        }
+    }
+    return first_key;
+}
+
 void FSFloaterWorkspaces::refresh(bool force)
 {
     auto& controller = FSWorkspaceController::instance();
@@ -159,6 +227,8 @@ void FSFloaterWorkspaces::refresh(bool force)
         if (!same_account)
         {
             mGroupKey.clear(); mGroupDefinition = LLSD();
+            mQuery.clear();
+            getChild<LLFilterEditor>("profile_filter")->setText(LLStringExplicit(""));
             FSWorkspaceContextUI::setOptions(this, {});
             getChild<LLCheckBoxCtrl>("remember_inventory_folders")->set(false);
             getChild<LLLineEditor>("workspace_name")->setText(LLStringExplicit(""));
@@ -168,31 +238,16 @@ void FSFloaterWorkspaces::refresh(bool force)
         const auto prior = same_account ? selected() : "";
         const auto scroll = same_account ? list->getScrollPos() : 0;
         list->deleteAllItems();
-        const auto entries = FSWorkspaceQuickAccess::entries();
-        mFavorites = FSWorkspaceQuickAccess::favorites(entries);
+        mFavorites.clear();
+        list->setCommentText(ready && !mQuery.empty() ? getString("no_matches") : "");
         if (ready)
         {
-            bool heading = false;
-            for (const auto& entry : FSWorkspaceQuickAccess::orderedFavorites(entries))
-            {
-                if (!heading) { addHeading(getString("favorites_heading")); heading = true; }
-                addEntry(entry.key, entry.label, entry.layout);
-            }
-            for (bool layout : {false, true})
-            {
-                heading = false;
-                for (const auto& entry : entries)
-                    if (entry.layout == layout && !mFavorites.count(entry.key))
-                    {
-                        if (!heading) { addHeading(getString(layout ? "layouts_heading" : "workspaces_heading")); heading = true; }
-                        addEntry(entry.key, entry.label, layout);
-                    }
-            }
+            const auto first_key = populateList();
             if (prior.empty() || !list->setSelectedByValue(prior, true))
             {
                 const auto active = controller.activeId();
-                if (active.empty() || !list->setSelectedByValue(std::string(WORKSPACE_PREFIX) + active, true))
-                    list->selectFirstItem();
+                const bool selected_active = !active.empty() && list->setSelectedByValue(std::string(WORKSPACE_PREFIX) + active, true);
+                if (!selected_active && !first_key.empty()) list->setSelectedByValue(first_key, true);
             }
             list->setScrollPos(scroll);
         }
@@ -212,7 +267,7 @@ void FSFloaterWorkspaces::updateButtons()
     const auto group = getChild<LLComboBox>("apply_group")->getValue().asString();
     getChild<LLComboBox>("apply_group")->setEnabled(can_switch && getChild<LLComboBox>("apply_group")->getItemCount() > 1);
     getChild<LLButton>("apply_selected_group")->setEnabled(can_switch && !group.empty());
-    getChild<LLButton>("save_toggle")->setEnabled(ready);
+    getChild<LLFilterEditor>("profile_filter")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("quiet_ui")->set(FSQuietUI::active());
     getChild<LLCheckBoxCtrl>("quiet_ui")->setEnabled(ready);
     getChild<LLButton>("previous")->setEnabled(controller.hasPrevious());
@@ -226,8 +281,8 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLButton>("favorite")->setLabel(getString(mFavorites.count(selected()) ? "unfavorite_label" : "favorite_label"));
     const auto ordered = FSWorkspaceQuickAccess::orderedFavorites(FSWorkspaceQuickAccess::entries());
     const auto favorite = std::find_if(ordered.begin(), ordered.end(), [this](const FSWorkspaceQuickAccess::Entry& entry) { return entry.key == selected(); });
-    getChild<LLButton>("favorite_up")->setEnabled(can_switch && favorite != ordered.end() && favorite != ordered.begin());
-    getChild<LLButton>("favorite_down")->setEnabled(can_switch && favorite != ordered.end() && favorite + 1 != ordered.end());
+    getChild<LLButton>("favorite_up")->setEnabled(can_switch && mQuery.empty() && favorite != ordered.end() && favorite != ordered.begin());
+    getChild<LLButton>("favorite_down")->setEnabled(can_switch && mQuery.empty() && favorite != ordered.end() && favorite + 1 != ordered.end());
     getChild<LLButton>("manage")->setEnabled(ready);
     getChild<LLCheckBoxCtrl>("show_favorites_strip")->setEnabled(can_switch);
     getChild<LLCheckBoxCtrl>("display_recovery")->setEnabled(can_switch);
@@ -243,21 +298,6 @@ void FSFloaterWorkspaces::updateButtons()
     LLStringUtil::format_map_t args;
     args["[NAME]"] = mSavedName;
     getChild<LLTextBox>("status")->setText(getString(!ready ? "unavailable" : !can_switch ? "preferences_open" : mActionStatus.empty() ? "ready" : mActionStatus, args));
-}
-void FSFloaterWorkspaces::setSaveExpanded(bool expanded)
-{
-    if (expanded == mSaveExpanded) return;
-    mSaveExpanded = expanded;
-    getChild<LLView>("save_controls")->setVisible(expanded);
-    getChild<LLButton>("save_toggle")->setLabel(getString(expanded ? "hide_save" : "show_save"));
-    auto* content = getChild<LLView>("workspace_content");
-    content->reshape(content->getRect().getWidth(), content->getRect().getHeight() + (expanded ? mSaveSectionHeight : -mSaveSectionHeight));
-    // Recompute the scroll range immediately; collapsing never leaves an
-    // empty document below the list. Top- and bottom-following panels reflow.
-    auto* scroll = getChild<LLScrollContainer>("workspace_scroll");
-    scroll->reshape(scroll->getRect().getWidth(), scroll->getRect().getHeight());
-    if (!expanded) scroll->goToTop();
-    else scroll->scrollToShowRect(getChild<LLView>("save_controls")->getRect());
 }
 void FSFloaterWorkspaces::refreshGroups()
 {
@@ -336,6 +376,9 @@ void FSFloaterWorkspaces::saveCurrent()
     LLStringUtil::trim(name);
     if (controller.saveCurrentNow(name, getChild<LLCheckBoxCtrl>("remember_inventory_folders")->get(), captureComponents(this), getChild<LLCheckBoxCtrl>("capture_toolbars")->get(), FSWorkspaceContextUI::options(this)))
     {
+        mQuery.clear();
+        getChild<LLFilterEditor>("profile_filter")->setText(LLStringExplicit(""));
+        getChild<LLTabContainer>("workspace_pages")->selectFirstTab();
         refresh(true);
         auto* list = getChild<LLScrollListCtrl>("profiles");
         list->setSelectedByValue(std::string(WORKSPACE_PREFIX) + name, true);
