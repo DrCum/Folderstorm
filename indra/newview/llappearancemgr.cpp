@@ -3168,14 +3168,15 @@ bool LLAppearanceMgr::hasPreviousLook() const
 {
     return !gDisconnected && !mPreviousLook.empty() && mLookSession == gAgent.getSessionID()
         && gAgent.getRegion() && isAgentAvatarValid() && !mOutfitLocked
-        && !gAgentWearables.isCOFChangeInProgress();
+        && !gAgentWearables.isCOFChangeInProgress() && LLAttachmentsMgr::instance().isAttachmentStateComplete();
 }
 
 void LLAppearanceMgr::capturePreviousLook()
 {
     mPreviousLook.clear();
     if (gAgent.getSessionID().isNull() || !isAgentAvatarValid() || !gAgentWearables.areWearablesLoaded()
-        || gAgentWearables.isCOFChangeInProgress() || !gInventory.isCategoryComplete(getCOF())) return;
+        || gAgentWearables.isCOFChangeInProgress() || !LLAttachmentsMgr::instance().isAttachmentStateComplete()
+        || !gInventory.isCategoryComplete(getCOF())) return;
     std::vector<LookItem> look;
     auto remember = [&](const LLUUID& id, LLAssetType::EType type, const std::string& order = "") {
         const auto* item = gInventory.getItem(id);
@@ -4838,6 +4839,7 @@ void LLAppearanceMgr::wearBaseOutfit()
     const LLUUID& base_outfit_id = getBaseOutfitUUID();
     if (base_outfit_id.isNull()) return;
 
+    capturePreviousLook();
     updateCOF(base_outfit_id);
 }
 

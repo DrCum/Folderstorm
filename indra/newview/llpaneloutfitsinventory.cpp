@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "lllayoutstack.h"
 
 #include "llpaneloutfitsinventory.h"
 
@@ -113,6 +114,13 @@ bool LLPanelOutfitsInventory::postBuild()
         LLInventoryModelBackgroundFetch::instance().start(outfits_cat);
     }
 
+    // The shipped skins override the whole outfits panel but share this action strip.
+    if (auto* actions = findChild<LLLayoutStack>("bottom_panel_ls"))
+    {
+        auto* panel = LLUICtrlFactory::createFromFile<LLLayoutPanel>(
+            "panel_previous_look.xml", nullptr, LLLayoutStack::child_registry_t::instance());
+        if (panel) actions->addPanel(panel);
+    }
     mPreviousLookBtn = findChild<LLButton>("previous_look");
     if (mPreviousLookBtn)
         mPreviousLookBtn->setCommitCallback([](LLUICtrl*, const LLSD&) { LLAppearanceMgr::instance().restorePreviousLook(); });

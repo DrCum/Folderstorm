@@ -33,6 +33,7 @@ struct {bool hasLockedWearableType(int){return false;}} gRlvWearableLocks;
 struct RlvFolderLocks {static RlvFolderLocks instance(){return {};}bool hasLockedFolder(int){return false;}};
 struct LLSD {LLSD& with(const char*,const std::string&){return *this;}};
 struct LLNotificationsUtil {static inline std::string last; static void add(std::string s,LLSD={}){last=s;}};
+struct LLAttachmentsMgr { bool complete=true; static LLAttachmentsMgr& instance(){static LLAttachmentsMgr mgr;return mgr;} bool isAttachmentStateComplete() const {return complete;} };
 struct LLAppearanceMgr {
     struct Entry {LLUUID id;LLAssetType::EType type;std::string name,order;};
     std::vector<Entry> mPreviousLook;LLUUID mLookSession{1},mLookBase{4}; bool mOutfitLocked=false;
@@ -50,6 +51,8 @@ int main(){
  gAgent.login={1};gRlvAttachmentLocks.locked=true;a.restorePreviousLook();assert(LLNotificationsUtil::last=="PreviousLookRestricted");
  gRlvAttachmentLocks.locked=false;a.restorePreviousLook();assert(LLNotificationsUtil::last=="PreviousLookMissing" && !a.mPreviousLook.empty());
  gInventory.items.emplace(3,LLAssetType::AT_CLOTHING);
+ LLAttachmentsMgr::instance().complete=false; a.restorePreviousLook(); assert(!a.dispatches && !a.mPreviousLook.empty());
+ LLAttachmentsMgr::instance().complete=true;
  a.restorePreviousLook();assert(a.dispatches==1 && a.mPreviousLook.empty() && gAgentWearables.busy);
  assert(gInventory.items.at(3).desc.empty());
 }
