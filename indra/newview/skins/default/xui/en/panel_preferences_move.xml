@@ -34,7 +34,7 @@
          top="0" left="0" right="-1" bottom="-1" follows="all"
          reserve_scroll_corner="false" opaque="false">
             <panel name="chrome_layout_editor" layout="topleft" left="0" top="0"
-             width="495" height="1400" follows="left|top|right">
+             width="495" height="1218" follows="left|top|right">
                 <text
                  follows="left|top|right"
                  height="48"
@@ -44,7 +44,7 @@
                  top="12"
                  name="chrome_layout_explanation"
                  wrap="true">
-                    Place toolbars, chat, and the top bars around the custom world viewport. Smart side bars sit outside the viewport when there is room, otherwise they stay just inside it.
+                    Place toolbars around the world viewport. Smart toolbars sit outside the viewport when space allows and just inside it otherwise.
                 </text>
                 <text
                  follows="left|top"
@@ -236,10 +236,10 @@
                 <combo_box
                  allow_text_entry="false"
                  control_name="FSChromeBottomDockRegion"
-                 follows="left|top|right"
+                 follows="left|top"
                  height="23"
-                 left="188"
-                 right="-20"
+                 left="149"
+                 width="115"
                  name="chrome_bottom_region"
                  top_delta="-4">
                     <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
@@ -249,6 +249,14 @@
                     <combo_box.item label="Right utility" name="bottom_right" value="3"/>
                     <combo_box.item label="Custom span" name="bottom_custom" value="4"/>
                 </combo_box>
+                <spinner name="chrome_bottom_span_start" control_name="FSChromeBottomDockSpanStart"
+                 visible="false" follows="left|top" layout="topleft" left="270" top_delta="0"
+                 width="100" height="23" label="Start %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Bottom dock: start of the custom span, as a percentage of the window width."/>
+                <spinner name="chrome_bottom_span_end" control_name="FSChromeBottomDockSpanEnd"
+                 visible="false" follows="left|top" layout="topleft" left="378" top_delta="0"
+                 width="100" height="23" label="End %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Bottom dock: end of the custom span, as a percentage of the window width."/>
                 <text
                  follows="left|top"
                  height="16"
@@ -262,10 +270,10 @@
                 <combo_box
                  allow_text_entry="false"
                  control_name="FSChromeNavFavoritesRegion"
-                 follows="left|top|right"
+                 follows="left|top"
                  height="23"
-                 left="188"
-                 right="-20"
+                 left="149"
+                 width="115"
                  name="chrome_nav_region"
                  top_delta="-4">
                     <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
@@ -275,6 +283,14 @@
                     <combo_box.item label="Right utility" name="nav_right" value="3"/>
                     <combo_box.item label="Custom span" name="nav_custom" value="4"/>
                 </combo_box>
+                <spinner name="chrome_nav_span_start" control_name="FSChromeNavFavoritesSpanStart"
+                 visible="false" follows="left|top" layout="topleft" left="270" top_delta="0"
+                 width="100" height="23" label="Start %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Address and favorites: start of the custom span, as a percentage of the window width."/>
+                <spinner name="chrome_nav_span_end" control_name="FSChromeNavFavoritesSpanEnd"
+                 visible="false" follows="left|top" layout="topleft" left="378" top_delta="0"
+                 width="100" height="23" label="End %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Address and favorites: end of the custom span, as a percentage of the window width."/>
                 <text
                  follows="left|top"
                  height="16"
@@ -288,10 +304,10 @@
                 <combo_box
                  allow_text_entry="false"
                  control_name="FSChromeMenuStatusRegion"
-                 follows="left|top|right"
+                 follows="left|top"
                  height="23"
-                 left="188"
-                 right="-20"
+                 left="149"
+                 width="115"
                  name="chrome_menu_region"
                  top_delta="-4">
                     <combo_box.commit_callback function="Pref.ChromeRegionChanged"/>
@@ -301,114 +317,14 @@
                     <combo_box.item label="Right utility" name="menu_right" value="3"/>
                     <combo_box.item label="Custom span" name="menu_custom" value="4"/>
                 </combo_box>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeBottomDockSpanStart"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Bottom start (%)"
-                 label_width="150"
-                 layout="topleft"
-                 left="20"
-                 max_val="100"
-                 min_val="0"
-                 right="-20"
-                 name="chrome_bottom_span_start"
-                 show_text="true"
-                 top_pad="16"
-                 visible="false"/>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeBottomDockSpanEnd"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Bottom end (%)"
-                 label_width="150"
-                 layout="topleft"
-                 max_val="100"
-                 min_val="0"
-                 left="20"
-                 right="-20"
-                 name="chrome_bottom_span_end"
-                 show_text="true"
-                 top_pad="8"
-                 visible="false"/>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeNavFavoritesSpanStart"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Nav start (%)"
-                 label_width="150"
-                 layout="topleft"
-                 max_val="100"
-                 min_val="0"
-                 left="20"
-                 right="-20"
-                 name="chrome_nav_span_start"
-                 show_text="true"
-                 top_pad="8"
-                 visible="false"/>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeNavFavoritesSpanEnd"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Nav end (%)"
-                 label_width="150"
-                 layout="topleft"
-                 max_val="100"
-                 min_val="0"
-                 left="20"
-                 right="-20"
-                 name="chrome_nav_span_end"
-                 show_text="true"
-                 top_pad="8"
-                 visible="false"/>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeMenuStatusSpanStart"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Menu start (%)"
-                 label_width="150"
-                 layout="topleft"
-                 max_val="100"
-                 min_val="0"
-                 left="20"
-                 right="-20"
-                 name="chrome_menu_span_start"
-                 show_text="true"
-                 top_pad="8"
-                 visible="false"/>
-                <slider
-                 can_edit_text="true"
-                 control_name="FSChromeMenuStatusSpanEnd"
-                 decimal_digits="1"
-                 follows="left|top|right"
-                 height="20"
-                 increment="0.5"
-                 label="Menu end (%)"
-                 label_width="150"
-                 layout="topleft"
-                 max_val="100"
-                 min_val="0"
-                 left="20"
-                 right="-20"
-                 name="chrome_menu_span_end"
-                 show_text="true"
-                 top_pad="8"
-                 visible="false"/>
+                <spinner name="chrome_menu_span_start" control_name="FSChromeMenuStatusSpanStart"
+                 visible="false" follows="left|top" layout="topleft" left="270" top_delta="0"
+                 width="100" height="23" label="Start %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Menu and status: start of the custom span, as a percentage of the window width."/>
+                <spinner name="chrome_menu_span_end" control_name="FSChromeMenuStatusSpanEnd"
+                 visible="false" follows="left|top" layout="topleft" left="378" top_delta="0"
+                 width="100" height="23" label="End %" label_width="43" decimal_digits="1"
+                 min_val="0" max_val="100" increment="0.5" tool_tip="Menu and status: end of the custom span, as a percentage of the window width."/>
                 <slider
                  can_edit_text="true"
                  control_name="FSChromeBottomDockMarginLeft"

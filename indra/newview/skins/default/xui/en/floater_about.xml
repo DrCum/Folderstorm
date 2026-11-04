@@ -26,22 +26,20 @@
       <text
         follows="top|left|right"
         font="SansSerif"
-        height="30"
+        height="34"
         layout="topleft"
         left="11"
         name="support_intro"
         top="16"
-        width="434"
+        width="480"
         wrap="true">
-Folderstorm is a fork of the Firestorm viewer.
-For upstream Firestorm information, visit
-https://www.firestormviewer.org
+[https://github.com/DrCum/Folderstorm Folderstorm] is a fork of the [https://www.firestormviewer.org Firestorm viewer].
       </text>
       <text_editor
         parse_urls="true"
         follows="top|left"
         font="SansSerif"
-        height="468"
+        height="464"
         bg_readonly_color="Transparent"
         left="5"
         max_length="65536"
