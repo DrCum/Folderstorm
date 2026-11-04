@@ -314,7 +314,7 @@ public:
     bool                check(const LLFolderViewModelItem* item);
     bool                check(const LLInventoryItem* item);
     bool                checkFolder(const LLFolderViewModelItem* item) const;
-    bool                checkFolder(const LLUUID& folder_id) const;
+    bool                checkFolder(const LLUUID& folder_id, bool fetch_contents = true) const;
 
     bool                showAllResults() const;
 

@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llpanelmaininventory.h"
+#include "fsfloaterfolderjump.h"
 #include "fsfloaterinventorybulk.h"
 #include "fsworkspacelayout.h"
 
@@ -578,6 +579,12 @@ void LLPanelMainInventory::startSearch()
 bool LLPanelMainInventory::handleKeyHere(KEY key, MASK mask)
 {
     // <FS:Ansariel> CTRL-F focusses local search editor
+    if (key == 'J' && mask == MASK_CONTROL)
+    {
+        FSFloaterFolderJump::showFrom(*this);
+        return true;
+    }
+
     if (FSCommon::isFilterEditorKeyCombo(key, mask))
     {
         mFilterEditor->setFocus(true);
@@ -2660,6 +2667,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
         FSFloaterInventoryBulk::showForSelection(getActivePanel());
         return;
     }
+    if (command_name == "go_to_folder")
+    {
+        FSFloaterFolderJump::showFrom(*this);
+        return;
+    }
     if (command_name == "assistant_inventory_history")
     {
         FSFloaterInventoryBulk::showHistory();
@@ -2961,6 +2973,7 @@ bool LLPanelMainInventory::isSaveTextureEnabled(const LLSD& userdata)
 bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
 {
     const std::string command_name = userdata.asString();
+    if (command_name == "go_to_folder") return gInventory.isInventoryUsable();
     if (command_name == "review_bulk_changes")
     {
         auto* panel = getActivePanel();

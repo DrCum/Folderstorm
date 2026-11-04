@@ -208,7 +208,7 @@ bool LLInventoryFilter::checkFolder(const LLFolderViewModelItem* item) const
     return checkFolder(folder_id);
 }
 
-bool LLInventoryFilter::checkFolder(const LLUUID& folder_id) const
+bool LLInventoryFilter::checkFolder(const LLUUID& folder_id, bool fetch_contents) const
 {
     // we're showing all folders, overriding filter
     if (mFilterOps.mShowFolderState == LLInventoryFilter::SHOW_ALL_FOLDERS)
@@ -218,7 +218,7 @@ bool LLInventoryFilter::checkFolder(const LLUUID& folder_id) const
 
     // when applying a filter, matching folders get their contents downloaded first
     // but make sure we are not interfering with pre-download
-    if (isNotDefault()
+    if (fetch_contents && isNotDefault()
         && LLStartUp::getStartupState() > STATE_WEARABLES_WAIT
         && !LLInventoryModelBackgroundFetch::instance().inventoryFetchInProgress())
     {
