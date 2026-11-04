@@ -7,6 +7,7 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsfloatergestureboard.h"
+#include "fscommon.h"
 #include "fsgestureboardcontroller.h"
 #include "llagent.h"
 #include "llbutton.h"
@@ -356,7 +357,7 @@ void FSFloaterGestureBoard::setFinding(bool finding)
 
 void FSFloaterGestureBoard::changed(U32 mask)
 {
-    if (!filtering() || !(mask & (LABEL | ADD | REMOVE | STRUCTURE))) return;
+    if (!filtering() || !(mask & (LABEL | ADD | REMOVE | STRUCTURE | REBUILD))) return;
     for (const auto& id : gInventory.getChangedIDs())
     {
         if (mFindReferences.count(id))
@@ -480,7 +481,8 @@ void FSFloaterGestureBoard::optionsMenu()
         const std::string kind(action);
         if (kind == "find")
         {
-            item.label = getString(mFinding ? "leave_search" : "board_find");
+            if (mFinding) item.label = getString("leave_search");
+            else if (FSCommon::isFilterEditorKeyCombo('F', MASK_CONTROL)) item.label = getString("board_find_shortcut");
             item.enabled = board && !mSelecting;
         }
         if (kind == "select" && mSelecting) item.label = getString("board_finish_selection");
@@ -549,7 +551,7 @@ void FSFloaterGestureBoard::selectTile(const std::string& id, MASK mask)
 }
 bool FSFloaterGestureBoard::handleKeyHere(KEY key, MASK mask)
 {
-    if (key == 'F' && mask == MASK_CONTROL && current() && !mSelecting)
+    if (FSCommon::isFilterEditorKeyCombo(key, mask) && current() && !mSelecting)
     {
         setFinding(true);
         getChild<LLFilterEditor>("tile_query")->setFocus(true);

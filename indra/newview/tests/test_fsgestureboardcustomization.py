@@ -102,15 +102,21 @@ class GestureBoardCustomization(unittest.TestCase):
 #include <cctype>
 #include <map>
 using namespace FSGestureBoard;
+using U32=unsigned int;
+enum { LABEL=1, ADD=2, REMOVE=4, STRUCTURE=8, REBUILD=16 };
 struct Item {std::string name; const std::string& getName() const {return name;}};
 struct Inventory {
     std::map<LLUUID,Item> items;
+    std::set<LLUUID> changed;
+    const auto& getChangedIDs() const {return changed;}
     const Item* getItem(const LLUUID& id) const {auto it=items.find(id);return it==items.end()?nullptr:&it->second;}
 } gInventory;
 std::string utf8str_tolower(std::string s){for(auto& c:s)c=static_cast<char>(std::tolower(c));return s;}
 struct FSFloaterGestureBoard {
     std::string mFindText;
-    bool mFindDirty=true;
+    bool mFindDirty=true,mRebuildSelection=false;
+    bool filtering() const{return !mFindText.empty();}
+    void changed(U32);
     std::set<std::string> mFindMatches;
     std::set<LLUUID> mFindReferences;
     void updateFindMatches(const Board&);
@@ -125,12 +131,15 @@ int main() {
     board.tiles={a,b};gInventory.items.emplace(LLUUID("B"),Item{"SOUND WAVE"});
     FSFloaterGestureBoard view;view.mFindText="wave";view.updateFindMatches(board);
     assert((view.mFindMatches==std::set<std::string>{"one","two"}));
-    gInventory.items.at(LLUUID("B")).name="Bell";view.updateFindMatches(board);
+    gInventory.items.at(LLUUID("B")).name="Bell";gInventory.changed={LLUUID("B")};
+    view.changed(REBUILD);assert(view.mFindDirty && view.mRebuildSelection);
+    view.updateFindMatches(board);
     assert(view.mFindMatches==std::set<std::string>{"one"});
     assert(view.mFindReferences.size()==2 && !view.mFindDirty);
 }
 '''
-        self.run_cpp(fixture + function(native, "void FSFloaterGestureBoard::updateFindMatches(") + cases)
+        self.run_cpp(fixture + function(native, "void FSFloaterGestureBoard::updateFindMatches(") +
+                     function(native, "void FSFloaterGestureBoard::changed(") + cases)
 
     def test_selecting_never_plays_items(self):
         source = r'''

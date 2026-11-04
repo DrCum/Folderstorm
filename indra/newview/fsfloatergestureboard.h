@@ -36,6 +36,7 @@ public:
     bool current() const;
     bool selecting() const { return mSelecting; }
     void selectTile(const std::string& id, MASK mask);
+    bool hasAccelerators() const override { return true; }
     bool handleKeyHere(KEY key, MASK mask) override;
     const LLUUID& windowID() const { return mWindowID; }
     const std::string& selectedBoard() const { return mBoard; }
