@@ -939,6 +939,7 @@ protected:
     void doInventoryCallback(bool from_simulator = false, bool complete = true);
     U64 mInventoryServerGeneration = 0;
     U64 mInventoryChangeGeneration = 0;
+    U64 mInventoryCapRequest = 0;
     bool mInventoryServerComplete = false;
 
     bool isOnMap();

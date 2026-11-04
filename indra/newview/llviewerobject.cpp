@@ -3113,19 +3113,25 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
         if (obj->mInventorySerialNum && obj->mInventory)
             url += "&inventory_serial=" + std::to_string(obj->mInventorySerialNum);
 
+        // Coroutines run on the viewer thread. A new fetch, even for a newly
+        // created object with the same UUID, must have a different owner.
+        static U64 next_request = 0;
+        const U64 request = ++next_request;
+        obj->mInventoryCapRequest = request;
         obj->mInvRequestState = INVENTORY_XFER;
         LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
-        // Object may have gone away while we were suspended, double-check that it still exists
+        // The UUID can resolve again after a kill/recreate while HTTP is suspended.
         obj = gObjectList.findObject(task_inv);
-        if (!obj)
+        if (!obj || obj->mInventoryCapRequest != request)
         {
-            LL_WARNS() << "Object " << task_inv << " went away while fetching inventory, dropping result" << LL_ENDL;
+            LL_DEBUGS() << "Dropping superseded inventory response for " << task_inv << LL_ENDL;
             return;
         }
+        obj->mInventoryCapRequest = 0;
 
         bool potentially_stale = false;
         if (status)

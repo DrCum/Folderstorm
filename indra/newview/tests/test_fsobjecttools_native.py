@@ -442,6 +442,12 @@ class NativeObjectToolsTests(unittest.TestCase):
         upload = (ROOT / 'llviewerassetupload.cpp').read_text()
         self.assertIn('fs_object_tools_native_execution_changed', function(upload, 'struct PendingInventoryUpload'))
 
+    def test_late_http_inventory_after_object_recreation(self):
+        viewer = (ROOT / 'llviewerobject.cpp').read_text()
+        coroutine = function(viewer, 'void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)')
+        fixture = (ROOT / 'tests' / 'task_inventory_cap_fixture.cpp').read_text()
+        self.compile_and_run(fixture.replace('#include "cap_fetch.inc"', coroutine))
+
 
 if __name__ == '__main__':
     unittest.main()
