@@ -47,8 +47,10 @@ def main():
         invocation = command(source, output)
         print(json.dumps({"command": invocation, "previous": str(args.previous) if args.previous else None}, indent=2))
         if args.pack:
-            version = subprocess.run(["vpk", "--version"], capture_output=True, text=True, check=True).stdout
-            if "0.0.1535" not in version:
+            # The pinned CLI has no --version option; its help includes the version.
+            help_text = subprocess.run(["vpk", "--help"], capture_output=True, text=True, check=True).stdout
+            version = re.search(r"(?m)^[ \t]*Velopack CLI ([^\s,]+)", help_text)
+            if not version or not re.fullmatch(r"0\.0\.1535(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", version[1]):
                 raise ValueError("Use vpk 0.0.1535 to match the pinned native SDK")
             if args.previous:
                 previous = args.previous.resolve(strict=True)
