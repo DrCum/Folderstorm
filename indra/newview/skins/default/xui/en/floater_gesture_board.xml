@@ -31,6 +31,11 @@
  <string name="board_new">New board…</string><string name="board_rename">Rename…</string>
  <string name="board_duplicate">Duplicate…</string><string name="board_delete">Delete…</string>
  <string name="board_window">Open board in new window</string>
+ <string name="board_find">Find tiles… (Ctrl+F)</string>
+ <string name="leave_search">Close tile search</string>
+ <string name="find_title">[NAME] · Matches: [COUNT]</string>
+ <string name="no_matches">No matching tiles</string>
+ <string name="empty_board">No gestures or sounds</string>
  <string name="board_title">Gesture board — [NAME]</string>
  <string name="windows_full">Maximum: 16 open gesture board windows. Close a window to open another.</string>
  <string name="sound_item">Inventory sound</string>
@@ -46,6 +51,10 @@
  <string name="tile_selecting">Click to toggle selection; Shift-click selects a range. Items do not play while selecting.</string>
  <string name="compact">Compact tiles</string>
  <string name="page_count">[CURRENT] / [TOTAL]</string>
+ <filter_editor name="tile_query" label="Find tiles" left="8" top="30" right="-100" height="22" follows="left|right|top"
+  visible="false" tool_tip="Find a tile by its label or inventory name. Escape returns to the board." />
+ <button name="leave_find" label="" image_overlay="Arrow_Left_Off" right="-62" top="30" width="24" height="22"
+  follows="right|top" visible="false" tool_tip="Return to the full board (Esc)" />
  <combo_box name="boards" left="8" top="30" right="-100" height="22" follows="left|right|top" tool_tip="Select gesture board"/>
  <text name="status" right="-88" top="32" width="10" height="18" follows="right|top" mouse_opaque="true">!</text>
  <button name="add_items" label="" image_overlay="AddItem_Off" right="-62" top="30" width="24" height="22" follows="right|top" tool_tip="Add gestures or sounds from Inventory"/>
