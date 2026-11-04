@@ -237,6 +237,8 @@ class LLDir
 // </FS:CR>
 // [SL:KB] - Patch: Viewer-Skins | Checked: 2010-10-20 (Catznip-3.4)
     virtual void setSkinFolder(const std::string& skin_folder, const std::string& theme_folder, const std::string& language);
+    void setCustomThemeDir(const std::string& directory);
+    const std::string& getCustomThemeDir() const { return mCustomThemeDir; }
 // [/SL:KB]
 //  virtual void setSkinFolder(const std::string &skin_folder, const std::string& language);
     virtual std::string getSkinFolder() const;
@@ -332,6 +334,7 @@ protected:
     // in a specific file overrides the corresponding item in more general
     // files. Of course, for a file-level search, iterate backwards.
     std::vector<std::string> mSearchSkinDirs;
+    std::string mCustomThemeDir;
     std::string mLanguage;              // Current viewer language
     std::string mLLPluginDir;           // Location for plugins and plugin shell
     static std::string sDumpDir;            // Per-run crash report subdir of log directory.

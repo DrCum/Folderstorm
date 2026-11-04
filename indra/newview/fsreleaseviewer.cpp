@@ -6,6 +6,7 @@
 #include "fsupdate.h"
 #include "fscrash.h"
 #include "fssessionworker.h"
+#include "fsthemeviewer.h"
 #include "llapp.h"
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -87,7 +88,7 @@ void FSReleaseViewer::check(bool manual)
         if(show && (!floater || !floater->getVisible()))LLFloaterReg::showInstance("folderstorm_updates");
     });
 }
-void FSReleaseViewer::startup(){if(!FSSessionWorker::managed())check(false);}
+void FSReleaseViewer::startup(){if(!FSSessionWorker::managed() && !FSThemeViewer::preview())check(false);}
 void FSReleaseViewer::show(){LLFloaterReg::showInstance("folderstorm_updates");check(true);}
 bool FSFloaterUpdates::postBuild()
 {

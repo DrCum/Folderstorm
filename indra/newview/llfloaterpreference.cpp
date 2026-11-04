@@ -32,6 +32,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsthemeviewer.h"
 #include "fschatupload.h"
 #include "fschatmedia.h"
 #include "fsklipyclient.h"
@@ -1609,6 +1610,10 @@ void LLFloaterPreference::onBtnOK(const LLSD& userdata)
 
     if (canClose())
     {
+        if (auto* tabs = findChild<LLTabContainer>("pref core"))
+            for (auto* view : *tabs->getChildList())
+                if (auto* skins = dynamic_cast<LLPanelPreferenceSkins*>(view))
+                    if (!skins->commitThemeSelection()) return;
         // Runtime previews become saved preferences only on explicit acceptance.
         if (auto* assistant = findChild<FSPanelPreferenceLocalAssistant>("local_assistant"))
             assistant->commitPendingSettings();
@@ -1647,7 +1652,7 @@ void LLFloaterPreference::onBtnOK(const LLSD& userdata)
             mPriorInstantMessageLogPath.clear();
         }
 
-        LLUIColorTable::instance().saveUserSettings();
+        LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
         gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
 // [SL:KB] - Patch: Viewer-CrashReporting | Checked: 2011-10-02 (Catznip-2.8.0e) | Added: Catznip-2.8.0e
         // We need to save all crash settings, even if they're defaults [see LLCrashLogger::loadCrashBehaviorSetting()]
@@ -5644,6 +5649,7 @@ LLPanelPreferenceSkins::LLPanelPreferenceSkins()
 
 bool LLPanelPreferenceSkins::postBuild()
 {
+    if(auto* lab=findChild<LLButton>("theme_lab"))lab->setClickedCallback([](LLUICtrl*,const LLSD&){FSThemeViewer::openEditor();});
     m_pSkinCombo = getChild<LLComboBox>("skin_combobox");
     if (m_pSkinCombo)
         m_pSkinCombo->setCommitCallback(boost::bind(&LLPanelPreferenceSkins::onSkinChanged, this));
@@ -5659,13 +5665,98 @@ bool LLPanelPreferenceSkins::postBuild()
     refreshPreviewImage();
     // </FS:PP>
 
+    m_ThemePreferences = FSThemeViewer::preferences(m_Skin, m_SkinTheme);
+    m_pCustomThemeCombo = findChild<LLComboBox>("custom_theme_combobox");
+    if (m_pCustomThemeCombo)
+        m_pCustomThemeCombo->setCommitCallback(boost::bind(&LLPanelPreferenceSkins::onCustomThemeChanged, this));
+    if (auto* previous = findChild<LLButton>("custom_theme_previous"))
+        previous->setClickedCallback(boost::bind(&LLPanelPreferenceSkins::onRestorePreviousTheme, this));
+    if (auto* refresh = findChild<LLButton>("custom_theme_refresh"))
+        refresh->setClickedCallback(boost::bind(&LLPanelPreferenceSkins::onRefreshThemes, this));
+    refreshThemeControls();
+
     return LLPanelPreference::postBuild();
+}
+
+void LLPanelPreferenceSkins::refreshThemeControls()
+{
+    if (!m_ThemePreferences) return;
+    m_ThemeRefreshing = true;
+    const auto base = FSThemeViewer::preferenceBase(*m_ThemePreferences);
+    m_Skin = base.first; m_SkinTheme = base.second;
+    refreshSkinList();
+    if (m_pSkinCombo) m_SkinName = m_pSkinCombo->getSelectedItemLabel();
+    if (m_pSkinThemeCombo) m_SkinThemeName = m_pSkinThemeCombo->getSelectedItemLabel();
+    if (m_pCustomThemeCombo)
+    {
+        m_pCustomThemeCombo->clearRows();
+        for (const auto& option : FSThemeViewer::preferenceOptions(*m_ThemePreferences))
+            m_pCustomThemeCombo->add(option.label, option.token);
+        m_pCustomThemeCombo->setSelectedByValue(FSThemeViewer::preferenceToken(*m_ThemePreferences), true);
+    }
+    const bool custom = FSThemeViewer::preferenceCustom(*m_ThemePreferences);
+    if (m_pSkinCombo) m_pSkinCombo->setEnabled(!custom);
+    if (m_pSkinThemeCombo) m_pSkinThemeCombo->setEnabled(!custom);
+    if (auto* previous = findChild<LLButton>("custom_theme_previous"))
+        previous->setEnabled(FSThemeViewer::preferenceCanRollback(*m_ThemePreferences));
+    if (auto* status = findChild<LLTextBox>("custom_theme_status"))
+    {
+        const auto detail = FSThemeViewer::preferenceDiagnostic(*m_ThemePreferences);
+        status->setText(detail); status->setToolTip(detail);
+    }
+    m_ThemeRefreshing = false;
+    refreshPreviewImage();
+}
+
+void LLPanelPreferenceSkins::onCustomThemeChanged()
+{
+    if (m_ThemeRefreshing || !m_ThemePreferences || !m_pCustomThemeCombo) return;
+    try { FSThemeViewer::preferenceSelect(*m_ThemePreferences, m_pCustomThemeCombo->getSelectedValue().asString()); }
+    catch (const std::exception& error)
+    { LLSD args; args["MESSAGE"] = error.what(); LLNotificationsUtil::add("GenericAlert", args); }
+    refreshThemeControls();
+}
+
+void LLPanelPreferenceSkins::onRestorePreviousTheme()
+{
+    if (!m_ThemePreferences) return;
+    try { FSThemeViewer::preferenceRollback(*m_ThemePreferences); }
+    catch (const std::exception& error)
+    { LLSD args; args["MESSAGE"] = error.what(); LLNotificationsUtil::add("GenericAlert", args); }
+    refreshThemeControls();
+}
+
+void LLPanelPreferenceSkins::onRefreshThemes()
+{
+    if (!m_ThemePreferences) return;
+    try { FSThemeViewer::preferenceRefresh(*m_ThemePreferences); }
+    catch (const std::exception& error)
+    { LLSD args; args["MESSAGE"] = error.what(); LLNotificationsUtil::add("GenericAlert", args); }
+    refreshThemeControls();
+}
+
+bool LLPanelPreferenceSkins::commitThemeSelection()
+{
+    if (!m_ThemePreferences) { m_ThemeApplyAccepted = true; return true; }
+    try
+    {
+        const auto committed = FSThemeViewer::preferenceCommit(*m_ThemePreferences);
+        m_ThemeRestartPending = committed.changed; m_ThemeKeepPersonal = committed.preservePersonal;
+        m_ThemeApplyAccepted = true;
+        refreshThemeControls();
+        return true;
+    }
+    catch (const std::exception& error)
+    { LLSD args; args["MESSAGE"] = error.what(); LLNotificationsUtil::add("GenericAlert", args); return false; }
 }
 
 void LLPanelPreferenceSkins::apply()
 {
-    if ( (m_Skin != gSavedSettings.getString("SkinCurrent")) || (m_SkinTheme != gSavedSettings.getString("SkinCurrentTheme")) )
+    if (!m_ThemeApplyAccepted) return;
+    m_ThemeApplyAccepted = false;
+    if ( m_ThemeRestartPending || (m_Skin != gSavedSettings.getString("SkinCurrent")) || (m_SkinTheme != gSavedSettings.getString("SkinCurrentTheme")) )
     {
+        m_ThemeRestartPending = false;
         gSavedSettings.setString("SkinCurrent", m_Skin);
         gSavedSettings.setString("SkinCurrentTheme", m_SkinTheme);
 
@@ -5675,13 +5766,13 @@ void LLPanelPreferenceSkins::apply()
         // <FS:AO> Some crude hardcoded preferences per skin. Without this, some defaults from the
         // current skin would be carried over, leading to confusion and a first experience with
         // the skin that the designer didn't intend.
-        if (gSavedSettings.getBOOL("FSSkinClobbersToolbarPrefs"))
+        if (!m_ThemeKeepPersonal && gSavedSettings.getBOOL("FSSkinClobbersToolbarPrefs"))
         {
             LL_INFOS() << "Clearing toolbar settings." << LL_ENDL;
             gSavedSettings.setBOOL("ResetToolbarSettings", true);
         }
 
-        if (m_Skin == "starlight" || m_Skin == "starlightcui")
+        if (!m_ThemeKeepPersonal && (m_Skin == "starlight" || m_Skin == "starlightcui"))
         {
             std::string noteMessage;
 
@@ -5740,12 +5831,16 @@ void LLPanelPreferenceSkins::callbackRestart(const LLSD& notification, const LLS
 
 void LLPanelPreferenceSkins::cancel(const std::vector<std::string> settings_to_skip)
 {
+    LLPanelPreference::cancel(settings_to_skip);
+    if (m_ThemePreferences) FSThemeViewer::preferenceCancel(*m_ThemePreferences);
+    m_ThemeRestartPending = false; m_ThemeKeepPersonal = false; m_ThemeApplyAccepted = false;
     m_Skin = gSavedSettings.getString("SkinCurrent");
     m_SkinTheme = gSavedSettings.getString("SkinCurrentTheme");
     m_SkinName = gSavedSettings.getString("FSSkinCurrentReadableName");
     m_SkinThemeName = gSavedSettings.getString("FSSkinCurrentThemeReadableName");
     refreshSkinList();
     refreshPreviewImage(); // <FS:PP> FIRE-1689: Skins preview image
+    refreshThemeControls();
 }
 
 void LLPanelPreferenceSkins::onSkinChanged()
@@ -5757,6 +5852,8 @@ void LLPanelPreferenceSkins::onSkinChanged()
     m_SkinName = m_pSkinCombo->getSelectedItemLabel();
     m_SkinThemeName = m_pSkinThemeCombo->getSelectedItemLabel();
     refreshPreviewImage(); // <FS:PP> FIRE-1689: Skins preview image
+    if (!m_ThemeRefreshing && m_ThemePreferences)
+    { FSThemeViewer::preferenceBuiltin(*m_ThemePreferences, m_Skin, m_SkinTheme); refreshThemeControls(); }
 }
 
 void LLPanelPreferenceSkins::onSkinThemeChanged()
@@ -5764,6 +5861,8 @@ void LLPanelPreferenceSkins::onSkinThemeChanged()
     m_SkinTheme = (m_pSkinThemeCombo) ? m_pSkinThemeCombo->getSelectedValue().asString() : "";
     m_SkinThemeName = m_pSkinThemeCombo->getSelectedItemLabel();
     refreshPreviewImage(); // <FS:PP> FIRE-1689: Skins preview image
+    if (!m_ThemeRefreshing && m_ThemePreferences)
+    { FSThemeViewer::preferenceBuiltin(*m_ThemePreferences, m_Skin, m_SkinTheme); refreshThemeControls(); }
 }
 
 void LLPanelPreferenceSkins::refreshSkinList()
@@ -5833,6 +5932,7 @@ void LLPanelPreferenceSkins::refreshSkinThemeList()
 // <FS:PP> FIRE-1689: Skins preview image
 void LLPanelPreferenceSkins::refreshPreviewImage()
 {
+    if (!m_pSkinPreview) return;
     std::string previewImageName = "skin " + m_SkinName + " " + m_SkinThemeName;
     LLStringUtil::toLower(previewImageName);
     m_pSkinPreview->setImages(previewImageName, previewImageName);
@@ -5999,7 +6099,7 @@ void FSPanelPreferenceBackup::doBackupSettings(const LLSD& notification, const L
 
     // make sure to write color preferences before copying them
     LL_INFOS("SettingsBackup") << "saving UI color table" << LL_ENDL;
-    LLUIColorTable::instance().saveUserSettings();
+    LLUIColorTable::instance().saveUserSettings(FSThemeViewer::customThemeActive() || FSThemeViewer::preservePersonalColors());
 
     // set it to save defaults, too (false), because our declaration automatically
     // makes the value default

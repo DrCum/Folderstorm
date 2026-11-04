@@ -1,0 +1,3 @@
+/** SPDX-License-Identifier: LGPL-2.1-or-later */
+#pragma once
+inline constexpr char ThemeRulesJson[]=R"fs_rules(@THEME_RULES_JSON@)fs_rules";

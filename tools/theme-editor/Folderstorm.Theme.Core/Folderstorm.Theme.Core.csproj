@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><EmbeddedResource Include="../contracts/xui-edit-rules.json" LogicalName="Folderstorm.Theme.XuiRules" /></ItemGroup>
+</Project>

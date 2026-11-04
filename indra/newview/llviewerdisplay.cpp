@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacebackground.h"
 #include "fssessionworker.h"
+#include "fsthemeviewer.h"
 
 #include "llviewerdisplay.h"
 
@@ -213,6 +214,7 @@ void display_startup()
 
     LLGLState::checkStates();
 
+    FSThemeViewer::captureFrame();
     if (gViewerWindow && gViewerWindow->getWindow())
     gViewerWindow->getWindow()->swapBuffers();
 

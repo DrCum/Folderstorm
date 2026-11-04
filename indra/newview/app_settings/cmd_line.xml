@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <llsd>
   <map>
+    <key>fs-theme-preview</key><map><key>count</key><integer>1</integer><key>map-to</key><string>FSThemePreviewRequest</string></map>
+    <key>reset-custom-theme</key><map><key>map-to</key><string>FSResetCustomTheme</string></map>
     <!-- Please insert new keys in alphabetical order. -->
     <key>analyzeperformance</key>
     <map>

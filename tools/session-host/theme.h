@@ -14,6 +14,10 @@
 #include <optional>
 namespace fs_host_ui
 {
+struct Palette
+{
+    COLORREF background,panel,input,text,muted,accent,border;
+};
 inline void setNativeFont(HWND child,HFONT font)
 {
     SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);
@@ -70,7 +74,7 @@ public:
         else if(d.itemState&ODS_FOCUS){RECT r=d.rcItem;InflateRect(&r,-2,-2);DrawFocusRect(d.hDC,&r);}
     }
     void release(){if(backBrush)DeleteObject(backBrush);if(panelBrush)DeleteObject(panelBrush);if(inputBrush)DeleteObject(inputBrush);if(selectionBrush)DeleteObject(selectionBrush);backBrush=panelBrush=inputBrush=selectionBrush=nullptr;}
-    void set(unsigned int choice,bool forceContrast=false)
+    void set(unsigned int choice,bool forceContrast=false,const Palette* custom=nullptr)
     {
         icons.clear();
         DWORD percent=100,bytes=sizeof(percent);
@@ -82,6 +86,11 @@ public:
         background=dark?RGB(17,16,22):RGB(247,245,251);panel=dark?RGB(26,25,33):RGB(255,255,255);
         text=dark?RGB(245,243,250):RGB(33,26,43);muted=dark?RGB(173,169,186):RGB(97,86,111);
         accent=dark?RGB(191,164,252):RGB(108,63,168);border=dark?RGB(115,103,135):RGB(137,125,157);input=background;
+        if(custom && !highContrast)
+        {
+            background=custom->background;panel=custom->panel;input=custom->input;text=custom->text;muted=custom->muted;accent=custom->accent;border=custom->border;
+            dark=(GetRValue(background)*299+GetGValue(background)*587+GetBValue(background)*114)<128000;
+        }
         if(systemHighContrast){background=panel=GetSysColor(COLOR_BTNFACE);input=GetSysColor(COLOR_WINDOW);text=GetSysColor(COLOR_WINDOWTEXT);muted=GetSysColor(COLOR_GRAYTEXT);accent=GetSysColor(COLOR_HIGHLIGHT);border=text;}
         else if(highContrast){background=input=RGB(0,0,0);panel=RGB(24,24,24);text=border=RGB(255,255,255);muted=RGB(190,190,190);accent=RGB(255,255,0);dark=true;}
         release();backBrush=CreateSolidBrush(background);panelBrush=CreateSolidBrush(panel);inputBrush=CreateSolidBrush(input);

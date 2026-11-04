@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:folderstorm:theme-project:1",
+  "type": "object",
+  "required": ["project_version", "project_id", "theme_id", "base_dependencies", "edits"],
+  "properties": {
+    "project_version": { "const": 1 },
+    "project_id": { "type": "string", "format": "uuid" },
+    "theme_id": { "type": "string", "format": "uuid" },
+    "display_name": { "type": "string" }, "package_version": { "type": "string" },
+    "base_skin": { "const": "ansastorm" }, "base_scheme": { "type": "string" },
+    "base_dependencies": { "type": "object" },
+    "edits": { "$ref": "#/$defs/edits" },
+    "undo": { "type": "array", "items": { "$ref": "#/$defs/checkpoint" } },
+    "redo": { "type": "array", "items": { "$ref": "#/$defs/checkpoint" } },
+    "origin": { "enum": ["authored", "compiled-package"] },
+    "extensions": { "type": "object" }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "edits": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "colors": { "type": "object", "additionalProperties": { "type": "string" } },
+        "assets": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["payload_path", "asset_path", "original_path", "kind"], "properties": { "payload_path": { "type": "string" }, "asset_path": { "type": "string" }, "original_path": { "type": "string" }, "kind": { "type": "string" } } } },
+        "recipes": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["operation", "parameters"], "properties": { "operation": { "type": "string" }, "parameters": { "type": "object" } } } },
+        "font_configuration": { "type": ["string", "null"] }
+      }
+    },
+    "checkpoint": { "type": "object", "additionalProperties": false, "required": ["label", "edits"], "properties": { "label": { "type": "string" }, "edits": { "$ref": "#/$defs/edits" } } }
+  }
+}

@@ -1,0 +1,35 @@
+# Host selection foundation
+
+The session host's custom palette selection is independent of viewer-profile
+selection and account settings. It captures a theme ID and a full immutable
+revision hash, rather than a theme name or a mutable latest-version pointer.
+
+`fs_host_theme::Selection` uses a strict JSON object, bounded to4096 bytes:
+
+```json
+{"format_version":1,"current":null,"previous":null}
+```
+
+Each non-null choice has exactly `theme_id` and `revision`. IDs use canonical
+lowercase GUID spelling, and revisions use64 lowercase hexadecimal characters.
+Unknown fields, duplicate keys, missing fields and unsupported versions fail.
+`null` means the host's existing built-in theme choice. Selecting the same choice
+preserves the previous slot. Reset retains the previous custom choice; rollback
+swaps the two slots, including built-in fallback.
+
+`capture` resolves the selected ID/revision inside the supplied theme library,
+rejects links within that boundary and validates the complete package against the
+matching installed base. The package must contain a valid host palette and its
+required capability. It verifies the exact consumed palette bytes again before
+returning all seven opaque colors. Failed capture never changes a selection.
+
+The GDI adapter converts packed RGB explicitly to `COLORREF`. `Theme::set` keeps
+system and host-preference high contrast above custom colors, and restores the
+existing built-in choice when no custom palette is supplied.
+
+The normal host embeds this selection in its existing preferences transaction;
+see `host-preferences-v2.md` for its bounded binary representation and migration.
+Startup, Preferences preview/Apply/Cancel/rollback and editor launch points are
+connected in source. The owned offline preview remains independent of normal
+settings. Full native packaging and desktop acceptance are still required. The
+pure helpers and fixture tests do not write real host or viewer profiles.

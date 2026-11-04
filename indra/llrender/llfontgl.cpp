@@ -893,7 +893,11 @@ void LLFontGL::initClass(F32 screen_dpi, F32 x_scale, F32 y_scale, const std::st
         // <FS:Kadah> User selectable fonts
         // load from install_dir/fonts
         const std::string xml_pathfont(gDirUtilp->getExpandedFilename(LL_PATH_FONTS, "", fonts_file));
-        if (!sFontRegistry->parseFontInfo(xml_pathfont))
+        const auto& theme_dir = gDirUtilp->getCustomThemeDir();
+        const bool theme_font_loaded = !theme_dir.empty() &&
+            gDirUtilp->fileExists(gDirUtilp->add(theme_dir, "fonts", "fonts.xml")) &&
+            sFontRegistry->parseFontInfo(gDirUtilp->add(theme_dir, "fonts", "fonts.xml"));
+        if (!theme_font_loaded && !sFontRegistry->parseFontInfo(xml_pathfont))
         {
             // attempt to load from user_settings/fonts
             const std::string xml_pathusr(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS , "fonts", fonts_file));

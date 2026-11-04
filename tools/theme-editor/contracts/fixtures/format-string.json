@@ -1,0 +1,23 @@
+{
+  "format_version": "1",
+  "theme_id": "cd2e719d-3242-41e8-9eef-1cfd448f498d",
+  "package_version": "1.0.0",
+  "display_name": "Violet test",
+  "base_skin": "ansastorm",
+  "base_scheme": "folderstorm",
+  "adapter_id": "ansastorm-classic",
+  "adapter_version": 1,
+  "required_capabilities": [
+    "viewer.overlay.v1"
+  ],
+  "base_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "files": [
+    {
+      "path": "base-dependencies.json",
+      "size": 0,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "dependencies"
+    }
+  ],
+  "font_dependencies": []
+}
