@@ -3,9 +3,8 @@
 	<tab_container name="about_tab">
 		<panel label="Informacje" name="support_panel">
 			<text name="support_intro">
-				Najnowsze informacje o Firestorm są dostępne pod adresem
-https://www.firestormviewer.org
-			</text>
+Podstawą programu [https://folderstorm.com Folderstorm] jest [https://www.firestormviewer.org Firestorm].
+    </text>
 			<button label="Kopiuj do schowka" name="copy_btn"/>
 		</panel>
 		<panel label="Podziękowania" name="credits_panel">
