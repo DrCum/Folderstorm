@@ -137,6 +137,13 @@ void LLLoginInstance::reconnect()
     mAttemptComplete = false;
     std::vector<std::string> uris;
     LLGridManager::getInstance()->getLoginURIs(uris);
+    // <FS:Beq> Retain the request so a later retry can use a restored endpoint.
+    if (uris.empty())
+    {
+        LL_WARNS("LLLogin") << "Failed to get login URIs during reconnect. No reconnect attempted." << LL_ENDL;
+        return;
+    }
+    // </FS:Beq>
     mLoginModule->connect(uris.front(), mRequestData);
     gViewerWindow->setShowProgress(true,!gSavedSettings.getBOOL("FSDisableLoginScreens"));
 }
