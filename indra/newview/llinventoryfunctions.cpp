@@ -80,6 +80,7 @@
 #include "llscrollcontainer.h"
 #include "llselectmgr.h"
 #include "llsidepanelinventory.h"
+#include "llstartup.h"
 #include "lltabcontainer.h"
 #include "lltooldraganddrop.h"
 #include "lltrans.h"
@@ -87,6 +88,7 @@
 #include "llviewermenu.h"
 #include "llviewermessage.h"
 #include "llviewerfoldertype.h"
+#include "llviewernetwork.h"
 #include "llviewerobjectlist.h"
 #include "llviewermenufile.h"
 #include "llviewerregion.h"
@@ -110,6 +112,116 @@ bool LLInventoryState::sWearNewClothing = false;
 LLUUID LLInventoryState::sWearNewClothingTransactionID;
 std::list<LLUUID> LLInventoryAction::sMarketplaceFolders;
 //bool LLInventoryAction::sDeleteConfirmationDisplayed = false; // <FS:Ansariel> Undo delete item confirmation per-session annoyance
+
+namespace
+{
+bool inventory_folder_outfit_available(const LLUUID& id, bool append)
+{
+    const auto* cat = gInventory.getCategory(id);
+    if (!cat || LLFolderType::lookupIsProtectedType(cat->getPreferredType()) ||
+        gAgentWearables.isCOFChangeInProgress())
+    {
+        return false;
+    }
+    const auto trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+    if (gInventory.isObjectDescendentOf(id, trash) ||
+        (gInventory.getMarketplaceListingsUUID().notNull() &&
+         gInventory.isObjectDescendentOf(id, gInventory.getMarketplaceListingsUUID())) ||
+        (!gInventory.isObjectDescendentOf(id, gInventory.getRootFolderID()) &&
+         !gInventory.isObjectDescendentOf(id, gInventory.getLibraryRootFolderID())))
+    {
+        return false;
+    }
+    if (RlvActions::isRlvEnabled() && RlvFolderLocks::instance().isLockedFolder(id, RLV_LOCK_ADD))
+    {
+        return false;
+    }
+    // Match the tree inventory's native outfit eligibility, including ordinary
+    // folders containing attachments/gestures and Add on saved outfits.
+    if (append && cat->getPreferredType() != LLFolderType::FT_OUTFIT)
+    {
+        return LLAppearanceMgr::instance().getCanAddToCOF(id);
+    }
+    if (!append && cat->getPreferredType() == LLFolderType::FT_OUTFIT)
+    {
+        return LLAppearanceMgr::instance().getCanReplaceCOF(id);
+    }
+    LLInventoryModel::cat_array_t cats;
+    LLInventoryModel::item_array_t items;
+    const std::vector<LLAssetType::EType> types = {
+        LLAssetType::AT_CLOTHING, LLAssetType::AT_BODYPART,
+        LLAssetType::AT_OBJECT, LLAssetType::AT_GESTURE
+    };
+    LLIsOneOfTypes wearable(types);
+    gInventory.collectDescendentsIf(id, cats, items, LLInventoryModel::EXCLUDE_TRASH, wearable);
+    return !items.empty();
+}
+}
+
+void confirm_inventory_folder_outfit(const uuid_vec_t& folder_ids, bool append)
+{
+    if (folder_ids.empty() || gDisconnected || LLApp::isExiting() ||
+        LLStartUp::getStartupState() != STATE_STARTED || !isAgentAvatarValid())
+    {
+        return;
+    }
+    // Reject a stale or mixed selection as a whole. Never capture a bridge,
+    // panel, folder view or menu: any of them may close before the reply.
+    for (const auto& id : folder_ids)
+    {
+        if (!inventory_folder_outfit_available(id, append)) return;
+    }
+    const auto account = gAgent.getID();
+    const auto login = gAgent.getSessionID();
+    const auto grid = LLGridManager::getInstance()->getGrid();
+    const LLStringUtil::format_map_t count_args = {
+        {"[COUNT]", std::to_string(folder_ids.size())}
+    };
+    LLSD args;
+    args["FOLDERS"] = folder_ids.size() == 1
+        ? gInventory.getCategory(folder_ids.front())->getName()
+        : LLTrans::getString("InventoryOutfitSelectedFolders", count_args);
+    LLSD payload;
+    payload["escape_button"] = "Cancel";
+    LLNotificationsUtil::add(append ? "ConfirmInventoryAddOutfit" : "ConfirmInventoryReplaceOutfit", args, payload,
+        [folder_ids, append, account, login, grid](const LLSD& notification, const LLSD& response)
+        {
+            if (LLNotificationsUtil::getSelectedOption(notification, response) != 0 ||
+                gDisconnected || LLApp::isExiting() || LLStartUp::getStartupState() != STATE_STARTED ||
+                !isAgentAvatarValid() || account != gAgent.getID() || login != gAgent.getSessionID() ||
+                grid != LLGridManager::getInstance()->getGrid())
+            {
+                return false;
+            }
+            // Check the entire captured selection before submitting any changes.
+            for (const auto& id : folder_ids)
+            {
+                if (!inventory_folder_outfit_available(id, append))
+                {
+                    LLNotificationsUtil::add("InventoryOutfitChangeUnavailable");
+                    return false;
+                }
+                const U32 max_items = gSavedSettings.getU32("WearFolderLimit");
+                LLInventoryModel::cat_array_t cats;
+                LLInventoryModel::item_array_t items;
+                LLFindWearablesEx not_worn(false, false);
+                gInventory.collectDescendentsIf(id, cats, items, LLInventoryModel::EXCLUDE_TRASH, not_worn);
+                if (items.size() > max_items)
+                {
+                    LLSD limit_args;
+                    limit_args["AMOUNT"] = llformat("%u", max_items);
+                    LLNotificationsUtil::add("TooManyWearables", limit_args);
+                    return false;
+                }
+            }
+            for (const auto& id : folder_ids)
+            {
+                const bool copy = !gInventory.isObjectDescendentOf(id, gInventory.getRootFolderID());
+                LLAppearanceMgr::instance().wearInventoryCategory(gInventory.getCategory(id), copy, append);
+            }
+            return false;
+        });
+}
 
 // Helper function : callback to update a folder after inventory action happened in the background
 void update_folder_cb(const LLUUID& dest_folder)

@@ -51,40 +51,6 @@
 #include "llvoavatarself.h"
 
 
-void modify_outfit(bool append, const LLUUID& cat_id, LLInventoryModel* model)
-{
-    LLViewerInventoryCategory* cat = model->getCategory(cat_id);
-    if (!cat) return;
-
-    // checking amount of items to wear
-    static LLCachedControl<U32> max_items(gSavedSettings, "WearFolderLimit", 125);
-    LLInventoryModel::cat_array_t cats;
-    LLInventoryModel::item_array_t items;
-    LLFindWearablesEx not_worn(/*is_worn=*/ false, /*include_body_parts=*/ false);
-    model->collectDescendentsIf(cat_id,
-                                    cats,
-                                    items,
-                                    LLInventoryModel::EXCLUDE_TRASH,
-                                    not_worn);
-
-    if (items.size() > max_items())
-    {
-        LLSD args;
-        args["AMOUNT"] = llformat("%u", max_items());
-        LLNotificationsUtil::add("TooManyWearables", args);
-        return;
-    }
-    if (model->isObjectDescendentOf(cat_id, gInventory.getRootFolderID()))
-    {
-        LLAppearanceMgr::instance().wearInventoryCategory(cat, false, append);
-    }
-    else
-    {
-        // Library, we need to copy content first
-        LLAppearanceMgr::instance().wearInventoryCategory(cat, true, append);
-    }
-}
-
 LLContextMenu* LLInventoryGalleryContextMenu::createMenu()
 {
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
@@ -134,6 +100,13 @@ LLContextMenu* LLInventoryGalleryContextMenu::createMenu()
 void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
 {
     std::string action = userdata.asString();
+    if (mUUIDs.empty()) return;
+    if (action == "wear" && !gSavedSettings.getBOOL("FSInventoryAllowContextMenuWear")) return;
+    if (action == "replaceoutfit" || action == "addtooutfit")
+    {
+        confirm_inventory_folder_outfit(mUUIDs, action == "addtooutfit");
+        return;
+    }
     LLInventoryObject* obj = gInventory.getObject(mUUIDs.front());
     if(!obj) return;
 
@@ -274,14 +247,6 @@ void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
         {
             set_favorite(id, false);
         }
-    }
-    else if ("replaceoutfit" == action)
-    {
-        modify_outfit(false, mUUIDs.front(), &gInventory);
-    }
-    else if ("addtooutfit" == action)
-    {
-        modify_outfit(true, mUUIDs.front(), &gInventory);
     }
     else if ("removefromoutfit" == action)
     {

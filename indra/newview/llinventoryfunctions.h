@@ -77,6 +77,9 @@ void reset_inventory_filter();
 void delete_from_outfit(const uuid_vec_t& ids);
 // </AS:Chanayane>
 
+// Inventory context menus only. Confirmation retains folder IDs, not UI selection.
+void confirm_inventory_folder_outfit(const uuid_vec_t& folder_ids, bool append);
+
 // Nudge the listing categories in the inventory to signal that their marketplace status changed
 void update_marketplace_category(const LLUUID& cat_id, bool perform_consistency_enforcement = true, bool skip_clear_listing = false);
 // Nudge all listing categories to signal that their marketplace status changed
