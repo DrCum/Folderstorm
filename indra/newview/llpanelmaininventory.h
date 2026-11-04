@@ -271,7 +271,7 @@ private:
     LLPanel* mDefaultViewPanel;
     bool mIncludeArchived = false;
     boost::signals2::scoped_connection mArchiveConnection;
-    void updateArchiveFilters();
+    void updateArchiveFilters(bool hierarchy_changed = false);
     LLPanel* mCombinationViewPanel;
 
     bool mSingleFolderMode;

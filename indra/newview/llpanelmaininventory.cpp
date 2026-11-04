@@ -1394,8 +1394,19 @@ bool LLPanelMainInventory::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
 }
 
 // virtual
-void LLPanelMainInventory::changed(U32)
+void LLPanelMainInventory::changed(U32 mask)
 {
+    if ((mask & LLInventoryObserver::STRUCTURE) && mArchiveConnection.connected()
+        && mAllItemsPanel->getFilter().hasArchivedFolders())
+    {
+        for (const auto& id : gInventory.getChangedIDs())
+            if (gInventory.getCategory(id))
+            {
+                // A move can change visibility of an entire already-filtered subtree.
+                updateArchiveFilters(true);
+                break;
+            }
+    }
     updateItemcountText();
 }
 
@@ -2667,13 +2678,18 @@ void LLPanelMainInventory::applyArchiveFilter(LLInventoryFilter& filter) const
     filter.setArchivedFolders(ids);
 }
 
-void LLPanelMainInventory::updateArchiveFilters()
+void LLPanelMainInventory::updateArchiveFilters(bool hierarchy_changed)
 {
+    auto update = [&](LLInventoryFilter& filter) {
+        if (hierarchy_changed) filter.setModified(LLInventoryFilter::FILTER_RESTART);
+        else applyArchiveFilter(filter);
+    };
     for (S32 i = 0; i < mFilterTabs->getTabCount(); ++i)
         if (auto* panel = dynamic_cast<LLInventoryPanel*>(mFilterTabs->getPanelByIndex(i)))
-            if (panel != mWornItemsPanel && panel != mFavoritesPanel) applyArchiveFilter(panel->getFilter());
-    applyArchiveFilter(mCombinationInventoryPanel->getFilter());
-    applyArchiveFilter(mCombinationGalleryPanel->getFilter());
+            if (panel != mWornItemsPanel && panel != mFavoritesPanel) update(panel->getFilter());
+    update(mCombinationInventoryPanel->getFilter());
+    update(mCombinationGalleryPanel->getFilter());
+    mCombinationGalleryPanel->clearArchivedSelection();
 }
 
 void LLPanelMainInventory::onCustomAction(const LLSD& userdata)

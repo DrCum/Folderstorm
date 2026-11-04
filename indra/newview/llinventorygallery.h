@@ -133,6 +133,7 @@ public:
 
     void deselectItem(const LLUUID& category_id);
     void clearSelection();
+    void clearArchivedSelection();
     LLSD captureWorkspaceSelection() const;
     void restoreWorkspaceSelection(const LLSD& state);
     void changeItemSelection(const LLUUID& item_id, bool scroll_to_selection = false);

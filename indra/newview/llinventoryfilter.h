@@ -316,6 +316,7 @@ public:
     bool                checkFolder(const LLFolderViewModelItem* item) const;
     bool                checkFolder(const LLUUID& folder_id) const;
     void setArchivedFolders(const std::set<LLUUID>& ids);
+    bool hasArchivedFolders() const { return !mArchivedFolders.empty(); }
     bool passesArchive(const LLUUID& id) const;
 
     bool                showAllResults() const;
