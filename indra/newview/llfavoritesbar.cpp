@@ -236,6 +236,18 @@ private:
  * in createButtons function but landmark data is not available when Favorites Bar is
  * created. Thats why we are requesting landmark data after
  */
+class FSFavoriteFolderMenu : public LLMenuGL
+{
+public:
+    explicit FSFavoriteFolderMenu(const Params& p) : LLMenuGL(p) {}
+    bool handleDragAndDrop(S32, S32, MASK, bool, EDragAndDropType, void*, EAcceptance* accept, std::string&) override
+    {
+        // Folder assignment is explicit. A drop on a popup must not pass through to the world.
+        *accept = ACCEPT_NO;
+        return true;
+    }
+};
+
 class FSFavoriteFolderButton : public LLButton
 {
 public:
@@ -651,6 +663,13 @@ bool LLFavoritesBarCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
                 LLView* overflow_menu = mOverflowMenuHandle.get();
                 if (overflow_menu && !overflow_menu->isDead() && overflow_menu->getVisible())
                 {
+                    if (dynamic_cast<LLMenuItemBranchGL*>(overflow_menu->childFromPoint(x, y)))
+                    {
+                        setLandingTab(nullptr);
+                        showDragMarker(false);
+                        *accept = ACCEPT_NO;
+                        return true;
+                    }
                     overflow_menu->handleHover(x, y, mask);
                 }
             }
@@ -921,18 +940,10 @@ bool LLFavoritesBarCtrl::findDragAndDropTarget(LLUUID& target_id, bool& insert_b
         }
         else
         {
-            // Choose the right landmark button
-            hovered_button = dynamic_cast<LLFavoriteLandmarkButton*>(mLastTab);
-            if (!hovered_button)
-            {
-                if (mItems.empty()) return false;
-                // The last visible button may represent a whole folder.
-                target_id = mItems.back()->getUUID();
-                insert_before = false;
-                return true;
-            }
-
+            // Drop after the last visible entry, even if it represents several landmarks.
+            target_id = itemBeforeOverflow();
             insert_before = false;
+            return target_id.notNull();
         }
         target_id = hovered_button->getLandmarkID();
     }
@@ -1096,6 +1107,12 @@ void LLFavoritesBarCtrl::rebuildFolderEntries()
         }
         mBarEntries.push_back(item);
     }
+}
+
+LLUUID LLFavoritesBarCtrl::itemBeforeOverflow() const
+{
+    return mFirstDropDownItem > 0 && mFirstDropDownItem <= mBarEntries.size()
+        ? mBarEntries[mFirstDropDownItem - 1]->getUUID() : LLUUID::null;
 }
 
 std::string LLFavoritesBarCtrl::entryLabel(S32 index) const
@@ -1504,7 +1521,7 @@ LLMenuGL* LLFavoritesBarCtrl::makeFolderMenu(const std::string& folder)
     p.can_tear_off(false);
     p.scrollable(true);
     p.visible(false);
-    auto* menu = LLUICtrlFactory::create<LLMenuGL>(p);
+    auto* menu = LLUICtrlFactory::create<FSFavoriteFolderMenu>(p);
     const auto session = gAgent.getSessionID();
     for (const auto& member : group->second)
     {
@@ -1519,7 +1536,13 @@ LLMenuGL* LLFavoritesBarCtrl::makeFolderMenu(const std::string& folder)
         row.on_click.function([this, id, still_here](LLUICtrl*, const LLSD&) {
             if (still_here()) onButtonClick(id);
         });
-        auto* entry = LLUICtrlFactory::create<LLMenuItemCallGL>(row);
+        auto* entry = LLUICtrlFactory::create<LLFavoriteLandmarkMenuItem>(row);
+        entry->initFavoritesBarPointer(this);
+        entry->setLandmarkID(id);
+        entry->LLUICtrl::setMouseDownCallback([this, id, still_here](LLUICtrl* ctrl, S32 x, S32 y, MASK mask) {
+            if (still_here()) onButtonMouseDown(id, ctrl, x, y, mask);
+        });
+        entry->LLUICtrl::setMouseUpCallback(boost::bind(&LLFavoritesBarCtrl::onButtonMouseUp, this, id, _1, _2, _3, _4));
         entry->setRightMouseDownCallback([this, id, still_here](LLUICtrl* ctrl, S32 x, S32 y, MASK mask) {
             if (still_here()) onButtonRightClick(id, ctrl, x, y, mask);
         });

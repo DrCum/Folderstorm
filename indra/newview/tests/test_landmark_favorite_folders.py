@@ -13,11 +13,13 @@ class FavoriteFolders(unittest.TestCase):
 #include <vector>
 struct LLUUID {
     int n;
+    static const LLUUID null;
     bool notNull() const{return n!=0;}
     std::string asString() const{return std::to_string(n);}
     bool operator==(LLUUID o)const{return n==o.n;}
     bool operator<(LLUUID o)const{return n<o.n;}
 };
+const LLUUID LLUUID::null{0};
 struct Item {
     LLUUID id; int type=5;
     LLUUID getUUID() const{return id;}
@@ -46,6 +48,8 @@ struct LLFavoritesBarCtrl {
     Items mItems,mBarEntries;
     std::map<LLUUID,std::string> mFolderButtons;
     std::map<std::string,Items> mFolderContents;
+    int mFirstDropDownItem=0;
+    LLUUID itemBeforeOverflow() const;
     void rebuildFolderEntries();
 };
 """
@@ -60,6 +64,8 @@ int main(){
     bar.rebuildFolderEntries();
     assert((bar.mBarEntries==LLFavoritesBarCtrl::Items{&a,&b,&c}));
     assert((bar.mFolderContents.at("Clubs")==LLFavoritesBarCtrl::Items{&b,&d}));
+    bar.mFirstDropDownItem=2; assert(bar.itemBeforeOverflow()==b.id); // visible: loose A, folder Clubs; C overflows
+    bar.mFirstDropDownItem=0; assert(!bar.itemBeforeOverflow().notNull());
     names.erase("2");bar.rebuildFolderEntries();
     assert(bar.mBarEntries==order && bar.mItems==order && bar.mFolderButtons.at(d.id)=="Clubs");
     names.clear();bar.rebuildFolderEntries();assert(bar.mBarEntries==order && bar.mFolderContents.empty());
@@ -67,7 +73,8 @@ int main(){
     gInventory.favorite=false;assert(!isCurrentFavorite({10},a.id));
 }
 """
-        methods = ("bool isCurrentFavorite(const LLUUID& session, const LLUUID& id)", "void LLFavoritesBarCtrl::rebuildFolderEntries()")
+        methods = ("bool isCurrentFavorite(const LLUUID& session, const LLUUID& id)", "void LLFavoritesBarCtrl::rebuildFolderEntries()",
+                   "LLUUID LLFavoritesBarCtrl::itemBeforeOverflow() const")
         native.NativeObjectToolsTests.compile_and_run(self, fixture + "".join(
             native.function(code, sig) for sig in methods) + cases)
 

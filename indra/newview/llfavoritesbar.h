@@ -102,6 +102,7 @@ protected:
     void showFolderMenu(const std::string& folder, LLUICtrl* button);
     void rebuildFolderEntries();
     std::string entryLabel(S32 index) const;
+    LLUUID itemBeforeOverflow() const;
     void doToSelected(const LLSD& userdata);
     static bool onRenameCommit(const LLSD& notification, const LLSD& response);
     bool isClipboardPasteable() const;
@@ -116,7 +117,7 @@ protected:
 
     LLUUID mFavoriteFolderId;
     const LLFontGL *mFont;
-    S32 mFirstDropDownItem;
+    S32 mFirstDropDownItem = 0;
     S32 mDropDownItemsCount;
     bool mUpdateDropDownItems;
     bool mRestoreOverflowMenu;
