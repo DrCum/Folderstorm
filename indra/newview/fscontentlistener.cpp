@@ -25,6 +25,7 @@ using namespace fs_content;
 struct Snapshot
 {
     LLSD authority,epoch;
+    LLUUID asset; // Resolved source identity, separate from native item metadata.
     std::string text,raw,prefix,suffix,hash;
     bool notecard=false,editable=true;
 };
@@ -109,7 +110,7 @@ bool baseSnapshot(const LLSD& request,Snapshot*& snapshot,LLViewerInventoryItem*
     bool notecard=false;if(!target(request,notecard,item,error) || !input(request,error))return false;
     const auto found=sSnapshots.find(item->getUUID());
     if(found==sSnapshots.end() || !sameSourceEpoch(found->second.epoch.asString(),request["__assistant_epoch"].asString()) || found->second.authority!=evidence(item) ||
-       found->second.hash!=request["content_hash"].asString() || item->getAssetUUID()!=request["expected_asset_id"].asUUID())
+       found->second.hash!=request["content_hash"].asString() || found->second.asset!=request["expected_asset_id"].asUUID())
     {error="Revision conflict or snapshot expired; obtain a fresh complete inventory_content_get";return false;}
     snapshot=&found->second;
     if(!snapshot->editable){error="Version 1 notecard reading is supported; lossless legacy editing is unavailable";return false;}
@@ -129,10 +130,13 @@ bool baseSnapshot(const LLSD& request,Snapshot*& snapshot,LLViewerInventoryItem*
 }
 std::shared_ptr<Write> ownWrite(const LLSD& request)
 {
-    const auto key=signature(request);
-    for(const auto& entry:sWrites)
-        if(entry.second->signature==key && sameSourceEpoch(entry.second->request["__assistant_epoch"].asString(),request["__assistant_epoch"].asString()))
-            return entry.second;
+    const auto guard=request["__assistant_guard"].asUUID();
+    if(guard.isNull())return {};
+    const auto found=sWrites.find(guard);
+    if(found!=sWrites.end() && found->second->request["__assistant_guard"].asUUID()==guard &&
+       found->second->signature==signature(request) &&
+       sameSourceEpoch(found->second->request["__assistant_epoch"].asString(),request["__assistant_epoch"].asString()))
+        return found->second;
     return {};
 }
 bool liveWrite(const std::shared_ptr<Write>& write)
@@ -160,7 +164,7 @@ LLSD receiptFor(const LLSD& request,std::string& error)
     LLSD result=write->receipt;
     result["current_asset_id"]=item->getAssetUUID();
     result["post_submit_conflict"]=write->progress.sourceSubmitted() &&
-        item->getAssetUUID()!=(result["source_saved"].asBoolean()?result["asset_id"].asUUID():result["previous_asset_id"].asUUID());
+        item->getAssetUUID()!=(result["source_saved"].asBoolean()?result["asset_id"].asUUID():write->authority["asset_id"].asUUID());
     return result;
 }
 void complete(const std::shared_ptr<Write>& write,const LLSD& result,bool success,const std::string& reason)
@@ -214,7 +218,7 @@ struct Read
 {
     LLSD request,authority;bool notecard=false;fs_assistant::AsyncTaskPtr task;
 };
-void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat)
+void loaded(const LLUUID& asset,LLAssetType::EType,void* userdata,S32 status,LLExtStat)
 {
     std::unique_ptr<Read> read(static_cast<Read*>(userdata));
     fs_assistant::AsyncScope scope(read->task->guard());
@@ -222,11 +226,12 @@ void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat
     auto* item=gInventory.getItem(read->request["id"].asUUID());
     if(!fs_assistant::asyncAllowed() || !fs_assistant_request_allowed(read->request) || !readable(item,read->notecard) || evidence(item)!=read->authority)
     {sendReply(llsd::map("error","Content authority or item revision changed; read again"),read->request);return;}
-    if(status){sendReply(llsd::map("error","Native item-bound asset download failed"),read->request);return;}
-    LLFileSystem file(item->getAssetUUID(),item->getType());const auto size=file.getSize();
+    if(status || asset.isNull() || (item->getAssetUUID().notNull() && asset!=item->getAssetUUID()))
+    {sendReply(llsd::map("error","Native item-bound asset download failed or returned a different known asset"),read->request);return;}
+    LLFileSystem file(asset,item->getType());const auto size=file.getSize();
     if(size<=0 || static_cast<std::size_t>(size)>assetLimit)
     {sendReply(llsd::map("error","Asset is unavailable, empty or exceeds the bounded content read limit"),read->request);return;}
-    Snapshot snapshot;snapshot.authority=read->authority;snapshot.epoch=read->request["__assistant_epoch"];snapshot.notecard=read->notecard;snapshot.raw.resize(size);
+    Snapshot snapshot;snapshot.authority=read->authority;snapshot.epoch=read->request["__assistant_epoch"];snapshot.asset=asset;snapshot.notecard=read->notecard;snapshot.raw.resize(size);
     if(size && (!file.read(reinterpret_cast<U8*>(&snapshot.raw[0]),size) || file.getLastBytesRead()!=size))
     {sendReply(llsd::map("error","Incomplete asset read"),read->request);return;}
     if(!snapshot.raw.empty() && snapshot.raw.back()=='\0')snapshot.raw.pop_back();
@@ -243,7 +248,7 @@ void loaded(const LLUUID&,LLAssetType::EType,void* userdata,S32 status,LLExtStat
     if(!utf8(snapshot.text))
     {sendReply(llsd::map("error","Source is not valid UTF-8 text"),read->request);return;}
     const bool full=snapshot.text.size()<=textLimit;snapshot.hash=hash(snapshot.raw);
-    LLSD reply=llsd::map("ok",true,"id",item->getUUID(),"asset_id",item->getAssetUUID(),
+    LLSD reply=llsd::map("ok",true,"id",item->getUUID(),"asset_id",asset,
         "kind",read->notecard?"notecard":"script","text",excerpt(snapshot.text,textLimit),"complete",full,"truncated",!full,
         "content_hash",full?snapshot.hash:std::string(),"native_readable",true,"native_writable",writable(item,read->notecard));
     reply["editable"]=full && snapshot.editable && writable(item,read->notecard);
@@ -323,7 +328,7 @@ public:
         if(!baseSnapshot(request,snapshot,item,error,op!="preview"))
         {Response response(LLSD(),request);return response.error(error);}
         if(op=="preview")
-        {Response response(LLSD(),request);response.setResponse(llsd::map("id",item->getUUID(),"asset_id",item->getAssetUUID(),"content_hash",snapshot->hash,"diff",diffValue(snapshot->text,request["text"].asString()),"atomic_revision_check",false));return;}
+        {Response response(LLSD(),request);response.setResponse(llsd::map("id",item->getUUID(),"asset_id",snapshot->asset,"content_hash",snapshot->hash,"diff",diffValue(snapshot->text,request["text"].asString()),"atomic_revision_check",false));return;}
         if(op!="saveNotecard" && op!="saveScript")
         {Response response(LLSD(),request);return response.error("Unsupported content mutation");}
         save(request,*snapshot,item);
@@ -336,7 +341,7 @@ public:
         auto write=std::make_shared<Write>();write->request=request;write->authority=evidence(item);write->notecard=snapshot.notecard;
         write->task=fs_assistant::asyncTask();write->signature=signature(request);
         const auto buffer=snapshot.notecard?replaceNotecard(snapshot.prefix,snapshot.suffix,request["text"].asString()):request["text"].asString();
-        write->receipt=llsd::map("operation_id",request["reqid"],"id",item->getUUID(),"previous_asset_id",item->getAssetUUID(),"asset_id",item->getAssetUUID(),
+        write->receipt=llsd::map("operation_id",request["reqid"],"id",item->getUUID(),"previous_asset_id",snapshot.asset,"asset_id",snapshot.asset,
             "state","queued","source_saved",false,"source_saved_known",true,"uncertain",false,"atomic_revision_check",false,
             "content_hash",hash(buffer));
         sWrites[request["reqid"].asUUID()]=write;

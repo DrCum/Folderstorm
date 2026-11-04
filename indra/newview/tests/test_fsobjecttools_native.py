@@ -235,6 +235,31 @@ int main(){
  assert(!requestRunning(&prim,item.uuid)&&!invalidateRunning(prim.uuid,item.uuid));
  assert(fs_object_tools_running_reply(&message)); // native UI still receives its result
  assert(service().running.empty());
+ // Stopped compilation is independent of uncertain running observations.
+ LLSD save=llsd::map("op","scriptSave","running_mode","stopped");
+ assert(stoppedCompile(save)&&invalidateRunning(prim.uuid,item.uuid,stoppedCompile(save)));
+ save["running_mode"]="preserve";assert(!stoppedCompile(save)&&!invalidateRunning(prim.uuid,item.uuid));
+ // A native query made DURING an assistant compile is fenced on completion,
+ // including when task inventory still hides the script asset UUID.
+ gAgent.login=LLUUID("next-login");service()=Service();executionState();item.asset=LLUUID();
+ assert(invalidateRunning(prim.uuid,item.uuid,true));
+ upload->owned=true;
+ {PendingInventoryUpload pending(upload);assert(fs_object_tools_request_running(&prim,item.uuid));}
+ auto afterAssistant=std::make_shared<RunningRead>(*fresh);afterAssistant->done=false;afterAssistant->item=itemEvidence(&item);
+ afterAssistant->execution=executionFor(prim.uuid,item.uuid);service().runningReads.push_back(afterAssistant);
+ assert(!requestRunning(&prim,item.uuid));message.running=true;
+ assert(!fs_object_tools_running_reply(&message)&&afterAssistant->done&&service().running.empty());
+ auto verified=std::make_shared<RunningRead>(*afterAssistant);verified->done=false;service().runningReads.push_back(verified);
+ assert(requestRunning(&prim,item.uuid));message.running=false;assert(fs_object_tools_running_reply(&message));
+ assert(!service().running.at({prim.uuid,item.uuid}).running);
+ // A lost reply is never discarded or endlessly joined. Explicit stopped saves
+ // advance execution safely while the old reply remains pending and stale.
+ assert(requestRunning(&prim,item.uuid));clockValue+=11.;const auto lostSent=message.sent;
+ assert(!requestRunning(&prim,item.uuid)&&message.sent==lostSent);
+ assert(runningQueryPending(&prim,item.uuid)&&!invalidateRunning(prim.uuid,item.uuid));
+ save["running_mode"]="stopped";assert(invalidateRunning(prim.uuid,item.uuid,stoppedCompile(save)));
+ assert(runningQueryPending(&prim,item.uuid));assert(!fs_object_tools_running_reply(&message));
+ assert(!runningQueryPending(&prim,item.uuid)&&service().running.empty());
 }
 '''
 
@@ -346,7 +371,8 @@ class NativeObjectToolsTests(unittest.TestCase):
             'ExecutionKey executionKey(LLViewerObject* prim,const LLUUID& item)',
             'U64 executionFor(const LLUUID& prim,const LLUUID& item)',
             'bool runningQueryPending(LLViewerObject* prim,const LLUUID& item)',
-            'bool invalidateRunning(const LLUUID& prim,const LLUUID& item)',
+            'bool stoppedCompile(const LLSD& request)',
+            'bool invalidateRunning(const LLUUID& prim,const LLUUID& item,bool allowPending=false)',
             'bool requestRunning(LLViewerObject* prim,const LLUUID& item,bool nativeObserver=false)',
             'bool fs_object_tools_request_running(LLViewerObject* prim,const LLUUID& item)',
             'void fs_object_tools_native_execution_changed(const LLUUID& object,const LLUUID& item)',

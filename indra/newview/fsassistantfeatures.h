@@ -17,7 +17,7 @@ inline double durableOperationSeconds(const std::string& api,const std::string& 
     const double seconds=static_cast<double>(approvedSeconds)+5.;return seconds>fallback?seconds:fallback;
 }
 struct FeatureOperation {const char* api;const char* op;const char* capability;const char* permission;bool readOnly;bool active;const char* receiptRead;};
-inline constexpr std::array<FeatureOperation, 94> featureOperations {{
+inline constexpr std::array<FeatureOperation, 95> featureOperations {{
     {"FSChat","conversations","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","history","social_chat","chat_read",true,false,"chat_read"},
     {"FSChat","search","social_chat","chat_read",true,false,"chat_read"},
@@ -99,6 +99,7 @@ inline constexpr std::array<FeatureOperation, 94> featureOperations {{
     {"FSObjects","scriptRunning","task_scripts","script_run",false,true,"task_inventory_read"},
     {"FSObjects","scriptReset","task_scripts","script_run",false,true,"task_inventory_read"},
     {"FSObjects","put","task_inventory","task_inventory_write",false,true,"task_inventory_read"},
+    {"FSObjects","reconcilePut","contents_reconciliation","task_inventory_write",false,true,"task_inventory_read"},
     {"FSObjects","rename","task_inventory","task_inventory_write",false,true,"task_inventory_read"},
     {"FSObjects","remove","task_inventory","task_inventory_remove",false,true,"task_inventory_read"},
     {"FSObjects","operationStatus","task_inventory","task_inventory_read",true,false,"task_inventory_read"},

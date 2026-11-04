@@ -32,7 +32,8 @@ inline bool agentInventory(const LLUUID& id)
 {return gInventory.getRootFolderID().notNull() && gInventory.isObjectDescendentOf(id,gInventory.getRootFolderID());}
 inline bool readable(const LLViewerInventoryItem* item,bool notecard)
 {
-    if(!item || !item->isFinished() || item->getIsLinkType() || item->getAssetUUID().isNull() ||
+    // Native item-bound source reads can resolve an undisclosed asset UUID.
+    if(!item || !item->isFinished() || item->getIsLinkType() ||
        gAgent.getID().isNull() || gAgent.getSessionID().isNull() ||
        (!agentInventory(item->getUUID()) && !library(item->getUUID())) ||
        item->getType()!=(notecard?LLAssetType::AT_NOTECARD:LLAssetType::AT_LSL_TEXT))return false;

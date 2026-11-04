@@ -11,8 +11,8 @@
 
 namespace fs_object_tools {
 // ScriptRunningReply has no request nonce. A caller timing out or cancelling
-// cannot discard this wire fence: a late reply must drain before execution can
-// change, or it could be mistaken for an observation of the next execution.
+// cannot discard this wire fence: late replies retain their original execution
+// version and must never be reassigned to an observation of the next execution.
 template<class Key> class RunningQueries
 {
 public:
@@ -59,6 +59,8 @@ struct Insertion {std::string id;bool ambiguous=false;};
 inline Insertion correlateInsertion(const std::set<std::string>& before,const std::vector<Candidate>& after,const std::string& asset,int type)
 {
     Insertion result;
+    // Two undisclosed UUIDs are not evidence that the assets are identical.
+    if(asset.empty() || asset=="00000000-0000-0000-0000-000000000000")return result;
     for(const auto& item:after)
     {
         if(before.count(item.id) || item.asset!=asset || item.type!=type)continue;
@@ -93,19 +95,31 @@ private:
 template<class Payload> class Receipts
 {
 public:
-    struct Entry {std::string signature;Payload value;unsigned pending=0;bool terminal=false;};
+    struct Entry
+    {
+        std::string signature;Payload value;unsigned pending=0;bool terminal=false,unresolved=false;
+        // Retained callbacks may outlive completion. Only an active mutation or
+        // an explicitly unresolved native outcome needs exclusive access.
+        bool blocksMutation()const{return !terminal || unresolved;}
+    };
     explicit Receipts(std::size_t limit=32):mLimit(limit){}
     Entry* find(const std::string& key)
     {const auto it=mEntries.find(key);return it==mEntries.end()?nullptr:&it->second;}
     const Entry* find(const std::string& key)const
     {const auto it=mEntries.find(key);return it==mEntries.end()?nullptr:&it->second;}
+    // Local receipt reconciliation consumes a replay tombstone, not a live
+    // mutation slot. Reserve one extra tombstone per possible submission so
+    // exhausting the submission budget cannot prevent its one-time recovery.
+    bool requestAvailable(const std::string& key)const{return !mSeen.count(key) && mSeen.size()<8192;}
+    bool reserveRequest(const std::string& key)
+    {if(!requestAvailable(key))return false;mSeen.insert(key);return true;}
     Entry* admit(const std::string& key,const std::string& signature,Payload value)
     {
         if(auto* entry=find(key))return entry->signature==signature?entry:nullptr;
         // A retired receipt is not permission to replay an old mutation.
         if(mSeen.count(key) || mSeen.size()>=4096)return nullptr;
         for(auto it=mEntries.begin();it!=mEntries.end() && mEntries.size()>=mLimit;)
-            if(it->second.terminal && !it->second.pending)it=mEntries.erase(it);else ++it;
+            if(it->second.terminal && !it->second.pending && !it->second.unresolved)it=mEntries.erase(it);else ++it;
         if(mEntries.size()>=mLimit)return nullptr;
         mSeen.insert(key);
         return &mEntries.emplace(key,Entry{signature,std::move(value),0,false}).first->second;

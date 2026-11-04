@@ -273,16 +273,19 @@ LLSD FSBuildListener::assistantLimits() const
 { return llsd::map("version",1,"max_faces",64,"max_distance",64,"revision_seconds",120,"copyable_rez_only",true,"linked_scale",false,"pbr_surface_overrides",false); }
 bool FSBuildListener::prepareAssistant(FSAssistantPreparedOperation& operation,std::string& error) const
 {
-    LLSD state; if(!arguments(operation.request,error) || !native(operation.request,state,error) || !baseline(operation.request,state,error)) return false;
-    const auto op=operation.request["op"].asString();
+    // Optional target fields (primitive rez has no id) must not be inserted by
+    // summary reads after the approval's material arguments have been frozen.
+    const LLSD& request=operation.request;
+    LLSD state; if(!arguments(request,error) || !native(request,state,error) || !baseline(request,state,error)) return false;
+    const auto op=request["op"].asString();
     operation.requiredClasses=inventoryOp(op)?std::vector<std::string>{"read"}:std::vector<std::string>{"world_read"};
     if(!readOp(op)) operation.requiredClasses.emplace_back(op=="nextOwnerSet"?"inventory_permissions":op=="rezPrimitive" || op=="rezInventory"?"build_rez":"build_edit");
-    if(op=="rezInventory" || operation.request.has("texture_item") || operation.request.has("material_item")) operation.requiredClasses.emplace_back("read");
-    LLSD frozen=llsd::map("material",material(operation.request),"state",state);
+    if(op=="rezInventory" || request.has("texture_item") || request.has("material_item")) operation.requiredClasses.emplace_back("read");
+    LLSD frozen=llsd::map("material",material(request),"state",state);
     const auto nonce=ticket(service().approvals,frozen); if(nonce.empty()) { error="busy: too many live building requests"; return false; }
     operation.validation["build_prepared"]=nonce; operation.request["__build_prepared"]=nonce;
-    operation.summary=llsd::map("op",op,"action",op=="nextOwnerSet"?"Change inventory next-owner permissions":op=="rezPrimitive" || op=="rezInventory"?"Rez an object (submission only)":"Edit an owned object", "subject_count",1,"target",operation.request["id"].asString(),"value",ll_stream_notation_sd(material(operation.request)));
-    if(!readOp(op)) operation.summary["subjects"].append(llsd::map("name",operation.request["id"].asString(),"before_name",ll_stream_notation_sd(state),"after_name",ll_stream_notation_sd(material(operation.request))));
+    operation.summary=llsd::map("op",op,"action",op=="nextOwnerSet"?"Change inventory next-owner permissions":op=="rezPrimitive" || op=="rezInventory"?"Rez an object (submission only)":"Edit an owned object", "subject_count",1,"target",request["id"].asString(),"value",ll_stream_notation_sd(material(request)));
+    if(!readOp(op)) operation.summary["subjects"].append(llsd::map("name",request["id"].asString(),"before_name",ll_stream_notation_sd(state),"after_name",ll_stream_notation_sd(material(request))));
     return true;
 }
 bool FSBuildListener::validateAssistant(const FSAssistantPreparedOperation& operation,std::string& error) const
