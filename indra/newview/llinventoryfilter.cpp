@@ -101,11 +101,42 @@ LLInventoryFilter::LLInventoryFilter(const Params& p)
     LLStringUtil::toUpper(mUsername);
 }
 
+void LLInventoryFilter::setViewFolders(std::set<LLUUID> ids)
+{
+    mViewFolders = std::move(ids);
+    refreshViewFolders();
+}
+
+void LLInventoryFilter::refreshViewFolders()
+{
+    mLiveViewFolders.clear();
+    mViewAncestors.clear();
+    const auto trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+    for (const auto& id : mViewFolders)
+    {
+        if (!gInventory.getCategory(id) || gInventory.isObjectDescendentOf(id, trash)
+            || !gInventory.isObjectDescendentOf(id, gInventory.getRootFolderID())) continue;
+        mLiveViewFolders.insert(id);
+        for (const auto* cat = gInventory.getCategory(id); cat; cat = gInventory.getCategory(cat->getParentUUID()))
+            if (!mViewAncestors.insert(cat->getUUID()).second) break;
+    }
+    setModified(FILTER_RESTART);
+}
+
+bool LLInventoryFilter::passesViewFolders(const LLUUID& id) const
+{
+    if (mViewFolders.empty() || id.isNull() || mViewAncestors.count(id)) return true;
+    for (const auto* obj = gInventory.getObject(id); obj; obj = gInventory.getCategory(obj->getParentUUID()))
+        if (mLiveViewFolders.count(obj->getUUID())) return true;
+    return false;
+}
+
 bool LLInventoryFilter::check(const LLFolderViewModelItem* item)
 {
     const LLFolderViewModelItemInventory* listener = dynamic_cast<const LLFolderViewModelItemInventory*>(item);
 
     // If it's a folder and we're showing all folders, return automatically.
+    if (!passesViewFolders(listener->getUUID())) return false;
     const bool is_folder = listener->getInventoryType() == LLInventoryType::IT_CATEGORY;
     if (is_folder && (mFilterOps.mShowFolderState == LLInventoryFilter::SHOW_ALL_FOLDERS))
     {
@@ -210,6 +241,7 @@ bool LLInventoryFilter::checkFolder(const LLFolderViewModelItem* item) const
 
 bool LLInventoryFilter::checkFolder(const LLUUID& folder_id) const
 {
+    if (!passesViewFolders(folder_id)) return false;
     // we're showing all folders, overriding filter
     if (mFilterOps.mShowFolderState == LLInventoryFilter::SHOW_ALL_FOLDERS)
     {

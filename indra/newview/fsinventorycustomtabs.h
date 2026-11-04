@@ -73,6 +73,8 @@ public:
     void onCloseClicked();
     void onHideClicked();
 
+    static bool canCreateFolderView(LLPanelMainInventory* parent);
+    static void createFolderView(LLPanelMainInventory* parent);
     static void install(LLPanelMainInventory* parent, LLFilterEditor* filter_editor);
     static void notifyFilterStateChanged(LLPanelMainInventory* parent);
     static bool activePanelIsCustom(const LLPanelMainInventory* parent);
@@ -88,6 +90,8 @@ public:
 private:
     static FSInventoryCustomTabs* instanceFor(LLPanelMainInventory* parent);
     static const FSInventoryCustomTabs* instanceFor(const LLPanelMainInventory* parent);
+    std::set<LLUUID> selectedFolders() const;
+    void changeFolderScope(const LLSD& action);
     void ensureRootOpenForActivePanel();
 
     LLInventoryPanel* addTab(const std::string& explicit_name, const std::string& filter, bool select);
