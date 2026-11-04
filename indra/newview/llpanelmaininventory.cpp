@@ -2667,11 +2667,6 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
         FSFloaterInventoryBulk::showForSelection(getActivePanel());
         return;
     }
-    if (command_name == "go_to_folder")
-    {
-        FSFloaterFolderJump::showFrom(*this);
-        return;
-    }
     if (command_name == "assistant_inventory_history")
     {
         FSFloaterInventoryBulk::showHistory();
@@ -2680,6 +2675,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
     if (command_name == "new_window")
     {
         newWindow();
+    }
+    if (command_name == "go_to_folder")
+    {
+        FSFloaterFolderJump::showFrom(*this);
+        return;
     }
     if (command_name == "sort_by_name")
     {
@@ -2973,7 +2973,6 @@ bool LLPanelMainInventory::isSaveTextureEnabled(const LLSD& userdata)
 bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
 {
     const std::string command_name = userdata.asString();
-    if (command_name == "go_to_folder") return gInventory.isInventoryUsable();
     if (command_name == "review_bulk_changes")
     {
         auto* panel = getActivePanel();
@@ -2981,6 +2980,7 @@ bool LLPanelMainInventory::isActionEnabled(const LLSD& userdata)
         const auto count = panel->getRootFolder()->getSelectionList().size();
         return count > 0 && count <= 50;
     }
+    if (command_name == "go_to_folder") return gInventory.isInventoryUsable();
     // <FS:Ansariel> Unused changes from STORM-2091 that has been fixed by LL differently in the meantime
     //if (command_name == "not_empty")
     //{

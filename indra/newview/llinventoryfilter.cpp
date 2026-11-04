@@ -194,6 +194,11 @@ bool LLInventoryFilter::check(const LLInventoryItem* item)
     return passed_filtertype && passed_permissions && passed_string;
 }
 
+bool LLInventoryFilter::checkFolder(const LLUUID& folder_id) const
+{
+    return checkFolder(folder_id, true);
+}
+
 bool LLInventoryFilter::checkFolder(const LLFolderViewModelItem* item) const
 {
     const LLFolderViewModelItemInventory* listener = dynamic_cast<const LLFolderViewModelItemInventory*>(item);

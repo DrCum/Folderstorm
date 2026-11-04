@@ -314,12 +314,14 @@ public:
     bool                check(const LLFolderViewModelItem* item);
     bool                check(const LLInventoryItem* item);
     bool                checkFolder(const LLFolderViewModelItem* item) const;
-    bool                checkFolder(const LLUUID& folder_id, bool fetch_contents = true) const;
+    bool                checkFolder(const LLUUID& folder_id) const;
 
     bool                showAllResults() const;
 
     std::string::size_type getStringMatchOffset(LLFolderViewModelItem* item) const;
     std::string::size_type getFilterStringSize() const;
+    // Folder navigation checks cached visibility without requesting folder contents.
+    bool checkFolder(const LLUUID& folder_id, bool fetch_contents) const;
 
     // +-------------------------------------------------------------------+
     // + Presentation
