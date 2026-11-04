@@ -43,7 +43,7 @@ struct Transcript
     void changeSource(const fs_session::ChatKey& key, LONG firstChar)
     {
         // Never retain text or selections. A paused surface remembers at most 32 places.
-        if (bound && !following && source.generation && !source.account.empty() && !source.conversation.empty())
+        if (bound && !following && source.generation && !source.account.empty())
         {
             const auto place = pendingPlace ? pendingPlace : fs_session::captureTranscriptAnchor(firstChar, offsets);
             if (place)
@@ -135,6 +135,11 @@ struct Transcript
         const LONG firstLine = static_cast<LONG>(SendMessageW(edit,EM_GETFIRSTVISIBLELINE,0,0));
         const LONG firstChar = static_cast<LONG>(SendMessageW(edit,EM_LINEINDEX,static_cast<WPARAM>(firstLine),0));
         if (changed) changeSource(key, firstChar);
+        else if (!following && !pendingPlace && positions.empty() && !offsets.empty())
+        {
+            // Monitors clear their rendered text while Chat is hidden. Keep only the event anchor.
+            pendingPlace = fs_session::captureTranscriptAnchor(firstChar, offsets);
+        }
         if (next.empty() && !pendingPlace) following = true;
         const auto fitted = [&](LONG position)
         { return fs_session::fitTranscriptAnchor(position,offsets,positions,static_cast<LONG>(next.size())); };

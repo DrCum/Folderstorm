@@ -45,7 +45,7 @@ int main()
                                 0, 0, 300, 72, parent, nullptr, GetModuleHandleW(nullptr), nullptr);
     assert(parent && edit); // The parent stays hidden for this entire check.
     Transcript view; view.attach(edit, nullptr);
-    ChatKey a; a.worker[0] = 1; a.generation = 1; a.grid = "grid"; a.account = "avatar"; a.conversation = "one";
+    ChatKey a; a.worker[0] = 1; a.generation = 1; a.grid = "grid"; a.account = "avatar"; a.conversation = ""; // Nearby uses the empty conversation ID.
     ChatKey b = a; b.conversation = "two";
     show(view, a, 1, 90);
     SendMessageW(edit, EM_LINESCROLL, 0, -34);
@@ -64,6 +64,10 @@ int main()
     DWORD start = 0, end = 0;
     SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
     assert(start == end);
+    view.update(a, L"", {}, 0); // Hiding monitor Chat clears its rendered history without changing its key.
+    assert(!view.following && view.text.empty());
+    show(view,a,10,102);
+    assert(!view.following && firstEvent(view)==paused);
     show(view, b, 1, 75);
     show(view, a, 150, 200); // The remembered event has been evicted by bounded history.
     assert(!view.following && firstEvent(view) == 150);
