@@ -92,7 +92,10 @@
 		         orientation="horizontal"
 		         top="0"
                  width="316">
-			    <layout_panel
+			    <layout_panel name="previous_look_lp" auto_resize="false" user_resize="false" width="86" height="23">
+                    <button name="previous_look" label="Previous Look" tool_tip="Restore the inventory-backed look worn before your last outfit replacement this login." follows="all" left="1" right="-1" top="0" height="23" />
+                </layout_panel>
+                <layout_panel
 			         follows="bottom|left|right"
 			         height="23"
                      layout="bottomleft"

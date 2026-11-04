@@ -15638,4 +15638,11 @@ Folder names cannot contain / or \.
  <notification name="ConfirmWorkspaceHUDs" type="alertmodal"><message>Add these saved HUDs?
 [HUDS]
 Unrelated attachments and clothing will stay worn.</message><tag>confirm</tag><usetemplate name="okcancelbuttons" notext="Cancel" yestext="Add HUDs"/></notification>
+  <notification icon="notifytip.tga" name="PreviousLookMissing" type="notify">
+Your look was not changed. These items are missing or in Trash:
+[ITEMS]
+  </notification>
+  <notification icon="notifytip.tga" name="PreviousLookRestricted" type="notify">
+Your look was not changed. An active outfit or attachment restriction prevents restoring this look.
+  </notification>
 </notifications>

@@ -113,6 +113,9 @@ bool LLPanelOutfitsInventory::postBuild()
         LLInventoryModelBackgroundFetch::instance().start(outfits_cat);
     }
 
+    mPreviousLookBtn = findChild<LLButton>("previous_look");
+    if (mPreviousLookBtn)
+        mPreviousLookBtn->setCommitCallback([](LLUICtrl*, const LLSD&) { LLAppearanceMgr::instance().restorePreviousLook(); });
     getChild<LLButton>(SAVE_BTN)->setCommitCallback(boost::bind(&LLPanelOutfitsInventory::saveOutfit, this, false));
     getChild<LLButton>(SAVE_AS_BTN)->setCommitCallback(boost::bind(&LLPanelOutfitsInventory::saveOutfit, this, true));
 
@@ -266,6 +269,8 @@ void LLPanelOutfitsInventory::onSave()
 // <FS:Ansariel> FIRE-17626: Attachment count in appearance floater
 void LLPanelOutfitsInventory::draw()
 {
+    if (mPreviousLookBtn)
+        mPreviousLookBtn->setEnabled(LLAppearanceMgr::instance().hasPreviousLook());
     if (mTempAttachmentUpdateTimer.checkExpirationAndReset(1.f))
     {
         if (U32 tempAttachmentCount = (U32)LLAgentWearables::getTempAttachments().size(); tempAttachmentCount != mCurrentTempAttachmentCount)
