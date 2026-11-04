@@ -64,19 +64,24 @@ void setOptions(LLView* view, const FSWorkspaceContext::Options& choices)
     }
     auto* list = root->getChild<LLScrollListCtrl>("hud_list"); list->deleteAllItems();
     auto huds = FSWorkspaceContext::attachedHUDs();
+    uuid_vec_t selected_ids;
     for (const auto& selected : choices.huds)
     {
+        selected_ids.emplace_back(selected.item);
         auto current = std::find_if(huds.begin(), huds.end(), [&](const FSWorkspaceContext::HUD& hud) { return hud.item == selected.item; });
         if (current == huds.end()) huds.push_back(selected);
         else *current = selected; // Keep the saved point/selection after an Inventory rename or manual reattachment.
     }
     for (const auto& hud : huds)
     {
-        LLSD row; row["value"] = hudValue(hud); row["columns"][0]["column"] = "name";
+        LLSD row;
+        row["value"] = LLUUID(hud.item);
+        row["alt_value"] = hudValue(hud);
+        row["columns"][0]["column"] = "name";
         row["columns"][0]["value"] = hud.name; row["columns"][1]["column"] = "point"; row["columns"][1]["value"] = FSWorkspaceContext::hudPointName(hud.point);
         list->addElement(row);
     }
-    for (const auto& hud : choices.huds) list->setSelectedByValue(hudValue(hud), true);
+    list->selectMultiple(std::move(selected_ids));
     root->getChild<LLCheckBoxCtrl>("remember_huds")->set(!choices.huds.empty());
 }
 FSWorkspaceContext::Options options(LLView* view)
@@ -92,7 +97,7 @@ FSWorkspaceContext::Options options(LLView* view)
     }
     if (root->getChild<LLCheckBoxCtrl>("remember_huds")->get())
         for (auto* row : root->getChild<LLScrollListCtrl>("hud_list")->getAllSelected())
-        { const auto value = row->getValue(); result.huds.push_back({value["item"].asString(), value["name"].asString(), value["point"].asInteger()}); }
+        { const auto value = row->getAltValue(); result.huds.push_back({value["item"].asString(), value["name"].asString(), value["point"].asInteger()}); }
     return result;
 }
 }
