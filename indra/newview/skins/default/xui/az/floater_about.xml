@@ -7,6 +7,7 @@
 https://www.firestormviewer.org
 			</text>
 			<button label="Buferə köçürt" name="copy_btn"/>
+			<check_box name="include_location" label="Dünyadakı mövqeyimi daxil et" tool_tip="Regionu, koordinatları və simulyator məlumatlarını hesabatda və onun surətində göstər." />
 		</panel>
 		<panel label="Təşəkkürlər" name="credits_panel">
 			<text name="linden_intro">

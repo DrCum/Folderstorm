@@ -7,6 +7,7 @@
  https://www.firestormviewer.org
 			</text>
 			<button label="Copier" name="copy_btn"/>
+			<check_box name="include_location" label="Inclure ma position" tool_tip="Afficher la région, les coordonnées et les informations du simulateur dans le rapport et sa copie." />
 		</panel>
 		<panel label="Auteurs Linden Lab" name="credits_panel">
 			<text name="linden_intro">

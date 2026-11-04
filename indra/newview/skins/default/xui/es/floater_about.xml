@@ -49,6 +49,7 @@ Calidad de dibujo (Render quality): [RENDERQUALITY]
 https://www.firestormviewer.org
 			</text>
   			<button label="Copiar al portapapeles" name="copy_btn"/>
+			<check_box name="include_location" label="Incluir mi ubicación" tool_tip="Muestra la región, las coordenadas y los datos del simulador en el informe y en la copia." />
 		</panel>
 		<panel label="Créditos de Linden Lab" name="credits_panel">
         		<text name="linden_intro">
