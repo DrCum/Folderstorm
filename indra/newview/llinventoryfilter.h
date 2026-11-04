@@ -297,6 +297,11 @@ public:
     void                setFilterLinks(U64 filter_link);
     U64                 getFilterLinks() const;
 
+    void setViewFolders(std::set<LLUUID> ids);
+    const std::set<LLUUID>& getViewFolders() const { return mViewFolders; }
+    void refreshViewFolders();
+    bool passesViewFolders(const LLUUID& id) const;
+
     // sets params for Link-only search and backs up search settings for future restoration
     void                setFindAllLinksMode(const std::string &search_name, const LLUUID& search_id);
 
@@ -315,10 +320,6 @@ public:
     bool                check(const LLInventoryItem* item);
     bool                checkFolder(const LLFolderViewModelItem* item) const;
     bool                checkFolder(const LLUUID& folder_id) const;
-    void setViewFolders(std::set<LLUUID> ids);
-    const std::set<LLUUID>& getViewFolders() const { return mViewFolders; }
-    void refreshViewFolders();
-    bool passesViewFolders(const LLUUID& id) const;
 
     bool                showAllResults() const;
 
@@ -393,10 +394,10 @@ private:
     bool                checkAgainstSearchVisibility(const class LLFolderViewModelItemInventory* listener) const;
     bool                checkAgainstClipboard(const LLUUID& object_id) const;
 
-    std::set<LLUUID> mViewFolders, mLiveViewFolders, mViewAncestors;
     FilterOps               mFilterOps;
     FilterOps               mDefaultFilterOps;
     FilterOps               mBackupFilterOps; // for backup purposes when leaving 'search link' mode
+    std::set<LLUUID> mViewFolders, mLiveViewFolders, mViewAncestors;
 
     std::string             mFilterSubString;
 

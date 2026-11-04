@@ -22,10 +22,16 @@ struct Node {
     LLUUID getParentUUID() const {return parent;}
 };
 namespace LLFolderType {enum {FT_TRASH};}
+using U32=unsigned int;
+#define LL_PROFILE_ZONE_SCOPED
+struct LLInventoryObserver {enum {STRUCTURE=1, ADD=2, REMOVE=4};};
 struct Inventory {
+    using changed_items_t=std::set<LLUUID>;
+    changed_items_t changed;
+    const changed_items_t& getChangedIDs() const{return changed;}
     std::map<int,Node> nodes;
-    const Node* getObject(LLUUID i){auto it=nodes.find(i);return it==nodes.end()?nullptr:&it->second;}
-    const Node* getCategory(LLUUID i){return getObject(i);}
+    const Node* getObject(LLUUID i) const{auto it=nodes.find(i);return it==nodes.end()?nullptr:&it->second;}
+    const Node* getCategory(LLUUID i) const{return getObject(i);}
     LLUUID findCategoryUUIDForType(int){return 2;}
     LLUUID getRootFolderID(){return 1;}
     bool isObjectDescendentOf(LLUUID i,LLUUID p){
@@ -35,8 +41,18 @@ struct Inventory {
 } gInventory;
 struct LLInventoryFilter {
     std::set<LLUUID> mViewFolders,mLiveViewFolders,mViewAncestors;
+    const auto& getViewFolders() const{return mViewFolders;}
     enum {FILTER_RESTART}; void setModified(int){}
     void refreshViewFolders(); bool passesViewFolders(const LLUUID&) const;
+};
+using LLInventoryModel=Inventory; using LLInventoryObject=Node;
+struct LLInventoryPanel {
+    enum {VIEWS_INITIALIZED=1}; int mViewsInitialized=0;
+    LLInventoryFilter& filter;
+    LLInventoryModel* getModel(){return &gInventory;}
+    LLInventoryFilter& getFilter(){return filter;}
+    void itemChanged(LLUUID,U32,const Node*){assert(false && "unopened tree touched");}
+    void modelChanged(U32 mask);
 };
 """
         cases = r"""
@@ -48,7 +64,9 @@ int main() {
     f.mViewFolders={4,7}; f.refreshViewFolders();
     assert(f.passesViewFolders(3)&&f.passesViewFolders(5)&&f.passesViewFolders(8));
     assert(!f.passesViewFolders(6)&&!f.passesViewFolders(9));
-    gInventory.nodes.at(4).parent=9; f.refreshViewFolders();
+    LLInventoryPanel unopened{0,f};
+    gInventory.nodes.at(4).parent=9; gInventory.changed={4};
+    unopened.modelChanged(LLInventoryObserver::STRUCTURE);
     assert(!f.passesViewFolders(3)&&f.passesViewFolders(9)&&f.passesViewFolders(5));
     gInventory.nodes.at(4).parent=2; gInventory.nodes.erase(7); f.refreshViewFolders();
     assert(!f.passesViewFolders(5)&&!f.passesViewFolders(8)&&!f.passesViewFolders(9));
@@ -58,7 +76,8 @@ int main() {
         methods = ("void LLInventoryFilter::refreshViewFolders()",
                    "bool LLInventoryFilter::passesViewFolders(const LLUUID& id) const")
         native.NativeObjectToolsTests.compile_and_run(self, fixture + "".join(
-            native.function(source, signature) for signature in methods) + cases)
+            native.function(source, signature) for signature in methods) + native.function(
+                (native.ROOT / "llinventorypanel.cpp").read_text(), "void LLInventoryPanel::modelChanged(U32 mask)") + cases)
 
 
 if __name__ == "__main__":

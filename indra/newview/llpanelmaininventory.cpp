@@ -2655,10 +2655,14 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 
     const std::string command_name = userdata.asString();
 
-    if (command_name == "save_folder_view") { FSInventoryCustomTabs::createFolderView(this); return; }
     if (command_name == "review_bulk_changes")
     {
         FSFloaterInventoryBulk::showForSelection(getActivePanel());
+        return;
+    }
+    if (command_name == "save_folder_view")
+    {
+        FSInventoryCustomTabs::createFolderView(this);
         return;
     }
     if (command_name == "assistant_inventory_history")
