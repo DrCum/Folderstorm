@@ -49,6 +49,8 @@
 // Linden library includes
 #include "llaudioengine.h"
 #include "llbutton.h"
+#include "llcheckboxctrl.h"
+#include "rlvactions.h"
 #include "llglheaders.h"
 #include "llfloater.h"
 #include "llfloaterreg.h"
@@ -84,6 +86,8 @@ private:
 
 public:
     bool postBuild() override;
+    void onOpen(const LLSD&) override;
+    void draw() override;
 
     /// Obtain the data used to fill out the contents string. This is
     /// separated so that we can programmatically access the same info.
@@ -94,7 +98,13 @@ public:
 
 // <FS:Ansariel> Release notes link not updating
 //private:
-    void setSupportText(const std::string& server_release_notes_url);
+    void setSupportText();
+    void syncLocationChoice(bool reopening = false);
+    void onLocationChoice();
+    LLCheckBoxCtrl* mLocationChoice = nullptr;
+    LLUUID mReportSession, mReportRegion;
+    bool mCanShowLocation = false;
+    bool mRequestedNotes = false;
 
     // notifications for user requested checks
     static void showCheckUpdateNotification(S32 state);
@@ -106,7 +116,7 @@ public:
     static const std::string sCheckUpdateListenerName;
 
     static void startFetchServerReleaseNotes();
-    static void fetchServerReleaseNotesCoro(const std::string cap_url);
+    static void fetchServerReleaseNotesCoro(std::string cap_url, LLUUID session, LLUUID region_id);
     static void handleServerReleaseNotes(LLSD results);
 };
 
@@ -145,17 +155,8 @@ bool LLFloaterAbout::postBuild()
 
     static const LLUIColor about_color = LLUIColorTable::instance().getColor("TextFgReadOnlyColor");
 
-    if (gAgent.getRegion())
-    {
-        // start fetching server release notes URL
-        setSupportText(LLTrans::getString("RetrievingData"));
-        startFetchServerReleaseNotes();
-    }
-    else // not logged in
-    {
-        LL_DEBUGS("ViewerInfo") << "cannot display region info when not connected" << LL_ENDL;
-        setSupportText(LLTrans::getString("NotConnected"));
-    }
+    mLocationChoice = getChild<LLCheckBoxCtrl>("include_location");
+    mLocationChoice->setCommitCallback([this](LLUICtrl*, const LLSD&) { onLocationChoice(); });
 
     support_widget->blockUndo();
 
@@ -212,6 +213,46 @@ LLSD LLFloaterAbout::getInfo()
     return LLAppViewer::instance()->getViewerInfo();
 }
 
+void LLFloaterAbout::onOpen(const LLSD&)
+{
+    syncLocationChoice(true);
+}
+
+void LLFloaterAbout::draw()
+{
+    syncLocationChoice();
+    LLFloater::draw();
+}
+
+void LLFloaterAbout::syncLocationChoice(bool reopening)
+{
+    const auto* region = gAgent.getRegion();
+    const auto region_id = region ? region->getRegionID() : LLUUID::null;
+    const auto session = gAgent.getSessionID();
+    const bool allowed = !gDisconnected && region && session.notNull() && RlvActions::canShowLocation();
+    if (!reopening && session == mReportSession && region_id == mReportRegion && allowed == mCanShowLocation) return;
+
+    mReportSession = session;
+    mReportRegion = region_id;
+    mCanShowLocation = allowed;
+    mRequestedNotes = false;
+    mLocationChoice->set(false);
+    mLocationChoice->setEnabled(allowed);
+    setSupportText();
+}
+
+void LLFloaterAbout::onLocationChoice()
+{
+    syncLocationChoice();
+    if (mLocationChoice->get() && mCanShowLocation && !mRequestedNotes)
+    {
+        mRequestedNotes = true;
+        LLAppViewer::instance()->setServerReleaseNotesURL("");
+        startFetchServerReleaseNotes();
+    }
+    setSupportText();
+}
+
 /*static*/
 void LLFloaterAbout::startFetchServerReleaseNotes()
 {
@@ -225,12 +266,18 @@ void LLFloaterAbout::startFetchServerReleaseNotes()
     // an URL suitable for external browsers in the "Location:" HTTP header.
     std::string cap_url = region->getCapability("ServerReleaseNotes");
 
-    LLCoros::instance().launch("fetchServerReleaseNotesCoro", boost::bind(&LLFloaterAbout::fetchServerReleaseNotesCoro, cap_url));
+    if (cap_url.empty())
+    {
+        LLAppViewer::instance()->setServerReleaseNotesURL(LLTrans::getString("ErrorFetchingServerReleaseNotesURL"));
+        return;
+    }
+    LLCoros::instance().launch("fetchServerReleaseNotesCoro", boost::bind(&LLFloaterAbout::fetchServerReleaseNotesCoro,
+        cap_url, gAgent.getSessionID(), region->getRegionID()));
 
 }
 
 /*static*/
-void LLFloaterAbout::fetchServerReleaseNotesCoro(const std::string cap_url)
+void LLFloaterAbout::fetchServerReleaseNotesCoro(std::string cap_url, LLUUID session, LLUUID region_id)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("fetchServerReleaseNotesCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -242,6 +289,10 @@ void LLFloaterAbout::fetchServerReleaseNotesCoro(const std::string cap_url)
     httpOpts->setSSLVerifyPeer(false); // We want this data even if SSL verification fails
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts);
+
+    const auto* current = gAgent.getRegion();
+    if (gDisconnected || !current || gAgent.getSessionID() != session || current->getRegionID() != region_id
+        || current->getCapability("ServerReleaseNotes") != cap_url) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -279,7 +330,8 @@ void LLFloaterAbout::handleServerReleaseNotes(LLSD results)
     LLFloaterAbout* floater_about = LLFloaterReg::findTypedInstance<LLFloaterAbout>("sl_about");
     if (floater_about)
     {
-        floater_about->setSupportText(location);
+        floater_about->syncLocationChoice();
+        if (floater_about->mLocationChoice->get()) floater_about->setSupportText();
     }
 }
 
@@ -310,6 +362,7 @@ static LLFloaterAboutListener floaterAboutListener;
 
 void LLFloaterAbout::onClickCopyToClipboard()
 {
+    syncLocationChoice();
     LLViewerTextEditor *support_widget =
         getChild<LLViewerTextEditor>("support_editor", true);
     support_widget->selectAll();
@@ -322,7 +375,7 @@ void LLFloaterAbout::onClickUpdateCheck()
     setUpdateListener();
 }
 
-void LLFloaterAbout::setSupportText(const std::string& server_release_notes_url)
+void LLFloaterAbout::setSupportText()
 {
 #if LL_WINDOWS
     getWindow()->incBusyCount();
@@ -338,7 +391,9 @@ void LLFloaterAbout::setSupportText(const std::string& server_release_notes_url)
 
     LLUIColor about_color = LLUIColorTable::instance().getColor("TextFgReadOnlyColor");
     support_widget->clear();
-    support_widget->appendText(LLAppViewer::instance()->getViewerInfoString(),
+    const auto location = mCanShowLocation && mLocationChoice->get()
+        ? LLAppViewer::ReportLocation::Include : LLAppViewer::ReportLocation::Omit;
+    support_widget->appendText(LLAppViewer::instance()->getViewerInfoString(false, location),
                                false, LLStyle::Params() .color(about_color));
 }
 

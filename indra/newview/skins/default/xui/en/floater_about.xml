@@ -57,6 +57,10 @@ https://www.firestormviewer.org
         top_pad="5"
         height="25"
         width="180" />
+      <check_box name="include_location" label="Include in-world location"
+                 left_pad="12" top_delta="0" width="280" height="25" follows="left|top"
+                 initial_value="false"
+                 tool_tip="Show the current region, coordinates, and simulator details here and in the copied report." />
     </panel>
     <panel
       border="true"
