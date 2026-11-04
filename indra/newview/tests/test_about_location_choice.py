@@ -56,7 +56,7 @@ struct Agent{Region* region=nullptr;LLUUID session{1};Region* getRegion()const{r
 bool gDisconnected=false;
 struct Choice{bool value=false,enabled=false;void set(bool v){value=v;}void setEnabled(bool v){enabled=v;}};
 struct LLFloaterAbout {
-    LLUUID mReportSession,mReportRegion;bool mCanShowLocation=false,mRequestedNotes=false;
+    LLUUID mReportSession,mReportRegion;bool mCanShowLocation=false; int mNotesGeneration=0; struct {void disconnect(){}} mCapsReady;
     Choice* mLocationChoice;int redraws=0;
     void syncLocationChoice(bool reopening=false);void setSupportText(){++redraws;}
 };
@@ -88,6 +88,62 @@ int main(){
         native.NativeObjectToolsTests.compile_and_run(self, fixture + native.function(
             app, "std::string LLAppViewer::getViewerInfoString(bool default_string, ReportLocation location) const") +
             native.function(about, "void LLFloaterAbout::syncLocationChoice(bool reopening)") + cases)
+
+    def test_deferred_server_notes_belong_to_the_current_choice(self):
+        about = (native.ROOT / "llfloaterabout.cpp").read_text()
+        fixture = r"""
+#include <cassert>
+#include <functional>
+#include <string>
+#include <vector>
+using LLUUID=int; using U64=unsigned long long;
+struct LLFloater {virtual ~LLFloater()=default;};
+template<class T> struct LLHandle {T* ptr;T* get()const{return ptr;}};
+struct Connection {void disconnect(){}};
+struct LLViewerRegion {
+    bool ready=false;std::function<void(const LLUUID&,LLViewerRegion*)> notify;
+    bool capabilitiesReceived()const{return ready;}
+    std::string getCapability(const char*)const{return ready?"current-cap":"";}
+    Connection setCapabilitiesReceivedCallback(std::function<void(const LLUUID&,LLViewerRegion*)> fn){notify=fn;return {};}
+};
+struct Agent{LLViewerRegion reg;LLViewerRegion* getRegion(){return &reg;}} gAgent;
+struct LLCoros {
+    std::vector<std::function<void()>> calls;
+    static LLCoros& instance(){static LLCoros c;return c;}
+    void launch(const char*,std::function<void()> fn){calls.push_back(fn);}
+};
+struct LLTrans{static std::string getString(const char* s){return s;}};
+struct LLAppViewer {static LLAppViewer* instance(){static LLAppViewer a;return &a;}void setServerReleaseNotesURL(std::string){}};
+struct Choice{bool on=true;bool get()const{return on;}};
+struct LLFloaterAbout:LLFloater {
+    Choice* mLocationChoice;bool mCanShowLocation=true;U64 mNotesGeneration=0;
+    Connection mCapsReady; int accepted=0;
+    void syncLocationChoice(){}void setSupportText(){}
+    void onLocationChoice();void startFetchServerReleaseNotes();
+    LLHandle<LLFloater> getHandle(){return {this};}
+    static LLFloaterAbout* notesOwner(const LLHandle<LLFloater>&,U64);
+    static void fetchServerReleaseNotesCoro(std::string cap,LLHandle<LLFloater> owner,U64 gen){
+        assert(cap=="current-cap");if(auto* about=notesOwner(owner,gen)) ++about->accepted;
+    }
+};
+"""
+        signatures = ("void LLFloaterAbout::onLocationChoice()",
+                      "LLFloaterAbout* LLFloaterAbout::notesOwner(const LLHandle<LLFloater>& handle, U64 generation)",
+                      "void LLFloaterAbout::startFetchServerReleaseNotes()")
+        cases = r"""
+int main(){
+    Choice c;LLFloaterAbout f;f.mLocationChoice=&c;
+    auto& jobs=LLCoros::instance().calls;
+    f.onLocationChoice();auto old_notice=gAgent.reg.notify;assert(old_notice && jobs.empty());
+    c.on=false;f.onLocationChoice();gAgent.reg.ready=true;old_notice(1,&gAgent.reg);assert(jobs.empty());
+    gAgent.reg.ready=false;c.on=true;f.onLocationChoice();gAgent.reg.ready=true;
+    gAgent.reg.notify(1,&gAgent.reg);assert(jobs.size()==1);
+    c.on=false;f.onLocationChoice();jobs.front()();assert(f.accepted==0);
+    c.on=true;f.onLocationChoice();assert(jobs.size()==2);jobs.back()();assert(f.accepted==1);
+}
+"""
+        native.NativeObjectToolsTests.compile_and_run(self, fixture + "".join(
+            native.function(about, signature) for signature in signatures) + cases)
 
 
 if __name__ == "__main__":

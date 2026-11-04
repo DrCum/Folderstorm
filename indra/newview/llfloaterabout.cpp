@@ -87,6 +87,7 @@ private:
 public:
     bool postBuild() override;
     void onOpen(const LLSD&) override;
+    void onClose(bool) override;
     void draw() override;
 
     /// Obtain the data used to fill out the contents string. This is
@@ -104,7 +105,9 @@ public:
     LLCheckBoxCtrl* mLocationChoice = nullptr;
     LLUUID mReportSession, mReportRegion;
     bool mCanShowLocation = false;
-    bool mRequestedNotes = false;
+    U64 mNotesGeneration = 0;
+    boost::signals2::scoped_connection mCapsReady;
+    static LLFloaterAbout* notesOwner(const LLHandle<LLFloater>& handle, U64 generation);
 
     // notifications for user requested checks
     static void showCheckUpdateNotification(S32 state);
@@ -115,9 +118,9 @@ public:
     // listener name for update checks
     static const std::string sCheckUpdateListenerName;
 
-    static void startFetchServerReleaseNotes();
-    static void fetchServerReleaseNotesCoro(std::string cap_url, LLUUID session, LLUUID region_id);
-    static void handleServerReleaseNotes(LLSD results);
+    void startFetchServerReleaseNotes();
+    static void fetchServerReleaseNotesCoro(std::string cap_url, LLHandle<LLFloater> owner, U64 generation);
+    void handleServerReleaseNotes(LLSD results);
 };
 
 
@@ -218,6 +221,12 @@ void LLFloaterAbout::onOpen(const LLSD&)
     syncLocationChoice(true);
 }
 
+void LLFloaterAbout::onClose(bool)
+{
+    ++mNotesGeneration;
+    mCapsReady.disconnect();
+}
+
 void LLFloaterAbout::draw()
 {
     syncLocationChoice();
@@ -235,7 +244,8 @@ void LLFloaterAbout::syncLocationChoice(bool reopening)
     mReportSession = session;
     mReportRegion = region_id;
     mCanShowLocation = allowed;
-    mRequestedNotes = false;
+    ++mNotesGeneration;
+    mCapsReady.disconnect();
     mLocationChoice->set(false);
     mLocationChoice->setEnabled(allowed);
     setSupportText();
@@ -244,20 +254,39 @@ void LLFloaterAbout::syncLocationChoice(bool reopening)
 void LLFloaterAbout::onLocationChoice()
 {
     syncLocationChoice();
-    if (mLocationChoice->get() && mCanShowLocation && !mRequestedNotes)
+    ++mNotesGeneration;
+    mCapsReady.disconnect();
+    if (mLocationChoice->get() && mCanShowLocation)
     {
-        mRequestedNotes = true;
         LLAppViewer::instance()->setServerReleaseNotesURL("");
         startFetchServerReleaseNotes();
     }
     setSupportText();
 }
 
-/*static*/
+LLFloaterAbout* LLFloaterAbout::notesOwner(const LLHandle<LLFloater>& handle, U64 generation)
+{
+    auto* about = dynamic_cast<LLFloaterAbout*>(handle.get());
+    if (!about || about->mNotesGeneration != generation) return nullptr;
+    about->syncLocationChoice();
+    return about->mNotesGeneration == generation && about->mLocationChoice->get() ? about : nullptr;
+}
+
 void LLFloaterAbout::startFetchServerReleaseNotes()
 {
     LLViewerRegion* region = gAgent.getRegion();
     if (!region) return;
+
+    const auto handle = getHandle();
+    const auto generation = mNotesGeneration;
+    mCapsReady.disconnect();
+    if (!region->capabilitiesReceived())
+    {
+        mCapsReady = region->setCapabilitiesReceivedCallback([handle, generation](const LLUUID&, LLViewerRegion*) {
+            if (auto* about = notesOwner(handle, generation)) about->startFetchServerReleaseNotes();
+        });
+        return;
+    }
 
     // We cannot display the URL returned by the ServerReleaseNotes capability
     // because opening it in an external browser will trigger a warning about untrusted
@@ -269,15 +298,17 @@ void LLFloaterAbout::startFetchServerReleaseNotes()
     if (cap_url.empty())
     {
         LLAppViewer::instance()->setServerReleaseNotesURL(LLTrans::getString("ErrorFetchingServerReleaseNotesURL"));
+        setSupportText();
         return;
     }
-    LLCoros::instance().launch("fetchServerReleaseNotesCoro", boost::bind(&LLFloaterAbout::fetchServerReleaseNotesCoro,
-        cap_url, gAgent.getSessionID(), region->getRegionID()));
+    LLCoros::instance().launch("fetchServerReleaseNotesCoro", [cap_url, handle, generation] {
+        fetchServerReleaseNotesCoro(cap_url, handle, generation);
+    });
 
 }
 
 /*static*/
-void LLFloaterAbout::fetchServerReleaseNotesCoro(std::string cap_url, LLUUID session, LLUUID region_id)
+void LLFloaterAbout::fetchServerReleaseNotesCoro(std::string cap_url, LLHandle<LLFloater> owner, U64 generation)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("fetchServerReleaseNotesCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -290,23 +321,26 @@ void LLFloaterAbout::fetchServerReleaseNotesCoro(std::string cap_url, LLUUID ses
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts);
 
-    const auto* current = gAgent.getRegion();
-    if (gDisconnected || !current || gAgent.getSessionID() != session || current->getRegionID() != region_id
-        || current->getCapability("ServerReleaseNotes") != cap_url) return;
+    auto* about = notesOwner(owner, generation);
+    if (!about) return;
+    if (!gAgent.getRegion()->capabilitiesReceived() || gAgent.getRegion()->getCapability("ServerReleaseNotes") != cap_url)
+    {
+        about->startFetchServerReleaseNotes();
+        return;
+    }
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
     if (!status)
     {
-        handleServerReleaseNotes(httpResults);
+        about->handleServerReleaseNotes(httpResults);
     }
     else
     {
-        handleServerReleaseNotes(result);
+        about->handleServerReleaseNotes(result);
     }
 }
 
-/*static*/
 void LLFloaterAbout::handleServerReleaseNotes(LLSD results)
 {
     LLSD http_headers;
@@ -327,12 +361,7 @@ void LLFloaterAbout::handleServerReleaseNotes(LLSD results)
     }
     LLAppViewer::instance()->setServerReleaseNotesURL(location);
 
-    LLFloaterAbout* floater_about = LLFloaterReg::findTypedInstance<LLFloaterAbout>("sl_about");
-    if (floater_about)
-    {
-        floater_about->syncLocationChoice();
-        if (floater_about->mLocationChoice->get()) floater_about->setSupportText();
-    }
+    setSupportText();
 }
 
 class LLFloaterAboutListener: public LLEventAPI
