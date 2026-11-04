@@ -16,6 +16,10 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "fsfloaterinventorybulk.h"
+#include "fsfloaterfolderjump.h"
+#include "lltextbox.h"
+#include "llinventoryfunctions.h"
+#include "llpanelmaininventory.h"
 #include "fsinventorybulk.h"
 #include "llagent.h"
 #include "llappviewer.h"
@@ -63,6 +67,7 @@ bool FSFloaterInventoryBulk::postBuild()
     bind("history", &FSFloaterInventoryBulk::loadHistory);
     bind("review_undo", &FSFloaterInventoryBulk::reviewUndo);
     bind("use_folder", &FSFloaterInventoryBulk::chooseDestination);
+    bind("browse_folder", &FSFloaterInventoryBulk::browseDestination);
     bind("clear_history", &FSFloaterInventoryBulk::clearHistory);
     getChild<LLUICtrl>("open_operation")->setCommitCallback([this](LLUICtrl*, const LLSD&)
     {
@@ -99,6 +104,7 @@ bool FSFloaterInventoryBulk::postBuild()
 
 void FSFloaterInventoryBulk::onOpen(const LLSD&)
 {
+    if (mSession != gAgent.getSessionID()) childSetValue("destination", "");
     mPage = 0;
     loadHistory();
 }
@@ -125,6 +131,11 @@ void FSFloaterInventoryBulk::loadSelection(LLInventoryPanel* panel)
     mData = LLSD(); mPlanID.clear(); mOperationID.clear();
     mMode = Mode::Compose; mPage = 0; mSession = gAgent.getSessionID();
     panel = panel ? panel : LLInventoryPanel::getActiveInventoryPanel(false);
+    mInventoryWindow.markDead();
+    if (panel)
+    {
+        if (auto* inventory = panel->getParentByType<LLPanelMainInventory>()) mInventoryWindow = inventory->getHandle();
+    }
     if (panel)
         for (auto* item : panel->getSelectedItems())
         {
@@ -160,8 +171,46 @@ void FSFloaterInventoryBulk::chooseDestination()
     { reportError(getString("select_folder")); return; }
     const auto id = selectedID(*panel->getSelectedItems().begin());
     if (!gInventory.getCategory(id)) { reportError(getString("select_folder")); return; }
+    acceptDestination(id, mGeneration, mSession);
+}
+
+void FSFloaterInventoryBulk::browseDestination()
+{
+    if (mBusy || mSelection.size() == 0 || mSession != gAgent.getSessionID()) return;
+    auto* inventory = dynamic_cast<LLPanelMainInventory*>(mInventoryWindow.get());
+    if (!inventory || !inventory->isInVisibleChain())
+    {
+        auto* panel = LLInventoryPanel::getActiveInventoryPanel(true);
+        inventory = panel ? panel->getParentByType<LLPanelMainInventory>() : nullptr;
+    }
+    if (!inventory) { reportError(getString("need_inventory")); return; }
+
+    const auto handle = getHandle();
+    const auto generation = mGeneration;
+    const auto session = mSession;
+    FSFloaterFolderJump::showFrom(*inventory, this, [handle, generation, session](const LLUUID& id) {
+        if (auto* ui = dynamic_cast<FSFloaterInventoryBulk*>(handle.get()))
+            ui->acceptDestination(id, generation, session);
+    });
+}
+
+void FSFloaterInventoryBulk::acceptDestination(const LLUUID& id, U64 generation, const LLUUID& session)
+{
+    if (mBusy || mSelection.size() == 0 || generation != mGeneration || session != mSession
+        || session != gAgent.getSessionID() || gDisconnected || !isInVisibleChain()
+        || getChild<LLComboBox>("kind")->getValue().asString() != "move" || !gInventory.getCategory(id)) return;
     childSetValue("destination", id.asString());
     invalidatePreview();
+}
+
+void FSFloaterInventoryBulk::updateDestinationPath()
+{
+    const auto text = getChild<LLLineEditor>("destination")->getText();
+    const LLUUID id = LLUUID::validate(text) ? LLUUID(text) : LLUUID::null;
+    const std::string path = id.notNull() && gInventory.getCategory(id) ? make_inventory_path(id) : "";
+    auto* display = getChild<LLTextBox>("destination_path");
+    display->setText(path.empty() ? getString(text.empty() ? "choose_hint" : "unresolved_folder") : path);
+    display->setToolTip(path);
 }
 
 void FSFloaterInventoryBulk::prepare()
@@ -380,6 +429,12 @@ void FSFloaterInventoryBulk::updateButtons()
     const bool rename = getChild<LLComboBox>("kind")->getValue().asString() == "rename";
     getChild<LLUICtrl>("kind")->setEnabled(selection);
     getChild<LLUICtrl>("name_pattern")->setEnabled(selection && rename);
+    for (const char* name : {"pattern_label", "name_pattern", "pattern_help"})
+        getChild<LLView>(name)->setVisible(rename);
+    for (const char* name : {"destination", "destination_path", "destination_label_ui", "use_folder", "browse_folder"})
+        getChild<LLView>(name)->setVisible(!rename);
+    if (!rename) updateDestinationPath();
+    getChild<LLUICtrl>("browse_folder")->setEnabled(selection && !rename);
     getChild<LLUICtrl>("destination")->setEnabled(selection && !rename);
     getChild<LLUICtrl>("use_folder")->setEnabled(selection && !rename);
     getChild<LLUICtrl>("preview")->setEnabled(selection);
@@ -407,6 +462,7 @@ void FSFloaterInventoryBulk::draw()
 {
     if (mSession != gAgent.getSessionID() || (gDisconnected && (!mData.isUndefined() || mSelection.size())))
     {
+        mInventoryWindow.markDead();
         ++mGeneration; mBusy = false; mSelection = LLSD::emptyArray();
         mData = LLSD(); mPlanID.clear(); mOperationID.clear(); mHistoryTotal = 0;
         mSession = gAgent.getSessionID(); mMode = Mode::Compose;
@@ -436,6 +492,7 @@ void FSFloaterInventoryBulk::draw()
 
 void FSFloaterInventoryBulk::onClose(bool)
 {
+    mInventoryWindow.markDead();
     // Closing never cancels submitted server work. Late callbacks cannot reopen
     // this floater or expose a prior session's labels.
     ++mGeneration; mBusy = false; mSelection = LLSD::emptyArray(); mData = LLSD();

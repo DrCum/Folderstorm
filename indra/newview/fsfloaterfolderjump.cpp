@@ -57,11 +57,13 @@ FSFloaterFolderJump::~FSFloaterFolderJump()
     if (gInventory.containsObserver(this)) gInventory.removeObserver(this);
 }
 
-void FSFloaterFolderJump::showFrom(LLPanelMainInventory& inventory)
+void FSFloaterFolderJump::showFrom(LLPanelMainInventory& inventory, LLView* requester, FolderChoice choose)
 {
     if (!gInventory.isInventoryUsable() || !gAgent.getRegion() || RlvActions::hasBehaviour(RLV_BHVR_SHOWINV)) return;
     auto* floater = LLFloaterReg::getTypedInstance<FSFloaterFolderJump>("inventory_folder_jump");
     if (!floater) return;
+    floater->mRequester = requester ? requester->getHandle() : LLHandle<LLView>();
+    floater->mChoose = std::move(choose);
     floater->mOwner = inventory.getHandle();
     floater->mSession = gAgent.getSessionID();
     floater->openFloater();
@@ -70,6 +72,7 @@ void FSFloaterFolderJump::showFrom(LLPanelMainInventory& inventory)
 LLPanelMainInventory* FSFloaterFolderJump::owner() const
 {
     auto* panel = dynamic_cast<LLPanelMainInventory*>(mOwner.get());
+    if (mChoose && (!mRequester.get() || !mRequester.get()->isInVisibleChain())) return nullptr;
     if (!panel || !panel->isInVisibleChain() || mSession.isNull() || mSession != gAgent.getSessionID()
         || gDisconnected || !gAgent.getRegion() || !gInventory.isInventoryUsable()
         || RlvActions::hasBehaviour(RLV_BHVR_SHOWINV)) return nullptr;
@@ -106,6 +109,9 @@ void FSFloaterFolderJump::onOpen(const LLSD&)
 {
     if (!owner()) { closeFloater(); return; }
     if (!gInventory.containsObserver(this)) gInventory.addObserver(this);
+    setTitle(getString(mChoose ? "choose_title" : "navigate_title"));
+    mOpen->setLabel(getString(mChoose ? "choose_action" : "navigate_action"));
+    mOpen->setToolTip(getString(mChoose ? "choose_tip" : "navigate_tip"));
     mRequestedQuery.clear();
     mResults->deleteAllItems();
     mQuery->setText(LLStringExplicit(""));
@@ -129,6 +135,8 @@ void FSFloaterFolderJump::onClose(bool)
     if (gInventory.containsObserver(this)) gInventory.removeObserver(this);
     clearIndex();
     mResults->deleteAllItems();
+    mChoose = {};
+    mRequester.markDead();
     mOwner.markDead();
     mSession.setNull();
 }
@@ -283,7 +291,9 @@ void FSFloaterFolderJump::openSelected()
         mIndexDirty = true;
         return;
     }
+    auto choose = std::move(mChoose);
     closeFloater();
+    if (choose) { choose(id); return; }
     if (inventory->isSingleFolderMode()) inventory->setSingleFolderViewRoot(id, false);
     else LLPanelMainInventory::newFolderWindow(id);
 }

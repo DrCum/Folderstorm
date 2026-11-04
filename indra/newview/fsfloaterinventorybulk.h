@@ -46,6 +46,9 @@ private:
     void execute();
     void reviewUndo();
     void chooseDestination();
+    void browseDestination();
+    void acceptDestination(const LLUUID& id, U64 generation, const LLUUID& session);
+    void updateDestinationPath();
     void invalidatePreview();
     void updateRows();
     void updateButtons();
@@ -60,6 +63,7 @@ private:
     std::string mPlanID;
     std::string mOperationID;
     LLUUID mSession;
+    LLHandle<LLView> mInventoryWindow;
     S32 mPage = 0;
     S32 mHistoryTotal = 0;
     U64 mGeneration = 0;
