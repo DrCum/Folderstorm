@@ -66,11 +66,16 @@ struct LLView
     }
 };
 
+constexpr char first_id[] = "00000000-0000-4000-8000-000000000001";
+constexpr char saved_id[] = "00000000-0000-4000-8000-000000000002";
+constexpr char third_id[] = "00000000-0000-4000-8000-000000000003";
+constexpr char unworn_id[] = "00000000-0000-4000-8000-000000000004";
+
 namespace FSWorkspaceContext
 {
     std::vector<HUD> attachedHUDs()
     {
-        return {{"first", "HUD", 31}, {"saved", "Renamed HUD", 32}, {"third", "HUD", 31}};
+        return {{first_id, "HUD", 31}, {saved_id, "Renamed HUD", 32}, {third_id, "HUD", 31}};
     }
 }
 
@@ -80,14 +85,14 @@ int main()
 {
     LLView view;
     FSWorkspaceContext::Options saved;
-    saved.huds = {{"saved", "HUD", 35}, {"unworn", "HUD", 31}};
+    saved.huds = {{saved_id, "HUD", 35}, {unworn_id, "HUD", 31}};
     FSWorkspaceContextUI::setOptions(&view, saved);
     auto restored = FSWorkspaceContextUI::options(&view);
     for (int pass = 0; pass != 2; ++pass)
     {
         if (restored.huds.size() != saved.huds.size())
         {
-            std::cerr << "Expected saved and unworn, got";
+            std::cerr << "Expected " << saved_id << " and " << unworn_id << ", got";
             for (const auto& hud : restored.huds) std::cerr << ' ' << hud.item;
             std::cerr << '\n';
             return 1;
