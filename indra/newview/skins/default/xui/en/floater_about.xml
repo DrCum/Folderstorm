@@ -33,7 +33,7 @@
         top="16"
         width="480"
         wrap="true">
-[https://github.com/DrCum/Folderstorm Folderstorm] is a fork of the [https://www.firestormviewer.org Firestorm viewer].
+[https://folderstorm.com Folderstorm] is based on the [https://www.firestormviewer.org Firestorm] viewer.
       </text>
       <text_editor
         parse_urls="true"
