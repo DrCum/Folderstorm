@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "fsinventoryarchive.h"
 #include "llpanelmaininventory.h"
 #include "fsfloaterinventorybulk.h"
 #include "fsworkspacelayout.h"
@@ -457,6 +458,9 @@ bool LLPanelMainInventory::postBuild()
     mGalleryRootUpdatedConnection = mCombinationGalleryPanel->setRootChangedCallback(boost::bind(&LLPanelMainInventory::onCombinationRootChanged, this, true));
     mCombinationGalleryPanel->setSelectionChangeCallback(boost::bind(&LLPanelMainInventory::onCombinationGallerySelectionChanged, this, _1));
 
+    mArchiveConnection = gSavedPerAccountSettings.getControl(fs_inventory_archive::setting)->getSignal()->connect(
+        [this](LLControlVariable*, const LLSD&, const LLSD&) { updateArchiveFilters(); });
+    updateArchiveFilters();
     initListCommandsHandlers();
     const std::string sound_upload_cost_str = std::to_string(LLAgentBenefitsMgr::current().getSoundUploadCost());
     const std::string animation_upload_cost_str = std::to_string(LLAgentBenefitsMgr::current().getAnimationUploadCost());
@@ -1390,8 +1394,19 @@ bool LLPanelMainInventory::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
 }
 
 // virtual
-void LLPanelMainInventory::changed(U32)
+void LLPanelMainInventory::changed(U32 mask)
 {
+    if ((mask & LLInventoryObserver::STRUCTURE) && mArchiveConnection.connected()
+        && mAllItemsPanel->getFilter().hasArchivedFolders())
+    {
+        for (const auto& id : gInventory.getChangedIDs())
+            if (gInventory.getCategory(id))
+            {
+                // A move can change visibility of an entire already-filtered subtree.
+                updateArchiveFilters(true);
+                break;
+            }
+    }
     updateItemcountText();
 }
 
@@ -2648,6 +2663,35 @@ void LLPanelMainInventory::saveTexture(const LLSD& userdata)
     }
 }
 
+void LLPanelMainInventory::applyArchiveFilter(LLInventoryFilter& filter) const
+{
+    std::set<LLUUID> ids;
+    if (!mIncludeArchived)
+    {
+        const LLSD folders = gSavedPerAccountSettings.getLLSD(fs_inventory_archive::setting);
+        for (auto it = folders.beginMap(); it != folders.endMap(); ++it)
+        {
+            LLUUID id;
+            if (id.set(it->first, false) && id.notNull()) ids.insert(id);
+        }
+    }
+    filter.setArchivedFolders(ids);
+}
+
+void LLPanelMainInventory::updateArchiveFilters(bool hierarchy_changed)
+{
+    auto update = [&](LLInventoryFilter& filter) {
+        if (hierarchy_changed) filter.setModified(LLInventoryFilter::FILTER_RESTART);
+        else applyArchiveFilter(filter);
+    };
+    for (S32 i = 0; i < mFilterTabs->getTabCount(); ++i)
+        if (auto* panel = dynamic_cast<LLInventoryPanel*>(mFilterTabs->getPanelByIndex(i)))
+            if (panel != mWornItemsPanel && panel != mFavoritesPanel) update(panel->getFilter());
+    update(mCombinationInventoryPanel->getFilter());
+    update(mCombinationGalleryPanel->getFilter());
+    mCombinationGalleryPanel->clearArchivedSelection();
+}
+
 void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 {
     if (!isActionEnabled(userdata))
@@ -2655,6 +2699,12 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 
     const std::string command_name = userdata.asString();
 
+    if (command_name == "include_archived")
+    {
+        mIncludeArchived = !mIncludeArchived;
+        updateArchiveFilters();
+        return;
+    }
     if (command_name == "review_bulk_changes")
     {
         FSFloaterInventoryBulk::showForSelection(getActivePanel());
@@ -3096,6 +3146,7 @@ bool LLPanelMainInventory::isActionChecked(const LLSD& userdata)
 {
     U32 sort_order_mask = (mSingleFolderMode && isGalleryViewMode()) ? mCombinationGalleryPanel->getSortOrder() :  getActivePanel()->getSortOrder();
     const std::string command_name = userdata.asString();
+    if (command_name == "include_archived") return mIncludeArchived;
     if (command_name == "sort_by_name")
     {
         return ~sort_order_mask & LLInventoryFilter::SO_DATE;

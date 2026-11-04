@@ -101,9 +101,35 @@ LLInventoryFilter::LLInventoryFilter(const Params& p)
     LLStringUtil::toUpper(mUsername);
 }
 
+void LLInventoryFilter::setArchivedFolders(const std::set<LLUUID>& ids)
+{
+    if (mArchivedFolders == ids) return;
+    mArchivedFolders = ids;
+    setModified(FILTER_RESTART);
+}
+
+bool LLInventoryFilter::passesArchive(const LLUUID& id) const
+{
+    if (mArchivedFolders.empty()) return true;
+    const LLInventoryObject* object = gInventory.getObject(id);
+    for (S32 depth = 0; object && depth < 256; ++depth)
+    {
+        if (mArchivedFolders.count(object->getUUID()))
+        {
+            // A folder moved to Trash must remain discoverable for recovery.
+            return gInventory.isObjectDescendentOf(object->getUUID(),
+                gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH));
+        }
+        object = gInventory.getCategory(object->getParentUUID());
+    }
+    return true;
+}
+
 bool LLInventoryFilter::check(const LLFolderViewModelItem* item)
 {
     const LLFolderViewModelItemInventory* listener = dynamic_cast<const LLFolderViewModelItemInventory*>(item);
+
+    if (!passesArchive(listener->getUUID())) return false;
 
     // If it's a folder and we're showing all folders, return automatically.
     const bool is_folder = listener->getInventoryType() == LLInventoryType::IT_CATEGORY;
@@ -210,6 +236,7 @@ bool LLInventoryFilter::checkFolder(const LLFolderViewModelItem* item) const
 
 bool LLInventoryFilter::checkFolder(const LLUUID& folder_id) const
 {
+    if (!passesArchive(folder_id)) return false;
     // we're showing all folders, overriding filter
     if (mFilterOps.mShowFolderState == LLInventoryFilter::SHOW_ALL_FOLDERS)
     {
