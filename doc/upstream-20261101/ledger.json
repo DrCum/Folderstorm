@@ -1,0 +1,1278 @@
+{
+  "reviewBase": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "scope": "Bounded completed GitHub Manager handoff, 41 candidates. No merge or release authorized.",
+  "candidates": [
+    {
+      "source": "fa8967bb61",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "No source ancestor or stable patch ID equivalent in main; checked earlier #32/#66 integrations.",
+        "Provenance retained in individual author-preserving commits."
+      ],
+      "pr": 163,
+      "branch": "upstream/20261101-memory-safety",
+      "tests": [
+        "3 compiled production-snippet checks",
+        "real-header Linux syntax checks for all 3 production files",
+        "merge-tree clean with held #160/#161/#162"
+      ],
+      "fullSource": "fa8967bb61cfd7787a0a01c0bc3dac11903b7282",
+      "subject": "Fix stack-buffer-overflow in set_thread_name on Windows",
+      "files": [
+        "indra/llcommon/llthread.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/fa8967bb61cfd7787a0a01c0bc3dac11903b7282",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "00f590b6d469e0f52e878b14da901edfa118a638",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "64966618596f071752e1f85bcb8f980d2f4004c6",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "d67326e620",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "No source ancestor or stable patch ID equivalent in main; checked earlier #32/#66 integrations.",
+        "Provenance retained in individual author-preserving commits."
+      ],
+      "pr": 163,
+      "branch": "upstream/20261101-memory-safety",
+      "tests": [
+        "3 compiled production-snippet checks",
+        "real-header Linux syntax checks for all 3 production files",
+        "merge-tree clean with held #160/#161/#162"
+      ],
+      "fullSource": "d67326e6208cb6ac65561d44ea70d3c395e40474",
+      "subject": "Fix heap-use-after-free in LLDrawInfo texture matrix",
+      "files": [
+        "indra/newview/llvovolume.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/d67326e6208cb6ac65561d44ea70d3c395e40474",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "6640f690e6f26b5e682c9d0ac10cc436b14438c3",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "64966618596f071752e1f85bcb8f980d2f4004c6",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "1af02acdf5",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "partially-implemented-held-risk",
+      "evidence": [
+        "Only safe HTTPStats/service ordering hunk applied. Full patch archived. Hard-cancel uses TerminateThread/pthread_cancel plus sleep, with no demonstrated join; held pending shutdown strategy review."
+      ],
+      "pr": 173,
+      "branch": "risk/20261101-http-shutdown",
+      "tests": [
+        "compiled production cooperative teardown-order/idempotence test",
+        "real-header Linux syntax; trial merges with held PRs clean"
+      ],
+      "fullSource": "1af02acdf5719fc56400499a80c2a052d1cb6f41",
+      "subject": "#6486 HTTP crash during shutdown",
+      "files": [
+        "indra/llcorehttp/_httpservice.cpp",
+        "indra/llcorehttp/httprequest.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/1af02acdf5719fc56400499a80c2a052d1cb6f41",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "c69cb0e3e17a53cc684d2a5aee1dec8e9f67cb3a",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-http/README.md",
+      "head": "e233acbd04d0438cc593e8fcd39d1d00bd4bf593",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "fd2040cf16",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
+      "fullSource": "fd2040cf169e416f855d914c704179a2ddcf43e7",
+      "subject": "#6501 Crash at LLFloater::getHost",
+      "files": [
+        "indra/newview/llfloaterimcontainer.cpp",
+        "indra/newview/llfloaterimcontainer.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/fd2040cf169e416f855d914c704179a2ddcf43e7",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "3fa98e27adc5f3de0081127fcd96721d990ce18c",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "e095a178191f0699837b01c16d4fb235d7fe68ac",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "89a5c6d003",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
+      "fullSource": "89a5c6d0038bd18d7d6b713da92d5032fe8ff0a8",
+      "subject": "#6555 fix crash at LLDirPicker::getDir",
+      "files": [
+        "indra/newview/lldirpicker.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/89a5c6d0038bd18d7d6b713da92d5032fe8ff0a8",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "7a8d302c61e48403b4f7a632c6d79b86a54dce24",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "e095a178191f0699837b01c16d4fb235d7fe68ac",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "6d88ec304f",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
+      "fullSource": "6d88ec304f493180d25e36b90872d388e3b4d20b",
+      "subject": "Fix uninitialised LLWorld members read by LLPanelObject::postBuild",
+      "files": [
+        "indra/newview/llworld.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/6d88ec304f493180d25e36b90872d388e3b4d20b",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "3aaebb583f8979175fcc49ed53309d77f6570169",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "26131a98082be749327fa30c66a211561f56e6db",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "08a4fb5c44",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
+      "fullSource": "08a4fb5c44aa6ef90e0cee16cd0e24bfdf32f82d",
+      "subject": "Fix invalid downcasts in FSFloaterPoser scroll lists",
+      "files": [
+        "indra/newview/fsfloaterposer.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/08a4fb5c44aa6ef90e0cee16cd0e24bfdf32f82d",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "2b7cd97d1e5cddfc782e6178bb7cfcb0f17694c2",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "26131a98082be749327fa30c66a211561f56e6db",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "524b32142f",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
+      "fullSource": "524b32142f73e9af4995e8f8b51b6d329da3d5b3",
+      "subject": "Fix use of uninitialised mIsAnimesh in LLVOAvatar",
+      "files": [
+        "indra/newview/llvoavatar.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/524b32142f73e9af4995e8f8b51b6d329da3d5b3",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "9b9cb8172b255d50fd3c772c3ef6357ca3c5a0a8",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "26131a98082be749327fa30c66a211561f56e6db",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "168ac4d590",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "#161 overlaps avatar files without text conflicts; no experimental code imported."
+      ],
+      "pr": 166,
+      "branch": "upstream/20261101-avatar-initialization",
+      "tests": [
+        "real-header Linux syntax for all 3 .cpp files (poser with native PCH)",
+        "23 pose source-contract checks",
+        "clean trial merges with held PRs and preceding batches"
+      ],
+      "fullSource": "168ac4d5903f2e3097aef7c85ae4635ce9e6dfe3",
+      "subject": "Fix use of uninitialised mVisibleTyping in LLVOAvatar",
+      "files": [
+        "indra/newview/llvoavatar.cpp",
+        "indra/newview/llvoavatar.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/168ac4d5903f2e3097aef7c85ae4635ce9e6dfe3",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "eb34f0b8d40a52225c1528bd3d23bfbe92bdf9e7",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "26131a98082be749327fa30c66a211561f56e6db",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "88ef9b00a5",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
+      "fullSource": "88ef9b00a56037b4f9072dc0a872dbf4a936169f",
+      "subject": "Fix FSPanelLogin callbacks undefined behaviour during destruction",
+      "files": [
+        "indra/newview/fspanellogin.cpp",
+        "indra/newview/fspanellogin.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/88ef9b00a56037b4f9072dc0a872dbf4a936169f",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "a0ab3a3c695097b115e3bbed95196af9f19081cf",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "e095a178191f0699837b01c16d4fb235d7fe68ac",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "aa72e4d949",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 165,
+      "branch": "upstream/20261101-ui-lifetimes",
+      "tests": [
+        "4 focused adapter/source checks",
+        "2 production syntax checks; Windows picker uncompiled (GTK harness blocker)",
+        "clean trial merges #160/#161/#162/#163"
+      ],
+      "fullSource": "aa72e4d9494b285428d4233a8d7cdb31fafde825",
+      "subject": "Fix undefined behaviour using FS modified e_insertion_point",
+      "files": [
+        "indra/llui/lltabcontainer.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/aa72e4d9494b285428d4233a8d7cdb31fafde825",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "c69118e1d0b381e7a50524ff0f2f2454fe6bd154",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "e095a178191f0699837b01c16d4fb235d7fe68ac",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "2200e164f4",
+      "group": "Crash and lifetime safety",
+      "priority": 1,
+      "status": "implemented",
+      "evidence": [
+        "No source ancestor or stable patch ID equivalent in main; checked earlier #32/#66 integrations.",
+        "Provenance retained in individual author-preserving commits."
+      ],
+      "pr": 163,
+      "branch": "upstream/20261101-memory-safety",
+      "tests": [
+        "3 compiled production-snippet checks",
+        "real-header Linux syntax checks for all 3 production files",
+        "merge-tree clean with held #160/#161/#162"
+      ],
+      "fullSource": "2200e164f48b03a3de2c5c4fc50df963aadd1855",
+      "subject": "#6475 Crash on domSource::getFloat_array",
+      "files": [
+        "indra/llprimitive/lldaeloader.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/2200e164f48b03a3de2c5c4fc50df963aadd1855",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "e717bced5893366e4d118df5df51f131bda7efbd",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "64966618596f071752e1f85bcb8f980d2f4004c6",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "9879049d15",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "9879049d15ebf13de76e1338bf139c36528a91a1",
+      "subject": "Fix mHypergrid in fsslurl being undefined and being overwritten to false in some constructors",
+      "files": [
+        "indra/newview/fsslurl.cpp",
+        "indra/newview/fsslurl.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/9879049d15ebf13de76e1338bf139c36528a91a1",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "3910e2d04cc760994a7e5392f7c2bbf4f5d2683b",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "f34effb391",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "f34effb39127d32d37053c7651955a0eaa7de6b2",
+      "subject": "Preserve UTF-8 region names when parsing OpenSim SLURLs",
+      "files": [
+        "indra/newview/fsslurl.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/f34effb39127d32d37053c7651955a0eaa7de6b2",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "163905de01d6274591f2b9db9acd9e2dcb83e437",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "00da4e64b3",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "00da4e64b3c8e75ab55cf1dd0bd2e14a04dc6bc5",
+      "subject": "Resolve grid aliases before storing the selected grid",
+      "files": [
+        "indra/newview/fsgridhandler.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/00da4e64b3c8e75ab55cf1dd0bd2e14a04dc6bc5",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "d822e7a8ccd7c435418d3239c533eec851417ff9",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "b4c12a79fc",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "b4c12a79fc1feab8d3aa71383bbbec56867e99eb",
+      "subject": "Return nickname and label matches when probing saved grids",
+      "files": [
+        "indra/newview/fsgridhandler.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/b4c12a79fc1feab8d3aa71383bbbec56867e99eb",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "9e0a0bd1253dc9e35a233b56b05ec729ba0059c0",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "528481bec4",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "528481bec46b46f16c7670559ed095b1452c5141",
+      "subject": "Keep map block requests within the 64-region server limit",
+      "files": [
+        "indra/newview/llworldmap.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/528481bec46b46f16c7670559ed095b1452c5141",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "ab04601238725fa91b41f04bce64c55d71a94ec5",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "a9c503e0f4",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 167,
+      "branch": "upstream/20261101-opensim-routing",
+      "tests": [
+        "5 focused compiled-adapter/source checks",
+        "real-header Linux syntax checks all 4 .cpp files",
+        "clean trial merges held PRs and preceding batches"
+      ],
+      "fullSource": "a9c503e0f4b937a7809a15b4068463f2616dbec5",
+      "subject": "Skip reconnect when no login endpoint is available",
+      "files": [
+        "indra/newview/lllogininstance.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/a9c503e0f4b937a7809a15b4068463f2616dbec5",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "97e6e78cf02c761a01c0f635a6de51d4ab3a4f77",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "3009ea5be6286e5e6cf343e6566a14e58311f2e8",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "1ecc5eacc1",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented-adapted",
+      "evidence": [
+        "Ported to current Boost API without importing newer std-filesystem migration.",
+        "Logging hunk already equivalent (UTF-8 string); fslslpreprocpath.h absent and inapplicable. Native upstream test infrastructure replaced by focused adapters."
+      ],
+      "pr": 168,
+      "branch": "upstream/20261101-cache-accounting",
+      "tests": [
+        "2 checks: compiled constructor/purge against real temporary files and fault-injected filesystem boundaries; Windows path source check",
+        "real-header Linux syntax both .cpp files",
+        "clean trial merges #160/#161/#162/#167"
+      ],
+      "fullSource": "1ecc5eacc12a2397ede1eadcf6fbc1091b1fb6bd",
+      "subject": "Fix non-ASCII paths and protected cache purge accounting",
+      "files": [
+        "indra/llfilesystem/CMakeLists.txt",
+        "indra/llfilesystem/lldir.cpp",
+        "indra/llfilesystem/lldiskcache.cpp",
+        "indra/llfilesystem/llfilesystem.cpp",
+        "indra/llfilesystem/tests/llnonasciipaths_test.cpp",
+        "indra/llfilesystem/tests/llstaticassetpaths_test.cpp",
+        "indra/llfilesystem/tests/path_test_support.h",
+        "indra/newview/fslslpreprocpath.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/1ecc5eacc12a2397ede1eadcf6fbc1091b1fb6bd",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "1ddb5776ea8198d99c09601f140ddf2a1e5169c1",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "cec200d09b711da71a4a3ad317c0c79334049a7a",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "7eb2c061f5",
+      "group": "OpenSim navigation and cache correctness",
+      "priority": 2,
+      "status": "implemented-adapted",
+      "evidence": [
+        "Ported to current Boost API without importing newer std-filesystem migration.",
+        "Logging hunk already equivalent (UTF-8 string); fslslpreprocpath.h absent and inapplicable. Native upstream test infrastructure replaced by focused adapters."
+      ],
+      "pr": 168,
+      "branch": "upstream/20261101-cache-accounting",
+      "tests": [
+        "2 checks: compiled constructor/purge against real temporary files and fault-injected filesystem boundaries; Windows path source check",
+        "real-header Linux syntax both .cpp files",
+        "clean trial merges #160/#161/#162/#167"
+      ],
+      "fullSource": "7eb2c061f5f63a7af698ab3de5723dccba9c17ea",
+      "subject": "Make high/low watermarks work as intended",
+      "files": [
+        "indra/llfilesystem/CMakeLists.txt",
+        "indra/llfilesystem/lldiskcache.cpp",
+        "indra/llfilesystem/tests/llcachewatermarks_test.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/7eb2c061f5f63a7af698ab3de5723dccba9c17ea",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "a61433d110d3b4a522bcbfb9aa417bd309d27892",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "cec200d09b711da71a4a3ad317c0c79334049a7a",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "bcb90c8dce",
+      "group": "Rendering and animation correctness",
+      "priority": 3,
+      "status": "implemented",
+      "evidence": [
+        "#161 motion/skinning overlap is text-clean; combined native animation-equivalence acceptance remains pending if #161 pursued."
+      ],
+      "pr": 169,
+      "branch": "upstream/20261101-render-animation",
+      "tests": [
+        "4 compiled production-method/snippet checks",
+        "real-header Linux syntax all 5 .cpp files",
+        "clean trial merges held PRs and prior memory/avatar batches"
+      ],
+      "fullSource": "bcb90c8dce7006f861b8252bd401fa379c0c54d5",
+      "subject": "#6530 Couple animation desync when avatar goes out of view",
+      "files": [
+        "indra/llcharacter/llmotioncontroller.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/bcb90c8dce7006f861b8252bd401fa379c0c54d5",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "61e57dedc12170d626b55979926a361f7e7426cc",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "257a42b7814ce1ea992f3dd2717fab4c659b2268",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "ccfd47cc8a",
+      "group": "Rendering and animation correctness",
+      "priority": 3,
+      "status": "implemented",
+      "evidence": [
+        "#161 motion/skinning overlap is text-clean; combined native animation-equivalence acceptance remains pending if #161 pursued."
+      ],
+      "pr": 169,
+      "branch": "upstream/20261101-render-animation",
+      "tests": [
+        "4 compiled production-method/snippet checks",
+        "real-header Linux syntax all 5 .cpp files",
+        "clean trial merges held PRs and prior memory/avatar batches"
+      ],
+      "fullSource": "ccfd47cc8a8bf12e93b3a487d4f184bd41132e3e",
+      "subject": "Fix RenderResolutionDivisor not working correctly with FXAA",
+      "files": [
+        "indra/newview/pipeline.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/ccfd47cc8a8bf12e93b3a487d4f184bd41132e3e",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "eb1275158579fe7a0c5c5be855d7c643b0485fa1",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "257a42b7814ce1ea992f3dd2717fab4c659b2268",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "5f111ff91c",
+      "group": "Rendering and animation correctness",
+      "priority": 3,
+      "status": "implemented",
+      "evidence": [
+        "#161 motion/skinning overlap is text-clean; combined native animation-equivalence acceptance remains pending if #161 pursued."
+      ],
+      "pr": 169,
+      "branch": "upstream/20261101-render-animation",
+      "tests": [
+        "4 compiled production-method/snippet checks",
+        "real-header Linux syntax all 5 .cpp files",
+        "clean trial merges held PRs and prior memory/avatar batches"
+      ],
+      "fullSource": "5f111ff91c567e9b4e56d42e60d4a7f1bfd565cc",
+      "subject": "#5980 fix alt click operations failing on opaque water (#6510)",
+      "files": [
+        "indra/newview/llspatialpartition.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/5f111ff91c567e9b4e56d42e60d4a7f1bfd565cc",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "b62141fdb93a2c62e84fd071fdf009ad6e2df9b4",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "257a42b7814ce1ea992f3dd2717fab4c659b2268",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "911881389c",
+      "group": "Inventory and editor usability",
+      "priority": 4,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 170,
+      "branch": "upstream/20261101-editor-usability",
+      "tests": [
+        "3 clipboard/color/XML checks",
+        "real-header syntax all 4 .cpp files",
+        "trial merges with held PRs/UI batch clean"
+      ],
+      "fullSource": "911881389c5d26a29e623fe9bf1211e70e5883b0",
+      "subject": "FIRE-36930 Allow CTRL+C of no copy item to paste as link (matches SLV)",
+      "files": [
+        "indra/llui/llfolderview.cpp",
+        "indra/llui/llfolderviewmodel.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/911881389c5d26a29e623fe9bf1211e70e5883b0",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "3fb130741f075fc1e731c121dbf07d05f4d8d1e0",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "7390cabf6b664e869c67bc0b9c477237ca656c1d",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "b564148e85",
+      "group": "Inventory and editor usability",
+      "priority": 4,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 170,
+      "branch": "upstream/20261101-editor-usability",
+      "tests": [
+        "3 clipboard/color/XML checks",
+        "real-header syntax all 4 .cpp files",
+        "trial merges with held PRs/UI batch clean"
+      ],
+      "fullSource": "b564148e858c11aebac8e511a24aef0d113c861a",
+      "subject": "FIRE-34900 keyword coloring doesn't refresh live",
+      "files": [
+        "indra/llui/llkeywords.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/b564148e858c11aebac8e511a24aef0d113c861a",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "0cd7ee61cf937abcf1b7cd737046d5cf73f0da96",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "7390cabf6b664e869c67bc0b9c477237ca656c1d",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "3ab8a4fdb4",
+      "group": "Inventory and editor usability",
+      "priority": 4,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 170,
+      "branch": "upstream/20261101-editor-usability",
+      "tests": [
+        "3 clipboard/color/XML checks",
+        "real-header syntax all 4 .cpp files",
+        "trial merges with held PRs/UI batch clean"
+      ],
+      "fullSource": "3ab8a4fdb4e54e4aa5e6be111ffb0c85500b7545",
+      "subject": "fix - unknown buddy at login is incorrectly hardcoded as online",
+      "files": [
+        "indra/newview/llcallingcard.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/3ab8a4fdb4e54e4aa5e6be111ffb0c85500b7545",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "75f794fd4ce4775aa86262511000e19957d488a3",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "7390cabf6b664e869c67bc0b9c477237ca656c1d",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "d942e1118d",
+      "group": "Inventory and editor usability",
+      "priority": 4,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 170,
+      "branch": "upstream/20261101-editor-usability",
+      "tests": [
+        "3 clipboard/color/XML checks",
+        "real-header syntax all 4 .cpp files",
+        "trial merges with held PRs/UI batch clean"
+      ],
+      "fullSource": "d942e1118d01c3383ef7d6b64f248af77452b0dc",
+      "subject": "Improve the startup speed of the embedded browser",
+      "files": [
+        "indra/newview/llfloaterwebcontent.cpp",
+        "indra/newview/skins/default/xui/en/floater_marketplace.xml",
+        "indra/newview/skins/default/xui/en/floater_media_browser.xml",
+        "indra/newview/skins/default/xui/en/floater_web_content.xml"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/d942e1118d01c3383ef7d6b64f248af77452b0dc",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "e539f9515bd394e5cb539b94376e0eb84d5e793b",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "7390cabf6b664e869c67bc0b9c477237ca656c1d",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "b92a4d01e5",
+      "group": "RLVa restriction correctness",
+      "priority": 5,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 171,
+      "branch": "upstream/20261101-rlva-correctness",
+      "tests": [
+        "3 compiled native restriction checks",
+        "6 MCP navigation native source/adapter checks",
+        "real-header syntax all 3 .cpp files",
+        "clean trial merges with held PRs/rendering"
+      ],
+      "fullSource": "b92a4d01e5e441fea731d79c83a074270aff2be3",
+      "subject": "FIX - RLVa SHOW_LOC bypassed by Set Location in picks",
+      "files": [
+        "indra/newview/llpanelprofilepicks.cpp",
+        "indra/newview/llpanelprofilepicks.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/b92a4d01e5e441fea731d79c83a074270aff2be3",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "29b650ecdbdcb69d32988debd05db834eae90955",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "a2cf70168f2a3ea52e70ed24b0b0bf6788700c16",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "31b1866463",
+      "group": "RLVa restriction correctness",
+      "priority": 5,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 171,
+      "branch": "upstream/20261101-rlva-correctness",
+      "tests": [
+        "3 compiled native restriction checks",
+        "6 MCP navigation native source/adapter checks",
+        "real-header syntax all 3 .cpp files",
+        "clean trial merges with held PRs/rendering"
+      ],
+      "fullSource": "31b1866463ce3a09f1a735726f87ec7b053e54e2",
+      "subject": "[FIRE-37059] RLVa tplocal=n should not default to 256m",
+      "files": [
+        "indra/newview/rlvactions.cpp",
+        "indra/newview/rlvdefines.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/31b1866463ce3a09f1a735726f87ec7b053e54e2",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "27646f8e6e2b769f6e94e42ac8e824627dc9ca20",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "a2cf70168f2a3ea52e70ed24b0b0bf6788700c16",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "c3b01a9ef7",
+      "group": "RLVa restriction correctness",
+      "priority": 5,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 171,
+      "branch": "upstream/20261101-rlva-correctness",
+      "tests": [
+        "3 compiled native restriction checks",
+        "6 MCP navigation native source/adapter checks",
+        "real-header syntax all 3 .cpp files",
+        "clean trial merges with held PRs/rendering"
+      ],
+      "fullSource": "c3b01a9ef7ee88ca61a6712a9caad9123680ff4d",
+      "subject": "[FIRE-37059] RLVa tplocal should use XYZ axis for distance check",
+      "files": [
+        "indra/newview/rlvactions.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/c3b01a9ef7ee88ca61a6712a9caad9123680ff4d",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "cf3def0b4b11c28734fa82642ea73fcbc4a7bd79",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "a2cf70168f2a3ea52e70ed24b0b0bf6788700c16",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "c3d918d23a",
+      "group": "RLVa restriction correctness",
+      "priority": 5,
+      "status": "implemented",
+      "evidence": [],
+      "pr": 171,
+      "branch": "upstream/20261101-rlva-correctness",
+      "tests": [
+        "3 compiled native restriction checks",
+        "6 MCP navigation native source/adapter checks",
+        "real-header syntax all 3 .cpp files",
+        "clean trial merges with held PRs/rendering"
+      ],
+      "fullSource": "c3d918d23a30be1561546e0e6dede8880b266eb8",
+      "subject": "FIX - RLVa fartouch distance check should be in agent space",
+      "files": [
+        "indra/newview/lltoolselect.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/c3d918d23a30be1561546e0e6dede8880b266eb8",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "eb628ce3d5ddbb3e08a967a29d260fccd358249b",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "a2cf70168f2a3ea52e70ed24b0b0bf6788700c16",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "c8c22bbfed",
+      "group": "largerSeparateWork",
+      "status": "isolated-risk-not-implemented",
+      "evidence": [
+        "Beyond existing background parser: map-based shared results, priority/deferred application and cache schema 6. Manual source/epoch/completeness integration and native performance acceptance required.",
+        "Exact source patch and applicability diagnostics retained in isolated branch; no production patch applied."
+      ],
+      "pr": 174,
+      "branch": "risk/20261101-progressive-inventory",
+      "tests": [
+        "non-mutating dry-run fails AIS/model/background-fetch applicability",
+        "3 existing #66 parser/folder-upload baseline checks pass; NOT candidate validation"
+      ],
+      "fullSource": "c8c22bbfed91ff1ddb70a3b30ec44c234b47fd20",
+      "subject": "#6419 Async inventory cache",
+      "files": [
+        "indra/newview/CMakeLists.txt",
+        "indra/newview/llaisapi.cpp",
+        "indra/newview/llinventorycache.h",
+        "indra/newview/llinventorymodel.cpp",
+        "indra/newview/llinventorymodel.h",
+        "indra/newview/llinventorymodelbackgroundfetch.cpp",
+        "indra/newview/llinventorymodelbackgroundfetch.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/c8c22bbfed91ff1ddb70a3b30ec44c234b47fd20",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "ceff9d3cc5e94acf52ed7ffd4bfb18c95101fa18",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-inventory/README.md",
+      "head": "cd775d005b6dfbf10976a4c816a4478807e9030b",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "d632b85899",
+      "group": "largerSeparateWork",
+      "status": "isolated-risk-not-implemented",
+      "evidence": [
+        "Exact source patches and dry-run diagnostics retained. Review shutdown work before optional capture/interface/SDK change.",
+        "Must preserve LLVoiceClient/FSSessionWorker::voiceAllowed active-character/input/microphone/PTT gates. No packages or settings changed."
+      ],
+      "pr": 175,
+      "branch": "risk/20261101-webrtc-capture",
+      "tests": [
+        "source/API ownership inspection",
+        "non-mutating independent dry-run applicability failures; candidate compilation/runtime NOT run"
+      ],
+      "fullSource": "d632b85899e76529c9b42affc4fe12df75c1af5e",
+      "subject": "#6452 fix webrtc crash on disconnect",
+      "files": [
+        "indra/llwebrtc/llwebrtc.cpp",
+        "indra/llwebrtc/llwebrtc_impl.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/d632b85899e76529c9b42affc4fe12df75c1af5e",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "34abb3760bbda7e64453cdcbbcee07882f24a122",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-voice/README.md",
+      "head": "477834d3264cb6ede2f73d529bd8adf7fa70c3ef",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "1bb852e5a4",
+      "group": "largerSeparateWork",
+      "status": "isolated-risk-not-implemented",
+      "evidence": [
+        "Exact source patches and dry-run diagnostics retained. Review shutdown work before optional capture/interface/SDK change.",
+        "Must preserve LLVoiceClient/FSSessionWorker::voiceAllowed active-character/input/microphone/PTT gates. No packages or settings changed."
+      ],
+      "pr": 175,
+      "branch": "risk/20261101-webrtc-capture",
+      "tests": [
+        "source/API ownership inspection",
+        "non-mutating independent dry-run applicability failures; candidate compilation/runtime NOT run"
+      ],
+      "fullSource": "1bb852e5a40d9bd31dcfeed9e1c4e87f2141a2d5",
+      "subject": "Implement option to stop mic capture when muted",
+      "files": [
+        "autobuild.xml",
+        "indra/llwebrtc/CMakeLists.txt",
+        "indra/llwebrtc/llwebrtc.cpp",
+        "indra/llwebrtc/llwebrtc.h",
+        "indra/llwebrtc/llwebrtc_impl.h",
+        "indra/newview/app_settings/settings.xml",
+        "indra/newview/llvoicewebrtc.cpp",
+        "indra/newview/llvoicewebrtc.h",
+        "indra/newview/skins/default/xui/de/panel_preferences_sound.xml",
+        "indra/newview/skins/default/xui/en/panel_preferences_sound.xml"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/1bb852e5a40d9bd31dcfeed9e1c4e87f2141a2d5",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "ecc4993773bfec92804e87286323a1d4612fa4b6",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-voice/README.md",
+      "head": "477834d3264cb6ede2f73d529bd8adf7fa70c3ef",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "432b726d67",
+      "group": "themeBranchCandidate",
+      "status": "implemented-isolated-risk",
+      "evidence": [
+        "Final upstream guard rejects valid acyclic chains >10 and calls llassert(false); depth/assertion policy requires Marty review with #160.",
+        "Per-file shipped colors maximum depth 3; not proof for merged/custom themes."
+      ],
+      "pr": 172,
+      "branch": "risk/20261101-theme-color-depth",
+      "tests": [
+        "compiled production getter: direct/live references, 10-link chain, 11-link acyclic rejection, self/two-color cycles",
+        "real-header Linux syntax",
+        "clean trial merges #160/#161/#162/#170"
+      ],
+      "fullSource": "432b726d6798c4053fc24fc314fbe2aefe421798",
+      "subject": "#6525 Harden LLUIColor traversal",
+      "files": [
+        "indra/llui/lluicolor.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/432b726d6798c4053fc24fc314fbe2aefe421798",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": true,
+      "patchID": "f768a07c73ea97d48be136d9064fba133aeac0db",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-theme-color-depth.md",
+      "head": "6a6a19d9f6fe9b65d9d8987d2f5ba727309f0661",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "e7fc2fc32d",
+      "group": "themeBranchCandidate",
+      "status": "implemented-isolated-risk",
+      "evidence": [
+        "Final upstream guard rejects valid acyclic chains >10 and calls llassert(false); depth/assertion policy requires Marty review with #160.",
+        "Per-file shipped colors maximum depth 3; not proof for merged/custom themes."
+      ],
+      "pr": 172,
+      "branch": "risk/20261101-theme-color-depth",
+      "tests": [
+        "compiled production getter: direct/live references, 10-link chain, 11-link acyclic rejection, self/two-color cycles",
+        "real-header Linux syntax",
+        "clean trial merges #160/#161/#162/#170"
+      ],
+      "fullSource": "e7fc2fc32d64721b83f12279044e0a1efa5ca72c",
+      "subject": "#6525 Warn about potential circular color references",
+      "files": [
+        "indra/llui/lluicolor.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/e7fc2fc32d64721b83f12279044e0a1efa5ca72c",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "193be3e942956bc49d4d00a0bbc268dc698cbfc4",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/risk-theme-color-depth.md",
+      "head": "6a6a19d9f6fe9b65d9d8987d2f5ba727309f0661",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "f47a453430",
+      "group": "alreadyCoveredOrNotApplicable",
+      "researchReason": "Folderstorm already uses strncmp for all four infinity cases.",
+      "status": "already-equivalent",
+      "evidence": [
+        "main llxmlnode.cpp:1546/1554/1562/1570 uses strncmp for all four infinity forms (inf, -inf, 1.#INF, -1.#INF); full source behavior already present despite no ancestry/patch-ID match."
+      ],
+      "pr": null,
+      "branch": null,
+      "tests": [],
+      "fullSource": "f47a45343092c90c549875657b1857aee95b124a",
+      "subject": "Fix heap-buffer-overflow in LLXMLNode::parseFloat using memcmp",
+      "files": [
+        "indra/llxml/llxmlnode.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/f47a45343092c90c549875657b1857aee95b124a",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "f288752d8d42b017e75096cbe2ab7c14059b814e",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/exclusions.md",
+      "nativeAcceptance": "No production change; content/API applicability inspection."
+    },
+    {
+      "source": "373addb1cb",
+      "group": "alreadyCoveredOrNotApplicable",
+      "researchReason": "LLFace and LLDrawInfo already retain LLConstPointer skin info; only remaining null/matrix guards should be considered, with #161 overlap.",
+      "status": "implemented-adapted",
+      "evidence": [
+        "Pointer-lifetime portion already content-equivalent via LLConstPointer in LLFace/LLDrawInfo. Imported only missing null/identity guards, including all 3 native overloads; retained #32 bounds.",
+        "#161 motion/skinning overlap is text-clean; combined native animation-equivalence acceptance remains pending if #161 pursued."
+      ],
+      "pr": 169,
+      "branch": "upstream/20261101-render-animation",
+      "tests": [
+        "4 compiled production-method/snippet checks",
+        "real-header Linux syntax all 5 .cpp files",
+        "clean trial merges held PRs and prior memory/avatar batches"
+      ],
+      "fullSource": "373addb1cbdb6ae505c8e797c33729cb1ad75dba",
+      "subject": "#6568 Ensure mSkinInfo persists",
+      "files": [
+        "indra/newview/lldrawpool.cpp",
+        "indra/newview/llface.h",
+        "indra/newview/llskinningutil.cpp",
+        "indra/newview/llspatialpartition.h"
+      ],
+      "alreadyAncestor": false,
+      "repository": "secondlife/viewer",
+      "url": "https://github.com/secondlife/viewer/commit/373addb1cbdb6ae505c8e797c33729cb1ad75dba",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "54b4f853f1a28f20616b9e644efbf9dc96570be6",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "head": "257a42b7814ce1ea992f3dd2717fab4c659b2268",
+      "nativeAcceptance": "Not run; see linked batch/risk report."
+    },
+    {
+      "source": "898bdf7367",
+      "group": "alreadyCoveredOrNotApplicable",
+      "researchReason": "Folderstorm still has synchronous APR pipe writes, not the newer Asio implementation the fix addresses.",
+      "status": "not-applicable",
+      "evidence": [
+        "main LLProcess WritePipe uses synchronous apr_file_write at llprocess.cpp:201. No startAsyncWrite/asio::async_write path that owns the source fix exists."
+      ],
+      "pr": null,
+      "branch": null,
+      "tests": [],
+      "fullSource": "898bdf73670125180510286782476bc75287bc13",
+      "subject": "Keep subprocess stdin buffers alive until asynchronous writes complete",
+      "files": [
+        "indra/llcommon/llprocess.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/898bdf73670125180510286782476bc75287bc13",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "db18dd8c97388151f57ffc3733dfb2eab4dde51d",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/exclusions.md",
+      "nativeAcceptance": "No production change; content/API applicability inspection."
+    },
+    {
+      "source": "06eed6230a",
+      "group": "alreadyCoveredOrNotApplicable",
+      "researchReason": "Folderstorm uses the older bool-mono queue implementation and not the newly shadowed target string.",
+      "status": "not-applicable",
+      "evidence": [
+        "main handle_selected_script_action uses bool mono=false then mono=true for compile mono, not the newer shadowed string target."
+      ],
+      "pr": null,
+      "branch": null,
+      "tests": [],
+      "fullSource": "06eed6230ac60500ec51ba73f0af3a8362b0ba9f",
+      "subject": "FIX - Compile mono compiling as LSO",
+      "files": [
+        "indra/newview/llviewermenu.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/06eed6230ac60500ec51ba73f0af3a8362b0ba9f",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "ba4b35462b7dc3803bc5ac1a31de49b45c0ac681",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/exclusions.md",
+      "nativeAcceptance": "No production change; content/API applicability inspection."
+    },
+    {
+      "source": "83c687e21d",
+      "group": "alreadyCoveredOrNotApplicable",
+      "researchReason": "Luau editor integration differs/absent; not a standalone matching fix.",
+      "status": "not-applicable",
+      "evidence": [
+        "main lacks LLScriptEdCore::updateTabs(bool is_lua) and getIsLuauLanguage(). It uses the older LSL/preprocessor editor path; importing language-specific hunks alone would not match native interfaces."
+      ],
+      "pr": null,
+      "branch": null,
+      "tests": [],
+      "fullSource": "83c687e21d8afd0eb82b1ba73231a847a7e6d4ba",
+      "subject": "FIX - Script preview keywords losing luau keywords & prepoc always on",
+      "files": [
+        "indra/newview/llpreviewscript.cpp"
+      ],
+      "alreadyAncestor": false,
+      "repository": "FirestormViewer/phoenix-firestorm",
+      "url": "https://github.com/FirestormViewer/phoenix-firestorm/commit/83c687e21d8afd0eb82b1ba73231a847a7e6d4ba",
+      "reverseAppliesAtBase": false,
+      "forwardAppliesAtBase": false,
+      "patchID": "f86ff964945e2e604c09909a5b0f1aced6b9b0fd",
+      "equivalentMainCommit": null,
+      "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+      "report": "doc/upstream-20261101/exclusions.md",
+      "nativeAcceptance": "No production change; content/API applicability inspection."
+    }
+  ],
+  "completedAtUTC": "2026-11-01T06:35:28.217163+00:00",
+  "reportPR": 164
+}

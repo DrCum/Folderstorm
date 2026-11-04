@@ -1,0 +1,113 @@
+{
+  "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "firestorm": "6d88ec304f",
+  "secondlife": "373addb1cb",
+  "date": "2026-11-01",
+  "groups": [
+    {
+      "priority": 1,
+      "name": "Crash and lifetime safety",
+      "sources": [
+        "fa8967bb61",
+        "d67326e620",
+        "1af02acdf5",
+        "fd2040cf16",
+        "89a5c6d003",
+        "6d88ec304f",
+        "08a4fb5c44",
+        "524b32142f",
+        "168ac4d590",
+        "88ef9b00a5",
+        "aa72e4d949",
+        "2200e164f4"
+      ]
+    },
+    {
+      "priority": 2,
+      "name": "OpenSim navigation and cache correctness",
+      "sources": [
+        "9879049d15",
+        "f34effb391",
+        "00da4e64b3",
+        "b4c12a79fc",
+        "528481bec4",
+        "a9c503e0f4",
+        "1ecc5eacc1",
+        "7eb2c061f5"
+      ]
+    },
+    {
+      "priority": 3,
+      "name": "Rendering and animation correctness",
+      "sources": [
+        "bcb90c8dce",
+        "ccfd47cc8a",
+        "5f111ff91c"
+      ]
+    },
+    {
+      "priority": 4,
+      "name": "Inventory and editor usability",
+      "sources": [
+        "911881389c",
+        "b564148e85",
+        "3ab8a4fdb4",
+        "d942e1118d"
+      ]
+    },
+    {
+      "priority": 5,
+      "name": "RLVa restriction correctness",
+      "sources": [
+        "b92a4d01e5",
+        "31b1866463",
+        "c3b01a9ef7",
+        "c3d918d23a"
+      ]
+    }
+  ],
+  "largerSeparateWork": [
+    "c8c22bbfed",
+    "d632b85899",
+    "1bb852e5a4"
+  ],
+  "themeBranchCandidate": [
+    "432b726d67",
+    "e7fc2fc32d"
+  ],
+  "alreadyCoveredOrNotApplicable": [
+    {
+      "sha": "f47a453430",
+      "reason": "Folderstorm already uses strncmp for all four infinity cases."
+    },
+    {
+      "sha": "373addb1cb",
+      "reason": "LLFace and LLDrawInfo already retain LLConstPointer skin info; only remaining null/matrix guards should be considered, with #161 overlap."
+    },
+    {
+      "sha": "898bdf7367",
+      "reason": "Folderstorm still has synchronous APR pipe writes, not the newer Asio implementation the fix addresses."
+    },
+    {
+      "sha": "06eed6230a",
+      "reason": "Folderstorm uses the older bool-mono queue implementation and not the newly shadowed target string."
+    },
+    {
+      "sha": "83c687e21d",
+      "reason": "Luau editor integration differs/absent; not a standalone matching fix."
+    }
+  ],
+  "audioConfiguration": {
+    "USE_FMODSTUDIO": false,
+    "USE_OPENAL": true,
+    "OPENSIM": true
+  },
+  "notes": [
+    "No runtime tests or build; dry-run applicability is not runtime validation.",
+    "Animation correctness and some avatar safety paths overlap held #161; do not import its experimental changes.",
+    "Cache/Unicode fixes overlap file paths touched by held #160; preserve theme changes when later integrating.",
+    "Do not reintroduce previously excluded direct-message sync or IME changes."
+  ],
+  "codeChanged": false,
+  "prsChanged": false
+}
