@@ -36,6 +36,7 @@
 #include "llviewerinventory.h"
 #include "llinitdestroyclass.h"
 
+class LLMenuGL;
 class LLMenuItemCallGL;
 class LLToggleableMenu;
 
@@ -97,6 +98,11 @@ protected:
     void onEndDrag();
 
     bool enableSelected(const LLSD& userdata);
+    LLMenuGL* makeFolderMenu(const std::string& folder);
+    void showFolderMenu(const std::string& folder, LLUICtrl* button);
+    void rebuildFolderEntries();
+    std::string entryLabel(S32 index) const;
+    LLUUID itemBeforeOverflow() const;
     void doToSelected(const LLSD& userdata);
     static bool onRenameCommit(const LLSD& notification, const LLSD& response);
     bool isClipboardPasteable() const;
@@ -111,7 +117,7 @@ protected:
 
     LLUUID mFavoriteFolderId;
     const LLFontGL *mFont;
-    S32 mFirstDropDownItem;
+    S32 mFirstDropDownItem = 0;
     S32 mDropDownItemsCount;
     bool mUpdateDropDownItems;
     bool mRestoreOverflowMenu;
@@ -178,6 +184,12 @@ private:
     LLInventoryModel::item_array_t mItems;
 
     static F64 sWaitingForCallabck;
+    // mItems stays in inventory order for drag/drop and login favorites export.
+    LLInventoryModel::item_array_t mBarEntries;
+    std::map<LLUUID, std::string> mFolderButtons;
+    std::map<std::string, LLInventoryModel::item_array_t> mFolderContents;
+    LLHandle<LLView> mFolderMenuHandle;
+    boost::signals2::scoped_connection mFolderSettingsConnection;
     bool mItemsListDirty;
 
     S32 mMouseX;
