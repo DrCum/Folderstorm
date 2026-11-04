@@ -90,6 +90,18 @@ int main()
     Request q;q.instance=h.controllerEndpoint.instance;q.id=std::to_string(now)+"-"+std::string(32,'c');q.op=Op::Background;q.profile=h.controllerConfig.profiles[0].id;q.revision=1;q.worker=h.controllerSource(0).worker;q.generation=9;q.viewerSession="opaque";q.mode=1;
     const auto pending=h.controllerDispatch(q);assert(pending.find("pending_approval")!=std::string::npos&&h.mutations==0);
     approval=[&](){++h.controllerConfig.revision;return IDYES;};h.controllerTick();auto* r=h.controllerOperations.find(q.id);assert(r&&r->state=="cancelled"&&h.mutations==0);approval={};
+    // Status queries still run while the native Ask dialog pumps messages.
+    q.id=std::to_string(now)+"-"+std::string(32,'a');
+    h.controllerDispatch(q);
+    approval=[&]() {
+        now+=70000;
+        Request status=q;status.op=Op::Receipt;
+        assert(h.controllerDispatch(status).find("deadline_expired")!=std::string::npos);
+        return 0; // Dismiss the original prompt after its caller saw cancellation.
+    };
+    h.controllerTick();approval={};
+    r=h.controllerOperations.find(q.id);
+    assert(r&&r->state=="cancelled"&&r->error=="deadline_expired"&&!r->submitted&&h.mutations==0);
     q.id=std::to_string(now)+"-"+std::string(32,'d');h.controllerDispatch(q);h.controllerTick();r=h.controllerOperations.find(q.id);assert(r&&r->state=="waiting_native"&&h.mutations==0);
     ++h.controllerConfig.revision;assert(!h.controllerTransportAllowed(0,Kind::SetMode)&&h.mutations==0&&r->state=="cancelled");
     Request wrong=q;wrong.id=std::to_string(now)+"-"+std::string(32,'0');wrong.viewerSession="replacement";assert(h.controllerDispatch(wrong).find("session_changed")!=std::string::npos);

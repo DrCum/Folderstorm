@@ -316,8 +316,8 @@ void controllerTick()
             if(receipt.request.op==fs_controller::Op::CycleConfigure)summary+=L"\nCycle interval: "+std::to_wstring(receipt.request.seconds)+L" seconds; "+(receipt.request.playing?L"playing":L"paused");
             summary+=L"\nThis approval expires after 70 seconds. Changed sources or permissions require a fresh request.";
             controllerApproving=true;const int answer=MessageBoxW(window,summary.c_str(),L"Controller MCP request",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2);controllerApproving=false;
+            if(receipt.terminal()||!controllerAllowed(receipt))return;
             if(answer!=IDYES){receipt.state="refused";receipt.error="user_denied";return;}
-            if(!controllerAllowed(receipt))return;
             receipt.state="queued";
         }
         if(receipt.state=="queued"){controllerExecute(receipt);return;}
