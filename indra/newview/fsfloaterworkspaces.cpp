@@ -297,7 +297,26 @@ void FSFloaterWorkspaces::updateButtons()
     getChild<LLScrollListCtrl>("profiles")->setEnabled(ready);
     LLStringUtil::format_map_t args;
     args["[NAME]"] = mSavedName;
-    getChild<LLTextBox>("status")->setText(getString(!ready ? "unavailable" : !can_switch ? "preferences_open" : mActionStatus.empty() ? "ready" : mActionStatus, args));
+    auto* status = getChild<LLTextBox>("status");
+    const auto message = getString(!ready ? "unavailable" : !can_switch ? "preferences_open" :
+                                   mActionStatus.empty() ? "ready" : mActionStatus, args);
+    if (status->getText() != message)
+    {
+        status->setText(message);
+        status->setToolTip(message);
+    }
+    // Give wrapped feedback room at narrow widths; return it to the list for short messages.
+    LLRect footer = status->getRect();
+    const S32 height = llclamp(status->getTextPixelHeight() + 4, 18, 58);
+    if (footer.getHeight() != height)
+    {
+        footer.mTop = footer.mBottom + height;
+        status->setShape(footer);
+        auto* pages = getChild<LLTabContainer>("workspace_pages");
+        LLRect body = pages->getRect();
+        body.mBottom = footer.mTop + 6;
+        pages->setShape(body);
+    }
 }
 void FSFloaterWorkspaces::refreshGroups()
 {
