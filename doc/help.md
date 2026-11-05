@@ -15,6 +15,10 @@ Open **Preferences → Move & View → Layout**.
 - **Viewport.** Turn on **Use a custom world viewport** and set the left, right, top, and bottom margins. The camera, HUD, and mouse stay in the remaining world area so Inventory and other windows can sit in the margins of a stretched window. If two opposite margins would leave less than 5% of the window, they are scaled down. The change previews immediately. There is a separate switch for mouselook.
 - **Layout.** Place the toolbars, chat bar, and top bars around that viewport. Side bars sit outside the viewport when there is room, and just inside it when there is not. Save the arrangement as a named profile, then apply, rename, or delete profiles later. **Reset** restores the default chrome.
 
+### Gesture boards
+
+Open **World → Gesture board…**. Use **Options → Find tiles…** to find a gesture or sound by its tile label or inventory name. **Ctrl+F** opens the same field when local search shortcuts are enabled. Click a result to play it. **Esc** returns to the page you were on.
+
 ### Outfit Gallery
 
 Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo width from 80 to 256 pixels. The name row stays a fixed height. 256 is the photo size the gallery fetches.

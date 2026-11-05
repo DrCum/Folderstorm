@@ -53,7 +53,8 @@ struct Frame
 Frame layoutFrame(int width, int height, int header_height, bool multiple_pages, bool selecting = false);
 // Fixed presentation sizes, independent of gesture names. Only a viewport
 // smaller than a tile may constrain its rendered size; its saved size is kept.
-std::vector<Page> paginate(const Board& board, int width, int height, const Style& defaults = Style{});
+std::vector<Page> paginate(const Board& board, int width, int height, const Style& defaults = Style{},
+                           const std::set<std::string>* visible_ids = nullptr);
 bool validText(const std::string& text, bool empty = false);
 bool decode(const LLSD& data, Collection& result);
 LLSD encode(const Collection& collection);

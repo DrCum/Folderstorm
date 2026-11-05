@@ -94,6 +94,53 @@ class GestureBoardCustomization(unittest.TestCase):
     def test_model_migration_defaults_bulk_and_pagination(self):
         self.run_cpp()
 
+    def test_find_uses_tile_labels_and_inventory_names(self):
+        fixture = r'''
+#include "fsgestureboardmodel.h"
+#include "lluuid.h"
+#include <cassert>
+#include <cctype>
+#include <map>
+using namespace FSGestureBoard;
+using U32=unsigned int;
+enum { LABEL=1, ADD=2, REMOVE=4, STRUCTURE=8, REBUILD=16 };
+struct Item {std::string name; const std::string& getName() const {return name;}};
+struct Inventory {
+    std::map<LLUUID,Item> items;
+    std::set<LLUUID> changed;
+    const auto& getChangedIDs() const {return changed;}
+    const Item* getItem(const LLUUID& id) const {auto it=items.find(id);return it==items.end()?nullptr:&it->second;}
+} gInventory;
+std::string utf8str_tolower(std::string s){for(auto& c:s)c=static_cast<char>(std::tolower(c));return s;}
+struct FSFloaterGestureBoard {
+    std::string mFindText;
+    bool mFindDirty=true,mRebuildSelection=false;
+    bool filtering() const{return !mFindText.empty();}
+    void changed(U32);
+    std::set<std::string> mFindMatches;
+    std::set<LLUUID> mFindReferences;
+    void updateFindMatches(const Board&);
+};
+'''
+        native = (VIEWER / "fsfloatergestureboard.cpp").read_text()
+        cases = r'''
+int main() {
+    Board board;
+    Tile a;a.id="one";a.item="A";a.label="Wave hello";
+    Tile b;b.id="two";b.item="B";
+    board.tiles={a,b};gInventory.items.emplace(LLUUID("B"),Item{"SOUND WAVE"});
+    FSFloaterGestureBoard view;view.mFindText="wave";view.updateFindMatches(board);
+    assert((view.mFindMatches==std::set<std::string>{"one","two"}));
+    gInventory.items.at(LLUUID("B")).name="Bell";gInventory.changed={LLUUID("B")};
+    view.changed(REBUILD);assert(view.mFindDirty && view.mRebuildSelection);
+    view.updateFindMatches(board);
+    assert(view.mFindMatches==std::set<std::string>{"one"});
+    assert(view.mFindReferences.size()==2 && !view.mFindDirty);
+}
+'''
+        self.run_cpp(fixture + function(native, "void FSFloaterGestureBoard::updateFindMatches(") +
+                     function(native, "void FSFloaterGestureBoard::changed(") + cases)
+
     def test_selecting_never_plays_items(self):
         source = r'''
 #include "fsgestureboardmodel.h"
@@ -112,6 +159,8 @@ struct FSFloaterGestureBoard {
     bool live=true,mSelecting=false,mRebuildSelection=false;int closes=0;
     Selection mSelection;std::string mBoard="b";LLUUID mWindowID{"w"},mFocusReference;
     bool current()const{return live;}
+    bool finding=true;
+    void setFinding(bool value){finding=value;}
     void closeEditors(){++closes;}
     void selectionMode(bool);void selectTile(const std::string&,MASK);void playTile(const std::string&);
 };
@@ -126,7 +175,7 @@ int main(){
     for(const char* id:{"a","b","c","d"}){Tile t;t.id=id;t.item=std::string("item-")+id;b.tiles.push_back(t);}
     c.value.boards.push_back(b);FSFloaterGestureBoard w;
     w.playTile("a");assert(c.plays==1);
-    w.selectTile("a",MASK_CONTROL);assert(w.mSelecting&&w.mSelection.ids==std::set<std::string>{"a"}&&w.closes==1&&c.plays==1);
+    w.selectTile("a",MASK_CONTROL);assert(!w.finding&&w.mSelecting&&w.mSelection.ids==std::set<std::string>{"a"}&&w.closes==1&&c.plays==1);
     w.playTile("d");assert(w.mSelection.ids==std::set<std::string>({"a","d"})&&c.plays==1);
     w.selectTile("b",MASK_SHIFT);assert(w.mSelection.ids.size()==4&&c.plays==1);
     w.playTile("b");assert(!w.mSelection.ids.count("b")&&c.plays==1);
