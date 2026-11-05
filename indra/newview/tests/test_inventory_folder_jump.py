@@ -84,6 +84,53 @@ int main() {
             definitions.append(native.function(source, signature))
         native.NativeObjectToolsTests.compile_and_run(self, fixture + "".join(definitions) + cases)
 
+    def test_bulk_choice_edits_only_the_same_frozen_move(self):
+        bulk = (native.ROOT / "fsfloaterinventorybulk.cpp").read_text()
+        fixture = r"""
+#include <cassert>
+#include <string>
+using U64=unsigned long long;
+struct LLUUID {
+    int value;
+    bool operator!=(LLUUID other)const{return value!=other.value;}
+    std::string asString()const{return std::to_string(value);}
+};
+struct Agent{LLUUID session{1};LLUUID getSessionID()const{return session;}} gAgent;
+bool gDisconnected=false;
+struct Inventory {bool known=true;bool getCategory(LLUUID)const{return known;}} gInventory;
+struct LLComboBox {
+    std::string kind="move";const LLComboBox& getValue()const{return *this;}
+    std::string asString()const{return kind;}
+};
+struct FSFloaterInventoryBulk {
+    bool mBusy=false,visible=true;
+    std::string mSelection="a",destination="old";
+    U64 mGeneration=10;LLUUID mSession{1};LLComboBox combo;int invalidated=0;
+    template<class T>T* getChild(const char*){return &combo;}
+    bool isInVisibleChain()const{return visible;}
+    void childSetValue(const char*,std::string target){destination=target;}
+    void invalidatePreview(){++invalidated;++mGeneration;}
+    void acceptDestination(const LLUUID&,U64,const LLUUID&);
+};
+"""
+        cases = r"""
+int main(){
+    FSFloaterInventoryBulk view;
+    auto choose=[&](){view.acceptDestination({42},10,{1});};
+    ++view.mGeneration;choose();--view.mGeneration;
+    gAgent.session={2};choose();gAgent.session={1};
+    view.combo.kind="rename";choose();view.combo.kind="move";
+    view.visible=false;choose();view.visible=true;
+    view.mBusy=true;choose();view.mBusy=false;
+    gInventory.known=false;choose();gInventory.known=true;
+    assert(view.destination=="old" && !view.invalidated);
+    choose();assert(view.destination=="42" && view.invalidated==1);
+    choose();assert(view.invalidated==1);
+}
+"""
+        native.NativeObjectToolsTests.compile_and_run(self, fixture + native.function(
+            bulk, "void FSFloaterInventoryBulk::acceptDestination(const LLUUID& id, U64 generation, const LLUUID& session)") + cases)
+
 
 if __name__ == "__main__":
     unittest.main()

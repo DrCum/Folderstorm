@@ -43,7 +43,7 @@ Settings search also recognizes **MCP**, **dual monitor**, **workspace**, and **
 
 ### Review Inventory changes
 
-Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. Review the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
+Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. For a move, click **Choose folder…**, search by folder or parent name, and click **Use folder**. Check the displayed path, then preview the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
 
 The gear menu's **Assistant inventory history…** shows this session's tracked rename/move operations. **Stop** prevents additional work; submitted changes may still finish. **Clear history** removes the visible records without changing Inventory. Undo is offered only for confirmed changes that still match their recorded state; ordinary renames and copyable-item moves have narrower rules than general Inventory actions. Unconfirmed changes, folder moves, moves involving Trash, and non-copyable-item moves cannot be undone here. See [bulk review and recovery](local-assistant-bulk-inventory.md) for the exact limits.
 

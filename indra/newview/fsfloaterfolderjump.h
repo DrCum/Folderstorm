@@ -19,6 +19,7 @@
 #include "llfloater.h"
 #include "llinventoryobserver.h"
 
+#include <functional>
 #include <set>
 #include <vector>
 
@@ -33,7 +34,8 @@ class FSFloaterFolderJump final : public LLFloater, public LLInventoryObserver
 public:
     explicit FSFloaterFolderJump(const LLSD& key) : LLFloater(key) {}
     ~FSFloaterFolderJump() override;
-    static void showFrom(LLPanelMainInventory& inventory);
+    using FolderChoice = std::function<void(const LLUUID&)>;
+    static void showFrom(LLPanelMainInventory& inventory, LLView* requester = nullptr, FolderChoice choose = {});
 
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
@@ -62,6 +64,8 @@ private:
     bool isReachable(const LLUUID& id, const LLInventoryFilter& filter) const;
 
     LLHandle<LLView> mOwner;
+    LLHandle<LLView> mRequester;
+    FolderChoice mChoose;
     LLUUID mSession;
     LLFilterEditor* mQuery = nullptr;
     LLScrollListCtrl* mResults = nullptr;
