@@ -37,6 +37,9 @@ LLSD = r'''
 #include <vector>
 struct LLSD {
     using Real=double;
+    using Binary=std::vector<unsigned char>;
+    bool isBinary()const{return false;}
+    Binary asBinary()const{return {};}
     enum Type{Undefined,Map,Array,Integer,Float,Boolean,String,Uuid} type=Undefined;
     std::map<std::string,LLSD> map;
     std::vector<LLSD> array;
