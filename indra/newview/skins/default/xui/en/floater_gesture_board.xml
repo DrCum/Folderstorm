@@ -53,7 +53,7 @@
  <string name="compact">Compact tiles</string>
  <string name="page_count">[CURRENT] / [TOTAL]</string>
  <filter_editor name="tile_query" label="Find tiles" left="8" top="30" right="-100" height="22" follows="left|right|top"
-  visible="false" tool_tip="Find a tile by its label or inventory name. Escape returns to the board." />
+  tool_tip="Find a tile by its label or inventory name. Escape returns to the board." />
  <button name="leave_find" label="" image_overlay="Arrow_Left_Off" right="-62" top="30" width="24" height="22"
   follows="right|top" visible="false" tool_tip="Return to the full board (Esc)" />
  <combo_box name="boards" left="8" top="30" right="-100" height="22" follows="left|right|top" tool_tip="Select gesture board"/>

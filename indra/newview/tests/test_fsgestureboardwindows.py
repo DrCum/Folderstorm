@@ -224,6 +224,14 @@ int main(){
         self.assertIn("next != mBoard", refresh) # Empty collections must not repeatedly close New-board editors.
         self.assertIn("!controller.matchesSnapshot(mDisplayed)", refresh)
 
+    def test_find_editor_can_be_shown(self):
+        root = ET.parse(VIEWER / "skins/default/xui/en/floater_gesture_board.xml").getroot()
+        query = root.find("filter_editor[@name='tile_query']")
+        # LLSearchEditor copies its XUI parameters into the internal line editor.
+        # An initially invisible child stays hidden when only its parent is shown.
+        self.assertNotEqual(query.get("visible", "true"), "false",
+                            "Find tiles would show a container with an invisible text editor")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -208,6 +208,8 @@ FSFloaterGestureBoard::~FSFloaterGestureBoard()
 }
 bool FSFloaterGestureBoard::postBuild()
 {
+    // Hide after construction so LLSearchEditor's internal text box stays visible.
+    getChild<LLFilterEditor>("tile_query")->setVisible(false);
     getChild<LLButton>("leave_find")->setCommitCallback([this](LLUICtrl*, const LLSD&) { setFinding(false); });
     getChild<LLFilterEditor>("tile_query")->setCommitCallback([this](LLUICtrl* ctrl, const LLSD&) {
         std::string text = utf8str_tolower(ctrl->getValue().asString());
