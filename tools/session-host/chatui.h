@@ -5,6 +5,8 @@
 #include <commctrl.h>
 #include <imm.h>
 #include <functional>
+#include <deque>
+#include <optional>
 #include <vector>
 #include <algorithm>
 #include "fssessionchatmodel.h"
@@ -26,6 +28,48 @@ struct Transcript
     std::vector<std::pair<std::uint64_t,LONG>> offsets;
     std::uint64_t watermark = 0, painted = 0;
     bool bound = false, following = true, changing = false;
+    using ReadingPlace = fs_session::TranscriptAnchor<LONG>;
+    struct SavedPlace { fs_session::ChatKey key; ReadingPlace place; };
+    std::deque<SavedPlace> paused;
+    std::optional<ReadingPlace> pendingPlace;
+    static bool sameLogin(const fs_session::ChatKey& a, const fs_session::ChatKey& b)
+    {
+        return a.worker == b.worker && a.generation == b.generation && a.account == b.account && a.grid == b.grid;
+    }
+    static bool sameConversation(const fs_session::ChatKey& a, const fs_session::ChatKey& b)
+    {
+        return sameLogin(a, b) && a.conversation == b.conversation;
+    }
+    void changeSource(const fs_session::ChatKey& key, LONG firstChar)
+    {
+        // Never retain text or selections. A paused surface remembers at most 32 places.
+        if (bound && !following && source.generation && !source.account.empty())
+        {
+            const auto place = pendingPlace ? pendingPlace : fs_session::captureTranscriptAnchor(firstChar, offsets);
+            if (place)
+            {
+                if (paused.size() == 32) paused.pop_front();
+                paused.push_back({source, *place});
+            }
+        }
+        pendingPlace.reset();
+        for (auto it = paused.begin(); it != paused.end(); )
+        {
+            if (sameConversation(it->key, key))
+            {
+                pendingPlace = it->place;
+                it = paused.erase(it);
+            }
+            else if (it->key.worker == key.worker && !sameLogin(it->key, key))
+                it = paused.erase(it);
+            else
+                ++it;
+        }
+        source = key;
+        bound = true;
+        following = !pendingPlace;
+        painted = 0;
+    }
     bool atTail() const
     {
         SCROLLINFO info{}; info.cbSize = sizeof(info); info.fMask = SIF_ALL;
@@ -42,7 +86,7 @@ struct Transcript
     { if (latest) ShowWindow(latest,visible() && !following ? SW_SHOWNOACTIVATE : SW_HIDE); }
     void tail()
     {
-        changing = true; following = true;
+        changing = true; following = true; pendingPlace.reset();
         const auto end = GetWindowTextLengthW(edit);
         SendMessageW(edit,EM_SETSEL,static_cast<WPARAM>(end),static_cast<LPARAM>(end));
         SendMessageW(edit,EM_SCROLLCARET,0,0); SendMessageW(edit,WM_VSCROLL,SB_BOTTOM,0);
@@ -52,7 +96,9 @@ struct Transcript
     {
         if (changing) return;
         DWORD start = 0, end = 0; SendMessageW(edit,EM_GETSEL,reinterpret_cast<WPARAM>(&start),reinterpret_cast<LPARAM>(&end));
-        following = atTail() && start == end; latestVisibility();
+        following = atTail() && start == end;
+        if (following) pendingPlace.reset();
+        latestVisibility();
     }
     static LRESULT CALLBACK proc(HWND window,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR data)
     {
@@ -63,25 +109,53 @@ struct Transcript
         if (message == WM_VSCROLL || message == WM_MOUSEWHEEL || message == WM_KEYUP || message == WM_LBUTTONUP) view.observe();
         if (message == WM_SIZE || message == WM_SHOWWINDOW)
         { if (view.following && view.visible()) view.tail(); else view.latestVisibility(); }
-        if (message == WM_NCDESTROY) { RemoveWindowSubclass(window,proc,5); view.edit = nullptr; }
+        if (message == WM_NCDESTROY)
+        {
+            RemoveWindowSubclass(window,proc,5);
+            view.edit = nullptr;
+            view.bound = false;
+            view.pendingPlace.reset();
+            view.paused.clear();
+            view.text.clear();
+            view.offsets.clear();
+        }
         return result;
     }
     void attach(HWND control,HWND jump)
     { edit = control; latest = jump; SetWindowSubclass(edit,proc,5,reinterpret_cast<DWORD_PTR>(this)); }
     void update(const fs_session::ChatKey& key,std::wstring next,std::vector<std::pair<std::uint64_t,LONG>> positions,std::uint64_t through)
     {
-        const bool changed = !bound || source.worker != key.worker || source.generation != key.generation ||
-            source.account != key.account || source.grid != key.grid || source.conversation != key.conversation;
-        if (changed) { source = key; bound = true; following = true; painted = 0; }
-        if (next.empty()) { following = true; latestVisibility(); }
-        if (next == text && !changed)
-        { if (watermark != through) { watermark = through; InvalidateRect(edit,nullptr,FALSE); } return; }
+        const bool changed = !bound || !sameConversation(source, key);
+        if (!changed && next == text && positions == offsets)
+        {
+            if (watermark != through) { watermark = through; InvalidateRect(edit,nullptr,FALSE); }
+            return;
+        }
         DWORD start = 0, end = 0; SendMessageW(edit,EM_GETSEL,reinterpret_cast<WPARAM>(&start),reinterpret_cast<LPARAM>(&end));
         const LONG firstLine = static_cast<LONG>(SendMessageW(edit,EM_GETFIRSTVISIBLELINE,0,0));
         const LONG firstChar = static_cast<LONG>(SendMessageW(edit,EM_LINEINDEX,static_cast<WPARAM>(firstLine),0));
+        if (changed) changeSource(key, firstChar);
+        else if (!following && !pendingPlace && positions.empty() && !offsets.empty())
+        {
+            // Monitors clear their rendered text while Chat is hidden. Keep only the event anchor.
+            pendingPlace = fs_session::captureTranscriptAnchor(firstChar, offsets);
+        }
+        if (next.empty() && !pendingPlace) following = true;
         const auto fitted = [&](LONG position)
         { return fs_session::fitTranscriptAnchor(position,offsets,positions,static_cast<LONG>(next.size())); };
-        const LONG anchor = fitted(firstChar), selectionStart = fitted(static_cast<LONG>(start)), selectionEnd = fitted(static_cast<LONG>(end));
+        LONG anchor = 0, selectionStart = 0, selectionEnd = 0;
+        if (pendingPlace && !positions.empty())
+        {
+            anchor = fs_session::restoreTranscriptAnchor(*pendingPlace, positions, static_cast<LONG>(next.size()));
+            selectionStart = selectionEnd = anchor;
+            pendingPlace.reset();
+        }
+        else if (!changed && !following)
+        {
+            anchor = fitted(firstChar);
+            selectionStart = fitted(static_cast<LONG>(start));
+            selectionEnd = fitted(static_cast<LONG>(end));
+        }
         changing = true;
         if (!changed && next.size() >= text.size() && next.compare(0,text.size(),text) == 0)
         {

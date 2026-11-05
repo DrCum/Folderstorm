@@ -220,6 +220,17 @@ folderstorm_check(squirty_policy ../test_fssquirtypolicy.cpp)
 # Native HWND/accessibility checks run only on Windows; portable UI models above
 # remain available without Win32 headers or the viewer.
 if(WIN32)
+  add_executable(session_native_chat_place ../../../../tools/session-host/tests/test_native_chat_place.cpp)
+  target_include_directories(session_native_chat_place PRIVATE ../.. ../../../../tools/session-host)
+  target_compile_definitions(session_native_chat_place PRIVATE UNICODE _UNICODE)
+  if(MSVC)
+    target_compile_options(session_native_chat_place PRIVATE /utf-8 /UNDEBUG)
+  else()
+    target_compile_options(session_native_chat_place PRIVATE -UNDEBUG)
+  endif()
+  target_link_libraries(session_native_chat_place PRIVATE user32 gdi32 comctl32 imm32)
+  add_test(NAME session_native_chat_place COMMAND session_native_chat_place)
+
   add_executable(session_native_controls ../../../../tools/session-host/tests/test_native_controls.cpp
     ../../../../tools/session-host/accessibility.cpp)
   target_include_directories(session_native_controls PRIVATE ../..)
