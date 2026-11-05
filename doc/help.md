@@ -41,6 +41,10 @@ Enable **Show workspace favorites strip** in the Workspaces switcher or Preferen
 
 Settings search also recognizes **MCP**, **dual monitor**, **workspace**, and **undo**. Matching tabs open automatically. Undo leads to **Local assistant → History**, where **History and undo…** opens the existing inventory review window. Searching or opening history does not authorize or execute inventory changes.
 
+### Custom Inventory tabs
+
+Select a custom Inventory tab and click **Customize tab...** beside the search box to edit its filters. The tab remembers its filters and search automatically. Right-click a tab's name for **Customize tab...**, **Rename...**, and **Clone**. Customizing an inactive tab selects it first.
+
 ### Review Inventory changes
 
 Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. For a move, click **Choose folder…**, search by folder or parent name, and click **Use folder**. Check the displayed path, then preview the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.

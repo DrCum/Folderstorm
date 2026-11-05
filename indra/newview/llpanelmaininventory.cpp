@@ -186,6 +186,7 @@ LLPanelMainInventory::LLPanelMainInventory(const LLPanel::Params& p)
     mCommitCallbackRegistrar.add("Inventory.EmptyLostAndFound", boost::bind(&LLInventoryModel::emptyFolderType, &gInventory, "ConfirmEmptyLostAndFound", LLFolderType::FT_LOST_AND_FOUND));
     mCommitCallbackRegistrar.add("Inventory.DoCreate", boost::bind(&LLPanelMainInventory::doCreate, this, _2));
     mCommitCallbackRegistrar.add("Inventory.ShowFilters", boost::bind(&LLPanelMainInventory::toggleFindOptions, this));
+    mCommitCallbackRegistrar.add("Inventory.CustomizeTab", boost::bind(&LLPanelMainInventory::customizeActiveTab, this));
     mCommitCallbackRegistrar.add("Inventory.ResetFilters", boost::bind(&LLPanelMainInventory::resetFilters, this));
     //mCommitCallbackRegistrar.add("Inventory.SetSortBy", boost::bind(&LLPanelMainInventory::setSortBy, this, _2)); // <FS:Zi> Sort By menu handlers
 
@@ -1597,6 +1598,14 @@ void LLPanelMainInventory::setFilterTextFromFilter()
     updateFilterDropdown(&filter);
     mFilterText = filter.getFilterText();
     // </FS:Zi> Filter dropdown
+}
+
+void LLPanelMainInventory::customizeActiveTab()
+{
+    if (!mSingleFolderMode && FSInventoryCustomTabs::activePanelIsCustom(this))
+    {
+        onFilterTypeSelected("filter_type_custom");
+    }
 }
 
 void LLPanelMainInventory::toggleFindOptions()

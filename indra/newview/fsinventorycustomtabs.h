@@ -69,6 +69,7 @@ public:
     void onShowHiddenClicked();
 
     void onRenameClicked();
+    void onCustomizeClicked();
     void onCloneClicked();
     void onCloseClicked();
     void onHideClicked();

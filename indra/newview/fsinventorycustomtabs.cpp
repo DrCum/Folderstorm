@@ -165,6 +165,7 @@ void FSInventoryCustomTabs::registerCommitCallbacks(LLPanelMainInventory* parent
     }
     auto& reg = parent->getCommitCallbackRegistrar();
     reg.add("FSInventoryCustomTab.Folders", [parent](LLUICtrl*, const LLSD& action) { if (auto* self = instanceFor(parent)) self->changeFolderScope(action); });
+    reg.add("FSInventoryCustomTab.Customize", [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onCustomizeClicked(); });
     reg.add("FSInventoryCustomTab.Rename", [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onRenameClicked(); });
     reg.add("FSInventoryCustomTab.Clone",  [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onCloneClicked();  });
     reg.add("FSInventoryCustomTab.Close",  [parent](LLUICtrl*, const LLSD&) { if (auto* self = instanceFor(parent)) self->onCloseClicked();  });
@@ -508,6 +509,10 @@ void FSInventoryCustomTabs::onParentDraw(LLPanelMainInventory* parent)
 {
     if (auto* self = instanceFor(parent))
     {
+        if (auto* controls = parent->findChild<LLView>("customize_tab_panel"))
+        {
+            controls->setVisible(!parent->isSingleFolderMode() && self->isCustomTab(parent->getActivePanel()));
+        }
         self->ensureRootOpenForActivePanel();
     }
 }
@@ -760,6 +765,18 @@ void FSInventoryCustomTabs::changeFolderScope(const LLSD& action)
     }
     filter.setViewFolders(std::move(roots));
     save();
+}
+
+void FSInventoryCustomTabs::onCustomizeClicked()
+{
+    if (mParent && mTabs && isCustomTab(mContextPanel) && !mParent->isSingleFolderMode())
+    {
+        // Right-clicking an inactive tab must edit that tab's filters.
+        if (mTabs->selectTabPanel(mContextPanel))
+        {
+            mParent->customizeActiveTab();
+        }
+    }
 }
 
 void FSInventoryCustomTabs::onRenameClicked()

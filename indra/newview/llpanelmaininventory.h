@@ -127,6 +127,7 @@ public:
     static void newFolderWindow(LLUUID folder_id = LLUUID(), LLUUID item_to_select = LLUUID());
 
     void toggleFindOptions();
+    void customizeActiveTab();
 
     void resetFilters();
     void resetAllItemsFilters();
