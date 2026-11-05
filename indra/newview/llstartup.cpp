@@ -322,9 +322,9 @@ std::unique_ptr<LLViewerStats::PhaseMap> LLStartUp::sPhases(new LLViewerStats::P
 // local function declaration
 //
 
-void login_show();
+LLNotificationPtr login_show();
 void login_callback(S32 option, void* userdata);
-void uninstall_nsis_if_required();
+void check_for_separate_installation(const LLNotificationPtr& login_notice);
 void show_release_notes_if_required();
 //void show_first_run_dialog(); // <FS:CR> Unused in Firestorm
 bool first_run_dialog_callback(const LLSD& notification, const LLSD& response);
@@ -1320,6 +1320,7 @@ bool idle_startup()
 
         OmnifilterEngine::getInstance()->init();    // <FS:Zi> Omnifilter support
 
+        LLNotificationPtr login_notice;
         if (show_connect_box)
         {
             LL_DEBUGS("AppInit") << "show_connect_box on" << LL_ENDL;
@@ -1334,7 +1335,7 @@ bool idle_startup()
             // Make sure the process dialog doesn't hide things
             gViewerWindow->setShowProgress(false,false);
             // Show the login dialog
-            login_show();
+            login_notice = login_show();
             // connect dialog is already shown, so fill in the names
             // <FS:CR>
             //LLPanelLogin::populateFields( gUserCredential, gRememberUser, gRememberPassword);
@@ -1403,7 +1404,7 @@ bool idle_startup()
         LL_DEBUGS("AppInit") << "PeekMessage processed" << LL_ENDL;
 #endif
         do_startup_frame();
-        uninstall_nsis_if_required();
+        check_for_separate_installation(login_notice);
         timeout.reset();
         return false;
     }
@@ -3568,7 +3569,7 @@ bool idle_startup()
 // local function definition
 //
 
-void login_show()
+LLNotificationPtr login_show()
 {
     LL_INFOS("AppInit") << "Initializing Login Screen" << LL_ENDL;
 
@@ -3585,10 +3586,11 @@ void login_show()
     // <FS:PP> Whitelist reminder
     if( gSavedSettings.getBOOL("FSShowWhitelistReminder") )
     {
-        LLNotificationsUtil::add("WhitelistReminder"); 
         gSavedSettings.setBOOL("FSShowWhitelistReminder", false);
+        return LLNotificationsUtil::add("WhitelistReminder");
     }
     // </FS:PP>
+    return {};
 }
 
 // Callback for when login screen is closed.  Option 0 = connect, option 1 = quit.
@@ -3657,18 +3659,9 @@ void release_notes_coro(const std::string url)
     LLWeb::loadURLInternal(url);
 }
 
-/**
-* Check if this is a fresh velopack install and
-* if uninstallation of old viewer is needed.
-*/
-void uninstall_nsis_if_required()
-{
 #if LL_VELOPACK && LL_WINDOWS
-    bool checked_for_legacy_install = gSavedSettings.getBOOL("PreviousInstallChecked");
-    if (checked_for_legacy_install)
-    {
-        return;
-    }
+static void report_previous_install_if_found()
+{
     gSavedSettings.setBOOL("PreviousInstallChecked", true);
 
     LL_INFOS() << "Looking for previous NSIS installs" << LL_ENDL;
@@ -3691,6 +3684,32 @@ void uninstall_nsis_if_required()
         llformat("%d.%d.%d", found_major, found_minor, found_patch);
     args["PATH"] = nsis_path;
     LLNotificationsUtil::add("FolderstormSeparateInstallation", args);
+}
+#endif
+
+void check_for_separate_installation(const LLNotificationPtr& login_notice)
+{
+#if LL_VELOPACK && LL_WINDOWS
+    static bool requested = false;
+    if (requested || gSavedSettings.getBOOL("PreviousInstallChecked"))
+    {
+        return;
+    }
+    requested = true;
+    if (!login_notice || !login_notice->isActive())
+    {
+        report_previous_install_if_found();
+        return;
+    }
+
+    // Frame timers run at the login screen. The ordinary viewer idle callbacks start after login.
+    doPeriodically([login_notice]()
+    {
+        if (LLApp::isExiting()) return true;
+        if (login_notice->isActive()) return false;
+        report_previous_install_if_found();
+        return true;
+    }, 0.25f);
 #endif
 }
 
