@@ -707,6 +707,14 @@
        top_pad="0"
        right="-1" />
     </layout_panel>
+    <layout_panel name="customize_tab_panel" width="124" height="25"
+     auto_resize="false" user_resize="false" visible="false">
+      <button name="customize_tab" label="Customize tab..." left="0" top="0"
+       width="124" height="23" follows="left|top"
+       tool_tip="Edit this tab's filters. Changes are saved automatically.">
+        <button.commit_callback function="Inventory.CustomizeTab" />
+      </button>
+    </layout_panel>
   </layout_stack>
 
   <layout_stack
