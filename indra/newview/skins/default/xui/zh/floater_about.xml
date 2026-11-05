@@ -6,6 +6,7 @@
 [https://folderstorm.com Folderstorm] 基於 [https://www.firestormviewer.org Firestorm]。
     </text>
 			<button label="複製到剪貼簿" name="copy_btn" />
+			<check_box name="include_location" label="包含目前位置" tool_tip="在報告及其複本中顯示目前的區域、座標與模擬器資訊。" />
 		</panel>
 		<panel label="鳴謝" name="credits_panel">
 			<text name="linden_intro">

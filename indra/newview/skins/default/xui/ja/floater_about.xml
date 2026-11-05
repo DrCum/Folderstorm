@@ -6,6 +6,7 @@
 [https://folderstorm.com Folderstorm] は [https://www.firestormviewer.org Firestorm] を基にしたビューアです。
     </text>
 			<button label="コピー" name="copy_btn"/>
+			<check_box name="include_location" label="現在地を含める" tool_tip="現在のリージョン、座標、シミュレーター情報をレポートとそのコピーに含めます。" />
 		</panel>
 		<panel label="Linden Labクレジット" name="credits_panel">
 			<text name="linden_intro">

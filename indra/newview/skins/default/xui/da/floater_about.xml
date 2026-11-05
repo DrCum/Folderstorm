@@ -45,6 +45,7 @@ Voice Server Version: [VOICE_VERSION]
 		<panel label="Info" name="support_panel">
 			<text name="support_intro">[https://folderstorm.com Folderstorm] er baseret på [https://www.firestormviewer.org Firestorm].</text>
 			<button label="Kopiér til udklipsholder" name="copy_btn"/>
+			<check_box name="include_location" label="Medtag min placering" tool_tip="Vis region, koordinater og simulatoroplysninger i rapporten og den kopierede tekst." />
 		</panel>
 		<panel label="Tak til" name="credits_panel">
 		</panel>

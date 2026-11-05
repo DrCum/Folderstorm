@@ -4414,11 +4414,20 @@ LLSD LLAppViewer::getViewerInfo() const
     return info;
 }
 
-std::string LLAppViewer::getViewerInfoString(bool default_string) const
+std::string LLAppViewer::getViewerInfoString(bool default_string, ReportLocation location) const
 {
     std::ostringstream support;
 
     LLSD info(getViewerInfo());
+    if (location == ReportLocation::Omit)
+    {
+        // Remove the values before expanding any localized template or array.
+        for (const char* key : {"POSITION", "POSITION_LOCAL", "REGION", "HOSTNAME", "SLURL",
+                                "SERVER_VERSION", "SERVER_RELEASE_NOTES_URL"})
+        {
+            info.erase(key);
+        }
+    }
 
     // Render the LLSD from getInfo() as a format_map_t
     LLStringUtil::format_map_t args;

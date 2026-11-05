@@ -6,6 +6,7 @@
 [https://folderstorm.com Folderstorm] basiert auf dem Viewer [https://www.firestormviewer.org Firestorm].
     </text>
 			<button label="In Zwischenablage kopieren" name="copy_btn"/>
+			<check_box name="include_location" label="Position in der Welt angeben" tool_tip="Region, Koordinaten und Simulatorinformationen im Bericht und in der kopierten Fassung anzeigen." />
 			<button label="Nach Updates suchen" name="update_btn"/>
 		</panel>
 		<panel label="Danksagung" name="credits_panel">

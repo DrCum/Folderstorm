@@ -121,7 +121,8 @@ public:
 
     void setServerReleaseNotesURL(const std::string& url) { mServerReleaseNotesURL = url; }
     LLSD getViewerInfo() const;
-    std::string getViewerInfoString(bool default_string = false) const;
+    enum class ReportLocation { Include, Omit };
+    std::string getViewerInfoString(bool default_string = false, ReportLocation location = ReportLocation::Include) const;
 
     // Report true if under the control of a debugger. A null-op default.
     virtual bool beingDebugged() { return false; }

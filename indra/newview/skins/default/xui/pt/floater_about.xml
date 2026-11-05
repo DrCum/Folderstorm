@@ -45,6 +45,7 @@ Versão do servidor de voz: [VOICE_VERSION]
 [https://folderstorm.com Folderstorm] tem como base o visualizador [https://www.firestormviewer.org Firestorm].
     </text>
 			<button label="Copiar" name="copy_btn"/>
+			<check_box name="include_location" label="Incluir minha localização" tool_tip="Mostra a região, as coordenadas e os dados do simulador no relatório e na cópia." />
 			<button label="Checar atualizações" name="update_btn"/>
 		</panel>
 		<panel label="Créditos" name="credits_panel">

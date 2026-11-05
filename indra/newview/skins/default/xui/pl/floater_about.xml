@@ -6,6 +6,7 @@
 Podstawą programu [https://folderstorm.com Folderstorm] jest [https://www.firestormviewer.org Firestorm].
     </text>
 			<button label="Kopiuj do schowka" name="copy_btn"/>
+			<check_box name="include_location" label="Uwzględnij moje położenie" tool_tip="Pokaż region, współrzędne i informacje o symulatorze w raporcie oraz w jego kopii." />
 		</panel>
 		<panel label="Podziękowania" name="credits_panel">
 			<text name="linden_intro">

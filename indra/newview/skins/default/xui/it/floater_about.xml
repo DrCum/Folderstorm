@@ -49,6 +49,7 @@ Versione Server voce: [VOICE_VERSION]
 [https://folderstorm.com Folderstorm] si basa sul viewer [https://www.firestormviewer.org Firestorm].
     </text>
 			<button label="Copia negli appunti" name="copy_btn"/>
+			<check_box name="include_location" label="Includi la mia posizione" tool_tip="Mostra la regione, le coordinate e i dettagli del simulatore nel rapporto e nella copia." />
 			<button label="Cerca aggiornamenti" name="update_btn"/>
 		</panel>
 		<panel label="Ringraziamenti" name="credits_panel">
