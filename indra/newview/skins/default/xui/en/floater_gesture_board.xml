@@ -31,6 +31,12 @@
  <string name="board_new">New board…</string><string name="board_rename">Rename…</string>
  <string name="board_duplicate">Duplicate…</string><string name="board_delete">Delete…</string>
  <string name="board_window">Open board in new window</string>
+ <string name="board_find">Find tiles…</string>
+ <string name="board_find_shortcut">Find tiles… (Ctrl+F)</string>
+ <string name="leave_search">Close tile search</string>
+ <string name="find_title">[NAME] · Matches: [COUNT]</string>
+ <string name="no_matches">No matching tiles</string>
+ <string name="empty_board">No gestures or sounds</string>
  <string name="board_title">Gesture board — [NAME]</string>
  <string name="windows_full">Maximum: 16 open gesture board windows. Close a window to open another.</string>
  <string name="sound_item">Inventory sound</string>
@@ -46,21 +52,25 @@
  <string name="tile_selecting">Click to toggle selection; Shift-click selects a range. Items do not play while selecting.</string>
  <string name="compact">Compact tiles</string>
  <string name="page_count">[CURRENT] / [TOTAL]</string>
+ <filter_editor name="tile_query" label="Find tiles" left="8" top="30" right="-100" height="22" follows="left|right|top"
+  tool_tip="Find a tile by its label or inventory name. Escape returns to the board." />
+ <button name="leave_find" label="" image_overlay="Arrow_Left_Off" right="-62" top="30" width="24" height="22"
+  follows="right|top" visible="false" tool_tip="Return to the full board (Esc)" />
  <combo_box name="boards" left="8" top="30" right="-100" height="22" follows="left|right|top" tool_tip="Select gesture board"/>
  <text name="status" right="-88" top="32" width="10" height="18" follows="right|top" mouse_opaque="true">!</text>
  <button name="add_items" label="" image_overlay="AddItem_Off" right="-62" top="30" width="24" height="22" follows="right|top" tool_tip="Add gestures or sounds from Inventory"/>
  <button name="stop" label="" image_overlay="Stop_Off" right="-36" top="30" width="24" height="22" follows="right|top" tool_tip="Stop board gestures and cancel pending plays"/>
  <button name="options" label="" image_overlay="OptionsMenu_Off" right="-8" top="30" width="24" height="22" follows="right|top" tool_tip="Board options, defaults and selection. Ctrl-click to select tiles; Shift-click selects a range. Drag unselected tiles to reorder."/>
- <panel name="selection" left="8" top="56" right="-8" height="22" follows="left|right|top" visible="false" layout="topleft">
+ <view name="selection" left="8" top="56" right="-8" height="22" follows="left|right|top" visible="false" layout="topleft">
   <text name="selected_count" left="0" top="2" width="52" height="18" use_ellipses="true" tool_tip="Click tiles to toggle selection. Shift-click selects a range; Ctrl+A selects all pages. Selection never plays items."/>
   <button name="edit_selected" label="Edit selected" left="56" top="0" width="96" height="22"/>
   <button name="done_selecting" label="Done" left="156" top="0" width="48" height="22" tool_tip="Return to normal playback (Esc)"/>
- </panel>
- <panel name="grid" left="8" top="58" right="-8" bottom="-6" follows="all"/>
+ </view>
+ <view name="grid" left="8" top="58" right="-8" bottom="-6" follows="all"/>
  <text name="empty" left="12" top="64" right="-12" height="24" follows="left|right|top" use_ellipses="true">No gestures or sounds</text>
- <panel name="pagination" left="8" right="-8" bottom="-6" height="22" follows="left|right|bottom" layout="topleft" visible="false">
+ <view name="pagination" left="8" right="-8" bottom="-6" height="22" follows="left|right|bottom" layout="topleft" visible="false">
   <button name="previous_page" label="&lt;" left="0" top="0" width="24" height="22" follows="left|top" tool_tip="Previous page"/>
   <text name="page_number" left="30" right="-30" top="2" height="18" halign="center" follows="left|right|top"/>
   <button name="next_page" label="&gt;" right="-1" top="0" width="24" height="22" follows="right|top" tool_tip="Next page"/>
- </panel>
+ </view>
 </floater>

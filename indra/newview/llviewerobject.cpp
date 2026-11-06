@@ -3071,9 +3071,10 @@ void LLViewerObject::fetchInventoryDelayed(const F64 &time_seconds)
     {
         if (mInvRequestXFerId != 0)
         {
-            // abort download.
-            gXferManager->abortRequestById(mInvRequestXFerId, -1);
+            // A queued transfer can call back synchronously from abortRequestById.
+            const U64 previous = mInvRequestXFerId;
             mInvRequestXFerId = 0;
+            gXferManager->abortRequestById(previous, -1);
         }
         mInvRequestState = INVENTORY_REQUEST_WAIT; // affects isInventoryPending()
         LLCoros::instance().launch("LLViewerObject::fetchInventoryDelayedCoro()",
@@ -3113,19 +3114,25 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
         if (obj->mInventorySerialNum && obj->mInventory)
             url += "&inventory_serial=" + std::to_string(obj->mInventorySerialNum);
 
+        // Coroutines run on the viewer thread. A new fetch, even for a newly
+        // created object with the same UUID, must have a different owner.
+        static U64 next_request = 0;
+        const U64 request = ++next_request;
+        obj->mInventoryCapRequest = request;
         obj->mInvRequestState = INVENTORY_XFER;
         LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
-        // Object may have gone away while we were suspended, double-check that it still exists
+        // The UUID can resolve again after a kill/recreate while HTTP is suspended.
         obj = gObjectList.findObject(task_inv);
-        if (!obj)
+        if (!obj || obj->mInventoryCapRequest != request)
         {
-            LL_WARNS() << "Object " << task_inv << " went away while fetching inventory, dropping result" << LL_ENDL;
+            LL_DEBUGS() << "Dropping superseded inventory response for " << task_inv << LL_ENDL;
             return;
         }
+        obj->mInventoryCapRequest = 0;
 
         bool potentially_stale = false;
         if (status)
@@ -3317,6 +3324,7 @@ struct LLFilenameAndTask
 {
     LLUUID mTaskID;
     std::string mFilename;
+    U64 mXferID = 0;
 
     // for sequencing in case of multiple updates
     S16 mSerial;
@@ -3432,39 +3440,37 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
             delete ft;
             return;
         }
-        U64 new_id = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
+        const U64 previous = object->mInvRequestXFerId;
+        ft->mXferID = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
             ft->mFilename, LL_PATH_CACHE,
             object->mRegionp->getHost(),
             true,
             &LLViewerObject::processTaskInvFile,
             (void**)ft, // This takes ownership of ft
             LLXferManager::HIGH_PRIORITY);
-        if (object->mInvRequestState == INVENTORY_XFER)
+        object->mInvRequestXFerId = ft->mXferID;
+        object->mInvRequestState = INVENTORY_XFER;
+        if (previous && previous != ft->mXferID)
         {
-            if (new_id > 0 && new_id != object->mInvRequestXFerId)
-            {
-                // we started new download.
-                gXferManager->abortRequestById(object->mInvRequestXFerId, -1);
-                object->mInvRequestXFerId = new_id;
-            }
-        }
-        else
-        {
-            object->mInvRequestState = INVENTORY_XFER;
-            object->mInvRequestXFerId = new_id;
+            gXferManager->abortRequestById(previous, -1);
         }
     }
 }
 
 void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtStat ext_status)
 {
-    LLFilenameAndTask* ft = (LLFilenameAndTask*)user_data;
-    LLViewerObject* object = NULL;
-
-    if (ft
-        && (0 == error_code)
-        && (object = gObjectList.findObject(ft->mTaskID))
-        && ft->mSerial >= object->mInventorySerialNum)
+    std::unique_ptr<LLFilenameAndTask> ft(reinterpret_cast<LLFilenameAndTask*>(user_data));
+    if (!ft) return;
+    LLViewerObject* object = gObjectList.findObject(ft->mTaskID);
+    if (!object || object->mInvRequestXFerId != ft->mXferID)
+    {
+        if (!error_code)
+        {
+            LLFile::remove(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename));
+        }
+        return;
+    }
+    if (!error_code && ft->mSerial >= object->mInventorySerialNum)
     {
         object->mInventorySerialNum = ft->mSerial;
         LL_DEBUGS() << "Receiving inventory task file for serial " << object->mInventorySerialNum << " taskid: " << ft->mTaskID << LL_ENDL;
@@ -3481,7 +3487,6 @@ void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtS
         if( !object->mInventory )
         {
             LL_WARNS() << "object->mInventory == 0" << LL_ENDL;
-            delete ft;
             return;
         }
         // </FS:ND>
@@ -3505,6 +3510,7 @@ void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtS
                     }
                 }
             }
+            return;
         }
         else
         {
@@ -3516,12 +3522,13 @@ void LLViewerObject::processTaskInvFile(void** user_data, S32 error_code, LLExtS
     }
     else
     {
-        // This Occurs When two requests were made, and the first one
-        // has already handled it.
         LL_DEBUGS() << "Problem loading task inventory. Return code: "
                  << error_code << LL_ENDL;
     }
-    delete ft;
+    // A failed transfer is not an inventory observation. Let the next caller retry.
+    object->mInvRequestXFerId = 0;
+    object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+    object->mInventoryDirty = true;
 }
 
 bool LLViewerObject::loadTaskInvFile(const std::string& filename, bool assistant_complete)
@@ -3664,9 +3671,12 @@ void LLViewerObject::doInventoryCallback(bool from_simulator, bool complete)
         }
     }
 
-    // release inventory loading state
-    mInvRequestXFerId = 0;
-    mInvRequestState = INVENTORY_REQUEST_STOPPED;
+    // Local notifications may publish cached contents while a file is downloading.
+    if (from_simulator || !mInvRequestXFerId)
+    {
+        mInvRequestXFerId = 0;
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
+    }
 }
 
 void LLViewerObject::removeInventory(const LLUUID& item_id)

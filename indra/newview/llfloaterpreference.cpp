@@ -670,6 +670,9 @@ void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bo
 
 bool LLFloaterPreference::postBuild()
 {
+    // Preference pages use fixed column widths. Let shorter windows resize vertically.
+    enableResizeCtrls(isResizable(), false, true);
+
     mDeleteTranscriptsBtn = getChild<LLButton>("delete_transcripts");
 
     // <FS:Ansariel> We don't have these buttons

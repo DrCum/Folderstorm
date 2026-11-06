@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewercontrol.h"
 #include "llfavoritesbar.h"
 
 #include "llfloaterreg.h"
@@ -235,6 +236,25 @@ private:
  * in createButtons function but landmark data is not available when Favorites Bar is
  * created. Thats why we are requesting landmark data after
  */
+class FSFavoriteFolderMenu : public LLMenuGL
+{
+public:
+    explicit FSFavoriteFolderMenu(const Params& p) : LLMenuGL(p) {}
+    bool handleDragAndDrop(S32, S32, MASK, bool, EDragAndDropType, void*, EAcceptance* accept, std::string&) override
+    {
+        // Folder assignment is explicit. A drop on a popup must not pass through to the world.
+        *accept = ACCEPT_NO;
+        return true;
+    }
+};
+
+class FSFavoriteFolderButton : public LLButton
+{
+public:
+    explicit FSFavoriteFolderButton(const Params& p) : LLButton(p) {}
+    std::string folder;
+};
+
 class LLFavoriteLandmarkButton : public LLButton
 {
 public:
@@ -608,6 +628,7 @@ LLFavoritesBarCtrl::~LLFavoritesBarCtrl()
         mOverflowMenuHandle.get()->die();
     if (mContextMenuHandle.get())
         mContextMenuHandle.get()->die();
+    if (mFolderMenuHandle.get()) mFolderMenuHandle.get()->die();
 }
 
 bool LLFavoritesBarCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
@@ -642,11 +663,25 @@ bool LLFavoritesBarCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
                 LLView* overflow_menu = mOverflowMenuHandle.get();
                 if (overflow_menu && !overflow_menu->isDead() && overflow_menu->getVisible())
                 {
+                    if (dynamic_cast<LLMenuItemBranchGL*>(overflow_menu->childFromPoint(x, y)))
+                    {
+                        setLandingTab(nullptr);
+                        showDragMarker(false);
+                        *accept = ACCEPT_NO;
+                        return true;
+                    }
                     overflow_menu->handleHover(x, y, mask);
                 }
             }
             else // Drag to the toolbar itself
             {
+                if (dynamic_cast<FSFavoriteFolderButton*>(findChildByLocalCoords(x, y)))
+                {
+                    setLandingTab(nullptr);
+                    showDragMarker(false);
+                    *accept = ACCEPT_NO;
+                    return true;
+                }
                 // Drag to a landmark button?
                 if (LLFavoriteLandmarkButton* dest = dynamic_cast<LLFavoriteLandmarkButton*>(findChildByLocalCoords(x, y)))
                 {
@@ -905,12 +940,10 @@ bool LLFavoritesBarCtrl::findDragAndDropTarget(LLUUID& target_id, bool& insert_b
         }
         else
         {
-            // Choose the right landmark button
-            hovered_button = dynamic_cast<LLFavoriteLandmarkButton*>(mLastTab);
-            if (LL_UNLIKELY(!hovered_button))
-                return false;
-
+            // Drop after the last visible entry, even if it represents several landmarks.
+            target_id = itemBeforeOverflow();
             insert_before = false;
+            return target_id.notNull();
         }
         target_id = hovered_button->getLandmarkID();
     }
@@ -1044,6 +1077,51 @@ const LLButton::Params& LLFavoritesBarCtrl::getButtonParams()
     return button_params;
 }
 
+namespace
+{
+constexpr const char* FOLDER_SETTING = "FSLandmarkFavoriteFolders";
+
+bool isCurrentFavorite(const LLUUID& session, const LLUUID& id)
+{
+    const auto* item = gInventory.getItem(id);
+    return session.notNull() && session == gAgent.getSessionID() && item && item->getType() == LLAssetType::AT_LANDMARK
+        && gInventory.isObjectDescendentOf(id, gInventory.findCategoryUUIDForType(LLFolderType::FT_FAVORITE));
+}
+}
+
+void LLFavoritesBarCtrl::rebuildFolderEntries()
+{
+    const LLSD assignments = gSavedPerAccountSettings.getLLSD(FOLDER_SETTING);
+    mBarEntries.clear();
+    mFolderButtons.clear();
+    mFolderContents.clear();
+    for (const auto& item : mItems)
+    {
+        const auto folder = assignments[item->getUUID().asString()].asString();
+        if (!folder.empty())
+        {
+            auto& members = mFolderContents[folder];
+            members.push_back(item);
+            if (members.size() > 1) continue;
+            mFolderButtons.emplace(item->getUUID(), folder);
+        }
+        mBarEntries.push_back(item);
+    }
+}
+
+LLUUID LLFavoritesBarCtrl::itemBeforeOverflow() const
+{
+    return mFirstDropDownItem > 0 && mFirstDropDownItem <= mBarEntries.size()
+        ? mBarEntries[mFirstDropDownItem - 1]->getUUID() : LLUUID::null;
+}
+
+std::string LLFavoritesBarCtrl::entryLabel(S32 index) const
+{
+    const auto& item = mBarEntries[index];
+    const auto group = mFolderButtons.find(item->getUUID());
+    return group == mFolderButtons.end() ? item->getName() : group->second + " \xE2\x96\xBE";
+}
+
 void LLFavoritesBarCtrl::updateButtons(bool force_update)
 {
     if (LLApp::isExiting())
@@ -1077,6 +1155,7 @@ void LLFavoritesBarCtrl::updateButtons(bool force_update)
         }
     }
 
+    rebuildFolderEntries();
     const LLButton::Params& button_params = getButtonParams();
 
     if(mItems.empty())
@@ -1094,29 +1173,27 @@ void LLFavoritesBarCtrl::updateButtons(bool force_update)
     if (!force_update)
     {
         //lets find first changed button
-        while (child_it != childs->end() && first_changed_item_index < mItems.size())
+        while (child_it != childs->end() && first_changed_item_index < mBarEntries.size())
         {
-            LLFavoriteLandmarkButton* button = dynamic_cast<LLFavoriteLandmarkButton*> (*child_it);
-            if (button)
+            const auto& item = mBarEntries[first_changed_item_index];
+            const auto folder = mFolderButtons.find(item->getUUID());
+            if (auto* group = dynamic_cast<FSFavoriteFolderButton*>(*child_it))
             {
-                const LLViewerInventoryItem *item = mItems[first_changed_item_index].get();
-                if (item)
-                {
-                    // an child's order  and mItems  should be same
-                    if (button->getLandmarkID() != item->getUUID() // sort order has been changed
-                        || button->getLabelSelected() != item->getName()) // favorite's name has been changed
-                    {
-                        break;
-                    }
-                }
-                first_changed_item_index++;
+                if (folder == mFolderButtons.end() || group->folder != folder->second) break;
+                ++first_changed_item_index;
+            }
+            else if (auto* button = dynamic_cast<LLFavoriteLandmarkButton*>(*child_it))
+            {
+                if (folder != mFolderButtons.end() || button->getLandmarkID() != item->getUUID()
+                    || button->getLabelSelected() != item->getName()) break;
+                ++first_changed_item_index;
             }
             child_it++;
         }
     }
     // now first_changed_item_index should contains a number of button that need to change
 
-    if (first_changed_item_index <= mItems.size())
+    if (first_changed_item_index <= mBarEntries.size())
     {
         // Rebuild the buttons only
         // child_list_t is a linked list, so safe to erase from the middle if we pre-increment the iterator
@@ -1125,10 +1202,11 @@ void LLFavoritesBarCtrl::updateButtons(bool force_update)
         {
             //lets remove other landmarks button and rebuild it
             child_list_const_iter_t cur_it = child_it++;
-            LLFavoriteLandmarkButton* button =
-                    dynamic_cast<LLFavoriteLandmarkButton*> (*cur_it);
+            LLButton* button = dynamic_cast<LLFavoriteLandmarkButton*>(*cur_it);
+            if (!button) button = dynamic_cast<FSFavoriteFolderButton*>(*cur_it);
             if (button)
             {
+                if (mLandingTab == button) mLandingTab = nullptr;
                 if (mLastTab == button)
                 {
                     mLastTab = NULL;
@@ -1167,9 +1245,9 @@ void LLFavoritesBarCtrl::updateButtons(bool force_update)
         //last_right_edge is saving coordinates
         LLButton* last_new_button = NULL;
         int j = first_changed_item_index;
-        for (; j < mItems.size(); j++)
+        for (; j < mBarEntries.size(); j++)
         {
-            last_new_button = createButton(mItems[j], button_params, last_right_edge);
+            last_new_button = createButton(mBarEntries[j], button_params, last_right_edge);
             if (!last_new_button)
             {
                 break;
@@ -1179,16 +1257,16 @@ void LLFavoritesBarCtrl::updateButtons(bool force_update)
 
             mLastTab = last_new_button;
         }
-        if (!mLastTab && mItems.size() > 0)
+        if (!mLastTab && mBarEntries.size() > 0)
         {
             // mMoreTextBox was removed, so LLFavoriteLandmarkButtons
             // should be the only ones in the list
-            mLastTab = dynamic_cast<LLFavoriteLandmarkButton*>(childs->back());
+            mLastTab = dynamic_cast<LLButton*>(childs->back());
         }
 
         mFirstDropDownItem = j;
         // Chevron button
-        if (mFirstDropDownItem < mItems.size())
+        if (mFirstDropDownItem < mBarEntries.size())
         {
             // if updateButton had been called it means:
             // or there are some new favorites, or width had been changed
@@ -1241,7 +1319,9 @@ LLButton* LLFavoritesBarCtrl::createButton(const LLPointer<LLViewerInventoryItem
      * Empty space or ellipsis might be displayed instead of last symbols, even though the width of the button is enough.
      * The problem disappears if we pad the button with 20 pixels.
      */
-    int required_width = mFont->getWidth(item->getName()) + 20;
+    const auto group = mFolderButtons.find(item->getUUID());
+    const auto label = group == mFolderButtons.end() ? item->getName() : group->second + " \xE2\x96\xBE";
+    int required_width = mFont->getWidth(label) + 20;
     int width = required_width > def_button_width? def_button_width : required_width;
     LLFavoriteLandmarkButton* fav_btn = NULL;
 
@@ -1254,6 +1334,20 @@ LLButton* LLFavoritesBarCtrl::createButton(const LLPointer<LLViewerInventoryItem
         return NULL;
     }
     LLButton::Params fav_btn_params(button_params);
+    if (group != mFolderButtons.end())
+    {
+        auto* button = LLUICtrlFactory::create<FSFavoriteFolderButton>(fav_btn_params);
+        button->folder = group->second;
+        auto rect = button->getRect();
+        rect.setOriginAndSize(curr_x + button_x_delta, rect.mBottom, width, rect.getHeight());
+        button->setRect(rect);
+        button->setFont(mFont);
+        button->setLabel(label);
+        button->setToolTip(group->second);
+        button->setCommitCallback(boost::bind(&LLFavoritesBarCtrl::showFolderMenu, this, group->second, _1));
+        addChild(button);
+        return button;
+    }
     fav_btn = LLUICtrlFactory::create<LLFavoriteLandmarkButton>(fav_btn_params);
     if (NULL == fav_btn)
     {
@@ -1292,6 +1386,8 @@ bool LLFavoritesBarCtrl::postBuild()
     }
     menu->setBackgroundColor(LLUIColorTable::instance().getColor("MenuPopupBgColor"));
     mContextMenuHandle = menu->getHandle();
+    mFolderSettingsConnection = gSavedPerAccountSettings.getControl(FOLDER_SETTING)->getCommitSignal()->connect(
+        [this](LLControlVariable*, const LLSD&, const LLSD&) { mItemsListDirty = true; });
 
     return true;
 }
@@ -1379,9 +1475,15 @@ void LLFavoritesBarCtrl::updateOverflowMenuItems()
 
     U32 widest_item = 0;
 
-    for (S32 i = mFirstDropDownItem; i < mItems.size(); i++)
+    for (S32 i = mFirstDropDownItem; i < mBarEntries.size(); i++)
     {
-        LLViewerInventoryItem* item = mItems.at(i);
+        LLViewerInventoryItem* item = mBarEntries.at(i);
+        const auto group = mFolderButtons.find(item->getUUID());
+        if (group != mFolderButtons.end())
+        {
+            if (auto* submenu = makeFolderMenu(group->second)) menu->addChild(submenu);
+            continue;
+        }
         const std::string& item_name = item->getName();
 
         LLFavoriteLandmarkMenuItem::Params item_params;
@@ -1407,6 +1509,57 @@ void LLFavoritesBarCtrl::updateOverflowMenuItems()
     mDropDownItemsCount = menu->getItemCount();
     addOpenLandmarksMenuItem(menu);
     mUpdateDropDownItems = false;
+}
+
+LLMenuGL* LLFavoritesBarCtrl::makeFolderMenu(const std::string& folder)
+{
+    const auto group = mFolderContents.find(folder);
+    if (group == mFolderContents.end()) return nullptr;
+    LLMenuGL::Params p;
+    p.name(folder);
+    p.label(folder);
+    p.can_tear_off(false);
+    p.scrollable(true);
+    p.visible(false);
+    auto* menu = LLUICtrlFactory::create<FSFavoriteFolderMenu>(p);
+    const auto session = gAgent.getSessionID();
+    for (const auto& member : group->second)
+    {
+        const auto id = member->getUUID();
+        LLMenuItemCallGL::Params row;
+        row.name(id.asString());
+        row.label(member->getName());
+        auto still_here = [session, id, folder]() {
+            return isCurrentFavorite(session, id)
+                && gSavedPerAccountSettings.getLLSD(FOLDER_SETTING)[id.asString()].asString() == folder;
+        };
+        row.on_click.function([this, id, still_here](LLUICtrl*, const LLSD&) {
+            if (still_here()) onButtonClick(id);
+        });
+        auto* entry = LLUICtrlFactory::create<LLFavoriteLandmarkMenuItem>(row);
+        entry->initFavoritesBarPointer(this);
+        entry->setLandmarkID(id);
+        entry->LLUICtrl::setMouseDownCallback([this, id, still_here](LLUICtrl* ctrl, S32 x, S32 y, MASK mask) {
+            if (still_here()) onButtonMouseDown(id, ctrl, x, y, mask);
+        });
+        entry->LLUICtrl::setMouseUpCallback(boost::bind(&LLFavoritesBarCtrl::onButtonMouseUp, this, id, _1, _2, _3, _4));
+        entry->setRightMouseDownCallback([this, id, still_here](LLUICtrl* ctrl, S32 x, S32 y, MASK mask) {
+            if (still_here()) onButtonRightClick(id, ctrl, x, y, mask);
+        });
+        menu->addChild(entry);
+    }
+    return menu;
+}
+
+void LLFavoritesBarCtrl::showFolderMenu(const std::string& folder, LLUICtrl* button)
+{
+    if (auto* old = mFolderMenuHandle.get()) old->die();
+    if (auto* menu = makeFolderMenu(folder))
+    {
+        mFolderMenuHandle = menu->getHandle();
+        menu->updateParent(LLMenuGL::sMenuContainer);
+        LLMenuGL::showPopup(button, menu, 0, 0);
+    }
 }
 
 void LLFavoritesBarCtrl::fitLabelWidth(LLMenuItemCallGL* menu_item)
@@ -1593,7 +1746,27 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
     if (!item)
         return;
 
-    if (action == "open")
+    if (action == "folder")
+    {
+        const auto id = item->getUUID();
+        const auto session = gAgent.getSessionID();
+        const auto key = id.asString();
+        const auto before = gSavedPerAccountSettings.getLLSD(FOLDER_SETTING)[key].asString();
+        LLSD args;
+        args["NAME"] = before;
+        LLNotificationsUtil::add("FSAssignFavoriteFolder", args, LLSD(),
+            [session, id, key, before](const LLSD& notification, const LLSD& response) {
+                if (LLNotificationsUtil::getSelectedOption(notification, response) != 0 || !isCurrentFavorite(session, id)) return;
+                auto assignments = gSavedPerAccountSettings.getLLSD(FOLDER_SETTING);
+                if (assignments[key].asString() != before) return;
+                auto name = response["new_name"].asString();
+                LLStringUtil::trim(name);
+                if (name.empty()) assignments.erase(key);
+                else assignments[key] = utf8str_truncate(name, 64);
+                gSavedPerAccountSettings.setLLSD(FOLDER_SETTING, assignments);
+            });
+    }
+    else if (action == "open")
     {
         onButtonClick(item->getUUID());
     }
@@ -2507,7 +2680,7 @@ S32 LLFavoritesBarCtrl::preferredWidth()
     const S32 maximum = std::max(1, static_cast<S32>(style.rect.width));
     const S32 spacing = std::max(0, static_cast<S32>(style.rect.left)) * 2;
     S32 width = mMoreCtrl->getRect().getWidth() + 4;
-    for (const auto& item : mItems)
-        width = std::min(16384, width + std::min(maximum, mFont->getWidth(item->getName()) + 20) + spacing);
+    for (S32 i = 0; i < mBarEntries.size(); ++i)
+        width = std::min(16384, width + std::min(maximum, mFont->getWidth(entryLabel(i)) + 20) + spacing);
     return width;
 }

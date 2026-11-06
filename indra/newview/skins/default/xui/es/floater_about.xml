@@ -44,11 +44,11 @@ Calidad de dibujo (Render quality): [RENDERQUALITY]
 	</floater.string>
 	<tab_container name="about_tab">
 		<panel label="Información" name="support_panel">
-			<text name="support_intro">    
-				Para obtener la información más reciente acerca de Firestorm, visita
-https://www.firestormviewer.org
-			</text>
+			<text name="support_intro">
+[https://folderstorm.com Folderstorm] se basa en el visor [https://www.firestormviewer.org Firestorm].
+    </text>
   			<button label="Copiar al portapapeles" name="copy_btn"/>
+			<check_box name="include_location" label="Incluir mi ubicación" tool_tip="Muestra la región, las coordenadas y los datos del simulador en el informe y en la copia." />
 		</panel>
 		<panel label="Créditos de Linden Lab" name="credits_panel">
         		<text name="linden_intro">

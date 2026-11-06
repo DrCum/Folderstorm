@@ -35,6 +35,8 @@ Rect rect(const LLRect& r) { return {double(r.mLeft),double(r.mBottom),double(r.
 bool workspaceVisible()
 {
     return ready() && gViewerWindow && gSavedSettings.getBOOL("FSWorldViewEnabled") &&
+        FSSessionWorker::renderAllowed() && gViewerWindow->getWindow()->getVisible() &&
+        !gViewerWindow->getWindow()->getMinimized() &&
         !outside(rect(gViewerWindow->getWorldViewBaseRectRaw(gAgentCamera.cameraMouselook())),viewport()).empty();
 }
 std::string directory()
@@ -143,16 +145,18 @@ struct Service
         finishImport();
         if (!force && timer.getElapsedTimeF32() < .2f) return;
         timer.reset();
-        if (displayGeometry.empty() || geometryTimer.getElapsedTimeF32() >= .2f)
-        {
-            displayGeometry=queryDisplays(); // Never enumerate native displays while drawing.
-            geometryTimer.reset();
-        }
         if (!sourceCurrent()) { clear(); account=gAgent.getID(); login=gAgent.getSessionID(); grid=LLGridManager::instance().getGrid(); }
         if (!ready()) { clear(); return; }
         config=resolve(current(),defaults());
+        const bool visible = workspaceVisible();
+        if ((visible || hasExtra) &&
+            (force || displayGeometry.empty() || geometryTimer.getElapsedTimeF32() >= .2f))
+        {
+            displayGeometry=queryDisplays(); // Reproject the window-layer cache only when needed.
+            geometryTimer.reset();
+        }
         std::set<std::string> needed;
-        if (workspaceVisible())
+        if (visible)
         {
             const auto screens=displays(); const auto topology=arrangement(screens);
             if (config.common.mode == Mode::Span) demand(config.common,needed);

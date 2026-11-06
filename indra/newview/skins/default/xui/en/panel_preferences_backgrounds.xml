@@ -9,30 +9,30 @@
  <string name="import_busy">An image is already being imported.</string>
  <string name="displays_changed">Display arrangement changed. Using the common background until reassigned.</string>
  <scroll_container name="background_scroll" follows="all" layout="topleft" left="0" top="0" right="-1" bottom="-1" opaque="false">
-  <panel name="background_editor" layout="topleft" follows="left|top|right" left="0" top="0" width="495" height="652">
-   <text name="background_help" left="16" top="12" right="-16" height="36" follows="left|top|right" wrap="true">Backgrounds fill the spare workspace outside your world viewport.</text>
-   <combo_box name="background_edit" left="16" top="54" right="-16" height="24" follows="left|top|right">
+  <panel name="background_editor" layout="topleft" follows="left|top|right" left="0" top="0" width="495" height="484">
+   <text name="background_help" left="16" top="12" right="-16" height="20" follows="left|top|right" wrap="true">Choose what appears outside the world viewport.</text>
+   <combo_box name="background_edit" left="16" top="42" width="200" height="24" follows="left|top">
     <combo_box.item label="This workspace" value="workspace"/><combo_box.item label="Default for workspaces" value="default"/>
    </combo_box>
-   <check_box name="background_inherit" label="Use default background" left="16" top="88" right="-16" height="22" follows="left|top|right" tool_tip="Changing the default updates every workspace that inherits it."/>
-   <workspace_background_diagram name="background_preview" left="16" top="120" right="-16" height="130" follows="left|top|right" tool_tip="Click a display to customize it. The shaded region is your world viewport."/>
-   <combo_box name="background_display" left="16" top="260" right="-16" height="24" follows="left|top|right"/>
-   <check_box name="background_override" label="Customize this display" left="16" top="294" right="-16" height="22" follows="left|top|right"/>
-   <button name="background_reassign" label="Reassign saved displays" left="16" top="318" width="210" height="23" tool_tip="Apply the saved display overrides to the current arrangement, ordered left to right."/>
-   <combo_box name="background_source" left="16" top="350" width="210" height="24">
+   <check_box name="background_inherit" label="Use default background" left="243" top="43" right="-16" height="22" follows="left|top|right" tool_tip="Changing the default updates every workspace that inherits it."/>
+   <workspace_background_diagram name="background_preview" left="16" top="80" right="-16" height="126" follows="left|top|right" tool_tip="Click a display to customize it. The shaded region is your world viewport."/>
+   <combo_box name="background_display" left="16" top="215" width="200" height="24" follows="left|top"/>
+   <check_box name="background_override" label="Customize this display" left="243" top="216" right="-16" height="22" follows="left|top|right"/>
+   <combo_box name="background_source" follows="left|top" left="16" top="259" width="200" height="24">
     <combo_box.item label="Solid color" value="0"/><combo_box.item label="SL texture" value="1"/><combo_box.item label="Local image" value="2"/>
    </combo_box>
-   <color_swatch name="background_color" label="Background color" left="246" top="350" width="170" height="44" can_apply_immediately="true" tool_tip="Also fills unused space in Fit and Center modes."/>
-   <texture_picker name="background_texture" left="16" top="386" width="64" height="64" allow_no_texture="false" can_apply_immediately="false" label="Texture"/>
-   <line_editor name="background_uuid" left="92" top="404" right="-16" height="24" follows="left|top|right" max_length="36" tool_tip="Texture asset UUID on the current grid."/>
-   <button name="background_file" label="Choose image / Locate replacement…" left="16" top="404" right="-16" follows="left|top|right" height="24" tool_tip="Imports a copy into your profile. The original can be moved or deleted."/>
-   <combo_box name="background_mode" left="16" top="466" right="-16" height="24" follows="left|top|right" tool_tip="Fill crops; Fit preserves the entire image. Span fills continuously across displays and suspends their overrides.">
+   <texture_picker name="background_texture" follows="left|top" left="243" top="258" width="64" height="64" allow_no_texture="false" can_apply_immediately="false" label="Texture"/>
+   <line_editor name="background_uuid" label="Texture UUID" left="315" top="273" right="-16" height="24" follows="left|top|right" max_length_chars="36" tool_tip="Texture asset UUID on the current grid."/>
+   <button name="background_file" label="Choose local image…" left="243" top="259" right="-16" follows="left|top|right" height="24" tool_tip="Choose an image or locate a replacement. A copy is kept in your profile."/>
+   <color_swatch name="background_color" follows="left|top" label="Background color" left="16" top="290" width="200" height="44" can_apply_immediately="true" tool_tip="Also fills unused space in Fit and Center modes."/>
+   <combo_box name="background_mode" left="16" top="346" width="166" height="24" follows="left|top" tool_tip="Image fit. Fill crops the image. Fit shows the entire image. Span covers all displays.">
     <combo_box.item label="Fill" value="0"/><combo_box.item label="Fit" value="1"/><combo_box.item label="Stretch" value="2"/>
     <combo_box.item label="Center" value="3"/><combo_box.item label="Tile" value="4"/><combo_box.item label="Span" value="5"/>
    </combo_box>
-   <slider name="background_brightness" label="Image brightness" left="16" top="506" right="-16" height="22" follows="left|top|right" min_val="0" max_val="100" initial_value="100" increment="1" show_text="true"/>
-   <button name="background_reset" label="Reset to default" left="16" top="548" width="150" height="24" tool_tip="This workspace inherits the default. When editing the shared default, restore its original solid color."/>
-   <text name="background_status" left="16" top="586" right="-16" height="50" follows="left|top|right" wrap="true"/>
+   <slider name="background_brightness" label="Image brightness (%)" left="201" top="347" right="-16" height="22" follows="left|top|right" min_val="0" max_val="100" initial_value="100" increment="1" decimal_digits="0" can_edit_text="true" text_width="42" show_text="true"/>
+   <button name="background_reset" label="Reset to default" follows="left|top" left="16" top="388" width="150" height="24" tool_tip="This workspace inherits the default. When editing the shared default, restore its original solid color."/>
+   <button name="background_reassign" follows="left|top" label="Reassign saved displays" left="179" top="388" width="210" height="23" tool_tip="Apply the saved display overrides to the current arrangement, ordered left to right."/>
+   <text name="background_status" left="16" top="425" right="-16" height="50" follows="left|top|right" wrap="true"/>
   </panel>
  </scroll_container>
 </panel>

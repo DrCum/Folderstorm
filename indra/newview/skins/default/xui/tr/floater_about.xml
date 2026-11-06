@@ -44,7 +44,9 @@ Ses Sunucusu Sürümü: [VOICE_VERSION]
 	</floater.string>
 	<tab_container name="about_tab">
 		<panel label="Bilgi" name="support_panel">
+			<text name="support_intro">[https://folderstorm.com Folderstorm], [https://www.firestormviewer.org Firestorm] tabanlı bir görüntüleyicidir.</text>
 			<button label="Panoya Kopyala" name="copy_btn"/>
+			<check_box name="include_location" label="Dünya içi konumumu ekle" tool_tip="Bölge, koordinatlar ve simülatör bilgilerini raporda ve kopyasında gösterir." />
 			<button label="Güncellemeleri kontrol et" name="update_btn"/>
 		</panel>
 		<panel label="Katkıda Bulunanlar" name="credits_panel">

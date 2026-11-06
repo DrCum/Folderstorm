@@ -5,8 +5,11 @@
  <string name="selection_limit">Select 1–50 inventory objects, then choose Review bulk changes again.</string>
  <string name="frozen_selection">[COUNT] objects selected. This selection stays fixed while you review.</string>
  <string name="preview_needed">Settings changed. Preview again before executing.</string>
+ <string name="choose_hint">Choose a destination folder</string>
+ <string name="unresolved_folder">Folder not found in this inventory</string>
+ <string name="need_inventory">Inventory is unavailable. Reopen it to choose a folder.</string>
  <string name="select_folder">Select one destination folder in an inventory window, then click Use selected folder.</string>
- <string name="invalid_folder">Enter a valid inventory folder UUID, or use a selected folder.</string>
+ <string name="invalid_folder">Choose a destination folder or paste its inventory UUID.</string>
  <string name="preview_counts">Requested: [COUNT] · Eligible: [ELIGIBLE] · Skipped: [SKIPPED]</string>
  <string name="executing">Executing. Submitted requests may complete after stopping or closing this window.</string>
  <string name="stop_requested">Stop requested. Remaining work will stop; submitted requests may still complete.</string>
@@ -63,6 +66,8 @@
  <line_editor name="name_pattern" left="285" top="70" right="-15" height="23" follows="left|right|top"
   value="{name}" max_length_bytes="256" tool_tip="Use {name} for the current name and {n} for the selection number."/>
  <text name="pattern_help" left="180" top="98" right="-15" height="18" follows="left|right|top">Example: Sorted {n} - {name}</text>
+ <text name="destination_path" left="180" top="74" right="-159" height="19" follows="left|right|top" use_ellipses="true" />
+ <button name="browse_folder" label="Choose folder…" right="-15" top="70" width="138" height="23" follows="right|top" />
  <text name="destination_label_ui" left="15" top="127" width="150" height="18" follows="left|top">Destination folder UUID:</text>
  <line_editor name="destination" left="175" top="122" right="-205" height="23" follows="left|right|top" max_length_bytes="36"/>
  <button name="use_folder" label="Use selected folder" right="-15" top="122" width="180" height="23" follows="right|top"/>

@@ -26,22 +26,20 @@
       <text
         follows="top|left|right"
         font="SansSerif"
-        height="30"
+        height="34"
         layout="topleft"
         left="11"
         name="support_intro"
         top="16"
-        width="434"
+        width="480"
         wrap="true">
-Folderstorm is a fork of the Firestorm viewer.
-For upstream Firestorm information, visit
-https://www.firestormviewer.org
+[https://folderstorm.com Folderstorm] is based on the [https://www.firestormviewer.org Firestorm] viewer.
       </text>
       <text_editor
         parse_urls="true"
         follows="top|left"
         font="SansSerif"
-        height="468"
+        height="464"
         bg_readonly_color="Transparent"
         left="5"
         max_length="65536"
@@ -57,6 +55,10 @@ https://www.firestormviewer.org
         top_pad="5"
         height="25"
         width="180" />
+      <check_box name="include_location" label="Include in-world location"
+                 left_pad="12" top_delta="0" width="280" height="25" follows="left|top"
+                 initial_value="false"
+                 tool_tip="Show the current region, coordinates, and simulator details here and in the copied report." />
     </panel>
     <panel
       border="true"

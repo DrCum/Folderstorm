@@ -3162,10 +3162,102 @@ void LLAppearanceMgr::getUserDescendents(const LLUUID& category,
                                     is_gesture);
 }
 
+std::string build_order_string(LLWearableType::EType type, U32 index);
+
+bool LLAppearanceMgr::hasPreviousLook() const
+{
+    return !gDisconnected && !mPreviousLook.empty() && mLookSession == gAgent.getSessionID()
+        && gAgent.getRegion() && isAgentAvatarValid() && !mOutfitLocked
+        && !gAgentWearables.isCOFChangeInProgress() && LLAttachmentsMgr::instance().isAttachmentStateComplete();
+}
+
+void LLAppearanceMgr::capturePreviousLook()
+{
+    mPreviousLook.clear();
+    if (gAgent.getSessionID().isNull() || !isAgentAvatarValid() || !gAgentWearables.areWearablesLoaded()
+        || gAgentWearables.isCOFChangeInProgress() || !LLAttachmentsMgr::instance().isAttachmentStateComplete()
+        || !gInventory.isCategoryComplete(getCOF())) return;
+    std::vector<LookItem> look;
+    auto remember = [&](const LLUUID& id, LLAssetType::EType type, const std::string& order = "") {
+        const auto* item = gInventory.getItem(id);
+        if (!item || item->getActualType() != type) return false;
+        look.push_back({id, type, item->getName(), order});
+        return true;
+    };
+    for (S32 t = 0; t < LLWearableType::WT_COUNT; ++t)
+    {
+        auto type = static_cast<LLWearableType::EType>(t);
+        uuid_vec_t worn;
+        gAgentWearables.getWearableItemIDs(type, worn);
+        const bool body = t <= LLWearableType::WT_EYES;
+        if (body && worn.size() != 1) return;
+        for (U32 i = 0; i < worn.size(); ++i)
+            if (!remember(worn[i], body ? LLAssetType::AT_BODYPART : LLAssetType::AT_CLOTHING,
+                body ? "" : build_order_string(type, i))) return;
+    }
+    for (const auto& point : gAgentAvatarp->mAttachmentPoints)
+        for (const auto& obj : point.second->mAttachedObjects)
+            if (obj && !obj->isTempAttachment() && !remember(obj->getAttachmentItemID(), LLAssetType::AT_OBJECT)) return;
+    LLInventoryModel::item_array_t gestures;
+    getDescendentsOfAssetType(getCOF(), gestures, LLAssetType::AT_GESTURE);
+    for (const auto& gesture : gestures)
+        if (LLGestureMgr::instance().isGestureActive(gesture->getLinkedUUID())
+            && !remember(gesture->getLinkedUUID(), LLAssetType::AT_GESTURE)) return;
+    mPreviousLook.swap(look);
+    mLookSession = gAgent.getSessionID();
+    mLookBase = getBaseOutfitUUID();
+}
+
+void LLAppearanceMgr::restorePreviousLook()
+{
+    if (!hasPreviousLook()) return;
+    if (RlvActions::isRlvEnabled() && (gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_ANY)
+        || gRlvWearableLocks.hasLockedWearableType(RLV_LOCK_ANY) || RlvFolderLocks::instance().hasLockedFolder(RLV_LOCK_ANY)))
+    {
+        LLNotificationsUtil::add("PreviousLookRestricted");
+        return;
+    }
+    const LLUUID trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+    LLInventoryModel::item_array_t bodies, clothes, attachments, gestures;
+    std::string missing;
+    for (const auto& entry : mPreviousLook)
+    {
+        auto* item = gInventory.getItem(entry.id);
+        if (!item || item->getActualType() != entry.type || !gInventory.isObjectDescendentOf(entry.id, gInventory.getRootFolderID())
+            || gInventory.isObjectDescendentOf(entry.id, trash))
+        {
+            if (!missing.empty()) missing += "\n";
+            missing += entry.name;
+            continue;
+        }
+        if (entry.type == LLAssetType::AT_CLOTHING)
+        {
+            // Ordering belongs to the COF link. Never edit the inventory original.
+            LLPointer<LLViewerInventoryItem> copy = new LLViewerInventoryItem(item);
+            copy->setDescription(entry.order);
+            clothes.push_back(copy);
+        }
+        else if (entry.type == LLAssetType::AT_OBJECT) attachments.push_back(item);
+        else if (entry.type == LLAssetType::AT_GESTURE) gestures.push_back(item);
+        else bodies.push_back(item);
+    }
+    if (!missing.empty())
+    {
+        LLNotificationsUtil::add("PreviousLookMissing", LLSD().with("ITEMS", missing));
+        return;
+    }
+    if (!assistantAppearanceIntent()) return;
+    const LLUUID base = gInventory.isObjectDescendentOf(mLookBase, trash) ? LLUUID::null : mLookBase;
+    mPreviousLook.clear();
+    gAgentWearables.notifyLoadingStarted();
+    updateCOF(bodies, clothes, attachments, gestures, false, base);
+}
+
 void LLAppearanceMgr::wearInventoryCategory(LLInventoryCategory* category, bool copy, bool append)
 {
     if(!assistantAppearanceIntent())return;
     if(!category) return;
+    if (!append) capturePreviousLook();
 
     // <FS:Ansariel> FIRE-12004: Attachments getting lost on TP; assume we're not changing outfits
     //               during a region crossing and set no region crossing state as a way to unstuck
@@ -4747,6 +4839,7 @@ void LLAppearanceMgr::wearBaseOutfit()
     const LLUUID& base_outfit_id = getBaseOutfitUUID();
     if (base_outfit_id.isNull()) return;
 
+    capturePreviousLook();
     updateCOF(base_outfit_id);
 }
 

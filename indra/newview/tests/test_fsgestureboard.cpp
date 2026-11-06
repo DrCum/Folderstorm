@@ -162,6 +162,15 @@ int main()
         }
         expect(next == MAX_TILES, "Pagination retains all tiles even in tiny windows");
     }
+    // Filtering rearranges just the visible tiles, and their indices still address the real board.
+    const auto& board_for_search = geometry;
+    const std::set<std::string> matches{board_for_search.tiles[1].id, board_for_search.tiles[3].id};
+    const auto filtered_pages = paginate(board_for_search, 1, 1, Style{}, &matches);
+    expect(filtered_pages.size() == 2 && filtered_pages[0][0].index == 1 && filtered_pages[1][0].index == 3,
+           "Search preserves original tile identities across pages");
+    const std::set<std::string> no_matches;
+    const auto empty_page = paginate(board_for_search, 200, 100, Style{}, &no_matches);
+    expect(empty_page.size() == 1 && empty_page.front().empty(), "No matching tiles yields one empty page");
     auto pages = paginate(sized.boards.front(), 264, 126);
     expect(pages.size() == 1 && pages[0][0].width == 73 && pages[0][0].height == 37,
            "Individual requested dimensions override regular board density");

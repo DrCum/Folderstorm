@@ -8,6 +8,7 @@
 #ifndef FS_FLOATER_GESTURE_BOARD_H
 #define FS_FLOATER_GESTURE_BOARD_H
 #include "llfloater.h"
+#include "llinventoryobserver.h"
 #include "lltimer.h"
 #include "lluuid.h"
 #include "fsgestureboardmodel.h"
@@ -16,7 +17,7 @@ class LLContextMenu;
 class LLButton;
 class LLTextBox;
 class FSGestureBoardTile;
-class FSFloaterGestureBoard final : public LLFloater
+class FSFloaterGestureBoard final : public LLFloater, public LLInventoryObserver
 {
 public:
     explicit FSFloaterGestureBoard(const LLSD& key) : LLFloater(key) {}
@@ -30,10 +31,12 @@ public:
     void tileMenu(const std::string& tile, LLView* view, S32 x, S32 y);
     void dragTile(const std::string& tile, S32 screen_x, S32 screen_y, bool finish);
     void playTile(const std::string& tile);
-    void focusItem(const LLUUID& item) { mFocusReference = item; }
+    void focusItem(const LLUUID& item);
+    void changed(U32 mask) override;
     bool current() const;
     bool selecting() const { return mSelecting; }
     void selectTile(const std::string& id, MASK mask);
+    bool hasAccelerators() const override { return true; }
     bool handleKeyHere(KEY key, MASK mask) override;
     const LLUUID& windowID() const { return mWindowID; }
     const std::string& selectedBoard() const { return mBoard; }
@@ -42,6 +45,9 @@ private:
     void refresh(bool force = false);
     void rebuild();
     void optionsMenu();
+    void setFinding(bool finding);
+    void updateFindMatches(const FSGestureBoard::Board& board);
+    bool filtering() const { return mFinding && !mFindText.empty(); }
     void boardAction(const std::string& action, const std::string& board, const LLSD& expected);
     void changePage(S32 direction);
     void editBoard(const std::string& mode);
@@ -58,6 +64,12 @@ private:
     LLSD mDisplayed;
     S32 mGridWidth = 0, mGridHeight = 0, mPage = 0;
     std::string mDisplayedBoard;
+    bool mFinding = false;
+    bool mFindDirty = false;
+    S32 mPageBeforeFind = 0;
+    std::string mFindText;
+    std::set<std::string> mFindMatches;
+    std::set<LLUUID> mFindReferences;
     bool mBuilt = false;
     bool mSelecting = false, mRebuildSelection = false;
     FSGestureBoard::Selection mSelection;

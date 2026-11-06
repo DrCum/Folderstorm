@@ -24,6 +24,9 @@
          parameter="show_on_map" />
     </menu_item_call>
 
+    <menu_item_call label="Set favorites folder..." name="favorite_folder">
+        <menu_item_call.on_click function="Favorites.DoToSelected" parameter="folder" />
+    </menu_item_call>
     <menu_item_separator
      layout="topleft" />
 

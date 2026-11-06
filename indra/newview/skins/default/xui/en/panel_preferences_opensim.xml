@@ -53,7 +53,7 @@
       max_length_chars="4096"
       name="add_grid"
       top_pad="5"
-	  label="Enter a LoginURI"
+	  label="Grid login URI"
       width="270" />
     <button
       follows="left|top"
@@ -93,12 +93,13 @@
       Manage Grids
     </text>
     <scroll_list
-      height="125"
+      follows="left|top"
+      height="120"
       layout="topleft"
       left="50"
       name="grid_list"
       draw_heading="true"
-      top="104"
+      top_pad="6"
       width="370">
         <scroll_list.columns
           label="Grid name"
@@ -136,7 +137,7 @@
 	  <panel
 		  border="true"
 		  follows="all"
-		  height="440"
+		  bottom="-1"
 		  layout="topleft"
 		  left="0"
 		  top="210"

@@ -764,7 +764,7 @@ bool LLInventoryGallery::applyFilter(LLInventoryGalleryItem* item, const std::st
 
 bool LLInventoryGallery::checkAgainstFilters(LLInventoryGalleryItem* item, const std::string& filter_substring)
 {
-    if (!item) return false;
+    if (!item || !mFilter->passesArchive(item->getUUID())) return false;
 
     if (item->isFolder() && (mFilter->getShowFolderState() == LLInventoryFilter::SHOW_ALL_FOLDERS))
     {
@@ -2522,6 +2522,19 @@ void LLInventoryGallery::restoreWorkspaceSelection(const LLSD& state)
     if (state.isArray())
         for (auto it = state.beginArray(); it != state.endArray(); ++it)
             if (it->isUUID() && gInventory.getObject(it->asUUID())) addItemSelection(it->asUUID(), false);
+}
+
+void LLInventoryGallery::clearArchivedSelection()
+{
+    auto hidden = [this](const LLUUID& id) { return !mFilter->passesArchive(id); };
+    std::erase_if(mItemsToSelect, hidden);
+    const auto removed = std::erase_if(mSelectedItemIDs, [&](const LLUUID& id) {
+        if (!hidden(id)) return false;
+        if (auto* item = getItem(id)) item->setSelected(false);
+        return true;
+    });
+    if (hidden(mLastInteractedUUID)) mLastInteractedUUID.setNull();
+    if (removed) signalSelectionItemID(mSelectedItemIDs.empty() ? LLUUID::null : mSelectedItemIDs.back());
 }
 
 void LLInventoryGallery::clearSelection()

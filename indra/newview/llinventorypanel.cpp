@@ -869,13 +869,24 @@ void LLInventoryPanel::modelChanged(U32 mask)
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    if (mViewsInitialized != VIEWS_INITIALIZED) return; // todo: Store changes if building?
-
     const LLInventoryModel* model = getModel();
     if (!model) return;
 
     const LLInventoryModel::changed_items_t& changed_items = model->getChangedIDs();
     if (changed_items.empty()) return;
+    if (!getFilter().getViewFolders().empty()
+        && (mask & (LLInventoryObserver::STRUCTURE | LLInventoryObserver::ADD | LLInventoryObserver::REMOVE)))
+    {
+        for (const auto& id : changed_items)
+            if (model->getCategory(id) || getFilter().getViewFolders().count(id))
+            {
+                getFilter().refreshViewFolders();
+                break;
+            }
+    }
+
+    // Unopened custom tabs still need current ancestry when their trees are first built.
+    if (mViewsInitialized != VIEWS_INITIALIZED) return; // todo: Store changes if building?
 
     for (LLInventoryModel::changed_items_t::const_iterator items_iter = changed_items.begin();
          items_iter != changed_items.end();

@@ -136,6 +136,7 @@ struct FSFloaterGestureBoard:FakeFloater{
     LLUUID mWindowID;std::string mBoard;FSGestureBoard::Selection mSelection;bool mSelecting=false;bool live=true;int refreshes=0;MenuHandle mMenu;
     const LLUUID& windowID()const{return mWindowID;}const std::string& selectedBoard()const{return mBoard;}
     bool current()const{return live;}void refresh(bool){++refreshes;}
+    bool finding=true; void setFinding(bool value){finding=value;}
     void closeEditors();void selectBoard(const std::string&);
 };
 FakeFloater picker,editor;std::vector<FSFloaterGestureBoard*> windows;
@@ -160,7 +161,7 @@ int main(){
     a.mBoard=ba.id;b.mBoard=bb.id;windows={&a,&b};
     picker.key["owner"]=b.mWindowID;editor.key["owner"]=b.mWindowID;
     a.mSelection.ids.insert("old-tile");a.mSelecting=true;
-    a.selectBoard(bb.id);assert(a.mSelection.ids.empty()&&!a.mSelecting);assert(a.mBoard==bb.id&&b.mBoard==bb.id&&picker.closes==0&&editor.closes==0);
+    a.selectBoard(bb.id);assert(!a.finding&&b.finding);assert(a.mSelection.ids.empty()&&!a.mSelecting);assert(a.mBoard==bb.id&&b.mBoard==bb.id&&picker.closes==0&&editor.closes==0);
     assert(c.mData.selected==bb.id&&c.matchesSnapshot(original)); // Selection alone does not invalidate a draft.
     auto changed=original;changed["boards"]="edited";assert(!c.matchesSnapshot(changed));
     a.selectBoard(ba.id);assert(b.mBoard==bb.id);
@@ -222,6 +223,14 @@ int main(){
         refresh = function(source, "void FSFloaterGestureBoard::refresh(")
         self.assertIn("next != mBoard", refresh) # Empty collections must not repeatedly close New-board editors.
         self.assertIn("!controller.matchesSnapshot(mDisplayed)", refresh)
+
+    def test_find_editor_can_be_shown(self):
+        root = ET.parse(VIEWER / "skins/default/xui/en/floater_gesture_board.xml").getroot()
+        query = root.find("filter_editor[@name='tile_query']")
+        # LLSearchEditor copies its XUI parameters into the internal line editor.
+        # An initially invisible child stays hidden when only its parent is shown.
+        self.assertNotEqual(query.get("visible", "true"), "false",
+                            "Find tiles would show a container with an invisible text editor")
 
 
 if __name__ == "__main__":

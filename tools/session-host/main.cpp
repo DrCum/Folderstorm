@@ -1826,6 +1826,17 @@ struct Host
         ShowWindow(window,SW_SHOW); SetForegroundWindow(window); layout();
         message(positions ? L"Controls and window positions recovered. Window pins were cleared." : L"Host controls restored.");
     }
+    void relayDisplayChange(WPARAM wparam, LPARAM lparam)
+    {
+        // Embedded child HWNDs do not receive top-level display broadcasts.
+        // surface() rechecks ownership; standalone viewers receive their own.
+        for (const auto& slot : slots)
+        {
+            if (!slot || slot->detached || !slot->running()) continue;
+            if (const HWND surface = slot->surface(); surface && IsChild(window, surface))
+                PostMessageW(surface, WM_DISPLAYCHANGE, wparam, lparam);
+        }
+    }
     void refitWindows()
     {
         fitOpenWindow(window,dpi,false);
@@ -4710,7 +4721,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         {const int selected=child==host->characterControl?host->selectedSlot(child):id-CardBase;host->lifecycle.observeSelection(selected);SendMessageW(host->characterControl,CB_SETCURSEL,selected,0);host->sessionMenu(1,0,selected);return 0;}
         break;
     }
-    case WM_DISPLAYCHANGE: host->refitWindows(); return 0;
+    case WM_DISPLAYCHANGE: host->relayDisplayChange(wparam,lparam);host->refitWindows(); return 0;
     case WM_THEMECHANGED:
     case WM_SETTINGCHANGE:
         host->applyTheme();host->updateDpi(host->dpi);

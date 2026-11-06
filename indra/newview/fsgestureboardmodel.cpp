@@ -207,7 +207,8 @@ void Selection::retain(const Board& board)
 }
 void Selection::all(const Board& board)
 { ids.clear(); for (const auto& tile : board.tiles) ids.insert(tile.id); anchor = board.tiles.empty() ? "" : board.tiles.front().id; }
-std::vector<Page> paginate(const Board& board, int width, int height, const Style& defaults)
+std::vector<Page> paginate(const Board& board, int width, int height, const Style& defaults,
+                           const std::set<std::string>* visible_ids)
 {
     std::vector<Page> pages(1); Collection collection; collection.defaults = defaults;
     width = std::max(1, width); height = std::max(1, height);
@@ -215,6 +216,7 @@ std::vector<Page> paginate(const Board& board, int width, int height, const Styl
     constexpr int gap = 4;
     for (int i = 0; i < static_cast<int>(board.tiles.size()); ++i)
     {
+        if (visible_ids && !visible_ids->count(board.tiles[i].id)) continue;
         const auto tile = presentation(collection, board, board.tiles[i]);
         const int w = std::clamp(tile.width, 1, width);
         const int h = std::clamp(tile.height, 1, height);

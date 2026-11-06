@@ -9,7 +9,7 @@
  <string name="settings_conflict">Assistant settings changed elsewhere; review your choices again.</string>
  <string name="summary_read_only">Allows reading inventory and outfits. All changes, camera movement and pictures are blocked.</string>
  <string name="summary_ask_changes">Allows inventory reading. Asks before changes. New private data stays blocked.</string>
- <string name="summary_custom">Individual permissions define what is allowed, requires confirmation or is blocked.</string>
+ <string name="summary_custom">Choose Allow, Ask or Never for each action.</string>
  <string name="inventory_login">Inventory: Log in to use inventory</string>
  <string name="inventory_loading">Inventory: Loading inventory</string>
  <string name="inventory_ready">Inventory: Ready</string>
@@ -31,286 +31,286 @@
  <string name="check_authorization">Authorization rejected. Turn access off and on, then retry.</string>
  <string name="check_bridge">Viewer bridge is unavailable. Enable access and retry.</string>
  <check_box height="20" label="Allow local assistant access" layout="topleft" left="12" top="8" width="510" name="local_assistant_enable" tool_tip="Allow authenticated programs running as your OS account to access this viewer." />
- <text follows="left|top|right" height="18" layout="topleft" left="12" top="33" width="510" name="intro" wrap="true">Connect your assistant separately. Choose what it can do below.</text>
+ <text follows="left|top|right" height="18" layout="topleft" left="12" top="33" width="510" name="intro" wrap="true">Choose what your assistant can do. The Setup tab has connection instructions.</text>
  <text follows="left|top|right" height="18" layout="topleft" left="12" top="54" width="510" name="local_assistant_status">Viewer access: Off</text>
  <text follows="left|top|right" height="18" layout="topleft" left="12" top="75" width="510" name="session_override" wrap="true" font="SansSerifSmall" />
  <tab_container follows="all" layout="topleft" left="5" right="-5" top="99" bottom="-5" name="tabs" tab_position="top">
   <panel follows="all" layout="topleft" label="Permissions" name="permissions" height="355" width="520">
-   <text follows="left|top|right" height="32" layout="topleft" left="8" top="8" width="500" name="access_help" wrap="true">Other programs running as your OS account can use this access. Ask shows a confirmation before the action.</text>
+   <text follows="left|top|right" height="32" layout="topleft" left="8" top="8" width="500" name="access_help" wrap="true">Programs running as your OS account can use this access. Ask prompts you before an action.</text>
    <text follows="left|top" height="20" layout="topleft" left="8" top="48" width="160" name="preset_label">Permission preset</text>
    <combo_box follows="left|top" height="23" layout="topleft" left="178" top="45" width="245" name="permission_preset" tool_tip="Read only, Ask before changes, or Custom individual permissions">
     <item label="Read only" name="read_only" value="read_only" />
     <item label="Ask before changes" name="ask_changes" value="ask_changes" />
     <item label="Custom" name="custom" value="custom" />
    </combo_box>
-   <text follows="left|top|right" height="42" layout="topleft" left="8" top="76" width="500" name="preset_summary" wrap="true" />
-   <check_box follows="left|top" height="20" layout="topleft" left="8" top="121" width="500" label="Use these settings for this session only" name="session_only" tool_tip="Applies to local assistant access and every permission. Saved settings resume when the viewer restarts." />
-   <text follows="left|top|right" height="34" layout="topleft" left="8" top="145" width="500" name="scope_help" wrap="true" font="SansSerifSmall">Your saved settings resume when the viewer restarts. Uncheck and click OK to save the settings shown here.</text>
-   <check_box follows="left|top" height="20" layout="topleft" left="8" top="184" width="500" label="Individual permissions" name="individual_permissions" tool_tip="Show individual inventory, social, world, pose and preference permissions." />
-   <scroll_container visible="false" follows="all" layout="topleft" left="4" right="-4" top="211" bottom="-3" name="permissions_scroll" opaque="false">
-    <panel follows="left|top|right" height="1592" layout="topleft" left="0" top="0" width="500" name="permission_rows">
-     <text follows="left|top" height="18" layout="topleft" left="5" top="2" width="335" name="local_assistant_read_label">Read inventory and outfits</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="20" width="335" font="SansSerifSmall" name="local_assistant_read_help" wrap="true">Search and inspect items without changing them.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="6" width="140" name="local_assistant_perm_read">
+   <text follows="left|top|right" height="34" layout="topleft" left="8" top="76" width="500" name="preset_summary" wrap="true" />
+   <check_box follows="left|top" height="20" layout="topleft" left="8" top="112" width="500" label="Use these settings for this session only" name="session_only" tool_tip="Applies to local assistant access and every permission. Saved settings resume when the viewer restarts." />
+   <text follows="left|top|right" height="34" layout="topleft" left="8" top="135" width="500" name="scope_help" wrap="true" font="SansSerifSmall">Session-only settings expire at restart. To keep them, uncheck this option and click OK.</text>
+   <check_box follows="left|top" height="20" layout="topleft" left="8" top="171" width="500" label="Individual permissions" name="individual_permissions" tool_tip="Show individual inventory, social, world, pose and preference permissions." />
+   <scroll_container visible="false" follows="all" layout="topleft" left="4" right="-4" top="195" bottom="-3" name="permissions_scroll" reserve_scroll_corner="false" opaque="false">
+    <panel follows="left|top|right" height="1592" layout="topleft" left="0" top="0" right="-24" name="permission_rows">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="2" right="-154" name="local_assistant_read_label">Read inventory and outfits</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="20" right="-154" font="SansSerifSmall" name="local_assistant_read_help" wrap="true">Search and inspect items without changing them.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="6" width="140" name="local_assistant_perm_read">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="40" width="335" name="local_assistant_camera_label">Move camera and take pictures</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="58" width="335" font="SansSerifSmall" name="local_assistant_camera_help" wrap="true">Change your view or capture a snapshot.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="44" width="140" name="local_assistant_perm_camera">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Ask" name="ask" value="ask" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="78" width="335" name="local_assistant_create_label">Create folders and items</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="96" width="335" font="SansSerifSmall" name="local_assistant_create_help" wrap="true">Add folders, links and supported inventory items.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="82" width="140" name="local_assistant_perm_create">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="40" right="-154" name="local_assistant_camera_label">Move camera and take pictures</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="58" right="-154" font="SansSerifSmall" name="local_assistant_camera_help" wrap="true">Change your view or capture a snapshot.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="44" width="140" name="local_assistant_perm_camera">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="116" width="335" name="local_assistant_edit_label">Rename and edit details</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="134" width="335" font="SansSerifSmall" name="local_assistant_edit_help" wrap="true">Change names, descriptions or thumbnails.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="120" width="140" name="local_assistant_perm_edit">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="78" right="-154" name="local_assistant_create_label">Create folders and items</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="96" right="-154" font="SansSerifSmall" name="local_assistant_create_help" wrap="true">Add folders, links and supported inventory items.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="82" width="140" name="local_assistant_perm_create">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="154" width="335" name="local_assistant_move_label">Move, copy and restore</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="172" width="335" font="SansSerifSmall" name="local_assistant_move_help" wrap="true">Change folders or restore items from Trash.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="158" width="140" name="local_assistant_perm_move">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="116" right="-154" name="local_assistant_edit_label">Rename and edit details</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="134" right="-154" font="SansSerifSmall" name="local_assistant_edit_help" wrap="true">Change names, descriptions or thumbnails.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="120" width="140" name="local_assistant_perm_edit">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="192" width="335" name="local_assistant_trash_label">Send items to Trash</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="210" width="335" font="SansSerifSmall" name="local_assistant_trash_help" wrap="true">Restore from Trash; permanent deletion is unavailable.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="196" width="140" name="local_assistant_perm_trash">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="154" right="-154" name="local_assistant_move_label">Move, copy and restore</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="172" right="-154" font="SansSerifSmall" name="local_assistant_move_help" wrap="true">Change folders or restore items from Trash.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="158" width="140" name="local_assistant_perm_move">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="230" width="335" name="local_assistant_nocopy_label">Move no-copy items during a copy</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="248" width="335" font="SansSerifSmall" name="local_assistant_nocopy_help" wrap="true">Moves the only copy out of the source folder.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="234" width="140" name="local_assistant_perm_nocopy">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="192" right="-154" name="local_assistant_trash_label">Send items to Trash</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="210" right="-154" font="SansSerifSmall" name="local_assistant_trash_help" wrap="true">Restore from Trash; permanent deletion is unavailable.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="196" width="140" name="local_assistant_perm_trash">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="268" width="335" name="local_assistant_wear_label">Wear and detach</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="286" width="335" font="SansSerifSmall" name="local_assistant_wear_help" wrap="true">Change outfits and worn attachments.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="272" width="140" name="local_assistant_perm_wear">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="230" right="-154" name="local_assistant_nocopy_label">Move no-copy items during a copy</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="248" right="-154" font="SansSerifSmall" name="local_assistant_nocopy_help" wrap="true">Moves the only copy out of the source folder.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="234" width="140" name="local_assistant_perm_nocopy">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="306" width="335" name="local_assistant_links_label">Replace links</text>
-     <text follows="left|top" height="18" layout="topleft" left="5" top="324" width="335" font="SansSerifSmall" name="local_assistant_links_help" wrap="true">Retarget inventory links to another item.</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="310" width="140" name="local_assistant_perm_links">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="268" right="-154" name="local_assistant_wear_label">Wear and detach</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="286" right="-154" font="SansSerifSmall" name="local_assistant_wear_help" wrap="true">Change outfits and worn attachments.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="272" width="140" name="local_assistant_perm_wear">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text name="local_assistant_workspace_label" left="5" top="344" width="335" height="18">Switch workspaces and layouts</text>
-     <text name="local_assistant_workspace_help" left="5" top="362" width="335" height="22" font="SansSerifSmall" wrap="true">Saved setups only. Camera and HUDs also follow their own permissions.</text>
-     <combo_box name="local_assistant_perm_workspace" left="350" top="348" width="140" height="23" follows="right|top">
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="306" right="-154" name="local_assistant_links_label">Replace links</text>
+     <text follows="left|top|right" height="18" layout="topleft" left="5" top="324" right="-154" font="SansSerifSmall" name="local_assistant_links_help" wrap="true">Retarget inventory links to another item.</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="310" width="140" name="local_assistant_perm_links">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Ask" name="ask" value="ask" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" name="local_assistant_workspace_label" left="5" top="344" right="-154" height="18">Switch workspaces and layouts</text>
+     <text follows="left|top|right" name="local_assistant_workspace_help" left="5" top="362" right="-154" height="22" font="SansSerifSmall" wrap="true">Saved setups only. Camera and HUD permissions still apply.</text>
+     <combo_box name="local_assistant_perm_workspace" right="-6" top="348" width="140" height="23" follows="right|top">
       <item label="Allow" value="allow"/><item label="Ask" value="ask"/><item label="Never" value="deny"/>
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="390" width="335" name="local_assistant_chat_read_label">Read Chat</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="388" width="140" name="local_assistant_perm_chat_read">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="390" right="-154" name="local_assistant_chat_read_label">Read Chat</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="388" width="140" name="local_assistant_perm_chat_read">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="424" width="335" name="local_assistant_chat_state_label">Manage Chat drafts and read state</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="422" width="140" name="local_assistant_perm_chat_state">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Ask" name="ask" value="ask" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="458" width="335" name="local_assistant_chat_send_im_label">Send direct IMs</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="456" width="140" name="local_assistant_perm_chat_send_im">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="424" right="-154" name="local_assistant_chat_state_label">Manage Chat drafts and read state</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="422" width="140" name="local_assistant_perm_chat_state">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="492" width="335" name="local_assistant_chat_send_group_label">Send group Chat</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="490" width="140" name="local_assistant_perm_chat_send_group">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="458" right="-154" name="local_assistant_chat_send_im_label">Send direct IMs</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="456" width="140" name="local_assistant_perm_chat_send_im">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="526" width="335" name="local_assistant_chat_send_conference_label">Send conference Chat</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="524" width="140" name="local_assistant_perm_chat_send_conference">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="492" right="-154" name="local_assistant_chat_send_group_label">Send group Chat</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="490" width="140" name="local_assistant_perm_chat_send_group">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="560" width="335" name="local_assistant_chat_send_nearby_label">Speak in Nearby Chat</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="558" width="140" name="local_assistant_perm_chat_send_nearby">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="526" right="-154" name="local_assistant_chat_send_conference_label">Send conference Chat</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="524" width="140" name="local_assistant_perm_chat_send_conference">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="594" width="335" name="local_assistant_friends_read_label">Read friends and online status</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="592" width="140" name="local_assistant_perm_friends_read">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="628" width="335" name="local_assistant_resident_search_label">Search residents</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="626" width="140" name="local_assistant_perm_resident_search">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="662" width="335" name="local_assistant_profile_read_label">Read resident profiles</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="660" width="140" name="local_assistant_perm_profile_read">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="696" width="335" name="local_assistant_notifications_read_label">Read viewer notifications</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="694" width="140" name="local_assistant_perm_notifications_read">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="730" width="335" name="local_assistant_notification_review_label">Review native notifications</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="728" width="140" name="local_assistant_perm_notification_review">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="560" right="-154" name="local_assistant_chat_send_nearby_label">Speak in Nearby Chat</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="558" width="140" name="local_assistant_perm_chat_send_nearby">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="764" width="335" name="local_assistant_world_read_label">Read nearby world and media observations</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="762" width="140" name="local_assistant_perm_world_read">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="594" right="-154" name="local_assistant_friends_read_label">Read friends and online status</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="592" width="140" name="local_assistant_perm_friends_read">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="798" width="335" name="local_assistant_gesture_read_label">Read gestures and playback state</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="796" width="140" name="local_assistant_perm_gesture_read">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="628" right="-154" name="local_assistant_resident_search_label">Search residents</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="626" width="140" name="local_assistant_perm_resident_search">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="832" width="335" name="local_assistant_gesture_play_label">Play and stop gestures</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="830" width="140" name="local_assistant_perm_gesture_play">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Ask" name="ask" value="ask" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="866" width="335" name="local_assistant_pose_read_label">Read poses and joint state</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="864" width="140" name="local_assistant_perm_pose_read">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="662" right="-154" name="local_assistant_profile_read_label">Read resident profiles</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="660" width="140" name="local_assistant_perm_profile_read">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="900" width="335" name="local_assistant_pose_edit_label">Edit your own pose</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="898" width="140" name="local_assistant_perm_pose_edit">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="696" right="-154" name="local_assistant_notifications_read_label">Read viewer notifications</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="694" width="140" name="local_assistant_perm_notifications_read">
       <item label="Allow" name="allow" value="allow" />
-      <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="934" width="335" name="local_assistant_pose_share_label">Use owner-approved shared posing</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="932" width="140" name="local_assistant_perm_pose_share">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="730" right="-154" name="local_assistant_notification_review_label">Review native notifications</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="728" width="140" name="local_assistant_perm_notification_review">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="968" width="335" name="local_assistant_content_edit_label">Edit notecard and script contents</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="966" width="140" name="local_assistant_perm_content_edit">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="764" right="-154" name="local_assistant_world_read_label">Read nearby world and media observations</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="762" width="140" name="local_assistant_perm_world_read">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="798" right="-154" name="local_assistant_gesture_read_label">Read gestures and playback state</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="796" width="140" name="local_assistant_perm_gesture_read">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="832" right="-154" name="local_assistant_gesture_play_label">Play and stop gestures</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="830" width="140" name="local_assistant_perm_gesture_play">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1002" width="335" name="local_assistant_preferences_read_label">Read curated viewer preferences</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1000" width="140" name="local_assistant_perm_preferences_read">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="866" right="-154" name="local_assistant_pose_read_label">Read poses and joint state</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="864" width="140" name="local_assistant_perm_pose_read">
       <item label="Allow" name="allow" value="allow" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1036" width="335" name="local_assistant_preferences_write_label">Change curated viewer preferences</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1034" width="140" name="local_assistant_perm_preferences_write">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Ask" name="ask" value="ask" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1070" width="335" name="local_assistant_pose_save_label">Save pose presets</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1068" width="140" name="local_assistant_perm_pose_save">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="900" right="-154" name="local_assistant_pose_edit_label">Edit your own pose</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="898" width="140" name="local_assistant_perm_pose_edit">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1106" width="335" name="local_assistant_build_edit_label">Edit owned world objects</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1104" width="140" name="local_assistant_perm_build_edit">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="934" right="-154" name="local_assistant_pose_share_label">Use owner-approved shared posing</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="932" width="140" name="local_assistant_perm_pose_share">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1140" width="335" name="local_assistant_build_rez_label">Rez world objects</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1138" width="140" name="local_assistant_perm_build_rez">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="968" right="-154" name="local_assistant_content_edit_label">Edit notecard and script contents</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="966" width="140" name="local_assistant_perm_content_edit">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1174" width="335" name="local_assistant_inventory_permissions_label">Change inventory next-owner permissions</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1172" width="140" name="local_assistant_perm_inventory_permissions">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1002" right="-154" name="local_assistant_preferences_read_label">Read curated viewer preferences</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1000" width="140" name="local_assistant_perm_preferences_read">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1036" right="-154" name="local_assistant_preferences_write_label">Change curated viewer preferences</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1034" width="140" name="local_assistant_perm_preferences_write">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1208" width="335" name="local_assistant_navigation_move_label">Move your avatar and change flight</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1206" width="140" name="local_assistant_perm_navigation_move">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1070" right="-154" name="local_assistant_pose_save_label">Save pose presets</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1068" width="140" name="local_assistant_perm_pose_save">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1242" width="335" name="local_assistant_navigation_teleport_label">Teleport your avatar</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1240" width="140" name="local_assistant_perm_navigation_teleport">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1106" right="-154" name="local_assistant_build_edit_label">Edit owned world objects</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1104" width="140" name="local_assistant_perm_build_edit">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1276" width="335" name="local_assistant_upload_label">Upload local files</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1274" width="140" name="local_assistant_perm_upload" tool_tip="Free uploads need no price confirmation. Paid uploads always ask.">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1140" right="-154" name="local_assistant_build_rez_label">Rez world objects</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1138" width="140" name="local_assistant_perm_build_rez">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1310" width="335" name="local_assistant_task_inventory_read_label">Read owned object Contents</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1308" width="140" name="local_assistant_perm_task_inventory_read">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1344" width="335" name="local_assistant_script_debug_read_label">Read script errors and owner output</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1342" width="140" name="local_assistant_perm_script_debug_read">
-      <item label="Allow" name="allow" value="allow" />
-      <item label="Never" name="deny" value="deny" />
-     </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1378" width="335" name="local_assistant_task_inventory_write_label">Change owned object Contents</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1376" width="140" name="local_assistant_perm_task_inventory_write">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1174" right="-154" name="local_assistant_inventory_permissions_label">Change inventory next-owner permissions</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1172" width="140" name="local_assistant_perm_inventory_permissions">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1412" width="335" name="local_assistant_task_inventory_remove_label">Permanently remove object Contents</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1410" width="140" name="local_assistant_perm_task_inventory_remove">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1208" right="-154" name="local_assistant_navigation_move_label">Move your avatar and change flight</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1206" width="140" name="local_assistant_perm_navigation_move">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1446" width="335" name="local_assistant_script_run_label">Start stop and reset object scripts</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1444" width="140" name="local_assistant_perm_script_run">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1242" right="-154" name="local_assistant_navigation_teleport_label">Teleport your avatar</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1240" width="140" name="local_assistant_perm_navigation_teleport">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1480" width="335" name="local_assistant_object_take_label">Take owned objects into inventory</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1478" width="140" name="local_assistant_perm_object_take">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1276" right="-154" name="local_assistant_upload_label">Upload local files</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1274" width="140" name="local_assistant_perm_upload" tool_tip="Free uploads need no price confirmation. Paid uploads always ask.">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1514" width="335" name="local_assistant_object_interact_label">Touch objects and answer game dialogs</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1512" width="140" name="local_assistant_perm_object_interact">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1310" right="-154" name="local_assistant_task_inventory_read_label">Read owned object Contents</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1308" width="140" name="local_assistant_perm_task_inventory_read">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1344" right="-154" name="local_assistant_script_debug_read_label">Read script errors and owner output</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1342" width="140" name="local_assistant_perm_script_debug_read">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1378" right="-154" name="local_assistant_task_inventory_write_label">Change owned object Contents</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1376" width="140" name="local_assistant_perm_task_inventory_write">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />
      </combo_box>
-     <text follows="left|top" height="20" layout="topleft" left="5" top="1548" width="335" name="local_assistant_script_test_label">Run scoped object test recipes</text>
-     <combo_box follows="right|top" height="23" layout="topleft" left="350" top="1546" width="140" name="local_assistant_perm_script_test">
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1412" right="-154" name="local_assistant_task_inventory_remove_label">Permanently remove object Contents</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1410" width="140" name="local_assistant_perm_task_inventory_remove">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Ask" name="ask" value="ask" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1446" right="-154" name="local_assistant_script_run_label">Start stop and reset object scripts</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1444" width="140" name="local_assistant_perm_script_run">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Ask" name="ask" value="ask" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1480" right="-154" name="local_assistant_object_take_label">Take owned objects into inventory</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1478" width="140" name="local_assistant_perm_object_take">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Ask" name="ask" value="ask" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1514" right="-154" name="local_assistant_object_interact_label">Touch objects and answer game dialogs</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1512" width="140" name="local_assistant_perm_object_interact">
+      <item label="Allow" name="allow" value="allow" />
+      <item label="Ask" name="ask" value="ask" />
+      <item label="Never" name="deny" value="deny" />
+     </combo_box>
+     <text follows="left|top|right" height="20" layout="topleft" left="5" top="1548" right="-154" name="local_assistant_script_test_label">Run scoped object test recipes</text>
+     <combo_box follows="right|top" height="23" layout="topleft" right="-6" top="1546" width="140" name="local_assistant_perm_script_test">
       <item label="Allow" name="allow" value="allow" />
       <item label="Ask" name="ask" value="ask" />
       <item label="Never" name="deny" value="deny" />

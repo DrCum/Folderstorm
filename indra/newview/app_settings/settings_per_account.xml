@@ -1,7 +1,19 @@
 <llsd>
     <map>
+    <key>FSArchivedInventoryFolders</key>
+    <map>
+      <key>Comment</key><string>Folders hidden from ordinary inventory browsing on this account.</string>
+      <key>Persist</key><integer>1</integer><key>Type</key><string>LLSD</string><key>Value</key><map/>
+    </map>
  <key>FSKlipyCustomer</key><map><key>Comment</key><string>Local owner binding and random opaque KLIPY identifier. Avatar identity is never sent as customer_id.</string><key>Persist</key><integer>1</integer><key>Type</key><string>LLSD</string><key>Value</key><map/></map>
 
+    <key>FSLandmarkFavoriteFolders</key>
+    <map>
+      <key>Comment</key><string>Local favorites bar folders, keyed by landmark inventory ID.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>LLSD</string>
+      <key>Value</key><map />
+    </map>
     <key>FSGestureBoards</key>
     <map>
       <key>Comment</key><string>Versioned account-local gesture board references, ordered tile labels and colors.</string>

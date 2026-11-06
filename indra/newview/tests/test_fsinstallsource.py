@@ -72,13 +72,66 @@ const before=writes;for(let i=0;i<100;++i)patchSupportLinks();assert.equal(write
             path.write_text(test)
             subprocess.run([node, str(path)], check=True)
 
+    def test_first_run_notice_order(self):
+        from test_fsobjecttools_native import NativeObjectToolsTests
+        native = (VIEWER / "llstartup.cpp").read_text()
+        schedule = function(native, "void check_for_separate_installation(const LLNotificationPtr& login_notice)\n{")
+        self.assertIn("login_notice = login_show();", native)
+        self.assertIn("check_for_separate_installation(login_notice);", native)
+        boundary = r'''
+#include <cassert>
+#include <functional>
+#include <memory>
+#define LL_WINDOWS 1
+#define LL_VELOPACK 1
+struct Notification { bool active = true; bool isActive() const { return active; } };
+using LLNotificationPtr = std::shared_ptr<Notification>;
+struct Settings { bool checked = false; bool getBOOL(const char*) const { return checked; } } gSavedSettings;
+namespace LLApp { bool exiting = false; bool isExiting() { return exiting; } }
+std::function<bool()> timer;
+int checks = 0;
+void doPeriodically(std::function<bool()> action, float) { assert(!timer); timer = action; }
+void report_previous_install_if_found() { ++checks; gSavedSettings.checked = true; }
+'''
+        # Each run begins with the same process-local one-shot state as a fresh launch.
+        scenarios = {
+            "dismiss": r'''
+    auto notice = std::make_shared<Notification>();
+    check_for_separate_installation(notice);
+    check_for_separate_installation({});
+    assert(timer && !timer() && checks == 0 && !gSavedSettings.checked);
+    notice->active = false;
+    assert(timer() && checks == 1 && gSavedSettings.checked);
+    check_for_separate_installation({});
+    assert(checks == 1);
+''',
+            "quit": r'''
+    auto notice = std::make_shared<Notification>();
+    check_for_separate_installation(notice);
+    LLApp::exiting = true;
+    assert(timer && timer() && !gSavedSettings.checked && checks == 0);
+''',
+            "auto_login": r'''
+    check_for_separate_installation({});
+    assert(!timer && checks == 1);
+''',
+            "checked": r'''
+    gSavedSettings.checked = true;
+    check_for_separate_installation(std::make_shared<Notification>());
+    assert(!timer && checks == 0);
+''',
+        }
+        for name, scenario in scenarios.items():
+            with self.subTest(name=name):
+                NativeObjectToolsTests.compile_and_run(self, boundary + schedule + "\nint main() {" + scenario + "}\n")
+
     def test_native_wiring_and_non_destructive_coexistence(self):
         notifications = ET.parse(VIEWER / "skins/default/xui/en/notifications.xml").getroot()
         names = {entry.get("name") for entry in notifications.findall("notification")}
         self.assertIn("FolderstormSeparateInstallation", names)
         menu = ET.parse(VIEWER / "skins/default/xui/en/menu_viewer.xml").getroot()
         self.assertTrue(any(entry.get("function") == "Help.FolderstormShortcuts" for entry in menu.iter()))
-        startup = function((VIEWER / "llstartup.cpp").read_text(), "void uninstall_nsis_if_required()\n{")
+        startup = function((VIEWER / "llstartup.cpp").read_text(), "static void report_previous_install_if_found()\n{")
         self.assertIn('"FolderstormSeparateInstallation"', startup)
         self.assertNotIn("clear_nsis_links", startup)
         hooks = (VIEWER / "llvelopack.cpp").read_text()

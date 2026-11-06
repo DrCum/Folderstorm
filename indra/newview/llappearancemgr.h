@@ -61,6 +61,8 @@ public:
                                 LLInventoryModel::item_array_t& obj_items_new,
                                 LLInventoryModel::item_array_t& gest_items_new,
                                 bool append=false, const LLUUID& idOutfit=LLUUID::null, LLPointer<LLInventoryCallback> link_waiter = NULL);
+    bool hasPreviousLook() const;
+    void restorePreviousLook();
     bool assistantAppearanceIntent();
     void wearInventoryCategory(LLInventoryCategory* category, bool copy, bool append);
     void wearInventoryCategoryOnAvatar(LLInventoryCategory* category, bool append);
@@ -265,6 +267,15 @@ public:
 // [/SL:KB]
 
 private:
+    struct LookItem
+    {
+        LLUUID id;
+        LLAssetType::EType type;
+        std::string name, order;
+    };
+    std::vector<LookItem> mPreviousLook;
+    LLUUID mLookSession, mLookBase;
+    void capturePreviousLook();
     std::weak_ptr<fs_assistant::AsyncOperation> mAssistantAppearance;
     fs_assistant::AsyncTaskPtr mAssistantBakeTask;
     void serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,fs_assistant::AsyncTaskPtr task=nullptr);

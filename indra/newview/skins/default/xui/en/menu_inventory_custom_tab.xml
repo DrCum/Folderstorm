@@ -4,6 +4,9 @@
  mouse_opaque="false"
  name="menu_inventory_custom_tab"
  visible="false">
+  <menu_item_call label="Customize tab..." layout="topleft" name="customize_tab">
+    <on_click function="FSInventoryCustomTab.Customize" />
+  </menu_item_call>
   <menu_item_call
    label="Rename..."
    layout="topleft"
@@ -16,6 +19,9 @@
    name="clone_tab">
     <on_click function="FSInventoryCustomTab.Clone" />
   </menu_item_call>
+  <menu_item_call label="Add selected folders to view" name="add_folders"><on_click function="FSInventoryCustomTab.Folders" parameter="add" /></menu_item_call>
+  <menu_item_call label="Use only selected folders" name="replace_folders"><on_click function="FSInventoryCustomTab.Folders" parameter="replace" /></menu_item_call>
+  <menu_item_call label="Show all folders" name="clear_folders"><on_click function="FSInventoryCustomTab.Folders" parameter="clear" /></menu_item_call>
   <menu_item_separator layout="topleft" />
   <menu_item_call
    label="Hide"

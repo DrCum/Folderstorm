@@ -15,6 +15,10 @@ Open **Preferences → Move & View → Layout**.
 - **Viewport.** Turn on **Use a custom world viewport** and set the left, right, top, and bottom margins. The camera, HUD, and mouse stay in the remaining world area so Inventory and other windows can sit in the margins of a stretched window. If two opposite margins would leave less than 5% of the window, they are scaled down. The change previews immediately. There is a separate switch for mouselook.
 - **Layout.** Place the toolbars, chat bar, and top bars around that viewport. Side bars sit outside the viewport when there is room, and just inside it when there is not. Save the arrangement as a named profile, then apply, rename, or delete profiles later. **Reset** restores the default chrome.
 
+### Gesture boards
+
+Open **World → Gesture board…**. Use **Options → Find tiles…** to find a gesture or sound by its tile label or inventory name. **Ctrl+F** opens the same field when local search shortcuts are enabled. Click a result to play it. **Esc** returns to the page you were on.
+
 ### Outfit Gallery
 
 Open the Outfits panel and the gallery tab. The thumbnail slider sets the photo width from 80 to 256 pixels. The name row stays a fixed height. 256 is the photo size the gallery fetches.
@@ -27,7 +31,9 @@ Open **Preferences → Move & View → Workspaces** after login. Arrange your wi
 
 Enable **Remember Inventory folders** before saving in Preferences or the quick switcher to include the folder root and list/gallery/combination presentation of each single-folder Inventory window. In a normal Inventory window, a single selected folder in **All Items** is remembered; selected items and other tabs' folder selections are excluded. The choice belongs to that save. Old workspaces keep their geometry-only behavior until resaved with the option enabled. Folder IDs stay in account-local settings; no Inventory contents, expanded trees, or search filters are saved. Preferences **Cancel** also restores the folder views from before the preview. If a folder was deleted, filtered out, or Inventory has not loaded yet, the rest of the workspace still loads with a brief notice; try switching again after Inventory loads.
 
-For quick switching, choose **World → Workspaces & Layouts…**, or drag **Workspaces** from **Toolbar Buttons** to any toolbar. Double-click an entry or choose **Switch**. **Favorite** puts entries in a separate Favorites section at the top of this list; landmark favorites remain in their own bar. Workspaces include supported window arrangements; Layouts change only the viewport and bars. Saved workspace definitions stay unchanged when switching. Enter a name under **Save current as a new workspace** and choose **Save** to keep the current setup immediately, without opening Preferences. This creates a new workspace; replacing an existing name is handled in Preferences. Finish Preferences with **OK** or **Cancel** before switching or saving from the list. **Preferences…** opens the selected entry's Workspaces or Layout settings.
+Choose **World → Workspaces & Layouts…**, or add **Workspaces** to a toolbar. On **Switch**, type part of a name and press **Enter** to switch. Favorites appear first. Workspaces restore supported window arrangements. Layouts change the viewport and bars. **Preview…** shows the selected workspace before you apply it.
+
+To keep your current arrangement, open **Save**, enter a new name, choose what to capture, and click **Save new**. Use **Tools → Preferences…** for the selected entry’s full settings. If Preferences is already open, finish with **OK** or **Cancel** before switching or saving.
 
 Tabbed **Conversations** restores size and position only; loading a workspace leaves its open/closed state and selected conversations unchanged. Detached **Nearby Chat** can restore visibility when its existing presentation is compatible. Workspace capture never stores messages, chat sessions, or inventory contents. The included workspace starting arrangements have been removed; your named workspaces remain available.
 
@@ -35,9 +41,13 @@ Enable **Show workspace favorites strip** in the Workspaces switcher or Preferen
 
 Settings search also recognizes **MCP**, **dual monitor**, **workspace**, and **undo**. Matching tabs open automatically. Undo leads to **Local assistant → History**, where **History and undo…** opens the existing inventory review window. Searching or opening history does not authorize or execute inventory changes.
 
+### Custom Inventory tabs
+
+Select a custom Inventory tab and click **Customize tab...** beside the search box to edit its filters. The tab remembers its filters and search automatically. Right-click a tab's name for **Customize tab...**, **Rename...**, and **Clone**. Customizing an inactive tab selects it first.
+
 ### Review Inventory changes
 
-Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. Review the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
+Select 1–50 items in the Inventory list, then use the gear menu's **Review bulk changes…** to preview a rename pattern or move to an existing folder. For a move, click **Choose folder…**, search by folder or parent name, and click **Use folder**. Check the displayed path, then preview the exact before/after rows and skipped items before executing. In that window, enable **Review assistant rename/move operations affecting 10 or more objects** to also review large assistant batches.
 
 The gear menu's **Assistant inventory history…** shows this session's tracked rename/move operations. **Stop** prevents additional work; submitted changes may still finish. **Clear history** removes the visible records without changing Inventory. Undo is offered only for confirmed changes that still match their recorded state; ordinary renames and copyable-item moves have narrower rules than general Inventory actions. Unconfirmed changes, folder moves, moves involving Trash, and non-copyable-item moves cannot be undone here. See [bulk review and recovery](local-assistant-bulk-inventory.md) for the exact limits.
 

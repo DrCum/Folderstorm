@@ -25,6 +25,12 @@ class InventoryOutfitSafety(unittest.TestCase):
                 str(cpp), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True, timeout=10)
 
+    def test_previous_look_preflight(self):
+        code = (VIEWER / "llappearancemgr.cpp").read_text()
+        fixture = (VIEWER / "tests/previous_look_fixture.cpp").read_text()
+        self.cpp(fixture.replace('#include "previous_look.inc"', function(code,
+            "bool LLAppearanceMgr::hasPreviousLook(") + function(code, "void LLAppearanceMgr::restorePreviousLook(")))
+
     def test_delayed_confirmation_and_native_dispatch(self):
         source = (VIEWER / "llinventoryfunctions.cpp").read_text()
         available = function(source, "bool inventory_folder_outfit_available(")
