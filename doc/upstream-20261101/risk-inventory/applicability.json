@@ -1,0 +1,8 @@
+{
+  "source": "c8c22bbfed91ff1ddb70a3b30ec44c234b47fd20",
+  "base": "e462dd1d1f7444b3922989ec30677814bd63c3cd",
+  "applied": false,
+  "dryRunReturnCode": 1,
+  "dryRunDiagnostics": "error: patch failed: indra/newview/llaisapi.cpp:947\nerror: indra/newview/llaisapi.cpp: patch does not apply\n<stdin>:125: new blank line at EOF.\n+\nerror: patch failed: indra/newview/llinventorymodel.cpp:2349\nerror: indra/newview/llinventorymodel.cpp: patch does not apply\nerror: patch failed: indra/newview/llinventorymodel.h:35\nerror: indra/newview/llinventorymodel.h: patch does not apply\nerror: patch failed: indra/newview/llinventorymodelbackgroundfetch.cpp:778\nerror: indra/newview/llinventorymodelbackgroundfetch.cpp: patch does not apply\nerror: patch failed: indra/newview/llinventorymodelbackgroundfetch.h:145\nerror: indra/newview/llinventorymodelbackgroundfetch.h: patch does not apply\n",
+  "candidateRuntimeTests": "not run; candidate not applied"
+}
