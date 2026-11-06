@@ -271,6 +271,13 @@ protected:
     RECT mRect;
     RECT mClientRect;
 
+    // App-thread cache. Bounds use desktop pixels with Y pointing up; each
+    // caller gets a fresh client-space projection without device enumeration.
+    void invalidateMonitorCache();
+    std::vector<MonitorRect> mDesktopMonitors;
+    bool mMonitorCacheDirty = true;
+    ULONGLONG mMonitorCacheRetryAt = 0;
+
     void updateWindowTheme();
     bool isSystemAppDarkMode();
     void setCustomIcon();

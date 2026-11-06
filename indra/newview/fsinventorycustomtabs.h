@@ -126,6 +126,7 @@ private:
 
     LLPanelMainInventory* mParent{ nullptr };
     LLTabContainer* mTabs{ nullptr };
+    LLHandle<LLView> mCustomizeTabPanel;
     LLHandle<LLView> mMenuHandle;
     LLHandle<LLContextMenu> mHiddenMenuHandle;
     std::set<LLInventoryPanel*> mPanels;

@@ -95,6 +95,13 @@ FSInventoryCustomTabs::FSInventoryCustomTabs(LLPanelMainInventory* parent)
         return;
     }
 
+    // Resolve once: a recursive lookup during draw walks the loaded Inventory
+    // trees, including hidden tabs, before reaching this header control.
+    if (auto* controls = mParent->findChild<LLView>("customize_tab_panel"))
+    {
+        mCustomizeTabPanel = controls->getHandle();
+    }
+
     if (gMenuHolder)
     {
         if (auto* menu = LLUICtrlFactory::getInstance()->createFromFile<LLMenuGL>(MENU_FILE, gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance()))
@@ -509,7 +516,7 @@ void FSInventoryCustomTabs::onParentDraw(LLPanelMainInventory* parent)
 {
     if (auto* self = instanceFor(parent))
     {
-        if (auto* controls = parent->findChild<LLView>("customize_tab_panel"))
+        if (auto* controls = self->mCustomizeTabPanel.get())
         {
             controls->setVisible(!parent->isSingleFolderMode() && self->isCustomTab(parent->getActivePanel()));
         }

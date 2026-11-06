@@ -18,6 +18,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "fsworkspacecontroller.h"
 #include "fsworkspacebackground.h"
+#include "fssessionworker.h"
 #include "fspreferenceslistener.h"
 #include "fspreferencesmodel.h"
 #include "fsworkspacecontextadapter.h"
@@ -1616,6 +1617,8 @@ void FSWorkspaceController::pollDisplays()
 {
     if (!available() || !gViewerWindow) { mDisplaySignature.clear(); mRecoveryWindows.clear(); mDisplayPending = false; return; }
     if (!gSavedSettings.getBOOL("FSWorkspaceDisplayRecovery")) { mDisplaySignature.clear(); mRecoveryWindows.clear(); mDisplayPending = false; return; }
+    if (!FSSessionWorker::renderAllowed() || !gViewerWindow->getWindow()->getVisible() ||
+        gViewerWindow->getWindow()->getMinimized()) return;
     if (mDisplayPollTimer.getElapsedTimeF32() < 2.f) return;
     mDisplayPollTimer.reset();
     std::vector<LLWindow::MonitorRect> monitors;

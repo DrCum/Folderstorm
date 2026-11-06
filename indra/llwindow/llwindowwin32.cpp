@@ -1185,8 +1185,6 @@ namespace
 {
 struct MonitorRectQuery
 {
-    POINT origin;
-    LONG client_height;
     std::vector<LLWindow::MonitorRect> monitors;
 
     static BOOL CALLBACK enumerate(HMONITOR monitor, HDC, LPRECT, LPARAM data)
@@ -1209,16 +1207,21 @@ struct MonitorRectQuery
         {
             result.name = ll_convert<std::string>(std::wstring(device.DeviceString));
         }
-        // Desktop coordinates are top-left based. Transform edges explicitly;
-        // convertCoords() transforms points and subtracts an extra pixel.
-        result.rect.set(info.rcMonitor.left - query.origin.x,
-                        query.client_height + query.origin.y - info.rcMonitor.top,
-                        info.rcMonitor.right - query.origin.x,
-                        query.client_height + query.origin.y - info.rcMonitor.bottom);
+        // Store desktop edges with Y pointing up. Window moves and resizes
+        // only change the client-space translation applied to this snapshot.
+        result.rect.set(info.rcMonitor.left, -info.rcMonitor.top,
+                        info.rcMonitor.right, -info.rcMonitor.bottom);
         query.monitors.push_back(std::move(result));
         return TRUE;
     }
 };
+}
+
+void LLWindowWin32::invalidateMonitorCache()
+{
+    ASSERT_MAIN_THREAD();
+    mMonitorCacheDirty = true;
+    mMonitorCacheRetryAt = 0;
 }
 
 bool LLWindowWin32::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
@@ -1235,19 +1238,29 @@ bool LLWindowWin32::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
     }
 
     RECT client{};
-    MonitorRectQuery query{};
+    POINT origin{};
     if (!GetClientRect(window, &client) ||
         client.right <= client.left || client.bottom <= client.top ||
-        !ClientToScreen(window, &query.origin))
+        !ClientToScreen(window, &origin))
     {
         return false;
     }
-    query.client_height = client.bottom - client.top;
-    if (!EnumDisplayMonitors(nullptr, nullptr, MonitorRectQuery::enumerate,
-                             reinterpret_cast<LPARAM>(&query)) ||
-        query.monitors.empty())
+    if (mMonitorCacheDirty)
     {
-        return false;
+        if (GetTickCount64() < mMonitorCacheRetryAt) return false;
+        MonitorRectQuery query{};
+        if (!EnumDisplayMonitors(nullptr, nullptr, MonitorRectQuery::enumerate,
+                                 reinterpret_cast<LPARAM>(&query)) ||
+            query.monitors.empty())
+        {
+            // Do not publish a partial topology or retry a failing driver on
+            // every idle callback. A real change notification allows a retry.
+            mMonitorCacheRetryAt = GetTickCount64() + 1000;
+            return false;
+        }
+        mDesktopMonitors = std::move(query.monitors);
+        mMonitorCacheDirty = false;
+        mMonitorCacheRetryAt = 0;
     }
 
     // A native move/resize can occur during enumeration. Return unavailable
@@ -1258,11 +1271,15 @@ bool LLWindowWin32::getMonitorRectsInClient(std::vector<MonitorRect>& monitors)
         !GetClientRect(window, &current_client) ||
         !ClientToScreen(window, &current_origin) ||
         !EqualRect(&client, &current_client) ||
-        current_origin.x != query.origin.x || current_origin.y != query.origin.y)
+        current_origin.x != origin.x || current_origin.y != origin.y)
     {
         return false;
     }
-    monitors = std::move(query.monitors);
+    monitors = mDesktopMonitors;
+    for (auto& monitor : monitors)
+    {
+        monitor.rect.translate(-origin.x, client.bottom - client.top + origin.y);
+    }
     return true;
 }
 
@@ -2575,6 +2592,11 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_DEVICECHANGE");
             window_imp->mWindowThread->pingWindowTimeout("WM_DEVICECHANGE");
 
+            if (w_param == DBT_DEVNODES_CHANGED || w_param == DBT_CONFIGCHANGED)
+            {
+                WINDOW_IMP_POST(window_imp->invalidateMonitorCache());
+            }
+
             // Log detailed device change information
             std::string change_type = "UNKNOWN";
             switch (w_param)
@@ -3347,6 +3369,7 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_DPICHANGED");
             window_imp->mWindowThread->pingWindowTimeout("WM_DPICHANGED");
+            WINDOW_IMP_POST(window_imp->invalidateMonitorCache());
             LPRECT lprc_new_scale;
             F32 new_scale = F32(LOWORD(w_param)) / F32(USER_DEFAULT_SCREEN_DPI);
             lprc_new_scale = (LPRECT)l_param;
@@ -3368,6 +3391,7 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
         case WM_DISPLAYCHANGE:
         {
             window_imp->mWindowThread->pingWindowTimeout("WM_DISPLAYCHANGE");
+            WINDOW_IMP_POST(window_imp->invalidateMonitorCache());
             WINDOW_IMP_POST(window_imp->mCallbacks->handleDisplayChanged());
             break;
         }
