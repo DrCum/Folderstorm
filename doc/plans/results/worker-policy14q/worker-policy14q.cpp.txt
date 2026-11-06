@@ -1,0 +1,3 @@
+#include "../viewer-performance/indra/llcommon/threadpool.cpp"
+#include "../viewer-performance/indra/llcommon/workqueue.cpp"
+#include "../viewer-performance/indra/llcommon/tests/threadpool_wait_policy_test.cpp"

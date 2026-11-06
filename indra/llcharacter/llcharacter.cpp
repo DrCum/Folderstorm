@@ -41,6 +41,21 @@ LLStringTable LLCharacter::sVisualParamNames(1024);
 std::list< LLCharacter* > LLCharacter::sInstances;
 bool LLCharacter::sAllowInstancesChange = true ;
 
+namespace
+{
+const std::string& handPoseDataName()
+{
+    static const std::string name("Hand Pose");
+    return name;
+}
+
+const std::string& handPosePriorityDataName()
+{
+    static const std::string name("Hand Pose Priority");
+    return name;
+}
+}
+
 //-----------------------------------------------------------------------------
 // LLCharacter()
 // Class Constructor
@@ -241,6 +256,29 @@ void LLCharacter::setAnimationData(std::string name, void *data)
 {
     mAnimationData[name] = data;
 }
+
+// <FS:Perf> Hand-morph inputs belong to the character, independently of asset eviction.
+void LLCharacter::setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority)
+{
+    mAnimationHandPose = pose;
+    mAnimationHandPosePriority = priority;
+    mAnimationData[handPoseDataName()] = &mAnimationHandPose;
+    mAnimationData[handPosePriorityDataName()] = &mAnimationHandPosePriority;
+}
+
+const LLJoint::JointPriority* LLCharacter::getHandPoseAnimationPriority() const
+{
+    // Consult the map each time so generic producers and hand-motion removal stay authoritative.
+    const auto found = mAnimationData.find(handPosePriorityDataName());
+    return found != mAnimationData.end() ? static_cast<const LLJoint::JointPriority*>(found->second) : nullptr;
+}
+
+void LLCharacter::clearHandPoseAnimationData()
+{
+    mAnimationData.erase(handPoseDataName());
+    mAnimationData.erase(handPosePriorityDataName());
+}
+// </FS:Perf>
 
 //-----------------------------------------------------------------------------
 // getAnimationData()

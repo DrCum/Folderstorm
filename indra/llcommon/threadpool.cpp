@@ -60,6 +60,8 @@ struct sleepy_robin: public boost::fibers::algo::round_robin
 /*****************************************************************************
 *   ThreadPoolBase
 *****************************************************************************/
+// <FS> Snapshot the effective policy after resolving the real configured width.
+/* Original upstream constructor:
 LL::ThreadPoolBase::ThreadPoolBase(const std::string& name,
                                    size_t threads,
                                    WorkQueueBase* queue,
@@ -70,6 +72,27 @@ LL::ThreadPoolBase::ThreadPoolBase(const std::string& name,
     mQueue(queue),
     mAutomaticShutdown(auto_shutdown)
 {}
+*/
+LL::ThreadPoolBase::ThreadPoolBase(const std::string& name,
+                                   size_t threads,
+                                   WorkQueueBase* queue,
+                                   bool auto_shutdown,
+                                   [[maybe_unused]] WaitPolicy wait_policy):
+    super(name),
+    mQueue(queue),
+    mAutomaticShutdown(auto_shutdown),
+    mName("ThreadPool:" + name),
+    mThreadCount(getConfiguredWidth(name, threads)),
+    mWaitPolicy(
+#if LL_WINDOWS
+        wait_policy == WaitPolicy::EventWaitSingleWorker && mThreadCount == 1 ?
+            WaitPolicy::EventWaitSingleWorker : WaitPolicy::PlatformDefault
+#else
+        WaitPolicy::PlatformDefault
+#endif
+    )
+{}
+// </FS>
 
 void LL::ThreadPoolBase::start()
 {
@@ -138,8 +161,14 @@ void LL::ThreadPoolBase::close()
 void LL::ThreadPoolBase::run(const std::string& name)
 {
 #if LL_WINDOWS
+    // <FS> The default path retains polling; only an eligible startup request opts in.
     // Try using sleepy_robin fiber scheduler.
-    boost::fibers::use_scheduling_algorithm<sleepy_robin>();
+    // boost::fibers::use_scheduling_algorithm<sleepy_robin>();
+    if (mWaitPolicy == WaitPolicy::EventWaitSingleWorker)
+        boost::fibers::use_scheduling_algorithm<boost::fibers::algo::round_robin>();
+    else
+        boost::fibers::use_scheduling_algorithm<sleepy_robin>();
+    // </FS>
 #endif // LL_WINDOWS
 
     LL_DEBUGS("ThreadPool") << name << " starting" << LL_ENDL;

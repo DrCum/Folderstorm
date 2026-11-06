@@ -1,0 +1,20 @@
+[
+  {
+    "pr": 118,
+    "head": "0ec73f05516ec0b2e4e578fadcf5e959ecf185d7",
+    "version": "7.2.5.82283",
+    "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-118\\7.2.5.82283-head-0ec73f0551-velopack-sentry-tracy-OFF-clean",
+    "installerSha256": "012551CDFBABADE19567D9CBB288FB0592AB8A05F429C32E83DB7EB49EB7C1F1",
+    "focusedCount": 37,
+    "runtimeAcceptance": "pending"
+  },
+  {
+    "pr": 119,
+    "head": "8952ad421837beb61737a15d999ff14fa1c069b4",
+    "version": "7.2.5.82287",
+    "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-119\\7.2.5.82287-head-8952ad4218-velopack-sentry-tracy-OFF-clean",
+    "installerSha256": "E161300D1780F72628A9DFAA0964F54C8B11A4CF75D6C9FDD032583DDD5BEE33",
+    "focusedCount": 38,
+    "runtimeAcceptance": "pending"
+  }
+]

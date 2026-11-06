@@ -1,0 +1,2 @@
+mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes
+default,8,0,busy,64,618,274880,0,2464,8304,22,8120,596,266760

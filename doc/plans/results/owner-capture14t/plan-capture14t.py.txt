@@ -1,0 +1,22 @@
+import json
+from pathlib import Path
+
+root=Path(__file__).resolve().parent
+results=root.parent/'viewer-performance/doc/plans/results/owner-capture14t'
+results.mkdir(exist_ok=True)
+cases=[]
+for round_ in (1,2):
+    modes=('direct','owned','owned-retained')
+    for avatars in (1,32) if round_==1 else (32,1):
+        for mode in modes if round_==1 else reversed(modes):
+            cases.append(dict(kind='timing',round=round_,mode=mode,avatars=avatars,frames=1024))
+for avatars in (1,32):
+    for mode in ('direct','owned','owned-retained'):
+        cases.append(dict(kind='alloc',round=1,mode=mode,avatars=avatars,frames=64))
+plan=dict(status='written_before_measurement',parent_pr=121,parent_head='81c90614cd1351b6825be2a2e5f19ad2049916db',
+          timing_cases=12,allocation_cases=6,gap_us=0,load='normal',cases=cases,
+          reason='1024 timing frames reduce short-window noise; 64 separate allocator frames preserve the count comparison. No scheduler policy change or live viewer deadline/FPS claim.')
+target=results/'matrix-plan.json'
+if target.exists():assert json.loads(target.read_text())==plan
+else:target.write_bytes((json.dumps(plan,indent=2)+'\n').encode())
+print('Fixed 12 timing and 6 allocation cases before collection')

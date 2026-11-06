@@ -1,0 +1,29 @@
+import json
+from pathlib import Path
+
+root = Path(__file__).resolve().parent
+cases = []
+configs = [(avatars, gap) for avatars in (1, 32) for gap in (0, 100, 500, 2000)]
+for round_ in (1, 2):
+    order = ('direct', 'owned', 'default', 'event')
+    for avatars, gap in configs if round_ == 1 else reversed(configs):
+        for mode in order if round_ == 1 else reversed(order):
+            cases.append(dict(mode=mode, avatars=avatars, gap=gap, round=round_, load='normal', allocations=False))
+    for load in ('busy', 'closed'):
+        for mode in ('default', 'event') if round_ == 1 else ('event', 'default'):
+            cases.append(dict(mode=mode, avatars=8, gap=0, round=round_, load=load, allocations=False))
+for gap in (0, 500):
+    for mode in ('direct', 'owned', 'default', 'event'):
+        cases.append(dict(mode=mode, avatars=32, gap=gap, round=1, load='normal', allocations=True))
+for load in ('busy', 'closed'):
+    for mode in ('default', 'event'):
+        cases.append(dict(mode=mode, avatars=8, gap=0, round=1, load=load, allocations=True))
+plan = dict(status='written_before_accepted_measurement', frames_per_case=64, timing_cases=72,
+            allocation_cases=12, cases=cases,
+            limits='Generated cohorts and explicit synthetic gaps; first-consumption cancellation; no viewer deadline/FPS acceptance')
+destination = root.parent / 'viewer-performance/doc/plans/results/event-sampling14s/matrix-plan.json'
+if destination.exists():
+    assert json.loads(destination.read_text()) == plan
+else:
+    destination.write_text(json.dumps(plan, indent=2) + '\n')
+print(f'{len(cases)} bounded cases planned before measurement')

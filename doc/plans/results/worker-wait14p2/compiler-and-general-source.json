@@ -1,0 +1,53 @@
+{
+  "source_context_commit": "144c67486a3224725470a3f2b5fc937cc353f491",
+  "status": "Source consumers and normal/Tracy compilation reviewed; remaining measurements and full viewer trial acceptance pending",
+  "packaged_ThreadPoolSizes": {
+    "General": 1,
+    "ImageDecode_before_initThreads_replacement": 9
+  },
+  "General_constructor_fallback": 3,
+  "runtime_width_read": false,
+  "source_sha256_normalized_lf": {
+    "indra/llcommon/threadpool.cpp": "06dd412f0c93f9200507e75bd19303977f8a22f064255461600c3ac08f83d154",
+    "indra/llcommon/threadpool.h": "7a519eda8895fc78e8db78a310b3df11d3f5b560b19854d613af77ebda3dcb14",
+    "indra/llcommon/commoncontrol.cpp": "8e3dd12bca164f1e74e2df2cb1b54a0edd0a8c1dbe3f768457b592bdf30adac1",
+    "indra/newview/llappviewer.cpp": "ffa5901243063b5656fe8f27e4431cb35401980f2ccbe5171e593a1218450dde",
+    "indra/newview/app_settings/settings.xml": "58524de493ed0452173eed67ad71dd13eb02c1b60688683da9d4386a5d804e74",
+    "indra/newview/llviewercontrollistener.cpp": "a03fcd648b911e37786685f95d4c730925192ad4f09a2a297387cf5e3fe7dc81",
+    "indra/llaudio/llaudiodecodemgr.cpp": "399b04292b15a99e4a80c38c8881f7864f1bd2a33981d916ce4c0c09bdc5a940",
+    "indra/llmessage/llcorehttputil.cpp": "16681bdb8354e78542f34cc9deb045217ca9dcd93670c5163bfe11c049818ad2",
+    "indra/llplugin/llpluginprocessparent.cpp": "2af7f3f482ba9bca41b1108ca54201f162ac6499144517c2a20fd8ab9ce5f345",
+    "indra/newview/llgltfmateriallist.cpp": "e93788431ca7d704487e4765299c8acb3373fa4540dfa23c1d819f368796b5db",
+    "indra/newview/llinventorymodel.cpp": "abbc88e9485d7980aed14048d0e9e87c438b1bb33951668a1cb4ab9d5af437eb",
+    "indra/newview/llviewermenufile.cpp": "99266c6ee54364907cedd1bcb95b8464ca0b4f9575164c37803102a386ce86c7",
+    "indra/newview/llviewermenu.cpp": "1e83bc031e42583405c4f403769f5081b588fe2c709831c88c5777ab105d6a94",
+    "indra/newview/llperfstats.h": "b9aabdbc8952e53551dc84de0be53a0bbbd00319950337f60241fb55c933623b",
+    "indra/newview/llperfstats.cpp": "a177946b8ed778fdaea091fc7ea480f44017d04ab423489dd5e49a5a9ddd7580"
+  },
+  "standalone_compiler_artifacts": {
+    "threadpool_scheduler_test-normal-worker14p2.rsp": "cd5fb3d8047bf97ed06f4ff7187f5838a2c36103edc7455b6e52b55fa6f2a077",
+    "threadpool_scheduler_test-normal-worker14p2.log": "1debbbff587b7504ec0388c1e2ee9325e21f5aa472575899d69a5c2a9067500c",
+    "threadpool_scheduler_test-tracy-worker14p2.rsp": "f581500a64e33437e098f399879c59cfa71f3f38abcbb361519f0202fdec0c05",
+    "threadpool_scheduler_test-tracy-worker14p2.log": "1debbbff587b7504ec0388c1e2ee9325e21f5aa472575899d69a5c2a9067500c",
+    "threadpool_scheduler_benchmark-normal-worker14p2.rsp": "3711324efada3755e490b83a23b0658528adc2c79a4e18d4e216142e1e69a26b",
+    "threadpool_scheduler_benchmark-normal-worker14p2.log": "e58399e8a01b0478ab2b91905865e3fb23521b4150db5d8661a1ab01970bf5e5",
+    "threadpool_scheduler_benchmark-tracy-worker14p2.rsp": "1cf4ea29749cb8123cfd41f3c29a0c59b8e67c605576c8fca731c12633e59693",
+    "threadpool_scheduler_benchmark-tracy-worker14p2.log": "e58399e8a01b0478ab2b91905865e3fb23521b4150db5d8661a1ab01970bf5e5"
+  },
+  "compiler_scope": "MSVC x64 AVX2 standalone syntax only, normal and Tracy; immutable source-policy/defaults unaffected; these are not full viewer builds or CPU measurements",
+  "General_consumers": [
+    "audio decode",
+    "large HTTP body parsing",
+    "media process creation",
+    "material asset parsing",
+    "inventory disk cache load",
+    "folder upload preparation",
+    "disk/CEF cache maintenance"
+  ],
+  "StatsRecorder_send": "synchronous processUpdate; no General dispatch at this entry point",
+  "notes": [
+    "Actual running overrides and CPU load remain unobserved",
+    "Source appendix is conditional; partial measurements do not authorize scheduler adoption",
+    "All compiler outputs are isolated scratch files; shared cache packages/project were read only"
+  ]
+}

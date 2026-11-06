@@ -1,0 +1,290 @@
+{
+  "status": "Partial 14l evaluation; no adopted hint cache or viewer FPS claim",
+  "production_parent": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "prototype_commit": "b298d5cb894a7761ffedbcebb272a8a38dcf1053",
+  "default_slots": 0,
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise assertions enabled; Tracy OFF, map curves",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "02492d2482eb2677daa15a23af0c9132081b3fef87a764476d072261fd6e295b",
+    "indra/llcharacter/llpose.h": "9f4240325ac5c773a5bd0fb173786a73c4725801aa19489a2aa34476f7961a82",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/blender_pool_multimotion_benchmark.cpp": "737c1cabd060349a1de82b5413baf9b23723c3285f2bcb532bec589c0d5346a9",
+    "indra/llcharacter/CMakeLists.txt": "cd34734a43c5746660fd6ad85dd1f20f342aa13ea3f4895612911f7071f44428"
+  },
+  "frozen_parent_sha256_normalized_lf": {
+    "llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d"
+  },
+  "reports_sha256_normalized_lf": {
+    "pool-multi-cold-256-r1-14l.csv": "d5e45728f22e9876b84af94e4d6b72fb59186d13b6ee45b1216177548de61a24",
+    "pool-multi-cold-256-r2-14l.csv": "9e56b6370eb111e1796ff31aa5cb596809e0727b6718fb92c3c36369e20c51a7",
+    "pool-multi-cold-64-r1-14l.csv": "3743c41ecf9e2c7001e47ef7bef8b0ef33cef4402bccd6b76af5fcaee99c9ea6",
+    "pool-multi-cold-64-r2-14l.csv": "cfe242c0dd123ede821469b3b4ce756dd194224d802b7abdbf00985c48f5ce87",
+    "pool-multi-cold-parent-r1-14l.csv": "8c59080ad32c5ad804a885ebf50fd5c44311fbd760a993463c6b8c6e6fde0255",
+    "pool-multi-cold-parent-r2-14l.csv": "a63615fe19694d8587e04af791aa3c90a62ea6cdb824c34a95db905c5b299c77",
+    "pool-multi-coverage14l.csv": "5e1b6a7349ec968a59cd6bf99deb0c64652a1e2cda38c2e4d2166664c8d27d6c",
+    "pool-multi-cycles-cold-256-r1-14l.csv": "3ae3a965dbb68ac409b1fdafee0e9206f8b059ba1b348d1608ae6143fe34c6c6",
+    "pool-multi-cycles-cold-256-r2-14l.csv": "74910be40e6f78febb7085c29767a9a6e5e976d3897307d3073540771292e7d3",
+    "pool-multi-cycles-cold-64-r1-14l.csv": "55a93c1928f7ccfcd9f38a7adc569ca30207746ad5aecec882f9cd4e073d1aa0",
+    "pool-multi-cycles-cold-64-r2-14l.csv": "0e948a2d2d2fa03b4a83b8271a5d8940168326b1dfc28fa943a008e4b17e5a49",
+    "pool-multi-cycles-cold-parent-r1-14l.csv": "c80b89984ac4281543a66cc78b0004e74969be54950ef3afa7eaae8a0b814b1f",
+    "pool-multi-cycles-cold-parent-r2-14l.csv": "b8c89abd90f4efeab771b498ea0a879505ab84feb3fdeef27db0e676856ecaac",
+    "pool-multi-cycles-parent-drift14l.csv": "6174f62613e1d338f392d09082ce84fe513928d3c5852c96185b20bb284f7e4f",
+    "pool-multi-cycles-steady-256-r1-14l.csv": "af2af6b3d1e789324bc6a2f9217b9632050281391c56c6087f32353549531940",
+    "pool-multi-cycles-steady-256-r2-14l.csv": "be6500160ffa8e36d3c288cf4e8c0b46879e24da8181fbd9cab1b3b7c658f625",
+    "pool-multi-cycles-steady-64-r1-14l.csv": "5e8e1d3396536359562cb4258a418d42dc9207583d37739a30c3e382b0dcff13",
+    "pool-multi-cycles-steady-64-r2-14l.csv": "8b58ddca5f6931f20636f4ee461b66e204645b3abd74675fef82c99769f4d104",
+    "pool-multi-cycles-steady-parent-r1-14l.csv": "76a383bb866b8896101517395988a297b553b2a7dc3fa737bb900bd4f587f3ed",
+    "pool-multi-cycles-steady-parent-r2-14l.csv": "32dc400b6c07854680311b71baf7cab5537c3f3ac5da35d5b6b1c853659a9c0c",
+    "pool-multi-cycles-summary14l.csv": "6ad0ca0372307d0de070820941aea84e65bea2a9618f5675cc47d8628d39c330",
+    "pool-multi-steady-256-r1-14l.csv": "aca73b10287110851b458d57b8d474d3f9b20dc65c55c73f6126d8645236cce7",
+    "pool-multi-steady-256-r2-14l.csv": "9fe7e6fb279da3da50ebd57d6df79a8d05617761363ebc51b9b62757823fa786",
+    "pool-multi-steady-64-r1-14l.csv": "b343133278276636f5a855dd4acd4f00cd64ddde8887f73e9557136d66a32ea6",
+    "pool-multi-steady-64-r2-14l.csv": "f92fdd7b52f2d7c5da706650cd14ee02e9c1af49ca01b53d903fc0343ea1df5f",
+    "pool-multi-steady-parent-r1-14l.csv": "9f57102c51b6cb7638ed3b87820caba834a4b527d2f518fc6038c4d4e7532a30",
+    "pool-multi-steady-parent-r2-14l.csv": "46f19b2894edd4b54e282e6aa7522ab3d88f2a21cd507c0839161d7e57d11d57",
+    "pool-multi-summary14l.csv": "9100c2e771297f828b465da9476a0c03306a935640ecc5782a8266c5abdcdc5d"
+  },
+  "retained_source_snapshot_sha256_normalized_lf": {
+    "pool-multi-first-fixture14l.cpp.txt": "c87e3462c968d2291e19dd7992ac454dbb31b7212ca12ffb68c14111538f119e"
+  },
+  "unchanged_scene_correctness_source_sha256": "831d8a9445cd8061e7c901f24f9774e13d06290d17571026522cff5809fe9803",
+  "scratch_artifact_sha256": {
+    "pool-multi-parent14l.exe": "0557931b70a32c9c6f6c8b4713ff087dd41b2b461bc8c335e5b53aef94c09ed3",
+    "pool-multi-parent14l.rsp": "30a99ff70951e874179de8d555ecb04c2fae94ef896110d5f59f3fda2b85d13a",
+    "pool-multi-parent14l.log": "1b1cb5b1b9d6d6547f46779cc4031ceaa563e7a8f4d2e6c10f4291c4e6413124",
+    "pool-multi-hints64-14l.exe": "721ef47317f06d0b72eb565b213c672046a764aafd5f78e92d1e4446dac3ee58",
+    "pool-multi-hints64-14l.rsp": "945aa2393999446b505ccda9bb207c9f4f2d89dca0af6e388033ad93a125f315",
+    "pool-multi-hints64-14l.log": "f5b56b8133c7450979a871fd2197c2f0acda01e43b7cce28bd4195e085b932be",
+    "pool-multi-hints256-14l.exe": "0485757ef9f6916deabb6630696516aa978f5d1bbf50a9ab3a4573597bd955ba",
+    "pool-multi-hints256-14l.rsp": "47a311d09fd7fbf7e6608a48e16100352dcd8e4288e329139c8559303a2910e3",
+    "pool-multi-hints256-14l.log": "aafa5568d2b7043c9ea1ef41fbca27dcca77be58d5035cd31c240f3e7210f1dc",
+    "pool-multi-cycles-parent-14l.exe": "af88e11703967aaf9d18672e31830c2a9a868abdc083bd98e2087f3829b55e32",
+    "pool-multi-cycles-parent-14l.rsp": "42e18271e4e56ca62a545be193d7cf406237fe419f0ed3b1a119ff20eb4f77b6",
+    "pool-multi-cycles-parent-14l.log": "24881636b5cd4ba8c6bdb048d84b97b0bad18e6cbaed763d7e5054ad21f7f41d",
+    "pool-multi-cycles-64-14l.exe": "5660e048e411f94df947b03612b02a6025e54729586b3311e6b7d0d8195b7acb",
+    "pool-multi-cycles-64-14l.rsp": "27816f99e5e8dafcd65a887a9e41fcb1101531bdc81641e62db163f6260a5bee",
+    "pool-multi-cycles-64-14l.log": "c3f5d3e6831396b900110e14d9ded43bded94a5e934796560f4f37763083acd1",
+    "pool-multi-cycles-256-14l.exe": "f4e22fc258dd9e7c2420f2003db49d063ed1f5f73d262792a92b81e76ae2963c",
+    "pool-multi-cycles-256-14l.rsp": "1f2872b4586eab4fc51efbe5300dfa70ac791e172ae3637dfed6e180bb9bdec3",
+    "pool-multi-cycles-256-14l.log": "3bdc79937aaa1b4652863a5ed14a694749ea136870e5a87bcabfa6ec87697fc4",
+    "pool-multi-native14l.cpp": "7f3ee4815193c462875b177df94e56066a28320b1e7aecc3219fa9fa5e087d7b",
+    "pool-multi-parent-native14l.cpp": "a2bf55be0d3d09660a94a5c7c2f1b0e95b40d4af2eaf0b728fffa9a3d008e79a",
+    "pool-multi-first-sweep14l-source.cpp": "c87e3462c968d2291e19dd7992ac454dbb31b7212ca12ffb68c14111538f119e",
+    "pool-multi-first-sweep14l-note.json": "d5d469f002856c12e53913acdcf632ce238d3b4d1ce5f4cc08759e9fd26518cf",
+    "pool-multi-cycles-sweep14l-source.cpp": "737c1cabd060349a1de82b5413baf9b23723c3285f2bcb532bec589c0d5346a9",
+    "measure-pool-multi14l.ps1": "7713ef7300301dd23f0c2f2220a406f9906e609f98ce25a7eff3a5f78354a1bd",
+    "measure-pool-multi-cycles14l.ps1": "ecab478a562276922498f3e2e90944d1514807cb87d869f9ae4870ef1f106566"
+  },
+  "immutable_dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "verified_libraries": 32,
+  "frame_lines_sha256_normalized_lf": "ecbfb06393c8b68df0e16a9c77c7f9a3f4859ce34d88ccd78b1bedcea15938c5",
+  "correctness": {
+    "checks_each": 38971,
+    "frames_each": 252,
+    "cases": 21,
+    "native_variants": 6,
+    "callback_coverage_identical": true
+  },
+  "initial_sweep": {
+    "receipt": {
+      "startedUtc": "2026-10-24T14:13:22.1497611Z",
+      "finishedUtc": "2026-10-24T14:13:51.2847075Z",
+      "checks": "State/worker idle and complete native build/package process inventory empty before/after every run",
+      "order": "P,64,256,256,64,P for steady and cold phases",
+      "runs": [
+        {
+          "phase": "steady",
+          "variant": "parent",
+          "repeat": "r1",
+          "report": "pool-multi-steady-parent-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-parent14l.exe",
+          "exe_sha256": "0557931b70a32c9c6f6c8b4713ff087dd41b2b461bc8c335e5b53aef94c09ed3"
+        },
+        {
+          "phase": "steady",
+          "variant": "64",
+          "repeat": "r1",
+          "report": "pool-multi-steady-64-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints64-14l.exe",
+          "exe_sha256": "721ef47317f06d0b72eb565b213c672046a764aafd5f78e92d1e4446dac3ee58"
+        },
+        {
+          "phase": "steady",
+          "variant": "256",
+          "repeat": "r1",
+          "report": "pool-multi-steady-256-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints256-14l.exe",
+          "exe_sha256": "0485757ef9f6916deabb6630696516aa978f5d1bbf50a9ab3a4573597bd955ba"
+        },
+        {
+          "phase": "steady",
+          "variant": "256",
+          "repeat": "r2",
+          "report": "pool-multi-steady-256-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints256-14l.exe",
+          "exe_sha256": "0485757ef9f6916deabb6630696516aa978f5d1bbf50a9ab3a4573597bd955ba"
+        },
+        {
+          "phase": "steady",
+          "variant": "64",
+          "repeat": "r2",
+          "report": "pool-multi-steady-64-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints64-14l.exe",
+          "exe_sha256": "721ef47317f06d0b72eb565b213c672046a764aafd5f78e92d1e4446dac3ee58"
+        },
+        {
+          "phase": "steady",
+          "variant": "parent",
+          "repeat": "r2",
+          "report": "pool-multi-steady-parent-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-parent14l.exe",
+          "exe_sha256": "0557931b70a32c9c6f6c8b4713ff087dd41b2b461bc8c335e5b53aef94c09ed3"
+        },
+        {
+          "phase": "cold",
+          "variant": "parent",
+          "repeat": "r1",
+          "report": "pool-multi-cold-parent-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-parent14l.exe",
+          "exe_sha256": "0557931b70a32c9c6f6c8b4713ff087dd41b2b461bc8c335e5b53aef94c09ed3"
+        },
+        {
+          "phase": "cold",
+          "variant": "64",
+          "repeat": "r1",
+          "report": "pool-multi-cold-64-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints64-14l.exe",
+          "exe_sha256": "721ef47317f06d0b72eb565b213c672046a764aafd5f78e92d1e4446dac3ee58"
+        },
+        {
+          "phase": "cold",
+          "variant": "256",
+          "repeat": "r1",
+          "report": "pool-multi-cold-256-r1-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints256-14l.exe",
+          "exe_sha256": "0485757ef9f6916deabb6630696516aa978f5d1bbf50a9ab3a4573597bd955ba"
+        },
+        {
+          "phase": "cold",
+          "variant": "256",
+          "repeat": "r2",
+          "report": "pool-multi-cold-256-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints256-14l.exe",
+          "exe_sha256": "0485757ef9f6916deabb6630696516aa978f5d1bbf50a9ab3a4573597bd955ba"
+        },
+        {
+          "phase": "cold",
+          "variant": "64",
+          "repeat": "r2",
+          "report": "pool-multi-cold-64-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-hints64-14l.exe",
+          "exe_sha256": "721ef47317f06d0b72eb565b213c672046a764aafd5f78e92d1e4446dac3ee58"
+        },
+        {
+          "phase": "cold",
+          "variant": "parent",
+          "repeat": "r2",
+          "report": "pool-multi-cold-parent-r2-14l.csv",
+          "rows": 189,
+          "exe": "pool-multi-parent14l.exe",
+          "exe_sha256": "0557931b70a32c9c6f6c8b4713ff087dd41b2b461bc8c335e5b53aef94c09ed3"
+        }
+      ]
+    },
+    "rows": 2268,
+    "eligible_for_adoption": false,
+    "reason": "Over 50 percent unchanged-parent wall drift in small cases; fixture/executables/reports preserved, not replaced"
+  },
+  "revised_sweep": {
+    "receipt": {
+      "startedUtc": "2026-10-24T14:25:03.6509913Z",
+      "finishedUtc": "2026-10-24T14:25:54.6329121Z",
+      "checks": "State/worker idle and complete native build/package process inventory empty before/after every case run",
+      "order": "P,64,256,256,64,P within each case, steady then cold",
+      "exe_sha256": {
+        "parent": "af88e11703967aaf9d18672e31830c2a9a868abdc083bd98e2087f3829b55e32",
+        "64": "5660e048e411f94df947b03612b02a6025e54729586b3311e6b7d0d8195b7acb",
+        "256": "f4e22fc258dd9e7c2420f2003db49d063ed1f5f73d262792a92b81e76ae2963c"
+      },
+      "reports": [
+        {
+          "file": "pool-multi-cycles-steady-parent-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-steady-parent-r2-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-steady-64-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-steady-64-r2-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-steady-256-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-steady-256-r2-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-parent-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-parent-r2-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-64-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-64-r2-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-256-r1-14l.csv",
+          "rows": 189
+        },
+        {
+          "file": "pool-multi-cycles-cold-256-r2-14l.csv",
+          "rows": 189
+        }
+      ],
+      "counter_scope": "QueryThreadCycleTime: raw thread CPU cycles, not converted to elapsed time; wall nanoseconds retained separately"
+    },
+    "rows": 2268,
+    "steady_updates": 1134000,
+    "fixture_create_warm_destroy": 18144,
+    "steady_parent_cycle_drift_percent_rounded_max": 2.88,
+    "cold_parent_cycle_drift_percent_rounded_max": 27.86,
+    "cold_conclusive": false
+  },
+  "cycle_contract": "Raw QueryThreadCycleTime counts include user/kernel execution; not converted into elapsed time. Timer behavior depends on CPU implementation/frequency. Wall nanoseconds retained independently.",
+  "api_reference": "https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-querythreadcycletime",
+  "pending": "Many-controller round-robin working-set test before accepting 4KiB/controller; broader selected-candidate regressions/build/runtime/quality acceptance still open. All current native probe handles terminal. No writes to primary source, shared caches or build monitoring; no account operations."
+}

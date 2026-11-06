@@ -323,6 +323,8 @@ namespace LL
         pop_result tryPopUntil_(lock_t& lock, const TimePoint& until, TimeTuple& tuple)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
+            // <FS> Recompute the head deadline after each wake, including new future work.
+            /* Original upstream implementation:
             TimePoint adjusted = until;
             if (! super::mStorage.empty())
             {
@@ -343,6 +345,27 @@ namespace LL
                 }
             }
             return popped;
+            */
+            while (true)
+            {
+                const auto popped = pop_result(super::pop_(lock, tuple));
+                if (popped == POPPED || popped == DONE)
+                    return popped;
+
+                TimePoint adjusted = until;
+                if (!super::mStorage.empty())
+                {
+                    LL_PROFILE_ZONE_NAMED("tpu - adjust");
+                    adjusted = min(std::get<0>(super::mStorage.front()), adjusted);
+                }
+
+                // The base wait loop retains its deadline across notifications.
+                // Wait once here so a newly inserted earlier head can shorten it.
+                if (super::mEmptyCond.wait_until(lock, adjusted) == LLCoros::cv_status::timeout &&
+                    adjusted == until)
+                    return popped;
+            }
+            // </FS>
         }
 
         /// tryPopUntil(DataTuple&)

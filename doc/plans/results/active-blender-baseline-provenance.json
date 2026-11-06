@@ -1,0 +1,22 @@
+{
+  "parent_commit": "b8c82e686def15937fdfad1620845d557e995a89",
+  "status": "Baseline only; active collection production code unchanged",
+  "recorded_utc": "2026-10-24T10:40:50.8694226Z",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "storage": "map",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "322bee929f7f4e1220e4e94bc635e1a766f5a4a8fca450e7fd5aa4e5485ae764",
+    "indra/llcharacter/llpose.h": "ba88c375fe5af2b5a691f61aa59b0116fd89675e74aaa0e011f49b581c1b9bea",
+    "indra/llcharacter/llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "indra/llcharacter/lljointstate.h": "7011257c1fc813c66d80e49baa3b044e46a91cfa29bf4ed00fd45e6f1c735b5c",
+    "indra/llcharacter/lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86",
+    "indra/llcharacter/tests/active_blender_cost_benchmark.cpp": "cb90b0545cec9cee705e5c7db11f77fcb58c2a578ea4dcce26f842672ed6e39d"
+  },
+  "executables_sha256": {
+    "active-blender-parent-alloc-ready14i.exe": "7b01e9345e3889ea9b99324e131f54714287a65c0b41a142253e0316d3251867",
+    "active-blender-parent-cost14i.exe": "a1ccc22a87659d87dc3d2f2d1283aeffa7bce5dd920bcc26b768f7f080f541a6"
+  },
+  "allocation_report_sha256_normalized_lf": "c2d4d5cf9f99e248c74626c7562a22caca08250cab49dc683d526f83e4cfc490",
+  "scope": "Fresh actual llpose.cpp and isolated addMotion/clearBlenders; pool and poses warmed before measurement; ordinary replacement-new counts only, no timing or FPS claim. Immutable dependency snapshot dependencies-shadow-20261024; other linked code read only."
+}

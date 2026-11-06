@@ -1,0 +1,171 @@
+{
+  "parent_commit": "1ad2444867c70566619913b092b42cde0f2e25ab",
+  "implementation_commit": "ea82a3c3ea",
+  "parent_controller_sha256_normalized_lf": "0bcae4a8180d1dad541fa5e6abb4b99bc13263f87146f8e566461df46d520762",
+  "parent_purge_function_sha256_normalized_lf": "6e79131aff06641f455cb752c9a5ec7e26bc52a1ab245bd76198ed0fded2ad09",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "timing_storage": "map",
+  "timing": {
+    "startedUtc": "2026-10-24T10:32:00.7201694Z",
+    "finishedUtc": "2026-10-24T10:32:04.6978903Z",
+    "checks": "State and worker idle, full native/package process inventory empty before and after each run",
+    "order": [
+      [
+        "purge",
+        "parent",
+        "r1",
+        "motion-purge-cost-parent14h.exe"
+      ],
+      [
+        "purge",
+        "current",
+        "r1",
+        "motion-purge-cost-current14h.exe"
+      ],
+      [
+        "purge",
+        "current",
+        "r2",
+        "motion-purge-cost-current14h.exe"
+      ],
+      [
+        "purge",
+        "parent",
+        "r2",
+        "motion-purge-cost-parent14h.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r1",
+        "sampling-shadow-cost-fallback14g.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r1",
+        "controller-purge-cost-current14h.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r2",
+        "controller-purge-cost-current14h.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r2",
+        "sampling-shadow-cost-fallback14g.exe"
+      ]
+    ]
+  },
+  "timing_rows": 324,
+  "timing_iterations": 11016000,
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/motion_purge_cost_benchmark.cpp": "e0cc6a5061934b77c9b2c87d824be4c6ed76e6629a0d88b8e40295f2a276ed8d",
+    "indra/llcharacter/tests/motion_purge_test.cpp": "4b8761ce35893802bcdf3ad3b75356f4897d74d49f69aa502c03dd363cc34032",
+    "indra/llcharacter/tests/motion_purge_reference.h": "4068654534a4a0e8c15a3b8c2caacbece3b2e5e183e3c4b556a2cb607451b9ac",
+    "indra/llcharacter/tests/keyframe_test_character.h": "eab03c45b6b695903c22cda140a04069ca5d62415acb03a758a43905036e766d"
+  },
+  "immutable_internal_library_snapshot": {
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+    "scope": "Byte-verified read-only copies; external packages/toolchain remain read-only. No shared-cache configure/build/writes."
+  },
+  "executables_sha256": {
+    "motion-purge-cost-parent14h.exe": "1b54c0c8814a32fa374be8dc9c57112766c0ea558df1d7f45a37c67d1cfdbdb4",
+    "motion-purge-cost-current14h.exe": "c334d71cdb067e162f9f6279d264ed669012c13ff1d6f2c1a8a0caf571ac2359",
+    "sampling-shadow-cost-fallback14g.exe": "1aec89d79f4054077571996fb7e523d639dc061db543004a7e26ff0059b3ea2c",
+    "controller-purge-cost-current14h.exe": "afd118504d8e591548982823cd66562ae1d08d2ef16f0881bff851cb70b89217",
+    "motion-purge-parent-alloc-final14h.exe": "7be4162a715661c5e0ca00953db02099eb14e1c20e133c572a8316973b8f8c35",
+    "motion-purge-zero-alloc-map-final14h.exe": "bb8bbe0adf69b4a4d9452f7c42f12effdae463ba392a767fc47e9a02213ade9d",
+    "motion-purge-zero-alloc-contiguous-final14h.exe": "d894977cb23a4d47451d425ab568eba3e165fa76bac4bfb5729dd6c90f3bd4ec",
+    "motion-purge-behavior-seeded-map14h.exe": "f02e2b74984f6857584bd24a5aa68f7c9692cb41cd4e6827f42a60d1303e0912",
+    "motion-purge-behavior-seeded-contiguous14h.exe": "848de6b16938728fb831d3731302080299838dca434915117f13857af329cad0",
+    "phase-after-purge-map14h.exe": "4a00fbb85833e491bc5f7ff8585281943191d9ec77775d79f6719839e38d1698",
+    "shadow-after-purge-correctness14h.exe": "261450a5edfe13629a1a19ed564ea3dd38df957ec042dd266023037994ebd15d",
+    "shadow-after-purge-map14h.exe": "bdcdef95d4cdd4c704ac9141664596583eb70469d7ef1f94f922e6d16c2c5379",
+    "initial-mask-after-purge14h.exe": "33f1769dd38965c643c6c386b8e95dbb956d77a841929f9cdb30676c2f867140"
+  },
+  "reports": {
+    "motion-purge-after-alloc-contiguous.csv": {
+      "sha256_normalized_lf": "f50f6cf04745214a65a74a23190d7774480f6661b26f691fdc1963280e1f92fb",
+      "rows": 3
+    },
+    "motion-purge-after-alloc-map.csv": {
+      "sha256_normalized_lf": "f50f6cf04745214a65a74a23190d7774480f6661b26f691fdc1963280e1f92fb",
+      "rows": 3
+    },
+    "motion-purge-before-alloc-map-final.csv": {
+      "sha256_normalized_lf": "770d036555d7c4a1a7b6ee687917fc23a0c36cdee3a393e017baf295bc702495",
+      "rows": 3
+    },
+    "motion-purge-before-alloc-map.csv": {
+      "sha256_normalized_lf": "770d036555d7c4a1a7b6ee687917fc23a0c36cdee3a393e017baf295bc702495",
+      "rows": 3
+    },
+    "motion-purge-controller-after-alloc-map.csv": {
+      "sha256_normalized_lf": "9a975e311d5e1c84a0ce6b1e0c52f70b9b08c0108a8a2fb85224d7cf03534baf",
+      "rows": 1
+    },
+    "motion-purge-cost-controller-current-r1.csv": {
+      "sha256_normalized_lf": "118f35a127bc5c078f8d217e665523b5d6ec515e9b99ea08486126fe68fab3bc",
+      "rows": 54
+    },
+    "motion-purge-cost-controller-current-r2.csv": {
+      "sha256_normalized_lf": "678591b874db81712c096c21daa87568c50e016de541b326f211f49465d17e25",
+      "rows": 54
+    },
+    "motion-purge-cost-controller-parent-r1.csv": {
+      "sha256_normalized_lf": "99bc6b199b9fef34590ed815ef3b09ed6a9538f05ff8fcd516da973dfe0bf00e",
+      "rows": 54
+    },
+    "motion-purge-cost-controller-parent-r2.csv": {
+      "sha256_normalized_lf": "17af67d04a549138e0c9fc62777e356245778dfe469550afb1866ec545841457",
+      "rows": 54
+    },
+    "motion-purge-cost-purge-current-r1.csv": {
+      "sha256_normalized_lf": "603ec32526ea95e0fb3671c449ee7bb91595de5983ebfd3cb6e71f4c8657646a",
+      "rows": 27
+    },
+    "motion-purge-cost-purge-current-r2.csv": {
+      "sha256_normalized_lf": "47ad2861456a841348595fd33ca76e4e7230a68bcc1e50d515dea0b820dfd9f5",
+      "rows": 27
+    },
+    "motion-purge-cost-purge-parent-r1.csv": {
+      "sha256_normalized_lf": "3b880253769d458b7d8010aafeb3de6cbc71e26c26c6f0ee13e8d540aaa91076",
+      "rows": 27
+    },
+    "motion-purge-cost-purge-parent-r2.csv": {
+      "sha256_normalized_lf": "bdbfe7f4f079cb07ae4d2d01ac4500c91137004ab010c9737e06f1fad4e75da9",
+      "rows": 27
+    }
+  },
+  "regressions": {
+    "purge_checks_each_mode": 5838,
+    "purge_cases_each_mode": 45,
+    "phase_checks_map": 5956,
+    "frozen_updates_map": 1474,
+    "shadow_checks_map": 5063,
+    "allocation_failure_checks_map": 26,
+    "mask_checks": 241,
+    "poisoned_mask_cases": 15
+  },
+  "scope": "Fresh affected sources, read-only immutable internal libraries and external packages. Purge-only non-inlined wrapper; complete controller uses the unchanged prior fixture, including retained enabled-shadow rows. Direct controller comparisons use only direct rows. No replacement allocators in timing executables. State/worker idle and full native/package process inventory checked before and after every timed run. No real avatar scene, rendering, useful worker overlap, whole-viewer CPU/FPS or other-platform execution claim."
+}

@@ -33,6 +33,7 @@
 #include <string>
 
 #include "lljoint.h"
+#include "llhandmotion.h" // </FS:Perf> Typed character-owned hand-pose data.
 #include "llmotioncontroller.h"
 #include "llvisualparam.h"
 #include "llstringtable.h"
@@ -159,6 +160,7 @@ public:
 
     LLAnimPauseRequest requestPause();
     bool areAnimationsPaused() const { return mMotionController.isPaused(); }
+    bool hasMotionPauseRequests() const { return mPauseRequest->getNumRefs() > 1; }
     void setAnimTimeFactor(F32 factor) { mMotionController.setTimeFactor(factor); }
     void setTimeStep(F32 time_step) { mMotionController.setTimeStep(time_step); }
 
@@ -184,6 +186,12 @@ public:
     virtual S32 getCollisionVolumeID(std::string &name) { return -1; }
 
     void setAnimationData(std::string name, void *data);
+
+    // <FS:Perf> Publish and consume character-owned hand inputs through the animation-data map.
+    void setHandPoseAnimationData(LLHandMotion::eHandPose pose, LLJoint::JointPriority priority);
+    const LLJoint::JointPriority* getHandPoseAnimationPriority() const;
+    void clearHandPoseAnimationData();
+    // </FS:Perf>
 
     void *getAnimationData(std::string name);
 
@@ -290,6 +298,9 @@ public:
     virtual void    setHoverOffset(const LLVector3& hover_offset, bool send_update=true) { mHoverOffset = hover_offset; }
     const LLVector3& getHoverOffset() const { return mHoverOffset; }
 
+    // Experimental owner context: generic/preview characters have no scene sampling permission.
+    virtual bool allowsOwnedKeyframeSampling() const { return false; }
+
 protected:
     LLMotionController  mMotionController;
 
@@ -314,6 +325,10 @@ private:
     static LLStringTable sVisualParamNames;
 
     LLVector3 mHoverOffset;
+    // <FS:Perf> Keep the existing animation-data pointers valid for the character's lifetime.
+    LLHandMotion::eHandPose mAnimationHandPose = LLHandMotion::HAND_POSE_RELAXED;
+    LLJoint::JointPriority mAnimationHandPosePriority = LLJoint::LOW_PRIORITY;
+    // </FS:Perf>
 };
 
 #endif // LL_LLCHARACTER_H

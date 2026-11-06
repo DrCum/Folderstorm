@@ -1,0 +1,56 @@
+#include "../viewer-performance/indra/llcharacter/llpose.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingcontext.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotion.cpp"
+#include "../viewer-performance/indra/llcharacter/llcharacter.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotioncontroller.cpp"
+#include "../viewer-performance/indra/llcharacter/llkeyframemotion.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingshadow.cpp"
+#include "../viewer-performance/indra/llcharacter/llhandmotion.cpp"
+#include "../viewer-performance/indra/llcharacter/tests/keyframe_test_character.h"
+#include "../viewer-performance/indra/llcharacter/tests/sampling_allocation_probe.h"
+#include <iostream>
+void requireHand(bool ok){if(!ok)std::abort();}
+int main()
+{
+#if !FS_SAMPLING_ALLOCATION_PROBE || TRACY_ENABLE
+    return 1;
+#endif
+    LLVector4a::initClass();
+    std::cout<<"case,callbacks,new_calls,requested_bytes,peak_live_delta,live_after_callbacks,live_after_cleanup\n";
+    for(unsigned mode=0;mode<6;++mode)
+    {
+        FSKeyframeTests::Character c; LLHandMotion hand(LLUUID::null);
+        requireHand(hand.onInitialize(&c)==LLMotion::STATUS_SUCCESS);
+        LLHandMotion::eHandPose relaxed=LLHandMotion::HAND_POSE_RELAXED;
+        LLJoint::JointPriority priority=LLJoint::HIGH_PRIORITY;
+        c.setHandPoseAnimationData(relaxed,priority);requireHand(hand.onUpdate(1.f,nullptr));
+        size_t calls=0,bytes=0,peak=0,live=0;
+        if(mode<5)
+        {
+            for(unsigned i=0;i<32;++i)
+            {
+                if(mode==1)c.setHandPoseAnimationData(relaxed,priority);
+                if(mode==2){c.setAnimationData("Hand Pose",&relaxed);c.setAnimationData("Hand Pose Priority",&priority);}
+                if(mode==3)c.setAnimationData("Hand Pose",&relaxed);
+                if(mode==4)c.setAnimationData("Hand Pose Priority",&priority);
+                FSSamplingAlloc::Stats s;
+                {FSSamplingAlloc::Scope scope;requireHand(hand.onUpdate(2.f+i,nullptr));s=FSSamplingAlloc::snapshot();}
+                requireHand(s.live==s.baseline);
+                requireHand(!c.getAnimationData("Hand Pose")&&!c.getHandPoseAnimationPriority());
+                calls+=s.calls;bytes+=s.requested;peak=std::max(peak,s.peak-s.baseline);
+            }
+        }
+        else
+        {
+            FSSamplingAlloc::Stats s;
+            {FSSamplingAlloc::Scope scope;
+             for(unsigned i=0;i<32;++i){requireHand(hand.onUpdate(2.f+i,nullptr));c.setHandPoseAnimationData(relaxed,priority);}
+             s=FSSamplingAlloc::snapshot();}
+            calls=s.calls;bytes=s.requested;peak=s.peak-s.baseline;live=s.live-s.baseline;
+            c.removeAnimationData("Hand Pose");c.removeAnimationData("Hand Pose Priority");
+        }
+        const auto exit=FSSamplingAlloc::snapshot();requireHand(!exit.live);
+        const char* names[]={"absent","owned","generic_override","pose_only","priority_only","cleanup_and_republish"};
+        std::cout<<names[mode]<<",32,"<<calls<<','<<bytes<<','<<peak<<','<<live<<','<<exit.live<<'\n';
+    }
+}

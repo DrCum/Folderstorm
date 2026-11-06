@@ -1,0 +1,4 @@
+mode,joints,cold_prepare_new_calls,warm_prepare_new_calls,direct_apply_new_calls,owned_apply_new_calls,direct_bytes,owned_bytes,direct_republish_new_calls,owned_republish_new_calls,direct_republish_bytes,owned_republish_bytes
+alloc,3,2,0,0,0,0,0,96,96,5632,5632
+alloc,32,2,0,0,0,0,0,96,96,5632,5632
+alloc,128,2,0,0,0,0,0,96,96,5632,5632

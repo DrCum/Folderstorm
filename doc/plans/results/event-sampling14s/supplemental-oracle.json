@@ -1,0 +1,26 @@
+{
+  "checks": 30861,
+  "frames": 768,
+  "query_frames_per_trial": 64,
+  "performance_measurement": false,
+  "source_implementation_head": "ed052e24b57a84e75856f886af80c17501bb146b",
+  "scope": "Same frozen core/fixture; direct comparisons on every query time, including loop wrapping; explicit correctness readiness only",
+  "artifacts": {
+    "event-sampling14s-long-oracle.cpp": {
+      "bytes": 842,
+      "sha256": "6ae734f1249c7d4528f729fcecd047ca0b7dfa5b88cd24722a9894705643ce07"
+    },
+    "event-sampling14s-long-oracle.exe": {
+      "bytes": 4493312,
+      "sha256": "19303104a6a7db55afb6322d901accdc4b1d748089d33f1c2a9a8307ba7878f4"
+    },
+    "event-sampling14s-long-oracle.rsp": {
+      "bytes": 12085,
+      "sha256": "a405804ba3df48917d2008f9f2f65a9394a31294c532f9fcbb217eeb362b72d6"
+    },
+    "event-sampling14s-long-oracle.log": {
+      "bytes": 644,
+      "sha256": "e8274e8ba930fea6e971cadf8bb1ee7bb8df1274a895340b66a6aee1494e292f"
+    }
+  }
+}

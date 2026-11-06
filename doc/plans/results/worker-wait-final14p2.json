@@ -1,0 +1,27 @@
+{
+  "status": "Complete private experiment; production selection and viewer lifecycle acceptance remain pending",
+  "benchmark_source_context_commit": "4bae43e6a595855510609c0ad7306c13c871bf4f",
+  "accepted_cases": 48,
+  "wake_samples": 3072,
+  "active_tasks": 196608,
+  "wake_rejections": 0,
+  "idle_seconds": 1446.5584067,
+  "accepted_windows_nonoverlapping": true,
+  "hashes_normalized_lf": {
+    "analyze.py": "4bee7f95f9d11a09a43e93fc2c4d6ab6dfc93d346d83bcf72f73f7a502c0fb9d",
+    "progress.json": "12c52e824491edc08188582acf5747551d3bd1e9c8406078622ebba3d08316b0",
+    "summary.json": "1a3239d6ad19ac815b45c2adb36ed1f0b89c9e30f9e4f09731f4d36970312794",
+    "summary.csv": "98691942e4d238c551d40176d622037b2b9a7dd264073cafbd4049fb75efbe1b",
+    "host.json": "695139013847eea82cda965f57a969c7202804e6caeb6ac515ac7a6e4415f3c7",
+    "compiler-and-general-source.json": "19e26e84cb8760e51fc10bf73394cbf2645653c5654a851ff8159db3f36eaf82"
+  },
+  "unchanged_production_threadpool_sha256_lf": "06dd412f0c93f9200507e75bd19303977f8a22f064255461600c3ac08f83d154",
+  "decision": "Propose default-OFF single-worker Windows General trial; wider active-cycle tradeoff excludes broad adoption",
+  "limits": [
+    "Only accepted full-host build-idle before/after cases are comparable",
+    "Other desktop load, power state and timer policy uncontrolled",
+    "Raw cycles are not elapsed time or power; Windows CPU time is quantized",
+    "Generated queue throughput is not viewer FPS",
+    "No production scheduler policy changes"
+  ]
+}

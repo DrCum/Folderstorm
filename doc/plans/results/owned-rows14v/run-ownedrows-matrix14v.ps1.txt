@@ -1,0 +1,15 @@
+$ErrorActionPreference='Stop'
+$plan=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../viewer-performance/doc/plans/results/owned-rows14v/matrix-plan.json') -Raw | ConvertFrom-Json
+foreach($case in $plan.cases){
+ $label="ownedrows14v-$($case.kind)-r$($case.round)-$($case.mode)-a$($case.avatars)-f$($case.frames)"
+ $records=@(Get-ChildItem -LiteralPath $PSScriptRoot -Filter "$label*.json" | Where-Object {
+  $_.BaseName -eq $label -or $_.BaseName -match ('^'+[regex]::Escape($label)+'-attempt[23]$') })
+ $needsInspection=@($records | Where-Object {(Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).status -in @('running','probe_failed')})
+ if($needsInspection.Count){throw "Inspect failed/interrupted case: $label"}
+ $complete=@($records | Where-Object {(Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).status -eq 'completed'})
+ if($complete.Count -gt 1){throw "Duplicate accepted cell: $label"}
+ if($complete.Count -eq 1){continue}
+ $attempt=$records.Count+1
+ if($attempt -gt 3){throw "Inspect repeated exclusions: $label"}
+ & (Join-Path $PSScriptRoot 'run-ownedrows14v.ps1') -Mode $case.mode -Avatars $case.avatars -Frames $case.frames -Kind $case.kind -Round $case.round -Attempt $attempt
+}

@@ -1,0 +1,17 @@
+$ErrorActionPreference='Stop'
+$planPath=Join-Path $PSScriptRoot '../viewer-performance/doc/plans/results/event-sampling14s/matrix-plan.json'
+$plan=Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+foreach($case in $plan.cases){
+    $kind=if($case.allocations){'alloc'}else{'timing'}
+    $label="event14s-$kind-r$($case.round)-$($case.mode)-a$($case.avatars)-g$($case.gap)-$($case.load)"
+    $records=@(Get-ChildItem -LiteralPath $PSScriptRoot -Filter "$label*.json" | Where-Object {
+        $_.BaseName -eq $label -or $_.BaseName -match ('^'+[regex]::Escape($label)+'-attempt[23]$') })
+    $complete=@($records | Where-Object {(Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).status -eq 'completed'})
+    $needsInspection=@($records | Where-Object {(Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).status -in @('running','probe_failed')})
+    if($needsInspection.Count){throw "Inspect failed/interrupted observation before proceeding: $label"}
+    if($complete.Count -gt 1){throw "Duplicate accepted observation: $label"}
+    if($complete.Count -eq 1){continue}
+    $attempt=$records.Count+1
+    if($attempt -gt 3){throw "Inspect repeated exclusions before retrying: $label"}
+    & (Join-Path $PSScriptRoot 'run-event-sampling14s.ps1') -Mode $case.mode -Avatars $case.avatars -Gap $case.gap -Round $case.round -Load $case.load -Attempt $attempt -Allocations:$case.allocations
+}

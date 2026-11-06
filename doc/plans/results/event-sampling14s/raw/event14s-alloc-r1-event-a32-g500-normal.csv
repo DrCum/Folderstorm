@@ -1,0 +1,2 @@
+mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes
+event,32,500,normal,64,2234,1172557,0,109453,125477,107,85718,2127,1086839

@@ -133,6 +133,13 @@ void LLSkinningUtil::initSkinningMatrixPalette(
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
 
+    // <FS:Perf> Empty palettes must not form an address into an empty vector.
+    if (count <= 0)
+    {
+        return;
+    }
+    // </FS:Perf>
+
     initJointNums(const_cast<LLMeshSkinInfo*>(skin), avatar);
 
     if (skin->mInvBindMatrix.size() < count )
@@ -145,7 +152,8 @@ void LLSkinningUtil::initSkinningMatrixPalette(
         return;
     }
 
-    LLMatrix4a world[LL_CHARACTER_MAX_ANIMATED_JOINTS];
+    // <FS:Perf> Multiply while the aligned joint matrix is already available.
+    // LLMatrix4a world[LL_CHARACTER_MAX_ANIMATED_JOINTS];
 
     for (S32 j = 0; j < count; ++j)
     {
@@ -154,7 +162,8 @@ void LLSkinningUtil::initSkinningMatrixPalette(
 
         if (joint)
         {
-            world[j] = joint->getWorldMatrix4a();
+            // world[j] = joint->getWorldMatrix4a();
+            matMulUnsafe(skin->mInvBindMatrix[j], joint->getWorldMatrix4a(), mat[j]);
         }
         else
         {
@@ -175,16 +184,17 @@ void LLSkinningUtil::initSkinningMatrixPalette(
         }
     }
 
-    //NOTE: pointer striders used here as a micro-optimization over vector/array lookups
-    const LLMatrix4a* invBind = &(skin->mInvBindMatrix[0]);
-    const LLMatrix4a* w = world;
-    LLMatrix4a* m = mat;
-    LLMatrix4a* end = m + count;
-
-    while (m < end)
-    {
-        matMulUnsafe(*(invBind++), *(w++), *(m++));
-    }
+    // Original second pass also overwrote missing-joint fallbacks using an
+    // uninitialized world[j]. Keep that fallback untouched in the single pass.
+    // const LLMatrix4a* invBind = &(skin->mInvBindMatrix[0]);
+    // const LLMatrix4a* w = world;
+    // LLMatrix4a* m = mat;
+    // LLMatrix4a* end = m + count;
+    // while (m < end)
+    // {
+    //     matMulUnsafe(*(invBind++), *(w++), *(m++));
+    // }
+    // </FS:Perf>
 }
 
 void LLSkinningUtil::checkSkinWeights(LLVector4a* weights, U32 num_vertices, const LLMeshSkinInfo* skin)

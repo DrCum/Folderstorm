@@ -1,0 +1,35 @@
+{
+  "base_commit": "2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c",
+  "parent_pr": "https://github.com/DrCum/Folderstorm/pull/115",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+    "indra/llcharacter/llmotioncontroller.h": "d7bedffa086f9a32a9fede9c814ad82584a2af34bbd906746d22ec8d2894ea29",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/fssamplingshadow.cpp": "6179d9a29968d97b8e1b427e10793acabfb8053528487eea34a492fb99b2f019",
+    "indra/llcharacter/fssamplingshadow.h": "7aab5d5614995a74a061065676265fefa0175fb7d043db01d0fbf7e153a654b0",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/llhandmotion.cpp": "5cee11882e875ad1191b46b57883808eb220607ca50832a1e2c633d487ebac68",
+    "indra/llcharacter/llhandmotion.h": "ece95bac47bccc195074a8103fb9c430d7f7314d3983f32b302770bd3e050abb",
+    "indra/llcharacter/tests/keyframe_test_character.h": "eab03c45b6b695903c22cda140a04069ca5d62415acb03a758a43905036e766d",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7"
+  },
+  "probe_sha256_normalized_lf": "8a211d12eda1cc75fbde8fa71e48320996243360649f3cfc07b33cd39665ee90",
+  "report_sha256_normalized_lf": "44a04157d097a529f9e8cdc13c1328466ed6552d025989d8cdf8f1f989548062",
+  "scratch_artifact_sha256": {
+    "hand-consumer-baseline14n.exe": "c212bffe68d66bd6c3228972e4ec59834f57a5e263c0d7200de68becdc760eb6",
+    "hand-consumer-baseline14n.rsp": "cd58b0d65b76958334e4d59e6e3fbc6db2fcf1ad5b4131c9db6462d6b898a2cb",
+    "hand-consumer-baseline14n.log": "00264acf7cbbc5e788b4fae8afb4e7d88cd7f555e63c6979ebf6a25e348608b1"
+  },
+  "dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "configuration": "MSVC x64 AVX2 /O2 /fp:precise assertions enabled, Tracy OFF, map curves, separate replacement-new executable; fresh pose/character/controller/keyframe/shadow/hand sources",
+  "scope": "Actual LLHandMotion::onUpdate, relaxed requests/no mesh only; 32 callbacks per case. Five consumer-only cases exclude producer allocations; sixth includes following publication. Generic/partial/absent map entries cleared. Does not establish rendered morph behavior or timing/FPS. Full-host named build processes absent and private state idle before compilation.",
+  "status": "Baseline only; no production cleanup change implemented. Probe session 51368 terminal."
+}

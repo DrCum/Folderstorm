@@ -1,0 +1,138 @@
+{
+  "status": "written_before_measurement",
+  "parent_pr": 121,
+  "parent_head": "81c90614cd1351b6825be2a2e5f19ad2049916db",
+  "timing_cases": 12,
+  "allocation_cases": 6,
+  "gap_us": 0,
+  "load": "normal",
+  "cases": [
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "owned",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "owned-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "owned",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "owned-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "owned-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "owned",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "owned-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "owned",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "owned",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "owned-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "owned",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "owned-retained",
+      "avatars": 32,
+      "frames": 64
+    }
+  ],
+  "reason": "1024 timing frames reduce short-window noise; 64 separate allocator frames preserve the count comparison. No scheduler policy change or live viewer deadline/FPS claim."
+}

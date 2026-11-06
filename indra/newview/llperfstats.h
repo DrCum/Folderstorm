@@ -221,11 +221,19 @@ namespace LLPerfStats
         // static inline const StatsTypeMatrix& getCurrentStatsMatrix(){ return statsDoubleBuffer[getReadBufferIndex()];}
         static inline uint64_t get(ObjType_t otype, LLUUID id, StatType_t type)
         {
-            return statsDoubleBuffer[getReadBufferIndex()][static_cast<size_t>(otype)][id][static_cast<size_t>(type)];
+            // <FS> Missing statistics read as zero without materializing a map entry.
+            // return statsDoubleBuffer[getReadBufferIndex()][static_cast<size_t>(otype)][id][static_cast<size_t>(type)];
+            const auto& stats = statsDoubleBuffer[getReadBufferIndex()][static_cast<size_t>(otype)];
+            const auto found = stats.find(id);
+            return found == stats.end() ? 0 : found->second[static_cast<size_t>(type)];
+            // </FS>
         }
         static inline uint64_t getSceneStat(StatType_t type)
         {
-            return statsDoubleBuffer[getReadBufferIndex()][static_cast<size_t>(ObjType_t::OT_GENERAL)][LLUUID::null][static_cast<size_t>(type)];
+            // <FS> Keep the same null-key scene read without inserting missing data.
+            // return statsDoubleBuffer[getReadBufferIndex()][static_cast<size_t>(ObjType_t::OT_GENERAL)][LLUUID::null][static_cast<size_t>(type)];
+            return get(ObjType_t::OT_GENERAL, LLUUID::null, type);
+            // </FS>
         }
 
         static inline uint64_t getSum(ObjType_t otype, StatType_t type)
@@ -239,6 +247,10 @@ namespace LLPerfStats
         static void updateAvatarParams();
     private:
         StatsRecorder();
+
+        // <FS> Seed and inspect static buffers in the isolated native read test.
+        friend struct StatsReadTestAccess;
+        // </FS>
 
         static int countNearbyAvatars(S32 distance);
         static U64 getMeanTotalFrameTime();

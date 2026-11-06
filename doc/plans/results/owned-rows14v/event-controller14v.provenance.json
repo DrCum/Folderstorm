@@ -1,0 +1,10 @@
+{
+  "source": "C:\\Users\\Marty\\Documents\\ChatGPT\\folderstorm 2\\viewer-performance\\indra\\llcharacter\\llmotioncontroller.cpp",
+  "source_sha256": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+  "generated_sha256": "e608f4a7941ff0a7a0e9762547fedaf50b75a4cdd3106bb3324ceafb58eadd95",
+  "test_seams": [
+    "before updateMotions body",
+    "existing invokeMotionUpdate callback"
+  ],
+  "viewer_source_modified": false
+}

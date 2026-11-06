@@ -1,0 +1,25 @@
+{
+  "checks": 18,
+  "status": "passed",
+  "details": [
+    "Packaged root has complete key/value pairs",
+    "Packaged root alternates keys and values",
+    "Trial setting occurs once at the root",
+    "Packaged trial defaults FALSE",
+    "Trial control is nonpersistent",
+    "Only General startup reads the trial setting",
+    "Only the explicit General request preserves fallback width, capacity and shutdown",
+    "Startup diagnostic exposes requested/effective policy and actual width",
+    "Reported width is observed after start",
+    "Both constructor APIs retain default platform policy",
+    "Effective policy is immutable and follows resolved width storage",
+    "Only resolved single-worker Windows requests are eligible",
+    "Production installation retains polling except eligible startup opt-in",
+    "No other production caller supplies the event-wait policy",
+    "New native fixture does not override scheduler installation",
+    "Packaged root has complete key/value pairs",
+    "Packaged root alternates keys and values",
+    "Every preceding packaged control is unchanged"
+  ],
+  "scope": "Source/packaging boundary only; native and full viewer acceptance remain separate"
+}

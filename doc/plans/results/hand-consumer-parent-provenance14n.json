@@ -1,0 +1,62 @@
+{
+  "base_commit": "2df5f5bdaf402c3fd3b64be860eaa4fdf55b411c",
+  "status": "Before implementation: both storage modes pass 17103 actual morph/visual-param checks and match 448 frames, including 55 callback republications",
+  "reference_sha256_normalized_lf": "1f51a5e2ac025aee1e1625b261cb2bb60e131f1d019f9b5749d7f48e2f23abb6",
+  "fixture_sha256_normalized_lf": "8afbf800d33303a7a6fbfd448794043a05ec4c676c3ae97f6cbcde08bdf37d1d",
+  "frozen_core_sha256_normalized_lf": {
+    "fsanimationkeys.h": "964f33f5a64be04a8dc84bc272853f834d90458cbebd5f2e0d48bd8a0641fdce",
+    "fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "fssamplingidentity.h": "b46c5fd5d5397bed5d46bcf9781586cea4a96dd29b16c9fb0f5b3f5861179389",
+    "fssamplingshadow.cpp": "6179d9a29968d97b8e1b427e10793acabfb8053528487eea34a492fb99b2f019",
+    "fssamplingshadow.h": "7aab5d5614995a74a061065676265fefa0175fb7d043db01d0fbf7e153a654b0",
+    "llanimationstates.h": "fa173b5a76c51bf49812ec60cd7c1f62c12ea982cf04c0d0df41493addaff211",
+    "llbvhconsts.h": "59c3f003dcb31a43ceb0ed9d1bebd98e3661775c8ab5067ec1870622f107ef91",
+    "llbvhloader.h": "4c494b9c3fad49955c253211996ce6aa2ef5f136570eeec8a8406157f8f48c19",
+    "llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "lleditingmotion.h": "8bc2b7227819e562857d0ae5026b1b9817517464db60388f01132b75e06f9a73",
+    "llgesture.h": "b3b3506537bd81d36fd39c7e0a52babc522ebd7e6a3f0ca2e4c7ae7e3913e90f",
+    "llhandmotion.cpp": "5cee11882e875ad1191b46b57883808eb220607ca50832a1e2c633d487ebac68",
+    "llhandmotion.h": "ece95bac47bccc195074a8103fb9c430d7f7314d3983f32b302770bd3e050abb",
+    "llheadrotmotion.h": "4f2d9161235028fdf09d4f790e0d3ddfdba43630e2360f61cb3a3afb771cf7e4",
+    "lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86",
+    "lljointsolverrp3.h": "bd8be3d80984b11e952f3a16bd86fd7c9ef9c5caa254b34dcdd3ab9251bf9c47",
+    "lljointstate.h": "7011257c1fc813c66d80e49baa3b044e46a91cfa29bf4ed00fd45e6f1c735b5c",
+    "llkeyframefallmotion.h": "11b619f802c3d3de90b52657f025f03388e7577d4b06847044b3272b68bd36ec",
+    "llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "llkeyframestandmotion.h": "afd52da880f71f8542334cfd0ce35904d525b4b2277fdd725cf406f590a02440",
+    "llkeyframewalkmotion.h": "88831fc71cf688c86e4555db4d9490b559a203509a0c6d4cdaa799ed30bcacf6",
+    "llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "llmotioncontroller.cpp": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+    "llmotioncontroller.h": "d7bedffa086f9a32a9fede9c814ad82584a2af34bbd906746d22ec8d2894ea29",
+    "llmultigesture.h": "8eedb9b0d0a060a2f611eccab041e7bb1e2b2f49d75a2b93f94a1cd386684ffb",
+    "llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "lltargetingmotion.h": "f5615c0c083070386411fa8c43e7f673081c6db03ed93b54daeec901721f0807",
+    "llvisualparam.h": "9c47ca8ab53730e2d0b54dc41403c397e3ab785b0fb2286fe36fea631a5012c9"
+  },
+  "frames": {
+    "map": {
+      "frames": 448,
+      "sha256_lf": "dff10b83e4939c52cc7d8185aaee141ab7fc2b885fe4f80e8368ab5ad9ce8574"
+    },
+    "contiguous": {
+      "frames": 448,
+      "sha256_lf": "dff10b83e4939c52cc7d8185aaee141ab7fc2b885fe4f80e8368ab5ad9ce8574"
+    }
+  },
+  "scratch_artifact_sha256": {
+    "hand-consumer-parent-map14n.exe": "1731af69de74c7ad4d57c2802e7dc3c4976d938ef0c5e04f35ced3b6ebd0d44d",
+    "hand-consumer-parent-map14n.rsp": "f01a7059e14618fd03e4a10c7522ce8146264e5c547fc67fd38ce0fc2f6833aa",
+    "hand-consumer-parent-map14n.log": "38cb12fc9db090688f192891aebc01cd04728b5a0c5b04afb63cb61b260fbb6f",
+    "hand-consumer-parent-contiguous14n.exe": "530a837cc3c884ba6d30614800595f188ddea86127f42e9339d2446ffc42f17b",
+    "hand-consumer-parent-contiguous14n.rsp": "4b0a82a78b748205fde8d0216f8f4b1bb7af3892893ac2b29925ff1b85e5c953",
+    "hand-consumer-parent-contiguous14n.log": "e640e0261b1d42ab7f4825840bd8c3983056c666acae8e02b36409f54eb371d8"
+  },
+  "dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "scope": "Correctness only with fresh frozen core, real hand callback and base visual-param storage/apply logic; dummy morph params, no rendered mesh. The private #115 build was active during these isolated checks; immutable internal libraries were linked and external packages read only. The idle guard reported active before the already-queued validation command ran. No timing evidence is claimed; no shared source/cache was changed.",
+  "session": "96164 terminal"
+}

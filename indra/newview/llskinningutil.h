@@ -43,6 +43,8 @@ namespace LLSkinningUtil
     S32 getMaxGLTFJointCount();
     U32 getMeshJointCount(const LLMeshSkinInfo *skin);
     void scrubInvalidJoints(LLVOAvatar *avatar, LLMeshSkinInfo* skin);
+    // <FS:Perf> Nonpositive counts are a no-op. Otherwise mat must hold count
+    // matrices, separate from skin/avatar joint storage; callers use getMeshJointCount.
     void initSkinningMatrixPalette(LLMatrix4a* mat, S32 count, const LLMeshSkinInfo* skin, LLVOAvatar *avatar);
     void checkSkinWeights(LLVector4a* weights, U32 num_vertices, const LLMeshSkinInfo* skin);
     void scrubSkinWeights(LLVector4a* weights, U32 num_vertices, const LLMeshSkinInfo* skin);

@@ -1,0 +1,65 @@
+{
+  "parent_commit": "514dc0acd4f12e5413718dfafa1c046c778e843e",
+  "decision": "Reject sorted-array production adoption; retain authoritative tree",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "production_pose_source_unchanged": true,
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/tests/blender_pool_index_experiment.cpp": "2c3168314e580af795ac6e1dc3303b8407a2de535905ccb483720d2931d9c2a1",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7",
+    "indra/llcharacter/CMakeLists.txt": "a38bab469db48dd63fc913cae4a0bfa47be8de9002ffe786efda8925632654b4",
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86"
+  },
+  "reports_sha256_normalized_lf": {
+    "blender-pool-index-memory14k.csv": "55ff60b2906b7dd6ac5537ea2315c6040252d7f7bf5a1c766e15e5abed416eaf",
+    "blender-pool-index-cost14k-r1.csv": "146a23de51ae3e6b8db6732a0ecc31d58131c6c62c33173736b2ec318e7eb029",
+    "blender-pool-index-cost14k-r2.csv": "af001d348fae31beedaf117790ac7a77a54c9b6431751e330f31e8b8ddc44b1e",
+    "blender-pool-index-summary14k.csv": "6ba6097a0532f91884075406fb1361aa2a7b4ea5a37781d6592da99f42759cff"
+  },
+  "scratch_artifact_sha256": {
+    "blender-pool-index-native14k.cpp": "cc00710bde133e9416cc7ca1e27d62459cf273cf8c5cdc0866ae8c5111457b89",
+    "blender-pool-index14k.exe": "6612bc903e06f01658261b45dcb6b4bb23f21141c89a26f4c93b8363663382ac",
+    "blender-pool-index-alloc14k.exe": "56bf63fbc65dfc31a6e814ad1e3856c26bde31d2382f4a7777a5fecfcb2c4b93",
+    "blender-pool-index14k.asm": "92adb371752282f36b98feac492efcaf9ad980f9be2f6760d3aafd1737e39eae",
+    "blender-pool-index14k.rsp": "304526e082293cea9f3a43ba7e135fb581e871ff27b62a3d996b2f5694f3a8b0",
+    "blender-pool-index-alloc14k.rsp": "8f83a87c139465b8fcb06d90a0a364f78374fcfe3a5d052a422a2c19f90638bc",
+    "blender-pool-index-faults14k.log": "30f31bd616b401039cb3333649f942a4268e34155f42d0419060a60cab8fffa7",
+    "blender_pool_index_experiment-tracy-pool-index14k.log": "69afae548ba2f1f5db13021ffbc8232d630ac670f22bc5e1109026ab7166c233",
+    "measure-blender-pool-index14k.ps1": "64a74414df710a3a36bfce2e138e62a822f51d82f78a4acbcb5c0aa6573b352a"
+  },
+  "immutable_dependency_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "verified_immutable_libraries": 32,
+  "timing": {
+    "startedUtc": "2026-10-24T13:27:25.4483318Z",
+    "finishedUtc": "2026-10-24T13:27:27.1911947Z",
+    "checks": "State/worker idle and complete native process inventory checked before/after each run",
+    "runs": [
+      {
+        "run": 1,
+        "rows": 1008,
+        "report": "blender-pool-index-cost14k-r1.csv",
+        "sha256": "60364355d28326e1a380715de8530ed44439bfa9a7dd1be3a2c4c88cf645283c"
+      },
+      {
+        "run": 2,
+        "rows": 1008,
+        "report": "blender-pool-index-cost14k-r2.csv",
+        "sha256": "09a5297ec70a46f8d2d3a51a60e8ce450ded1d2c4ff5dfc51b2cea97841479fc"
+      }
+    ],
+    "exe_sha256": "6612bc903e06f01658261b45dcb6b4bb23f21141c89a26f4c93b8363663382ac"
+  },
+  "timing_rows": 2016,
+  "summary_rows": 168,
+  "memory_rows": 42,
+  "correctness_checks": 47517,
+  "allocation_growth_retry_checks": 21931,
+  "tree_failure_cases": 32,
+  "flat_failure_cases": 10,
+  "timing_design": "Same-process matched indexes over actual joint/blender pointers; alternating backend order in six samples per insertion order, two runs. 1024-key no-inline batches with offset and consumed checksum; matched results checked for every backend pair. No replacement allocator in timing executable.",
+  "memory_scope": "Only index construction/growth/live/teardown. Joints and aligned blenders are constructed before probes. The MSVC xmemory large-allocation allowance is 8+32-1=39 bytes on this non-debug x64 target; measured array capacity excludes that allowance.",
+  "limits": "No production container change or full-controller integration. Warm common-key and reverse cold regressions reject the candidate before integration. No whole-viewer FPS, real cache pressure, rendered behavior or other-platform execution claim. No shared source/cache writes or build-monitor control."
+}

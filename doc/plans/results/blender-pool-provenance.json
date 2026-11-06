@@ -1,0 +1,233 @@
+{
+  "parent_commit": "c7ce8ec6d7769c13a1decba496260feb5dd8bdd7",
+  "implementation_commit": "670008164f94e3d638ab6fc06e4c576a7e24f17c",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "timing_storage": "map",
+  "timing": {
+    "startedUtc": "2026-10-24T12:44:43.0424035Z",
+    "finishedUtc": "2026-10-24T12:44:53.5975111Z",
+    "checks": "State and worker idle, full native/package process inventory empty before and after each run",
+    "order": [
+      [
+        "collection",
+        "parent",
+        "r1",
+        "active-blender-current-paired-cost14i.exe"
+      ],
+      [
+        "collection",
+        "current",
+        "r1",
+        "blender-pool-cold-helper-collection14j.exe"
+      ],
+      [
+        "collection",
+        "current",
+        "r2",
+        "blender-pool-cold-helper-collection14j.exe"
+      ],
+      [
+        "collection",
+        "parent",
+        "r2",
+        "active-blender-current-paired-cost14i.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r1",
+        "active-blender-controller-cost14i.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r1",
+        "blender-pool-cold-helper-controller14j.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r2",
+        "blender-pool-cold-helper-controller14j.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r2",
+        "active-blender-controller-cost14i.exe"
+      ]
+    ]
+  },
+  "timing_rows": 504,
+  "timing_iterations": 504000,
+  "parent_pose_sha256_normalized_lf": "f83740f180ed59028949e00a545dc167edddd148a04d77a502d268e39a632c4f",
+  "unchanged_numerical_pose_methods_sha256_normalized_lf": "a90a857587c1c60f2d569e9e3524df39a877d3bb01d56de29ff9832075203eb9",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/motion_purge_cost_benchmark.cpp": "e0cc6a5061934b77c9b2c87d824be4c6ed76e6629a0d88b8e40295f2a276ed8d",
+    "indra/llcharacter/tests/motion_purge_test.cpp": "4b8761ce35893802bcdf3ad3b75356f4897d74d49f69aa502c03dd363cc34032",
+    "indra/llcharacter/tests/motion_purge_reference.h": "4068654534a4a0e8c15a3b8c2caacbece3b2e5e183e3c4b556a2cb607451b9ac",
+    "indra/llcharacter/tests/keyframe_test_character.h": "eab03c45b6b695903c22cda140a04069ca5d62415acb03a758a43905036e766d",
+    "indra/llcharacter/llpose.cpp": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86",
+    "indra/llcharacter/lljointstate.h": "7011257c1fc813c66d80e49baa3b044e46a91cfa29bf4ed00fd45e6f1c735b5c",
+    "indra/llcharacter/tests/active_blender_test.cpp": "9092c8965101713f4dab9ac0ddf365558ea878dc4883e5a63f6d09743270771d",
+    "indra/llcharacter/tests/active_blender_controller_test.cpp": "97c35e1e441429515d84af8c1ccabd703191b0462d3a86c24f635dd5de09e2f8",
+    "indra/llcharacter/tests/active_blender_cost_benchmark.cpp": "86569ad4933b266b827064377034238177b5f1052ecc31bf085498ad7326fbf8",
+    "indra/llcharacter/tests/active_blender_reference.h": "3cdaa6fcb69647e76c156c4872c97c388f0136436b5a12b079b572c4fadaf262",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7",
+    "indra/llcharacter/tests/blender_pool_failure_test.cpp": "6ad1c932d9ac4befd0163fe8bfb9c08a71c0cb623800ed7bce8e445b1ae8c5b0",
+    "indra/llcharacter/CMakeLists.txt": "fcc3c3dc50736586d3720000f34d2f98759e47818883975192a40c8c7c101b5f",
+    "indra/llcommon/llmemory.h": "d72924a2f55bf26644c8fa126c5aec909e7155394b7e1913dfcd648d0bd0a334"
+  },
+  "immutable_internal_library_snapshot": {
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+    "scope": "Byte-verified read-only copies; external packages/toolchain remain read-only. No shared-cache configure/build/writes."
+  },
+  "executables_sha256": {
+    "active-blender-current-paired-cost14i.exe": "a635a5ea3bd64671d47505b541a2a893a5471bbd78f663d3b7546c9f363e1de2",
+    "active-blender-controller-cost14i.exe": "07943e4596c7101a5b85267ee8600eacd4de5f451d2a7629ed24bddafee27f70",
+    "blender-pool-cold-helper-collection14j.exe": "deea7689f295b5cd845f943de6622d85524dfee1afca2df40b15671773dca576",
+    "blender-pool-cold-helper-controller14j.exe": "e5184514cc4c248469b9021989a8d42f09383375e14c78bb4e7aa48c93f95660",
+    "blender-pool-final-fault-map14j.exe": "579a0b8803e2ff1984f6d64bd3e2c56942fe24a5dc531353c0cf32acc944dd68",
+    "blender-pool-final-fault-contiguous14j.exe": "01a7258223babdd50414336d44ae1be483e57185463500e4fe632588eed06b0c",
+    "pool-final-parent-fault-control14j.exe": "ef38c6ced63ba32d49eca608e7dbf6c96ca1be06a8a620ca573cf1afa8ad9a22",
+    "pool-final-outer-map14j.exe": "b9da3102df79614d74682a77ed55a1d98a47880af87e6a0061973eb516c9777c",
+    "pool-final-outer-contiguous14j.exe": "0020f5faa4e16cf517c23a5444cc09a9bedf128fa44418a0e6f69cc1a61f58a0",
+    "pool-final-controller-map14j.exe": "38409f233603c9e04e80d44f8daba1e2c230a99d1f4d3b51a05daea6ad9e3b75",
+    "pool-final-controller-contiguous14j.exe": "c3f150dc57a7da677d3ed90c4bb8e45363d889a3f0190ab94d9bea077a8ff366",
+    "pool-final-phase14j.exe": "ced8b97d3c37362ec32b17bb527c6314bf1b020e946a4fb7f0cb004c28980265",
+    "pool-final-shadow14j.exe": "6105a4c4e8e7149382b9464f80ee08004de82ee25255196e85886d3ba96eb24a",
+    "pool-final-shadow-allocations14j.exe": "c24d55c9df6aae942de43662160755251f6872d31b43435512aa544ca6b5718c",
+    "pool-final-purge14j.exe": "c7dd4eb8698caca62de3c06bd009823aab209a5edcf60b1033446561e4741c99",
+    "pool-final-mask14j.exe": "ac6c4d71c04f3bd240e92eaca9ae8ea8759bbb984e64070941fa230a8c41f003",
+    "pool-final-memory14j.exe": "5ea3f16dddf6a10a20aa9b0547ee777ed1f7712d30b31eeb8e433e1f919859ee"
+  },
+  "reports": {
+    "blender-pool-controller-after-alloc-map.csv": {
+      "sha256_normalized_lf": "b9ac45c151b344f030e0c6c38ae6748dcb497101eed76313023830558f70d648",
+      "rows": 1
+    },
+    "blender-pool-cost-collection-current-r1.csv": {
+      "sha256_normalized_lf": "29df3bacf8a9a45fd0cc4dce1cdc35bd525463007cde4afbd05df9aa6e87aa64",
+      "rows": 72
+    },
+    "blender-pool-cost-collection-current-r2.csv": {
+      "sha256_normalized_lf": "3099f60e0203ae6a18d593b7570b11035cca4553e95289ffdde8b6841f2b9959",
+      "rows": 72
+    },
+    "blender-pool-cost-collection-parent-r1.csv": {
+      "sha256_normalized_lf": "70093a9b106b8026791619b333ef49efeaaced97519cffe930cf7a136e802b34",
+      "rows": 72
+    },
+    "blender-pool-cost-collection-parent-r2.csv": {
+      "sha256_normalized_lf": "35a8f0b668c5f63422276f48387748fe41b0c680924fe80560d2d4df70f89f5a",
+      "rows": 72
+    },
+    "blender-pool-cost-controller-current-r1.csv": {
+      "sha256_normalized_lf": "b5dcb387407b8742259882278fd8c49df93c54c760690bef9ea3c052e93cc473",
+      "rows": 54
+    },
+    "blender-pool-cost-controller-current-r2.csv": {
+      "sha256_normalized_lf": "eb5f0ffe67c1cea74757871432a9b1aee4af7a920b39b857b3096ace0daf9611",
+      "rows": 54
+    },
+    "blender-pool-cost-controller-parent-r1.csv": {
+      "sha256_normalized_lf": "ebfa7abfbd0f97f879eb7318ca95394e12e710f853bd5fb099b29abea971f08d",
+      "rows": 54
+    },
+    "blender-pool-cost-controller-parent-r2.csv": {
+      "sha256_normalized_lf": "054de245e03cca9364ec979b7da50168a59b9b1340d5a339ff0b4bb235214c3e",
+      "rows": 54
+    },
+    "blender-pool-failure-after-contiguous.csv": {
+      "sha256_normalized_lf": "e6eb562cc6fd17a74a0ceabd074b9b7094872767158af40a2c694c9be88dadfb",
+      "rows": 8
+    },
+    "blender-pool-failure-after-map.csv": {
+      "sha256_normalized_lf": "e6eb562cc6fd17a74a0ceabd074b9b7094872767158af40a2c694c9be88dadfb",
+      "rows": 8
+    },
+    "blender-pool-failure-before.csv": {
+      "sha256_normalized_lf": "9e0cadafd805664a1349ead90f4d838f98eeadfa54680b63f51c415c800b939e",
+      "rows": 8
+    },
+    "blender-pool-failure-legacy112.csv": {
+      "sha256_normalized_lf": "8bc96955e605e70f66a72d39d60d6edc7d59777cb68c38b44b7e16ef9077879e",
+      "rows": 8
+    },
+    "blender-pool-failure-parent-retry.csv": {
+      "sha256_normalized_lf": "4febbeee42bcd22dcf3e22d03a9926a647c1d5bbdca8076a4c33eee10a3d37a6",
+      "rows": 8
+    },
+    "blender-pool-memory-after-map.csv": {
+      "sha256_normalized_lf": "8cdcefe67ec3db4e4f48bf048d046893fad10e48c81683a10b6a146c8de68f1a",
+      "rows": 8
+    },
+    "blender-pool-reentry-after-map.csv": {
+      "sha256_normalized_lf": "6a1b98be569aa9c85acd479e970b07f9f5444d41299159432b171f4e4170591a",
+      "rows": 1
+    },
+    "blender-pool-reentry-parent.csv": {
+      "sha256_normalized_lf": "27b916d23ac8f3607769406942bd595441c112c921aa001983fd5fadef1cac07",
+      "rows": 1
+    }
+  },
+  "controller_traces": {
+    "active-blender-controller-current-trace14i.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59"
+    },
+    "pool-final-controller-map-trace14j.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59"
+    },
+    "pool-final-controller-contiguous-trace14j.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59"
+    }
+  },
+  "regressions": {
+    "fault_retry_reentry_checks_each_mode": 79,
+    "outer_checks_each_mode": 26748,
+    "outer_cases_each_mode": 46,
+    "controller_checks_each_mode": 4054,
+    "frames_each_mode": 216,
+    "phase_checks_map": 5956,
+    "frozen_updates_map": 1474,
+    "shadow_checks_map": 5063,
+    "purge_checks_map": 5838,
+    "mask_checks": 241,
+    "diagnostic_allocation_failure_checks": 26
+  },
+  "aligned_allocation_scope": "Existing class aligned new/delete pair is unchanged; constructed joint blender is 544 bytes on this target. Ordinary-new counters observe its two map allocations but exclude the aligned block and allocator/RSS overhead. Temporary unique ownership uses the class delete on failed publication.",
+  "allocation_hook_scope": "One-shot callback is only in FS_SAMPLING_ALLOCATION_PROBE=1 single-thread tests. Reentry is exercised only if ordinary constructor allocation exists, before pool insertion. Global failure injection skips Tracy-enabled execution. Both timing binaries use FS_SAMPLING_ALLOCATION_PROBE=0; new callback code is excluded.",
+  "excluded_inline_prototype": {
+    "path": "performance-validation/blender-pool-before-cold-helper14j",
+    "manifest_sha256": "f7b1b44f060bcaf95aa1dc4a5b6393cde92ed8141ef8e37fbc2c1ba367764088",
+    "reason": "Small full-controller regression prompted separate cold cleanup; original reports retained, not mixed with final helper series."
+  },
+  "scope": "Actual fresh pose/core code and unchanged generated fixtures, with byte-verified fresh PR 113 timing parents. Separate allocation/failure/memory probes; no allocation instrumentation in timings. All final allocation/memory rows reproduced by final binaries; both curve modes reproduce the exact PR 113 frame stream. State/worker idle and full native/package process inventory checked around every timed run. Smallest isolated collection regresses about 5 ns; reported explicitly. No whole-viewer FPS/quality, worker window or native other-platform execution claim. External packages and shared caches read only."
+}

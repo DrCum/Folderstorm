@@ -1,0 +1,25 @@
+{
+  "case": "event14s-timing-r1-direct-a1-g0-normal",
+  "kind": "timing",
+  "round": 1,
+  "mode": "direct",
+  "avatars": 1,
+  "gapUs": 0,
+  "load": "normal",
+  "frames": 64,
+  "before": {
+    "utc": "2026-10-24T21:42:27.9553828Z",
+    "activeBuild": null,
+    "phase": "NORMAL_PERFORMANCE_QUEUE",
+    "workerStatus": "idle",
+    "workerCurrent": null,
+    "buildOrProbeProcesses": [],
+    "idle": false
+  },
+  "after": null,
+  "status": "before_check",
+  "exit": null,
+  "exeSha256": "20FB456245215EB2ADED019DE6A92DEAFE25A67815D8EB59CD8CFE8D42A7F6C4",
+  "scope": "Private generated cohort and production wait selection; explicit synthetic gap; no live viewer/deadline/FPS claim",
+  "limits": "Only before/after full-host build/probe idle; desktop load, power, timer policy uncontrolled"
+}

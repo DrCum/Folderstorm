@@ -1,0 +1,239 @@
+{
+  "parent_commit": "b8c82e686def15937fdfad1620845d557e995a89",
+  "implementation_commit": "85255dd8172bc34462fc2d6d7b744531cab58a06",
+  "initial_baseline_fixture_commit": "3c04393c54cadc1bc3337dfd202bccefbda4a211",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "toolchain": "MSVC 19.51.36244 x64 AVX2 /O2 /fp:precise, assertions enabled",
+  "tracy": false,
+  "timing_storage": "map",
+  "timing": {
+    "startedUtc": "2026-10-24T11:30:29.7740724Z",
+    "finishedUtc": "2026-10-24T11:30:49.2016618Z",
+    "checks": "State and worker idle, full native/package process inventory empty before and after each run",
+    "order": [
+      [
+        "collection",
+        "parent",
+        "r1",
+        "active-blender-parent-valid-cost14i.exe"
+      ],
+      [
+        "collection",
+        "current",
+        "r1",
+        "active-blender-current-paired-cost14i.exe"
+      ],
+      [
+        "collection",
+        "current",
+        "r2",
+        "active-blender-current-paired-cost14i.exe"
+      ],
+      [
+        "collection",
+        "parent",
+        "r2",
+        "active-blender-parent-valid-cost14i.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r1",
+        "active-blender-controller-parent-fresh14i.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r1",
+        "active-blender-controller-cost14i.exe"
+      ],
+      [
+        "controller",
+        "current",
+        "r2",
+        "active-blender-controller-cost14i.exe"
+      ],
+      [
+        "controller",
+        "parent",
+        "r2",
+        "active-blender-controller-parent-fresh14i.exe"
+      ]
+    ]
+  },
+  "timing_rows": 504,
+  "timing_iterations": 504000,
+  "parent_source_archive_sha256": "e8bf2bf6f9f2454bdcc173106561add10ccc20543a54abcac199c08a2b73a942",
+  "parent_core_sha256_normalized_lf": {
+    "indra/llcharacter/llpose.cpp": "322bee929f7f4e1220e4e94bc635e1a766f5a4a8fca450e7fd5aa4e5485ae764",
+    "indra/llcharacter/llpose.h": "ba88c375fe5af2b5a691f61aa59b0116fd89675e74aaa0e011f49b581c1b9bea",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llmotion.h": "1fd45571daeed72fcaef8a2f304eaac192eba2ef25ad86488fa4501aef268675",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/keyframe_test_character.h": "eab03c45b6b695903c22cda140a04069ca5d62415acb03a758a43905036e766d"
+  },
+  "unchanged_numerical_pose_prefix_sha256_normalized_lf": "25b6b171297f8886b9378704af203e14041bf5c9f4d567a250a4aa6ab3aa25b2",
+  "source_sha256_normalized_lf": {
+    "indra/llcharacter/fssamplingcontext.cpp": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802",
+    "indra/llcharacter/fssamplingcontext.h": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c",
+    "indra/llcharacter/fssamplingshadow.cpp": "f087a31d6e33437d2fc1c9dbfb1428d267086a356692219e961dc52e8aef66f4",
+    "indra/llcharacter/fssamplingshadow.h": "a67a970ada610b336b3378e7371fe326b20f9a3706d8e78be4260fee9eefe603",
+    "indra/llcharacter/llmotion.cpp": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b",
+    "indra/llcharacter/llcharacter.cpp": "cc9c576f1c2bc45e5c54b32ab2c4d680fbbf4278f8eba4588128ca2bc21a378e",
+    "indra/llcharacter/llcharacter.h": "0e33264142a44565c4d77a22427f814ad167b1505f0417bd0f574ac9360e7bd3",
+    "indra/llcharacter/llmotioncontroller.cpp": "7514fa7edd83073a4ebb3f33b169f0d1b28807dafde62d48699d54e51d0b3824",
+    "indra/llcharacter/llmotioncontroller.h": "9fd72c274a5fba71b979d992ebac3664d0b1b307f732c74cd6d4ae5acae6b5d3",
+    "indra/llcharacter/llkeyframemotion.cpp": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f",
+    "indra/llcharacter/llkeyframemotion.h": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1",
+    "indra/llcharacter/tests/sampling_shadow_cost_benchmark.cpp": "cb94bb76bd0aff5ac3d9dcf6c211786dbb4f028fe6836e874be568788d951aa7",
+    "indra/llcharacter/tests/current_motion_fixture.h": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447",
+    "indra/llcharacter/tests/motion_purge_cost_benchmark.cpp": "e0cc6a5061934b77c9b2c87d824be4c6ed76e6629a0d88b8e40295f2a276ed8d",
+    "indra/llcharacter/tests/motion_purge_test.cpp": "4b8761ce35893802bcdf3ad3b75356f4897d74d49f69aa502c03dd363cc34032",
+    "indra/llcharacter/tests/motion_purge_reference.h": "4068654534a4a0e8c15a3b8c2caacbece3b2e5e183e3c4b556a2cb607451b9ac",
+    "indra/llcharacter/tests/keyframe_test_character.h": "eab03c45b6b695903c22cda140a04069ca5d62415acb03a758a43905036e766d",
+    "indra/llcharacter/llpose.cpp": "f83740f180ed59028949e00a545dc167edddd148a04d77a502d268e39a632c4f",
+    "indra/llcharacter/llpose.h": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d",
+    "indra/llcharacter/lljoint.h": "e6af7a7571dfa3361ac09cdda6314227afb5c49fd319f44f55493d0533f52d86",
+    "indra/llcharacter/lljointstate.h": "7011257c1fc813c66d80e49baa3b044e46a91cfa29bf4ed00fd45e6f1c735b5c",
+    "indra/llcharacter/tests/active_blender_test.cpp": "9092c8965101713f4dab9ac0ddf365558ea878dc4883e5a63f6d09743270771d",
+    "indra/llcharacter/tests/active_blender_controller_test.cpp": "97c35e1e441429515d84af8c1ccabd703191b0462d3a86c24f635dd5de09e2f8",
+    "indra/llcharacter/tests/active_blender_cost_benchmark.cpp": "86569ad4933b266b827064377034238177b5f1052ecc31bf085498ad7326fbf8",
+    "indra/llcharacter/tests/active_blender_reference.h": "3cdaa6fcb69647e76c156c4872c97c388f0136436b5a12b079b572c4fadaf262",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "033547f7d83637ece98958ba571b023ced5a53bdd8bc0fa49fa3a238f5316501"
+  },
+  "immutable_internal_library_snapshot": {
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+    "scope": "Byte-verified read-only copies; external packages/toolchain remain read-only. No shared-cache configure/build/writes."
+  },
+  "executables_sha256": {
+    "active-blender-parent-valid-cost14i.exe": "aa1956639a593ce2072908e1082805ad99418a82fdbddc2572419c4fdeff4d7c",
+    "active-blender-current-paired-cost14i.exe": "a635a5ea3bd64671d47505b541a2a893a5471bbd78f663d3b7546c9f363e1de2",
+    "active-blender-controller-parent-fresh14i.exe": "2433ab8c762cd991160328dc90e1e7fd03a2117d5a37c703201b41ca55eeb603",
+    "active-blender-controller-cost14i.exe": "07943e4596c7101a5b85267ee8600eacd4de5f451d2a7629ed24bddafee27f70",
+    "active-blender-parent-valid-memory14i.exe": "433d08945958aef124fb92b007668d1483d8f60ea1a7603f385a69b3bd79a802",
+    "active-blender-current-memory14i.exe": "5fc114b93526f1265f97a566a9d26f83312155e51603ac6e55c08b645185ace2",
+    "active-blender-reference-valid-control14i.exe": "df13764d65b6eaa7f810f6adae5a8b6e4755f298408d8fe4894a80712b6011a3",
+    "active-blender-vector-map14i.exe": "6b535c17428212e97e407b4eee470c5f7620023fb5e5bb0ae28f1352b06f680c",
+    "active-blender-vector-contiguous14i.exe": "9b893577b65fac2db9db3330f26a08167bce1c7fbff8f2f8d3204415fc38a108",
+    "active-blender-vector-faults14i.exe": "732abd770a2ee4eefa41df93c4edb828c3a9d6ce30b951411ea28c8019cdff75",
+    "active-blender-controller-parent14i.exe": "9c58ce5f970978db99126e07157a8ea987af53a1463b5d8e42686a2ab35f794b",
+    "active-blender-controller-current14i.exe": "27853c6d3f22b1b393ad49f406dcfd9115b92c9f78c99e47308cc074f9ae9d68",
+    "active-blender-controller-contiguous14i.exe": "f4b231319ae7c584aa9fa30c0e92df34897d98fc49efa60390f33501c44e91a9",
+    "phase-after-active-blender14i.exe": "8254e219f0202f4980862f6f7cd14acc6029f0b5e0a5ad04397f14e282ae8f3c",
+    "shadow-after-active-blender14i.exe": "9413551eab4d88ee5902b90f7024a39e54b6fde493f1055a3a1ece1071b9806b",
+    "purge-after-active-blender14i.exe": "6765941e5fb8ca005fbb120ed254fc1bb5578ca606019856fc2bd5245d0e3533",
+    "mask-after-active-blender14i.exe": "ddbd76e966065c5ebecf9fd4420feea595bfd63602aef623647f870cebabd780",
+    "shadow-allocation-after-blender14i.exe": "1924e158ff14e127ffe714f50657cc5cf8aa45f49d2c5f3d1d881c8b814444c5",
+    "active-blender-cache-order-negative14i.exe": "63a1a1a3def9abffc0305f4ddb6cba82de84999bcb8ff5e3767b1c60c98bfdfc"
+  },
+  "reports": {
+    "active-blender-before-alloc-map.csv": {
+      "sha256_normalized_lf": "c2d4d5cf9f99e248c74626c7562a22caca08250cab49dc683d526f83e4cfc490",
+      "rows": 8
+    },
+    "active-blender-controller-after-alloc-map.csv": {
+      "sha256_normalized_lf": "b9ac45c151b344f030e0c6c38ae6748dcb497101eed76313023830558f70d648",
+      "rows": 1
+    },
+    "active-blender-cost-collection-current-r1.csv": {
+      "sha256_normalized_lf": "190dbee4d04a652f07e4fa533d37e51952d3383d1a7fc38c15c225f00c326253",
+      "rows": 72
+    },
+    "active-blender-cost-collection-current-r2.csv": {
+      "sha256_normalized_lf": "53bb7f84ed7b28d68b1591d05ad77808ae3caacccff956f9636fc1a2d87a2b00",
+      "rows": 72
+    },
+    "active-blender-cost-collection-parent-r1.csv": {
+      "sha256_normalized_lf": "911d1396d30356561f3cfe33c6588c619c0b41e5d0e7edf14a2ec32bd1ea01e9",
+      "rows": 72
+    },
+    "active-blender-cost-collection-parent-r2.csv": {
+      "sha256_normalized_lf": "59fd46e0e256afdc855a6ba66f9e10e6647e5a3cba6281e8d6b48c7ea2feab4d",
+      "rows": 72
+    },
+    "active-blender-cost-controller-current-r1.csv": {
+      "sha256_normalized_lf": "cb8e450a00170d97dc773f93b894c3c29da9ad3ebe0b1dcf49054545d88a8e68",
+      "rows": 54
+    },
+    "active-blender-cost-controller-current-r2.csv": {
+      "sha256_normalized_lf": "7040dbfc7783523c40bc5b021d6f762def989ae75536d66d4d8bafc21a540e97",
+      "rows": 54
+    },
+    "active-blender-cost-controller-parent-r1.csv": {
+      "sha256_normalized_lf": "578e2753fa5fd496081c1592e2ae9a49a441e1b903580a9d0ac5c1d9cf5956a3",
+      "rows": 54
+    },
+    "active-blender-cost-controller-parent-r2.csv": {
+      "sha256_normalized_lf": "60e19bc863d2ee1e6f5b89be8b3978c064a27414beb53e2eecdb4c7e71bb6466",
+      "rows": 54
+    },
+    "active-blender-memory-current-map.csv": {
+      "sha256_normalized_lf": "8cdcefe67ec3db4e4f48bf048d046893fad10e48c81683a10b6a146c8de68f1a",
+      "rows": 8
+    },
+    "active-blender-memory-parent-map.csv": {
+      "sha256_normalized_lf": "2bdb2ce57293a7fb28d1fc31c67a2f260d156404546766034bd9b5662e873da8",
+      "rows": 8
+    }
+  },
+  "controller_traces": {
+    "active-blender-controller-parent-trace14i.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "3c58db6eace73be6c383aba9777ec83d7b24f07d6e4aafebbd31c2e7ec5aa939"
+    },
+    "active-blender-controller-current-trace14i.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59"
+    },
+    "active-blender-controller-contiguous-trace14i.txt": {
+      "frames": 216,
+      "state_words": 338544.0,
+      "frame_stream_sha256_normalized_lf": "4ead8e8e3bbfa1a7e4664ad4c38148a65d5ee24cabdb93da08612d9cde2d7eba",
+      "raw_file_sha256": "808338dff2153a7ac7aea8e1cb5060c88bf9b713700570b24371615362e5bd59"
+    }
+  },
+  "object_sizes_windows_x64": {
+    "aligned_joint_blender_parent": 544,
+    "aligned_joint_blender_current": 544,
+    "pose_blender_parent": 72,
+    "pose_blender_current": 80,
+    "motion_controller_parent": 680,
+    "motion_controller_current": 688
+  },
+  "regressions": {
+    "outer_checks_each_mode": 26748,
+    "outer_cases_each_mode": 46,
+    "controller_checks_each_mode": 4054,
+    "frozen_map_frames_per_candidate_mode": 216,
+    "insertion_failure_checks": 18,
+    "phase_checks_map": 5956,
+    "frozen_updates_map": 1474,
+    "shadow_checks_map": 5063,
+    "purge_checks_map": 5838,
+    "mask_checks": 241,
+    "diagnostic_failure_checks": 26,
+    "wrong_cache_order_mutant": "Rejected at observable cache alias, case 44"
+  },
+  "excluded_prior_series": {
+    "path": "performance-validation/active-blender-before-fresh-control14i",
+    "manifest_sha256": "0aa77124a1191c4a532726f799607503f841e47166ecae2865b2a501a8d58d76",
+    "reason": "Cached parent pose versus fresh candidate pose configuration; preserved and excluded. Final parent and candidate both compile pose/core fresh under matching flags."
+  },
+  "scope": "Fresh affected pose/core sources; complete parent compiled from exact frozen source archive. Numerical joint-blender bodies unchanged. Read-only immutable internal libraries and external packages. Separate replacement-new allocation/failure/memory executables; custom aligned object allocation and allocator/RSS overhead excluded from ordinary-new byte accounting. Collection fixture admits/clears warmed shared joints; complete controller uses unchanged generated four-key fixture, with enabled-shadow rows retained but direct rows used for ordinary comparisons. State/worker idle and full native/package process inventory checked around every timed run. No real avatar rendering, crowd FPS/quality, worker overlap or native other-platform execution claim."
+}

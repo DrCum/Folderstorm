@@ -1,0 +1,8 @@
+{
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor              ",
+  "logicalProcessors": 12,
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "process64bit": true,
+  "observedUtc": "2026-10-24T19:37:46.6660543Z",
+  "controls": "Power policy, frequency, desktop load and global timer state uncontrolled"
+}

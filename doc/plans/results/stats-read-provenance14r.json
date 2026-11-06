@@ -1,0 +1,66 @@
+{
+  "implementation_commit": "1330a9d0c921561d5a7affa7fd683a11c820bcd8",
+  "base_commit": "22ea4cee92ae72d315ecc4355241abd6bbe78ff3",
+  "status": "Native checked; exact-head full viewer/LL_TESTS target integration and UI/autotuning acceptance pending",
+  "native": "MSVC x64 AVX2 /O2 /fp:precise, replacement-new isolated to this test executable, immutable32 internal libraries, packages read only",
+  "source_sha256_normalized_lf": {
+    "indra/newview/llperfstats.h": "af8f4a708c1ec927a4453f9abcb980c06a6f2be02033a3136b133ab7a5102128",
+    "indra/newview/CMakeLists.txt": "d227c3128c8daf6bcc8873c26d0cd81d66433706bea4bfae2ae9a2a76b4d5dba",
+    "indra/newview/tests/performance_stats_read_test.cpp": "24ee9d1001280ad698628a6727c58be420d975115dfb6a5a7b8de6c330388a25",
+    "indra/llcharacter/tests/sampling_allocation_probe.h": "e60d76d5c1b6fe704cb0387c379425b8458b08c91fdf707999db537f6301e1e7"
+  },
+  "scratch_artifact_sha256": {
+    "stats-read14r.cpp": "2f506452f7e6ac1ca3caf956a532b81d8e0b1389549e6d999f63fe214bb3f2ed",
+    "stats-read-old14r.exe": "3ab427239a6f07c9159b442b6cd1c36b8d4e59c82d4919056cca0b3a5e0e9861",
+    "stats-read-old14r.rsp": "19a7683ba74006dcd617c8c21530086dcf10c7b046a570e71ada93df117f74a4",
+    "stats-read-old14r-results.log": "eaa4fafa453964bad7216542267c4cd6f4787afabb9ea30f48fd12c66a0a71bb",
+    "stats-read-old-header14r.h.txt": "868130a19a9151f8279dc48682e713786cacbb6484810ec6b64b08f8cbd8311a",
+    "stats-read-fixture14r.cpp.txt": "24ee9d1001280ad698628a6727c58be420d975115dfb6a5a7b8de6c330388a25",
+    "stats-read-fixed14r.exe": "5f88d36b3adc0b7bce19f50c922176f6514e52de56f506907159466d57a760ee",
+    "stats-read-fixed14r.rsp": "79c437fd651fa58ad0a9071cb03e9d5cfe2be425af1704f86fa77852ca4bdac4",
+    "stats-read-fixed14r.log": "0b5a15c0f90605fe75160c004e38758914e51bb8656c867e620337dd4f080cdf"
+  },
+  "standalone_syntax_sha256": {
+    "llperfstats-normal-stats14r.rsp": "31567ed01a9dedd9c5fab77ad2f72ef3fefc1b03929ffe36c356b400fd1eb21a",
+    "llperfstats-normal-stats14r.log": "527c658e4ad2f32ea04df364e9b891783cca423df33be566b235a04b1ff906a8",
+    "llperfstats-tracy-stats14r.rsp": "22d624882019ef7047f5bf83076f6958fd73f041742783b5066307e149fe22e9",
+    "llperfstats-tracy-stats14r.log": "527c658e4ad2f32ea04df364e9b891783cca423df33be566b235a04b1ff906a8",
+    "fsfloaterperformance-normal-stats14r.rsp": "41e91a4a44e9a60f2af57a69d3eeb7c7d8cb343bba143bfe50af0cc0f437ccac",
+    "fsfloaterperformance-normal-stats14r.log": "c44eadbc1302aa2a7439ff239ed834114fdf3828e771d36bc7f63327ea38ff15",
+    "performance_stats_read_test-normal-stats14r.rsp": "6f4fb6aa72f54a00671961991d1e890005ceb6aeac10861eec3bb07578780007",
+    "performance_stats_read_test-normal-stats14r.log": "75e0b8d1a0793a2227bd23bde0ab75a92dcc63648434047dd17c4d5c0c611971",
+    "performance_stats_read_test-tracy-stats14r.rsp": "81e5548b0049f7d4e2c71b9901a6c64d3f44e8c094b37d5b5333abb0903e8c1a",
+    "performance_stats_read_test-tracy-stats14r.log": "75e0b8d1a0793a2227bd23bde0ab75a92dcc63648434047dd17c4d5c0c611971",
+    "performance_stats_read_test-normal-stats14r-alloc.rsp": "c098b1c00468e09b08c3c4b1a5d9d724160b994dfed1897d29b460c7c45ec4d0",
+    "performance_stats_read_test-normal-stats14r-alloc.log": "ca516d6c0d09b003a444dbdc827cf476db68d751d53b39fa24c9b916579f9afb",
+    "performance_stats_read_test-tracy-stats14r-alloc.rsp": "5770e97e68313116d5c295ce9409c49ef072c82fb0d488a2c2db2fe5459e0e14",
+    "performance_stats_read_test-tracy-stats14r-alloc.log": "ca516d6c0d09b003a444dbdc827cf476db68d751d53b39fa24c9b916579f9afb"
+  },
+  "before": {
+    "failures": 6,
+    "requested_bytes": 115148,
+    "exit": 1,
+    "inserted_nodes": 514,
+    "new_calls": 522,
+    "checks": 311,
+    "reads": 1538
+  },
+  "after": {
+    "failures": 0,
+    "requested_bytes": 0,
+    "exit": 0,
+    "inserted_nodes": 0,
+    "new_calls": 0,
+    "checks": 312,
+    "reads": 1538
+  },
+  "value_scope": "All valid object/stat indices, both read buffers, populated/null/absent/erased/replaced/reset keys; frozen old expressions on separate storage. The fixed pressure read completes one additional value check.",
+  "failure_scope": "UUIDs prepared before injection; missing read works with allocation countdown0; genuine producer insertion still fails, then succeeds on retry",
+  "fixture_scope": "Actual inline getters and doUpd, existing static storage definitions, test friend access; no singleton/window construction or full frame publication/autotuning/lifecycle test",
+  "allocation_scope": "Initially empty reused maps; prior value fixtures leave bucket capacity. Counts are replacement-new requests/bytes, not allocator footprint or viewer FPS.",
+  "no_timing_claim": true,
+  "full_viewer_not_run": true,
+  "immutable_libraries_verified": 32,
+  "immutable_manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+  "identical_fixture_before_after": true
+}

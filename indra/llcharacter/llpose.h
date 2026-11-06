@@ -37,6 +37,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 
 //-----------------------------------------------------------------------------
@@ -88,6 +89,9 @@ protected:
     LLPointer<LLJointState> mJointStates[JSB_NUM_JOINT_STATES];
     S32             mPriorities[JSB_NUM_JOINT_STATES];
     bool            mAdditiveBlends[JSB_NUM_JOINT_STATES];
+private:
+    friend class LLPoseBlender;
+    bool mInActiveCollection = false;
 public:
     LLJointStateBlender();
     ~LLJointStateBlender();
@@ -106,10 +110,9 @@ class LLMotion;
 class LLPoseBlender
 {
 protected:
-    typedef std::list<LLJointStateBlender*> blender_list_t;
     typedef std::map<LLJoint*,LLJointStateBlender*> blender_map_t;
     blender_map_t mJointStateBlenderPool;
-    blender_list_t mActiveBlenders;
+    std::vector<LLJointStateBlender*> mActiveBlenders;
 
     S32         mNextPoseSlot;
     LLPose      mBlendedPose;

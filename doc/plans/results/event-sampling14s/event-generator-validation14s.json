@@ -1,0 +1,27 @@
+{
+  "checks": 5,
+  "results": [
+    {
+      "case": "'\\n'",
+      "unchanged_bytes_recovered": true
+    },
+    {
+      "case": "'\\r\\n'",
+      "unchanged_bytes_recovered": true
+    },
+    {
+      "case": "#include \"llmotioncontroller.h\"",
+      "ambiguous_boundary_rejected": true
+    },
+    {
+      "case": "void LLMotionController::updateMotions(bool force_update)\n{",
+      "ambiguous_boundary_rejected": true
+    },
+    {
+      "case": "    return motion.onUpdate(time, mask);",
+      "ambiguous_boundary_rejected": true
+    }
+  ],
+  "source_sha256": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3",
+  "generator_sha256": "a1798e758264419dd2ad2d2aae4a73dafe0e202a8a54633bd00a95cc028e3325"
+}

@@ -1,0 +1,8 @@
+#include "../viewer-performance/indra/llcharacter/llpose.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingcontext.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotion.cpp"
+#include "../viewer-performance/indra/llcharacter/llcharacter.cpp"
+#include "../viewer-performance/indra/llcharacter/llmotioncontroller.cpp"
+#include "../viewer-performance/indra/llcharacter/llkeyframemotion.cpp"
+#include "../viewer-performance/indra/llcharacter/fssamplingshadow.cpp"
+#include "../viewer-performance/indra/llcharacter/tests/owned_sampling_rows_test.cpp"

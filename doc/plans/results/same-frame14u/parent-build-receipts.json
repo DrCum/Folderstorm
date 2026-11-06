@@ -1,0 +1,30 @@
+[
+  {
+    "prNumber": 121,
+    "head": "81c90614cd1351b6825be2a2e5f19ad2049916db",
+    "version": "7.2.5.82297",
+    "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-121\\7.2.5.82297-head-81c90614cd-velopack-sentry-tracy-OFF-clean",
+    "installer": "D:\\Folderstorm-performance-builds\\normal\\pr-121\\7.2.5.82297-head-81c90614cd-velopack-sentry-tracy-OFF-clean\\Phoenix-FolderstormOS-Nightly_AVX2-7-2-5-82297_Setup.exe",
+    "installerSha256": "C32CEFADADB09BBF5839A88E6FDBB8FB11CA3522DABF14230C4C98DF0D1E9CF5",
+    "nativeTestCount": 39,
+    "focusedReceiptCount": 39,
+    "tracyEnabled": false,
+    "animationKeys": "OFF",
+    "sourceClean": true,
+    "runtimeAcceptance": false
+  },
+  {
+    "prNumber": 122,
+    "head": "b7c60446cfdf3f67565690a0b1ffaa3c7f8048be",
+    "version": "7.2.5.82299",
+    "archive": "D:\\Folderstorm-performance-builds\\normal\\pr-122\\7.2.5.82299-head-b7c60446cf-velopack-sentry-tracy-OFF-clean",
+    "installer": "D:\\Folderstorm-performance-builds\\normal\\pr-122\\7.2.5.82299-head-b7c60446cf-velopack-sentry-tracy-OFF-clean\\Phoenix-FolderstormOS-Nightly_AVX2-7-2-5-82299_Setup.exe",
+    "installerSha256": "0655FC1D049A9BB8F948914FA1B268EEF78BF0A69062EF55AF041E3FD22CA618",
+    "nativeTestCount": 39,
+    "focusedReceiptCount": 39,
+    "tracyEnabled": false,
+    "animationKeys": "OFF",
+    "sourceClean": true,
+    "runtimeAcceptance": false
+  }
+]

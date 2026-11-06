@@ -1,0 +1,2 @@
+mode,avatars,gap_us,load,frames,new_calls,requested_bytes,baseline_bytes,live_bytes,peak_bytes,first_frame_calls,first_frame_bytes,later_calls,later_bytes,retained_binding_bytes,retained_binding_motions,binding_bytes_after_cleanup
+event-first-retained,32,0,normal,64,2798,1261072,0,360,28407,74,35759,2724,1225313,16384,32,0

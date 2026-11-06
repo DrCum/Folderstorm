@@ -1,0 +1,37 @@
+{
+  "status": "Initial byte-scan candidate; CPU attribution inconclusive due control drift; retained before tightening scan",
+  "base": "dccf4b445d6fc08ec4d96be6926e6060b43b8798",
+  "source_sha256_normalized_lf": {
+    "llmotioncontroller.cpp": "eceb69ad24a560971692d7b7d2e479ef7afdbb439aba9859b0fa35ed6e0685cc",
+    "llmotioncontroller.h": "c875ff9447025dbe3054d1b283addec51a9827b07eb16cab8bc8464d1e625382",
+    "fssamplingshadow.cpp": "6179d9a29968d97b8e1b427e10793acabfb8053528487eea34a492fb99b2f019",
+    "fssamplingshadow.h": "7aab5d5614995a74a061065676265fefa0175fb7d043db01d0fbf7e153a654b0"
+  },
+  "reports_sha256_normalized_lf": {
+    "shadow-mask-cost-current-r1-14m.csv": "e64a341a9ce1b2efb0a4bcdca049a6917de1337c7432d4fd6b84c875611b42ee",
+    "shadow-mask-cost-current-r2-14m.csv": "dafb645fa7b377e08d25d80e427b41aef2eede0b8a77bbceecd2452c8a128941",
+    "shadow-mask-cost-parent-r1-14m.csv": "7c71fec91f76ac027de885b3ffab045a14bcc4d151fd9a2496f28c3d91ebc3dc",
+    "shadow-mask-cost-parent-r2-14m.csv": "183f1f826a1f7919db8eb13daab04f2cb88afdd859a01712b26dee4c1d7f72ea"
+  },
+  "scratch_artifact_sha256": {
+    "shadow-mask-timing-parent-14m.exe": "aacde60bbce5fb0e78f22eacda61d801323dcd8c1dc085d5fb405962c3f9c97e",
+    "shadow-mask-timing-parent-14m.rsp": "3f153e8a855dbece21a9b23e7c586c69e03cdc8fe360ce3fc5c48976efb0687f",
+    "shadow-mask-timing-parent-14m.log": "4a3e205d3ffbce73c7c1a2abe479b52e8d876dc78b0981e98e378e27aa8d3a18",
+    "shadow-mask-timing-current-14m.exe": "370575c6814f3b60c6dbd18dd766300c4cca5ce0018930685d22d5f868545c42",
+    "shadow-mask-timing-current-14m.rsp": "0d65d3bdca80a0cff1fe7bc9c1e70dfc9000e178fb8f37acbdd09e6f1d4b850f",
+    "shadow-mask-timing-current-14m.log": "0cb1a1c5505bd3e097076ea0067915b0993ee353b5e0117824c82d62b20ddaed"
+  },
+  "idle": {
+    "startedUtc": "2026-10-24T16:40:01.8433185Z",
+    "finishedUtc": "2026-10-24T16:40:16.6590386Z",
+    "exe_sha256": {
+      "parent": "aacde60bbce5fb0e78f22eacda61d801323dcd8c1dc085d5fb405962c3f9c97e",
+      "current": "370575c6814f3b60c6dbd18dd766300c4cca5ce0018930685d22d5f868545c42"
+    },
+    "rows": 280,
+    "updates": 280000,
+    "order": "P,C,C,P within each case",
+    "controls": "Private activeBuild empty, worker idle and full host cl/link/msbuild/cmake/ninja/vpk process inventory empty before/after each case. Does not prove an idle desktop or other CPU users.",
+    "counter_scope": "QueryThreadCycleTime raw cycles, never converted to elapsed time; wall ns kept separately"
+  }
+}

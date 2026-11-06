@@ -1,0 +1,46 @@
+import hashlib
+import importlib.util
+import json
+import tempfile
+from pathlib import Path
+
+root = Path(__file__).resolve().parent
+repo = root.parent / 'viewer-performance'
+script = repo / 'indra/llcharacter/tests/make_event_sampling_controller.py'
+spec = importlib.util.spec_from_file_location('event_generator', script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+original = (repo / 'indra/llcharacter/llmotioncontroller.cpp').read_bytes()
+results = []
+with tempfile.TemporaryDirectory(dir=root) as directory:
+    folder = Path(directory)
+    for newline in ('\n', '\r\n'):
+        raw = original.replace(b'\r\n', b'\n').replace(b'\n', newline.encode())
+        source = folder / 'controller.cpp'
+        output = folder / 'generated.cpp'
+        source.write_bytes(raw)
+        module.generate(source, output)
+        produced = output.read_bytes()
+        declaration_start = produced.index(b'\nnamespace FSEventSampling\n')
+        declaration_end = produced.index(b'\n}\n', declaration_start) + len(b'\n}\n')
+        restored = produced[:declaration_start] + produced[declaration_end:]
+        inserted = b'\n    FSEventSampling::prepare(*this, force_update,\n        &LLMotionController::predictSamplingTime, &LLMotionController::predictSamplingMask);\n'
+        assert restored.count(inserted) == 1
+        restored = restored.replace(inserted, b'', 1)
+        restored = restored.replace(b'    return FSEventSampling::invoke(*this, motion, time, mask);', b'    return motion.onUpdate(time, mask);', 1)
+        assert restored == raw
+        results.append({'case': repr(newline), 'unchanged_bytes_recovered': True})
+    for boundary in (b'#include "llmotioncontroller.h"', b'void LLMotionController::updateMotions(bool force_update)\n{', b'    return motion.onUpdate(time, mask);'):
+        source.write_bytes(original + b'\n' + boundary + b'\n')
+        try:
+            module.generate(source, output)
+        except ValueError:
+            results.append({'case': boundary.decode(), 'ambiguous_boundary_rejected': True})
+        else:
+            raise AssertionError('Ambiguous controller seam accepted')
+(root / 'event-generator-validation14s.json').write_text(json.dumps({
+    'checks': len(results), 'results': results,
+    'source_sha256': hashlib.sha256(original).hexdigest(),
+    'generator_sha256': hashlib.sha256(script.read_bytes()).hexdigest(),
+}, indent=2) + '\n')
+print(f'{len(results)} generator boundary/byte-preservation checks passed')

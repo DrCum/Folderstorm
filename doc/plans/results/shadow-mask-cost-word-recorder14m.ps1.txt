@@ -1,0 +1,39 @@
+$ErrorActionPreference='Stop'
+$taskRoot=Split-Path -Parent $PSScriptRoot
+$results=Join-Path $taskRoot 'viewer-performance/doc/plans/results'
+function Assert-Idle {
+ $state=Get-Content -LiteralPath (Join-Path $taskRoot 'performance-state.json') -Raw | ConvertFrom-Json
+ $worker=Get-Content -LiteralPath (Join-Path $taskRoot 'performance-worker-checkpoint.json') -Raw | ConvertFrom-Json
+ if($state.activeBuild -or $worker.status -ne 'idle'){throw 'Independent builder active'}
+ if(@(Get-Process -Name cl,link,msbuild,cmake,ninja,vpk -ErrorAction SilentlyContinue).Count){throw 'Native builder or packager active'}
+}
+Assert-Idle
+$hashes=[ordered]@{}
+foreach($variant in 'parent','current'){$hashes[$variant]=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot "shadow-mask-timing-$variant-word14m.exe")).Hash.ToLowerInvariant()}
+foreach($variant in 'parent','current'){foreach($repeat in 'r1','r2'){
+ $path=Join-Path $results "shadow-mask-cost-word-$variant-$repeat-14m.csv"
+ if((Test-Path -LiteralPath $path) -or (Test-Path -LiteralPath "$path.partial")){throw 'Refusing to overwrite a prior report'}
+}}
+$started=[DateTime]::UtcNow.ToString('o')
+foreach($case in @(@(3,1,0),@(3,1,2),@(128,8,0),@(128,8,1),@(128,8,2))){foreach($enabled in 0,1){
+ foreach($run in @(@('parent','r1'),@('current','r1'),@('current','r2'),@('parent','r2'))){
+  Assert-Idle
+  $rows=@(& (Join-Path $PSScriptRoot "shadow-mask-timing-$($run[0])-word14m.exe") @case $enabled)
+  if($LASTEXITCODE -ne 0 -or $rows.Count -ne 8){throw 'Incomplete case output'}
+  Assert-Idle
+  $parsed=@($rows | ConvertFrom-Csv)
+  if(@($parsed | Where-Object {[int]$_.updates -ne 1000 -or [UInt64]$_.thread_cycles -eq 0 -or [int]$_.enabled -ne $enabled}).Count){throw 'Invalid case rows'}
+  $path=Join-Path $results "shadow-mask-cost-word-$($run[0])-$($run[1])-14m.csv.partial"
+  if(Test-Path -LiteralPath $path){$rows | Select-Object -Skip 1 | Add-Content -LiteralPath $path}else{$rows | Set-Content -LiteralPath $path}
+ }
+ Write-Output "joints=$($case[0]), motions=$($case[1]), mode=$($case[2]), enabled=${enabled}: P,C,C,P retained"
+}}
+foreach($variant in 'parent','current'){
+ if((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot "shadow-mask-timing-$variant-word14m.exe")).Hash.ToLowerInvariant() -cne $hashes[$variant]){throw 'Executable identity changed'}
+ foreach($repeat in 'r1','r2'){
+  $path=Join-Path $results "shadow-mask-cost-word-$variant-$repeat-14m.csv"
+  if(@(Import-Csv -LiteralPath "$path.partial").Count -ne 70){throw 'Incomplete aggregate'}
+  Move-Item -LiteralPath "$path.partial" -Destination $path
+ }
+}
+[ordered]@{startedUtc=$started;finishedUtc=[DateTime]::UtcNow.ToString('o');exe_sha256=$hashes;rows=280;updates=280000;order='P,C,C,P within each case';controls='Private activeBuild empty, worker idle and full host cl/link/msbuild/cmake/ninja/vpk process inventory empty before/after each case. Does not prove an idle desktop or other CPU users.';counter_scope='QueryThreadCycleTime raw cycles, never converted to elapsed time; wall ns kept separately'} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'shadow-mask-cost-word-idle14m.json')

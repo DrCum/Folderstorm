@@ -1,0 +1,4 @@
+owned-rows14v.cpp
+D:\Folderstorm-stack-build\packages\include\boost/fiber/detail/cpu_relax.hpp(19): warning C4005: 'WIN32_LEAN_AND_MEAN': macro redefinition
+D:\Folderstorm-stack-build\packages\include\boost/fiber/detail/cpu_relax.hpp(19): note: 'WIN32_LEAN_AND_MEAN' previously declared on the command line
+   Creating library C:\Users\Marty\Documents\ChatGPT\folderstorm 2\performance-validation\owned-rows14v-initial.lib and object C:\Users\Marty\Documents\ChatGPT\folderstorm 2\performance-validation\owned-rows14v-initial.exp

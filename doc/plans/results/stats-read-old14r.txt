@@ -1,0 +1,8 @@
+cold_reads=1538,new_calls=522,bytes=115148,nodes=514
+FAILED: read recreated an erased avatar
+FAILED: read methods inserted or changed map entries
+FAILED: reading reset scene created a node
+FAILED: cold reads allocated
+FAILED: cold reads populated missing keys
+FAILED: missing read failed under allocation pressure
+311 stats read checks; 6 failures

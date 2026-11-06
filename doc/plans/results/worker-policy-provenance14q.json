@@ -1,0 +1,70 @@
+{
+  "status": "Implemented and native checked; exact-head full viewer, full LL_TESTS integration and manual lifecycle/CPU/frame-time acceptance pending",
+  "implementation_commit": "9043662887c4675bc7ddfe8c413e1494e8ff3e75",
+  "base_commit": "8952ad421837beb61737a15d999ff14fa1c069b4",
+  "source_sha256_normalized_lf": {
+    "indra/llcommon/threadpool.h": "392806d37dd2e7cbd99208d081d2989413783b3a23751dd329539f77447148f7",
+    "indra/llcommon/threadpool.cpp": "2e6c2306f104abdcc3a2dbd3f992b149103b7781cadea6e10c48082961ad09b0",
+    "indra/llcommon/workqueue.cpp": "ce349a39683b1a72b87b748b2a396e023652d234bc1dc8cf142647d529276526",
+    "indra/llcommon/CMakeLists.txt": "786b5ea2c21cd77c1cce4d2826889587d950532e41440582daffc6dc5021aaf1",
+    "indra/llcommon/tests/threadpool_wait_policy_test.cpp": "e89f5c219a73a3e36f29686e4a9808af0b3d6846dca502782e099bfd74c815a1",
+    "indra/llcommon/tests/scheduler_probe.h": "55c7929a3ad12f947d6dcdf0ba616301feff279e389ce4dccca9c03b7a1639e9",
+    "indra/newview/llappviewer.cpp": "fd41c2eaa871c2a5eb5e88aaec59f9fb1d07375512c95f568c963922520486ac",
+    "indra/newview/app_settings/settings.xml": "3f7a438e609acdde277dcc5596d1849eb8589bdd6016cb3dc8fbcc3459f8ebdd",
+    "indra/newview/tests/test_general_wait_policy.py": "654bc0e01aa2c21b2257e1989d3dbebbc70530da1870154a2fdd8fcc37b886c9",
+    "indra/newview/tests/folderstorm/CMakeLists.txt": "6d7c9d76c05821dd11a1091fc7802c01379c4413ed5dbfae75a26df559f3f9df"
+  },
+  "scratch_artifact_sha256": {
+    "worker-policy14q.cpp": "1c8e5aae0366dc44937ac772586587592ad02f073ac989ad045b20b35012fe39",
+    "worker-policy14q-release.exe": "9a310fdd4e1a431f965a452a600c5a7f4733e47a5d446eed948c37f6c0d3312a",
+    "worker-policy14q-release.rsp": "a0842a379b134d64b14abcb61d639e845d1ce5fea02a56fdadf39fea7d8291af",
+    "worker-policy14q-release.log": "a5aecd2728c20dc4d14727a69c71c4bf0f8dd18fe938c110013c227914d8b940",
+    "worker-policy-scope14q-final.json": "b81fdb6c95c072189fa26c89ac4c53736a6c393f10e6e621850b66e04a3f12d0",
+    "run-worker-policy-delivery14q.ps1": "6231e5207c2de6ade0ffd1f3c0d53e47fdf42cdb0c92e0ba5f32f0d40f70e4df"
+  },
+  "standalone_artifact_sha256": {
+    "threadpool-normal-policy14q.rsp": "460bb66ddd80c257cda6eb8d6498824924ba57ba8c544807bf97b3cd6bfd99dd",
+    "threadpool-normal-policy14q.log": "279739afabf99889e9df0e97f8d79fb1954f55b23389fc739c550ff6e89b1605",
+    "threadpool_wait_policy_test-normal-policy14q.rsp": "2d19a785e4679a649a3706226aadd46a7c4951c10744c840993021eb25899d2d",
+    "threadpool_wait_policy_test-normal-policy14q.log": "9726ef30d511f83eca589aeff395208aaccc3eb88827d691bd7395ac5a5c2d74",
+    "llappviewer-normal-policy14q.rsp": "feaedae9305e6e4a3c655fb58a984fcbbc3b130878c10ed5840bda7195ae4db8",
+    "llappviewer-normal-policy14q.log": "e0d5b88dbb655ebfa45e054e54b71a4b6d5ed20f2854d97e0aed572eae9a561a",
+    "llimageworker-normal-policy14q.rsp": "4105ed08053e18193eb366dbde2f82ae923445a0fad9a20bf16968c680994cc1",
+    "llimageworker-normal-policy14q.log": "ef70b265b68919f7e26ad1cd1ce5a9338afc99d955f4e8a34e1e160d9517b51e",
+    "llimagegl-normal-policy14q.rsp": "a7948e92e236f62b7ff33b5b6a0fddb7fa729607f7eafbcc7b923e1315cd2952",
+    "llimagegl-normal-policy14q.log": "ee5ee334f4ab39ab47bb9df4226d7b919d44f3b8348aeee98f37238526df445a",
+    "threadpool-tracy-policy14q-final.rsp": "34c480b226cb8518d5b11be1c1409c3b9d5f47cdf33b5c6fafe4c20977286233",
+    "threadpool-tracy-policy14q-final.log": "279739afabf99889e9df0e97f8d79fb1954f55b23389fc739c550ff6e89b1605",
+    "threadpool_wait_policy_test-tracy-policy14q-final.rsp": "534b4eb315defbae2cc7b366a290c94e47cf5092aa00a69ae5fc64537aeff949",
+    "threadpool_wait_policy_test-tracy-policy14q-final.log": "9726ef30d511f83eca589aeff395208aaccc3eb88827d691bd7395ac5a5c2d74",
+    "llappviewer-tracy-policy14q-final.rsp": "5b3fc4537e4263392b5944f08839606ed3fef3cb3b377bc9e5a47a4dd3a58b83",
+    "llappviewer-tracy-policy14q-final.log": "e0d5b88dbb655ebfa45e054e54b71a4b6d5ed20f2854d97e0aed572eae9a561a"
+  },
+  "fresh_production_cpp": [
+    "threadpool.cpp",
+    "workqueue.cpp"
+  ],
+  "native_checks": 4593,
+  "source_scope_checks": 18,
+  "invariants": [
+    "Default PlatformDefault for every existing caller",
+    "Only resolved Windows width1 can accept opt-in",
+    "Immutable constructor snapshot with no worker control queries",
+    "Only General startup supplies request",
+    "Boolean FALSE/Persist0, all preceding packaged controls unchanged",
+    "FIFO/exactly-once/lifetimes, fibers/timers, producer/close rejection, real LLApp automatic drain"
+  ],
+  "delivery": "Four paired/reversed actual production-path observations, requested1ms,256 admitted callbacks,0 rejects; default p95 2001.7/2033.1us, event p95 18.0/21.3us",
+  "frozen_dependencies": {
+    "count": 32,
+    "manifest_sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4",
+    "all_hashes_reverified": true
+  },
+  "limits": [
+    "No viewer/account launch or quality/frame-rate claim",
+    "Other desktop load/power/timers uncontrolled",
+    "No new sustained CPU claim; prior48-case algorithm evidence preserved",
+    "Other-platform execution pending; source gate retains current behavior",
+    "Full CMake target integration is not proved by standalone compiler checks"
+  ]
+}

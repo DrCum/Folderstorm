@@ -1,0 +1,681 @@
+{
+  "status": "written_before_accepted_measurement",
+  "frames_per_case": 64,
+  "timing_cases": 72,
+  "allocation_cases": 12,
+  "cases": [
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 100,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 1,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "busy",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "busy",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "closed",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "closed",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 2000,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 500,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 100,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 1,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 1,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "owned",
+      "avatars": 1,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 1,
+      "gap": 0,
+      "round": 2,
+      "load": "normal",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 2,
+      "load": "busy",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 2,
+      "load": "busy",
+      "allocations": false
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 2,
+      "load": "closed",
+      "allocations": false
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 2,
+      "load": "closed",
+      "allocations": false
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 0,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "direct",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "owned",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "default",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "event",
+      "avatars": 32,
+      "gap": 500,
+      "round": 1,
+      "load": "normal",
+      "allocations": true
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "busy",
+      "allocations": true
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "busy",
+      "allocations": true
+    },
+    {
+      "mode": "default",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "closed",
+      "allocations": true
+    },
+    {
+      "mode": "event",
+      "avatars": 8,
+      "gap": 0,
+      "round": 1,
+      "load": "closed",
+      "allocations": true
+    }
+  ],
+  "limits": "Generated cohorts and explicit synthetic gaps; first-consumption cancellation; no viewer deadline/FPS acceptance"
+}

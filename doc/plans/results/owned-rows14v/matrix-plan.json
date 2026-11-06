@@ -1,0 +1,182 @@
+{
+  "status": "written_before_measurement",
+  "parent_pr": 123,
+  "parent_head": "6daba8aa6619e678f19fbada673c8295922f867b",
+  "timing_cases": 16,
+  "allocation_cases": 8,
+  "gap_us": 0,
+  "load": "normal",
+  "cases": [
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "default-rows-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 1,
+      "mode": "default-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "default-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "default-rows-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-rows-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "timing",
+      "round": 2,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 1024
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "default-rows-retained",
+      "avatars": 1,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "direct",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-later-retained",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "event-rows-retained",
+      "avatars": 32,
+      "frames": 64
+    },
+    {
+      "kind": "alloc",
+      "round": 1,
+      "mode": "default-rows-retained",
+      "avatars": 32,
+      "frames": 64
+    }
+  ],
+  "controls": "Same current executable; direct, whole event later control, per-row event/default. Two reversed timing orders. One bounded callback; two owned32-cell groups. Requested1ms timer; no artificial gap/wait/gate in measured work.",
+  "accounting": "Complete owner/worker windows include frame object lifetime, buffer reset/capture/queue/check/apply/fallback/cancel, final drain/buffer destruction/binding cleanup. Pool/executor/fixed-group setup and owned observation-vector allocations precede windows in all applicable modes. Report fixed+vector group resident bytes separately; excludes shared assets and allocator/control-block overhead.",
+  "limits": "Full-host/private-builder idle guards before/after; desktop/power/timer load uncontrolled. Synthetic fixed-cohort private current-controller fixture; no rendered FPS, live deadline or general viewer lifetime acceptance."
+}

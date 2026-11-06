@@ -1,0 +1,189 @@
+{
+  "parent_pr": 121,
+  "parent_head": "81c90614cd1351b6825be2a2e5f19ad2049916db",
+  "implementation_head": "482809653ddafa1a541396186c12b3997a7f5734",
+  "status": "complete_test_only_experiment",
+  "native_checks": 67824,
+  "allocation_instrumented_checks": 67824,
+  "runtime_diff_vs_parent": "",
+  "sources": {
+    "indra/llcharacter/tests/event_sampling_cost.cpp": {
+      "bytes": 27339,
+      "sha256": "01566536538d61c00b1142f4cab76af660e814d5f335a46205ecaee775168c36"
+    },
+    "indra/llcharacter/tests/make_event_sampling_controller.py": {
+      "bytes": 2458,
+      "sha256": "a1798e758264419dd2ad2d2aae4a73dafe0e202a8a54633bd00a95cc028e3325"
+    },
+    "indra/llcharacter/CMakeLists.txt": {
+      "bytes": 18052,
+      "sha256": "ca6adfb484619f1a2c353628a2afe45a646802050412c6b296efaee050a3eb86"
+    },
+    "indra/llcommon/threadpool.cpp": {
+      "bytes": 8120,
+      "sha256": "2e6c2306f104abdcc3a2dbd3f992b149103b7781cadea6e10c48082961ad09b0"
+    },
+    "indra/llcommon/threadpool.h": {
+      "bytes": 6151,
+      "sha256": "392806d37dd2e7cbd99208d081d2989413783b3a23751dd329539f77447148f7"
+    },
+    "indra/llcommon/workqueue.cpp": {
+      "bytes": 10019,
+      "sha256": "ce349a39683b1a72b87b748b2a396e023652d234bc1dc8cf142647d529276526"
+    },
+    "indra/llcommon/workqueue.h": {
+      "bytes": 25783,
+      "sha256": "1368f2f66b6a5884e18a2b7612ffe83b334b21d6eb39dea23185b69ca2741bc4"
+    },
+    "indra/llcommon/threadsafeschedule.h": {
+      "bytes": 17325,
+      "sha256": "32488a8de4fd48fa13bab8644d310cc2a40d630f13a0235976d22997b27b5b4d"
+    },
+    "indra/llcharacter/fssamplingcontext.cpp": {
+      "bytes": 1565,
+      "sha256": "82ef49dfe1b59af34203c0c1720d907d2a882581a7e883d29ea870e01f96d802"
+    },
+    "indra/llcharacter/fssamplingcontext.h": {
+      "bytes": 1319,
+      "sha256": "39dddcc989414a25e583e61ce99bd76ef82f3f48d0ad56db47627653b279cc6c"
+    },
+    "indra/llcharacter/llpose.cpp": {
+      "bytes": 18632,
+      "sha256": "365add18a724937fb4b2b4eaefea5d9eef5a56fcac50283145b0f19934225fce"
+    },
+    "indra/llcharacter/llpose.h": {
+      "bytes": 4390,
+      "sha256": "ded15531bb2374b7003cfbdffbf2ef2216f55eafa895c84b751c21653f7f576d"
+    },
+    "indra/llcharacter/llmotioncontroller.cpp": {
+      "bytes": 43918,
+      "sha256": "afe31528367e551c2db534b3e3d87c446105db24b25ea75f1d5091adaac66be3"
+    },
+    "indra/llcharacter/llmotioncontroller.h": {
+      "bytes": 9220,
+      "sha256": "d7bedffa086f9a32a9fede9c814ad82584a2af34bbd906746d22ec8d2894ea29"
+    },
+    "indra/llcharacter/llkeyframemotion.cpp": {
+      "bytes": 120309,
+      "sha256": "c9c6f1f9a4369200c0f182718994648c21cb5e5a463fab6ea999d5afabd8844f"
+    },
+    "indra/llcharacter/llkeyframemotion.h": {
+      "bytes": 24909,
+      "sha256": "ba10f9ba00605ddc78b0b76d4e2b7aa2d2a1dd67a050885fbc43767b0c4c1ae1"
+    },
+    "indra/llcharacter/llmotion.cpp": {
+      "bytes": 5548,
+      "sha256": "12d5b79df9e07726eca633e9cbbe9616ded94d115f2012f062effa4c1bd8024b"
+    },
+    "indra/llcharacter/llcharacter.cpp": {
+      "bytes": 18580,
+      "sha256": "8ac509c6dee6d2cdf5aa23a109910279e0f77071874cd13472a820e2a24abae9"
+    },
+    "indra/llcharacter/fssamplingshadow.cpp": {
+      "bytes": 10000,
+      "sha256": "87a0c40c5ba061ed99b2aa97ae3ccf5233680c366b857585a340e58c6753964b"
+    },
+    "indra/llcharacter/tests/current_motion_fixture.h": {
+      "bytes": 4377,
+      "sha256": "73a5a8cc06c09baf77002f2008cf6459348d0392a741fb5ba96bab4f88dae447"
+    },
+    "indra/llcharacter/tests/sampling_cost_fixture.h": {
+      "bytes": 10584,
+      "sha256": "290b120bf15b2895c9c6e1d45a57d64d9bbb2f6855cf5f831961954958158339"
+    },
+    "indra/llcharacter/tests/bounded_sampling_executor.h": {
+      "bytes": 9066,
+      "sha256": "f90e3acc14de07dbfbae511a6cb71b2c5ed90a14978acda41599c12b542a9092"
+    }
+  },
+  "native_artifacts": {
+    "event-sampling14t.cpp": {
+      "bytes": 651,
+      "sha256": "f0fccad51c74f55860117008e4faff385af39cb2b5ff0ae44de009d2b59069fb"
+    },
+    "event-sampling14t-correctness.exe": {
+      "bytes": 4500480,
+      "sha256": "b35a0cdde6a14820da941f93166ee515b6e9b5d9384f072890ae09b20f2ff937"
+    },
+    "event-sampling14t-correctness.rsp": {
+      "bytes": 12073,
+      "sha256": "5b9ff255d8d5bc4961d9862ca74ae75abeadddcc19324f0639d506cdbe90959c"
+    },
+    "event-sampling14t-correctness.log": {
+      "bytes": 654,
+      "sha256": "a97bb4445bd4986af9050dd871ef1f2747c7de9a93c34ce14be92e3447bdae1c"
+    },
+    "event-sampling14t-allocations.exe": {
+      "bytes": 4514816,
+      "sha256": "43b53a051ce07457ee1aa7d341c74576a7219647272e5b01ce41f2c05b61887b"
+    },
+    "event-sampling14t-allocations.rsp": {
+      "bytes": 12106,
+      "sha256": "7c1cc05e88f7e95e06dfa0d31c538242b58dc95b2e34a1716437557f368a7719"
+    },
+    "event-sampling14t-allocations.log": {
+      "bytes": 654,
+      "sha256": "429803e37482e1b61277d486dfc0b043677a1833bd4b8402593ade6363e78007"
+    },
+    "event_sampling_cost-normal-event14t.rsp": {
+      "bytes": 4090,
+      "sha256": "ca5a9708180ba06322666674c950b080d823d662e3aa003a32045b2a2b763c55"
+    },
+    "event_sampling_cost-normal-event14t.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "event_sampling_cost-tracy-event14t.rsp": {
+      "bytes": 4284,
+      "sha256": "7311030e9bc4f685279a2b8b10eb86eb43f7ac020adbc5f32b7cc64212294a38"
+    },
+    "event_sampling_cost-tracy-event14t.log": {
+      "bytes": 316,
+      "sha256": "b13b4a5faf52ca99ab5dcdfaa6bc7e83ebde8290d1307ea4ca696450e78fadd8"
+    },
+    "run-capture14t.ps1": {
+      "bytes": 3263,
+      "sha256": "e834cb34199f2406feb78da423a3e706a570419b6a9140ae938683ff84bc6424"
+    },
+    "run-capture-matrix14t.ps1": {
+      "bytes": 1224,
+      "sha256": "30ac01fa22d3a75a233f562561e9e482366491b464b3e6a51e6a2b2ee8f1c6ac"
+    },
+    "plan-capture14t.py": {
+      "bytes": 1242,
+      "sha256": "5a470aff3b6965d4ef2fcff5dc4c769a3f3820c6f97ab781ca5309f3e2c9367c"
+    }
+  },
+  "programs": {
+    "timing": {
+      "name": "event-sampling14t-correctness.exe",
+      "bytes": 4500480,
+      "sha256": "b35a0cdde6a14820da941f93166ee515b6e9b5d9384f072890ae09b20f2ff937"
+    },
+    "alloc": {
+      "name": "event-sampling14t-allocations.exe",
+      "bytes": 4514816,
+      "sha256": "43b53a051ce07457ee1aa7d341c74576a7219647272e5b01ce41f2c05b61887b"
+    }
+  },
+  "immutable_libraries": {
+    "bytes": 6422,
+    "sha256": "d0d71986698a155342277baf9f0c7951655d9f9d4375e4af9fcb891253f481b4"
+  },
+  "matrix_plan_normalized_sha256": "b3b91389660d5ddc51107d567a254bdc429856baa74670f186d59c7a50234c48",
+  "limits": [
+    "Fixed private cohort; retained bindings released within Scene lifetime; not a general viewer cache/deprecated-motion lifetime design.",
+    "No new queue/readiness strategy, production dispatch, live viewer deadline, quality change or FPS acceptance.",
+    "Owner windows include bookkeeping, bounds/cleanup verification and final binding cleanup; per-job cycles are attribution."
+  ],
+  "accepted_timing_cases": 12,
+  "accepted_allocation_cases": 6,
+  "accepted_timing_frames": 12288,
+  "nonoverlap_verified": true,
+  "decision": "Retained bindings remove recurring allocation; serial owned remains more costly than direct; no viewer integration",
+  "analysis_source": {
+    "path": "indra\\llcharacter\\tests\\analyze_owner_capture_cost.py",
+    "bytes": 6056,
+    "sha256": "ac158f167e7a3313205fb471007b928ce7b1abf79fc44bde6e77032469798af7"
+  }
+}

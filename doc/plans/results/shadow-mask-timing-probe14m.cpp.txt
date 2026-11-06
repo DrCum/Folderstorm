@@ -1,0 +1,38 @@
+#define main fsMultiMotionUnusedMain
+#include "../viewer-performance/indra/llcharacter/tests/blender_pool_multimotion_benchmark.cpp"
+#undef main
+int main(int argc, char** argv)
+{
+    using namespace BlenderPoolMulti;
+    if (argc != 5) return 1;
+    const unsigned count = unsigned(std::atoi(argv[1])), overlap = unsigned(std::atoi(argv[2]));
+    const unsigned mode = unsigned(std::atoi(argv[3]));
+    const bool enabled = std::atoi(argv[4]) != 0;
+    if ((count != 3 && count != 128) || (overlap != 1 && overlap != 8) || mode > 2) return 1;
+    LLVector4a::initClass(); prepare(count,overlap,mode);
+    {
+        Scene scene(count,overlap,mode);
+        const auto expected = scene.snapshot();
+        std::cout << "joints,motions,workload,enabled,sample,updates,elapsed_ns,thread_cycles,predicted,matched,unused,unpredicted\n";
+        for (unsigned sample = 0; sample < 7; ++sample)
+        {
+            require(FSSampling::ShadowScope::resetTotals());
+            const U64 beforeCycles = threadCycles();
+            const auto start = std::chrono::steady_clock::now();
+            for (unsigned i = 0; i < 1000; ++i)
+            {
+                FSSampling::ShadowScope scope(scene.character.getMotionController(),enabled);
+                scene.update();
+            }
+            const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();
+            const U64 cycles = threadCycles()-beforeCycles;
+            const auto s = FSSampling::ShadowScope::totals();
+            require(scene.snapshot()==expected && !s.mismatched && s.predicted==s.matched+s.unused);
+            if(enabled) require(s.matched+s.unpredicted==1000*(mode==2?1:overlap));
+            else require(!s.scopes&&!s.predicted);
+            std::cout << count << ',' << overlap << ',' << name(mode) << ',' << enabled << ',' << sample << ",1000,"
+                << ns << ',' << cycles << ',' << s.predicted << ',' << s.matched << ',' << s.unused << ',' << s.unpredicted << '\n';
+        }
+    }
+    LLKeyframeDataCache::clear();
+}
