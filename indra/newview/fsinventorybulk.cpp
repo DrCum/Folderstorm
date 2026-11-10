@@ -290,6 +290,45 @@ bool authoritative(const LLSD& response, const Snapshot& expected, const std::st
         response.has("name") && response["name"].asString() == name &&
         response.has("parent_id") && response["parent_id"].asUUID() == LLUUID(parent);
 }
+void verifyUpdate(const Row& row, Kind kind, const std::function<bool()>& same_session,
+                  const std::function<void(Outcome)>& completed, int attempts)
+{
+    AISAPI::BulkRequest(LLUUID(row.before.id), row.before.folder, LLSD(), same_session,
+        []() { return true; }, [row, kind, same_session, completed, attempts](bool success, const LLSD& response)
+        {
+            const auto& name = kind == Kind::Rename ? row.after_name : row.before.name;
+            const auto& parent = kind == Kind::Move ? row.destination : row.before.parent;
+            Outcome result;
+            result.accepted = true;
+            if (success && authoritative(response, row.before, name, parent))
+            {
+                result.after = snapshot(LLUUID(row.before.id));
+                if (result.after.name == name && result.after.parent == parent)
+                {
+                    result.status = "confirmed";
+                    completed(result);
+                    return;
+                }
+                result.error = "Final inventory state changed during verification";
+            }
+            else if (attempts > 1 && success && authoritative(response, row.before, row.before.name, row.before.parent))
+            {
+                // The simulator move and AIS read can race. Retry only the read.
+                doAfterInterval([row, kind, same_session, completed, attempts]()
+                {
+                    verifyUpdate(row, kind, same_session, completed, attempts - 1);
+                }, 1.0f);
+                return;
+            }
+            else
+            {
+                result.error = "Update submitted but final server state could not be verified";
+            }
+            result.status = "unconfirmed";
+            completed(result);
+        });
+}
+
 void perform(const Row& row, Kind kind, bool inverse, std::function<bool()> alive,
              std::function<void()> submitted, std::function<void(Outcome)> completed)
 {
@@ -324,12 +363,35 @@ void perform(const Row& row, Kind kind, bool inverse, std::function<bool()> aliv
             const auto error = inverse && !inverseRule(row, kind).empty() ? inverseRule(row, kind) : validateRow(row, kind, false);
             if (!success || !authoritative(response, row.before, row.before.name, row.before.parent) || !error.empty())
             { failure("skipped", "Server state changed or could not be verified before submission"); return; }
+
+            if (kind == Kind::Move)
+            {
+                const LLUUID id(row.before.id);
+                LLPointer<LLInventoryObject> moved;
+                if (auto* item = gInventory.getItem(id))
+                    moved = new LLViewerInventoryItem(item);
+                else if (auto* folder = gInventory.getCategory(id))
+                    moved = new LLViewerInventoryCategory(folder);
+                if (!moved)
+                { failure("skipped", "Inventory object disappeared before submission"); return; }
+
+                // Send the same move message as native inventory. Let AIS readback
+                // update the live model instead of assuming the move succeeded.
+                moved->setParent(LLUUID(row.destination));
+                submitted();
+                moved->updateParentOnServer(false);
+                doAfterInterval([row, same_session, completed]()
+                {
+                    verifyUpdate(row, Kind::Move, same_session, completed, 3);
+                }, 1.0f);
+                return;
+            }
+
             LLSD updates;
-            if (kind == Kind::Rename) updates["name"] = row.after_name;
-            else updates["parent_id"] = LLUUID(row.destination);
+            updates["name"] = row.after_name;
             auto did_submit = std::make_shared<bool>(false);
-            AISAPI::BulkRequest(LLUUID(row.before.id), row.before.folder, updates, same_session, [row, kind, inverse, alive]() { return alive() && (!inverse || inverseRule(row, kind).empty()) && validateRow(row, kind, false).empty(); },
-                [row, kind, alive, same_session, did_submit, completed, failure](bool accepted, const LLSD& response)
+            AISAPI::BulkRequest(LLUUID(row.before.id), row.before.folder, updates, same_session, [row, alive]() { return alive() && validateRow(row, Kind::Rename, false).empty(); },
+                [row, same_session, did_submit, completed, failure](bool accepted, const LLSD& response)
                 {
                     if (!same_session()) { failure("unconfirmed", "Session ended; submitted work may have completed", accepted); return; }
                     if (!*did_submit) { failure("cancelled_before_submission", "Execution stopped before mutation submission"); return; }
@@ -341,19 +403,7 @@ void perform(const Row& row, Kind kind, bool inverse, std::function<bool()> aliv
                     }
                     // Read back even after cancellation: reconciliation does not
                     // submit more mutations or authorize a new inverse action.
-                    AISAPI::BulkRequest(LLUUID(row.before.id), row.before.folder, LLSD(), same_session,
-                        []() { return true; }, [row, kind, completed, failure](bool success, const LLSD& response)
-                        {
-                            const auto name = kind == Kind::Rename ? row.after_name : row.before.name;
-                            const auto parent = kind == Kind::Move ? row.destination : row.before.parent;
-                            if (!success || !authoritative(response, row.before, name, parent))
-                            { failure("unconfirmed", "Update acknowledged but final server state could not be verified", true); return; }
-                            Outcome result; result.status = "confirmed"; result.accepted = true;
-                            result.after = snapshot(LLUUID(row.before.id));
-                            if (result.after.name != name || result.after.parent != parent)
-                            { failure("unconfirmed", "Final inventory state changed during verification", true); return; }
-                            completed(result);
-                        });
+                    verifyUpdate(row, Kind::Rename, same_session, completed, 1);
                 }, [did_submit, submitted]() { *did_submit = true; submitted(); });
         });
 }
@@ -385,8 +435,8 @@ LLSD preview(const LLSD& request, std::string& error)
     if (!rename && !move) { error = "Unknown bulk preview operation"; return {}; }
     prepared->kind = rename ? Kind::Rename : Kind::Move;
     LLSD entries = rename ? request["items"] : request["ids"];
-    if (op == "rename") entries = LLSD::emptyArray().append(llsd::map("id", request["id"], "name", request["name"]));
-    if (op == "move") entries = LLSD::emptyArray().append(request["id"]);
+    if (op == "rename") entries = llsd::array(llsd::map("id", request["id"], "name", request["name"]));
+    if (op == "move") entries = llsd::array(request["id"]);
     if (!entries.isArray() || entries.size() < 1 || entries.size() > 50)
     { error = "A preview must contain 1 to 50 requested rows"; return {}; }
     const std::string destination = request["parent_id"].asUUID().asString();
